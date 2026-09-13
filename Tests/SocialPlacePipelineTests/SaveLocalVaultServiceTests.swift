@@ -120,6 +120,161 @@ final class SaveLocalVaultServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testPendingRefinementUpdatesPreservedRecordWithoutMergingDistinctCandidates() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let service = SaveLocalVaultService(overrideVaultURL: url)
+        let id = UUID()
+        let pending = makePendingCandidate(localID: id)
+        let original = try service.saveReviewCandidate(pending, recordID: id, preservingExisting: true)
+        XCTAssertEqual(original.state, .sourceOnly)
+
+        var refined = pending
+        refined.isSourceOnly = false
+        refined.candidateName = "Resolved Cafe"
+        refined.address = "1 Test Way"
+        refined.latitude = 25.051
+        refined.longitude = 121.519
+        _ = try service.saveReviewCandidate(refined, recordID: id)
+
+        let reloaded = SaveLocalVaultService(overrideVaultURL: url)
+        let records = try reloaded.recentRecords()
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.id, original.id)
+        XCTAssertEqual(records.first?.state, .reviewCandidate)
+        XCTAssertEqual(records.first?.address, "1 Test Way")
+        XCTAssertEqual(records.first?.sourceText, pending.sourceText)
+        XCTAssertTrue(try reloaded.confirmedPlaces().isEmpty)
+
+        let otherID = UUID()
+        _ = try reloaded.saveReviewCandidate(makePendingCandidate(localID: otherID), recordID: otherID, preservingExisting: true)
+        XCTAssertEqual(try reloaded.recentRecords().count, 2, "Distinct pending candidates from the same source must stay distinct")
+    }
+
+    @MainActor
+    func testPendingQueueRetryKeepsOneRecordAndRetainsAlreadyRefinedEvidence() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let service = SaveLocalVaultService(overrideVaultURL: url)
+        let pending = makePendingCandidate(localID: UUID())
+        let id = try XCTUnwrap(pending.localVaultRecordID)
+        _ = try service.saveReviewCandidate(pending, recordID: id, preservingExisting: true)
+
+        // Analysis failed before refinement. Restoring/reloading the pending queue retains its local ID.
+        let queue = try JSONEncoder().encode([pending])
+        let retry = try XCTUnwrap(JSONDecoder().decode([PendingReviewCandidate].self, from: queue).first)
+        XCTAssertEqual(retry.localVaultRecordID, id)
+        let restarted = SaveLocalVaultService(overrideVaultURL: url)
+        _ = try restarted.saveReviewCandidate(retry, recordID: id, preservingExisting: true)
+        XCTAssertEqual(try restarted.recentRecords().count, 1)
+
+        var refined = retry
+        refined.candidateName = "Resolved Cafe"
+        refined.evidence.append("Refined source evidence")
+        refined.isSourceOnly = false
+        _ = try restarted.saveReviewCandidate(refined, recordID: id)
+
+        // Remote persistence failed after refinement; another retry must not discard the richer record.
+        let next = SaveLocalVaultService(overrideVaultURL: url)
+        let preserved = try next.saveReviewCandidate(retry, recordID: id, preservingExisting: true)
+        XCTAssertEqual(preserved.title, "Resolved Cafe")
+        XCTAssertTrue(preserved.evidence.contains("Refined source evidence"))
+        _ = try next.saveReviewCandidate(refined, recordID: id)
+        XCTAssertEqual(try next.recentRecords().count, 1)
+        XCTAssertEqual(try next.recentRecords().first?.id, id)
+        XCTAssertEqual(try next.reviewCandidates().count, 1)
+    }
+
+    @MainActor
+    func testFailedRefinementAfterRemoteFailureCannotReplaceStrongerCandidate() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let service = SaveLocalVaultService(overrideVaultURL: url)
+        let id = UUID()
+        let original = makePendingCandidate(localID: id)
+        _ = try service.saveReviewCandidate(original, recordID: id, preservingExisting: true)
+        var refined = original
+        refined.isSourceOnly = false
+        refined.candidateName = "Resolved North Branch"
+        refined.address = "1 North Street"
+        refined.latitude = 25.051
+        refined.longitude = 121.519
+        refined.evidence = ["North branch address and location evidence"]
+        let stronger = try service.saveReviewCandidate(refined, recordID: id)
+
+        // The remote write failed. Queue persistence must retain the refined payload and local ID.
+        let failedQueue = try JSONEncoder().encode([refined])
+        let retry = try XCTUnwrap(JSONDecoder().decode([PendingReviewCandidate].self, from: failedQueue).first)
+        XCTAssertEqual(retry.localVaultRecordID, id)
+        XCTAssertEqual(retry.latitude, refined.latitude)
+        XCTAssertEqual(retry.evidence, refined.evidence)
+
+        let restarted = SaveLocalVaultService(overrideVaultURL: url)
+        _ = try restarted.saveReviewCandidate(retry, recordID: id, preservingExisting: true)
+        // A provider failure returns only a thin clue; exercise the actual refinement upsert,
+        // including a review-shaped result with no reliable coordinates.
+        for sourceOnly in [true, false] {
+            var failedRefinement = original
+            failedRefinement.isSourceOnly = sourceOnly
+            failedRefinement.candidateName = "Unresolved South Branch"
+            failedRefinement.address = "South area"
+            failedRefinement.evidence = ["Incomplete lookup"]
+            let result = try restarted.saveReviewCandidate(failedRefinement, recordID: id)
+            XCTAssertEqual(result, stronger)
+        }
+        let finalRecords = try SaveLocalVaultService(overrideVaultURL: url).recentRecords()
+        XCTAssertEqual(finalRecords, [stronger])
+        XCTAssertEqual(finalRecords.first?.latitude, refined.latitude)
+        XCTAssertEqual(finalRecords.first?.longitude, refined.longitude)
+        XCTAssertEqual(finalRecords.first?.evidence, refined.evidence)
+        XCTAssertTrue(try restarted.confirmedPlaces().isEmpty)
+    }
+
+    @MainActor
+    func testPendingRetryCannotDowngradeUserConfirmedMapStamp() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let service = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let id = UUID()
+        let pending = makePendingCandidate(localID: id)
+        _ = try service.saveReviewCandidate(pending, recordID: id, preservingExisting: true)
+        try service.removeReviewCandidate(id)
+        _ = try service.saveConfirmedPlace(makePlace(id: id, name: "User confirmed Cafe", address: "2 Correct Way", googlePlaceId: nil))
+
+        _ = try service.saveReviewCandidate(pending, recordID: id, preservingExisting: true)
+        _ = try service.saveReviewCandidate(pending, recordID: id)
+        let records = try service.recentRecords()
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.state, .confirmedPlace)
+        XCTAssertEqual(records.first?.title, "User confirmed Cafe")
+        XCTAssertEqual(records.first?.address, "2 Correct Way")
+        XCTAssertTrue(try service.reviewCandidates().isEmpty)
+    }
+
+    @MainActor
+    func testOlderPendingQueueWithoutLocalRecordIdentityStillDecodes() throws {
+        let original = makePendingCandidate(localID: nil)
+        let data = try JSONEncoder().encode(original)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertNil(object["localVaultRecordID"])
+        let decoded = try JSONDecoder().decode(PendingReviewCandidate.self, from: data)
+        XCTAssertNil(decoded.localVaultRecordID)
+        XCTAssertEqual(decoded.sourceURL, original.sourceURL)
+    }
+
+    @MainActor
+    private func makePendingCandidate(localID: UUID?) -> PendingReviewCandidate {
+        PendingReviewCandidate(candidateName: "Source clue", address: "", category: "food",
+            sourceURL: "https://example.com/shared-post", sourceText: "Original caption",
+            evidence: ["Original source clue"], confidence: 0, missingInfo: ["Exact place"],
+            savedAt: Date(timeIntervalSince1970: 1_700_000_000), isSourceOnly: true,
+            localVaultRecordID: localID)
+    }
+
+    @MainActor
     private func makePlace(
         id: UUID,
         name: String,

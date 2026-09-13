@@ -8,16 +8,26 @@ import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-async function analysisFetch(operation:AnalysisOperation,input:Parameters<typeof fetch>[0],init?:Parameters<typeof fetch>[1],fetchImpl:typeof fetch=fetch):Promise<Response> {
-  return trackAnalysisOperation({operation},async()=>{
-    const response=await fetchImpl(input,init);
-    if(response.status===429 || response.status>=500) {
-      await response.body?.cancel().catch(()=>{});
-      throw new Error(`Provider HTTP ${response.status}`);
+async function analysisFetch<T>(
+  operation: AnalysisOperation,
+  input: Parameters<typeof fetch>[0],
+  init: Parameters<typeof fetch>[1],
+  read: (response: Response) => Promise<T>,
+  fetchImpl: typeof fetch = fetch,
+): Promise<T> {
+  return trackAnalysisOperation({ operation }, async () => {
+    const response = await fetchImpl(input, init);
+    try {
+      if (response.status === 429 || response.status >= 500) throw new Error(`Provider HTTP ${response.status}`);
+      return await read(response);
+    } finally {
+      // Redirects and rejected headers may leave the body entirely unread.
+      if (!response.bodyUsed) await response.body?.cancel().catch(() => {});
     }
-    return response;
   });
 }
+
+class RejectedMediaResponse extends Error {}
 
 const execFileAsync = promisify(execFile);
 
@@ -733,7 +743,7 @@ async function externalEvidenceRubricEvaluator(input: EvidenceRubricInput): Prom
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
-    const response = await analysisFetch("rubric", url.toString(), {
+    return await analysisFetch("rubric", url.toString(), {
       method: "POST",
       headers: {
         "User-Agent": "Savvy evidence rubric/1.0",
@@ -746,10 +756,13 @@ async function externalEvidenceRubricEvaluator(input: EvidenceRubricInput): Prom
       redirect: "manual",
       signal: controller.signal,
       body: JSON.stringify(evidenceRubricProjection(input)),
+    }, async response => {
+      if (isRedirectResponse(response) || !response.ok) throw new Error("Rubric provider unavailable");
+      const body = JSON.parse(await boundedResponseText(response, 64_000)) as unknown;
+      const verdict = normalizeRubricVerdict(body);
+      if (!verdict) throw new Error("Invalid rubric verdict");
+      return verdict;
     });
-    if (isRedirectResponse(response) || !response.ok) return undefined;
-    const body = JSON.parse(await boundedResponseText(response, 64_000)) as unknown;
-    return normalizeRubricVerdict(body);
   } catch (error) {
     if(error instanceof AnalysisControlError) throw error;
     return undefined;
@@ -1253,17 +1266,18 @@ export async function defaultFetchText(url: string, signal?: AbortSignal): Promi
   else signal?.addEventListener("abort", abortFromParent, { once: true });
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
-    const response = await analysisFetch("public_search", parsed.toString(), {
+    return await analysisFetch("public_search", parsed.toString(), {
       headers: {
         "User-Agent": "Savvy source recovery worker/1.0",
         "Accept": "text/html,application/xhtml+xml",
       },
       redirect: "manual",
       signal: controller.signal,
+    }, async response => {
+      if (isRedirectResponse(response)) throw new Error("Blocked redirect response");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await boundedResponseText(response, maxTextFetchBytes);
     });
-    if (isRedirectResponse(response)) throw new Error("Blocked redirect response");
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await boundedResponseText(response, maxTextFetchBytes);
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener("abort", abortFromParent);
@@ -1296,52 +1310,44 @@ export async function resolveSourceDocument(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
-    let response: Response | undefined;
     const redirectChain = [originalURL];
     for (let redirectCount = 0; redirectCount <= maxMetadataRedirects; redirectCount += 1) {
-      response = await analysisFetch("metadata", parsed.toString(), {
+      const currentURL: URL = parsed;
+      const result: { redirect: URL } | { document: ResolvedSourceDocument } = await analysisFetch("metadata", currentURL.toString(), {
         headers: {
           "User-Agent": "Savvy social metadata fetcher/1.0",
           "Accept": "text/html,application/xhtml+xml",
         },
         redirect: "manual",
         signal: controller.signal,
+      }, async response => {
+        if (isRedirectResponse(response)) {
+          const location = response.headers.get("location");
+          if (!location || redirectCount === maxMetadataRedirects) throw new Error("Blocked redirect response");
+          const redirect = safeURL(new URL(location, currentURL).toString());
+          if (!redirect || !(await isSafePublicHTTPURL(redirect))) throw new Error("Blocked non-public URL");
+          return { redirect };
+        }
+        if (!response.ok && ![401, 403, 404, 410].includes(response.status)) throw new Error(`HTTP ${response.status}`);
+        const html = await boundedHeadResponseText(response, maxBytes);
+        const canonicalURL = canonicalSourceURL(html, currentURL) ?? recoveredOriginalURL(currentURL) ?? currentURL;
+        const resolvedURL = canonicalURL.toString();
+        const metadata = sourceMetadataFromHTML(html, resolvedURL);
+        const resolution = buildSourceResolution({
+          originalURL, resolvedURL, redirectChain, responseStatus: response.status,
+          html, metadata, networkURL: currentURL.toString(),
+        });
+        return { document: { html, resolution } };
       }, fetchImpl);
-      if (!isRedirectResponse(response)) break;
-
-      const location = response.headers.get("location");
-      if (!location || redirectCount === maxMetadataRedirects) throw new Error("Blocked redirect response");
-      parsed = safeURL(new URL(location, parsed).toString());
-      if (!parsed || !(await isSafePublicHTTPURL(parsed))) throw new Error("Blocked non-public URL");
-      redirectChain.push(parsed.toString());
+      if ("redirect" in result) {
+        parsed = result.redirect;
+        redirectChain.push(parsed.toString());
+      } else {
+        if (result.document.resolution.status === "resolved") cacheResolvedSourceDocument(cacheKey, result.document);
+        return result.document;
+      }
     }
-
-    if (!response) throw new Error("No response");
-    if (isRedirectResponse(response)) throw new Error("Blocked redirect response");
-    if (!response.ok && ![401, 403, 404, 410].includes(response.status)) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const html = await boundedHeadResponseText(response, maxBytes);
-    const networkURL = parsed.toString();
-    const canonicalURL = canonicalSourceURL(html, parsed) ?? recoveredOriginalURL(parsed) ?? parsed;
-    const resolvedURL = canonicalURL.toString();
-    const metadata = sourceMetadataFromHTML(html, resolvedURL);
-    const resolution = buildSourceResolution({
-      originalURL,
-      resolvedURL,
-      redirectChain,
-      responseStatus: response.status,
-      html,
-      metadata,
-      networkURL,
-    });
-    const document = { html, resolution };
-
-    if (resolution.status === "resolved") {
-      cacheResolvedSourceDocument(cacheKey, document);
-    }
-    return document;
+    throw new Error("No response");
   } finally {
     clearTimeout(timeout);
   }
@@ -1771,40 +1777,45 @@ export async function fetchBoundedMedia(
   controller.signal.addEventListener("abort", cancelRead, { once: true });
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    response = await analysisFetch("media_download", parsed.toString(), {
+    return await analysisFetch("media_download", parsed.toString(), {
       headers: {
         "User-Agent": "Savvy source recovery media fetcher/1.0",
         "Accept": "image/avif,image/webp,image/apng,image/*,video/*,*/*;q=0.8",
       },
       redirect: "manual",
       signal: controller.signal,
-    }, fetchImpl);
-    controller.signal.throwIfAborted();
-    if (isRedirectResponse(response) || !response.ok) return undefined;
-    const length = Number(response.headers.get("content-length") ?? "0");
-    if (length > maxBytes) return undefined;
+    }, async fetchedResponse => {
+      response = fetchedResponse;
+      controller.signal.throwIfAborted();
+      if (isRedirectResponse(response) || !response.ok) throw new RejectedMediaResponse("Rejected media response");
+      const length = Number(response.headers.get("content-length") ?? "0");
+      if (length > maxBytes) throw new RejectedMediaResponse("Response too large");
 
-    const chunks: Uint8Array[] = [];
-    let byteLength = 0;
-    reader = response.body?.getReader();
-    if (reader) {
-      while (true) {
-        const { value, done } = await reader.read();
-        controller.signal.throwIfAborted();
-        if (done) break;
-        if (value.byteLength > maxBytes - byteLength) return undefined;
-        byteLength += value.byteLength;
-        if (value.byteLength > 0) chunks.push(value);
+      const chunks: Uint8Array[] = [];
+      let byteLength = 0;
+      reader = response.body?.getReader();
+      if (reader) {
+        while (true) {
+          const { value, done } = await reader.read();
+          controller.signal.throwIfAborted();
+          if (done) break;
+          if (value.byteLength > maxBytes - byteLength) throw new RejectedMediaResponse("Response too large");
+          byteLength += value.byteLength;
+          if (value.byteLength > 0) chunks.push(value);
+        }
       }
-    }
-    const data = new Uint8Array(byteLength);
-    let offset = 0;
-    for (const chunk of chunks) {
-      data.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-    completed = true;
-    return { data, contentType: response.headers.get("content-type") ?? undefined };
+      const data = new Uint8Array(byteLength);
+      let offset = 0;
+      for (const chunk of chunks) {
+        data.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      completed = true;
+      return { data, contentType: response.headers.get("content-type") ?? undefined };
+    }, fetchImpl);
+  } catch (error) {
+    if (error instanceof RejectedMediaResponse) return undefined;
+    throw error;
   } finally {
     clearTimeout(timeout);
     controller.signal.removeEventListener("abort", cancelRead);
@@ -1962,15 +1973,21 @@ async function boundedResponseText(response: Response, maxBytes: number): Promis
   const chunks: Uint8Array[] = [];
   let byteLength = 0;
   const reader = response.body.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    byteLength += value.byteLength;
-    if (byteLength > maxBytes) {
-      await reader.cancel();
-      throw new Error("Response too large");
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      byteLength += value.byteLength;
+      if (byteLength > maxBytes) {
+        await reader.cancel();
+        throw new Error("Response too large");
+      }
+      chunks.push(value);
     }
-    chunks.push(value);
+
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
 
   const data = new Uint8Array(byteLength);
@@ -1990,34 +2007,41 @@ async function boundedHeadResponseText(response: Response, maxBytes: number): Pr
   let text = "";
   let byteLength = 0;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    byteLength += value.byteLength;
-    text += decoder.decode(value, { stream: true });
+      const exceedsLimit = value.byteLength > maxBytes - byteLength;
+      const boundedChunk = value.subarray(0, maxBytes - byteLength);
+      byteLength += boundedChunk.byteLength;
+      text += decoder.decode(boundedChunk, { stream: true });
 
-    const headEnd = text.match(/<\/head\s*>/i);
-    if (headEnd?.index !== undefined) {
-      const headLength = headEnd.index + headEnd[0].length;
-      const head = text.slice(0, headLength);
-      if (/<title\b|<meta\b[^>]*(?:description|og:|twitter:)/i.test(head)) {
-        await reader.cancel();
-        return head;
+      const headEnd = text.match(/<\/head\s*>/i);
+      if (headEnd?.index !== undefined) {
+        const headLength = headEnd.index + headEnd[0].length;
+        const head = text.slice(0, headLength);
+        if (/<title\b|<meta\b[^>]*(?:description|og:|twitter:)/i.test(head)) {
+          await reader.cancel();
+          return head;
+        }
+        if (text.length >= headLength + 8_192) {
+          await reader.cancel();
+          return text.slice(0, headLength + 8_192);
+        }
       }
-      if (text.length >= headLength + 8_192) {
+
+      if (exceedsLimit) {
         await reader.cancel();
-        return text.slice(0, headLength + 8_192);
+        throw new Error("Response too large");
       }
     }
 
-    if (byteLength >= maxBytes) {
-      await reader.cancel();
-      return text.slice(0, maxBytes);
-    }
+    return text + decoder.decode();
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
-
-  return text + decoder.decode();
 }
 
 function sha256(data: Uint8Array): string {

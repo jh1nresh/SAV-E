@@ -84,8 +84,13 @@ final class SaveLocalVaultService: Sendable {
         return record
     }
 
-    func saveReviewCandidate(_ candidate: PendingReviewCandidate) throws -> SaveMemoryRecord {
+    func saveReviewCandidate(
+        _ candidate: PendingReviewCandidate,
+        recordID: UUID? = nil,
+        preservingExisting: Bool = false
+    ) throws -> SaveMemoryRecord {
         let record = SaveMemoryRecord(
+            id: recordID ?? UUID(),
             state: candidate.isSourceOnly ? .sourceOnly : .reviewCandidate,
             sourceURL: candidate.sourceURL,
             sourceText: candidate.sourceText,
@@ -107,8 +112,31 @@ final class SaveLocalVaultService: Sendable {
                     ?? PlaceCategory.inferred(from: "\(candidate.candidateName) \(candidate.address)"),
             createdAt: candidate.savedAt
         )
-        try append(record)
-        return record
+        guard let recordID else {
+            try append(record)
+            return record
+        }
+        return try withLock {
+            try withCoordinatedVaultWrite { url in
+                var records = try loadRecords(from: url)
+                if let index = records.firstIndex(where: { $0.id == recordID }) {
+                    // A retry must retain already-refined evidence or a user-confirmed place.
+                    let existing = records[index]
+                    if preservingExisting || existing.state == .confirmedPlace { return existing }
+                    let losesReviewState = existing.state == .reviewCandidate && record.state == .sourceOnly
+                    let losesLocation = existing.reviewCandidate?.hasSavableLocation == true
+                        && record.reviewCandidate?.hasSavableLocation != true
+                    // Keep the whole stronger candidate; never combine an old branch's coordinates
+                    // with the name/address/evidence of an unresolved retry.
+                    if losesReviewState || losesLocation { return existing }
+                    records[index] = record
+                } else {
+                    records.insert(record, at: 0)
+                }
+                try save(records, to: url)
+                return record
+            }
+        }
     }
 
     func saveReviewCandidate(_ candidate: PlaceReviewCandidate) throws -> SaveMemoryRecord {

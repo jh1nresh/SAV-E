@@ -208,6 +208,25 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       assert.equal((await calls()).length, count);
     });
 
+    await t.test("denied recovery restores the preserved capture state and remains retryable", async () => {
+      const id=await start(owner);
+      const captured=await api("/v0/memory/captures",{source_type:"note",raw_text:"A lovely day outside"},owner,{"x-save-analysis-id":id});
+      assert.equal(captured.status,201);
+      for(let n=0;n<3;n++) assert.equal((await api(`/v0/analysis/${id}/places`,{query:"fixture"},owner)).status,200);
+      const before=(await calls()).length;
+      const path=`/v0/memory/captures/${captured.body.id}/search-recovery`;
+      const body={queries:["fixture recovery"],max_queries:1,include_media_evidence:false};
+      const denied=await api(path,body,owner,{"x-save-analysis-id":id});
+      assert.equal(denied.status,429);
+      assert.equal(denied.body.code,"analysis_limit_exceeded");
+      assert.equal((await calls()).length,before);
+      assert.equal((await pool.query("select status from captures where id=$1",[captured.body.id])).rows[0].status,"review");
+      const fresh=await start(owner);
+      const retry=await api(path,body,owner,{"x-save-analysis-id":fresh});
+      assert.equal(retry.status,200);
+      assert.equal(retry.body.reused,false);
+    });
+
     await t.test("enabled limits reject headerless Gemini instead of using the unmetered path", async () => {
       const before = (await calls()).length;
       const result = await api("/v0/llm/gemini-generate-content", geminiBody(), owner);

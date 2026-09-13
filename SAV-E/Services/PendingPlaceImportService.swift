@@ -198,6 +198,8 @@ struct SocialPlaceRejectedEvidence: Codable, Hashable {
 }
 
 struct PendingReviewCandidate: Codable {
+    // Local queue identity survives remote failures; never part of place evidence.
+    var localVaultRecordID: UUID? = nil
     var candidateName: String
     var address: String
     var category: String
@@ -237,8 +239,10 @@ struct PendingReviewCandidate: Codable {
         recommendedItems: [RecommendedItem] = [],
         vibeTags: [String] = [],
         accessNotes: [String] = [],
-        sourceHandle: String? = nil
+        sourceHandle: String? = nil,
+        localVaultRecordID: UUID? = nil
     ) {
+        self.localVaultRecordID = localVaultRecordID
         self.candidateName = candidateName
         self.address = address
         self.category = category
@@ -262,6 +266,7 @@ struct PendingReviewCandidate: Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case localVaultRecordID
         case candidateName
         case address
         case category
@@ -285,6 +290,7 @@ struct PendingReviewCandidate: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        localVaultRecordID = try container.decodeIfPresent(UUID.self, forKey: .localVaultRecordID)
         candidateName = try container.decode(String.self, forKey: .candidateName)
         address = try container.decode(String.self, forKey: .address)
         category = try container.decode(String.self, forKey: .category)
