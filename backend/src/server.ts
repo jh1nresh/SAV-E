@@ -1,5 +1,7 @@
+import { AnalysisControlError, AnalysisUsageStore, analysisID, analysisLimits, analysisPrices, geminiTokens, trackAnalysisOperation, withAnalysisUsage } from "./analysisUsage.js";
+import { runAnalysisRecovery } from "./analysisRecovery.js";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { randomBytes, createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { randomUUID, randomBytes, createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { importSPKI, jwtVerify, type JWTPayload, type KeyLike } from "jose";
 import pg, { type PoolClient } from "pg";
 import {
@@ -886,6 +888,8 @@ const jsonbFields = new Set([
   "ratings",
 ]);
 
+const analysisUsageStore = new AnalysisUsageStore(pool);
+
 createServer(async (request, response) => {
   if (request.method === "OPTIONS") {
     return sendJson(response, null, 204);
@@ -1043,7 +1047,7 @@ createServer(async (request, response) => {
     await ensureProfile(userId);
 
     if (!isV0 && resource === "place-resolve") {
-      return await handlePlaceResolve(request, response);
+      return await handlePlaceResolve(request, response, userId);
     }
 
     if (isV0 && resource === "user-channels") {
@@ -1076,6 +1080,9 @@ createServer(async (request, response) => {
     }
     if (isV0 && resource === "entitlements" && id === "apple" && segments.length === 2) {
       return await handleAppleEntitlement(request, response, userId);
+    }
+    if (isV0 && resource === "analysis") {
+      return await handleAnalysis(request,response,segments.slice(1),userId);
     }
     if (isV0 && resource === "llm") {
       return await handleLLMProxy(request, response, segments.slice(1), userId);
@@ -1122,6 +1129,8 @@ createServer(async (request, response) => {
 
     return sendJson(response, { error: "Not found" }, 404);
   } catch (error) {
+    if (error instanceof AnalysisProviderError) return sendJson(response,{error:"Gemini upstream request failed",status:error.upstreamStatus},502);
+    if (error instanceof AnalysisControlError) return sendJson(response,{error:error.message,code:error.code},error.status);
     const status = error instanceof ApiError
       ? error.status
       : error instanceof WorkflowContractError
@@ -1156,18 +1165,22 @@ createServer(async (request, response) => {
   }
 });
 
-async function handlePlaceResolve(request: IncomingMessage, response: ServerResponse): Promise<void> {
+async function handlePlaceResolve(request: IncomingMessage, response: ServerResponse, userId: string): Promise<void> {
   if (request.method !== "POST") {
     return sendJson(response, { error: "Unsupported place resolver route" }, 405);
   }
   response.setHeader("Cache-Control", "private, no-store");
   try {
     const body = normalizeChinaPlaceResolveRequest(await readJson(request, 4_096));
-    const result = await resolveChinaPlace(body, {
+    const aid=requestAnalysisId(request);
+    if(!aid && analysisLimits().enabled) throw new AnalysisControlError(400,"analysis_required","Start an analysis before requesting this provider");
+    if(aid) await analysisUsageStore.owner(userId,aid);
+    const resolve=()=>resolveChinaPlace(body, {
       usageAuthorized: process.env.AMAP_USAGE_AUTHORIZED === "true",
       internationalApiKey: process.env.AMAP_INTERNATIONAL_WEB_SERVICE_KEY,
       domesticApiKey: process.env.AMAP_WEB_SERVICE_KEY,
     });
+    const result=aid ? await withAnalysisUsage(analysisUsageStore,userId,aid,resolve) : await resolve();
     return sendJson(response, result);
   } catch (error) {
     if (error instanceof ChinaPlaceResolverInputError) {
@@ -2288,12 +2301,102 @@ async function handleRecommendationOutcomes(
   }
 }
 
-async function handleLLMProxy(
+class AnalysisProviderError extends Error { constructor(readonly upstreamStatus:number) { super("Upstream provider failed"); } }
+function requestAnalysisId(request: IncomingMessage, body?: JsonBody): string | undefined {
+  const header=request.headers["x-save-analysis-id"];
+  if (Array.isArray(header)) throw new AnalysisControlError(400,"analysis_invalid_id","Invalid analysis identifier");
+  const value=header ?? body?.analysis_id;
+  if (header && body?.analysis_id && header !== body.analysis_id) throw new AnalysisControlError(400,"analysis_invalid_id","Conflicting analysis identifier");
+  return value === undefined ? undefined : analysisID(value);
+}
+async function handleAnalysis(request:IncomingMessage,response:ServerResponse,segments:string[],userId:string):Promise<void> {
+  response.setHeader("Cache-Control","private, no-store");
+  const [id,action]=segments;
+  try {
+    if(request.method === "POST" && !id) {
+      const body=await readJson(request,2048);
+      return sendJson(response,{analysis_id:await analysisUsageStore.start(userId,analysisID(body.id))},201);
+    }
+    if(!id || segments.length>2) return sendJson(response,{error:"Not found"},404);
+    const aid=analysisID(id);
+    if(request.method === "GET" && !action) return sendJson(response,await analysisUsageStore.summary(userId,aid));
+    if(request.method !== "POST") return sendJson(response,{error:"Unsupported analysis route"},405);
+    const body=await readJson(request,65536);
+    if(action === "finish") {
+      await analysisUsageStore.finish(userId,aid,body.outcome,body.capture_ids ?? []);
+      return sendJson(response,await analysisUsageStore.summary(userId,aid));
+    }
+    if(action === "client-events") {
+      await analysisUsageStore.clientEvents(userId,aid,body.events,body.events_truncated ?? false);
+      return sendJson(response,{recorded:true});
+    }
+    if(action === "places") {
+      await analysisUsageStore.owner(userId,aid);
+      const query=typeof body.query === "string" ? body.query.trim() : "";
+      if(!query || query.length>500) throw new ApiError(400,"Invalid place query");
+      const key=process.env.GOOGLE_PLACES_API_KEY;
+      if(!key) throw new AnalysisControlError(503,"analysis_controls_unavailable","Place analysis is not configured");
+      const url=new URL("https://maps.googleapis.com/maps/api/place/textsearch/json");
+      url.searchParams.set("query",query);url.searchParams.set("key",key);
+      if(body.latitude !== undefined || body.longitude !== undefined) {
+        if(typeof body.latitude !== "number" || typeof body.longitude !== "number" || !Number.isFinite(body.latitude) || !Number.isFinite(body.longitude) || Math.abs(body.latitude)>90 || Math.abs(body.longitude)>180) throw new ApiError(400,"Invalid place coordinates");
+        url.searchParams.set("location",`${body.latitude},${body.longitude}`);url.searchParams.set("radius","5000");
+      }
+      const result=await withAnalysisUsage(analysisUsageStore,userId,aid,()=>trackAnalysisOperation({operation:"google_places"},async()=>{
+        const upstream=await fetch(url,{redirect:"manual",signal:AbortSignal.timeout(10000)});
+        const raw=await boundedResponseBuffer(upstream,1_000_000);
+        if(!upstream.ok) throw new ApiError(502,"Place provider unavailable");
+        const result=JSON.parse(new TextDecoder().decode(raw));
+        if(!["OK","ZERO_RESULTS"].includes(result.status)) throw new ApiError(502,"Place provider unavailable");
+        return result;
+      }));
+      return sendJson(response,result);
+    }
+    return sendJson(response,{error:"Not found"},404);
+  } catch(error) {
+    if(isMissingRelationError(error)) throw new AnalysisControlError(503,"analysis_controls_unavailable","Analysis controls are temporarily unavailable");
+    throw error;
+  }
+}
+async function handleLLMProxy(request:IncomingMessage,response:ServerResponse,segments:string[],userId:string):Promise<void> {
+  if(segments[0] !== "gemini-generate-content") return sendJson(response,{error:"Unsupported LLM route"},404);
+  if(request.method !== "POST") return sendJson(response,{error:"Unsupported LLM route"},405);
+  const body=await readJson(request,geminiProxyRequestMaxBytes);
+  const aid=requestAnalysisId(request,body);
+  if(!aid) {
+    if(analysisLimits().enabled) throw new AnalysisControlError(400,"analysis_required","Start an analysis before requesting this provider");
+    return sendJson(response,await handleLLMProxyUnmetered(request,response,segments,userId,body));
+  }
+  await analysisUsageStore.owner(userId,aid);
+  if(!(process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GEMINI_API_KEY)) throw new AnalysisControlError(503,"analysis_controls_unavailable","Gemini analysis is not configured");
+  const model=geminiProxyModel(body.model);
+  const geminiBody=geminiProxyBody(body);
+  // A text-only caption request has no images, cached content, tools or billable grounding.
+  const contents=geminiBody.contents;
+  if(!Array.isArray(contents) || contents.length !== 1 || !contents[0] || typeof contents[0] !== "object") throw new ApiError(400,"Analysis requires one text input");
+  const parts=(contents[0] as JsonBody).parts;
+  if(!Array.isArray(parts) || parts.length !== 1 || !parts[0] || typeof parts[0] !== "object" || typeof (parts[0] as JsonBody).text !== "string" || Object.keys(parts[0]).some(key=>key!=="text") || body.tools || body.systemInstruction || body.cachedContent) throw new ApiError(400,"Analysis requires text-only input");
+  const text=String((parts[0] as JsonBody).text);
+  if(Buffer.byteLength(text,"utf8")>16384) throw new ApiError(400,"Analysis input is too large");
+  const config=asObject(geminiBody.generationConfig);
+  const maxOutput=typeof config.maxOutputTokens === "number" && Number.isInteger(config.maxOutputTokens) ? config.maxOutputTokens : 256;
+  if(maxOutput<1 || maxOutput>1024 || (config.candidateCount !== undefined && config.candidateCount !== 1)) throw new ApiError(400,"Analysis output limit is invalid");
+  body.generationConfig={...config,maxOutputTokens:maxOutput,candidateCount:1};
+  const price=analysisPrices[`gemini:${model}`];
+  // Conservative byte-based input reservation plus protocol overhead; output includes thoughts.
+  const reserve=price?.inputMicrosPerMillion !== undefined && price.outputMicrosPerMillion !== undefined
+    ? Math.ceil(((Buffer.byteLength(JSON.stringify(body),"utf8")+4096)*price.inputMicrosPerMillion+maxOutput*price.outputMicrosPerMillion)/1_000_000) : undefined;
+  const result=await withAnalysisUsage(analysisUsageStore,userId,aid,()=>trackAnalysisOperation({operation:"gemini",model,reserveMicros:reserve},()=>handleLLMProxyUnmetered(request,response,segments,userId,body),geminiTokens));
+  return sendJson(response,result);
+}
+
+async function handleLLMProxyUnmetered(
   request: IncomingMessage,
   response: ServerResponse,
   segments: string[],
   userId: string,
-): Promise<void> {
+  body: JsonBody,
+): Promise<unknown> {
   const [providerAction] = segments;
   if (providerAction !== "gemini-generate-content") {
     return sendJson(response, { error: "Unsupported LLM route" }, 404);
@@ -2305,7 +2408,6 @@ async function handleLLMProxy(
   const apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GEMINI_API_KEY;
   if (!apiKey) throw new ApiError(503, "Gemini proxy is not configured");
 
-  const body = await readJson(request, geminiProxyRequestMaxBytes);
   const model = geminiProxyModel(body.model);
   const geminiBody = geminiProxyBody(body);
   const startedAt = Date.now();
@@ -2346,7 +2448,7 @@ async function handleLLMProxy(
   }
   if (!upstream.ok) {
     await recordGeminiFailure(userId, model, "upstream_failure", upstream.status, startedAt);
-    return sendJson(response, { error: "Gemini upstream request failed", status: upstream.status }, 502);
+    throw new AnalysisProviderError(upstream.status);
   }
   let parsed: unknown;
   try {
@@ -2362,7 +2464,7 @@ async function handleLLMProxy(
     latencyMs: Date.now() - startedAt,
     responseBody: parsed,
   }));
-  return sendJson(response, parsed);
+  return parsed;
 }
 
 async function handleUsageQuotaPreview(
@@ -4167,57 +4269,59 @@ async function handleCaptureSearchRecovery(
   const { rows } = await pool.query("select * from captures where id = $1 and user_id = $2", [captureId, userId]);
   const capture = asObject(rows[0]);
 
-  await pool.query("update captures set status = 'investigating' where id = $1 and user_id = $2", [captureId, userId]);
-
-  const recovery = await runSourceSearchRecovery(
-    {
-      sourceUrl: stringValue(capture.source_url),
-      rawText: stringValue(capture.raw_text),
-      title: stringValue(capture.title),
-      suggestedSearchQueries: requestedQueries,
-      maxQueries,
-    },
-    undefined,
-    undefined,
-    { persistedSourceResolution: capture.source_resolution },
-  );
-
-  const existingKeys = await existingCandidateKeys(captureId);
-  const createdCandidates: JsonBody[] = [];
-
-  for (const candidate of recovery.candidates) {
-    const key = candidateKey(candidate.name, candidate.address);
-    if (existingKeys.has(key)) continue;
-    existingKeys.add(key);
-
-    const body = sourceSearchCandidateBody(candidate, captureId, workflowRunId);
-    const insert = buildInsert("place_candidates", body, placeCandidateFields);
-    const { rows: insertedRows } = await pool.query(`${insert.sql} returning *`, insert.values);
-    createdCandidates.push(formatPlaceCandidate(insertedRows[0]));
-  }
-
-  const sourceResolution = recovery.sourceResolution
-    ? sourceResolutionResponseBody(recovery.sourceResolution)
-    : null;
-  await pool.query(
-    `update captures
-     set status = 'review',
-         source_resolution = coalesce($3::jsonb, source_resolution),
-         updated_at = now()
-     where id = $1 and user_id = $2`,
-    [captureId, userId, sourceResolution ? JSON.stringify(sourceResolution) : null],
-  );
-
-  return sendJson(response, {
-    capture_id: captureId,
-    queries: recovery.queries,
-    search_results: recovery.searchResults,
-    created_candidates: createdCandidates,
-    media_evidence: recovery.mediaEvidence,
-    source_resolution: sourceResolution,
-    errors: recovery.errors,
-    receipt: recovery.receipt,
+  if(body.include_media_evidence !== undefined && typeof body.include_media_evidence !== "boolean") throw new ApiError(400,"include_media_evidence must be a boolean");
+  const requestedAnalysis=requestAnalysisId(request,body);
+  if(requestedAnalysis) await analysisUsageStore.owner(userId,requestedAnalysis);
+  const input={sourceUrl:stringValue(capture.source_url),rawText:stringValue(capture.raw_text),title:stringValue(capture.title),suggestedSearchQueries:requestedQueries,maxQueries,includeMediaEvidence:body.include_media_evidence !== false};
+  const result=await runAnalysisRecovery(pool,userId,captureId,{...input,workflowRunId},async()=>{
+    const aid=requestedAnalysis ?? await analysisUsageStore.start(userId,randomUUID(),false);
+    let completed=false;
+    try {
+      return await withAnalysisUsage(analysisUsageStore,userId,aid,async()=>{
+        await pool.query("update captures set status='investigating' where id=$1 and user_id=$2",[captureId,userId]);
+        const recovery=await runSourceSearchRecovery(input,undefined,undefined,{persistedSourceResolution:capture.source_resolution,includeMediaEvidence:input.includeMediaEvidence});
+        const client=await pool.connect();
+        const createdCandidates:JsonBody[]=[];
+        const sourceResolution=recovery.sourceResolution ? sourceResolutionResponseBody(recovery.sourceResolution) : null;
+        try {
+          await client.query("begin");
+          await client.query("set local statement_timeout='10s'");
+          await client.query("select id from captures where id=$1 and user_id=$2 for update",[captureId,userId]);
+          const existing=await client.query("select name,address from place_candidates where capture_id=$1",[captureId]);
+          const keys=new Set(existing.rows.map(row=>candidateKey(row.name,row.address)));
+          for(const candidate of recovery.candidates) {
+            const key=candidateKey(candidate.name,candidate.address);
+            if(keys.has(key)) continue;
+            keys.add(key);
+            const insert=buildInsert("place_candidates",sourceSearchCandidateBody(candidate,captureId,workflowRunId),placeCandidateFields);
+            const inserted=await client.query(`${insert.sql} returning *`,insert.values);
+            createdCandidates.push(formatPlaceCandidate(inserted.rows[0]));
+          }
+          await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,captureId,userId]);
+          await client.query("update captures set status='review',source_resolution=coalesce($3::jsonb,source_resolution),updated_at=now() where id=$1 and user_id=$2",[captureId,userId,sourceResolution?JSON.stringify(sourceResolution):null]);
+          await client.query("commit");
+        } catch(error) { await client.query("rollback"); throw error; } finally { client.release(); }
+        if(!requestedAnalysis) await analysisUsageStore.finish(userId,aid,recovery.candidates.length ? "review_candidate":"source_only",[captureId]);
+        completed=true;
+        return {capture_id:captureId,analysis_id:aid,queries:recovery.queries,search_results:recovery.searchResults,created_candidates:createdCandidates,media_evidence:recovery.mediaEvidence,source_resolution:sourceResolution,errors:recovery.errors,receipt:recovery.receipt};
+      });
+    } finally {
+      if(!completed && !requestedAnalysis) await analysisUsageStore.finish(userId,aid,"failed",[captureId]).catch(()=>{});
+    }
   });
+  if(result.reused && requestedAnalysis) {
+    await analysisUsageStore.owner(userId,requestedAnalysis);
+    await pool.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[requestedAnalysis,captureId,userId]);
+    result.reused_from_analysis_id=result.analysis_id;
+    result.analysis_id=requestedAnalysis;
+  }
+  if(result.reused && Array.isArray(result.created_candidates)) {
+    // A cached recovery must never resurrect a removed, rejected or confirmed candidate.
+    const ids=result.created_candidates.map(row=>asObject(row).id).filter((id):id is string=>typeof id==="string");
+    const current=await pool.query("select c.* from place_candidates c join captures s on s.id=c.capture_id where c.capture_id=$1 and s.user_id=$2 and c.id=any($3::uuid[]) and c.status in ('review','needs_more_evidence','source_only')",[captureId,userId,ids]);
+    result.created_candidates=current.rows.map(formatPlaceCandidate);
+  }
+  return sendJson(response,result);
 }
 
 async function handleMemoryCaptures(
@@ -4245,9 +4349,18 @@ async function handleMemoryCaptures(
 
   if (request.method === "POST" && !captureId) {
     const body = withOwner(await readJson(request), userId);
+    const aid=requestAnalysisId(request,body);
     const insert = buildInsert("captures", body, [...captureFields, "user_id"]);
-    const { rows } = await pool.query(`${insert.sql} returning *`, insert.values);
-    return sendJson(response, formatCapture(rows[0]), 201);
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      if(aid) await analysisUsageStore.owner(userId,aid,client);
+      const { rows } = await client.query(`${insert.sql} returning *`, insert.values);
+      if(aid) await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,rows[0].id,userId]);
+      await client.query("commit");
+      return sendJson(response, formatCapture(rows[0]), 201);
+    } catch(error) { await client.query("rollback"); throw error; }
+    finally { client.release(); }
   }
 
   if (request.method === "PATCH" && captureId) {
@@ -4750,14 +4863,6 @@ function isMissingRelationError(error: unknown): boolean {
   const value = error as { code?: unknown; message?: unknown };
   return value.code === "42P01" ||
     (typeof value.message === "string" && value.message.includes("does not exist"));
-}
-
-async function existingCandidateKeys(captureId: string): Promise<Set<string>> {
-  const { rows } = await pool.query("select name, address from place_candidates where capture_id = $1", [captureId]);
-  return new Set(rows.map((row) => {
-    const value = asObject(row);
-    return candidateKey(stringValue(value.name) ?? "", stringValue(value.address) ?? "");
-  }));
 }
 
 function sourceSearchCandidateBody(candidate: SourceSearchCandidate, captureId: string, workflowRunId?: string): JsonBody {

@@ -69,6 +69,86 @@ curl "$RAILWAY_PUBLIC_DOMAIN/health/source-recovery"
 
 `npm start` builds the TypeScript backend and runs `check:source-recovery` before boot. The check stays green when OCR, ASR, and external rubric are disabled. It fails when an enabled OCR/ASR adapter is missing its executable or when `SAVE_EVIDENCE_RUBRIC_URL` is not an HTTPS public URL. Railway also uses `/health/source-recovery` as the deployment healthcheck, so source-recovery adapter misconfiguration blocks rollout instead of silently falling back in production.
 
+## Social-analysis accounting and admission
+
+Deploy in this order after release approval: apply `backend/sql/analysis-usage.sql`
+(or the complete `schema.sql`), deploy this backend, then distribute the matching
+iOS build. The new iOS import requires `/v0/analysis`; missing tables/routes fail
+closed and preserve the local source. The additive migration does not change
+existing places or decisions. Roll back application code with enforcement off;
+do not drop operational tables or user records as rollback.
+
+Each active social import/refinement creates an owner-scoped UUID with
+`POST /v0/analysis {"id":"UUID"}`. Its Google searches use
+`POST /v0/analysis/:id/places`; Gemini and China requests carry
+`x-save-analysis-id`. Recovery accepts the same header or `analysis_id` body
+field. `POST /v0/analysis/:id/client-events` accepts only bounded operation,
+outcome, duration and UUID fields; the server ignores client cost/token claims.
+`POST /v0/analysis/:id/finish` links owned capture IDs and an outcome. Owner-only
+`GET /v0/analysis/:id` returns attempt/token totals, known cost estimates, explicit
+unknowns, and confirmed/saved candidate counts. Client telemetry is unverified;
+missing or truncated client receipts, unfinished sessions and unknown costs make
+`cost_complete` false. Operational events never contain URLs, prompts, captions,
+queries, candidate evidence or saved/shared notes.
+
+Costs use gross USD retail estimates (`retail-usd-2026-09-13`), excluding free
+allowances, discounts, tax and infrastructure. Google legacy Text Search uses
+$32/1,000 requests; Gemini 3.5 Flash text input/output uses $1.50/$9 per million,
+and 2.5 Flash $0.30/$2.50. Cached input uses $0.15/$0.03 respectively. Output
+includes thinking tokens; absent/inconsistent usage stays unknown. Sources:
+[Google pricing](https://developers.google.com/maps/billing-and-pricing/pricing),
+[Gemini pricing](https://ai.google.dev/gemini-api/docs/pricing?authuser=3),
+[thinking/output limits](https://ai.google.dev/gemini-api/docs/generate-content/thinking).
+External rubric and China pricing remain unknown. Local OCR/ASR, Apple search,
+HTML lookup and media downloads have zero variable external-provider estimate;
+that does not mean zero compute/network cost. Failed requests retain an unknown
+billable outcome. Do not treat these estimates as actual invoices or divide only
+successful requests by confirmations: include failed analyses, retries and
+unconfirmed imports when calculating cost per saved place from a time cohort.
+A capture can link several analyses; deduplicate confirmations across the cohort.
+
+Enforcement is **off by default**. Activation and amounts require a separate
+approved configuration change. Setting `SAVE_ANALYSIS_LIMITS_ENABLED=true`
+requires all five nonnegative integer settings (zero is an explicit stop):
+
+- `SAVE_ANALYSIS_ACCOUNT_DAILY_LIMIT`: sessions started per account per UTC day.
+- `SAVE_ANALYSIS_REQUEST_LIMIT`: server operation attempts per analysis.
+- `SAVE_ANALYSIS_BUDGET_MICROS`: reserved USD micros per analysis.
+- `SAVE_ANALYSIS_ACCOUNT_DAILY_BUDGET_MICROS`: per account per UTC day.
+- `SAVE_ANALYSIS_GLOBAL_DAILY_BUDGET_MICROS`: all scoped analyses per UTC day.
+
+One USD is 1,000,000 micros. Admission serializes reservations across processes
+in PostgreSQL before dispatch, with a bounded SQL timeout. A paid request keeps
+the larger of its reservation and known estimate; failures/abandonment never
+refund a reservation. Text-only Gemini requests bound input and output (including
+thinking); unknown prices or incomplete enabled configuration deny further
+provider work. Invalid/missing analysis IDs cannot bypass enabled Gemini/China
+gates. This is an operational spend guard, not a purchased user entitlement;
+internal retries are metered attempts, not paid credits. It does not cap legacy
+apps using embedded provider keys, ordinary direct map searches, unrelated
+backend routes, or infrastructure. Provider key restrictions and a provider-side
+budget policy remain separate release decisions.
+
+Recovery coalesces identical owner/capture/input/workflow work and reuses
+successful results for five minutes. Failed work is retryable. Cross-process
+leases last ten minutes and fence stale result publication; a crash after an
+external request cannot guarantee exactly-once provider billing. Candidate
+writes are transactionally deduplicated, and reuse reloads current candidate
+states so saved/rejected/deleted candidates are not resurrected. A new analysis
+reusing the same result links the capture and reports `reused_from_analysis_id`;
+provider charges remain on the original analysis. Cache rows hold private
+recovery output and expire for reuse; they are removed with the owning account
+or capture, not automatically purged at the reuse deadline.
+
+Focused PostgreSQL/HTTP fixtures require `SAVE_ANALYSIS_TEST_DATABASE_URL` pointing
+to the disposable `save_analysis_fixture` database on a private socket under
+`/tmp/save-analysis-completion/`. Apply the schema there, build, then run
+`node --test dist/analysisUsage.test.js` and `node --test dist/analysisApi.test.js`
+sequentially from `backend/`. The API fixture substitutes every provider fetch;
+no real provider credentials or traffic are used. Without that variable these
+database tests explicitly skip; ordinary `npm run validate` still runs the
+pure accounting, recovery, parser and transport boundary tests.
+
 ## Routes
 
 Persistence routes accept either `Authorization: Bearer <Privy access token>` or `x-save-guest-token: <server-issued guest token>`.

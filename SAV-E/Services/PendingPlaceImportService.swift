@@ -328,6 +328,8 @@ struct PendingReviewCandidate: Codable {
 }
 
 struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
+    // Transient display state; excluded from Codable/evidence/share payloads.
+    var sourceFailureReason: SourceSearchFailureReason? = nil
     var id: UUID
     var captureId: UUID?
     var workflowRunId: UUID?

@@ -1,4 +1,5 @@
 import XCTest
+import CoreLocation
 @testable import SAVE
 
 final class SAVEProductionConfigTests: XCTestCase {
@@ -364,6 +365,323 @@ private final class TransportFailureURLProtocol: URLProtocol {
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: Data(body.utf8))
         client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
+
+@MainActor
+final class SAVEAnalysisTransportTests: XCTestCase {
+    override func tearDown() {
+        AnalysisRequestURLProtocol.reset()
+        super.tearDown()
+    }
+
+    private func session() -> URLSession {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [AnalysisRequestURLProtocol.self]
+        return URLSession(configuration: config)
+    }
+
+    private func gemini(session: URLSession) -> SAVEGeminiTransport {
+        SAVEGeminiTransport(modelFallbacks: ["first", "second"], session: session,
+            accessTokenProvider: { "synthetic-token" }, directAPIKey: "must-not-be-used",
+            apiBaseURL: "https://analysis.test", maxAttemptsPerModel: 2,
+            transientRetryDelayNanoseconds: 0)
+    }
+
+    func testConcurrentGeminiSessionsCorrelateEveryFallbackWithoutLeakingScope() async throws {
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            if body["model"] as? String == "first" {
+                return (400, #"{"error":"Unsupported Gemini model"}"#)
+            }
+            return (200, #"{"ok":true}"#)
+        }
+        let runner = gemini(session: session())
+        let first = SAVEAnalysisContext(id: UUID())
+        let second = SAVEAnalysisContext(id: UUID())
+        let a = Task { @MainActor in
+            try await SAVEAnalysisScope.$current.withValue(first) { _ = try await runner.generateContent(body: [:]) }
+        }
+        let b = Task { @MainActor in
+            try await SAVEAnalysisScope.$current.withValue(second) { _ = try await runner.generateContent(body: [:]) }
+        }
+        let results = await (a.result, b.result)
+        try results.0.get()
+        try results.1.get()
+        XCTAssertNil(SAVEAnalysisScope.current)
+        let requests = AnalysisRequestURLProtocol.requests
+        XCTAssertEqual(requests.count, 4)
+        for context in [first, second] {
+            XCTAssertEqual(requests.filter { $0.value(forHTTPHeaderField: "x-save-analysis-id") == context.id.uuidString }.count, 2)
+        }
+        XCTAssertTrue(requests.allSatisfy { $0.url?.host == "analysis.test" })
+    }
+
+    func testAnalysisDenialDoesNotRetryModelOrUseDirectProvider() async {
+        for code in ["analysis_limit_exceeded", "analysis_controls_unavailable", "analysis_closed", "analysis_not_found"] {
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { _ in (429, "{\"code\":\"\(code)\"}") }
+            let context = SAVEAnalysisContext(id: UUID())
+            do {
+                _ = try await SAVEAnalysisScope.$current.withValue(context) {
+                    try await gemini(session: session()).generateContent(body: [:])
+                }
+                XCTFail("Expected a terminal analysis denial")
+            } catch SAVEAnalysisError.denied {} catch { XCTFail("Unexpected error: \(error)") }
+            XCTAssertEqual(AnalysisRequestURLProtocol.requests.count, 1)
+            XCTAssertEqual(AnalysisRequestURLProtocol.requests.first?.url?.host, "analysis.test")
+        }
+    }
+
+    func testMissingAnalysisProxyNeverUsesConfiguredDirectGeminiKey() async {
+        var runner = gemini(session: session())
+        runner.apiBaseURL = nil
+        do {
+            _ = try await SAVEAnalysisScope.$current.withValue(SAVEAnalysisContext(id: UUID())) {
+                try await runner.generateContent(body: [:])
+            }
+            XCTFail("Expected unavailable analysis")
+        } catch SAVEAnalysisError.denied {} catch { XCTFail("Unexpected error: \(error)") }
+        XCTAssertTrue(AnalysisRequestURLProtocol.requests.isEmpty)
+    }
+
+    func testGoogleUsesServerWithoutClientKeyAndKeepsOrdinarySearchRoute() async throws {
+        let result = #"{"status":"OK","results":[{"place_id":"fixture","name":"Fixture","geometry":{"location":{"lat":25.03,"lng":121.56}}}]}"#
+        AnalysisRequestURLProtocol.handler = { _ in (200, result) }
+        let places = GooglePlacesService(apiKey: "REPLACE_ME", session: session(), apiBaseURL: "https://analysis.test",
+            accessTokenProvider: { "synthetic-token" })
+        let context = SAVEAnalysisContext(id: UUID())
+        let matches = try await SAVEAnalysisScope.$current.withValue(context) {
+            try await places.searchPlace(query: "Fixture", near: nil)
+        }
+        XCTAssertEqual(matches.first?.id, "fixture")
+        let request = try XCTUnwrap(AnalysisRequestURLProtocol.requests.first)
+        XCTAssertEqual(request.url?.path, "/v0/analysis/\(context.id.uuidString)/places")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "x-save-analysis-id"), context.id.uuidString)
+        XCTAssertNil(request.url?.query)
+        let ordinary = GooglePlacesService(apiKey: "synthetic-key", session: session(), apiBaseURL: "https://analysis.test",
+            accessTokenProvider: { XCTFail("Ordinary search must keep its route"); return "unused" })
+        _ = try await ordinary.searchPlace(query: "Fixture", near: nil)
+        let unscoped = try XCTUnwrap(AnalysisRequestURLProtocol.requests.last)
+        XCTAssertEqual(unscoped.url?.host, "maps.googleapis.com")
+        XCTAssertNil(unscoped.value(forHTTPHeaderField: "x-save-analysis-id"))
+    }
+
+    func testGoogleDenialNeverFallsBackToClientKeyOrMakesLaterAnalysisCall() async {
+        AnalysisRequestURLProtocol.handler = { _ in (429, #"{"code":"analysis_limit_exceeded"}"#) }
+        let places = GooglePlacesService(apiKey: "must-not-be-used", session: session(), apiBaseURL: "https://analysis.test",
+            accessTokenProvider: { "synthetic-token" })
+        let context = SAVEAnalysisContext(id: UUID())
+        for _ in 0..<2 {
+            do {
+                _ = try await SAVEAnalysisScope.$current.withValue(context) {
+                    try await places.searchPlace(query: "Fixture", near: nil)
+                }
+                XCTFail("Expected denial")
+            } catch SAVEAnalysisError.denied {} catch { XCTFail("Unexpected error: \(error)") }
+        }
+        XCTAssertEqual(AnalysisRequestURLProtocol.requests.count, 1)
+        XCTAssertEqual(AnalysisRequestURLProtocol.requests.first?.url?.host, "analysis.test")
+    }
+
+    func testActualSessionStartAndCancelledFinishSendRedactedCorrelatedEvents() async throws {
+        let id = UUID()
+        let captureID = UUID()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.url?.path == "/v0/analysis" {
+                let body = try AnalysisRequestURLProtocol.body(request)
+                return (200, "{\"analysis_id\":\"\(body["id"] as! String)\"}")
+            }
+            return (200, "{}")
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "synthetic-token" })
+        let started = try await service.startAnalysis(id: id)
+        XCTAssertEqual(started, id)
+        let context = SAVEAnalysisContext(id: id)
+        await context.addCapture(captureID)
+        await SAVEAnalysisScope.$current.withValue(context) {
+            _ = try? await SAVEAnalysisScope.measure(.publicSearch) {
+                throw NSError(domain: "private caption or token must not enter telemetry", code: 1)
+            }
+            await SAVEAnalysisScope.measure(.localOCR) { () }
+        }
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            await service.finishAnalysis(context, outcome: "cancelled")
+        }
+        await task.value
+        let requests = AnalysisRequestURLProtocol.requests
+        XCTAssertEqual(requests.count, 3)
+        let eventsRequest = try XCTUnwrap(requests.first { $0.url?.path.hasSuffix("/client-events") == true })
+        XCTAssertTrue(eventsRequest.url!.path.contains(id.uuidString))
+        let events = try XCTUnwrap(try AnalysisRequestURLProtocol.body(eventsRequest)["events"] as? [[String: Any]])
+        XCTAssertEqual(events.count, 2)
+        XCTAssertEqual(events.first?["outcome"] as? String, "failure")
+        for event in events { XCTAssertEqual(Set(event.keys), ["event_id", "operation", "outcome", "duration_ms"]) }
+        let finish = try AnalysisRequestURLProtocol.body(try XCTUnwrap(requests.last))
+        XCTAssertEqual(finish["outcome"] as? String, "cancelled")
+        XCTAssertEqual(finish["capture_ids"] as? [String], [captureID.uuidString])
+    }
+
+    func testChinaControlDenialStopsGoogleAndLaterResolverAttempts() async {
+        for code in ["analysis_limit_exceeded", "analysis_controls_unavailable", "analysis_closed", "analysis_not_found"] {
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { _ in (429, "{\"code\":\"\(code)\"}") }
+            let google = AnalysisGoogleSpy()
+            let apple = AnalysisAppleSpy()
+            let china = BackendPlaceResolverService(apiBaseURL: "https://analysis.test", session: session(),
+                accessTokenProvider: { "synthetic-token" })
+            let resolver = PlaceResolverService(googlePlacesService: google,
+                appleMapsPlaceSearchService: apple, backendPlaceResolverService: china)
+            await SAVEAnalysisScope.$current.withValue(SAVEAnalysisContext(id: UUID())) {
+                for _ in 0..<2 {
+                    do {
+                        _ = try await resolver.searchPlace(query: "台北咖啡", near: nil)
+                        XCTFail("Expected terminal analysis denial")
+                    } catch SAVEAnalysisError.denied {} catch { XCTFail("Unexpected error: \(error)") }
+                }
+            }
+            XCTAssertEqual(google.searchCount, 0)
+            XCTAssertEqual(apple.searchCount, 1)
+            XCTAssertEqual(AnalysisRequestURLProtocol.requests.count, 1)
+            XCTAssertEqual(AnalysisRequestURLProtocol.requests.first?.url?.path, "/place-resolve")
+        }
+    }
+
+    func testRecoveryControlDenialStopsLaterRecoveryGoogleAndGeminiRequests() async {
+        AnalysisRequestURLProtocol.handler = { _ in (503, #"{"code":"analysis_controls_unavailable"}"#) }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "synthetic-token" })
+        let google = GooglePlacesService(apiKey: "must-not-be-used", session: session(), apiBaseURL: "https://analysis.test",
+            accessTokenProvider: { "synthetic-token" })
+        let runner = gemini(session: session())
+        await SAVEAnalysisScope.$current.withValue(SAVEAnalysisContext(id: UUID())) {
+            for _ in 0..<2 {
+                do {
+                    _ = try await service.recoverSourceOnlyReviewCandidates(captureId: UUID())
+                    XCTFail("Expected recovery denial")
+                } catch SAVEAnalysisError.denied {} catch { XCTFail("Unexpected error: \(error)") }
+            }
+            do {
+                _ = try await google.searchPlace(query: "Fixture", near: nil)
+                XCTFail("Expected Google to stop before sending")
+            } catch SAVEAnalysisError.denied {} catch { XCTFail("Unexpected error: \(error)") }
+            do {
+                _ = try await runner.generateContent(body: [:])
+                XCTFail("Expected Gemini to stop before sending")
+            } catch SAVEAnalysisError.denied {} catch { XCTFail("Unexpected error: \(error)") }
+        }
+        XCTAssertEqual(AnalysisRequestURLProtocol.requests.count, 1)
+        XCTAssertTrue(AnalysisRequestURLProtocol.requests.first?.url?.path.hasSuffix("/search-recovery") == true)
+    }
+
+    func testEmptyClientEventsStillSendsReceiptBeforeFinish() async throws {
+        AnalysisRequestURLProtocol.handler = { _ in (200, "{}") }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "synthetic-token" })
+        await service.finishAnalysis(SAVEAnalysisContext(id: UUID()), outcome: "source_only")
+        let requests = AnalysisRequestURLProtocol.requests
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertTrue(requests.first?.url?.path.hasSuffix("/client-events") == true)
+        let body = try AnalysisRequestURLProtocol.body(try XCTUnwrap(requests.first))
+        XCTAssertEqual((body["events"] as? [Any])?.count, 0)
+        XCTAssertEqual(body["events_truncated"] as? Bool, false)
+        XCTAssertTrue(requests.last?.url?.path.hasSuffix("/finish") == true)
+    }
+
+    func testClientEventBufferReportsOverflowAndKeepsCountsPerSession() async {
+        let context = SAVEAnalysisContext(id: UUID())
+        for _ in 0..<65 {
+            await context.record(.metadata, outcome: .success, started: ProcessInfo.processInfo.systemUptime)
+        }
+        let snapshot = await context.snapshot()
+        XCTAssertEqual(snapshot.events.count, 64)
+        XCTAssertTrue(snapshot.eventsTruncated)
+        let independent = await SAVEAnalysisContext(id: UUID()).snapshot()
+        XCTAssertTrue(independent.events.isEmpty)
+        XCTAssertFalse(independent.eventsTruncated)
+    }
+
+    func testFailureReceiptUsesActionableCopyWithoutProviderDiagnostics() throws {
+        for reason in ["login_required", "expired", "caption_missing", "unresolved_source", "no_place_evidence"] {
+            let data = Data("{\"created_candidates\":[],\"receipt\":{\"failureReason\":{\"kind\":\"insufficient_source\",\"reason\":\"\(reason)\"}}}".utf8)
+            let recovered = try SupabaseService.decodeSourceSearchRecoveryResponse(data)
+            let failure = try XCTUnwrap(recovered.failureReason)
+            XCTAssertEqual(failure.kind, .insufficientSource)
+            XCTAssertTrue(failure.englishMessage.contains("caption"))
+            XCTAssertTrue(failure.englishMessage.contains("screenshot"))
+        }
+        let data = Data(#"{"created_candidates":[],"receipt":{"failureReason":{"kind":"provider_failure","stage":"public_search"}}}"#.utf8)
+        let failure = try XCTUnwrap(try SupabaseService.decodeSourceSearchRecoveryResponse(data).failureReason)
+        XCTAssertTrue(failure.englishMessage.contains("try again"))
+        XCTAssertFalse(failure.englishMessage.contains("public_search"))
+        XCTAssertNil(try SupabaseService.decodeSourceSearchRecoveryResponse(Data(#"{"created_candidates":[]}"#.utf8)).failureReason)
+    }
+}
+
+@MainActor
+private final class AnalysisGoogleSpy: GooglePlacesServiceProtocol {
+    var searchCount = 0
+    func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] {
+        searchCount += 1
+        return []
+    }
+    func getPlaceDetails(placeId: String) async throws -> GooglePlaceDetails { throw GooglePlacesError.noResults }
+    func photoURL(reference: String, maxWidth: Int) -> URL? { nil }
+}
+
+@MainActor
+private final class AnalysisAppleSpy: AppleMapsPlaceSearchServiceProtocol {
+    var searchCount = 0
+    func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] {
+        searchCount += 1
+        return []
+    }
+}
+
+private final class AnalysisRequestURLProtocol: URLProtocol {
+    private final class State: @unchecked Sendable {
+        let lock = NSLock()
+        var requests: [URLRequest] = []
+        var handler: ((URLRequest) throws -> (Int, String))?
+    }
+    private static let state = State()
+    static var requests: [URLRequest] { state.lock.withLock { state.requests } }
+    static var handler: ((URLRequest) throws -> (Int, String))? {
+        get { state.lock.withLock { state.handler } }
+        set { state.lock.withLock { state.handler = newValue } }
+    }
+    static func reset() { state.lock.withLock { state.requests = []; state.handler = nil } }
+    static func body(_ request: URLRequest) throws -> [String: Any] {
+        var data = request.httpBody ?? Data()
+        if data.isEmpty, let stream = request.httpBodyStream {
+            stream.open()
+            defer { stream.close() }
+            var buffer = [UInt8](repeating: 0, count: 2048)
+            while stream.hasBytesAvailable {
+                let count = stream.read(&buffer, maxLength: buffer.count)
+                if count <= 0 { break }
+                data.append(buffer, count: count)
+            }
+        }
+        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        do {
+            // Materialize URLSession's stream once so assertions can inspect it after completion.
+            var recorded = request
+            if recorded.httpBody == nil, request.httpBodyStream != nil {
+                recorded.httpBody = try JSONSerialization.data(withJSONObject: Self.body(request))
+            }
+            let handler = Self.state.lock.withLock { Self.state.requests.append(recorded); return Self.state.handler }
+            guard let handler else { throw URLError(.badServerResponse) }
+            let (status, body) = try handler(recorded)
+            client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status,
+                httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: Data(body.utf8))
+            client?.urlProtocolDidFinishLoading(self)
+        } catch { client?.urlProtocol(self, didFailWithError: error) }
     }
     override func stopLoading() {}
 }

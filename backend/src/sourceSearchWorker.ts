@@ -1,3 +1,4 @@
+import { AnalysisControlError, trackAnalysisOperation, type AnalysisOperation } from "./analysisUsage.js";
 import { createHash } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
@@ -6,6 +7,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+
+async function analysisFetch(operation:AnalysisOperation,input:Parameters<typeof fetch>[0],init?:Parameters<typeof fetch>[1],fetchImpl:typeof fetch=fetch):Promise<Response> {
+  return trackAnalysisOperation({operation},async()=>{
+    const response=await fetchImpl(input,init);
+    if(response.status===429 || response.status>=500) {
+      await response.body?.cancel().catch(()=>{});
+      throw new Error(`Provider HTTP ${response.status}`);
+    }
+    return response;
+  });
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -35,6 +47,10 @@ export type SourceSearchCandidate = {
   missingInfo: string[];
 };
 
+export type SourceRecoveryFailureReason =
+  | { kind: "insufficient_source"; reason: "login_required" | "expired" | "unresolved_source" | "caption_missing" | "no_place_evidence" }
+  | { kind: "provider_failure"; stage: "source" | "media" | "public_search" };
+
 export type SourceRecoveryReceipt = {
   input: "social_url" | "web_url" | "text";
   capabilityLevel: "metadata_enrichment" | "public_search_recovery" | "media_evidence_recovery";
@@ -43,6 +59,7 @@ export type SourceRecoveryReceipt = {
   missing: string[];
   output: "review_candidate" | "source_only_clue" | "diagnostic_only";
   nextBestClue: string;
+  failureReason?: SourceRecoveryFailureReason;
 };
 
 export type SourceMediaEvidence = {
@@ -107,6 +124,7 @@ export type SourceSearchWorkerOptions = {
   rubricEvaluator?: EvidenceRubricEvaluator;
   sourceDocumentResolver?: SourceDocumentResolver;
   persistedSourceResolution?: unknown;
+  includeMediaEvidence?: boolean;
 };
 
 type PlacesCorroboration = {
@@ -156,7 +174,15 @@ export async function runSourceSearchRecovery(
   );
   const sourceMetadata = sourceDocument?.metadata;
   const sourceResolution = sourceDocument?.resolution;
-  const mediaEvidence = await recoverSourceMediaEvidence(sourceMetadata, fetchMediaEvidence, errors);
+  let providerFailure: SourceRecoveryFailureReason | undefined = errors.length > 0
+    ? { kind: "provider_failure", stage: "source" }
+    : undefined;
+  const includeMediaEvidence = options.includeMediaEvidence !== false;
+  const errorsBeforeMedia = errors.length;
+  const mediaEvidence = includeMediaEvidence
+    ? await recoverSourceMediaEvidence(sourceMetadata, fetchMediaEvidence, errors)
+    : [];
+  if (errors.length > errorsBeforeMedia) providerFailure ??= { kind: "provider_failure", stage: "media" };
   const enrichedInput = inputWithSourceMetadata(input, sourceMetadata, sourceResolution);
   const queries = buildSourceRecoveryQueries(enrichedInput).slice(0, input.maxQueries ?? defaultMaxQueries);
   const searchResults: SourceSearchResult[] = [];
@@ -165,8 +191,10 @@ export async function runSourceSearchRecovery(
     try {
       searchResults.push(...await searchPublicWebResults(query, fetchText, maxResultsPerQuery));
     } catch (error) {
+      if(error instanceof AnalysisControlError) throw error;
       const message = error instanceof Error ? error.message : "Unknown search error";
       errors.push(`${query}: ${message}`);
+      providerFailure ??= { kind: "provider_failure", stage: "public_search" };
     }
   }
 
@@ -203,6 +231,8 @@ export async function runSourceSearchRecovery(
       candidates,
       mediaEvidence,
       errors,
+      includeMediaEvidence,
+      providerFailure,
     ),
   };
 }
@@ -393,6 +423,8 @@ function buildSourceRecoveryReceipt(
   candidates: SourceSearchCandidate[],
   mediaEvidence: SourceMediaEvidence[],
   errors: string[],
+  includeMediaEvidence: boolean,
+  providerFailure: SourceRecoveryFailureReason | undefined,
 ): SourceRecoveryReceipt {
   const found: string[] = [];
   const tried: string[] = [];
@@ -422,8 +454,8 @@ function buildSourceRecoveryReceipt(
     tried.push("source_resolution");
     tried.push("public_source_metadata");
   }
-  if (metadata?.imageURL || metadata?.videoURL) tried.push("public_media_fetch");
-  if (metadata?.videoURL) tried.push("server_keyframe_extraction");
+  if (includeMediaEvidence && (metadata?.imageURL || metadata?.videoURL)) tried.push("public_media_fetch");
+  if (includeMediaEvidence && metadata?.videoURL) tried.push("server_keyframe_extraction");
   if (queries.length > 0) tried.push("public_search");
   if (candidates.length > 0) tried.push("candidate_quality_gate");
   if (errors.length > 0) tried.push("error_capture");
@@ -445,6 +477,26 @@ function buildSourceRecoveryReceipt(
   if (sourceResolution?.status === "expired") missing.add("Unexpired source link");
   if (sourceResolution?.status === "opaque_unresolved") missing.add("Canonical source URL or readable share evidence");
 
+  let failureReason: SourceRecoveryFailureReason | undefined;
+  if (candidates.length === 0) {
+    // Confirmed source dispositions are evidence gaps, even if fallback search
+    // also fails. Provider failures are tracked by stage, never by raw messages.
+    if (sourceResolution?.status === "blocked_login") {
+      failureReason = { kind: "insufficient_source", reason: "login_required" };
+    } else if (sourceResolution?.status === "expired") {
+      failureReason = { kind: "insufficient_source", reason: "expired" };
+    } else if (sourceResolution?.status === "opaque_unresolved") {
+      failureReason = { kind: "insufficient_source", reason: "unresolved_source" };
+    } else if (providerFailure) {
+      failureReason = providerFailure;
+    } else if (sourceURL && !input.rawText?.trim() && !metadata?.description?.trim()
+      && !mediaEvidence.some(item => item.text?.trim())) {
+      failureReason = { kind: "insufficient_source", reason: "caption_missing" };
+    } else {
+      failureReason = { kind: "insufficient_source", reason: "no_place_evidence" };
+    }
+  }
+
   return {
     input: inputKind,
     capabilityLevel: mediaEvidence.some((item) => item.kind === "video_keyframe")
@@ -463,6 +515,7 @@ function buildSourceRecoveryReceipt(
         ? "source_only_clue"
         : "diagnostic_only",
     nextBestClue: nextBestClue(candidates),
+    ...(failureReason ? { failureReason } : {}),
   };
 }
 
@@ -564,6 +617,7 @@ async function finalizeCandidates(
       const places = await context.placesCorroborator(next);
       if (places) next = applyPlacesCorroboration(next, places);
     } catch (error) {
+      if(error instanceof AnalysisControlError) throw error;
       const message = error instanceof Error ? error.message : "Unknown Places corroboration error";
       errors.push(`places corroboration ${candidate.name}: ${message}`);
     }
@@ -679,7 +733,7 @@ async function externalEvidenceRubricEvaluator(input: EvidenceRubricInput): Prom
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
-    const response = await fetch(url.toString(), {
+    const response = await analysisFetch("rubric", url.toString(), {
       method: "POST",
       headers: {
         "User-Agent": "Savvy evidence rubric/1.0",
@@ -696,7 +750,8 @@ async function externalEvidenceRubricEvaluator(input: EvidenceRubricInput): Prom
     if (isRedirectResponse(response) || !response.ok) return undefined;
     const body = JSON.parse(await boundedResponseText(response, 64_000)) as unknown;
     return normalizeRubricVerdict(body);
-  } catch {
+  } catch (error) {
+    if(error instanceof AnalysisControlError) throw error;
     return undefined;
   } finally {
     clearTimeout(timeout);
@@ -767,7 +822,7 @@ function normalizeRubricVerdict(value: unknown): EvidenceRubricVerdict | undefin
   };
 }
 
-async function defaultPlacesCorroborator(candidate: SourceSearchCandidate): Promise<PlacesCorroboration | undefined> {
+export async function defaultPlacesCorroborator(candidate: SourceSearchCandidate): Promise<PlacesCorroboration | undefined> {
   const key = process.env.GOOGLE_PLACES_API_KEY;
   if (!key) return undefined;
   const query = [candidate.name, candidate.address].filter(Boolean).join(" ");
@@ -778,15 +833,21 @@ async function defaultPlacesCorroborator(candidate: SourceSearchCandidate): Prom
     fields: "place_id,name,formatted_address,geometry",
   });
   const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`;
+  return trackAnalysisOperation({operation:"google_places"}, async () => {
   const response = await fetch(url, {
     headers: {
       "User-Agent": "Savvy Places corroborator/1.0",
       "Accept": "application/json",
     },
     redirect: "manual",
+    signal: AbortSignal.timeout(10_000),
   });
-  if (isRedirectResponse(response) || !response.ok) return undefined;
+  if (isRedirectResponse(response) || !response.ok) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error("Places provider unavailable");
+  }
   const body = JSON.parse(await boundedResponseText(response, 512_000)) as {
+    status?: string;
     results?: Array<{
       place_id?: string;
       name?: string;
@@ -794,6 +855,7 @@ async function defaultPlacesCorroborator(candidate: SourceSearchCandidate): Prom
       geometry?: { location?: { lat?: number; lng?: number } };
     }>;
   };
+  if (!["OK", "ZERO_RESULTS"].includes(body.status ?? "")) throw new Error("Places provider unavailable");
   const result = body.results?.[0];
   if (!result) return undefined;
   const latitude = result.geometry?.location?.lat;
@@ -807,6 +869,7 @@ async function defaultPlacesCorroborator(candidate: SourceSearchCandidate): Prom
     confidenceBoost: 0.22,
     evidence: ["Places resolver matched the candidate by name/address query"],
   };
+  });
 }
 
 function mediaEvidencePlaceName(text: string, address?: string): string | undefined {
@@ -1190,7 +1253,7 @@ export async function defaultFetchText(url: string, signal?: AbortSignal): Promi
   else signal?.addEventListener("abort", abortFromParent, { once: true });
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
-    const response = await fetch(parsed.toString(), {
+    const response = await analysisFetch("public_search", parsed.toString(), {
       headers: {
         "User-Agent": "Savvy source recovery worker/1.0",
         "Accept": "text/html,application/xhtml+xml",
@@ -1236,14 +1299,14 @@ export async function resolveSourceDocument(
     let response: Response | undefined;
     const redirectChain = [originalURL];
     for (let redirectCount = 0; redirectCount <= maxMetadataRedirects; redirectCount += 1) {
-      response = await fetchImpl(parsed.toString(), {
+      response = await analysisFetch("metadata", parsed.toString(), {
         headers: {
           "User-Agent": "Savvy social metadata fetcher/1.0",
           "Accept": "text/html,application/xhtml+xml",
         },
         redirect: "manual",
         signal: controller.signal,
-      });
+      }, fetchImpl);
       if (!isRedirectResponse(response)) break;
 
       const location = response.headers.get("location");
@@ -1400,6 +1463,7 @@ async function fetchSourceDocument(
       : undefined;
     return { metadata, resolution: document.resolution };
   } catch (error) {
+      if(error instanceof AnalysisControlError) throw error;
     const message = error instanceof Error ? error.message : "Unknown source metadata error";
     errors.push(`source metadata ${url.toString()}: ${message}`);
     return undefined;
@@ -1493,7 +1557,8 @@ function canonicalSourceURL(html: string, baseURL: URL): URL | undefined {
     let candidate: URL | undefined;
     try {
       candidate = safeURL(new URL(href, baseURL).toString());
-    } catch {
+    } catch (error) {
+    if(error instanceof AnalysisControlError) throw error;
       continue;
     }
     if (candidate && isSafePublicHTTPURLByHostname(candidate) && sameDomainFamily(candidate, baseURL)) {
@@ -1642,6 +1707,7 @@ async function recoverSourceMediaEvidence(
   try {
     return await fetchMediaEvidence(metadata);
   } catch (error) {
+      if(error instanceof AnalysisControlError) throw error;
     const message = error instanceof Error ? error.message : "Unknown source media error";
     errors.push(`source media recovery: ${message}`);
     return [];
@@ -1686,30 +1752,67 @@ async function defaultFetchMediaEvidence(metadata: SourceMetadata): Promise<Sour
   return evidence;
 }
 
-async function fetchBoundedMedia(url: string, maxBytes: number): Promise<{ data: Uint8Array; contentType?: string } | undefined> {
+export async function fetchBoundedMedia(
+  url: string,
+  maxBytes: number,
+  fetchImpl: typeof fetch = fetch,
+  timeoutMs = 10_000,
+): Promise<{ data: Uint8Array; contentType?: string } | undefined> {
   const parsed = safeURL(url);
   if (!parsed || !(await isSafePublicHTTPURL(parsed))) return undefined;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+  let response: Response | undefined;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  let completed = false;
+  // Cancel a pending read as well as the request, including injected streams
+  // that do not themselves listen to the fetch signal.
+  const cancelRead = () => { void reader?.cancel().catch(() => {}); };
+  controller.signal.addEventListener("abort", cancelRead, { once: true });
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(parsed.toString(), {
+    response = await analysisFetch("media_download", parsed.toString(), {
       headers: {
         "User-Agent": "Savvy source recovery media fetcher/1.0",
         "Accept": "image/avif,image/webp,image/apng,image/*,video/*,*/*;q=0.8",
       },
       redirect: "manual",
       signal: controller.signal,
-    });
-    if (isRedirectResponse(response)) return undefined;
-    if (!response.ok) return undefined;
+    }, fetchImpl);
+    controller.signal.throwIfAborted();
+    if (isRedirectResponse(response) || !response.ok) return undefined;
     const length = Number(response.headers.get("content-length") ?? "0");
     if (length > maxBytes) return undefined;
-    const data = new Uint8Array(await response.arrayBuffer());
-    if (data.byteLength > maxBytes) return undefined;
+
+    const chunks: Uint8Array[] = [];
+    let byteLength = 0;
+    reader = response.body?.getReader();
+    if (reader) {
+      while (true) {
+        const { value, done } = await reader.read();
+        controller.signal.throwIfAborted();
+        if (done) break;
+        if (value.byteLength > maxBytes - byteLength) return undefined;
+        byteLength += value.byteLength;
+        if (value.byteLength > 0) chunks.push(value);
+      }
+    }
+    const data = new Uint8Array(byteLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      data.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    completed = true;
     return { data, contentType: response.headers.get("content-type") ?? undefined };
   } finally {
     clearTimeout(timeout);
+    controller.signal.removeEventListener("abort", cancelRead);
+    if (!completed) {
+      controller.abort();
+      await (reader ? reader.cancel() : response?.body?.cancel())?.catch(() => {});
+    }
+    reader?.releaseLock();
   }
 }
 
@@ -1747,7 +1850,8 @@ async function extractFirstKeyframe(videoData: Uint8Array, sourceUrl: string): P
       text: ocrText,
       textSource: ocrText ? "ocr" : undefined,
     };
-  } catch {
+  } catch (error) {
+    if(error instanceof AnalysisControlError) throw error;
     return undefined;
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -1758,13 +1862,14 @@ async function extractOCRText(imagePath: string): Promise<string | undefined> {
   if (process.env.SAVE_ENABLE_SERVER_OCR !== "true") return undefined;
   try {
     const command = process.env.SAVE_SERVER_OCR_COMMAND?.trim() || "tesseract";
-    const { stdout } = await execFileAsync(command, [imagePath, "stdout"], {
+    const { stdout } = await trackAnalysisOperation({operation:"local_ocr"}, () => execFileAsync(command, [imagePath, "stdout"], {
       timeout: 10_000,
       maxBuffer: 500_000,
-    });
+    }));
     const text = cleanText(stdout);
     return text.length >= 2 ? text.slice(0, 2_000) : undefined;
-  } catch {
+  } catch (error) {
+    if(error instanceof AnalysisControlError) throw error;
     return undefined;
   }
 }
@@ -1777,7 +1882,7 @@ async function extractASRTranscript(videoData: Uint8Array): Promise<string | und
     await writeFile(input, videoData);
     const command = process.env.SAVE_SERVER_ASR_COMMAND?.trim() || "whisper";
     const model = process.env.SAVE_SERVER_ASR_MODEL?.trim() || "base";
-    await execFileAsync(command, [
+    await trackAnalysisOperation({operation:"local_asr"}, () => execFileAsync(command, [
       input,
       "--model",
       model,
@@ -1785,10 +1890,11 @@ async function extractASRTranscript(videoData: Uint8Array): Promise<string | und
       "txt",
       "--output_dir",
       dir,
-    ], { timeout: 60_000, maxBuffer: 1_000_000 });
+    ], { timeout: 60_000, maxBuffer: 1_000_000 }));
     const text = cleanText(await readFile(join(dir, "input.txt"), "utf8"));
     return text.length >= 2 ? text.slice(0, 4_000) : undefined;
-  } catch {
+  } catch (error) {
+    if(error instanceof AnalysisControlError) throw error;
     return undefined;
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -1808,7 +1914,8 @@ async function isSafePublicHTTPURL(url: URL): Promise<boolean> {
   try {
     const addresses = await lookup(host, { all: true, verbatim: true });
     return addresses.length > 0 && addresses.every((address) => !isPrivateIPAddress(address.address));
-  } catch {
+  } catch (error) {
+    if(error instanceof AnalysisControlError) throw error;
     return false;
   }
 }
@@ -1920,7 +2027,8 @@ function sha256(data: Uint8Array): string {
 function safeURL(value: string): URL | undefined {
   try {
     return new URL(value);
-  } catch {
+  } catch (error) {
+    if(error instanceof AnalysisControlError) throw error;
     return undefined;
   }
 }
@@ -1938,7 +2046,8 @@ function normalizeDuckDuckGoURL(value: string): string | undefined {
     const url = new URL(value, "https://duckduckgo.com");
     const uddg = url.searchParams.get("uddg");
     return uddg ? decodeURIComponent(uddg) : url.toString();
-  } catch {
+  } catch (error) {
+    if(error instanceof AnalysisControlError) throw error;
     return undefined;
   }
 }

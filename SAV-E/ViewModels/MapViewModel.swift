@@ -628,6 +628,7 @@ final class MapViewModel: ObservableObject {
     /// exact candidates returned by that search. A later unrelated map tap
     /// must never retire the clue.
     private var exactSearchResolution: ExactSearchResolution?
+    private var importFailureReasons: [UUID: SourceSearchFailureReason] = [:]
     /// Invalidates any in-flight map search before it can publish stale pins.
     private var mapCandidateSearchGeneration = UUID()
     /// Last trustworthy generic-search or locate center used to reject outliers.
@@ -979,48 +980,56 @@ final class MapViewModel: ObservableObject {
         var failedCandidates = Array(pending.dropFirst(Self.pendingReviewImportBatchLimit))
 
         for candidate in currentBatch {
-            let refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
-            mirrorToLocalVault(refinedCandidate)
-            var run: PlaceRecoveryWorkflowRun?
-            var failedStep = "validate_input"
             do {
-                let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(
-                    sourceURL: refinedCandidate.sourceURL,
-                    sourceType: nil
-                )
-                let createdRun = try await supabaseService.createPlaceRecoveryRun(
-                    workOrderId: workOrder.id,
-                    sourceURL: refinedCandidate.sourceURL,
-                    sourceType: nil
-                )
-                run = createdRun
-                failedStep = "persist_candidate"
-                let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
-                let candidateId = try await supabaseService.createPlaceCandidate(
-                    refinedCandidate,
-                    captureId: captureId,
-                    userId: userId,
-                    workflowRunId: createdRun.id
-                )
-                failedStep = "write_receipt"
-                _ = try await supabaseService.recordPlaceRecoveryResult(
-                    placeRecoveryResult(for: refinedCandidate, candidateId: candidateId),
-                    for: createdRun.id
-                )
-                if runSourceRecovery && refinedCandidate.isSourceOnly {
-                    _ = try? await supabaseService.recoverSourceOnlyReviewCandidates(captureId: captureId, workflowRunId: createdRun.id)
+                _ = try saveLocalVaultService.saveReviewCandidate(candidate)
+                try await withImportAnalysis {
+                    let refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
+                    mirrorToLocalVault(refinedCandidate)
+                    var run: PlaceRecoveryWorkflowRun?
+                    var failedStep = "validate_input"
+                    do {
+                        let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(
+                            sourceURL: refinedCandidate.sourceURL,
+                            sourceType: nil
+                        )
+                        let createdRun = try await supabaseService.createPlaceRecoveryRun(
+                            workOrderId: workOrder.id,
+                            sourceURL: refinedCandidate.sourceURL,
+                            sourceType: nil
+                        )
+                        run = createdRun
+                        failedStep = "persist_candidate"
+                        let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
+                        await SAVEAnalysisScope.current?.addCapture(captureId)
+                        let candidateId = try await supabaseService.createPlaceCandidate(
+                            refinedCandidate,
+                            captureId: captureId,
+                            userId: userId,
+                            workflowRunId: createdRun.id
+                        )
+                        if !refinedCandidate.isSourceOnly { await SAVEAnalysisScope.current?.foundReviewCandidate() }
+                        failedStep = "write_receipt"
+                        _ = try await supabaseService.recordPlaceRecoveryResult(
+                            placeRecoveryResult(for: refinedCandidate, candidateId: candidateId),
+                            for: createdRun.id
+                        )
+                        if runSourceRecovery && refinedCandidate.isSourceOnly {
+                            await recoverImportSource(captureId: captureId, candidateId: candidateId, workflowRunId: createdRun.id)
+                        }
+                    } catch {
+                        if failedStep != "write_receipt" {
+                            await recordPlaceRecoveryFailureIfNeeded(
+                                run: run,
+                                candidate: refinedCandidate,
+                                error: error,
+                                failedStep: failedStep
+                            )
+                        }
+                        throw error
+                    }
                 }
             } catch {
-                if failedStep != "write_receipt" {
-                    await recordPlaceRecoveryFailureIfNeeded(
-                        run: run,
-                        candidate: refinedCandidate,
-                        error: error,
-                        failedStep: failedStep
-                    )
-                }
                 failedCandidates.append(candidate)
-                print("MapViewModel: failed to import review candidate \(candidate.candidateName): \(error)")
             }
         }
 
@@ -1029,7 +1038,11 @@ final class MapViewModel: ObservableObject {
 
     func refreshReviewCandidates() async throws {
         let candidates = try await supabaseService.fetchReviewCandidates()
-        reviewCandidates = candidates.filter { candidate in
+        reviewCandidates = candidates.map { candidate in
+            var candidate = candidate
+            candidate.sourceFailureReason = importFailureReasons[candidate.id]
+            return candidate
+        }.filter { candidate in
             candidate.status == "review" || candidate.status == "confirmed" ||
                 candidate.status == "needs_more_evidence" || candidate.status == "source_only"
         }
@@ -1061,7 +1074,7 @@ final class MapViewModel: ObservableObject {
         }
         guard !analysisInput.isEmpty else { throw URLError(.badURL) }
         if let sourceURL {
-            _ = try? saveLocalVaultService.saveSourceOnly(url: sourceURL)
+            _ = try saveLocalVaultService.saveSourceOnly(url: sourceURL, note: normalizedShare.captionEvidence)
         }
 
         let candidates: [PendingReviewCandidate]
@@ -1107,57 +1120,108 @@ final class MapViewModel: ObservableObject {
         guard let userId = authService.currentUserId else {
             throw SupabaseError.notAuthenticated
         }
-        candidates = await socialLinkReviewCandidateService
-            .reviewCandidates(fromSharedText: analysisInput)
-            .map { candidate in
-                var candidate = candidate
-                if sourceURL == nil { candidate.sourceURL = nil }
-                return candidate
-            }
-        var importedCandidateIDs: [UUID] = []
-        for candidate in candidates {
-            mirrorToLocalVault(candidate)
-            var run: PlaceRecoveryWorkflowRun?
-            var failedStep = "validate_input"
-            do {
-                let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(sourceURL: candidate.sourceURL, sourceType: nil)
-                let createdRun = try await supabaseService.createPlaceRecoveryRun(workOrderId: workOrder.id, sourceURL: candidate.sourceURL, sourceType: nil)
-                run = createdRun
-                failedStep = "persist_candidate"
-                let captureId = try await supabaseService.createMemoryCapture(from: candidate, userId: userId)
-                let candidateId = try await supabaseService.createPlaceCandidate(
-                    candidate,
-                    captureId: captureId,
-                    userId: userId,
-                    workflowRunId: createdRun.id
-                )
-                importedCandidateIDs.append(candidateId)
-                failedStep = "write_receipt"
-                _ = try await supabaseService.recordPlaceRecoveryResult(
-                    placeRecoveryResult(for: candidate, candidateId: candidateId),
-                    for: createdRun.id
-                )
-                if candidate.isSourceOnly {
-                    let recovered = try? await supabaseService.recoverSourceOnlyReviewCandidates(
+        if sourceURL == nil {
+            _ = try saveLocalVaultService.saveReviewCandidate(PendingReviewCandidate(
+                candidateName: "Source clue", address: "", category: "other", sourceURL: nil,
+                sourceText: analysisInput, evidence: [], confidence: 0, missingInfo: ["Exact place"],
+                savedAt: Date(), isSourceOnly: true
+            ))
+        }
+        return try await withImportAnalysis {
+            let candidates = await socialLinkReviewCandidateService
+                .reviewCandidates(fromSharedText: analysisInput)
+                .map { candidate in
+                    var candidate = candidate
+                    if sourceURL == nil { candidate.sourceURL = nil }
+                    return candidate
+                }
+            var importedCandidateIDs: [UUID] = []
+            for candidate in candidates {
+                mirrorToLocalVault(candidate)
+                var run: PlaceRecoveryWorkflowRun?
+                var failedStep = "validate_input"
+                do {
+                    let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(sourceURL: candidate.sourceURL, sourceType: nil)
+                    let createdRun = try await supabaseService.createPlaceRecoveryRun(workOrderId: workOrder.id, sourceURL: candidate.sourceURL, sourceType: nil)
+                    run = createdRun
+                    failedStep = "persist_candidate"
+                    let captureId = try await supabaseService.createMemoryCapture(from: candidate, userId: userId)
+                    await SAVEAnalysisScope.current?.addCapture(captureId)
+                    let candidateId = try await supabaseService.createPlaceCandidate(
+                        candidate,
                         captureId: captureId,
+                        userId: userId,
                         workflowRunId: createdRun.id
                     )
-                    importedCandidateIDs.append(contentsOf: recovered?.createdCandidates.map(\.id) ?? [])
-                }
-            } catch {
-                if failedStep != "write_receipt" {
-                    await recordPlaceRecoveryFailureIfNeeded(
-                        run: run,
-                        candidate: candidate,
-                        error: error,
-                        failedStep: failedStep
+                    importedCandidateIDs.append(candidateId)
+                    if !candidate.isSourceOnly { await SAVEAnalysisScope.current?.foundReviewCandidate() }
+                    failedStep = "write_receipt"
+                    _ = try await supabaseService.recordPlaceRecoveryResult(
+                        placeRecoveryResult(for: candidate, candidateId: candidateId),
+                        for: createdRun.id
                     )
+                    if candidate.isSourceOnly {
+                        let recovered = await recoverImportSource(captureId: captureId, candidateId: candidateId, workflowRunId: createdRun.id)
+                        importedCandidateIDs.append(contentsOf: recovered)
+                    }
+                } catch {
+                    if failedStep != "write_receipt" {
+                        await recordPlaceRecoveryFailureIfNeeded(
+                            run: run,
+                            candidate: candidate,
+                            error: error,
+                            failedStep: failedStep
+                        )
+                    }
+                    throw error
                 }
+            }
+            try await refreshReviewCandidates()
+            return Array(Set(importedCandidateIDs))
+        }
+    }
+
+    private func withImportAnalysis<T>(_ work: () async throws -> T) async throws -> T {
+        try Task.checkCancellation()
+        let context = SAVEAnalysisContext(id: UUID())
+        do {
+            // Protocol fakes can opt out without starting real network sessions.
+            guard try await supabaseService.startAnalysis(id: context.id) != nil else { return try await work() }
+        } catch {
+            // Start may have reached the server even if its response was lost.
+            await supabaseService.finishAnalysis(context, outcome: Task.isCancelled ? "cancelled" : "failed")
+            throw error
+        }
+        return try await SAVEAnalysisScope.$current.withValue(context) {
+            do {
+                try Task.checkCancellation()
+                let result = try await work()
+                try Task.checkCancellation()
+                await supabaseService.finishAnalysis(context, outcome: nil)
+                return result
+            } catch {
+                let cancelled = Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled
+                await supabaseService.finishAnalysis(context, outcome: cancelled ? "cancelled" : "failed")
                 throw error
             }
         }
-        try await refreshReviewCandidates()
-        return Array(Set(importedCandidateIDs))
+    }
+
+    @discardableResult
+    private func recoverImportSource(captureId: UUID, candidateId: UUID, workflowRunId: UUID) async -> [UUID] {
+        do {
+            let recovered = try await supabaseService.recoverSourceOnlyReviewCandidates(captureId: captureId, workflowRunId: workflowRunId)
+            if let reason = recovered.failureReason {
+                importFailureReasons[candidateId] = reason
+                if reason.kind == .providerFailure { await SAVEAnalysisScope.current?.markProviderFailure() }
+            }
+            if !recovered.createdCandidates.isEmpty { await SAVEAnalysisScope.current?.foundReviewCandidate() }
+            return recovered.createdCandidates.map(\.id)
+        } catch {
+            importFailureReasons[candidateId] = SourceSearchFailureReason(kind: .providerFailure, reason: nil, stage: "source")
+            await SAVEAnalysisScope.current?.markProviderFailure()
+            return []
+        }
     }
 
     func rejectReviewCandidate(_ candidate: PlaceReviewCandidate) async throws {

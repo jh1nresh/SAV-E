@@ -77,6 +77,105 @@ enum SAVEProductionConfig {
     }
 }
 
+// Per-import correlation never enters place evidence, notes, or share payloads.
+enum SAVEAnalysisScope {
+    @TaskLocal static var current: SAVEAnalysisContext?
+
+    static func measure<T>(_ operation: SAVEAnalysisClientEvent.Operation, outcome: (T) -> SAVEAnalysisClientEvent.Outcome = { _ in .success }, work: () async throws -> T) async rethrows -> T {
+        guard let context = current else { return try await work() }
+        let started = ProcessInfo.processInfo.systemUptime
+        do {
+            let result = try await work()
+            await context.record(operation, outcome: outcome(result), started: started)
+            return result
+        } catch {
+            let cancelled = error is CancellationError || (error as? URLError)?.code == .cancelled
+            await context.record(operation, outcome: cancelled ? .cancelled : .failure, started: started)
+            throw error
+        }
+    }
+
+    static func httpOutcome(_ result: (Data, URLResponse)) -> SAVEAnalysisClientEvent.Outcome {
+        guard let response = result.1 as? HTTPURLResponse, (200..<300).contains(response.statusCode) else { return .failure }
+        return .success
+    }
+}
+
+struct SAVEAnalysisClientEvent: Codable, Sendable {
+    enum Operation: String, Codable, Sendable {
+        case metadata, publicSearch = "public_search", appleMaps = "apple_maps"
+        case chinaPlaces = "china_places", localOCR = "local_ocr"
+    }
+    enum Outcome: String, Codable, Sendable { case success, failure, cancelled }
+    let event_id: UUID
+    let operation: Operation
+    let outcome: Outcome
+    let duration_ms: Int
+}
+
+actor SAVEAnalysisContext {
+    nonisolated let id: UUID
+    private var events: [SAVEAnalysisClientEvent] = []
+    private var eventsTruncated = false
+    private var captureIDs: [UUID] = []
+    private var hasReviewCandidate = false
+    private var providerFailed = false
+    private var denied = false
+
+    init(id: UUID) { self.id = id }
+    func record(_ operation: SAVEAnalysisClientEvent.Operation, outcome: SAVEAnalysisClientEvent.Outcome, started: TimeInterval) {
+        // Bound payloads and never accept arbitrary source/query/error strings.
+        guard events.count < 64 else { eventsTruncated = true; return }
+        events.append(SAVEAnalysisClientEvent(event_id: UUID(), operation: operation, outcome: outcome,
+            duration_ms: min(300_000, max(0, Int((ProcessInfo.processInfo.systemUptime - started) * 1000)))))
+    }
+    func addCapture(_ id: UUID) { if !captureIDs.contains(id) { captureIDs.append(id) } }
+    func foundReviewCandidate() { hasReviewCandidate = true }
+    func markProviderFailure() { providerFailed = true }
+    func markDenied() { denied = true; providerFailed = true }
+    func checkAllowed() throws { if denied { throw SAVEAnalysisError.denied } }
+    func snapshot(outcome: String? = nil) -> (outcome: String, captureIDs: [UUID], events: [SAVEAnalysisClientEvent], eventsTruncated: Bool) {
+        (outcome ?? (hasReviewCandidate ? "review_candidate" : providerFailed ? "failed" : "source_only"), captureIDs, events, eventsTruncated)
+    }
+}
+
+enum SAVEAnalysisError: LocalizedError {
+    case denied
+    var errorDescription: String? { "Your source is kept. Analysis is unavailable right now. Please try again later." }
+    static func isControlDenial(_ data: Data) -> Bool {
+        guard let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let code = body["code"] as? String else { return false }
+        return ["analysis_limit_exceeded", "analysis_controls_unavailable", "analysis_closed", "analysis_not_found"].contains(code)
+    }
+}
+
+struct SourceSearchFailureReason: Codable, Hashable, Sendable {
+    enum Kind: String, Codable, Sendable {
+        case insufficientSource = "insufficient_source"
+        case providerFailure = "provider_failure"
+    }
+    let kind: Kind
+    let reason: String?
+    let stage: String?
+
+    var englishMessage: String {
+        if kind == .providerFailure { return "Your source is kept. A lookup service could not finish. Please try again later." }
+        switch reason {
+        case "login_required": return "This post needs a login. Add its caption, an address, or a screenshot to identify the place."
+        case "expired": return "This link has expired. Add the post caption, an address, or a screenshot to identify the place."
+        default: return "Your source is kept. Add the post caption, an address, or a screenshot to identify the place."
+        }
+    }
+    var traditionalChineseMessage: String {
+        if kind == .providerFailure { return "來源已保留。查詢服務暫時無法完成，請稍後再試。" }
+        switch reason {
+        case "login_required": return "這則貼文需要登入。請補上貼文文字、地址或截圖，協助辨識地點。"
+        case "expired": return "這個連結已失效。請補上貼文文字、地址或截圖，協助辨識地點。"
+        default: return "來源已保留。請補上貼文文字、地址或截圖，協助辨識地點。"
+        }
+    }
+}
+
 struct SAVEGeminiTransport {
     var modelFallbacks: [String] = SAVEProductionConfig.defaultGeminiModelFallbacks
     var session: URLSession = .shared
@@ -86,6 +185,7 @@ struct SAVEGeminiTransport {
     /// request authenticates with `x-save-guest-token` instead of a Bearer JWT.
     var guestTokenProvider: (() -> String?)?
     var directAPIKey: String? = SAVEProductionConfig.clientGeminiAPIKeyIfAllowed()
+    var apiBaseURL: String? = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"])
     var requestTimeout: TimeInterval = 30
     var maxAttemptsPerModel: Int = 2
     var transientRetryDelayNanoseconds: UInt64 = 500_000_000
@@ -110,6 +210,7 @@ struct SAVEGeminiTransport {
                 break
             }
         }
+        await SAVEAnalysisScope.current?.markProviderFailure()
         throw lastError ?? SAVEGeminiTransportError.emptyResponse
     }
 
@@ -152,6 +253,7 @@ struct SAVEGeminiTransport {
         if let proxied = try await generateViaBackendProxy(body: body, model: model) {
             return proxied
         }
+        guard SAVEAnalysisScope.current == nil else { throw SAVEAnalysisError.denied }
         guard let directAPIKey, !directAPIKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw SAVEGeminiTransportError.notConfigured
         }
@@ -159,7 +261,8 @@ struct SAVEGeminiTransport {
     }
 
     private func generateViaBackendProxy(body: [String: Any], model: String) async throws -> [String: Any]? {
-        guard let apiBaseURL = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]) else {
+        try await SAVEAnalysisScope.current?.checkAllowed()
+        guard let apiBaseURL else {
             return nil
         }
         // Prefer the real Privy JWT. If it's unavailable (App Review demo session,
@@ -195,6 +298,7 @@ struct SAVEGeminiTransport {
         request.timeoutInterval = requestTimeout
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(authorization.value, forHTTPHeaderField: authorization.header)
+        request.setValue(SAVEAnalysisScope.current?.id.uuidString, forHTTPHeaderField: "x-save-analysis-id")
         request.httpBody = requestBody
         return try await decodeResponse(for: request, isBackendProxy: true)
     }
@@ -220,6 +324,10 @@ struct SAVEGeminiTransport {
             throw SAVEGeminiTransportError.emptyResponse
         }
         guard http.statusCode == 200 else {
+            if isBackendProxy, SAVEAnalysisError.isControlDenial(data) {
+                await SAVEAnalysisScope.current?.markDenied()
+                throw SAVEAnalysisError.denied
+            }
             if isBackendProxy, http.statusCode != 401, http.statusCode != 403,
                let envelope = try? JSONDecoder().decode(ProxyErrorEnvelope.self, from: data) {
                 if http.statusCode == 400, envelope.error == "Unsupported Gemini model" {
