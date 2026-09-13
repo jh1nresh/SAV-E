@@ -979,12 +979,17 @@ final class MapViewModel: ObservableObject {
         let currentBatch = Array(pending.prefix(Self.pendingReviewImportBatchLimit))
         var failedCandidates = Array(pending.dropFirst(Self.pendingReviewImportBatchLimit))
 
-        for candidate in currentBatch {
+        for var candidate in currentBatch {
+            let localRecordID = candidate.localVaultRecordID ?? UUID()
+            candidate.localVaultRecordID = localRecordID
             do {
-                _ = try saveLocalVaultService.saveReviewCandidate(candidate)
+                _ = try saveLocalVaultService.saveReviewCandidate(candidate, recordID: localRecordID, preservingExisting: true)
                 try await withImportAnalysis {
                     let refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
-                    mirrorToLocalVault(refinedCandidate)
+                    _ = try saveLocalVaultService.saveReviewCandidate(refinedCandidate, recordID: localRecordID)
+                    // A remote failure must retry the refined payload, not the original thin clue.
+                    candidate = refinedCandidate
+                    candidate.localVaultRecordID = localRecordID
                     var run: PlaceRecoveryWorkflowRun?
                     var failedStep = "validate_input"
                     do {
