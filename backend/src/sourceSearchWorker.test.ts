@@ -4,6 +4,8 @@ import {
   buildSourceRecoveryQueries,
   candidatesFromSearchResults,
   defaultFetchMetadataHTML,
+  defaultPlacesCorroborator,
+  fetchBoundedMedia,
   parseDuckDuckGoResults,
   parsePersistedSourceResolution,
   resolveSourceDocument,
@@ -1004,4 +1006,208 @@ test("pinned store parsing generalizes across line breaks and preserves repeated
 test("store suffix within a brand does not swallow its explicit branch suffix", async () => {
   const output = await recoverCaptionFixture("台北兩間店 📍星光咖啡店 中山店 📍星光咖啡店 信義店");
   assert.deepEqual(output.candidates.map(candidate => candidate.name), ["星光咖啡店 中山店", "星光咖啡店 信義店"]);
+});
+
+
+function mediaStreamFixture(chunks: Uint8Array[], headers: Record<string, string> = {}, status = 200) {
+  let reads = 0;
+  let cancelled = false;
+  let requestSignal: AbortSignal | undefined;
+  let calls = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const chunk = chunks[reads++];
+      if (chunk) controller.enqueue(chunk);
+      else controller.close();
+    },
+    cancel() { cancelled = true; },
+  }, { highWaterMark: 0 });
+  const response = new Response(body, { status, headers });
+  const fetcher: typeof fetch = async (_url, init) => {
+    calls += 1;
+    requestSignal = init?.signal ?? undefined;
+    assert.equal(init?.redirect, "manual");
+    return response;
+  };
+  return { fetcher, response, get reads() { return reads; }, get cancelled() { return cancelled; },
+    get calls() { return calls; }, get aborted() { return requestSignal?.aborted; } };
+}
+
+for (const contentLength of [undefined, "1", "invalid"]) {
+  test(`fetchBoundedMedia stops oversized stream with content-length ${contentLength}`, async () => {
+    const headers: Record<string, string> = contentLength === undefined ? {} : { "content-length": contentLength };
+    const f = mediaStreamFixture([new Uint8Array(2), new Uint8Array(3), new Uint8Array(40)], headers);
+    assert.equal(await fetchBoundedMedia("https://93.184.216.34/media", 4, f.fetcher), undefined);
+    assert.equal(f.reads, 2, "must stop without consuming subsequent chunks");
+    assert.equal(f.cancelled, true);
+    assert.equal(f.aborted, true);
+    assert.equal(f.response.body?.locked, false);
+  });
+}
+
+test("fetchBoundedMedia cancels announced oversized body before reading", async () => {
+  const f = mediaStreamFixture([new Uint8Array(10)], { "content-length": "10" });
+  assert.equal(await fetchBoundedMedia("https://93.184.216.34/media", 4, f.fetcher), undefined);
+  assert.equal(f.reads, 0);
+  assert.equal(f.cancelled, true);
+  assert.equal(f.aborted, true);
+});
+
+test("fetchBoundedMedia accepts exact byte limit across chunks without arrayBuffer", async () => {
+  const f = mediaStreamFixture([Uint8Array.of(1, 2), Uint8Array.of(3, 4)], { "content-type": "image/png" });
+  f.response.arrayBuffer = async () => { throw new Error("Unbounded arrayBuffer must not be used"); };
+  const result = await fetchBoundedMedia("https://93.184.216.34/media", 4, f.fetcher);
+  assert.deepEqual(result?.data, Uint8Array.of(1, 2, 3, 4));
+  assert.equal(result?.contentType, "image/png");
+  assert.equal(f.response.body?.locked, false);
+});
+
+for (const status of [302, 503]) {
+  test(`fetchBoundedMedia cancels rejected HTTP ${status} response`, async () => {
+    const f = mediaStreamFixture([new Uint8Array(2)], { location: "http://127.0.0.1/private" }, status);
+    if(status >= 500) await assert.rejects(fetchBoundedMedia("https://93.184.216.34/media", 4, f.fetcher), /Provider HTTP 503/);
+    else assert.equal(await fetchBoundedMedia("https://93.184.216.34/media", 4, f.fetcher), undefined);
+    assert.equal(f.calls, 1, "redirect must never be followed");
+    assert.equal(f.reads, 0);
+    assert.equal(f.cancelled, true);
+    assert.equal(f.aborted, true);
+  });
+}
+
+test("fetchBoundedMedia blocks private and non-HTTP URLs before fetching", async () => {
+  const f = mediaStreamFixture([]);
+  for (const url of ["http://127.0.0.1/media", "http://10.0.0.1/media", "file:///tmp/media", "http://name:secret@93.184.216.34/media"]) {
+    assert.equal(await fetchBoundedMedia(url, 4, f.fetcher), undefined);
+  }
+  assert.equal(f.calls, 0);
+});
+
+test("fetchBoundedMedia aborts and unlocks on stream errors", async () => {
+  let requestSignal: AbortSignal | undefined;
+  const response = new Response(new ReadableStream<Uint8Array>({
+    pull(controller) { controller.error(new Error("broken stream")); },
+  }, { highWaterMark: 0 }));
+  const fetcher: typeof fetch = async (_url, init) => { requestSignal = init?.signal ?? undefined; return response; };
+  await assert.rejects(fetchBoundedMedia("https://93.184.216.34/media", 4, fetcher), /broken stream/);
+  assert.equal(requestSignal?.aborted, true);
+  assert.equal(response.body?.locked, false);
+});
+
+test("fetchBoundedMedia timeout cancels a stalled body and aborts the request", async () => {
+  let cancelled = false;
+  let requestSignal: AbortSignal | undefined;
+  const response = new Response(new ReadableStream<Uint8Array>({
+    pull() { return new Promise<void>(() => {}); },
+    cancel() { cancelled = true; },
+  }, { highWaterMark: 0 }));
+  const fetcher: typeof fetch = async (_url, init) => { requestSignal = init?.signal ?? undefined; return response; };
+  await assert.rejects(fetchBoundedMedia("https://93.184.216.34/media", 4, fetcher, 5), { name: "AbortError" });
+  assert.equal(cancelled, true);
+  assert.equal(requestSignal?.aborted, true);
+  assert.equal(response.body?.locked, false);
+});
+
+test("fetchBoundedMedia aborts a rejected fetch", async () => {
+  let requestSignal: AbortSignal | undefined;
+  const fetcher: typeof fetch = async (_url, init) => {
+    requestSignal = init?.signal ?? undefined;
+    throw new Error("fetch failed");
+  };
+  await assert.rejects(fetchBoundedMedia("https://93.184.216.34/media", 4, fetcher), /fetch failed/);
+  assert.equal(requestSignal?.aborted, true);
+});
+
+const receiptSourceURL = "https://93.184.216.34/source";
+function receiptDocument(status: "resolved" | "blocked_login" | "expired" | "opaque_unresolved" = "resolved", html = "") {
+  return { html, resolution: { originalURL: receiptSourceURL, resolvedURL: receiptSourceURL, redirectChain: [receiptSourceURL], status } };
+}
+const receiptMediaHTML = '<meta property="og:title" content="Instagram"><meta property="og:image" content="https://93.184.216.34/image"><meta property="og:video" content="https://93.184.216.34/video">';
+
+test("source recovery media option defaults on and false skips fetch and tried markers", async () => {
+  for (const includeMediaEvidence of [undefined, false]) {
+    let mediaCalls = 0;
+    const output = await runSourceSearchRecovery(
+      { sourceUrl: receiptSourceURL, maxQueries: 0 }, async () => "",
+      async () => { mediaCalls += 1; return [{ kind: "thumbnail", url: "https://93.184.216.34/image", byteLength: 2 }]; },
+      { includeMediaEvidence, sourceDocumentResolver: async () => receiptDocument("resolved", receiptMediaHTML) },
+    );
+    assert.equal(mediaCalls, includeMediaEvidence === false ? 0 : 1);
+    assert.equal(output.mediaEvidence.length, mediaCalls);
+    assert.equal(output.receipt.tried.includes("public_media_fetch"), includeMediaEvidence !== false);
+    assert.equal(output.receipt.tried.includes("server_keyframe_extraction"), includeMediaEvidence !== false);
+    assert.deepEqual(output.candidates, []);
+    assert.deepEqual(output.receipt.failureReason, { kind: "insufficient_source", reason: "caption_missing" });
+  }
+});
+
+test("source recovery classifies confirmed inaccessible source separately from provider failures", async () => {
+  for (const [status, reason] of [["blocked_login", "login_required"], ["expired", "expired"], ["opaque_unresolved", "unresolved_source"]] as const) {
+    const output = await runSourceSearchRecovery(
+      { sourceUrl: receiptSourceURL, suggestedSearchQueries: ["fixture"], maxQueries: 1 },
+      async () => { throw new Error("private provider failure detail"); }, async () => [],
+      { sourceDocumentResolver: async () => receiptDocument(status) },
+    );
+    assert.deepEqual(output.receipt.failureReason, { kind: "insufficient_source", reason });
+    assert.deepEqual(output.candidates, []);
+    assert.ok(!JSON.stringify(output.receipt).includes("private provider failure detail"));
+  }
+});
+
+test("source recovery identifies source media and public search provider failure stages", async () => {
+  for (const stage of ["source", "media", "public_search"] as const) {
+    const output = await runSourceSearchRecovery(
+      { sourceUrl: receiptSourceURL, suggestedSearchQueries: ["fixture"], maxQueries: stage === "public_search" ? 1 : 0 },
+      async () => { throw new Error("private failure"); },
+      async () => { throw new Error("private failure"); },
+      { sourceDocumentResolver: async () => {
+        if (stage === "source") throw new Error("private failure");
+        return receiptDocument("resolved", stage === "media" ? receiptMediaHTML : "");
+      } },
+    );
+    assert.deepEqual(output.receipt.failureReason, { kind: "provider_failure", stage });
+    assert.deepEqual(output.candidates, []);
+    assert.ok(!JSON.stringify(output.receipt).includes("private failure"));
+  }
+});
+
+test("source recovery preserves successful candidates despite media failure without failure receipt", async () => {
+  const output = await runSourceSearchRecovery(
+    { sourceUrl: receiptSourceURL, maxQueries: 0 }, async () => "",
+    async () => { throw new Error("private media error"); },
+    { sourceDocumentResolver: async () => receiptDocument("resolved", receiptMediaHTML + '<meta property="og:description" content="📍小山咖啡 北區店">'),
+      placesCorroborator: async () => undefined,
+      rubricEvaluator: () => ({ confidenceReason: "fixture", evidenceTier: "weak", missingInfo: [] }),
+    },
+  );
+  assert.equal(output.candidates.length, 1);
+  assert.equal(output.candidates[0].name, "小山咖啡 北區店");
+  assert.equal(output.candidates[0].latitude, undefined);
+  assert.equal(output.receipt.failureReason, undefined);
+  assert.ok(!JSON.stringify(output.candidates).includes("private media error"));
+});
+
+test("source recovery with readable but non-place text is insufficient evidence", async () => {
+  const output = await runSourceSearchRecovery({ rawText: "A lovely day outside", maxQueries: 0 }, async () => "", async () => []);
+  assert.deepEqual(output.candidates, []);
+  assert.deepEqual(output.receipt.failureReason, { kind: "insufficient_source", reason: "no_place_evidence" });
+});
+
+
+test("Places provider semantic failures remain retryable and zero results are valid", async () => {
+  const originalFetch=globalThis.fetch, originalKey=process.env.GOOGLE_PLACES_API_KEY;
+  process.env.GOOGLE_PLACES_API_KEY="synthetic";
+  const candidate={name:"Fixture Cafe",address:"123 Main Street",evidence:[],confidence:0.5,missingInfo:[]};
+  try {
+    for(const body of [JSON.stringify({status:"REQUEST_DENIED",results:[]}),JSON.stringify({status:"OVER_QUERY_LIMIT",results:[]}),"malformed"]) {
+      globalThis.fetch=async()=>new Response(body,{status:200});
+      await assert.rejects(defaultPlacesCorroborator(candidate));
+    }
+    globalThis.fetch=async()=>Response.json({status:"ZERO_RESULTS",results:[]});
+    assert.equal(await defaultPlacesCorroborator(candidate),undefined);
+    globalThis.fetch=async()=>new Response("denied",{status:400});
+    await assert.rejects(defaultPlacesCorroborator(candidate));
+  } finally {
+    globalThis.fetch=originalFetch;
+    if(originalKey===undefined) delete process.env.GOOGLE_PLACES_API_KEY;else process.env.GOOGLE_PLACES_API_KEY=originalKey;
+  }
 });

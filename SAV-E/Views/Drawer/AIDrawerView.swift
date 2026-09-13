@@ -1403,7 +1403,7 @@ struct AIDrawerView: View {
                 linkAnalysisState = .ready(Set(candidateIDs))
                 onOpenReview()
             } catch {
-                linkAnalysisState = .failed(error.localizedDescription)
+                linkAnalysisState = .failed(languageSettings.localized(english: "Analysis could not finish. Please try again later.", traditionalChinese: "分析暫時無法完成，請稍後再試。"))
                 viewModel.returnToCommands()
                 withAnimation { drawerDetent = .medium }
             }
@@ -3433,14 +3433,17 @@ private struct ReviewCandidateDetailCard: View {
     }
 
     private var presentationTrustLine: String {
-        candidate.hasSavableLocation
+        if !candidate.hasSavableLocation, let failure = candidate.sourceFailureReason {
+            return languageSettings.localized(english: failure.englishMessage, traditionalChinese: failure.traditionalChineseMessage)
+        }
+        return candidate.hasSavableLocation
             ? languageSettings.localized(
                 english: "Savvy found a likely place. Review the evidence before stamping it to your map.",
                 traditionalChinese: "Savvy 找到可能的地點。存成地圖章前，請先確認證據。"
             )
             : languageSettings.localized(
-                english: "Savvy found a source, but not enough proof for a place yet.",
-                traditionalChinese: "Savvy 找到來源，但還沒有足夠證據確認成地點。"
+                english: "Your source is kept. Add the post caption, an address, or a screenshot to identify the place.",
+                traditionalChinese: "來源已保留。請補上貼文文字、地址或截圖，協助辨識地點。"
             )
     }
 
@@ -3806,6 +3809,9 @@ private struct ReviewCandidateNextStepPanel: View {
             )
         }
 
+        if let failure = candidate.sourceFailureReason {
+            return languageSettings.localized(english: failure.englishMessage, traditionalChinese: failure.traditionalChineseMessage)
+        }
         let missing = candidate.missingInfo
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }

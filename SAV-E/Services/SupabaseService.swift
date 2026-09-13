@@ -3,6 +3,9 @@ import Foundation
 // MARK: - Protocol
 
 protocol SupabaseServiceProtocol {
+    func startAnalysis(id: UUID) async throws -> UUID?
+    func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async
+
     func fetchPlaces(for userId: String) async throws -> [Place]
     func savePlace(_ place: Place, userId: String) async throws
     func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult
@@ -101,19 +104,52 @@ enum SupabaseError: LocalizedError {
     }
 }
 
+// Existing service fakes opt out; production always creates a server session.
+extension SupabaseServiceProtocol {
+    func startAnalysis(id: UUID) async throws -> UUID? { nil }
+    func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {}
+}
+
 // MARK: - Implementation
 
 final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProviding, AccountStatusProviding, AccountDeletionProviding {
     static let shared = SupabaseService()
 
     private let apiBaseURL: String?
+    private let session: URLSession
+    private let accessTokenProvider: (() async throws -> String)?
 
     convenience init() {
         self.init(apiBaseURL: SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]))
     }
 
-    init(apiBaseURL: String?) {
+    init(apiBaseURL: String?, session: URLSession = .shared, accessTokenProvider: (() async throws -> String)? = nil) {
         self.apiBaseURL = apiBaseURL
+        self.session = session
+        self.accessTokenProvider = accessTokenProvider
+    }
+
+    func startAnalysis(id: UUID) async throws -> UUID? {
+        let data = try await request(path: "/v0/analysis", method: "POST", body: Self.jsonBody(["id": id.uuidString]))
+        struct Started: Decodable { let analysis_id: UUID }
+        let started = try JSONDecoder().decode(Started.self, from: data)
+        guard started.analysis_id == id else { throw SAVEAnalysisError.denied }
+        return started.analysis_id
+    }
+
+    func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {
+        let snapshot = await context.snapshot(outcome: outcome)
+        // An unstructured task can finish the receipt even when its import was cancelled.
+        await Task {
+            struct Events: Encodable {
+                let events: [SAVEAnalysisClientEvent]
+                let events_truncated: Bool
+            }
+            _ = try? await request(path: "/v0/analysis/\(context.id.uuidString)/client-events", method: "POST",
+                body: JSONEncoder().encode(Events(events: snapshot.events, events_truncated: snapshot.eventsTruncated)))
+            _ = try? await request(path: "/v0/analysis/\(context.id.uuidString)/finish", method: "POST",
+                body: Self.jsonBody(["outcome": snapshot.outcome, "capture_ids": snapshot.captureIDs.map(\.uuidString)]))
+        }.value
     }
 
     private var isConfigured: Bool {
@@ -485,6 +521,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         guard isConfigured else { throw SupabaseError.notConfigured }
 
         let body = try Self.jsonBody([
+            "analysis_id": SAVEAnalysisScope.current?.id.uuidString,
             "source_type": "url",
             "source_url": candidate.sourceURL,
             "raw_text": candidate.sourceText,
@@ -519,11 +556,13 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     }
 
     func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID? = nil) async throws -> SourceSearchRecoveryResult {
+        try await SAVEAnalysisScope.current?.checkAllowed()
         guard isConfigured else { return SourceSearchRecoveryResult(createdCandidates: [], sourceResolution: nil) }
 
         let body = try Self.jsonBody([
             "workflow_run_id": workflowRunId?.uuidString,
             "include_media_evidence": true,
+            "analysis_id": SAVEAnalysisScope.current?.id.uuidString,
         ])
         let data = try await request(
             path: "/memory/captures/\(captureId.uuidString)/search-recovery",
@@ -537,7 +576,8 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let row = try JSONDecoder.supabase.decode(SourceSearchRecoveryRow.self, from: data)
         return SourceSearchRecoveryResult(
             createdCandidates: row.createdCandidates.map { $0.toCandidate() },
-            sourceResolution: row.sourceResolution
+            sourceResolution: row.sourceResolution,
+            failureReason: row.receipt?.failureReason
         )
     }
 
@@ -941,6 +981,8 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
 
         var request = URLRequest(url: url)
         request.httpMethod = method
+        if path.hasPrefix("/v0/analysis") { request.timeoutInterval = 8 }
+        request.setValue(SAVEAnalysisScope.current?.id.uuidString, forHTTPHeaderField: "x-save-analysis-id")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         for (name, value) in additionalHeaders {
             request.setValue(value, forHTTPHeaderField: name)
@@ -960,7 +1002,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await URLSession.shared.data(for: request)
+            (data, response) = try await session.data(for: request)
         } catch is CancellationError {
             throw CancellationError()
         } catch let error as URLError {
@@ -974,6 +1016,10 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             throw SupabaseError.invalidResponse("Savvy returned a non-HTTP response")
         }
         if !(200..<300).contains(http.statusCode) {
+            if SAVEAnalysisError.isControlDenial(data) {
+                await SAVEAnalysisScope.current?.markDenied()
+                throw SAVEAnalysisError.denied
+            }
             let body = String(data: data, encoding: .utf8) ?? ""
             throw Self.httpError(statusCode: http.statusCode, body: body)
         }
@@ -983,7 +1029,8 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
 
     @MainActor
     private func privyAccessToken() async throws -> String {
-        try await PrivyAuthService.shared.accessToken()
+        if let accessTokenProvider { return try await accessTokenProvider() }
+        return try await PrivyAuthService.shared.accessToken()
     }
 
     private static func jsonBody(_ values: [String: Any?]) throws -> Data {
@@ -1895,6 +1942,7 @@ private struct MemoryCaptureRow: Codable {
 struct SourceSearchRecoveryResult {
     let createdCandidates: [PlaceReviewCandidate]
     let sourceResolution: SourceResolution?
+    var failureReason: SourceSearchFailureReason? = nil
 }
 
 struct SourceResolution: Codable, Equatable {
@@ -1925,10 +1973,13 @@ struct SourceResolution: Codable, Equatable {
 }
 
 private struct SourceSearchRecoveryRow: Codable {
+    struct Receipt: Codable { let failureReason: SourceSearchFailureReason? }
+    let receipt: Receipt?
     let createdCandidates: [PlaceCandidateRow]
     let sourceResolution: SourceResolution?
 
     enum CodingKeys: String, CodingKey {
+        case receipt
         case createdCandidates = "created_candidates"
         case sourceResolution = "source_resolution"
     }

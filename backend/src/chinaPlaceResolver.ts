@@ -1,3 +1,4 @@
+import { AnalysisControlError, trackAnalysisOperation } from "./analysisUsage.js";
 export type ChinaPlaceCoordinateSystem = "WGS84" | "GCJ-02";
 
 export interface ChinaPlaceResolveRequest {
@@ -132,23 +133,26 @@ async function requestAmapMatches(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    return await trackAnalysisOperation({operation:"china_places"}, async () => {
     const response = await (config.fetcher ?? fetch)(url, {
       method: "GET",
       headers: { accept: "application/json" },
       signal: controller.signal,
     });
-    if (!response.ok) return [];
+    if (!response.ok) throw new Error("Place provider unavailable");
     const declaredLength = Number(response.headers.get("content-length") ?? 0);
-    if (declaredLength > maxResponseBytes) return [];
+    if (declaredLength > maxResponseBytes) throw new Error("Place response too large");
     const text = await response.text();
-    if (Buffer.byteLength(text, "utf8") > maxResponseBytes) return [];
+    if (Buffer.byteLength(text, "utf8") > maxResponseBytes) throw new Error("Place response too large");
     const body = JSON.parse(text) as AmapResponse;
-    if (body.status !== "1" || !Array.isArray(body.pois)) return [];
+    if (body.status !== "1" || !Array.isArray(body.pois)) throw new Error("Place provider unavailable");
     return body.pois
       .slice(0, 10)
       .map((poi) => parsePOI(poi, coordinateSystem))
       .filter((match): match is ChinaPlaceMatch => match !== undefined);
-  } catch {
+    });
+  } catch (error) {
+    if(error instanceof AnalysisControlError) throw error;
     return [];
   } finally {
     clearTimeout(timeout);

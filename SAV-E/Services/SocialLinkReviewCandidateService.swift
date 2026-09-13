@@ -111,7 +111,9 @@ final class PublicSourceSearchService: PublicSourceSearchServiceProtocol {
         request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
         request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
 
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, _) = try await SAVEAnalysisScope.measure(.publicSearch, outcome: SAVEAnalysisScope.httpOutcome) {
+            try await URLSession.shared.data(for: request)
+        }
         let html = String(data: data.prefix(250_000), encoding: .utf8) ?? ""
         return parseDuckDuckGoResults(from: html)
     }
@@ -1568,7 +1570,9 @@ final class SocialLinkReviewCandidateService {
         let maxAttempts = 2
         for attempt in 1...maxAttempts {
             do {
-                let (data, response) = try await URLSession.shared.data(for: request)
+                let (data, response) = try await SAVEAnalysisScope.measure(.metadata, outcome: SAVEAnalysisScope.httpOutcome) {
+                    try await URLSession.shared.data(for: request)
+                }
                 let canonicalURL = SocialShareURLCanonicalizer.analysisURL(
                     originalURL: url,
                     resolvedURL: response.url
@@ -1666,8 +1670,12 @@ final class SocialLinkReviewCandidateService {
             request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
             request.setValue("image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8", forHTTPHeaderField: "Accept")
             let fetcher = SafeThumbnailDataFetcher(maxBytes: thumbnailImageByteLimit, isSafeURL: isSafePublicHTTPURL)
-            let (data, _) = try await fetcher.fetch(request)
-            return await recognizedThumbnailTextLines(from: data)
+            let (data, _) = try await SAVEAnalysisScope.measure(.metadata, outcome: SAVEAnalysisScope.httpOutcome) {
+                try await fetcher.fetch(request)
+            }
+            return await SAVEAnalysisScope.measure(.localOCR) {
+                await recognizedThumbnailTextLines(from: data)
+            }
         } catch {
             return []
         }

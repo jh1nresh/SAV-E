@@ -191,6 +191,7 @@ final class PlaceResolverService: PlaceResolverServiceProtocol {
     }
 
     func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] {
+        try await SAVEAnalysisScope.current?.checkAllowed()
         var results: [PlaceProviderMatch] = []
         var seen = Set<String>()
         let shouldTryChinaProviders = Self.shouldTryChinaProviders(for: query)
@@ -200,15 +201,18 @@ final class PlaceResolverService: PlaceResolverServiceProtocol {
             append(appleMatches, to: &results, seen: &seen)
         }
 
+        try await SAVEAnalysisScope.current?.checkAllowed()
         if shouldTryChinaProviders,
            let proxyMatches = try? await backendPlaceResolverService.searchPlace(query: query, near: near) {
             append(proxyMatches, to: &results, seen: &seen)
         }
 
+        try await SAVEAnalysisScope.current?.checkAllowed()
         if let googleMatches = try? await googlePlacesService.searchPlace(query: query, near: near) {
             append(googleMatches.map(\.providerMatch), to: &results, seen: &seen)
         }
 
+        try await SAVEAnalysisScope.current?.checkAllowed()
         guard !results.isEmpty else { throw GooglePlacesError.noResults }
         return results
     }
@@ -250,7 +254,9 @@ final class AppleMapsPlaceSearchService: AppleMapsPlaceSearchServiceProtocol {
             )
         }
 
-        let response = try await MKLocalSearch(request: request).start()
+        let response = try await SAVEAnalysisScope.measure(.appleMaps) {
+            try await MKLocalSearch(request: request).start()
+        }
         let matches = response.mapItems.prefix(20).compactMap { item -> PlaceProviderMatch? in
             let name = (item.name ?? item.placemark.name ?? "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -333,17 +339,23 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
     private let apiKey: String?
     private let session: URLSession
     private let bundleIdentifier: String?
+    private let apiBaseURL: String?
+    private let accessTokenProvider: () async throws -> String
 
     init(
         apiKey: String? = nil,
         session: URLSession? = nil,
-        bundleIdentifier: String? = Bundle.main.bundleIdentifier
+        bundleIdentifier: String? = Bundle.main.bundleIdentifier,
+        apiBaseURL: String? = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]),
+        accessTokenProvider: @escaping () async throws -> String = { try await PrivyAuthService.shared.accessToken() }
     ) {
         self.apiKey = Self.normalizedAPIKey(
             apiKey
                 ?? ProcessInfo.processInfo.environment["GOOGLE_PLACES_API_KEY"]
                 ?? SAVEProductionConfig.keyFromPlist("GOOGLE_PLACES_API_KEY")
         )
+        self.apiBaseURL = apiBaseURL
+        self.accessTokenProvider = accessTokenProvider
         self.bundleIdentifier = bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let session {
             self.session = session
@@ -372,21 +384,51 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
     // MARK: - Text Search
 
     func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] {
-        guard let apiKey, !apiKey.isEmpty else {
-            throw GooglePlacesError.apiKeyMissing
+        let data: Data
+        if let context = SAVEAnalysisScope.current {
+            try await context.checkAllowed()
+            guard let apiBaseURL, let url = URL(string: "\(apiBaseURL)/v0/analysis/\(context.id.uuidString)/places") else {
+                throw SAVEAnalysisError.denied
+            }
+            var body: [String: Any] = ["query": query]
+            if let near, SaveChromeNavigation.isTrustworthyMapCoordinate(near) {
+                body["latitude"] = near.latitude
+                body["longitude"] = near.longitude
+            }
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.timeoutInterval = 30
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("Bearer \(try await accessTokenProvider())", forHTTPHeaderField: "Authorization")
+            request.setValue(context.id.uuidString, forHTTPHeaderField: "x-save-analysis-id")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            let (responseData, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                if SAVEAnalysisError.isControlDenial(responseData) {
+                    await context.markDenied()
+                    throw SAVEAnalysisError.denied
+                }
+                await context.markProviderFailure()
+                throw GooglePlacesError.noResults
+            }
+            data = responseData
+        } else {
+            guard let apiKey, !apiKey.isEmpty else {
+                throw GooglePlacesError.apiKeyMissing
+            }
+
+            var urlString = "https://maps.googleapis.com/maps/api/place/textsearch/json?query=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query)&key=\(apiKey)"
+
+            if let location = near, SaveChromeNavigation.isTrustworthyMapCoordinate(location) {
+                urlString += "&location=\(location.latitude),\(location.longitude)&radius=5000"
+            }
+
+            guard let url = URL(string: urlString) else {
+                throw GooglePlacesError.noResults
+            }
+
+            (data, _) = try await session.data(for: authorizedRequest(for: url))
         }
-
-        var urlString = "https://maps.googleapis.com/maps/api/place/textsearch/json?query=\(query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query)&key=\(apiKey)"
-
-        if let location = near, SaveChromeNavigation.isTrustworthyMapCoordinate(location) {
-            urlString += "&location=\(location.latitude),\(location.longitude)&radius=5000"
-        }
-
-        guard let url = URL(string: urlString) else {
-            throw GooglePlacesError.noResults
-        }
-
-        let (data, _) = try await session.data(for: authorizedRequest(for: url))
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         guard let results = json?["results"] as? [[String: Any]], !results.isEmpty else {
@@ -424,6 +466,7 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
     // MARK: - Place Details
 
     func getPlaceDetails(placeId: String) async throws -> GooglePlaceDetails {
+        guard SAVEAnalysisScope.current == nil else { throw SAVEAnalysisError.denied }
         guard let apiKey, !apiKey.isEmpty else {
             throw GooglePlacesError.apiKeyMissing
         }
@@ -570,19 +613,23 @@ final class BackendPlaceResolverService: BackendPlaceResolverServiceProtocol {
     static let shared = BackendPlaceResolverService()
 
     private let apiBaseURL: String?
+    private let session: URLSession
     private let accessTokenProvider: (() async throws -> String)?
 
     init(
         apiBaseURL: String? = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]),
+        session: URLSession = .shared,
         accessTokenProvider: (() async throws -> String)? = {
             try await PrivyAuthService.shared.accessToken()
         }
     ) {
         self.apiBaseURL = apiBaseURL?.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         self.accessTokenProvider = accessTokenProvider
+        self.session = session
     }
 
     func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] {
+        try await SAVEAnalysisScope.current?.checkAllowed()
         guard let apiBaseURL, !apiBaseURL.isEmpty,
               let endpoint = URL(string: "\(apiBaseURL)/place-resolve") else {
             throw BackendPlaceResolverError.notConfigured
@@ -599,8 +646,15 @@ final class BackendPlaceResolverService: BackendPlaceResolverServiceProtocol {
         request.setValue("Bearer \(try await accessTokenProvider())", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        request.setValue(SAVEAnalysisScope.current?.id.uuidString, forHTTPHeaderField: "x-save-analysis-id")
+        let (data, response) = try await SAVEAnalysisScope.measure(.chinaPlaces, outcome: SAVEAnalysisScope.httpOutcome) {
+            try await session.data(for: request)
+        }
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            if SAVEAnalysisError.isControlDenial(data) {
+                await SAVEAnalysisScope.current?.markDenied()
+                throw SAVEAnalysisError.denied
+            }
             throw BackendPlaceResolverError.apiError(String(data: data, encoding: .utf8) ?? "HTTP \(http.statusCode)")
         }
         let decoded = try JSONDecoder().decode(BackendPlaceResolveResponse.self, from: data)

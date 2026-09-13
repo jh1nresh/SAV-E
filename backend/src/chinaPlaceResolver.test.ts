@@ -115,7 +115,7 @@ test("server exposes the place resolver only after bearer account resolution", a
   const routeIndex = server.indexOf('resource === "place-resolve"');
   assert.ok(authIndex >= 0);
   assert.ok(routeIndex > authIndex);
-  assert.match(server, /handlePlaceResolve\(request, response\)/);
+  assert.match(server, /handlePlaceResolve\(request, response, userId\)/);
   assert.match(server, /"coordinate_system"/);
   assert.match(server, /"location_provider"/);
   assert.match(server, /"provider_place_id"/);

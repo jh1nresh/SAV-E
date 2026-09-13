@@ -1714,7 +1714,7 @@ private struct SaveCaptureFlowView: View {
                 }
                 onComplete(candidateIDs)
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = localized("Analysis could not finish. Please try again later.", "分析暫時無法完成，請稍後再試。")
             }
         }
     }
