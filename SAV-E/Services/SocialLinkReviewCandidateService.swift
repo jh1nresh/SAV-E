@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 #if canImport(ImageIO)
 import ImageIO
 #endif
@@ -163,16 +164,36 @@ final class SocialLinkReviewCandidateService {
     /// deterministic-only behavior. Injected as a fake (no network) in tests.
     private let captionVenueExtractor: SocialCaptionVenueExtractor?
     private let thumbnailImageByteLimit = 6_000_000
+    private let analysisDiagnosticsObserver: (AnalysisSearchDiagnostics) -> Void
+    private static let analysisLogger = Logger(subsystem: "Savvy", category: "SocialAnalysisSearch")
+
+    // Logical request counts, not provider billing. Never attach these to candidate
+    // evidence: that evidence becomes the user's saved/shared place note.
+    struct AnalysisSearchDiagnostics {
+        let analysisID: UUID
+        let resolverAttempts: Int
+        let resolverErrors: Int
+        let resolverCacheHits: Int
+        let publicAttempts: Int
+        let publicErrors: Int
+        let publicCacheHits: Int
+    }
 
     init(
         googlePlacesService: GooglePlacesServiceProtocol = GooglePlacesService.shared,
         publicSourceSearchService: PublicSourceSearchServiceProtocol = PublicSourceSearchService.shared,
         placeResolverService: PlaceResolverServiceProtocol? = nil,
-        captionVenueExtractor: SocialCaptionVenueExtractor? = GeminiCaptionVenueExtractor.liveFromConfig()
+        captionVenueExtractor: SocialCaptionVenueExtractor? = GeminiCaptionVenueExtractor.liveFromConfig(),
+        analysisDiagnosticsObserver: ((AnalysisSearchDiagnostics) -> Void)? = nil
     ) {
         self.placeResolverService = placeResolverService ?? PlaceResolverService(googlePlacesService: googlePlacesService)
         self.publicSourceSearchService = publicSourceSearchService
         self.captionVenueExtractor = captionVenueExtractor
+        self.analysisDiagnosticsObserver = analysisDiagnosticsObserver ?? Self.logAnalysisDiagnostics
+    }
+
+    private static func logAnalysisDiagnostics(_ counts: AnalysisSearchDiagnostics) {
+        analysisLogger.info("Analysis search counts (logical requests, not billing): analysis_id=\(counts.analysisID.uuidString, privacy: .private), resolver_attempts=\(counts.resolverAttempts, privacy: .public), resolver_errors=\(counts.resolverErrors, privacy: .public), resolver_cache_hits=\(counts.resolverCacheHits, privacy: .public), public_attempts=\(counts.publicAttempts, privacy: .public), public_errors=\(counts.publicErrors, privacy: .public), public_cache_hits=\(counts.publicCacheHits, privacy: .public)")
     }
 
     func resolveEvidence(_ input: SocialPlaceEvidenceResolverInput) async -> SocialPlaceEvidenceResolverResult {
@@ -295,7 +316,37 @@ final class SocialLinkReviewCandidateService {
         }
     }
 
+    // Each entry point owns this state; concurrent analyses never share caches.
+    private final class AnalysisSearchContext {
+        let analysisID = UUID()
+        var resolverResults: [String: [PlaceProviderMatch]] = [:]
+        var publicResults: [String: [PublicSourceSearchResult]] = [:]
+        var resolverAttempts = 0
+        var resolverErrors = 0
+        var resolverCacheHits = 0
+        var publicAttempts = 0
+        var publicErrors = 0
+        var publicCacheHits = 0
+        var cancelled = false
+        var shouldStop: Bool { cancelled || Task.isCancelled }
+
+        var diagnostics: AnalysisSearchDiagnostics {
+            AnalysisSearchDiagnostics(analysisID: analysisID,
+                resolverAttempts: resolverAttempts, resolverErrors: resolverErrors, resolverCacheHits: resolverCacheHits,
+                publicAttempts: publicAttempts, publicErrors: publicErrors, publicCacheHits: publicCacheHits)
+        }
+    }
+
     func recoverReviewCandidates(fromEvidenceText evidenceText: String, sourceURL: String) async throws -> [PendingReviewCandidate] {
+        let context = AnalysisSearchContext()
+        defer { analysisDiagnosticsObserver(context.diagnostics) }
+        try Task.checkCancellation()
+        let candidates = await recoverReviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL, context: context)
+        if context.shouldStop { throw CancellationError() }
+        return candidates
+    }
+
+    private func recoverReviewCandidates(fromEvidenceText evidenceText: String, sourceURL: String, context: AnalysisSearchContext) async -> [PendingReviewCandidate] {
         let initial = reviewCandidatesOrSourceOnly(fromEvidenceText: evidenceText, sourceURL: sourceURL)
         let shouldRunRecovery = initial.contains {
             $0.isPlaceBearingSource || $0.isSourceOnly || $0.reviewState == "unresolved_place_candidate"
@@ -306,7 +357,7 @@ final class SocialLinkReviewCandidateService {
             // "shop in LA" off a prose caption) with no address/coordinates — not
             // a real venue. When that's all we have, let the LLM read the prose
             // for the actual venue name before settling for the fragment.
-            let refined = await refineCandidates(initial, evidenceText: evidenceText)
+            let refined = await refineCandidates(initial, evidenceText: evidenceText, context: context)
             // No extractor configured (no backend/API key): keep deterministic-only
             // behavior unchanged — never downgrade a fragment without an LLM.
             guard captionVenueExtractor != nil,
@@ -318,7 +369,8 @@ final class SocialLinkReviewCandidateService {
             if let llmCandidates = await llmCaptionFallbackCandidates(
                 evidenceText: evidenceText,
                 sourceURL: sourceURL,
-                analysis: analyze(evidenceText: evidenceText, sourceURL: sourceURL)
+                analysis: analyze(evidenceText: evidenceText, sourceURL: sourceURL),
+                context: context
             ) {
                 return llmCandidates
             }
@@ -350,14 +402,14 @@ final class SocialLinkReviewCandidateService {
             || isRecoverableThinSocialSource else { return initial }
 
         let queries = sourceRecoverySearchQueries(evidenceText: evidenceText, sourceURL: sourceURL, analysis: analysis)
-        let searchResults = await publicSearchResults(for: queries)
+        let searchResults = await publicSearchResults(for: queries, context: context)
         let recovered = sourceRecoveryCandidates(
             from: searchResults,
             analysis: analysis,
             evidenceText: evidenceText,
             sourceURL: sourceURL
         )
-        let refinedRecovered = await refineCandidates(recovered, evidenceText: sourceRecoveryEvidenceText(evidenceText: evidenceText, results: searchResults))
+        let refinedRecovered = await refineCandidates(recovered, evidenceText: sourceRecoveryEvidenceText(evidenceText: evidenceText, results: searchResults), context: context)
         let mapReady = refinedRecovered.filter { $0.hasReliableCoordinates }
         if !mapReady.isEmpty { return rankedCandidates(mapReady) }
         if !refinedRecovered.isEmpty { return rankedCandidates(refinedRecovered) }
@@ -374,7 +426,8 @@ final class SocialLinkReviewCandidateService {
             if let llmCandidates = await llmCaptionFallbackCandidates(
                 evidenceText: evidenceText,
                 sourceURL: sourceURL,
-                analysis: analysis
+                analysis: analysis,
+                context: context
             ) {
                 return llmCandidates
             }
@@ -458,9 +511,10 @@ final class SocialLinkReviewCandidateService {
     private func llmCaptionFallbackCandidates(
         evidenceText: String,
         sourceURL: String,
-        analysis: SocialPlaceAgentAnalysis
+        analysis: SocialPlaceAgentAnalysis,
+        context: AnalysisSearchContext
     ) async -> [PendingReviewCandidate]? {
-        guard let captionVenueExtractor else { return nil }
+        guard !context.shouldStop, let captionVenueExtractor else { return nil }
         let caption = evidenceText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !caption.isEmpty else { return nil }
 
@@ -499,7 +553,7 @@ final class SocialLinkReviewCandidateService {
             [extracted.area.map { "\(name) \($0)" } ?? name],
             [name]
         )
-        let upgradeResults = await publicSearchResults(for: upgradeQueries)
+        let upgradeResults = await publicSearchResults(for: upgradeQueries, context: context)
         if !upgradeResults.isEmpty {
             let upgradeAnalysis = analyze(evidenceText: "\(name) \(evidenceText)", sourceURL: sourceURL)
             let recovered = sourceRecoveryCandidates(
@@ -510,7 +564,8 @@ final class SocialLinkReviewCandidateService {
             )
             let refined = await refineCandidates(
                 recovered,
-                evidenceText: sourceRecoveryEvidenceText(evidenceText: "\(name)\n\(evidenceText)", results: upgradeResults)
+                evidenceText: sourceRecoveryEvidenceText(evidenceText: "\(name)\n\(evidenceText)", results: upgradeResults),
+                context: context
             )
             let mapReady = refined.filter { $0.hasReliableCoordinates }
             if !mapReady.isEmpty { return rankedCandidates(mapReady) }
@@ -672,6 +727,13 @@ final class SocialLinkReviewCandidateService {
     }
 
     func refineCandidate(_ candidate: PendingReviewCandidate, evidenceText: String? = nil) async -> PendingReviewCandidate {
+        let context = AnalysisSearchContext()
+        defer { analysisDiagnosticsObserver(context.diagnostics) }
+        return await refineCandidate(candidate, evidenceText: evidenceText, context: context)
+    }
+
+    private func refineCandidate(_ candidate: PendingReviewCandidate, evidenceText: String?, context: AnalysisSearchContext) async -> PendingReviewCandidate {
+        guard !context.shouldStop else { return candidate }
         guard !candidate.isSourceOnly else { return candidate }
         guard !candidate.isPlaceBearingSource else { return candidate }
         guard !candidate.hasReliableCoordinates else { return candidate }
@@ -679,7 +741,7 @@ final class SocialLinkReviewCandidateService {
         guard !query.isEmpty else { return candidate }
 
         do {
-            let matches = try await placeResolverMatches(for: candidate, evidenceText: evidenceText ?? candidate.sourceText ?? "")
+            let matches = try await placeResolverMatches(for: candidate, evidenceText: evidenceText ?? candidate.sourceText ?? "", context: context)
             if let match = bestAcceptableRefinement(in: matches, for: candidate) {
                 var refined = candidate
                 refined.candidateName = match.name.isEmpty ? refined.candidateName : match.name
@@ -713,6 +775,7 @@ final class SocialLinkReviewCandidateService {
             }
             return candidate
         } catch {
+            if error is CancellationError || (error as? URLError)?.code == .cancelled { context.cancelled = true }
             var unresolved = candidate
             let failureMessages = containsCJK(query)
                 ? [
@@ -728,10 +791,10 @@ final class SocialLinkReviewCandidateService {
         }
     }
 
-    private func refineCandidates(_ candidates: [PendingReviewCandidate], evidenceText: String) async -> [PendingReviewCandidate] {
+    private func refineCandidates(_ candidates: [PendingReviewCandidate], evidenceText: String, context: AnalysisSearchContext) async -> [PendingReviewCandidate] {
         var refined: [PendingReviewCandidate] = []
         for candidate in candidates {
-            refined.append(await refineCandidate(candidate, evidenceText: evidenceText))
+            refined.append(await refineCandidate(candidate, evidenceText: evidenceText, context: context))
         }
         return refined
     }
@@ -840,17 +903,32 @@ final class SocialLinkReviewCandidateService {
         return cleaned.isEmpty ? nil : cleaned
     }
 
-    private func publicSearchResults(for queries: [String]) async -> [PublicSourceSearchResult] {
+    private func publicSearchResults(for queries: [String], context: AnalysisSearchContext) async -> [PublicSourceSearchResult] {
         var results: [PublicSourceSearchResult] = []
         var seen = Set<PublicSourceSearchResult>()
         for query in queries.prefix(4) {
+            guard !context.shouldStop else { break }
             do {
-                for result in try await publicSourceSearchService.search(query: query).prefix(5) where !seen.contains(result) {
+                let matches: [PublicSourceSearchResult]
+                if let cached = context.publicResults[query] {
+                    context.publicCacheHits += 1
+                    matches = cached
+                } else {
+                    context.publicAttempts += 1
+                    matches = Array(try await publicSourceSearchService.search(query: query).prefix(5))
+                    guard !context.shouldStop else { break }
+                    if context.publicResults.count < 32 { context.publicResults[query] = matches }
+                }
+                for result in matches where !seen.contains(result) {
                     seen.insert(result)
                     results.append(result)
                 }
             } catch {
-                continue
+                if error is CancellationError || (error as? URLError)?.code == .cancelled || context.shouldStop {
+                    context.cancelled = true
+                    break
+                }
+                context.publicErrors += 1
             }
         }
         return results
@@ -2085,19 +2163,65 @@ final class SocialLinkReviewCandidateService {
         }
     }
 
-    private func placeResolverMatches(for candidate: PendingReviewCandidate, evidenceText: String) async throws -> [PlaceProviderMatch] {
+    private func placeResolverMatches(for candidate: PendingReviewCandidate, evidenceText: String, context: AnalysisSearchContext) async throws -> [PlaceProviderMatch] {
         var allMatches: [PlaceProviderMatch] = []
         var seenIDs = Set<String>()
+        var lastError: Error?
         for query in refinementQueries(for: candidate, evidenceText: evidenceText).prefix(4) {
-            let matches = try await placeResolverService.searchPlace(query: query, near: nil)
-            for match in matches {
-                let key = "\(match.provider.rawValue):\(match.id)"
-                guard !seenIDs.contains(key) else { continue }
-                seenIDs.insert(key)
-                allMatches.append(match)
+            if context.shouldStop { throw CancellationError() }
+            do {
+                let matches: [PlaceProviderMatch]
+                if let cached = context.resolverResults[query] {
+                    context.resolverCacheHits += 1
+                    matches = cached
+                } else {
+                    context.resolverAttempts += 1
+                    matches = try await placeResolverService.searchPlace(query: query, near: nil)
+                    if context.shouldStop { throw CancellationError() }
+                    // Bound cache storage, not request allowance. Failed/malformed
+                    // responses are not reused; empty successful responses are.
+                    if context.resolverResults.count < 32,
+                       matches.allSatisfy({ isValidMapCoordinate(latitude: $0.latitude, longitude: $0.longitude) }) {
+                        context.resolverResults[query] = matches
+                    }
+                }
+                for match in matches {
+                    let key = "\(match.provider.rawValue):\(match.id)"
+                    guard !seenIDs.contains(key) else { continue }
+                    seenIDs.insert(key)
+                    allMatches.append(match)
+                }
+                if hasUniqueExactRefinement(in: allMatches, for: candidate) { break }
+            } catch {
+                if error is CancellationError || (error as? URLError)?.code == .cancelled || context.shouldStop {
+                    context.cancelled = true
+                    throw CancellationError()
+                }
+                context.resolverErrors += 1
+                lastError = error
             }
         }
+        if allMatches.isEmpty, let lastError { throw lastError }
         return allMatches
+    }
+
+    private func hasUniqueExactRefinement(in matches: [PlaceProviderMatch], for candidate: PendingReviewCandidate) -> Bool {
+        let name = exactRefinementKey(candidate.candidateName)
+        let address = exactRefinementKey(candidate.address)
+        // A city/area string is not a branch address. Keep the established
+        // address recognizer and require a street number before stopping.
+        guard !name.isEmpty, !address.isEmpty,
+              candidate.address.rangeOfCharacter(from: .decimalDigits) != nil,
+              streetAddressLine(in: candidate.address) != nil else { return false }
+        let eligible = matches.filter { isAcceptableRefinement($0, for: candidate) }
+        guard eligible.count == 1, let match = eligible.first else { return false }
+        return exactRefinementKey(match.name) == name && exactRefinementKey(match.address) == address
+    }
+
+    private func exactRefinementKey(_ value: String) -> String {
+        value.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func bestAcceptableRefinement(in matches: [PlaceProviderMatch], for candidate: PendingReviewCandidate) -> PlaceProviderMatch? {

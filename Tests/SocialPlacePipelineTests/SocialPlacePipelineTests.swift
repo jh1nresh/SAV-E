@@ -4332,6 +4332,337 @@ final class SocialPlacePipelineTests: XCTestCase {
                       "Deterministic recovery succeeded; the LLM caption extractor must not be called")
     }
 
+    // MARK: - Analysis-scoped search recovery and request accounting
+
+    private final class CountingAnalysisResolver: PlaceResolverServiceProtocol {
+        var queries: [String] = []
+        var diagnostics: [SocialLinkReviewCandidateService.AnalysisSearchDiagnostics] = []
+        let answer: (String, Int) throws -> [PlaceProviderMatch]
+
+        init(answer: @escaping (String, Int) throws -> [PlaceProviderMatch]) { self.answer = answer }
+
+        func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [PlaceProviderMatch] {
+            queries.append(query)
+            return try answer(query, queries.count)
+        }
+    }
+
+    private final class CountingAnalysisSearch: PublicSourceSearchServiceProtocol {
+        var queries: [String] = []
+        let answer: (String, Int) throws -> [PublicSourceSearchResult]
+
+        init(answer: @escaping (String, Int) throws -> [PublicSourceSearchResult] = { _, _ in [] }) {
+            self.answer = answer
+        }
+
+        func search(query: String) async throws -> [PublicSourceSearchResult] {
+            queries.append(query)
+            return try answer(query, queries.count)
+        }
+    }
+
+    @MainActor
+    private func analysisCandidate(address: String = "12 Test Street") -> PendingReviewCandidate {
+        PendingReviewCandidate(candidateName: "Juniper Coffee", address: address, category: "food",
+            sourceURL: "https://www.instagram.com/reel/fixture/", sourceText: "Coffee venue",
+            evidence: ["Venue named in source"], confidence: 0.6, missingInfo: ["Verified coordinates"], savedAt: Date())
+    }
+
+    private func analysisMatch(id: String = "venue-1", address: String = "12 Test Street") -> PlaceProviderMatch {
+        PlaceProviderMatch(provider: .googlePlaces, id: id, name: "Juniper Coffee", address: address,
+            latitude: 47.61, longitude: -122.33, rating: nil, reviewCount: nil, priceLevel: nil,
+            types: ["cafe"], coordinateSystem: .wgs84)
+    }
+
+    @MainActor
+    private func analysisService(resolver: CountingAnalysisResolver, search: CountingAnalysisSearch = CountingAnalysisSearch()) -> SocialLinkReviewCandidateService {
+        SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(),
+            publicSourceSearchService: search, placeResolverService: resolver, captionVenueExtractor: nil,
+            analysisDiagnosticsObserver: { resolver.diagnostics.append($0) })
+    }
+
+    @MainActor
+    private func analysisCounts(_ resolver: CountingAnalysisResolver) -> [String: String] {
+        guard let counts = resolver.diagnostics.last else {
+            XCTFail("Analysis should report one internal completion snapshot")
+            return [:]
+        }
+        return [
+            "analysis_id": counts.analysisID.uuidString,
+            "resolver_attempts": String(counts.resolverAttempts),
+            "resolver_errors": String(counts.resolverErrors),
+            "resolver_cache_hits": String(counts.resolverCacheHits),
+            "public_attempts": String(counts.publicAttempts),
+            "public_errors": String(counts.publicErrors),
+            "public_cache_hits": String(counts.publicCacheHits)
+        ]
+    }
+
+    @MainActor
+    func testAnalysisResolverPreservesEarlierSuccessAfterLaterQueryFailure() async {
+        let match = analysisMatch(address: "14 Test Street") // Similar, but not an exact early stop.
+        let resolver = CountingAnalysisResolver { _, attempt in
+            if attempt == 2 { throw URLError(.timedOut) }
+            return attempt == 1 ? [match] : []
+        }
+        let result = await analysisService(resolver: resolver).refineCandidate(analysisCandidate())
+        XCTAssertEqual(result.reviewState, "map_match_ready")
+        XCTAssertEqual(result.address, match.address)
+        XCTAssertEqual(resolver.queries.count, 3)
+        XCTAssertEqual(analysisCounts(resolver)["resolver_errors"], "1")
+        XCTAssertEqual(analysisCounts(resolver)["resolver_attempts"], "3")
+    }
+
+    @MainActor
+    func testAnalysisResolverContinuesAfterFirstFailureToLaterSuccess() async {
+        let match = analysisMatch(address: "14 Test Street")
+        let resolver = CountingAnalysisResolver { _, attempt in
+            if attempt == 1 { throw URLError(.timedOut) }
+            return attempt == 2 ? [match] : []
+        }
+        let result = await analysisService(resolver: resolver).refineCandidate(analysisCandidate())
+        XCTAssertEqual(result.reviewState, "map_match_ready")
+        XCTAssertEqual(result.latitude, match.latitude)
+        XCTAssertEqual(resolver.queries.count, 3)
+        XCTAssertEqual(analysisCounts(resolver)["resolver_errors"], "1")
+    }
+
+    @MainActor
+    func testAnalysisResolverAllFailuresAndEmptyResultsStayUnresolved() async {
+        for fails in [true, false] {
+            let resolver = CountingAnalysisResolver { _, _ in
+                if fails { throw URLError(.cannotFindHost) }
+                return []
+            }
+            let result = await analysisService(resolver: resolver).refineCandidate(analysisCandidate())
+            XCTAssertFalse(result.hasReliableCoordinates)
+            XCTAssertNil(result.latitude)
+            XCTAssertEqual(resolver.queries.count, 3)
+            XCTAssertEqual(analysisCounts(resolver)["resolver_errors"], fails ? "3" : "0")
+        }
+    }
+
+    @MainActor
+    func testAnalysisResolverExactUniqueStreetMatchStopsAfterOneQuery() async {
+        var match = analysisMatch()
+        match.name = "JÚNIPER coffee"
+        match.address = "  12   Test Street  "
+        let resolver = CountingAnalysisResolver { _, _ in [match] }
+        let result = await analysisService(resolver: resolver).refineCandidate(analysisCandidate())
+        XCTAssertTrue(result.hasReliableCoordinates)
+        XCTAssertEqual(resolver.queries.count, 1)
+        XCTAssertEqual(analysisCounts(resolver)["resolver_attempts"], "1")
+    }
+
+    @MainActor
+    func testAnalysisResolverAmbiguousBranchesDoNotStopEarly() async {
+        let matches = [analysisMatch(), analysisMatch(id: "other-branch", address: "14 Test Street")]
+        let resolver = CountingAnalysisResolver { _, _ in matches }
+        _ = await analysisService(resolver: resolver).refineCandidate(analysisCandidate())
+        XCTAssertEqual(resolver.queries.count, 3)
+    }
+
+    @MainActor
+    func testAnalysisResolverVagueDifferentAndPunctuatedAddressesDoNotStopEarly() async {
+        for (address, providerAddress) in [
+            ("", "12 Test Street"), ("Seattle", "Seattle"),
+            ("12 Test Street", "14 Test Street"),
+            ("12 Test Street, Unit 1-2", "12 Test Street, Unit 1/2")
+        ] {
+            let match = analysisMatch(address: providerAddress)
+            let resolver = CountingAnalysisResolver { _, _ in [match] }
+            _ = await analysisService(resolver: resolver).refineCandidate(analysisCandidate(address: address))
+            XCTAssertGreaterThan(resolver.queries.count, 1, "Must keep searching for \(address)")
+        }
+    }
+
+    @MainActor
+    func testAnalysisResolverExactAddressWithDifferentNameDoesNotStopEarly() async {
+        var match = analysisMatch()
+        match.name = "Juniper Coffee Annex"
+        let resolver = CountingAnalysisResolver { _, _ in [match] }
+        _ = await analysisService(resolver: resolver).refineCandidate(analysisCandidate())
+        XCTAssertEqual(resolver.queries.count, 3)
+    }
+
+    @MainActor
+    func testAnalysisResolverChinaGuardRejectsExactForeignAndGCJ02MatchesBeforeStopping() async {
+        var candidate = analysisCandidate(address: "上海市黄浦区广东路59号")
+        candidate.sourceURL = "https://www.dianping.com/shop/fixture?isoversea=0"
+        let foreign = analysisMatch(id: "foreign", address: candidate.address)
+        var gcj = analysisMatch(id: "gcj", address: candidate.address)
+        gcj.latitude = 31.23
+        gcj.longitude = 121.49
+        gcj.coordinateSystem = .gcj02
+        var correct = analysisMatch(id: "correct", address: candidate.address)
+        correct.latitude = gcj.latitude
+        correct.longitude = gcj.longitude
+        let responses = [[foreign], [gcj], [correct]]
+        let resolver = CountingAnalysisResolver { _, attempt in responses[min(attempt - 1, 2)] }
+        let result = await analysisService(resolver: resolver).refineCandidate(candidate)
+        XCTAssertEqual(resolver.queries.count, 3)
+        XCTAssertEqual(result.latitude, correct.latitude)
+        XCTAssertTrue(result.hasReliableCoordinates)
+    }
+
+    @MainActor
+    func testAnalysisResolverCancellationStopsRemainingQueries() async {
+        for cancellation in [CancellationError() as Error, URLError(.cancelled) as Error] {
+            let resolver = CountingAnalysisResolver { _, _ in throw cancellation }
+            let result = await analysisService(resolver: resolver).refineCandidate(analysisCandidate())
+            XCTAssertFalse(result.hasReliableCoordinates)
+            XCTAssertEqual(resolver.queries.count, 1)
+            XCTAssertEqual(analysisCounts(resolver)["resolver_errors"], "0")
+        }
+    }
+
+    @MainActor
+    func testAnalysisTaskCancellationStopsEvenWhenProviderReturnsNormally() async {
+        let resolver = CountingAnalysisResolver { _, _ in
+            withUnsafeCurrentTask { $0?.cancel() }
+            return []
+        }
+        let service = analysisService(resolver: resolver)
+        let candidate = analysisCandidate()
+        let result = await Task { await service.refineCandidate(candidate) }.value
+        XCTAssertFalse(result.hasReliableCoordinates)
+        XCTAssertEqual(resolver.queries.count, 1)
+    }
+
+    @MainActor
+    func testAnalysisPublicSearchCancellationStopsRecovery() async {
+        let search = CountingAnalysisSearch { _, _ in throw URLError(.cancelled) }
+        let resolver = CountingAnalysisResolver { _, _ in XCTFail("No provider work after cancellation"); return [] }
+        do {
+            _ = try await analysisService(resolver: resolver, search: search).recoverReviewCandidates(
+                fromEvidenceText: "", sourceURL: "https://www.instagram.com/reel/CancellationFixture/")
+            XCTFail("Recovery must propagate cancellation")
+        } catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertEqual(search.queries.count, 1)
+        XCTAssertTrue(resolver.queries.isEmpty)
+        XCTAssertEqual(resolver.diagnostics.count, 1, "Cancellation still completes internal reporting")
+    }
+
+    @MainActor
+    func testAnalysisCachesDuplicateCandidateQueriesWithoutCrossAnalysisLeakage() async throws {
+        let publicResults = ["a", "b"].map {
+            PublicSourceSearchResult(title: "Juniper Coffee", url: "https://example.com/\($0)", snippet: "Independent coffee venue")
+        }
+        let search = CountingAnalysisSearch { _, _ in publicResults }
+        let match = analysisMatch()
+        let resolver = CountingAnalysisResolver { _, _ in [match] }
+        let service = analysisService(resolver: resolver, search: search)
+        let first = try await service.recoverReviewCandidates(fromEvidenceText: "", sourceURL: "https://www.instagram.com/reel/CacheFixture/")
+        let candidate = try XCTUnwrap(first.first)
+        XCTAssertTrue(candidate.hasReliableCoordinates)
+        let counts = analysisCounts(resolver)
+        XCTAssertEqual(resolver.diagnostics.count, 1)
+        XCTAssertGreaterThan(Int(counts["resolver_cache_hits"] ?? "0") ?? 0, 0)
+        XCTAssertEqual(Set(resolver.queries).count, resolver.queries.count)
+        XCTAssertEqual(Int(counts["resolver_attempts"] ?? ""), resolver.queries.count)
+        XCTAssertEqual(Int(counts["public_attempts"] ?? ""), search.queries.count)
+        XCTAssertEqual(counts["public_errors"], "0")
+        XCTAssertNotNil(UUID(uuidString: counts["analysis_id"] ?? ""))
+        let resolverCount = resolver.queries.count
+        let publicCount = search.queries.count
+        let second = try await service.recoverReviewCandidates(fromEvidenceText: "", sourceURL: "https://www.instagram.com/reel/CacheFixture/")
+        XCTAssertEqual(resolver.queries.count, resolverCount * 2)
+        XCTAssertEqual(search.queries.count, publicCount * 2)
+        XCTAssertNotEqual(analysisCounts(resolver)["analysis_id"], counts["analysis_id"])
+        XCTAssertFalse(second.isEmpty)
+        XCTAssertEqual(resolver.diagnostics.count, 2, "One snapshot per analysis, not per candidate")
+        for item in first + second {
+            XCTAssertFalse(item.evidence.contains { $0.contains("analysis_id=") || $0.contains("resolver_attempts=") })
+        }
+    }
+
+    @MainActor
+    func testAnalysisDoesNotCacheFailedResolverQueries() async throws {
+        let results = ["a", "b"].map {
+            PublicSourceSearchResult(title: "Juniper Coffee", url: "https://example.com/\($0)", snippet: "Independent coffee venue")
+        }
+        let resolver = CountingAnalysisResolver { _, _ in throw URLError(.timedOut) }
+        let first = try await analysisService(resolver: resolver, search: CountingAnalysisSearch { _, _ in results })
+            .recoverReviewCandidates(fromEvidenceText: "", sourceURL: "https://www.instagram.com/reel/FailureCacheFixture/")
+        XCTAssertGreaterThan(resolver.queries.count, Set(resolver.queries).count)
+        XCTAssertEqual(analysisCounts(resolver)["resolver_cache_hits"], "0")
+        XCTAssertTrue(first.allSatisfy { !$0.hasReliableCoordinates })
+    }
+
+    @MainActor
+    func testAnalysisPublicSearchKeepsSuccessAcrossIndependentQueryFailures() async throws {
+        for failedAttempt in [1, 2] {
+            let result = PublicSourceSearchResult(title: "Juniper Coffee", url: "https://example.com/venue", snippet: "Independent coffee venue")
+            let search = CountingAnalysisSearch { _, attempt in
+                if attempt == failedAttempt { throw URLError(.timedOut) }
+                return [result]
+            }
+            let resolver = CountingAnalysisResolver { _, _ in [] }
+            let candidates = try await analysisService(resolver: resolver, search: search).recoverReviewCandidates(
+                fromEvidenceText: "", sourceURL: "https://www.instagram.com/reel/PublicFailureFixture/")
+            let candidate = try XCTUnwrap(candidates.first)
+            XCTAssertEqual(candidate.candidateName, "Juniper Coffee")
+            XCTAssertFalse(candidate.hasReliableCoordinates)
+            XCTAssertGreaterThan(search.queries.count, failedAttempt)
+            XCTAssertEqual(analysisCounts(resolver)["public_errors"], "1")
+        }
+        let search = CountingAnalysisSearch { _, _ in throw URLError(.timedOut) }
+        let resolver = CountingAnalysisResolver { _, _ in XCTFail("No fabricated candidate after all search failures"); return [] }
+        let candidates = try await analysisService(resolver: resolver, search: search).recoverReviewCandidates(
+            fromEvidenceText: "", sourceURL: "https://www.instagram.com/reel/AllPublicFailures/")
+        XCTAssertTrue(candidates.allSatisfy { $0.isSourceOnly && !$0.hasReliableCoordinates })
+        XCTAssertEqual(Int(analysisCounts(resolver)["public_errors"] ?? ""), search.queries.count)
+    }
+
+    @MainActor
+    func testAnalysisCachesEmptyButNotMalformedResolverResponses() async throws {
+        for malformed in [false, true] {
+            let results = ["a", "b"].map {
+                PublicSourceSearchResult(title: "Juniper Coffee", url: "https://example.com/\($0)", snippet: "Independent coffee venue")
+            }
+            var invalid = analysisMatch()
+            invalid.latitude = .nan
+            let resolver = CountingAnalysisResolver { _, _ in malformed ? [invalid] : [] }
+            let candidates = try await analysisService(resolver: resolver, search: CountingAnalysisSearch { _, _ in results })
+                .recoverReviewCandidates(fromEvidenceText: "", sourceURL: "https://www.instagram.com/reel/EmptyCacheFixture/")
+            XCTAssertTrue(candidates.allSatisfy { !$0.hasReliableCoordinates })
+            let hits = Int(analysisCounts(resolver)["resolver_cache_hits"] ?? "0") ?? 0
+            if malformed { XCTAssertEqual(hits, 0) } else { XCTAssertGreaterThan(hits, 0) }
+        }
+    }
+
+    @MainActor
+    func testAnalysisDiagnosticsNeverEnterCandidateSavedOrSharedNotes() async throws {
+        let match = analysisMatch()
+        let resolver = CountingAnalysisResolver { _, _ in [match] }
+        let candidate = await analysisService(resolver: resolver).refineCandidate(analysisCandidate())
+        let snapshot = try XCTUnwrap(resolver.diagnostics.first)
+        XCTAssertEqual(resolver.diagnostics.count, 1)
+        XCTAssertEqual(snapshot.resolverAttempts, 1)
+        XCTAssertTrue(candidate.evidence.contains("Venue named in source"), "User evidence must remain intact")
+
+        let defaultReporterService = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(),
+            publicSourceSearchService: CountingAnalysisSearch(), placeResolverService: resolver, captionVenueExtractor: nil)
+        let loggedCandidate = await defaultReporterService.refineCandidate(analysisCandidate())
+        XCTAssertEqual(loggedCandidate.evidence, candidate.evidence, "The production logger must not mutate evidence either")
+        for item in [candidate, loggedCandidate] {
+            let review = PlaceReviewCandidate(id: UUID(), captureId: nil,
+                name: item.candidateName, address: item.address, city: nil,
+                latitude: item.latitude, longitude: item.longitude,
+                evidence: item.evidence, confidence: item.confidence,
+                missingInfo: item.missingInfo, status: "review", createdAt: Date())
+            let place = Place.from(review)
+            let sharedNote = ShareRoutePayloadSanitizer.publicNote(place.note) ?? ""
+            XCTAssertEqual(place.note, item.evidence.joined(separator: "\n"))
+            let persistedCandidate = String(decoding: try JSONEncoder().encode(item), as: UTF8.self)
+            for text in [persistedCandidate, item.evidence.joined(separator: "\n"), place.note ?? "", sharedNote] {
+                for diagnostic in [snapshot.analysisID.uuidString, "analysis_id", "Analysis search counts", "resolver_attempts", "resolver_errors", "resolver_cache_hits", "public_attempts", "public_errors", "public_cache_hits"] {
+                    XCTAssertFalse(text.localizedCaseInsensitiveContains(diagnostic), "Internal diagnostics must never become user or shared content")
+                }
+            }
+        }
+    }
+
 }
 
 private final class StubGeminiURLProtocol: URLProtocol {
