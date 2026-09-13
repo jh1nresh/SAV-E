@@ -3,6 +3,52 @@ import XCTest
 
 @MainActor
 final class SavePlanAgentTests: XCTestCase {
+    func testInitialProviderOutageDoesNotClaimAnExistingDraft() {
+        let message = SavePlanAgent.failureMessage(
+            for: SAVEGeminiTransportError.upstreamStatus(429), hasDraft: false, language: .traditionalChinese)
+        XCTAssertTrue(message.contains("規劃服務暫時無法使用"))
+        XCTAssertTrue(message.contains("你輸入的訊息已保留"))
+        XCTAssertFalse(message.contains("草稿"))
+        XCTAssertFalse(message.contains("調整"))
+    }
+
+    func testProviderOutagePreservesExistingDraftMessage() {
+        let message = SavePlanAgent.failureMessage(
+            for: SAVEGeminiTransportError.upstreamStatus(503), hasDraft: true, language: .english)
+        XCTAssertTrue(message.contains("planning service is temporarily unavailable"))
+        XCTAssertTrue(message.contains("Your draft and message are kept"))
+    }
+
+    func testMissingModelsReportServiceFailureAndPreserveOnlyExistingState() {
+        for language in AppLanguage.allCases {
+            for hasDraft in [false, true] {
+                let message = SavePlanAgent.failureMessage(
+                    for: SAVEGeminiTransportError.upstreamStatus(404), hasDraft: hasDraft, language: language)
+                XCTAssertTrue(message.contains(language.localized(
+                    english: "planning service is temporarily unavailable",
+                    traditionalChinese: "規劃服務暫時無法使用")))
+                XCTAssertTrue(message.hasSuffix(language.localized(
+                    english: hasDraft ? "Your draft and message are kept." : "Your message is kept.",
+                    traditionalChinese: hasDraft ? "原本草稿和你輸入的訊息都已保留。" : "你輸入的訊息已保留。")))
+            }
+        }
+    }
+
+    func testPlanFailureDistinguishesConnectionAndInvalidProposal() {
+        let network = SavePlanAgent.failureMessage(
+            for: URLError(.notConnectedToInternet), hasDraft: false, language: .traditionalChinese)
+        XCTAssertTrue(network.contains("檢查網路連線"))
+        let invalid = SavePlanAgent.failureMessage(
+            for: SavePlanAgentValidationError("synthetic invalid proposal"), hasDraft: false, language: .traditionalChinese)
+        XCTAssertTrue(invalid.contains("沒能完成規劃"))
+        XCTAssertFalse(invalid.contains("調整"))
+        XCTAssertFalse(invalid.contains("synthetic"))
+        let edit = SavePlanAgent.failureMessage(
+            for: SavePlanAgentValidationError("synthetic invalid proposal"), hasDraft: true, language: .traditionalChinese)
+        XCTAssertTrue(edit.contains("沒能完成調整"))
+        XCTAssertTrue(edit.contains("原本草稿"))
+    }
+
     private func place(_ name: String, area: String = "Taipei", category: PlaceCategory = .attraction) -> Place {
         Place(id: UUID(), name: name, address: area, latitude: 25.04, longitude: 121.54,
               category: category, status: .wantToGo, sourcePlatform: .other, createdAt: Date())

@@ -253,7 +253,7 @@ struct SavePlanView: View {
             isPlanning = false
         }
         .alert(
-            localized("Couldn’t draft that plan", "無法排出這版行程"),
+            localized("Couldn’t finish planning", "規劃未完成"),
             isPresented: Binding(
                 get: { planError != nil },
                 set: { if !$0 { planError = nil } }
@@ -522,10 +522,8 @@ struct SavePlanView: View {
             } catch {
                 guard !Task.isCancelled, conversation.sessionID == sessionID else { return }
                 // A failed semantic edit must not be presented as a successful generic redraft.
-                planError = localized(
-                    "Savvy couldn’t finish this change. Your draft and message are kept; please try again.",
-                    "Savvy 這次沒能完成調整，原本草稿和訊息都留著，請再試一次。"
-                )
+                planError = SavePlanAgent.failureMessage(
+                    for: error, hasDraft: conversation.draft != nil, language: language)
             }
         }
     }

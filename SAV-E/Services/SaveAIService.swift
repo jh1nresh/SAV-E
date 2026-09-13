@@ -161,6 +161,7 @@ final class SaveAIService {
         } catch let error as SAVEGeminiTransportError {
             if let deterministicDraft { return deterministicDraft }
             if case .upstreamStatus(let status) = error { throw SaveAIError.apiError(status) }
+            if case .unsupportedModel = error { throw SaveAIError.apiError(400) }
             throw SaveAIError.apiKeyMissing
         } catch {
             if let deterministicDraft { return deterministicDraft }
