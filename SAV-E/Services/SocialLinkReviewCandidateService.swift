@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 #if canImport(ImageIO)
 import ImageIO
 #endif
@@ -163,16 +164,36 @@ final class SocialLinkReviewCandidateService {
     /// deterministic-only behavior. Injected as a fake (no network) in tests.
     private let captionVenueExtractor: SocialCaptionVenueExtractor?
     private let thumbnailImageByteLimit = 6_000_000
+    private let analysisDiagnosticsObserver: (AnalysisSearchDiagnostics) -> Void
+    private static let analysisLogger = Logger(subsystem: "Savvy", category: "SocialAnalysisSearch")
+
+    // Logical request counts, not provider billing. Never attach these to candidate
+    // evidence: that evidence becomes the user's saved/shared place note.
+    struct AnalysisSearchDiagnostics {
+        let analysisID: UUID
+        let resolverAttempts: Int
+        let resolverErrors: Int
+        let resolverCacheHits: Int
+        let publicAttempts: Int
+        let publicErrors: Int
+        let publicCacheHits: Int
+    }
 
     init(
         googlePlacesService: GooglePlacesServiceProtocol = GooglePlacesService.shared,
         publicSourceSearchService: PublicSourceSearchServiceProtocol = PublicSourceSearchService.shared,
         placeResolverService: PlaceResolverServiceProtocol? = nil,
-        captionVenueExtractor: SocialCaptionVenueExtractor? = GeminiCaptionVenueExtractor.liveFromConfig()
+        captionVenueExtractor: SocialCaptionVenueExtractor? = GeminiCaptionVenueExtractor.liveFromConfig(),
+        analysisDiagnosticsObserver: ((AnalysisSearchDiagnostics) -> Void)? = nil
     ) {
         self.placeResolverService = placeResolverService ?? PlaceResolverService(googlePlacesService: googlePlacesService)
         self.publicSourceSearchService = publicSourceSearchService
         self.captionVenueExtractor = captionVenueExtractor
+        self.analysisDiagnosticsObserver = analysisDiagnosticsObserver ?? Self.logAnalysisDiagnostics
+    }
+
+    private static func logAnalysisDiagnostics(_ counts: AnalysisSearchDiagnostics) {
+        analysisLogger.info("Analysis search counts (logical requests, not billing): analysis_id=\(counts.analysisID.uuidString, privacy: .private), resolver_attempts=\(counts.resolverAttempts, privacy: .public), resolver_errors=\(counts.resolverErrors, privacy: .public), resolver_cache_hits=\(counts.resolverCacheHits, privacy: .public), public_attempts=\(counts.publicAttempts, privacy: .public), public_errors=\(counts.publicErrors, privacy: .public), public_cache_hits=\(counts.publicCacheHits, privacy: .public)")
     }
 
     func resolveEvidence(_ input: SocialPlaceEvidenceResolverInput) async -> SocialPlaceEvidenceResolverResult {
@@ -297,7 +318,7 @@ final class SocialLinkReviewCandidateService {
 
     // Each entry point owns this state; concurrent analyses never share caches.
     private final class AnalysisSearchContext {
-        let analysisID = UUID().uuidString.lowercased()
+        let analysisID = UUID()
         var resolverResults: [String: [PlaceProviderMatch]] = [:]
         var publicResults: [String: [PublicSourceSearchResult]] = [:]
         var resolverAttempts = 0
@@ -309,22 +330,20 @@ final class SocialLinkReviewCandidateService {
         var cancelled = false
         var shouldStop: Bool { cancelled || Task.isCancelled }
 
-        func attachCounts(to candidate: PendingReviewCandidate) -> PendingReviewCandidate {
-            var result = candidate
-            result.evidence.removeAll { $0.hasPrefix("Analysis search counts (logical requests, not billing):") }
-            result.evidence.append(
-                "Analysis search counts (logical requests, not billing): analysis_id=\(analysisID), resolver_attempts=\(resolverAttempts), resolver_errors=\(resolverErrors), resolver_cache_hits=\(resolverCacheHits), public_attempts=\(publicAttempts), public_errors=\(publicErrors), public_cache_hits=\(publicCacheHits)"
-            )
-            return result
+        var diagnostics: AnalysisSearchDiagnostics {
+            AnalysisSearchDiagnostics(analysisID: analysisID,
+                resolverAttempts: resolverAttempts, resolverErrors: resolverErrors, resolverCacheHits: resolverCacheHits,
+                publicAttempts: publicAttempts, publicErrors: publicErrors, publicCacheHits: publicCacheHits)
         }
     }
 
     func recoverReviewCandidates(fromEvidenceText evidenceText: String, sourceURL: String) async throws -> [PendingReviewCandidate] {
         let context = AnalysisSearchContext()
+        defer { analysisDiagnosticsObserver(context.diagnostics) }
         try Task.checkCancellation()
         let candidates = await recoverReviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL, context: context)
         if context.shouldStop { throw CancellationError() }
-        return candidates.map { context.attachCounts(to: $0) }
+        return candidates
     }
 
     private func recoverReviewCandidates(fromEvidenceText evidenceText: String, sourceURL: String, context: AnalysisSearchContext) async -> [PendingReviewCandidate] {
@@ -709,8 +728,8 @@ final class SocialLinkReviewCandidateService {
 
     func refineCandidate(_ candidate: PendingReviewCandidate, evidenceText: String? = nil) async -> PendingReviewCandidate {
         let context = AnalysisSearchContext()
-        let refined = await refineCandidate(candidate, evidenceText: evidenceText, context: context)
-        return context.attachCounts(to: refined)
+        defer { analysisDiagnosticsObserver(context.diagnostics) }
+        return await refineCandidate(candidate, evidenceText: evidenceText, context: context)
     }
 
     private func refineCandidate(_ candidate: PendingReviewCandidate, evidenceText: String?, context: AnalysisSearchContext) async -> PendingReviewCandidate {

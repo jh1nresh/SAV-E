@@ -4336,6 +4336,7 @@ final class SocialPlacePipelineTests: XCTestCase {
 
     private final class CountingAnalysisResolver: PlaceResolverServiceProtocol {
         var queries: [String] = []
+        var diagnostics: [SocialLinkReviewCandidateService.AnalysisSearchDiagnostics] = []
         let answer: (String, Int) throws -> [PlaceProviderMatch]
 
         init(answer: @escaping (String, Int) throws -> [PlaceProviderMatch]) { self.answer = answer }
@@ -4374,16 +4375,24 @@ final class SocialPlacePipelineTests: XCTestCase {
 
     private func analysisService(resolver: CountingAnalysisResolver, search: CountingAnalysisSearch = CountingAnalysisSearch()) -> SocialLinkReviewCandidateService {
         SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(),
-            publicSourceSearchService: search, placeResolverService: resolver, captionVenueExtractor: nil)
+            publicSourceSearchService: search, placeResolverService: resolver, captionVenueExtractor: nil,
+            analysisDiagnosticsObserver: { resolver.diagnostics.append($0) })
     }
 
-    private func analysisCounts(_ candidate: PendingReviewCandidate) -> [String: String] {
-        let line = candidate.evidence.first { $0.hasPrefix("Analysis search counts (logical requests, not billing): ") } ?? ""
-        let fields = line.components(separatedBy: ": ").last ?? ""
-        return Dictionary(uniqueKeysWithValues: fields.components(separatedBy: ", ").compactMap { field in
-            let parts = field.components(separatedBy: "=")
-            return parts.count == 2 ? (parts[0], parts[1]) : nil
-        })
+    private func analysisCounts(_ resolver: CountingAnalysisResolver) -> [String: String] {
+        guard let counts = resolver.diagnostics.last else {
+            XCTFail("Analysis should report one internal completion snapshot")
+            return [:]
+        }
+        return [
+            "analysis_id": counts.analysisID.uuidString,
+            "resolver_attempts": String(counts.resolverAttempts),
+            "resolver_errors": String(counts.resolverErrors),
+            "resolver_cache_hits": String(counts.resolverCacheHits),
+            "public_attempts": String(counts.publicAttempts),
+            "public_errors": String(counts.publicErrors),
+            "public_cache_hits": String(counts.publicCacheHits)
+        ]
     }
 
     @MainActor
@@ -4397,8 +4406,8 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(result.reviewState, "map_match_ready")
         XCTAssertEqual(result.address, match.address)
         XCTAssertEqual(resolver.queries.count, 3)
-        XCTAssertEqual(analysisCounts(result)["resolver_errors"], "1")
-        XCTAssertEqual(analysisCounts(result)["resolver_attempts"], "3")
+        XCTAssertEqual(analysisCounts(resolver)["resolver_errors"], "1")
+        XCTAssertEqual(analysisCounts(resolver)["resolver_attempts"], "3")
     }
 
     @MainActor
@@ -4412,7 +4421,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(result.reviewState, "map_match_ready")
         XCTAssertEqual(result.latitude, match.latitude)
         XCTAssertEqual(resolver.queries.count, 3)
-        XCTAssertEqual(analysisCounts(result)["resolver_errors"], "1")
+        XCTAssertEqual(analysisCounts(resolver)["resolver_errors"], "1")
     }
 
     @MainActor
@@ -4426,7 +4435,7 @@ final class SocialPlacePipelineTests: XCTestCase {
             XCTAssertFalse(result.hasReliableCoordinates)
             XCTAssertNil(result.latitude)
             XCTAssertEqual(resolver.queries.count, 3)
-            XCTAssertEqual(analysisCounts(result)["resolver_errors"], fails ? "3" : "0")
+            XCTAssertEqual(analysisCounts(resolver)["resolver_errors"], fails ? "3" : "0")
         }
     }
 
@@ -4439,7 +4448,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         let result = await analysisService(resolver: resolver).refineCandidate(analysisCandidate())
         XCTAssertTrue(result.hasReliableCoordinates)
         XCTAssertEqual(resolver.queries.count, 1)
-        XCTAssertEqual(analysisCounts(result)["resolver_attempts"], "1")
+        XCTAssertEqual(analysisCounts(resolver)["resolver_attempts"], "1")
     }
 
     @MainActor
@@ -4500,7 +4509,7 @@ final class SocialPlacePipelineTests: XCTestCase {
             let result = await analysisService(resolver: resolver).refineCandidate(analysisCandidate())
             XCTAssertFalse(result.hasReliableCoordinates)
             XCTAssertEqual(resolver.queries.count, 1)
-            XCTAssertEqual(analysisCounts(result)["resolver_errors"], "0")
+            XCTAssertEqual(analysisCounts(resolver)["resolver_errors"], "0")
         }
     }
 
@@ -4528,6 +4537,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         } catch { XCTAssertTrue(error is CancellationError) }
         XCTAssertEqual(search.queries.count, 1)
         XCTAssertTrue(resolver.queries.isEmpty)
+        XCTAssertEqual(resolver.diagnostics.count, 1, "Cancellation still completes internal reporting")
     }
 
     @MainActor
@@ -4542,7 +4552,8 @@ final class SocialPlacePipelineTests: XCTestCase {
         let first = try await service.recoverReviewCandidates(fromEvidenceText: "", sourceURL: "https://www.instagram.com/reel/CacheFixture/")
         let candidate = try XCTUnwrap(first.first)
         XCTAssertTrue(candidate.hasReliableCoordinates)
-        let counts = analysisCounts(candidate)
+        let counts = analysisCounts(resolver)
+        XCTAssertEqual(resolver.diagnostics.count, 1)
         XCTAssertGreaterThan(Int(counts["resolver_cache_hits"] ?? "0") ?? 0, 0)
         XCTAssertEqual(Set(resolver.queries).count, resolver.queries.count)
         XCTAssertEqual(Int(counts["resolver_attempts"] ?? ""), resolver.queries.count)
@@ -4554,8 +4565,12 @@ final class SocialPlacePipelineTests: XCTestCase {
         let second = try await service.recoverReviewCandidates(fromEvidenceText: "", sourceURL: "https://www.instagram.com/reel/CacheFixture/")
         XCTAssertEqual(resolver.queries.count, resolverCount * 2)
         XCTAssertEqual(search.queries.count, publicCount * 2)
-        XCTAssertNotEqual(analysisCounts(try XCTUnwrap(second.first))["analysis_id"], counts["analysis_id"])
-        for item in first { XCTAssertEqual(analysisCounts(item), counts) }
+        XCTAssertNotEqual(analysisCounts(resolver)["analysis_id"], counts["analysis_id"])
+        XCTAssertFalse(second.isEmpty)
+        XCTAssertEqual(resolver.diagnostics.count, 2, "One snapshot per analysis, not per candidate")
+        for item in first + second {
+            XCTAssertFalse(item.evidence.contains { $0.contains("analysis_id=") || $0.contains("resolver_attempts=") })
+        }
     }
 
     @MainActor
@@ -4567,7 +4582,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         let first = try await analysisService(resolver: resolver, search: CountingAnalysisSearch { _, _ in results })
             .recoverReviewCandidates(fromEvidenceText: "", sourceURL: "https://www.instagram.com/reel/FailureCacheFixture/")
         XCTAssertGreaterThan(resolver.queries.count, Set(resolver.queries).count)
-        XCTAssertEqual(analysisCounts(try XCTUnwrap(first.first))["resolver_cache_hits"], "0")
+        XCTAssertEqual(analysisCounts(resolver)["resolver_cache_hits"], "0")
         XCTAssertTrue(first.allSatisfy { !$0.hasReliableCoordinates })
     }
 
@@ -4586,14 +4601,14 @@ final class SocialPlacePipelineTests: XCTestCase {
             XCTAssertEqual(candidate.candidateName, "Juniper Coffee")
             XCTAssertFalse(candidate.hasReliableCoordinates)
             XCTAssertGreaterThan(search.queries.count, failedAttempt)
-            XCTAssertEqual(analysisCounts(candidate)["public_errors"], "1")
+            XCTAssertEqual(analysisCounts(resolver)["public_errors"], "1")
         }
         let search = CountingAnalysisSearch { _, _ in throw URLError(.timedOut) }
         let resolver = CountingAnalysisResolver { _, _ in XCTFail("No fabricated candidate after all search failures"); return [] }
         let candidates = try await analysisService(resolver: resolver, search: search).recoverReviewCandidates(
             fromEvidenceText: "", sourceURL: "https://www.instagram.com/reel/AllPublicFailures/")
         XCTAssertTrue(candidates.allSatisfy { $0.isSourceOnly && !$0.hasReliableCoordinates })
-        XCTAssertEqual(Int(analysisCounts(try XCTUnwrap(candidates.first))["public_errors"] ?? ""), search.queries.count)
+        XCTAssertEqual(Int(analysisCounts(resolver)["public_errors"] ?? ""), search.queries.count)
     }
 
     @MainActor
@@ -4608,8 +4623,40 @@ final class SocialPlacePipelineTests: XCTestCase {
             let candidates = try await analysisService(resolver: resolver, search: CountingAnalysisSearch { _, _ in results })
                 .recoverReviewCandidates(fromEvidenceText: "", sourceURL: "https://www.instagram.com/reel/EmptyCacheFixture/")
             XCTAssertTrue(candidates.allSatisfy { !$0.hasReliableCoordinates })
-            let hits = Int(analysisCounts(try XCTUnwrap(candidates.first))["resolver_cache_hits"] ?? "0") ?? 0
+            let hits = Int(analysisCounts(resolver)["resolver_cache_hits"] ?? "0") ?? 0
             if malformed { XCTAssertEqual(hits, 0) } else { XCTAssertGreaterThan(hits, 0) }
+        }
+    }
+
+    @MainActor
+    func testAnalysisDiagnosticsNeverEnterCandidateSavedOrSharedNotes() async throws {
+        let match = analysisMatch()
+        let resolver = CountingAnalysisResolver { _, _ in [match] }
+        let candidate = await analysisService(resolver: resolver).refineCandidate(analysisCandidate())
+        let snapshot = try XCTUnwrap(resolver.diagnostics.first)
+        XCTAssertEqual(resolver.diagnostics.count, 1)
+        XCTAssertEqual(snapshot.resolverAttempts, 1)
+        XCTAssertTrue(candidate.evidence.contains("Venue named in source"), "User evidence must remain intact")
+
+        let defaultReporterService = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(),
+            publicSourceSearchService: CountingAnalysisSearch(), placeResolverService: resolver, captionVenueExtractor: nil)
+        let loggedCandidate = await defaultReporterService.refineCandidate(analysisCandidate())
+        XCTAssertEqual(loggedCandidate.evidence, candidate.evidence, "The production logger must not mutate evidence either")
+        for item in [candidate, loggedCandidate] {
+            let review = PlaceReviewCandidate(id: UUID(), captureId: nil,
+                name: item.candidateName, address: item.address, city: nil,
+                latitude: item.latitude, longitude: item.longitude,
+                evidence: item.evidence, confidence: item.confidence,
+                missingInfo: item.missingInfo, status: "review", createdAt: Date())
+            let place = Place.from(review)
+            let sharedNote = ShareRoutePayloadSanitizer.publicNote(place.note) ?? ""
+            XCTAssertEqual(place.note, item.evidence.joined(separator: "\n"))
+            let persistedCandidate = String(decoding: try JSONEncoder().encode(item), as: UTF8.self)
+            for text in [persistedCandidate, item.evidence.joined(separator: "\n"), place.note ?? "", sharedNote] {
+                for diagnostic in [snapshot.analysisID.uuidString, "analysis_id", "Analysis search counts", "resolver_attempts", "resolver_errors", "resolver_cache_hits", "public_attempts", "public_errors", "public_cache_hits"] {
+                    XCTAssertFalse(text.localizedCaseInsensitiveContains(diagnostic), "Internal diagnostics must never become user or shared content")
+                }
+            }
         }
     }
 
