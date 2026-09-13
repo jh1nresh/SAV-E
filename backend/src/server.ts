@@ -4276,9 +4276,12 @@ async function handleCaptureSearchRecovery(
   const result=await runAnalysisRecovery(pool,userId,captureId,{...input,workflowRunId},async()=>{
     const aid=requestedAnalysis ?? await analysisUsageStore.start(userId,randomUUID(),false);
     let completed=false;
+    let investigatingVersion:string|undefined;
     try {
       return await withAnalysisUsage(analysisUsageStore,userId,aid,async()=>{
-        await pool.query("update captures set status='investigating' where id=$1 and user_id=$2",[captureId,userId]);
+        const investigating=await pool.query("update captures set status='investigating' where id=$1 and user_id=$2 returning updated_at::text as version",[captureId,userId]);
+        if(!investigating.rows[0]) throw new ApiError(404,"Capture not found");
+        investigatingVersion=investigating.rows[0].version;
         const recovery=await runSourceSearchRecovery(input,undefined,undefined,{persistedSourceResolution:capture.source_resolution,includeMediaEvidence:input.includeMediaEvidence});
         const client=await pool.connect();
         const createdCandidates:JsonBody[]=[];
@@ -4306,6 +4309,11 @@ async function handleCaptureSearchRecovery(
         return {capture_id:captureId,analysis_id:aid,queries:recovery.queries,search_results:recovery.searchResults,created_candidates:createdCandidates,media_evidence:recovery.mediaEvidence,source_resolution:sourceResolution,errors:recovery.errors,receipt:recovery.receipt};
       });
     } finally {
+      if(!completed && investigatingVersion) {
+        // Restore only this attempt's state; a newer recovery or user edit wins.
+        const priorStatus=capture.status === "investigating" ? "review" : capture.status;
+        await pool.query("update captures set status=$3 where id=$1 and user_id=$2 and status='investigating' and updated_at=$4::timestamptz",[captureId,userId,priorStatus,investigatingVersion]).catch(()=>{});
+      }
       if(!completed && !requestedAnalysis) await analysisUsageStore.finish(userId,aid,"failed",[captureId]).catch(()=>{});
     }
   });

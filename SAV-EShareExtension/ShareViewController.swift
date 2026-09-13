@@ -427,6 +427,8 @@ private struct SocialPlaceEvidenceDiagnostic: Codable {
 }
 
 private struct PendingReviewCandidate: Codable {
+    // Preserve app-assigned retry identity when the extension rewrites the shared queue.
+    var localVaultRecordID: UUID? = nil
     var candidateName: String
     var address: String
     var category: String

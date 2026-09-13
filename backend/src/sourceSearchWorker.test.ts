@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { AnalysisControlError, withAnalysisUsage, type AnalysisUsageStore } from "./analysisUsage.js";
 import {
   buildSourceRecoveryQueries,
   candidatesFromSearchResults,
   defaultFetchMetadataHTML,
+  defaultFetchText,
   defaultPlacesCorroborator,
   fetchBoundedMedia,
   parseDuckDuckGoResults,
@@ -1209,5 +1211,160 @@ test("Places provider semantic failures remain retryable and zero results are va
   } finally {
     globalThis.fetch=originalFetch;
     if(originalKey===undefined) delete process.env.GOOGLE_PLACES_API_KEY;else process.env.GOOGLE_PLACES_API_KEY=originalKey;
+  }
+});
+
+function workerLedger(denied = false) {
+  const events: string[] = [];
+  const store = {
+    async reserve(_owner: string, _id: string, input: { operation: string }) {
+      events.push(`reserve:${input.operation}`);
+      if (denied) throw new AnalysisControlError(429, "analysis_limit_exceeded", "fixture denial");
+      return "event";
+    },
+    async settle(_owner: string, _id: string, _event: string, _input: unknown, outcome: string) { events.push(outcome); },
+  } as unknown as AnalysisUsageStore;
+  return { events, run: <T>(work: () => Promise<T>) => withAnalysisUsage(store, "owner", "analysis", work) };
+}
+function ledgerBody(events: string[], fail = false) {
+  return new Response(new ReadableStream<Uint8Array>({
+    pull(controller) {
+      events.push("read");
+      if (fail) controller.error(new Error("fixture body failed"));
+      else { controller.enqueue(new TextEncoder().encode("fixture")); controller.close(); }
+    },
+  }, { highWaterMark: 0 }));
+}
+
+for (const fail of [true, false]) {
+  test(`worker ledger settles public search after body ${fail ? "failure" : "success"}`, async () => {
+    const ledger = workerLedger(); const originalFetch = globalThis.fetch;
+    globalThis.fetch = async () => { ledger.events.push("fetch"); return ledgerBody(ledger.events, fail); };
+    try {
+      const result = ledger.run(() => defaultFetchText("https://93.184.216.34/search"));
+      if (fail) await assert.rejects(result, /fixture body failed/); else assert.equal(await result, "fixture");
+      assert.deepEqual(ledger.events, ["reserve:public_search", "fetch", "read", fail ? "failure" : "success"]);
+    } finally { globalThis.fetch = originalFetch; }
+  });
+}
+
+test("worker ledger marks announced public search size rejection as failure", async () => {
+  const ledger = workerLedger(); const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { ledger.events.push("fetch"); return new Response("fixture", { headers: { "content-length": "1000001" } }); };
+  try {
+    await assert.rejects(ledger.run(() => defaultFetchText("https://93.184.216.34/search")), /too large/);
+    assert.deepEqual(ledger.events, ["reserve:public_search", "fetch", "failure"]);
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+for (const mode of ["read_error", "oversize", "success"] as const) {
+  test(`worker ledger settles media ${mode} after reading`, async () => {
+    const ledger = workerLedger();
+    const fetcher: typeof fetch = async () => { ledger.events.push("fetch"); return ledgerBody(ledger.events, mode === "read_error"); };
+    const result = ledger.run(() => fetchBoundedMedia("https://93.184.216.34/media", mode === "oversize" ? 2 : 10, fetcher));
+    if (mode === "read_error") await assert.rejects(result, /fixture body failed/);
+    else if (mode === "oversize") assert.equal(await result, undefined); else assert.equal((await result)?.data.byteLength, 7);
+    assert.deepEqual(ledger.events, ["reserve:media_download", "fetch", "read", mode === "success" ? "success" : "failure"]);
+  });
+}
+
+test("worker ledger records one operation for each validated metadata redirect attempt", async () => {
+  const ledger = workerLedger(); let calls = 0;
+  const fetcher: typeof fetch = async () => {
+    ledger.events.push("fetch");
+    return calls++ === 0 ? new Response(null, { status: 302, headers: { location: "https://93.184.216.34/ledger-target" } }) : ledgerBody(ledger.events, true);
+  };
+  await assert.rejects(ledger.run(() => resolveSourceDocument("https://93.184.216.34/ledger-redirect", 100, fetcher)), /fixture body failed/);
+  assert.deepEqual(ledger.events, ["reserve:metadata", "fetch", "success", "reserve:metadata", "fetch", "read", "failure"]);
+});
+
+test("worker ledger treats readable login and expired pages as valid retrievals", async () => {
+  for (const status of [401, 404]) {
+    const ledger = workerLedger();
+    const fetcher: typeof fetch = async () => { ledger.events.push("fetch"); return new Response("unavailable", { status }); };
+    const result = await ledger.run(() => resolveSourceDocument(`https://93.184.216.34/ledger-${status}`, 100, fetcher));
+    assert.equal(result.resolution.status, status === 401 ? "blocked_login" : "expired");
+    assert.deepEqual(ledger.events, ["reserve:metadata", "fetch", "success"]);
+  }
+});
+
+test("worker ledger rejects metadata truncated before a usable head", async () => {
+  const ledger = workerLedger();
+  const fetcher: typeof fetch = async () => { ledger.events.push("fetch"); return new Response("x".repeat(101)); };
+  await assert.rejects(ledger.run(() => resolveSourceDocument("https://93.184.216.34/ledger-large", 100, fetcher)), /too large/);
+  assert.deepEqual(ledger.events, ["reserve:metadata", "fetch", "failure"]);
+});
+
+for (const responseBody of ["malformed JSON", JSON.stringify({ evidence_tier: "unknown", confidence_reason: "fixture" })]) {
+  test(`worker ledger marks malformed rubric ${responseBody.startsWith("{") ? "verdict" : "JSON"} as failure while retaining fallback`, async () => {
+    const ledger = workerLedger(); const originalFetch = globalThis.fetch; const oldURL = process.env.SAVE_EVIDENCE_RUBRIC_URL;
+    process.env.SAVE_EVIDENCE_RUBRIC_URL = "https://93.184.216.34/rubric";
+    globalThis.fetch = async () => { ledger.events.push("fetch"); return new Response(responseBody); };
+    try {
+      const output = await ledger.run(() => runSourceSearchRecovery({ sourceUrl: receiptSourceURL, maxQueries: 0 }, async () => "", async () => [], {
+        sourceDocumentResolver: async () => receiptDocument("resolved", '<meta property="og:description" content="📍小山咖啡 北區店">'),
+        placesCorroborator: async () => undefined,
+      }));
+      assert.equal(output.candidates.length, 1);
+      assert.deepEqual(ledger.events, ["reserve:rubric", "fetch", "failure"]);
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (oldURL === undefined) delete process.env.SAVE_EVIDENCE_RUBRIC_URL; else process.env.SAVE_EVIDENCE_RUBRIC_URL = oldURL;
+    }
+  });
+}
+
+test("worker ledger does not fetch or swallow admission denial", async () => {
+  const ledger = workerLedger(true);
+  await assert.rejects(ledger.run(() => fetchBoundedMedia("https://93.184.216.34/media", 10, async () => { throw new Error("must not fetch"); })), { code: "analysis_limit_exceeded" });
+  assert.deepEqual(ledger.events, ["reserve:media_download"]);
+});
+
+test("worker ledger records a media body timeout as cancelled after fetch", async () => {
+  const ledger = workerLedger();
+  const fetcher: typeof fetch = async () => {
+    ledger.events.push("fetch");
+    return new Response(new ReadableStream<Uint8Array>({ pull() { return new Promise<void>(() => {}); } }, { highWaterMark: 0 }));
+  };
+  await assert.rejects(ledger.run(() => fetchBoundedMedia("https://93.184.216.34/timeout", 10, fetcher, 5)), { name: "AbortError" });
+  assert.deepEqual(ledger.events, ["reserve:media_download", "fetch", "cancelled"]);
+});
+
+test("worker ledger does not swallow rubric admission denial in the fallback", async () => {
+  const ledger = workerLedger(true); const originalFetch = globalThis.fetch; const oldURL = process.env.SAVE_EVIDENCE_RUBRIC_URL;
+  process.env.SAVE_EVIDENCE_RUBRIC_URL = "https://93.184.216.34/rubric";
+  globalThis.fetch = async () => { ledger.events.push("fetch"); throw new Error("must not fetch"); };
+  try {
+    await assert.rejects(ledger.run(() => runSourceSearchRecovery({ sourceUrl: receiptSourceURL, maxQueries: 0 }, async () => "", async () => [], {
+      sourceDocumentResolver: async () => receiptDocument("resolved", '<meta property="og:description" content="📍小山咖啡 北區店">'),
+      placesCorroborator: async () => undefined,
+    })), { code: "analysis_limit_exceeded" });
+    assert.deepEqual(ledger.events, ["reserve:rubric"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (oldURL === undefined) delete process.env.SAVE_EVIDENCE_RUBRIC_URL; else process.env.SAVE_EVIDENCE_RUBRIC_URL = oldURL;
+  }
+});
+
+
+test("metadata headless body accepts the exact byte limit and rejects only actual overflow", async () => {
+  for (const overflow of [false, true]) {
+    const ledger = workerLedger();
+    let reads = 0;
+    const fetcher: typeof fetch = async () => {
+      ledger.events.push("fetch");
+      return new Response(new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (reads++ === 0) controller.enqueue(new TextEncoder().encode("fixture"));
+          else if (overflow && reads === 2) controller.enqueue(Uint8Array.of(120));
+          else controller.close();
+        },
+      }, { highWaterMark: 0 }));
+    };
+    const result = ledger.run(() => resolveSourceDocument(`https://93.184.216.34/exact-headless-${overflow}`, 7, fetcher));
+    if (overflow) await assert.rejects(result, /too large/);
+    else assert.equal((await result).html, "fixture");
+    assert.equal(reads, 2, "read EOF or the first overflowing chunk before settling");
+    assert.deepEqual(ledger.events, ["reserve:metadata", "fetch", overflow ? "failure" : "success"]);
   }
 });
