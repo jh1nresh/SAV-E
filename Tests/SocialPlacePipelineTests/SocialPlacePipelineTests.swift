@@ -4361,6 +4361,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         }
     }
 
+    @MainActor
     private func analysisCandidate(address: String = "12 Test Street") -> PendingReviewCandidate {
         PendingReviewCandidate(candidateName: "Juniper Coffee", address: address, category: "food",
             sourceURL: "https://www.instagram.com/reel/fixture/", sourceText: "Coffee venue",
@@ -4373,12 +4374,14 @@ final class SocialPlacePipelineTests: XCTestCase {
             types: ["cafe"], coordinateSystem: .wgs84)
     }
 
+    @MainActor
     private func analysisService(resolver: CountingAnalysisResolver, search: CountingAnalysisSearch = CountingAnalysisSearch()) -> SocialLinkReviewCandidateService {
         SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(),
             publicSourceSearchService: search, placeResolverService: resolver, captionVenueExtractor: nil,
             analysisDiagnosticsObserver: { resolver.diagnostics.append($0) })
     }
 
+    @MainActor
     private func analysisCounts(_ resolver: CountingAnalysisResolver) -> [String: String] {
         guard let counts = resolver.diagnostics.last else {
             XCTFail("Analysis should report one internal completion snapshot")
