@@ -272,6 +272,12 @@ final class SAVEGeminiTransportFailureTests: XCTestCase {
         XCTAssertEqual(TransportFailureURLProtocol.requestCount, 3)
     }
 
+    func testMissingModelsReport404OnlyAfterAllFallbacksAreExhausted() async {
+        let runner = transport([(404, "{}"), (404, "{}"), (404, "{}")])
+        await expectStatus(404, from: runner)
+        XCTAssertEqual(TransportFailureURLProtocol.requestCount, 3)
+    }
+
     func testWrappedQuotaRetriesRemainBoundedAndSupportedFallbackSucceeds() async throws {
         let runner = transport([(502, wrapped429), (502, wrapped429), (200, #"{"ok":true}"#)], attempts: 2)
         let result = try await runner.generateContent(body: [:])

@@ -19,6 +19,21 @@ final class SavePlanAgentTests: XCTestCase {
         XCTAssertTrue(message.contains("Your draft and message are kept"))
     }
 
+    func testMissingModelsReportServiceFailureAndPreserveOnlyExistingState() {
+        for language in AppLanguage.allCases {
+            for hasDraft in [false, true] {
+                let message = SavePlanAgent.failureMessage(
+                    for: SAVEGeminiTransportError.upstreamStatus(404), hasDraft: hasDraft, language: language)
+                XCTAssertTrue(message.contains(language.localized(
+                    english: "planning service is temporarily unavailable",
+                    traditionalChinese: "規劃服務暫時無法使用")))
+                XCTAssertTrue(message.hasSuffix(language.localized(
+                    english: hasDraft ? "Your draft and message are kept." : "Your message is kept.",
+                    traditionalChinese: hasDraft ? "原本草稿和你輸入的訊息都已保留。" : "你輸入的訊息已保留。")))
+            }
+        }
+    }
+
     func testPlanFailureDistinguishesConnectionAndInvalidProposal() {
         let network = SavePlanAgent.failureMessage(
             for: URLError(.notConnectedToInternet), hasDraft: false, language: .traditionalChinese)

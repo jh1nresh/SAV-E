@@ -260,6 +260,7 @@ jobs:
             ${{ runner.temp }}/SAVE-Atlas-Parity
             ${{ runner.temp }}/SAVE-First-Run
             ${{ runner.temp }}/SAVE-Trip-Sheets
+            ${{ runner.temp }}/SAVE-*-tests.log
           if-no-files-found: warn
           retention-days: 14
 

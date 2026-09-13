@@ -51,7 +51,7 @@ struct SavePlanAgent {
     static func failureMessage(for error: Error, hasDraft: Bool, language: AppLanguage) -> String {
         let reason: String
         switch error {
-        case SAVEGeminiTransportError.upstreamStatus(let status) where status == 429 || (500...599).contains(status):
+        case SAVEGeminiTransportError.upstreamStatus(let status) where status == 404 || status == 429 || (500...599).contains(status):
             reason = language.localized(
                 english: "The planning service is temporarily unavailable. Please try again later.",
                 traditionalChinese: "規劃服務暫時無法使用，請稍後再試。")
