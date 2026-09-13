@@ -10,6 +10,7 @@ import {
   stableAccountRefSecret,
 } from "./accountStatus.js";
 import { createGuestSession, userIdFromGuestSessionToken } from "./guestSessions.js";
+import { recoverMissingAnalysisReceipt } from "./workflowReceiptRecovery.js";
 import {
   buildMaatPlaceAnalysis,
   buildPublicPlaceCard,
@@ -4901,10 +4902,11 @@ async function recordPlaceRecoveryResult(
   runId: string,
   userId: string,
   result: PlaceRecoveryWorkerResult,
+  transactionClient?: PoolClient,
 ): Promise<JsonBody & { created: boolean }> {
-  const client = await pool.connect();
+  const client = transactionClient ?? await pool.connect();
   try {
-    await client.query("begin");
+    if (!transactionClient) await client.query("begin");
     const run = await lockedWorkflowRun(client, runId, userId);
     const currentAttemptNo = Number(run.current_attempt_no ?? 1);
     const attemptNo = result.attemptNo ?? currentAttemptNo;
@@ -4939,7 +4941,7 @@ async function recordPlaceRecoveryResult(
       ) {
         throw new WorkflowConflictError("Result idempotency key was already used with different identity or output");
       }
-      await client.query("commit");
+      if (!transactionClient) await client.query("commit");
       return {
         created: false,
         run: formatDates(run),
@@ -4966,7 +4968,7 @@ async function recordPlaceRecoveryResult(
     });
     if (plan.kind === "idempotent") {
       const { rows } = await client.query("select * from workflow_receipts where id = $1", [plan.receiptId]);
-      await client.query("commit");
+      if (!transactionClient) await client.query("commit");
       return { created: false, run: formatDates(run), receipt: workflowReceiptResponse(rows[0]) };
     }
 
@@ -5059,17 +5061,17 @@ async function recordPlaceRecoveryResult(
     });
     await refreshWorkflowReputationSnapshot(client, userId, updatedRun, receipt);
 
-    await client.query("commit");
+    if (!transactionClient) await client.query("commit");
     return {
       created: true,
       run: formatDates(updatedRun),
       receipt: workflowReceiptResponse(receipt),
     };
   } catch (error) {
-    await client.query("rollback");
+    if (!transactionClient) await client.query("rollback");
     throw error;
   } finally {
-    client.release();
+    if (!transactionClient) client.release();
   }
 }
 
@@ -5237,8 +5239,18 @@ async function recordPlaceRecoveryDecision(
   const client = await pool.connect();
   try {
     await client.query("begin");
-    const run = await lockedWorkflowRun(client, runId, userId);
-    const currentReceipt = await currentAnalysisReceipt(client, runId);
+    let run = await lockedWorkflowRun(client, runId, userId);
+    let currentReceipt = await currentAnalysisReceipt(client, runId);
+    if (!currentReceipt) {
+      const recovered = await recoverMissingAnalysisReceipt(
+        client, run, userId, decisionInput.candidateId,
+        (result) => recordPlaceRecoveryResult(runId, userId, result, client),
+      );
+      if (recovered) {
+        run = await lockedWorkflowRun(client, runId, userId);
+        currentReceipt = await currentAnalysisReceipt(client, runId);
+      }
+    }
     if (!currentReceipt) throw new WorkflowConflictError("A current analysis receipt is required before a decision");
     if (run.result_type === "technical_failure") {
       throw new WorkflowConflictError("Technical failures are refunded automatically and do not accept user decisions");
