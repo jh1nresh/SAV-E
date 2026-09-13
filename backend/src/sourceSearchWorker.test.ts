@@ -953,3 +953,55 @@ test("runSourceSearchRecovery sends safe projection to external rubric adapter",
     else process.env.GOOGLE_PLACES_API_KEY = originalPlacesKey;
   }
 });
+
+// Reported public Reel shapes; authors and tracking tokens omitted. The captions
+// are evidence for extraction, not verification of current branches or decor.
+const reelBranchCaption = "我心中很喜歡的店 CRO#FEE咖啡弄 打造韓系空間美學，連家具都很前衛🪑 餐點好吃格調也很獨特 在臺北這個城市顯得格外的鮮豔 有兩家分店，都在臺北市區 📍CRO_FEE 咖啡弄 復興店 📍CRO_FEE 咖啡弄 敦南店 影片是敦南店的前身，現在改裝潢了，依然值得去一趟！ ▪️ #咖啡弄 #台北下午茶";
+
+async function recoverCaptionFixture(caption: string) {
+  return runSourceSearchRecovery(
+    { sourceUrl: "https://www.instagram.com/reel/BranchFixture/", maxQueries: 0 },
+    async () => `<html><head><meta property="og:title" content="Food creator • Instagram reel"><meta property="og:description" content="${caption}"></head></html>`,
+    async () => [],
+    { placesCorroborator: async () => undefined },
+  );
+}
+
+test("Reel metadata keeps explicitly pinned cafe branches as separate review candidates", async () => {
+  const output = await recoverCaptionFixture(reelBranchCaption);
+  assert.deepEqual(output.candidates.map(candidate => candidate.name), ["CRO_FEE 咖啡弄 復興店", "CRO_FEE 咖啡弄 敦南店"]);
+  for (const candidate of output.candidates) {
+    assert.equal(candidate.address, "台北");
+    assert.equal(candidate.latitude, undefined);
+    assert.ok(candidate.missingInfo.includes("User confirmation before saving as Map Stamp"));
+    assert.ok(candidate.missingInfo.includes("Confirm exact street address"));
+    assert.ok(candidate.evidence.some(line => line.includes("現在改裝潢了")));
+  }
+  assert.equal(output.receipt.output, "review_candidate");
+});
+
+test("Reel without a venue name remains a source clue and asks for a visible name", async () => {
+  const output = await recoverCaptionFixture("敢開在台北拉麵一級戰區，這日本老闆到底哪來的膽子？ #日本人開的餐廳 #日本人開的拉麵 #台北拉麵推薦 #台北晚餐推薦 #台北美食推薦");
+  assert.deepEqual(output.candidates, []);
+  assert.equal(output.receipt.output, "source_only_clue");
+  assert.ok(output.receipt.missing.includes("Verified venue name"));
+  assert.match(output.receipt.nextBestClue, /screenshot.*venue name/);
+});
+
+test("generic pins and malformed pin prose never become venue names", async () => {
+  for (const caption of ["📍台北市 📍信義區", "📍咖啡店 📍拉麵店", "📍台北咖啡店", "📍臺北市咖啡店", "📍附近的咖啡店", "📍飲料店", "📍台北拉麵推薦 📍咖啡店推薦", "📍這間店真的很好吃 今天一定要來！", "📍 @food_diary #台北咖啡"]) {
+    const output = await recoverCaptionFixture(caption);
+    assert.deepEqual(output.candidates, [], caption);
+  }
+});
+
+test("pinned store parsing generalizes across line breaks and preserves repeated branch identity", async () => {
+  const output = await recoverCaptionFixture("台中咖啡：\n📍小山咖啡 北區店\n📌小山咖啡 西區店\n📍小山咖啡 北區店");
+  assert.deepEqual(output.candidates.map(candidate => candidate.name), ["小山咖啡 北區店", "小山咖啡 西區店"]);
+});
+
+
+test("store suffix within a brand does not swallow its explicit branch suffix", async () => {
+  const output = await recoverCaptionFixture("台北兩間店 📍星光咖啡店 中山店 📍星光咖啡店 信義店");
+  assert.deepEqual(output.candidates.map(candidate => candidate.name), ["星光咖啡店 中山店", "星光咖啡店 信義店"]);
+});
