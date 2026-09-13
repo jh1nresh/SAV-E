@@ -241,8 +241,18 @@ final class SaveLocalVaultServiceTests: XCTestCase {
         let id = UUID()
         let pending = makePendingCandidate(localID: id)
         _ = try service.saveReviewCandidate(pending, recordID: id, preservingExisting: true)
-        try service.removeReviewCandidate(id)
+        // Confirmation requires a review candidate with a reliable location, not a source-only clue.
+        var refined = pending
+        refined.isSourceOnly = false
+        refined.latitude = 25.051
+        refined.longitude = 121.519
+        _ = try service.saveReviewCandidate(refined, recordID: id)
+        XCTAssertEqual(try service.reviewCandidates().count, 1)
+
+        // Match the local confirmation flow: save the Map Stamp, then retire its review candidate.
         _ = try service.saveConfirmedPlace(makePlace(id: id, name: "User confirmed Cafe", address: "2 Correct Way", googlePlaceId: nil))
+        try service.removeReviewCandidate(id)
+        XCTAssertEqual(try service.recentRecords().count, 1, "Confirmation must finish before exercising the retry")
 
         _ = try service.saveReviewCandidate(pending, recordID: id, preservingExisting: true)
         _ = try service.saveReviewCandidate(pending, recordID: id)
