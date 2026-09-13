@@ -286,15 +286,17 @@ function candidatesFromSourceMetadata(metadata: SourceMetadata | undefined): Sou
   const evidenceText = decodedMetadataText(metadata);
   const address = addressFromText(evidenceText);
   const venueClue = sourceMetadataVenueClue(evidenceText);
+  const pinnedNames = address ? [] : pinnedStoreNames(evidenceText);
   const name = address
     ? sourceMetadataPlaceName(evidenceText, address)
     : venueClue?.name;
-  if (!name || !isUsableCandidateName(name)) return [];
+  const names = pinnedNames.length > 0 ? pinnedNames : name && isUsableCandidateName(name) ? [name] : [];
+  if (names.length === 0) return [];
 
   const hasStreetAddress = Boolean(address);
-  const area = hasStreetAddress ? undefined : venueClue?.area;
+  const area = hasStreetAddress ? undefined : venueClue?.area ?? taiwanAreaClue(evidenceText);
 
-  return [{
+  return names.map(name => ({
     name,
     address: address ?? area ?? "",
     evidence: [
@@ -319,7 +321,32 @@ function candidatesFromSourceMetadata(metadata: SourceMetadata | undefined): Sou
         "Places corroboration or Maps refine before saving",
         "User confirmation before saving as Map Stamp",
       ],
-  }];
+  }));
+}
+
+// A pin explicitly naming a store can carry several branches in one flattened
+// caption. Stop at the store suffix, retaining branch identity and excluding
+// the narrative that follows. City/category pins alone are not venue evidence.
+function pinnedStoreNames(text: string): string[] {
+  const names: string[] = [];
+  for (const segment of instagramCaptionBody(text).split(/[📍📌]/u).slice(1)) {
+    const name = segment.trim().match(/^([A-Za-z\u4e00-\u9fff][A-Za-z0-9_\u4e00-\u9fff &'().-]{1,59}?店(?:\s+[A-Za-z0-9_\u4e00-\u9fff.-]{1,15}店)?)(?=$|[\s，。！？!?；;#])/u)?.[1];
+    if (!name || !isUsableCandidateName(name) || looksLikeAreaOnlyName(name)
+      || looksLikeCreatorDiaryTitle(name)
+      || isGenericPinnedStore(name)
+      || /推薦|推荐|這間|这间|那間|那间|必吃|必訪|必访|打卡|好吃/.test(name)) continue;
+    names.push(name);
+  }
+  return unique(names).slice(0, 5);
+}
+
+function isGenericPinnedStore(name: string): boolean {
+  const normalized = name.replace(/臺/g, "台");
+  const area = taiwanAreaClue(normalized);
+  const withoutArea = area && normalized.startsWith(area)
+    ? normalized.slice(area.length).replace(/^市/, "").trim()
+    : normalized;
+  return /^(?:(?:附近|路邊|路边|當地|当地|本地)(?:的)?)?(?:咖啡|拉麵|拉面|餐|飯|饭|書|书|甜點|甜点|茶|酒|小吃|飲料|饮料|早餐|便當|便当|火鍋|火锅)店$/.test(withoutArea);
 }
 
 function candidatesFromMediaEvidence(
