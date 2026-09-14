@@ -222,6 +222,10 @@ import {
   verifyAppleNotification,
 } from "./appleNotifications.js";
 import { deleteAccount } from "./accountDeletion.js";
+import {
+  FriendRatingError, listFriendRatings, getFriendRating, ownFriendRatings,
+  putFriendRating, withdrawFriendRating, saveFriendRating, savedFriendAttributions,
+} from "./friendRatings.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -1099,6 +1103,27 @@ createServer(async (request, response) => {
     if (isV0 && resource === "places" && id && segments[2] === "trust-summary") {
       return await handlePlaceTrustSummary(request, response, id, userId);
     }
+    if (isV0 && resource === "friend-ratings") {
+      response.setHeader("Cache-Control", "private, no-store");
+      response.setHeader("Vary", "Authorization");
+      if (request.method === "GET" && segments.length === 1) return sendJson(response, await listFriendRatings(pool, userId, url));
+      if (request.method === "GET" && segments.length === 2 && id === "mine") return sendJson(response, await ownFriendRatings(pool, userId));
+      if (request.method === "GET" && segments.length === 2 && id === "saved") return sendJson(response, await savedFriendAttributions(pool, userId));
+      if (id && segments.length === 2) {
+        if (request.method === "GET") return sendJson(response, await getFriendRating(pool, userId, id));
+        if (request.method === "PUT") return sendJson(response, await putFriendRating(pool, userId, id, await readJson(request, 2048)));
+        if (request.method === "DELETE") {
+          await withdrawFriendRating(pool, userId, id);
+          return sendJson(response, null, 204);
+        }
+      }
+      if (id && request.method === "POST" && segments.length === 3 && segments[2] === "save") {
+        const body = await readJson(request, 2048);
+        if (Object.keys(body).length) return sendJson(response, { error: "Save accepts only the shared rating id" }, 400);
+        return sendJson(response, formatPlace(await saveFriendRating(pool, userId, id)), 201);
+      }
+      return sendJson(response, { error: "Unsupported friend ratings route" }, 405);
+    }
     if (resource === "places" && id && segments[2] === "visibility") {
       return await handlePlaceVisibility(request, response, id, userId);
     }
@@ -1129,6 +1154,7 @@ createServer(async (request, response) => {
 
     return sendJson(response, { error: "Not found" }, 404);
   } catch (error) {
+    if (error instanceof FriendRatingError) return sendJson(response, { error: error.message }, error.status);
     if (error instanceof AnalysisProviderError) return sendJson(response,{error:"Gemini upstream request failed",status:error.upstreamStatus},502);
     if (error instanceof AnalysisControlError) return sendJson(response,{error:error.message,code:error.code},error.status);
     const status = error instanceof ApiError
@@ -4677,6 +4703,7 @@ async function friendSignalPlaces(userId: string, limit: number): Promise<JsonBo
     `select
        p.*,
        pv.visibility as social_visibility,
+       pv.published_at as social_published_at,
        f.lens as follow_lens,
        actor.id as actor_id,
        actor.display_name as actor_display_name,
@@ -4690,6 +4717,9 @@ async function friendSignalPlaces(userId: string, limit: number): Promise<JsonBo
        and p.user_id <> $1
        and pv.allow_friend_signal = true
        and pv.visibility in ('friends', 'public_link', 'public_guide')
+       -- Ratings use the revocable Friends projection and save endpoint only.
+       -- The legacy save path persists attribution in the recipient's recommender.
+       and not exists (select 1 from friend_restaurant_ratings r where r.place_id = p.id)
      order by p.created_at desc
      limit $2`,
     [userId, limit],
@@ -4721,6 +4751,7 @@ async function trendingSignalPlaces(userId: string, limit: number): Promise<Json
     `select
        p.*,
        pv.visibility as social_visibility,
+       pv.published_at as social_published_at,
        pss.lens as signal_lens,
        pss.friend_count,
        pss.save_count,
@@ -4764,6 +4795,7 @@ async function communityRecommendationPlaces(userId: string, limit: number): Pro
     `select
        p.*,
        pv.visibility as social_visibility,
+       pv.published_at as social_published_at,
        owner.display_name as owner_display_name,
        owner.handle as owner_handle
      from places p
@@ -4795,6 +4827,7 @@ async function referralFeaturedPlaces(referrerId: string, referralCode: string):
     `select
        p.*,
        pv.visibility as social_visibility,
+       pv.published_at as social_published_at,
        owner.display_name as owner_display_name,
        owner.handle as owner_handle
      from places p
@@ -4831,7 +4864,16 @@ async function referralFeaturedPlaces(referrerId: string, referralCode: string):
 
 function formatSocialPlace(row: JsonBody, socialSignal: JsonBody): JsonBody {
   return {
-    ...formatDates(pickFields(row, [...placeFields, "user_id"])),
+    ...formatDates(pickFields(row, [
+      "id", "user_id", "name", "address", "latitude", "longitude", "google_place_id",
+      "category", "coordinate_system", "location_provider", "provider_place_id",
+      "provider_map_url", "google_rating", "google_price_level", "opening_hours",
+    ])),
+    // Social venue metadata is not the author's private memory. Owner-entered
+    // stars are exposed only through the explicitly shared Friends projection.
+    status: "wantToGo",
+    source_platform: "other",
+    created_at: row.social_published_at ?? "1970-01-01T00:00:00Z",
     visibility: stringValue(row.social_visibility) ?? "private",
     social_signal: socialSignal,
   };

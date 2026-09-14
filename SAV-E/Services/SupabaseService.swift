@@ -734,6 +734,34 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
 
     // MARK: - Social Graph
 
+    func fetchFriendRatings(cursor: String? = nil) async throws -> FriendRestaurantRatingsPage {
+        var components = URLComponents()
+        components.path = "/v0/friend-ratings"
+        components.queryItems = [URLQueryItem(name: "limit", value: "20")]
+        if let cursor { components.queryItems?.append(URLQueryItem(name: "cursor", value: cursor)) }
+        let data = try await request(path: components.string ?? "/v0/friend-ratings")
+        return try JSONDecoder().decode(FriendRestaurantRatingsPage.self, from: data)
+    }
+
+    func fetchOwnRestaurantRatings() async throws -> [OwnRestaurantRating] {
+        let data = try await request(path: "/v0/friend-ratings/mine")
+        return try JSONDecoder().decode([OwnRestaurantRating].self, from: data)
+    }
+
+    func putRestaurantRating(placeID: UUID, stars: Double, eaten: Bool, shared: Bool) async throws {
+        let body = try JSONSerialization.data(withJSONObject: ["stars": stars, "eaten": eaten, "shared": shared])
+        try await request(path: "/v0/friend-ratings/\(placeID)", method: "PUT", body: body)
+    }
+
+    func withdrawRestaurantRating(placeID: UUID) async throws {
+        try await request(path: "/v0/friend-ratings/\(placeID)", method: "DELETE")
+    }
+
+    func saveFriendRestaurant(placeID: UUID) async throws -> Place {
+        let data = try await request(path: "/v0/friend-ratings/\(placeID)/save", method: "POST", body: Data("{}".utf8))
+        return try JSONDecoder.supabase.decode(PlaceRow.self, from: data).toPlace()
+    }
+
     func fetchFollowedFriends(query: String, cursor: String?, limit: Int) async throws -> SaveFollowedFriendsPage {
         guard isConfigured else { return SaveFollowedFriendsPage(items: [], nextCursor: nil) }
 
@@ -973,6 +1001,8 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         additionalHeaders: [String: String] = [:],
         baseURLOverride: String? = nil
     ) async throws -> (Data, HTTPURLResponse) {
+        let friendSession: Int? = path.hasPrefix("/v0/friend-ratings")
+            ? await MainActor.run { PrivyAuthService.shared.sessionGeneration } : nil
         guard let base = baseURLOverride ?? apiBaseURL else { throw SupabaseError.notConfigured }
 
         guard let url = URL(string: "\(base)\(path)") else {
@@ -980,6 +1010,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }
 
         var request = URLRequest(url: url)
+        if path.hasPrefix("/v0/friend-ratings") { request.cachePolicy = .reloadIgnoringLocalCacheData }
         request.httpMethod = method
         if path.hasPrefix("/v0/analysis") { request.timeoutInterval = 8 }
         request.setValue(SAVEAnalysisScope.current?.id.uuidString, forHTTPHeaderField: "x-save-analysis-id")
@@ -997,6 +1028,11 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             }
         }
 
+        if let friendSession {
+            let stillCurrent = await MainActor.run { PrivyAuthService.shared.sessionGeneration == friendSession }
+            guard stillCurrent else { throw CancellationError() }
+            try Task.checkCancellation()
+        }
         if let body { request.httpBody = body }
 
         let data: Data

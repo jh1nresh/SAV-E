@@ -115,6 +115,7 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
     let title: KeyPath<Item, String>
     let icon: KeyPath<Item, String>
     let accessibilityPrefix: String
+    var displayTitle: ((Item) -> String)? = nil
     var isRaisedControl: (Item) -> Bool = { _ in false }
     let onSelect: (Item) -> Void
 
@@ -165,7 +166,7 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                                 ))
                                 .frame(height: 24)
 
-                            Text(item[keyPath: title])
+                            Text(displayTitle?(item) ?? item[keyPath: title])
                                 .font(AtlasType.display(isRaisedControl(item) ? 9 : 11))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.85)
@@ -182,7 +183,7 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(item[keyPath: title])
+                .accessibilityLabel(displayTitle?(item) ?? item[keyPath: title])
                 .accessibilityIdentifier(
                     "\(accessibilityPrefix).\(item[keyPath: title].lowercased())"
                 )

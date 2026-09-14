@@ -154,6 +154,7 @@ Use these product nouns:
 - Memory Card
 - Evidence Receipt
 - Passport
+- Friends (朋友): explicitly shared restaurant ratings from people you follow
 - Your quests (探索任務): live next steps in Passport
 - Plan
 - Plan around this
@@ -297,6 +298,7 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | Onboarding | Atlas |
 | Google Takeout import | Atlas (some legacy tokens remain inline) |
 | Passport (`ProfileView`, `StatsView`, pet companion card chrome) | Atlas |
+| Friends (`SaveFriendsView`) | Atlas |
 | `CategoryPill`, `EmptyStateView`, `RelatedPlaceSourcesPanel` | Atlas |
 | Brand accents: pet preset colors (Spark = honey), stamp moment ripple, `SaveMemoryBadge` stamp palette, `MemoMascotMark` | Intentional — do not recolor in migrations |
 | App Clip shared place, trip, and list previews | Atlas |
@@ -758,6 +760,24 @@ Rules:
   It may observe a waiting clue, an unvisited Map Stamp, a private Map Stamp,
   or a missing friend connection. It does not grant Pro, XP, or rewards. If no
   live step applies, hide the strip. Do not show an empty quest card.
+
+### Friends
+
+Home / Map / + / Friends / Passport is the root bar. Existing Plan and Trips
+child routes remain secondary. Friends is a compact recent-first restaurant
+rating list, with friend identity, restaurant, stars, and Save to try.
+
+An author's self-reported visit is not verified attendance. Entering stars or
+marking Visited never implies sharing. Explicit sharing discloses that all
+current and future followers may see the author's name, venue and stars; mutual
+following is not required. Private notes, photos and source receipts stay private.
+Use an optional share toggle, not mandatory post composition. My ratings allows
+editing and withdrawal. Empty states use real absence, never production seeds.
+
+The recipient's Save creates a want-to-go Map Stamp, without the author's stars
+or visit state. Before saving, show Save to try rather than claiming the
+restaurant is already in the recipient's memory. Refresh, account changes and
+returning from background discard the previous feed projection.
 
 ### Share Extension
 
