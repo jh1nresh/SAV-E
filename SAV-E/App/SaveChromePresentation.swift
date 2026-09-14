@@ -69,7 +69,12 @@ enum SaveChromeNavigation {
             return [route]
         case .trips:
             return [.trips]
+        case .plan:
+            return path.contains(.trips) ? [.trips, .plan] : [.plan]
         case .trip(let tripID):
+            if path.contains(.plan) {
+                return path.contains(.trips) ? [.trips, .plan, .trip(tripID)] : [.plan, .trip(tripID)]
+            }
             if path.contains(.trips) {
                 return [.trips, .trip(tripID)]
             }

@@ -1,6 +1,6 @@
 # Savvy Design System
 
-> Last updated: 2026-09-04
+> Last updated: 2026-09-14
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** governs Home, Saves, Plan, Trips, Map, and the ask
 > drawer. **Cream-notebook** tokens are legacy-surface-only. See "Atlas Postcard
@@ -552,6 +552,18 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 
 ## Screen Rules
 
+### Primary Navigation
+
+- Root controls are Home / Map / + / Passport, in that order.
+- Home owns saved places and waiting clues. Do not add a duplicate Saves tab.
+- + opens capture and leaves the previous destination selected when dismissed.
+- Plan is a secondary route while planning demand remains unvalidated.
+- Home's More menu retains Trips and existing trip data. Trips offers Resume
+  planning for the current conversation; New trip retains its explicit reset
+  and unsaved-draft confirmation behavior.
+- Planning and trip child pages have a back path to their parent. Plan has no
+  root tab bar; the conversation remains owned by the app shell across visits.
+
 ### Sign-In
 
 First impression:
@@ -621,7 +633,7 @@ Plan is the itinerary workbench. It drafts a walking day from confirmed Map Stam
 
 Rules:
 
-- Plan is a root tab. It is not a social feed and not a booking desk.
+- Plan is a child page reached from Trips or an explicit place action.
 - Every Plan turn reaches the semantic planner with the current draft and bounded
   place inventory. The model chooses a draft edit, one necessary clarification,
   or one nearby candidate lookup; no required pace/time questionnaire.

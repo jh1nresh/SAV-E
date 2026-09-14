@@ -169,11 +169,6 @@ struct SavePlanView: View {
         ZStack(alignment: .topLeading) {
             AtlasCanvas()
 
-            BrandHeader {
-                EmptyView()
-            }
-            .placed(x: 0, y: 48, width: AtlasMetrics.width, height: 51)
-
             planActions
                 .placed(x: 16, y: 105, width: AtlasMetrics.width - 32, height: 44)
 
