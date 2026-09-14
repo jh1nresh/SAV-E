@@ -623,10 +623,7 @@ struct SavePlanView: View {
             onSaveTripPlan: { name, city, stops in
                 await tripStore.createTrip(fromPlanNamed: name, city: city, stops: stops)
             },
-            onOpenTrip: { tripID in
-                conversation.startNewPlan()
-                onOpenTrip(tripID)
-            },
+            onOpenTrip: onOpenTrip,
             onConfirmCandidate: onConfirmCandidate,
             onDaysChange: { conversation.updateDraftDays($0, replacing: draft, availablePlaces: $1, language: languageSettings.language) }
         )

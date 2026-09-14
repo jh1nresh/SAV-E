@@ -287,7 +287,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
         )
         launch(app)
-        try signInViaReviewDemo(app: app)
+        try signInViaReviewDemoRequired(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         let tabs = ["Home", "Map", "Save", "Passport"].map {
@@ -785,6 +785,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(keyboardDone.waitForExistence(timeout: stepTimeout))
         keyboardDone.tap()
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: stepTimeout))
+        popPlan(app: app, returningTo: "trips.home")
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         dismissLocationAlertIfPresent()
@@ -1172,6 +1173,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.buttons["plan.review.close"].exists)
         tapReachable(review)
         XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
+        popPlan(app: app, returningTo: "trips.home")
         openRootTab("Home", app: app)
         openPlanFromTrips(app: app)
         XCTAssertTrue(app.staticTexts["Plan a relaxed 1 day trip in Tokyo"].waitForExistence(timeout: stepTimeout))
@@ -1323,6 +1325,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.descendants(matching: .any)["plan.draft"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
         attach(app, name: "plan-place-anchor-awaiting-input")
+        popPlan(app: app, returningTo: "home.root")
         openRootTab("Home", app: app)
         openSavesFromHome(app: app)
         app.buttons["saves.segment.mapStamps"].tap()
@@ -1444,7 +1447,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(tripBack.waitForExistence(timeout: stepTimeout))
         tripBack.tap()
         XCTAssertTrue(app.descendants(matching: .any)["plan.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.buttons["tripPlan.open"].exists, "Returning from a saved Trip keeps its Plan conversation")
+        XCTAssertTrue(
+            app.staticTexts["Day two is too tiring; make it lighter"].waitForExistence(timeout: stepTimeout),
+            "Returning from a saved Trip keeps the existing Plan conversation"
+        )
+        XCTAssertTrue(app.staticTexts["I’ve made day two lighter and kept day one unchanged."].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["plan.draft"].exists,
+            "Returning from a saved Trip keeps the edited draft"
+        )
+        XCTAssertTrue(scrollUntilHittable(review, in: app.scrollViews.firstMatch, maxSwipes: 10))
+        review.tap()
+        XCTAssertTrue(app.staticTexts["Plan Test Garden"].firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(candidate.exists, "Returning from a saved Trip retains the confirmed place in its draft")
 
         terminate(app)
         app.launchArguments.removeAll { $0 == "--uitest-reset-review-demo-storage" }
@@ -1933,6 +1948,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.navigationBars["Plan"].buttons.firstMatch.isHittable)
         XCTAssertFalse(app.buttons["root.passport"].exists, "Plan uses native child navigation")
 
+        popPlan(app: app, returningTo: "trips.home")
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(
@@ -2166,6 +2182,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         success.buttons["OK"].tap()
         XCTAssertFalse(app.buttons["plan.review.close"].exists)
         tapReachable(review)
+        popPlan(app: app, returningTo: "home.root")
         try assertSavedPlaceAndTripStopPersist(
             app: app,
             placeName: placeName,
@@ -2477,6 +2494,16 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             trips.waitForExistence(timeout: stepTimeout),
             "Home Trips entry did not open Trips"
         )
+    }
+
+    @MainActor
+    private func popPlan(app: XCUIApplication, returningTo screenIdentifier: String) {
+        let back = app.navigationBars["Plan"].buttons.firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: stepTimeout), "Plan must expose a native back action")
+        XCTAssertTrue(back.isHittable)
+        back.tap()
+        XCTAssertTrue(app.descendants(matching: .any)[screenIdentifier].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["plan.root"].waitForNonExistence(timeout: stepTimeout))
     }
 
     @MainActor
