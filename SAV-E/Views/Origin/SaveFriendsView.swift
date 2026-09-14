@@ -178,8 +178,10 @@ struct SaveFriendsView: View {
         do {
             let page = try await api.fetchFriendRatings()
             let mine = try await api.fetchOwnRestaurantRatings()
+            let saved = try await api.fetchSavedFriendRatingIDs()
             guard ticket == generation, session == auth.sessionGeneration, !Task.isCancelled else { return }
             ratings = page.items; nextCursor = page.nextCursor; ownRatings = mine
+            savedIDs = saved
             await mapViewModel.refreshFollowedFriends(force: true)
         } catch {
             guard ticket == generation, session == auth.sessionGeneration, !Task.isCancelled else { return }
@@ -195,10 +197,12 @@ struct SaveFriendsView: View {
         defer { if ticket == generation { loading = false } }
         do {
             let page = try await api.fetchFriendRatings(cursor: cursor)
+            let saved = try await api.fetchSavedFriendRatingIDs()
             guard ticket == generation, session == auth.sessionGeneration, !Task.isCancelled else { return }
             // A new page replaces the old projection; previously visible rows
             // may have been withdrawn since their request.
             ratings = page.items
+            savedIDs = saved
             nextCursor = page.nextCursor
         } catch {
             // A failed request must not leave potentially revoked ratings visible.

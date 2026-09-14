@@ -748,6 +748,12 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         return try JSONDecoder().decode([OwnRestaurantRating].self, from: data)
     }
 
+    func fetchSavedFriendRatingIDs() async throws -> Set<UUID> {
+        struct SavedReference: Decodable { let id: UUID }
+        let data = try await request(path: "/v0/friend-ratings/saved")
+        return Set(try JSONDecoder().decode([SavedReference].self, from: data).map(\.id))
+    }
+
     func putRestaurantRating(placeID: UUID, stars: Double, eaten: Bool, shared: Bool) async throws {
         let body = try JSONSerialization.data(withJSONObject: ["stars": stars, "eaten": eaten, "shared": shared])
         try await request(path: "/v0/friend-ratings/\(placeID)", method: "PUT", body: body)

@@ -84,6 +84,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         rootTabButton("Home", app: app).tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Local Test Bistro'")).firstMatch.waitForExistence(timeout: stepTimeout))
         attach(app, name: "friends-local-saved-home")
+        rootTabButton("Friends", app: app).tap()
+        let restoredSave = app.buttons["Saved to your map"]
+        guard restoredSave.waitForExistence(timeout: stepTimeout), !restoredSave.isEnabled else {
+            attach(app, name: "friends-local-saved-state-failure")
+            throw NSError(domain: "FriendsFixture", code: 6, userInfo: [NSLocalizedDescriptionKey: "Returning to Friends must preserve the saved state"])
+        }
+        attach(app, name: "friends-local-saved-state-restored")
         rootTabButton("Map", app: app).tap()
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].firstMatch.waitForExistence(timeout: stepTimeout))
         app.buttons["map.command.search"].tap()

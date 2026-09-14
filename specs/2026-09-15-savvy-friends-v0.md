@@ -81,7 +81,7 @@ began with 25.6 GiB free. No simulator deletion is authorized.
 
 - Native `SAVETests`: 858 executed, 857 passed, 1 existing opt-in live-provider
   evaluation skipped, zero failures. Local Friends UI acceptance: 1 executed,
-  zero failures, 77.233 seconds. B explicitly rated/shared; A saw and saved it;
+  zero failures, 84.884 seconds. B explicitly rated/shared; A saw and saved it;
   Home and Map saved-place search showed the recipient-owned Map Stamp; C was
   denied; B withdrew; A's rating feed/attribution cleared while its own save remained.
 - Controller reviewed the final empty/populated five-tab screenshots against
@@ -97,3 +97,11 @@ began with 25.6 GiB free. No simulator deletion is authorized.
 
 Owner: controller on `codex/savvy-friends-v0`. PR carries current CI/review state.
 Merge, production migration/deployment and distribution remain unperformed.
+
+PR #241 saved-state follow-up: refreshing or paging Friends now reloads saved
+rating IDs from the current access-checked `/v0/friend-ratings/saved` response.
+The native regression leaves Friends after saving, returns, and requires the
+restored Saved label and disabled action before continuing Map/withdrawal checks.
+Verification: `.verification/friends-saved-state.log`; 858 native units
+(1 existing opt-in skip), plus the complete real HTTP/native flow, all passing.
+Resource receipt: `.resource-state/savvy-friends-saved-state.json`.
