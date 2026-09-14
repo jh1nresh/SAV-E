@@ -2,32 +2,32 @@ import XCTest
 @testable import SAVE
 
 /// Root navigation and sizing invariants. The legacy class name remains stable
-/// while the root bar becomes Home, Map, Save, and Passport.
+/// while the root bar becomes Home, Map, Save, Friends, and Passport.
 final class AtlasFiveTabBarTests: XCTestCase {
     // MARK: - Tab shape
 
     @MainActor
-    func testRootBarIsFourItemsInTheSpecifiedOrder() {
+    func testRootBarIncludesFriendsInTheSpecifiedOrder() {
         XCTAssertEqual(
             SaveRootTab.allCases,
-            [.home, .map, .capture, .profile]
+            [.home, .map, .capture, .friends, .profile]
         )
-        XCTAssertEqual(SaveRootTab.allCases.count, 4)
+        XCTAssertEqual(SaveRootTab.allCases.count, 5)
     }
 
     @MainActor
     func testCaptureIsAControlNotADestination() {
         XCTAssertTrue(SaveRootTab.capture.isCaptureControl)
-        XCTAssertEqual(SaveRootTab.destinations, [.home, .map, .profile])
+        XCTAssertEqual(SaveRootTab.destinations, [.home, .map, .friends, .profile])
         for tab in SaveRootTab.destinations {
             XCTAssertFalse(tab.isCaptureControl, "\(tab) should be a destination")
         }
     }
 
     @MainActor
-    func testCaptureSitsThirdBeforePassport() {
+    func testCaptureSitsThirdBeforeFriendsAndPassport() {
         let all = SaveRootTab.allCases
-        XCTAssertEqual(all.count, 4)
+        XCTAssertEqual(all.count, 5)
         XCTAssertEqual(all.firstIndex(of: .capture), 2)
         XCTAssertEqual(all.last, .profile)
     }
@@ -63,7 +63,7 @@ final class AtlasFiveTabBarTests: XCTestCase {
     }
 
     @MainActor
-    func testRaisedCaptureControlFitsInsideBarAndItsFourItemSlot() {
+    func testRaisedCaptureControlFitsInsideBarAndItsFiveItemSlot() {
         XCTAssertTrue(
             AtlasTabBarMetrics.raisedControlFitsBar,
             "Save plus its stroke must sit inside the mint-lozenge chrome inset"
@@ -198,7 +198,7 @@ final class AtlasFiveTabBarTests: XCTestCase {
                 "\(tab) zh-Hant title looks like an untranslated fallback"
             )
         }
-        XCTAssertEqual(SaveRootTab.allCases.map(\.atlasTitle), ["Home", "Map", "Save", "Passport"])
+        XCTAssertEqual(SaveRootTab.allCases.map(\.atlasTitle), ["Home", "Map", "Save", "Friends", "Passport"])
         XCTAssertEqual(SaveRootTab.profile.title(language: .english), "Passport")
         XCTAssertEqual(SaveRootTab.profile.title(language: .traditionalChinese), "護照")
         XCTAssertFalse(SaveRootTab.allCases.map(\.atlasIcon).contains("paperclip"))

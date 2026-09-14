@@ -1582,6 +1582,18 @@ final class MapViewModel: ObservableObject {
         return .saved(savedPlace)
     }
 
+    /// Accept the authenticated server save result without importing any friend
+    /// memory. The server owns dedupe and preserves an existing recipient row.
+    func acceptFriendRestaurantSave(_ place: Place) {
+        if let index = places.firstIndex(where: { $0.id == place.id }) {
+            places[index] = place
+        } else {
+            places.append(place)
+            recordPassportFieldActionAfterSavingPlace()
+        }
+        mirrorToLocalVault(place)
+    }
+
     @discardableResult
     func saveSocialPlaceToMySave(_ socialPlace: Place) async throws -> Place {
         if let match = existingSavedPlace(matching: socialPlace) {

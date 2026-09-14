@@ -1,6 +1,27 @@
 import CoreLocation
 import Foundation
 
+/// Ephemeral server projection; never persist another person's rating in Place.
+struct FriendRestaurantRating: Decodable, Identifiable {
+    let id: UUID
+    let name: String
+    let address: String
+    let stars: Double
+    let author_name: String
+    let author_handle: String?
+}
+
+struct FriendRestaurantRatingsPage: Decodable {
+    let items: [FriendRestaurantRating]
+    let nextCursor: String?
+}
+
+struct OwnRestaurantRating: Decodable {
+    let place_id: UUID
+    let stars: Double
+    let shared: Bool
+}
+
 enum PlaceVisibility: String, Codable, CaseIterable, Hashable {
     case privateMemory = "private"
     case friends

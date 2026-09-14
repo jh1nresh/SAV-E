@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// Primary navigation: Home | Map | + | Passport.
+/// Primary navigation: Home | Map | + | Friends | Passport.
 /// Capture opens a cover without changing the selected destination.
 /// Saves, Trips and Plan remain child routes; their state stays owned here.
 enum SaveRootTab: Hashable, CaseIterable, Identifiable {
     case home
     case map
     case capture
+    case friends
     case profile
 
     var id: Self { self }
@@ -24,6 +25,7 @@ enum SaveRootTab: Hashable, CaseIterable, Identifiable {
         case .home: "Home"
         case .map: "Map"
         case .capture: "Save"
+        case .friends: "Friends"
         case .profile: "Passport"
         }
     }
@@ -41,6 +43,7 @@ enum SaveRootTab: Hashable, CaseIterable, Identifiable {
         case .home: "book.closed"
         case .map: "map"
         case .capture: "plus"
+        case .friends: "person.2"
         case .profile: "person.crop.circle"
         }
     }
@@ -53,6 +56,8 @@ enum SaveRootTab: Hashable, CaseIterable, Identifiable {
             return language.localized(english: "Map", traditionalChinese: "地圖")
         case .capture:
             return language.localized(english: "Save", traditionalChinese: "收藏")
+        case .friends:
+            return language.localized(english: "Friends", traditionalChinese: "朋友")
         case .profile:
             return language.localized(english: "Passport", traditionalChinese: "護照")
         }
@@ -173,6 +178,7 @@ struct ContentView: View {
     @Binding private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     @Binding private var pendingOnboardingClue: String
     private let storageScope: ContentStorageScope
+    private let friendsAPI: SupabaseService
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.scenePhase) private var scenePhase
     @State private var isRootSheetPresented: Bool
@@ -202,13 +208,16 @@ struct ContentView: View {
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
         pendingOnboardingClue: Binding<String> = .constant(""),
-        storageScope: ContentStorageScope = .production
+        storageScope: ContentStorageScope = .production,
+        mapViewModel: MapViewModel? = nil,
+        friendsAPI: SupabaseService = .shared
     ) {
-        _mapVM = StateObject(wrappedValue: storageScope.makeMapViewModel())
+        _mapVM = StateObject(wrappedValue: mapViewModel ?? storageScope.makeMapViewModel())
         _tripStore = StateObject(wrappedValue: storageScope.makeTripPackStore())
         _incomingPlaceReceipt = incomingPlaceReceipt
         _pendingOnboardingClue = pendingOnboardingClue
         self.storageScope = storageScope
+        self.friendsAPI = friendsAPI
         let hasInitialReceipt = incomingPlaceReceipt.wrappedValue != nil
         _isRootSheetPresented = State(initialValue: hasInitialReceipt)
         _drawerDetent = State(initialValue: .large)
@@ -539,6 +548,8 @@ struct ContentView: View {
                                 onPlanAroundPlace: openPlanAround,
                                 onOpenPassport: openPassport
                             )
+                        case .friends:
+                            SaveFriendsView(mapViewModel: mapVM, api: friendsAPI)
                         case .profile:
                             passportView(isRootTab: true)
                         case .capture:
@@ -555,6 +566,7 @@ struct ContentView: View {
                         title: \.atlasTitle,
                         icon: \.atlasIcon,
                         accessibilityPrefix: "root.tab",
+                        displayTitle: { $0.title(language: languageSettings.language) },
                         isRaisedControl: { $0.isCaptureControl },
                         onSelect: selectRootTab
                     )
