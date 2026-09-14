@@ -169,11 +169,6 @@ struct SavePlanView: View {
         ZStack(alignment: .topLeading) {
             AtlasCanvas()
 
-            BrandHeader {
-                EmptyView()
-            }
-            .placed(x: 0, y: 48, width: AtlasMetrics.width, height: 51)
-
             planActions
                 .placed(x: 16, y: 105, width: AtlasMetrics.width - 32, height: 44)
 
@@ -628,10 +623,7 @@ struct SavePlanView: View {
             onSaveTripPlan: { name, city, stops in
                 await tripStore.createTrip(fromPlanNamed: name, city: city, stops: stops)
             },
-            onOpenTrip: { tripID in
-                conversation.startNewPlan()
-                onOpenTrip(tripID)
-            },
+            onOpenTrip: onOpenTrip,
             onConfirmCandidate: onConfirmCandidate,
             onDaysChange: { conversation.updateDraftDays($0, replacing: draft, availablePlaces: $1, language: languageSettings.language) }
         )

@@ -15,6 +15,10 @@ final class TapCrashP0Tests: XCTestCase {
             SaveChromeNavigation.destination(afterSelecting: .map, current: .home),
             .map
         )
+        XCTAssertEqual(
+            SaveChromeNavigation.destination(afterSelecting: .capture, current: .profile),
+            .profile
+        )
     }
 
     @MainActor
@@ -40,6 +44,38 @@ final class TapCrashP0Tests: XCTestCase {
         XCTAssertEqual(
             SaveChromeNavigation.pathByOpening(.trip(tripID), currently: [.saves]),
             [.trip(tripID)]
+        )
+    }
+
+    @MainActor
+    func testOpeningPlanKeepsTripsAsItsParentAndReplacesStaleChildren() {
+        let staleTrip = UUID()
+        for path: [SaveRootRoute] in [[], [.saves], [.trip(staleTrip)], [.plan, .trip(staleTrip)]] {
+            XCTAssertEqual(SaveChromeNavigation.pathByOpening(.plan, currently: path), [.plan])
+        }
+        for path: [SaveRootRoute] in [[.trips], [.trips, .trip(staleTrip)], [.trips, .plan, .trip(staleTrip)]] {
+            XCTAssertEqual(SaveChromeNavigation.pathByOpening(.plan, currently: path), [.trips, .plan])
+        }
+    }
+
+    @MainActor
+    func testOpeningSavedTripFromPlanKeepsThePlanBackDestination() {
+        let tripID = UUID()
+        XCTAssertEqual(
+            SaveChromeNavigation.pathByOpening(.trip(tripID), currently: [.trips, .plan]),
+            [.trips, .plan, .trip(tripID)]
+        )
+        XCTAssertEqual(
+            SaveChromeNavigation.pathByOpening(.trip(tripID), currently: [.plan]),
+            [.plan, .trip(tripID)]
+        )
+        XCTAssertEqual(
+            SaveChromeNavigation.pathByOpening(.trips, currently: [.plan, .trip(tripID)]),
+            [.trips]
+        )
+        XCTAssertEqual(
+            SaveChromeNavigation.pathByOpening(.saves, currently: [.trips, .plan]),
+            [.saves]
         )
     }
 

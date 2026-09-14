@@ -1,25 +1,12 @@
 import SwiftUI
 
-/// The five root tabs.
-///
-/// Shape decided 2026-08-23 and specified in
-/// `specs/2026-08-24-save-tab-restructure-and-origin-surface-v0.md` (W2):
-///
-///     [ Home ]  [ Map ]  ( + )  [ Plan ]  [ Profile ]
-///
-/// - `saves` is gone from the root bar: `SaveHomeView` is now its permanent
-///   entry point while the denser `SaveLibraryView` remains a pushed child.
-/// - `trips` is demoted off the root bar as a child route. Plan is the
-///   permanent itinerary workbench that replaced Origin.
-/// - `capture` is the raised centre control, not a screen — selecting it opens
-///   the capture cover and leaves the previous tab selected.
-/// - `plan` drafts walking days from confirmed Map Stamps. Unsaved
-///   attractions stay labeled. It is not a social feed.
+/// Primary navigation: Home | Map | + | Passport.
+/// Capture opens a cover without changing the selected destination.
+/// Saves, Trips and Plan remain child routes; their state stays owned here.
 enum SaveRootTab: Hashable, CaseIterable, Identifiable {
     case home
     case map
     case capture
-    case plan
     case profile
 
     var id: Self { self }
@@ -37,8 +24,7 @@ enum SaveRootTab: Hashable, CaseIterable, Identifiable {
         case .home: "Home"
         case .map: "Map"
         case .capture: "Save"
-        case .plan: "Plan"
-        case .profile: "Profile"
+        case .profile: "Passport"
         }
     }
 
@@ -49,13 +35,12 @@ enum SaveRootTab: Hashable, CaseIterable, Identifiable {
     /// Chosen against the Atlas/Postcard language rather than accepting
     /// defaults: Home is the notebook cover, Map is a folded paper map (not a
     /// globe — Savvy is a city-scale tool), Save is the capture control,
-    /// Plan is a calendar itinerary, Profile is the passport holder.
+    /// Passport is the personal memory ledger.
     var atlasIcon: String {
         switch self {
         case .home: "book.closed"
         case .map: "map"
         case .capture: "plus"
-        case .plan: "calendar"
         case .profile: "person.crop.circle"
         }
     }
@@ -68,15 +53,14 @@ enum SaveRootTab: Hashable, CaseIterable, Identifiable {
             return language.localized(english: "Map", traditionalChinese: "地圖")
         case .capture:
             return language.localized(english: "Save", traditionalChinese: "收藏")
-        case .plan:
-            return language.localized(english: "Plan", traditionalChinese: "規劃")
         case .profile:
-            return language.localized(english: "Profile", traditionalChinese: "護照")
+            return language.localized(english: "Passport", traditionalChinese: "護照")
         }
     }
 }
 
 enum SaveRootRoute: Hashable {
+    case plan
     case captureResults([UUID])
     case trip(UUID)
     /// The old Saves tab, now a child screen.
@@ -529,10 +513,7 @@ struct ContentView: View {
                                     )
                                 },
                                 onOpenTrips: {
-                                    // Trips stays a demoted child route (same
-                                    // pattern as Saves). Plan is the root-tab
-                                    // workbench that replaced Origin — not the
-                                    // Home Trips destination.
+                                    // Existing trips remain available through Home's More menu.
                                     rootPath = SaveChromeNavigation.pathByOpening(
                                         .trips,
                                         currently: rootPath
@@ -558,17 +539,13 @@ struct ContentView: View {
                                 onPlanAroundPlace: openPlanAround,
                                 onOpenPassport: openPassport
                             )
-                        case .plan:
-                            planView
                         case .profile:
                             passportView(isRootTab: true)
                         case .capture:
                             // Unreachable: `.capture` is a control, and
                             // `selectRootTab` opens the cover instead of
-                            // committing the selection. Render the previous
-                            // surface's neighbour rather than crashing if a
-                            // future caller sets it directly.
-                            planView
+                            // committing the selection.
+                            Color.clear
                         }
                     }
 
@@ -595,6 +572,13 @@ struct ContentView: View {
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: SaveRootRoute.self) { route in
                 switch route {
+                case .plan:
+                    ReferenceViewport { planView }
+                        .navigationTitle(languageSettings.localized(
+                            english: "Plan", traditionalChinese: "規劃"
+                        ))
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar(.visible, for: .navigationBar)
                 case .trip(let tripID):
                     TripWorkspaceView(
                         tripID: tripID,
@@ -622,6 +606,18 @@ struct ContentView: View {
                         },
                         onOpenPassport: openPassport
                     )
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                presentAfterClearingExclusiveChrome(.plan)
+                            } label: {
+                                Label(languageSettings.localized(
+                                    english: "Resume planning", traditionalChinese: "規劃草稿"
+                                ), systemImage: "text.bubble")
+                            }
+                            .accessibilityIdentifier("trips.plan")
+                        }
+                    }
                     .navigationTitle(languageSettings.localized(
                         english: "Trips",
                         traditionalChinese: "行程"
@@ -631,7 +627,7 @@ struct ContentView: View {
                 }
             }
         }
-        .ignoresSafeArea(.keyboard, edges: selectedRootTab == .plan && rootPath.isEmpty ? .bottom : [])
+        .ignoresSafeArea(.keyboard, edges: rootPath.last == .plan ? .bottom : [])
     }
 
     private var planView: some View {
@@ -1016,8 +1012,7 @@ struct ContentView: View {
             rootPath = SaveChromeNavigation.pathByOpening(.saves, currently: rootPath)
             return
         case .ask:
-            rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
-            selectedRootTab = .plan
+            rootPath = SaveChromeNavigation.pathByOpening(.plan, currently: rootPath)
         }
 
         drawerLaunchRequest = DrawerLaunchRequest(target: target, initialQuery: initialQuery, focusesSearch: focusesSearch)
@@ -1087,8 +1082,7 @@ struct ContentView: View {
         case .cover(let route):
             fullScreenRoute = route
         case .plan:
-            rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
-            selectedRootTab = .plan
+            rootPath = SaveChromeNavigation.pathByOpening(.plan, currently: rootPath)
         case .mapDrawer(let request):
             drawerLaunchRequest = request
             drawerDetent = request.focusesSearch ? .large : .medium
@@ -1394,8 +1388,7 @@ struct ContentView: View {
         action: @escaping () async -> Void
     ) {
         fullScreenRoute = nil
-        rootPath.removeAll()
-        selectedRootTab = .plan
+        rootPath = SaveChromeNavigation.pathByOpening(.plan, currently: rootPath)
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 180_000_000)
             openDrawer(.ask, tripID: nil)

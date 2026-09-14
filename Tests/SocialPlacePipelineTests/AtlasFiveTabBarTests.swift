@@ -1,39 +1,35 @@
 import XCTest
 @testable import SAVE
 
-/// W2/W3 from `specs/2026-08-24-save-tab-restructure-and-origin-surface-v0.md`.
-///
-/// These assertions exist because the four-tab bar only ever fit by luck: the
-/// selection pill was hardcoded to 90pt against a ~98.5pt slot. A fifth item
-/// makes the slot ~78.8pt, so a fixed pill would overflow into its neighbours.
+/// Root navigation and sizing invariants. The legacy class name remains stable
+/// while the root bar becomes Home, Map, Save, and Passport.
 final class AtlasFiveTabBarTests: XCTestCase {
     // MARK: - Tab shape
 
     @MainActor
-    func testRootBarIsFiveItemsInTheSpecifiedOrder() {
+    func testRootBarIsFourItemsInTheSpecifiedOrder() {
         XCTAssertEqual(
             SaveRootTab.allCases,
-            [.home, .map, .capture, .plan, .profile]
+            [.home, .map, .capture, .profile]
         )
-        XCTAssertEqual(SaveRootTab.allCases.count, 5)
+        XCTAssertEqual(SaveRootTab.allCases.count, 4)
     }
 
     @MainActor
     func testCaptureIsAControlNotADestination() {
         XCTAssertTrue(SaveRootTab.capture.isCaptureControl)
-        XCTAssertEqual(SaveRootTab.destinations, [.home, .map, .plan, .profile])
+        XCTAssertEqual(SaveRootTab.destinations, [.home, .map, .profile])
         for tab in SaveRootTab.destinations {
             XCTAssertFalse(tab.isCaptureControl, "\(tab) should be a destination")
         }
     }
 
     @MainActor
-    func testCaptureSitsInTheCentreSlot() {
-        // The raised capture control only reads as centre if it is literally
-        // the middle item of an odd-length bar.
+    func testCaptureSitsThirdBeforePassport() {
         let all = SaveRootTab.allCases
-        XCTAssertEqual(all.count % 2, 1)
-        XCTAssertEqual(all[all.count / 2], .capture)
+        XCTAssertEqual(all.count, 4)
+        XCTAssertEqual(all.firstIndex(of: .capture), 2)
+        XCTAssertEqual(all.last, .profile)
     }
 
     // MARK: - Layout (the bug this work item exists to prevent)
@@ -67,13 +63,13 @@ final class AtlasFiveTabBarTests: XCTestCase {
     }
 
     @MainActor
-    func testRaisedCaptureControlFitsInsideBarAndItsFiveItemSlot() {
+    func testRaisedCaptureControlFitsInsideBarAndItsFourItemSlot() {
         XCTAssertTrue(
             AtlasTabBarMetrics.raisedControlFitsBar,
             "Save plus its stroke must sit inside the mint-lozenge chrome inset"
         )
         XCTAssertTrue(
-            AtlasTabBarMetrics.raisedControlFitsSlot(itemCount: 5),
+            AtlasTabBarMetrics.raisedControlFitsSlot(itemCount: SaveRootTab.allCases.count),
             "the Save control must not overlap its neighbouring tabs"
         )
         XCTAssertEqual(AtlasTabBarMetrics.raisedControlOffsetY, 0)
@@ -202,15 +198,16 @@ final class AtlasFiveTabBarTests: XCTestCase {
                 "\(tab) zh-Hant title looks like an untranslated fallback"
             )
         }
-        XCTAssertEqual(SaveRootTab.plan.title(language: .traditionalChinese), "規劃")
-        XCTAssertEqual(SaveRootTab.plan.atlasIcon, "calendar")
+        XCTAssertEqual(SaveRootTab.allCases.map(\.atlasTitle), ["Home", "Map", "Save", "Passport"])
+        XCTAssertEqual(SaveRootTab.profile.title(language: .english), "Passport")
+        XCTAssertEqual(SaveRootTab.profile.title(language: .traditionalChinese), "護照")
         XCTAssertFalse(SaveRootTab.allCases.map(\.atlasIcon).contains("paperclip"))
     }
 
     // MARK: - Plan workbench
 
     @MainActor
-    func testPlanTabComposesFromSavedStampsAndKeepsUnsavedLabeled() throws {
+    func testPlanChildComposesFromSavedStampsAndKeepsUnsavedLabeled() throws {
         let plan = try source(at: "SAV-E/Views/Plan/SavePlanView.swift")
         let content = try contentViewSource()
 
