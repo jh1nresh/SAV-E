@@ -56,6 +56,7 @@ final class SaveLocalVaultService: Sendable {
                 Array(
                     try loadRecords(from: url)
                         .compactMap(\.reviewCandidate)
+                        .sorted(by: PlaceReviewCandidate.newestFirst)
                         .prefix(limit)
                 )
             }
@@ -80,8 +81,7 @@ final class SaveLocalVaultService: Sendable {
             evidence: diagnostic.found + diagnostic.attempts + diagnosticSearchEvidence(diagnostic),
             evidenceDiagnostic: diagnostic
         )
-        try append(record)
-        return record
+        return try upsertReviewRecord(record, matchSourceIdentity: true)
     }
 
     func saveReviewCandidate(
@@ -113,8 +113,7 @@ final class SaveLocalVaultService: Sendable {
             createdAt: candidate.savedAt
         )
         guard let recordID else {
-            try append(record)
-            return record
+            return try upsertReviewRecord(record, matchSourceIdentity: true)
         }
         return try withLock {
             try withCoordinatedVaultWrite { url in
@@ -129,12 +128,12 @@ final class SaveLocalVaultService: Sendable {
                     // Keep the whole stronger candidate; never combine an old branch's coordinates
                     // with the name/address/evidence of an unresolved retry.
                     if losesReviewState || losesLocation { return existing }
-                    records[index] = record
+                    records[index] = mergingReviewEvidence(record, with: existing)
                 } else {
                     records.insert(record, at: 0)
                 }
                 try save(records, to: url)
-                return record
+                return records.first { $0.id == recordID } ?? record
             }
         }
     }
@@ -142,7 +141,7 @@ final class SaveLocalVaultService: Sendable {
     func saveReviewCandidate(_ candidate: PlaceReviewCandidate) throws -> SaveMemoryRecord {
         let record = SaveMemoryRecord(
             id: candidate.id,
-            state: .reviewCandidate,
+            state: candidate.status == "source_only" ? .sourceOnly : .reviewCandidate,
             title: candidate.name,
             placeName: candidate.name,
             address: candidate.address.isEmpty ? nil : candidate.address,
@@ -157,8 +156,58 @@ final class SaveLocalVaultService: Sendable {
             category: PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
             createdAt: candidate.createdAt
         )
-        try append(record)
-        return record
+        return try upsertReviewRecord(record, matchSourceIdentity: false)
+    }
+
+    private func upsertReviewRecord(_ incoming: SaveMemoryRecord, matchSourceIdentity: Bool) throws -> SaveMemoryRecord {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                var records = try loadRecords(from: url)
+                let index = records.firstIndex { existing in
+                    if existing.id == incoming.id { return true }
+                    guard matchSourceIdentity,
+                          let source = SaveSourceIdentity.url(incoming.sourceURL),
+                          source == SaveSourceIdentity.url(existing.sourceURL),
+                          existing.state == incoming.state else { return false }
+                    if incoming.state == .sourceOnly { return true }
+                    guard let candidate = existing.reviewCandidate else { return false }
+                    return candidate.matchesImport(PendingReviewCandidate(
+                        candidateName: incoming.displayTitle, address: incoming.address ?? "", category: "other",
+                        latitude: incoming.latitude, longitude: incoming.longitude,
+                        sourceURL: incoming.sourceURL, sourceText: incoming.sourceText, evidence: incoming.evidence,
+                        confidence: 0, missingInfo: [], savedAt: incoming.createdAt
+                    ))
+                }
+                let record: SaveMemoryRecord
+                if let index {
+                    let existing = records[index]
+                    if existing.state == .confirmedPlace { return existing }
+                    record = mergingReviewEvidence(incoming, with: existing)
+                    records[index] = record
+                } else {
+                    record = incoming
+                    records.insert(record, at: 0)
+                }
+                try save(records, to: url)
+                return record
+            }
+        }
+    }
+
+    private func mergingReviewEvidence(_ incoming: SaveMemoryRecord, with existing: SaveMemoryRecord) -> SaveMemoryRecord {
+        let losesLocation = existing.reviewCandidate?.hasSavableLocation == true
+            && incoming.reviewCandidate?.hasSavableLocation != true
+        var merged = losesLocation || (existing.state == .reviewCandidate && incoming.state == .sourceOnly)
+            ? existing : incoming
+        merged.id = existing.id
+        merged.createdAt = min(existing.createdAt, incoming.createdAt)
+        merged.sourceURL = existing.sourceURL ?? incoming.sourceURL
+        var seen = Set<String>()
+        merged.evidence = (existing.evidence + incoming.evidence).filter { seen.insert($0).inserted }
+        let texts = [existing.sourceText, incoming.sourceText].compactMap { $0 }.filter { !$0.isEmpty }
+        seen.removeAll()
+        merged.sourceText = texts.filter { seen.insert($0).inserted }.joined(separator: "\n")
+        return merged
     }
 
     func saveConfirmedPlace(_ incoming: Place) throws -> SaveMemoryRecord {
@@ -435,7 +484,7 @@ final class SaveLocalVaultService: Sendable {
 
 private extension SaveMemoryRecord {
     var reviewCandidate: PlaceReviewCandidate? {
-        guard state == .reviewCandidate else { return nil }
+        guard state == .reviewCandidate || state == .sourceOnly else { return nil }
         let name = displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return nil }
 
@@ -447,10 +496,10 @@ private extension SaveMemoryRecord {
             city: nil,
             latitude: latitude,
             longitude: longitude,
-            evidence: evidence,
+            evidence: evidence + (sourceURL.map { ["Source URL: \($0)"] } ?? []),
             confidence: nil,
             missingInfo: evidenceDiagnostic?.missingFields ?? [],
-            status: "review",
+            status: state == .sourceOnly ? "source_only" : "review",
             createdAt: createdAt,
             placeHighlights: placeHighlights,
             recommendedItems: recommendedItems,

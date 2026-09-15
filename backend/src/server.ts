@@ -1,3 +1,4 @@
+import { prepareCandidate, reconcileSavedCandidates, reuseCapture, supersedeSourceOnlyCandidates, duplicateCandidateGroups, supersededCandidateID, externalCandidateEvidence } from "./memoryStorage.js";
 import { AnalysisControlError, AnalysisUsageStore, analysisID, analysisLimits, analysisPrices, geminiTokens, trackAnalysisOperation, withAnalysisUsage } from "./analysisUsage.js";
 import { runAnalysisRecovery } from "./analysisRecovery.js";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -4261,6 +4262,11 @@ async function handleMemory(
 ): Promise<void> {
   const [kind, id] = segments;
 
+  if (kind === "duplicate-audit" && request.method === "GET") {
+    const { rows } = await pool.query("select pc.*, c.source_url from place_candidates pc join captures c on c.id=pc.capture_id where c.user_id=$1 order by pc.created_at, pc.id", [userId]);
+    const places = await pool.query("select id, name, address, latitude, longitude from places where user_id=$1", [userId]);
+    return sendJson(response, { groups: duplicateCandidateGroups(rows, places.rows) });
+  }
   if (kind === "captures" && id && segments[2] === "search-recovery") {
     return await handleCaptureSearchRecovery(request, response, id, userId);
   }
@@ -4297,9 +4303,11 @@ async function handleCaptureSearchRecovery(
 
   if(body.include_media_evidence !== undefined && typeof body.include_media_evidence !== "boolean") throw new ApiError(400,"include_media_evidence must be a boolean");
   const requestedAnalysis=requestAnalysisId(request,body);
+  if (body.explicit_retry !== undefined && typeof body.explicit_retry !== "boolean") throw new ApiError(400, "explicit_retry must be a boolean");
+  if (body.explicit_retry === true && !requestedAnalysis) throw new ApiError(400, "explicit_retry requires an analysis ID");
   if(requestedAnalysis) await analysisUsageStore.owner(userId,requestedAnalysis);
   const input={sourceUrl:stringValue(capture.source_url),rawText:stringValue(capture.raw_text),title:stringValue(capture.title),suggestedSearchQueries:requestedQueries,maxQueries,includeMediaEvidence:body.include_media_evidence !== false,videoAnalysisVersion:process.env.SAVE_ENABLE_VIDEO_VENUE_ANALYSIS === "true" ? "frames-v1" : null};
-  const result=await runAnalysisRecovery(pool,userId,captureId,{...input,workflowRunId},async()=>{
+  const result=await runAnalysisRecovery(pool,userId,captureId,{...input,workflowRunId,...(body.explicit_retry === true ? { retryAnalysisId: requestedAnalysis } : {})},async()=>{
     const aid=requestedAnalysis ?? await analysisUsageStore.start(userId,randomUUID(),false);
     let completed=false;
     let investigatingVersion:string|undefined;
@@ -4311,28 +4319,26 @@ async function handleCaptureSearchRecovery(
         const recovery=await runSourceSearchRecovery(input,undefined,undefined,{persistedSourceResolution:capture.source_resolution,includeMediaEvidence:input.includeMediaEvidence});
         const client=await pool.connect();
         const createdCandidates:JsonBody[]=[];
+        const supersededCandidateIds:string[]=[];
         const sourceResolution=recovery.sourceResolution ? sourceResolutionResponseBody(recovery.sourceResolution) : null;
         try {
           await client.query("begin");
           await client.query("set local statement_timeout='10s'");
           await client.query("select id from captures where id=$1 and user_id=$2 for update",[captureId,userId]);
-          const existing=await client.query("select name,address from place_candidates where capture_id=$1",[captureId]);
-          const keys=new Set(existing.rows.map(row=>candidateKey(row.name,row.address)));
           for(const candidate of recovery.candidates) {
-            const key=candidateKey(candidate.name,candidate.address);
-            if(keys.has(key)) continue;
-            keys.add(key);
-            const insert=buildInsert("place_candidates",sourceSearchCandidateBody(candidate,captureId,workflowRunId),placeCandidateFields);
-            const inserted=await client.query(`${insert.sql} returning *`,insert.values);
-            createdCandidates.push(formatPlaceCandidate(inserted.rows[0]));
+            const prepared = await prepareCandidate(client, sourceSearchCandidateBody(candidate,captureId,workflowRunId));
+            const insert=buildInsert("place_candidates",prepared.body,placeCandidateFields);
+            const row = prepared.existing ?? (await client.query(`${insert.sql} returning *`,insert.values)).rows[0];
+            if (["review", "needs_more_evidence", "source_only"].includes(row.status)) createdCandidates.push(formatPlaceCandidate(row));
           }
+          if (recovery.candidates.length) supersededCandidateIds.push(...await supersedeSourceOnlyCandidates(client, captureId));
           await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,captureId,userId]);
           await client.query("update captures set status='review',source_resolution=coalesce($3::jsonb,source_resolution),updated_at=now() where id=$1 and user_id=$2",[captureId,userId,sourceResolution?JSON.stringify(sourceResolution):null]);
           await client.query("commit");
         } catch(error) { await client.query("rollback"); throw error; } finally { client.release(); }
         if(!requestedAnalysis) await analysisUsageStore.finish(userId,aid,recovery.candidates.length ? "review_candidate":"source_only",[captureId]);
         completed=true;
-        return {capture_id:captureId,analysis_id:aid,queries:recovery.queries,search_results:recovery.searchResults,created_candidates:createdCandidates,media_evidence:recovery.mediaEvidence,source_resolution:sourceResolution,errors:recovery.errors,receipt:recovery.receipt};
+        return {capture_id:captureId,analysis_id:aid,queries:recovery.queries,search_results:recovery.searchResults,created_candidates:createdCandidates,superseded_candidate_ids:supersededCandidateIds,media_evidence:recovery.mediaEvidence,source_resolution:sourceResolution,errors:recovery.errors,receipt:recovery.receipt};
       });
     } finally {
       if(!completed && investigatingVersion) {
@@ -4389,7 +4395,8 @@ async function handleMemoryCaptures(
     try {
       await client.query("begin");
       if(aid) await analysisUsageStore.owner(userId,aid,client);
-      const { rows } = await client.query(`${insert.sql} returning *`, insert.values);
+      const reused = await reuseCapture(client, userId, body);
+      const rows = reused ? [reused] : (await client.query(`${insert.sql} returning *`, insert.values)).rows;
       if(aid) await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,rows[0].id,userId]);
       await client.query("commit");
       return sendJson(response, formatCapture(rows[0]), 201);
@@ -4449,29 +4456,44 @@ async function handleMemoryCandidates(
     if (body.workflow_run_id) await ensureWorkflowRunOwner(body.workflow_run_id, userId);
     await ensureOwnedPlaceReference(body.place_id, userId);
 
-    const insert = buildInsert("place_candidates", body, placeCandidateFields);
-    const { rows } = await pool.query(`${insert.sql} returning *`, insert.values);
-    return sendJson(response, formatPlaceCandidate(rows[0]), 201);
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const prepared = await prepareCandidate(client, body);
+      const insert = buildInsert("place_candidates", prepared.body, placeCandidateFields);
+      const row = prepared.existing ?? (await client.query(`${insert.sql} returning *`, insert.values)).rows[0];
+      await client.query("commit");
+      return sendJson(response, formatPlaceCandidate(row), prepared.existing ? 200 : 201);
+    } catch (error) { await client.query("rollback"); throw error; }
+    finally { client.release(); }
   }
 
   if (request.method === "PATCH" && candidateId) {
     const body = writableFields(await readJson(request), ["id", "capture_id", "created_at", "updated_at"]);
+    if (body.evidence !== undefined) body.evidence = externalCandidateEvidence(body.evidence);
     await ensureOwnedPlaceReference(body.place_id, userId);
     const update = buildUpdate("place_candidates", body, placeCandidateFields);
     if (!update) return sendJson(response, { error: "No writable fields" }, 400);
 
     const values = [...update.values, candidateId, userId];
-    const { rows } = await pool.query(
-      `${update.sql}
-       from captures c
-       where place_candidates.capture_id = c.id
-         and place_candidates.id = $${values.length - 1}
-         and c.user_id = $${values.length}
-       returning place_candidates.*`,
-      values,
-    );
-    if (!rows[0]) return sendJson(response, { error: "Candidate not found" }, 404);
-    return sendJson(response, formatPlaceCandidate(rows[0]));
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [`candidate-decision:${userId}`]);
+      const { rows } = await client.query(
+        `${update.sql}
+         from captures c
+         where place_candidates.capture_id = c.id
+           and place_candidates.id = $${values.length - 1}
+           and c.user_id = $${values.length}
+         returning place_candidates.*`, values,
+      );
+      if (!rows[0]) throw new ApiError(404, "Candidate not found");
+      if (body.status === "saved" || body.status === "confirmed") await reconcileSavedCandidates(client, userId, candidateId);
+      await client.query("commit");
+      return sendJson(response, formatPlaceCandidate(rows[0]));
+    } catch (error) { await client.query("rollback"); throw error; }
+    finally { client.release(); }
   }
 
   return sendJson(response, { error: "Unsupported memory candidates route" }, 405);
@@ -4929,14 +4951,6 @@ function sourceSearchCandidateBody(candidate: SourceSearchCandidate, captureId: 
     missing_info: candidate.missingInfo,
     status: "review",
   };
-}
-
-function candidateKey(name: string, address: string): string {
-  return `${canonicalCandidateValue(name)}|${canonicalCandidateValue(address)}`;
-}
-
-function canonicalCandidateValue(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, " ").trim();
 }
 
 function stringArray(value: unknown): string[] | undefined {
@@ -5703,6 +5717,7 @@ async function updateDecisionCandidateState(
   decision: UserDecisionInput,
 ): Promise<void> {
   if (!decision.candidateId) return;
+  await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [`candidate-decision:${userId}`]);
   const status = decision.action === "reject"
     ? "rejected"
     : decision.action === "source_only"
@@ -5721,6 +5736,7 @@ async function updateDecisionCandidateState(
      where pc.capture_id = c.id and pc.id = $3 and c.user_id = $4`,
     [status, decision.finalPlaceId ?? null, decision.candidateId, userId],
   );
+  if (status === "saved" || status === "confirmed") await reconcileSavedCandidates(client, userId, decision.candidateId);
 }
 
 async function persistWorkflowResultSteps(
@@ -6559,7 +6575,7 @@ function formatCapture(row: JsonBody): JsonBody {
 }
 
 function formatPlaceCandidate(row: JsonBody): JsonBody {
-  return formatDates(row);
+  return formatDates({ ...row, superseded_by_candidate_id: supersededCandidateID(row) ?? null });
 }
 
 function formatAgentDecision(row: JsonBody): JsonBody {

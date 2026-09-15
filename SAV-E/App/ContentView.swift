@@ -1131,7 +1131,8 @@ struct ContentView: View {
             onOpenReviewCandidate: { openReviewCandidate($0, tripID: captureResultIDs == nil ? nil : pendingCaptureTripID) },
             onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
             onOpenPassport: openPassport,
-            captureResultCount: captureResultIDs?.count
+            captureResultCount: captureResultIDs?.count,
+            onLoadDuplicateAudit: { try await mapVM.reviewDuplicateAudit() }
         )
         .navigationTitle(languageSettings.localized(
             english: captureResultIDs == nil ? "Saves" : "This capture",
@@ -1185,8 +1186,15 @@ struct ContentView: View {
 
     private func investigateFullScreenCandidate(_ candidate: PlaceReviewCandidate) {
         performFullScreenCandidateAction(candidate) {
-            try await mapVM.investigateReviewCandidateMore(candidate)
-            openExactSearch(candidate)
+            if candidate.captureId != nil {
+                let ids = try await mapVM.reanalyzeReviewSource(candidate)
+                guard !ids.isEmpty else { throw ReviewCandidateError.sourceStillUnresolved }
+                fullScreenRoute = nil
+                rootPath = [.captureResults(ids)]
+            } else {
+                try await mapVM.investigateReviewCandidateMore(candidate)
+                openExactSearch(candidate)
+            }
         }
     }
 

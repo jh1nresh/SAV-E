@@ -13,8 +13,10 @@ protocol SupabaseServiceProtocol {
     func deletePlace(_ placeId: UUID) async throws
     func createMemoryCapture(from candidate: PendingReviewCandidate, userId: String) async throws -> UUID
     func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID?) async throws -> UUID
-    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?) async throws -> SourceSearchRecoveryResult
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?, explicitRetry: Bool) async throws -> SourceSearchRecoveryResult
     func fetchReviewCandidates() async throws -> [PlaceReviewCandidate]
+    func fetchReviewCandidates(captureId: UUID) async throws -> [PlaceReviewCandidate]
+    func fetchReviewDuplicateAudit() async throws -> [SaveReviewDuplicateGroup]
     func updatePlaceCandidateStatus(_ candidateId: UUID, status: String, placeId: UUID?) async throws
     func createPlaceRecoveryWorkOrder(sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkOrder
     func createPlaceRecoveryRun(workOrderId: UUID?, sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkflowRun
@@ -106,6 +108,13 @@ enum SupabaseError: LocalizedError {
 
 // Existing service fakes opt out; production always creates a server session.
 extension SupabaseServiceProtocol {
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?) async throws -> SourceSearchRecoveryResult {
+        try await recoverSourceOnlyReviewCandidates(captureId: captureId, workflowRunId: workflowRunId, explicitRetry: false)
+    }
+    func fetchReviewDuplicateAudit() async throws -> [SaveReviewDuplicateGroup] { [] }
+    func fetchReviewCandidates(captureId: UUID) async throws -> [PlaceReviewCandidate] {
+        try await fetchReviewCandidates().filter { $0.captureId == captureId }
+    }
     func startAnalysis(id: UUID) async throws -> UUID? { nil }
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {}
 }
@@ -522,7 +531,8 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
 
         let body = try Self.jsonBody([
             "analysis_id": SAVEAnalysisScope.current?.id.uuidString,
-            "source_type": "url",
+            "source_type": candidate.sourceURL == nil ? "note" : "url",
+            "created_at": ISO8601DateFormatter().string(from: candidate.savedAt),
             "source_url": candidate.sourceURL,
             "raw_text": candidate.sourceText,
             "title": candidate.candidateName,
@@ -548,20 +558,22 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             "evidence": evidence,
             "confidence": candidate.confidence,
             "missing_info": candidate.missingInfo,
-            "status": "review",
+            "status": candidate.isSourceOnly ? "source_only" : "review",
+            "created_at": ISO8601DateFormatter().string(from: candidate.savedAt),
         ])
         let data = try await request(path: "/memory/candidates", method: "POST", body: body)
         let row = try JSONDecoder.supabase.decode(PlaceCandidateRow.self, from: data)
         return row.id
     }
 
-    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID? = nil) async throws -> SourceSearchRecoveryResult {
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID? = nil, explicitRetry: Bool = false) async throws -> SourceSearchRecoveryResult {
         try await SAVEAnalysisScope.current?.checkAllowed()
         guard isConfigured else { return SourceSearchRecoveryResult(createdCandidates: [], sourceResolution: nil) }
 
         let body = try Self.jsonBody([
             "workflow_run_id": workflowRunId?.uuidString,
             "include_media_evidence": true,
+            "explicit_retry": explicitRetry,
             "analysis_id": SAVEAnalysisScope.current?.id.uuidString,
         ])
         let data = try await request(
@@ -587,6 +599,18 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let data = try await request(path: "/memory/candidates")
         let rows = try JSONDecoder.supabase.decode([PlaceCandidateRow].self, from: data)
         return rows.map { $0.toCandidate() }
+    }
+
+    func fetchReviewCandidates(captureId: UUID) async throws -> [PlaceReviewCandidate] {
+        guard isConfigured else { return [] }
+        let data = try await request(path: "/memory/candidates?capture_id=\(captureId.uuidString)")
+        return try JSONDecoder.supabase.decode([PlaceCandidateRow].self, from: data).map { $0.toCandidate() }
+    }
+
+    func fetchReviewDuplicateAudit() async throws -> [SaveReviewDuplicateGroup] {
+        let data = try await request(path: "/memory/duplicate-audit")
+        struct Audit: Decodable { let groups: [SaveReviewDuplicateGroup] }
+        return try JSONDecoder().decode(Audit.self, from: data).groups
     }
 
     func fetchOriginCaptures() async throws -> [SaveOriginCapture] {
@@ -1878,7 +1902,7 @@ private struct PlaceRow: Codable {
             googleRating: google_rating,
             googlePriceLevel: google_price_level,
             openingHours: opening_hours,
-            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date(),
+            createdAt: memoryCollectionDate(created_at),
             visibility: visibility.flatMap(PlaceVisibility.init(rawValue:)),
             socialSignal: social_signal?.toSignal()
         )
@@ -2032,6 +2056,7 @@ private struct SourceSearchRecoveryRow: Codable {
 }
 
 private struct PlaceCandidateRow: Codable {
+    let superseded_by_candidate_id: UUID?
     let id: UUID
     let capture_id: UUID?
     let workflow_run_id: UUID?
@@ -2047,7 +2072,7 @@ private struct PlaceCandidateRow: Codable {
     let created_at: String
 
     func toCandidate() -> PlaceReviewCandidate {
-        PlaceReviewCandidate(
+        var candidate = PlaceReviewCandidate(
             id: id,
             captureId: capture_id,
             workflowRunId: workflow_run_id,
@@ -2060,8 +2085,10 @@ private struct PlaceCandidateRow: Codable {
             confidence: confidence,
             missingInfo: missing_info ?? [],
             status: status,
-            createdAt: ISO8601DateFormatter().date(from: created_at) ?? Date()
+            createdAt: memoryCollectionDate(created_at)
         )
+        candidate.supersededByCandidateID = superseded_by_candidate_id
+        return candidate
     }
 }
 
@@ -2324,6 +2351,14 @@ struct SaveListShareCodeInfo: Identifiable, Hashable {
 
 // MARK: - JSON Coding
 
+/// PostgreSQL API dates include fractional seconds. Preserve them instead of
+/// making old memories appear newly collected each time they are fetched.
+private func memoryCollectionDate(_ value: String) -> Date {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value) ?? .distantPast
+}
+
 extension JSONDecoder {
     static let supabase: JSONDecoder = {
         let d = JSONDecoder()
@@ -2345,5 +2380,19 @@ private extension String {
 
     var urlQueryEncoded: String? {
         addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed)
+    }
+}
+
+struct SaveReviewDuplicateGroup: Decodable, Identifiable {
+    let candidateIDs: [UUID]
+    let pendingCandidateIDs: [UUID]
+    let savedPlaceIDs: [UUID]
+    let reason: String
+    var id: String { candidateIDs.map(\.uuidString).sorted().joined(separator: ":") }
+    enum CodingKeys: String, CodingKey {
+        case candidateIDs = "candidate_ids"
+        case pendingCandidateIDs = "pending_candidate_ids"
+        case savedPlaceIDs = "saved_place_ids"
+        case reason
     }
 }

@@ -45,6 +45,7 @@ struct Place: Identifiable, Codable, Hashable {
         let aliases = Array(savedIDs.union(other.savedIDs).subtracting([id])).sorted { $0.uuidString < $1.uuidString }
         merged.mergedPlaceIDs = aliases.isEmpty ? nil : aliases
         // A fresh copy of the same record owns its edits, including cleared notes.
+        merged.createdAt = min(createdAt, other.createdAt)
         guard id != other.id else { return merged }
         let evidence = (sourceEvidence + other.sourceEvidence).removingDuplicates()
         merged.note = evidence.isEmpty ? nil : evidence.joined(separator: "\n")

@@ -3,6 +3,67 @@ import XCTest
 
 final class SaveLocalVaultServiceTests: XCTestCase {
     @MainActor
+    func testRepeatedThinNamedCandidateKeepsVerifiedLocationAndAddedEvidence() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        var pending = makePendingCandidate(localID: UUID())
+        pending.isSourceOnly = false
+        pending.candidateName = "Cafe"
+        pending.address = "1 Test Way"
+        pending.latitude = 25.05
+        pending.longitude = 121.51
+        let original = try vault.saveReviewCandidate(pending)
+        pending.latitude = nil
+        pending.longitude = nil
+        pending.evidence += ["Second caption"]
+        let repeated = try vault.saveReviewCandidate(pending)
+        XCTAssertEqual(repeated.id, original.id)
+        XCTAssertEqual(repeated.latitude, original.latitude)
+        XCTAssertEqual(repeated.longitude, original.longitude)
+        XCTAssertTrue(repeated.evidence.contains("Second caption"))
+        XCTAssertEqual(try vault.reviewCandidates().first?.latitude, original.latitude)
+    }
+
+    @MainActor
+    func testRepeatedSourceSurvivesReloadAsOneClueWithBothNotes() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        let first = try vault.saveSourceOnly(url: URL(string: "https://example.com/post?id=1")!, note: "First clue")
+        let second = try vault.saveSourceOnly(url: URL(string: "https://example.com/post?utm_source=ig&id=1")!, note: "More context")
+        XCTAssertEqual(first.id, second.id)
+        XCTAssertEqual(first.createdAt.timeIntervalSince1970, second.createdAt.timeIntervalSince1970, accuracy: 1)
+        let reloaded = SaveLocalVaultService(overrideVaultURL: url)
+        XCTAssertEqual(try reloaded.recentRecords().count, 1)
+        XCTAssertEqual(try reloaded.reviewCandidates().count, 1)
+        XCTAssertTrue(try XCTUnwrap(reloaded.recentRecords().first?.sourceText).contains("First clue"))
+        XCTAssertTrue(try XCTUnwrap(reloaded.recentRecords().first?.sourceText).contains("More context"))
+    }
+
+    @MainActor
+    func testNamedCandidateRepeatUpsertsButAnotherVenueInPostRemainsSeparate() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        var pending = makePendingCandidate(localID: UUID())
+        pending.isSourceOnly = false
+        pending.candidateName = "Cafe"
+        pending.address = "1 Test Way"
+        let original = try vault.saveReviewCandidate(pending)
+        pending.savedAt = original.createdAt.addingTimeInterval(100)
+        pending.evidence += ["Additional source evidence"]
+        let repeated = try vault.saveReviewCandidate(pending)
+        XCTAssertEqual(repeated.id, original.id)
+        XCTAssertEqual(repeated.createdAt, original.createdAt)
+        XCTAssertTrue(repeated.evidence.contains("Additional source evidence"))
+        pending.candidateName = "Museum"
+        _ = try vault.saveReviewCandidate(pending)
+        XCTAssertEqual(try vault.reviewCandidates().count, 2)
+    }
+
+    @MainActor
     func testConfirmedPlaceSaveUpsertsMatchingVenueInsteadOfAppendingDuplicate() throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -229,7 +290,8 @@ final class SaveLocalVaultServiceTests: XCTestCase {
         XCTAssertEqual(finalRecords, [stronger])
         XCTAssertEqual(finalRecords.first?.latitude, refined.latitude)
         XCTAssertEqual(finalRecords.first?.longitude, refined.longitude)
-        XCTAssertEqual(finalRecords.first?.evidence, refined.evidence)
+        XCTAssertEqual(finalRecords.first?.evidence, stronger.evidence)
+        XCTAssertTrue(stronger.evidence.contains("Original source clue"))
         XCTAssertTrue(try restarted.confirmedPlaces().isEmpty)
     }
 

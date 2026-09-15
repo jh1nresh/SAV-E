@@ -278,10 +278,11 @@ struct AIDrawerView: View {
             onInvestigateCandidateMore: { candidate in
                 performCandidateAction(
                     candidate,
-                    successMessage: languageSettings.localized(english: "Kept in Review for more investigation.", traditionalChinese: "已留在待確認，等待進一步調查。")
+                    successMessage: languageSettings.localized(english: "Review the updated clues.", traditionalChinese: "請確認更新後的線索。")
                 ) {
                     try await onInvestigateCandidateMore(candidate)
-                    addMoreClue(for: candidate)
+                    if candidate.captureId != nil { openReviewInbox() }
+                    else { addMoreClue(for: candidate) }
                 }
             },
             onSaveMapCandidate: { candidate in
@@ -3357,12 +3358,15 @@ private struct ReviewCandidateDetailCard: View {
                     }
 
                     CandidateActionButton(
-                        title: languageSettings.localized(english: "Investigate", traditionalChinese: "繼續調查"),
+                        title: candidate.captureId == nil
+                            ? languageSettings.localized(english: "Investigate", traditionalChinese: "繼續調查")
+                            : languageSettings.localized(english: "Reanalyze source", traditionalChinese: "重新解析來源"),
                         systemImage: "sparkle.magnifyingglass",
                         fill: SaveAtlasPalette.paper,
                         disabled: isWorking,
                         action: onInvestigateMore
                     )
+                    .accessibilityIdentifier("drawer.review.reanalyze")
 
                     Menu {
                         // When the primary action is Confirm (candidate already

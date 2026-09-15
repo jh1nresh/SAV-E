@@ -336,6 +336,7 @@ struct PendingReviewCandidate: Codable {
 struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     // Transient display state; excluded from Codable/evidence/share payloads.
     var sourceFailureReason: SourceSearchFailureReason? = nil
+    var supersededByCandidateID: UUID? = nil
     var id: UUID
     var captureId: UUID?
     var workflowRunId: UUID?
@@ -397,6 +398,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case supersededByCandidateID
         case id
         case captureId
         case workflowRunId
@@ -419,6 +421,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        supersededByCandidateID = try container.decodeIfPresent(UUID.self, forKey: .supersededByCandidateID)
         id = try container.decode(UUID.self, forKey: .id)
         captureId = try container.decodeIfPresent(UUID.self, forKey: .captureId)
         workflowRunId = try container.decodeIfPresent(UUID.self, forKey: .workflowRunId)
@@ -449,6 +452,33 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
 
     var hasSavableLocation: Bool {
         hasReliableCoordinates || providerLocation != nil
+    }
+
+    static func newestFirst(_ lhs: Self, _ rhs: Self) -> Bool {
+        if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
+        return lhs.id.uuidString < rhs.id.uuidString
+    }
+
+    /// A shared post can contain several venues. Reuse only an exact identity
+    /// within its capture, and never turn a named venue into a source-only clue.
+    func matchesImport(_ pending: PendingReviewCandidate) -> Bool {
+        if status == "source_only" || pending.isSourceOnly {
+            return pending.isSourceOnly
+                && (status == "source_only" || SaveSourceIdentity.text(name) == SaveSourceIdentity.text(pending.candidateName))
+                && address.isEmpty && pending.address.isEmpty
+                && latitude == nil && longitude == nil
+                && pending.latitude == nil && pending.longitude == nil
+        }
+        let normalizedName = SaveSourceIdentity.text(name)
+        let normalizedAddress = SaveSourceIdentity.text(address)
+        guard !normalizedName.isEmpty, !normalizedAddress.isEmpty,
+              normalizedName == SaveSourceIdentity.text(pending.candidateName),
+              normalizedAddress == SaveSourceIdentity.text(pending.address) else { return false }
+        if let latitude, let longitude, let otherLat = pending.latitude, let otherLon = pending.longitude {
+            return latitude.isFinite && longitude.isFinite && otherLat.isFinite && otherLon.isFinite
+                && abs(latitude - otherLat) <= 0.001 && abs(longitude - otherLon) <= 0.001
+        }
+        return true
     }
 
     var refinementQuery: String {
@@ -789,7 +819,7 @@ extension Place {
             googleRating: refinedMatch?.rating,
             googlePriceLevel: refinedMatch?.priceLevel,
             openingHours: nil,
-            createdAt: Date(),
+            createdAt: candidate.createdAt,
             visibility: .privateMemory,
             socialSignal: nil,
             placeHighlights: candidate.placeHighlights.nilIfEmpty,
@@ -1086,5 +1116,35 @@ private extension String {
     var normalizedVenueIdentity: String {
         folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
             .unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.map(String.init).joined()
+    }
+}
+
+/// Memory identity removes only known tracking parameters, retaining query
+/// values that may select a different post or venue.
+enum SaveSourceIdentity {
+    static func text(_ value: String) -> String {
+        value.precomposedStringWithCompatibilityMapping
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+            .lowercased()
+    }
+
+    static func url(_ value: String?) -> String? {
+        guard let value, var parts = URLComponents(string: value.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let scheme = parts.scheme?.lowercased(), ["https", "http"].contains(scheme),
+              let host = parts.host?.lowercased(), !host.isEmpty,
+              parts.user == nil, parts.password == nil else { return nil }
+        parts.scheme = scheme
+        parts.host = host
+        let tracking: Set<String> = ["fbclid", "gclid", "igshid", "igsh", "mc_cid", "mc_eid"]
+        parts.queryItems = parts.queryItems?.filter {
+            !$0.name.lowercased().hasPrefix("utm_") && !tracking.contains($0.name.lowercased())
+        }.sorted {
+            if $0.name != $1.name { return $0.name < $1.name }
+            return ($0.value ?? "") < ($1.value ?? "")
+        }
+        if parts.queryItems?.isEmpty == true { parts.queryItems = nil }
+        if parts.path.isEmpty { parts.path = "/" }
+        return parts.string
     }
 }

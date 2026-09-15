@@ -145,6 +145,67 @@ final class PlaceDeduplicationTests: XCTestCase {
         XCTAssertEqual(map.placesForRoute(placeIDs: [second.id]).map(\.id), [first.id])
     }
 
+    @MainActor
+    func testNewestReviewComesFirstEvenWhenItHasNoLocation() {
+        let ready = review(date: 1, located: true)
+        let clue = review(date: 2, located: false)
+        XCTAssertEqual([ready, clue].sorted(by: PlaceReviewCandidate.newestFirst).map(\.id), [clue.id, ready.id])
+        var tie = clue
+        tie.id = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        XCTAssertEqual([clue, tie].sorted(by: PlaceReviewCandidate.newestFirst).first?.id, tie.id)
+    }
+
+    @MainActor
+    func testConfirmingReviewPreservesOriginalCollectionDate() {
+        let candidate = review(date: 100, located: true)
+        let place = Place.from(candidate)
+        XCTAssertEqual(place.createdAt, candidate.createdAt)
+    }
+
+    @MainActor
+    func testSameVenueSupplementPreservesFirstCollectionDate() {
+        var first = makePlace(name: "Cafe", address: "1 Test Way", googlePlaceId: "venue", sourceUrl: nil)
+        first.createdAt = Date(timeIntervalSince1970: 1)
+        var second = first
+        second.createdAt = Date(timeIntervalSince1970: 2)
+        XCTAssertEqual(second.mergingSources(from: first).createdAt, first.createdAt)
+    }
+
+    @MainActor
+    func testImportIdentityKeepsBranchesAndSourceOnlySeparate() {
+        let existing = review(date: 1, located: true)
+        var pending = PendingReviewCandidate(
+            candidateName: "  CAFE  ", address: "1 Test Way", category: "cafe",
+            latitude: existing.latitude, longitude: existing.longitude,
+            sourceURL: "https://example.com/post", sourceText: nil,
+            evidence: [], confidence: 1, missingInfo: [], savedAt: Date()
+        )
+        XCTAssertTrue(existing.matchesImport(pending))
+        pending.latitude = 26
+        XCTAssertFalse(existing.matchesImport(pending))
+        pending.latitude = existing.latitude
+        pending.candidateName = "Other Cafe"
+        XCTAssertFalse(existing.matchesImport(pending))
+        pending.isSourceOnly = true
+        XCTAssertFalse(existing.matchesImport(pending))
+    }
+
+    @MainActor
+    func testSourceIdentityRetainsContentQueriesAndRejectsCredentials() {
+        XCTAssertEqual(SaveSourceIdentity.url("https://example.com/post?id=1&utm_source=ig"), SaveSourceIdentity.url("https://example.com/post?id=1"))
+        XCTAssertNotEqual(SaveSourceIdentity.url("https://example.com/post?id=1"), SaveSourceIdentity.url("https://example.com/post?id=2"))
+        XCTAssertNil(SaveSourceIdentity.url("https://user:secret@example.com/post"))
+        XCTAssertNil(SaveSourceIdentity.url("not a link"))
+    }
+
+    @MainActor
+    private func review(date: Double, located: Bool) -> PlaceReviewCandidate {
+        PlaceReviewCandidate(id: UUID(), captureId: UUID(), name: "Cafe", address: located ? "1 Test Way" : "",
+            city: nil, latitude: located ? 25.03 : nil, longitude: located ? 121.55 : nil,
+            evidence: [], confidence: nil, missingInfo: [], status: located ? "review" : "source_only",
+            createdAt: Date(timeIntervalSince1970: date))
+    }
+
     // MARK: - Helper
 
     @MainActor

@@ -371,6 +371,84 @@ private final class TransportFailureURLProtocol: URLProtocol {
 
 @MainActor
 final class SAVEAnalysisTransportTests: XCTestCase {
+    @MainActor
+    func testMemoryImportSendsOriginalDateAndSourceOnlyState() async throws {
+        let id = UUID()
+        let capture = UUID()
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertEqual(body["created_at"] as? String, "2020-01-02T03:04:05Z")
+            if request.url?.path.hasSuffix("/captures") == true {
+                return (200, "{\"id\":\"\(capture)\"}")
+            }
+            XCTAssertEqual(body["status"] as? String, "source_only")
+            return (200, "{\"id\":\"\(id)\",\"capture_id\":\"\(capture)\",\"name\":\"Clue\",\"status\":\"source_only\",\"created_at\":\"2020-01-02T03:04:05Z\"}")
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let pending = PendingReviewCandidate(candidateName: "Clue", address: "", category: "other",
+            sourceURL: "https://example.com/post", sourceText: "clue", evidence: [], confidence: 0,
+            missingInfo: [], savedAt: ISO8601DateFormatter().date(from: "2020-01-02T03:04:05Z")!, isSourceOnly: true)
+        let captured = try await service.createMemoryCapture(from: pending, userId: "test-owner")
+        XCTAssertEqual(captured, capture)
+        let candidate = try await service.createPlaceCandidate(pending, captureId: captured, userId: "test-owner")
+        XCTAssertEqual(candidate, id)
+    }
+
+    @MainActor
+    func testMemoryFetchPreservesServerDatesWithAndWithoutFractionalSeconds() async throws {
+        let id = UUID()
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let base = ISO8601DateFormatter().date(from: "2020-01-02T03:04:05Z")!
+        for (timestamp, fraction) in [("2020-01-02T03:04:05Z", 0.0), ("2020-01-02T03:04:05.123Z", 0.123), ("2020-01-02T03:04:05.123456+00:00", 0.123456)] {
+            AnalysisRequestURLProtocol.handler = { request in
+                if request.url?.path.hasSuffix("/candidates") == true {
+                    return (200, "[{\"id\":\"\(id)\",\"name\":\"Clue\",\"status\":\"review\",\"created_at\":\"\(timestamp)\"}]")
+                }
+                return (200, "[{\"id\":\"\(id)\",\"user_id\":\"owner\",\"name\":\"Cafe\",\"address\":\"1 Road\",\"latitude\":25,\"longitude\":121,\"category\":\"food\",\"status\":\"wantToGo\",\"source_platform\":\"other\",\"created_at\":\"\(timestamp)\"}]")
+            }
+            let candidates = try await service.fetchReviewCandidates()
+            let places = try await service.fetchPlaces(for: "owner")
+            XCTAssertEqual(try XCTUnwrap(candidates.first).createdAt.timeIntervalSince(base), fraction, accuracy: 0.001)
+            XCTAssertEqual(try XCTUnwrap(places.first).createdAt.timeIntervalSince(base), fraction, accuracy: 0.001)
+        }
+    }
+
+    @MainActor
+    func testRetryUsesExistingCaptureAndHidesOnlySupersededClueAfterReload() async throws {
+        let capture = UUID(), oldID = UUID(), newID = UUID(), run = UUID()
+        let oldJSON = "{\"id\":\"\(oldID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(run)\",\"name\":\"Clue\",\"status\":\"source_only\",\"created_at\":\"2020-01-02T03:04:05Z\",\"superseded_by_candidate_id\":\"\(newID)\"}"
+        let newJSON = "{\"id\":\"\(newID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(run)\",\"name\":\"Cafe\",\"status\":\"review\",\"created_at\":\"2020-01-02T03:04:05Z\"}"
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.url?.path == "/v0/analysis" {
+                let id = try XCTUnwrap(AnalysisRequestURLProtocol.body(request)["id"] as? String)
+                return (200, "{\"analysis_id\":\"\(id)\"}")
+            }
+            if request.url?.path.hasSuffix("/search-recovery") == true {
+                XCTAssertTrue(request.url!.path.contains(capture.uuidString))
+                let body = try AnalysisRequestURLProtocol.body(request)
+                XCTAssertEqual(body["workflow_run_id"] as? String, run.uuidString)
+                XCTAssertEqual(body["explicit_retry"] as? Bool, true)
+                return (200, "{\"created_candidates\":[\(newJSON)]}")
+            }
+            if request.url?.path.hasSuffix("/candidates") == true { return (200, "[\(oldJSON),\(newJSON)]") }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let map = MapViewModel(supabaseService: service)
+        let old = PlaceReviewCandidate(id: oldID, captureId: capture, workflowRunId: run, name: "Clue", address: "",
+            city: nil, latitude: nil, longitude: nil, evidence: [], confidence: nil, missingInfo: [],
+            status: "source_only", createdAt: Date(timeIntervalSince1970: 1))
+        let ids = try await map.reanalyzeReviewSource(old)
+        XCTAssertEqual(ids, [newID])
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [newID])
+        XCTAssertTrue(AnalysisRequestURLProtocol.requests.allSatisfy {
+            $0.httpMethod != "POST" || !$0.url!.path.hasSuffix("/captures")
+        })
+        try await map.refreshReviewCandidates()
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [newID])
+    }
+
     override func tearDown() {
         AnalysisRequestURLProtocol.reset()
         super.tearDown()
