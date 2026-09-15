@@ -13,6 +13,7 @@ import {
   resolveSourceDocument,
   runSourceSearchRecovery,
   sourceResolutionResponseBody,
+  searchPublicWebResults,
 } from "./sourceSearchWorker.js";
 
 test("buildSourceRecoveryQueries strips Instagram tracking query", () => {
@@ -1367,4 +1368,72 @@ test("metadata headless body accepts the exact byte limit and rejects only actua
     assert.equal(reads, 2, "read EOF or the first overflowing chunk before settling");
     assert.deepEqual(ledger.events, ["reserve:metadata", "fetch", overflow ? "failure" : "success"]);
   }
+});
+
+const reportedReelMetadata = `<html><head>
+<meta name="twitter:title" content="Wendy三分熟 (@wendyismediumrare) • Instagram reel">
+<meta property="og:title" content="Wendy三分熟 on Instagram: &quot;日本人挑戰開牛肉麵店 榮獲米其林推薦 必吃 #台北牛肉麵推薦&quot;">
+<meta property="og:description" content="177 likes, 2 comments - wendyismediumrare on August 21, 2026: &quot;日本人挑戰開牛肉麵店 榮獲米其林推薦 必吃 #台北牛肉麵推薦&quot;">
+</head></html>`;
+
+test("reported Reel uses its caption within four recovery searches without inventing a venue", async () => {
+  const seen: string[] = [];
+  const output = await runSourceSearchRecovery(
+    { sourceUrl: "https://www.instagram.com/reel/DcTZXFrjfJG/?stkn=tracking" },
+    async url => {
+      if (url.includes("instagram.com")) return reportedReelMetadata;
+      seen.push(new URL(url).searchParams.get("q") ?? "");
+      return "";
+    },
+    async () => [],
+  );
+  assert.match(output.sourceResolution?.title ?? "", /日本人挑戰開牛肉麵店/);
+  assert.ok(seen.some(query => query.includes("日本人挑戰開牛肉麵店 榮獲米其林推薦 必吃") && !query.includes("Wendy")));
+  assert.equal(seen.length, 4);
+  assert.deepEqual(output.candidates, []);
+  assert.equal(output.receipt.output, "source_only_clue");
+});
+
+test("caption recovery preserves caller search priority and the requested query cap", async () => {
+  const output = await runSourceSearchRecovery(
+    { sourceUrl: "https://www.instagram.com/reel/DcTZXFrjfJG/", suggestedSearchQueries: ["user supplied venue address"], maxQueries: 1 },
+    async url => url.includes("instagram.com") ? reportedReelMetadata : "",
+    async () => [],
+  );
+  assert.deepEqual(output.queries, ["user supplied venue address"]);
+});
+
+test("creator-only or hashtag-only titles do not create caption recovery queries", async () => {
+  for (const title of ["Wendy (@wendyismediumrare) • Instagram reel", "Wendy on Instagram: &quot;#台北牛肉麵推薦 #中山區美食&quot;"]) {
+    const output = await runSourceSearchRecovery(
+      { sourceUrl: "https://www.instagram.com/reel/DcTZXFrjfJG/" },
+      async url => url.includes("instagram.com") ? `<meta property="og:title" content="${title}">` : "",
+      async () => [],
+    );
+    assert.equal(output.queries[0], "instagram reel DcTZXFrjfJG place");
+    assert.deepEqual(output.candidates, []);
+  }
+});
+
+
+test("public recovery uses the direct HTML endpoint without requiring redirects", async () => {
+  let requestURL: URL | undefined;
+  await searchPublicWebResults('"DcTZXFrjfJG"', async url => { requestURL = new URL(url); return ""; });
+  assert.equal(requestURL?.origin, "https://html.duckduckgo.com");
+  assert.equal(requestURL?.pathname, "/html/");
+  assert.equal(requestURL?.searchParams.get("q"), '"DcTZXFrjfJG"');
+});
+
+test("retry of a persisted Reel recovers caption even when the old title was creator-only", async () => {
+  const url = "https://www.instagram.com/reel/DcTZXFrjfJG/";
+  const output = await runSourceSearchRecovery(
+    { sourceUrl: url }, async () => "", async () => [],
+    { persistedSourceResolution: {
+      original_url: url, resolved_url: url, redirect_chain: [url], status: "resolved",
+      title: "Wendy三分熟 (@wendyismediumrare) • Instagram reel",
+      caption: '177 likes, 2 comments - wendyismediumrare on August 21, 2026: "日本人挑戰開牛肉麵店 榮獲米其林推薦 必吃 #台北牛肉麵推薦".',
+    } },
+  );
+  assert.equal(output.queries[0], '"日本人挑戰開牛肉麵店 榮獲米其林推薦 必吃" place');
+  assert.deepEqual(output.candidates, []);
 });
