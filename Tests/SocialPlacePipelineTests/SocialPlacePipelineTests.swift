@@ -4339,6 +4339,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         let service = SocialLinkReviewCandidateService(
             googlePlacesService: EmptyGooglePlacesService(),
             publicSourceSearchService: search,
+            placeResolverService: CountingAnalysisResolver { _, _ in [] },
             captionVenueExtractor: extractor
         )
         var thumbnailLoads = 0
@@ -4365,6 +4366,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         let service = SocialLinkReviewCandidateService(
             googlePlacesService: EmptyGooglePlacesService(),
             publicSourceSearchService: CountingAnalysisSearch(),
+            placeResolverService: CountingAnalysisResolver { _, _ in [] },
             captionVenueExtractor: nil
         )
         for caption in [
@@ -4391,6 +4393,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         let service = SocialLinkReviewCandidateService(
             googlePlacesService: EmptyGooglePlacesService(),
             publicSourceSearchService: CountingAnalysisSearch(),
+            placeResolverService: CountingAnalysisResolver { _, _ in [] },
             captionVenueExtractor: nil
         )
         let candidates = await service.reviewCandidates(
