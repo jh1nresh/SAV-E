@@ -59,7 +59,15 @@ test("apply-sql.sh dry-reads friend-ratings.sql without secrets or writes", asyn
   assert.match(out, /dry-read only/);
   assert.match(out, /overriding legacy PGSSLMODE=no-verify/);
   assert.match(out, /PGSSLMODE=require psql/);
+  assert.match(out, /-f sql\/friend-ratings\.sql/);
+  assert.doesNotMatch(out, /-f backend\/sql\//);
   assert.doesNotMatch(out, /secret-user|secret-pass|example\.invalid/);
+});
+
+test("apply-sql.sh drops only sslmode and keeps other libpq query params", async () => {
+  const { code, out } = await runApply(["--self-test"]);
+  assert.equal(code, 0, out);
+  assert.match(out, /apply-sql self-test passed/);
 });
 
 test("apply-sql.sh refuses a path outside backend/sql", async () => {

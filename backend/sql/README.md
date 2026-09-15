@@ -31,13 +31,21 @@ From `backend/`:
 ```
 
 If the URL still carries `sslmode=no-verify`, modern libpq rejects it. The
-helper strips the query string and uses `PGSSLMODE=require` for that `psql`
-invocation only. Equivalent manual path used in production applies:
+helper drops only the `sslmode` query parameter (other libpq params stay) and
+uses `PGSSLMODE=require` for that `psql` invocation. `--apply` opens the SQL
+file by absolute path, so it does not depend on cwd.
+
+The founder one-liner used in production applies (from `backend/`; the known
+prod URL only carries `sslmode`) is:
 
 ```bash
 PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -v ON_ERROR_STOP=1 -1 \
-  -f backend/sql/friend-ratings.sql
+  -f sql/friend-ratings.sql
 ```
+
+If the URL has other query parameters (`options`, `target_session_attrs`,
+`sslrootcert`, …), use the helper or restore those params by hand after
+stripping `sslmode`. Do not run `-f backend/sql/…` from `backend/`.
 
 Valid libpq `sslmode` / `PGSSLMODE` values: `disable`, `allow`, `prefer`,
 `require`, `verify-ca`, `verify-full`. Prefer `require`. Do not set

@@ -55,10 +55,11 @@ npm run start
 Apply schema / pending SQL (see **Deploy checklist** below and `sql/README.md`):
 
 ```bash
-# New empty database only:
+# From repository root, new empty database only:
 psql "$DATABASE_URL" -f backend/sql/schema.sql
 
-# Pending additive file (dry-read, then apply). Founder-owned. Not on boot.
+# From backend/: pending additive file (dry-read, then apply). Founder-owned.
+cd backend
 ./scripts/apply-sql.sh friend-ratings.sql
 ./scripts/apply-sql.sh friend-ratings.sql --apply
 ```
@@ -89,10 +90,13 @@ authorization to migrate or deploy.
    - `friend-ratings.sql` creates `idx_places_id_user_id` if missing before the
      composite FK, so a database that already has `places` but lacks that index
      does not fail the way the #241 prod apply did
-   - Dry-read, then apply: `./scripts/apply-sql.sh friend-ratings.sql` then
-     `./scripts/apply-sql.sh friend-ratings.sql --apply`
-   - If `psql` rejects `sslmode=no-verify`:
+   - From `backend/`: dry-read, then apply: `./scripts/apply-sql.sh friend-ratings.sql`
+     then `./scripts/apply-sql.sh friend-ratings.sql --apply`
+   - If `psql` rejects `sslmode=no-verify` (from `backend/`; known prod URL
+     only carries that query param):
      `PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -v ON_ERROR_STOP=1 -1 -f sql/friend-ratings.sql`
+     Use the helper when the URL has other libpq query params — it drops
+     `sslmode` only.
 2. Verify tables (read-only). Expect `t|t|t`:
 
    ```bash

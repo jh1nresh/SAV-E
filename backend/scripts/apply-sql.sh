@@ -11,18 +11,74 @@ Usage: apply-sql.sh <name.sql> [--apply]
   Dry-read (default): print statement order and a redacted psql command.
   --apply: run that command. Requires DATABASE_URL. Not used on boot.
 
-Examples:
+Examples (from backend/):
   ./scripts/apply-sql.sh friend-ratings.sql
   ./scripts/apply-sql.sh friend-ratings.sql --apply
 
-SSL: strips ?query from DATABASE_URL (pooler URLs often carry
+SSL: drops only sslmode= from DATABASE_URL (pooler URLs often carry
 sslmode=no-verify, which modern libpq rejects) and invokes
-  PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -v ON_ERROR_STOP=1 -1 -f <file>
-unless PGSSLMODE is already a valid libpq value (disable, allow, prefer,
+  PGSSLMODE=require psql <rewritten-url> -v ON_ERROR_STOP=1 -1 -f sql/<file>
+from backend/. Other query params (options, target_session_attrs, …) are kept.
+--apply uses this script's absolute sql path, so cwd does not matter.
+
+Unless PGSSLMODE is already a valid libpq value (disable, allow, prefer,
 require, verify-ca, verify-full). Legacy no-verify is overridden to require
 for this psql process only; the Railway service env is not rewritten.
+
+The documented founder one-liner still strips the whole query string
+(${DATABASE_URL%%\?*}) because the known prod URL only carries sslmode.
+Use this helper, or restore extra params by hand, when the URL has more.
 EOF
 }
+
+# Drop sslmode=… only. Never print the result; callers must not echo it.
+psql_url() {
+  local raw="$1"
+  local base="${raw%%\?*}"
+  if [[ "$raw" != *"?"* ]]; then
+    printf '%s' "$raw"
+    return
+  fi
+  local query="${raw#*\?}"
+  local kept=""
+  local part
+  local IFS='&'
+  for part in $query; do
+    case "$(printf '%s' "$part" | tr '[:upper:]' '[:lower:]')" in
+      sslmode=*|sslmode|"") continue ;;
+    esac
+    if [[ -n "$kept" ]]; then
+      kept="${kept}&${part}"
+    else
+      kept="$part"
+    fi
+  done
+  if [[ -n "$kept" ]]; then
+    printf '%s?%s' "$base" "$kept"
+  else
+    printf '%s' "$base"
+  fi
+}
+
+if [[ "${1:-}" == "--self-test" ]]; then
+  expect() {
+    local got
+    got="$(psql_url "$1")"
+    if [[ "$got" != "$2" ]]; then
+      echo "self-test failed: $(printf '%q' "$1") -> $(printf '%q' "$got") (want $(printf '%q' "$2"))" >&2
+      exit 1
+    fi
+  }
+  expect "postgresql://u:p@h:5432/db" "postgresql://u:p@h:5432/db"
+  expect "postgresql://u:p@h:5432/db?sslmode=no-verify" "postgresql://u:p@h:5432/db"
+  expect "postgresql://u:p@h:5432/db?sslmode=require" "postgresql://u:p@h:5432/db"
+  expect "postgresql://u:p@h:5432/db?sslmode=no-verify&options=-c%20search_path%3Dpublic" \
+    "postgresql://u:p@h:5432/db?options=-c%20search_path%3Dpublic"
+  expect "postgresql://u:p@h:5432/db?options=-c%20search_path%3Dpublic&sslmode=no-verify&target_session_attrs=read-write" \
+    "postgresql://u:p@h:5432/db?options=-c%20search_path%3Dpublic&target_session_attrs=read-write"
+  echo "apply-sql self-test passed"
+  exit 0
+fi
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" || $# -eq 0 ]]; then
   usage
@@ -37,6 +93,7 @@ name=""
 for arg in "$@"; do
   case "$arg" in
     --apply) apply=1 ;;
+    --self-test) echo "--self-test must be the only argument" >&2; exit 2 ;;
     -h|--help) usage; exit 0 ;;
     --*) echo "unknown flag: $arg" >&2; usage >&2; exit 2 ;;
     *)
@@ -70,7 +127,7 @@ if [[ ! -f "$sql_file" ]]; then
   exit 2
 fi
 
-echo "file: backend/sql/${base}"
+echo "file: sql/${base} (from backend/; --apply uses this script's absolute path)"
 echo "boot: never (manual / founder-owned only)"
 echo "order:"
 awk '
@@ -114,7 +171,7 @@ case "$sslmode" in
     ;;
 esac
 
-echo "psql: PGSSLMODE=${sslmode} psql \"\${DATABASE_URL%%\\?*}\" -v ON_ERROR_STOP=1 -1 -f backend/sql/${base}"
+echo "psql: (from backend/) PGSSLMODE=${sslmode} psql <url, sslmode query dropped> -v ON_ERROR_STOP=1 -1 -f sql/${base}"
 
 if [[ "$apply" -eq 0 ]]; then
   echo "dry-read only; pass --apply to execute (requires DATABASE_URL)"
@@ -131,6 +188,6 @@ if ! command -v psql >/dev/null 2>&1; then
   exit 2
 fi
 
-url="${DATABASE_URL%%\?*}"
+url="$(psql_url "$DATABASE_URL")"
 echo "applying (URL redacted)…"
 PGSSLMODE="$sslmode" psql "$url" -v ON_ERROR_STOP=1 -1 -f "$sql_file"
