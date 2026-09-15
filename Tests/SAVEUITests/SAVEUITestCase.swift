@@ -141,11 +141,12 @@ class SAVEUITestCase: XCTestCase {
             line: line
         )
 
-        let focused = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "hasKeyboardFocus == true"),
-            object: element
-        )
         for _ in 0..<3 {
+            // XCTest expectations are single-use, including after a timeout.
+            let focused = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "hasKeyboardFocus == true"),
+                object: element
+            )
             element.tap()
             if XCTWaiter.wait(for: [focused], timeout: timeout(5)) == .completed {
                 return true

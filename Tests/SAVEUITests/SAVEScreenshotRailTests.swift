@@ -10,125 +10,43 @@ import XCTest
 /// partial rail still yields whatever screenshots were captured before it.
 final class SAVEScreenshotRailTests: SAVEUITestCase {
 
-    /// Run with scripts/friends-local-fixture.mjs --native and its isolated DB.
-    /// These are signed local identities and real HTTP writes, not canned UI data.
     @MainActor
-    func testLocalFriendsAuthenticatedFlow() async throws {
-        struct Fixture: Decodable { let users: [String]; let tokens: [String]; let placeID: String; let base: String }
-        let configURL = URL(string: "http://127.0.0.1:55441/fixture")!
-        var request = URLRequest(url: configURL); request.timeoutInterval = 2
-        let data: Data
-        do { (data, _) = try await URLSession.shared.data(for: request) }
-        catch { throw XCTSkip("Local Friends database/server fixture is not running") }
-        let fixture = try JSONDecoder().decode(Fixture.self, from: data)
-        XCTAssertEqual(fixture.base, "http://127.0.0.1:55440")
-        let app = makeApp(launchArguments: [
-            "--uitest-local-friends", "--uitest-review-demo-offline", "--skip-map-tour",
-            "-save.appLanguage", "en"
-        ])
-        let storage = UUID().uuidString
-        func open(_ user: Int) {
-            app.launchEnvironment = ["API_BASE_URL": fixture.base,
-                "SAVE_FRIENDS_FIXTURE_USER": fixture.users[user], "SAVE_FRIENDS_FIXTURE_TOKEN": fixture.tokens[user],
-                "SAVE_UI_TEST_STORAGE_ID": "\(storage)-\(user)"]
+    func testFriendsComingSoon() throws {
+        try assertFriendsComingSoonLanguages()
+    }
+
+    @MainActor
+    private func assertFriendsComingSoonLanguages() throws {
+        for (language, expectedTitle) in [("en", "Coming soon"), ("zh-Hant", "即將推出")] {
+            let app = makeApp(launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed", "-save.appLanguage", language
+            ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
             launch(app)
-            XCTAssertTrue(rootTabButton("Friends", app: app).waitForExistence(timeout: launchTimeout))
+            try signInViaReviewDemoRequired(app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+            waitForHomeCoverImagery(app)
+            waitForStableFrame(rootTabButton("Friends", app: app))
+            attach(app, name: "friends-before-opening-\(language)")
+            openRootTab("Friends", app: app)
+            attach(app, name: "friends-after-opening-\(language)")
+            let title = app.staticTexts["friends.comingSoon"]
+            XCTAssertTrue(title.waitForExistence(timeout: stepTimeout))
+            XCTAssertEqual(title.label, expectedTitle)
             XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'root.tab.'")).count, 5)
-            rootTabButton("Friends", app: app).tap()
+            XCTAssertFalse(rootTabButton("Plan", app: app).exists)
+            XCTAssertFalse(app.textFields["friends.invite"].exists)
+            XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'friends.save.' OR identifier BEGINSWITH 'friends.rate.'")).firstMatch.exists)
+            XCTAssertLessThan(title.frame.maxY, rootTabButton("Friends", app: app).frame.minY)
+            attach(app, name: "friends-coming-soon-\(language)")
+            openRootTab("Home", app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["home.root"].firstMatch.waitForExistence(timeout: stepTimeout))
+            openRootTab("Friends", app: app)
+            XCTAssertTrue(title.waitForExistence(timeout: stepTimeout))
+            XCTAssertEqual(title.label, expectedTitle)
+            app.terminate()
         }
-        func api(_ user: Int, _ path: String) async throws -> (Data, HTTPURLResponse) {
-            var request = URLRequest(url: URL(string: fixture.base + path)!)
-            request.setValue("Bearer \(fixture.tokens[user])", forHTTPHeaderField: "Authorization")
-            let (data, response) = try await URLSession.shared.data(for: request)
-            return (data, response as! HTTPURLResponse)
-        }
-
-        open(0)
-        XCTAssertTrue(app.descendants(matching: .any)["friends.empty"].firstMatch.waitForExistence(timeout: stepTimeout))
-        attach(app, name: "friends-local-empty-five-tabs")
-
-        open(1)
-        app.buttons["My ratings"].tap()
-        let ownRow = app.buttons["friends.rate.\(fixture.placeID.uppercased())"]
-        XCTAssertTrue(ownRow.waitForExistence(timeout: stepTimeout)); ownRow.tap()
-        app.buttons["friends.editor.stars"].tap()
-        app.buttons["4.5 / 5"].tap()
-        for id in ["friends.editor.eaten", "friends.editor.shared"] {
-            let toggle = app.switches[id]
-            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
-            guard toggle.value as? String == "1" else {
-                attach(app, name: "friends-local-toggle-failure")
-                throw NSError(domain: "FriendsFixture", code: 1, userInfo: [NSLocalizedDescriptionKey: "Toggle did not turn on: \(id)"])
-            }
-        }
-        attach(app, name: "friends-local-explicit-share")
-        let submit = app.buttons["Save rating"]
-        guard submit.isEnabled else { throw NSError(domain: "FriendsFixture", code: 2, userInfo: [NSLocalizedDescriptionKey: "Rating submission is disabled"]) }
-        submit.tap()
-        let dismissed = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: submit)
-        await fulfillment(of: [dismissed], timeout: stepTimeout)
-        guard !submit.exists else {
-            attach(app, name: "friends-local-submit-failure")
-            throw NSError(domain: "FriendsFixture", code: 3, userInfo: [NSLocalizedDescriptionKey: "Rating editor did not dismiss"])
-        }
-
-        open(0)
-        let save = app.buttons["friends.save.\(fixture.placeID.uppercased())"]
-        guard save.waitForExistence(timeout: stepTimeout) else {
-            attach(app, name: "friends-local-feed-failure")
-            throw NSError(domain: "FriendsFixture", code: 4, userInfo: [NSLocalizedDescriptionKey: "Shared rating missing from follower feed"])
-        }
-        attach(app, name: "friends-local-populated-five-tabs")
-        save.tap()
-        XCTAssertTrue(app.buttons["Saved to your map"].waitForExistence(timeout: stepTimeout))
-        rootTabButton("Home", app: app).tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Local Test Bistro'")).firstMatch.waitForExistence(timeout: stepTimeout))
-        attach(app, name: "friends-local-saved-home")
-        rootTabButton("Friends", app: app).tap()
-        let restoredSave = app.buttons["Saved to your map"]
-        guard restoredSave.waitForExistence(timeout: stepTimeout), !restoredSave.isEnabled else {
-            attach(app, name: "friends-local-saved-state-failure")
-            throw NSError(domain: "FriendsFixture", code: 6, userInfo: [NSLocalizedDescriptionKey: "Returning to Friends must preserve the saved state"])
-        }
-        attach(app, name: "friends-local-saved-state-restored")
-        rootTabButton("Map", app: app).tap()
-        XCTAssertTrue(app.descendants(matching: .any)["map.root"].firstMatch.waitForExistence(timeout: stepTimeout))
-        app.buttons["map.command.search"].tap()
-        let mapSearch = app.textFields["map.search.input"]
-        typeText("Local Test Bistro", into: mapSearch)
-        let mapResult = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'map.search.saved.' AND label CONTAINS 'Local Test Bistro'")).firstMatch
-        guard mapResult.waitForExistence(timeout: stepTimeout) else {
-            attach(app, name: "friends-local-map-search-failure")
-            throw NSError(domain: "FriendsFixture", code: 5, userInfo: [NSLocalizedDescriptionKey: "Saved restaurant missing from Map search"])
-        }
-        attach(app, name: "friends-local-saved-map")
-        let (savedData, savedResponse) = try await api(0, "/v0/places")
-        XCTAssertEqual(savedResponse.statusCode, 200)
-        let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: savedData) as? [[String: Any]])
-        let bistro = try XCTUnwrap(saved.first { $0["name"] as? String == "Local Test Bistro" })
-        XCTAssertEqual(bistro["status"] as? String, "wantToGo")
-        XCTAssertTrue(bistro["rating"] is NSNull); XCTAssertTrue(bistro["recommender"] is NSNull)
-
-        open(2)
-        XCTAssertTrue(app.descendants(matching: .any)["friends.empty"].firstMatch.waitForExistence(timeout: stepTimeout))
-        let (_, denied) = try await api(2, "/v0/friend-ratings/\(fixture.placeID)")
-        XCTAssertEqual(denied.statusCode, 404)
-
-        open(1)
-        app.buttons["My ratings"].tap()
-        XCTAssertTrue(ownRow.waitForExistence(timeout: stepTimeout)); ownRow.tap()
-        app.buttons["Withdraw share"].tap()
-        let withdrawnEditor = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: app.buttons["Withdraw share"])
-        await fulfillment(of: [withdrawnEditor], timeout: stepTimeout)
-        open(0)
-        XCTAssertTrue(app.descendants(matching: .any)["friends.empty"].firstMatch.waitForExistence(timeout: stepTimeout))
-        attach(app, name: "friends-local-withdrawn")
-        let (_, withdrawn) = try await api(0, "/v0/friend-ratings/\(fixture.placeID)")
-        XCTAssertEqual(withdrawn.statusCode, 404)
-        let (attributions, _) = try await api(0, "/v0/friend-ratings/saved")
-        XCTAssertEqual(String(data: attributions, encoding: .utf8), "[]")
-        rootTabButton("Home", app: app).tap()
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Local Test Bistro'")).firstMatch.waitForExistence(timeout: stepTimeout))
     }
 
     @MainActor
@@ -396,6 +314,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// Run on the reference and compact devices; attachment names stay stable for parity.
     @MainActor
     func testCaptureFiveTabLanding() throws {
+        try assertFriendsComingSoonLanguages()
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
@@ -430,6 +349,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertEqual(leadingInset, trailingInset, accuracy: 2)
         waitForHomeCoverImagery(app)
         attach(app, name: "five-tab-home")
+
+        openRootTab("Friends", app: app)
+        XCTAssertTrue(app.staticTexts["friends.comingSoon"].waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(app.staticTexts["friends.comingSoon"].label, "Coming soon")
+        XCTAssertFalse(app.textFields["friends.invite"].exists)
+        attach(app, name: "five-tab-friends-coming-soon")
 
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
@@ -2550,6 +2475,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         switch title {
         case "Home": return "home.root"
         case "Map": return "map.root"
+        case "Friends": return "friends.root"
         case "Passport": return "profile.root"
         default: return nil
         }
