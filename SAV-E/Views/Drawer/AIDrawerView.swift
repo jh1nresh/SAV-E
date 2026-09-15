@@ -80,6 +80,7 @@ struct AIDrawerView: View {
         case idle
         case analyzing
         case ready(Set<UUID>)
+        case alreadyReviewed
         case failed(String)
     }
 
@@ -278,10 +279,11 @@ struct AIDrawerView: View {
             onInvestigateCandidateMore: { candidate in
                 performCandidateAction(
                     candidate,
-                    successMessage: languageSettings.localized(english: "Kept in Review for more investigation.", traditionalChinese: "已留在待確認，等待進一步調查。")
+                    successMessage: languageSettings.localized(english: "Review the updated clues.", traditionalChinese: "請確認更新後的線索。")
                 ) {
                     try await onInvestigateCandidateMore(candidate)
-                    addMoreClue(for: candidate)
+                    if candidate.captureId != nil { openReviewInbox() }
+                    else { addMoreClue(for: candidate) }
                 }
             },
             onSaveMapCandidate: { candidate in
@@ -1066,6 +1068,12 @@ struct AIDrawerView: View {
             do {
                 try await action()
                 addSpotStatus = successMessage
+            } catch ReviewCandidateError.sourceAlreadyReviewed {
+                openReviewInbox()
+                addSpotStatus = languageSettings.localized(
+                    english: "This source was already saved or reviewed. No new review was added.",
+                    traditionalChinese: "這個來源已收藏或處理過，沒有新增待確認項目。"
+                )
             } catch {
                 addSpotStatus = error.localizedDescription
             }
@@ -1402,6 +1410,10 @@ struct AIDrawerView: View {
                 let candidateIDs = try await onImportSharedTextAsReviewCandidates(sharedText)
                 linkAnalysisState = .ready(Set(candidateIDs))
                 onOpenReview()
+            } catch ReviewCandidateError.sourceAlreadyReviewed {
+                linkAnalysisState = .alreadyReviewed
+                viewModel.returnToCommands()
+                withAnimation { drawerDetent = .medium }
             } catch {
                 linkAnalysisState = .failed(languageSettings.localized(english: "Analysis could not finish. Please try again later.", traditionalChinese: "分析暫時無法完成，請稍後再試。"))
                 viewModel.returnToCommands()
@@ -1445,6 +1457,17 @@ struct AIDrawerView: View {
                 ),
                 isLoading: false,
                 tone: count == 0 ? SaveAtlasPalette.kraft : SaveAtlasPalette.mint
+            )
+        case .alreadyReviewed:
+            LinkAnalysisStatusCard(
+                systemImage: "checkmark.circle",
+                title: languageSettings.localized(english: "Already reviewed", traditionalChinese: "已處理過"),
+                message: languageSettings.localized(
+                    english: "This source was already saved or reviewed. No new review was added.",
+                    traditionalChinese: "這個來源已收藏或處理過，沒有新增待確認項目。"
+                ),
+                isLoading: false,
+                tone: SaveAtlasPalette.mint
             )
         case .failed(let message):
             LinkAnalysisStatusCard(
@@ -3357,12 +3380,15 @@ private struct ReviewCandidateDetailCard: View {
                     }
 
                     CandidateActionButton(
-                        title: languageSettings.localized(english: "Investigate", traditionalChinese: "繼續調查"),
+                        title: candidate.captureId == nil
+                            ? languageSettings.localized(english: "Investigate", traditionalChinese: "繼續調查")
+                            : languageSettings.localized(english: "Reanalyze source", traditionalChinese: "重新解析來源"),
                         systemImage: "sparkle.magnifyingglass",
                         fill: SaveAtlasPalette.paper,
                         disabled: isWorking,
                         action: onInvestigateMore
                     )
+                    .accessibilityIdentifier("drawer.review.reanalyze")
 
                     Menu {
                         // When the primary action is Confirm (candidate already

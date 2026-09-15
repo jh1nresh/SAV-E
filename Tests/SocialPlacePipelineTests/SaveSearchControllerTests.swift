@@ -1994,24 +1994,10 @@ final class SaveSearchControllerTests: XCTestCase {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("exact-search-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: vaultURL) }
-        let map = MapViewModel(
-            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
-            usesRemotePersistence: false
-        )
-        let clue = PlaceReviewCandidate(
-            id: UUID(),
-            captureId: nil,
-            name: "Review Coffee",
-            address: "Taipei",
-            city: "Taipei",
-            latitude: nil,
-            longitude: nil,
-            evidence: ["User asked for the exact branch"],
-            confidence: 0.7,
-            missingInfo: ["Exact coordinates"],
-            status: "pending",
-            createdAt: Date()
-        )
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        _ = try vault.saveSourceOnly(url: URL(string: "https://example.com/original")!, note: "Original source note")
+        let clue = try XCTUnwrap(vault.reviewCandidates().first)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
         let returnedCandidate = SaveMapCandidate(
             id: "returned-candidate",
             title: "Review Coffee Xinyi",
@@ -2040,6 +2026,12 @@ final class SaveSearchControllerTests: XCTestCase {
         let savedPlace = try await map.saveMapCandidateAsPlace(returnedCandidate)
         XCTAssertEqual(savedPlace.name, returnedCandidate.title)
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+        let reloaded = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        XCTAssertTrue(try reloaded.reviewCandidates().isEmpty, "Resolved source-only records must stay retired after reload")
+        XCTAssertEqual(try reloaded.confirmedPlaces().filter { $0.id == savedPlace.id }.count, 1)
+        let persisted = try XCTUnwrap(reloaded.confirmedPlaces().first { $0.id == savedPlace.id })
+        XCTAssertTrue(persisted.sourceEvidence.contains("Original source note"))
+        XCTAssertTrue(persisted.sourceEvidence.contains("Source URL: https://example.com/original"))
     }
 
     @MainActor

@@ -63,6 +63,9 @@ struct SaveLibraryView: View {
     let onOpenSavedPlace: (Place) -> Void
     let onOpenPassport: () -> Void
     var captureResultCount: Int? = nil
+    var onLoadDuplicateAudit: () async throws -> [SaveReviewDuplicateGroup] = { [] }
+    @State private var showsDuplicateAudit = false
+    @State private var auditSelection: PlaceReviewCandidate?
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selectedMode: SaveLibraryMode?
@@ -84,6 +87,20 @@ struct SaveLibraryView: View {
         // back control when the child's toolbar modifier won.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("saves.root")
+        .sheet(isPresented: $showsDuplicateAudit, onDismiss: {
+            if let candidate = auditSelection {
+                auditSelection = nil
+                onOpenReviewCandidate(candidate)
+            }
+        }) {
+            SaveReviewDuplicateAuditView(
+                candidates: reviewCandidates, places: places, load: onLoadDuplicateAudit,
+                onOpen: { candidate in
+                    auditSelection = candidate
+                    showsDuplicateAudit = false
+                }
+            )
+        }
     }
 
     private var atlasPresentation: AtlasPresentation {
@@ -138,6 +155,16 @@ struct SaveLibraryView: View {
                 modePicker
                     .padding(.horizontal, 14)
                     .padding(.top, 4)
+                HStack {
+                    Text(localized("Newest saved first", "依收藏時間，最新在前"))
+                    Spacer()
+                    Button(localized("Check duplicates", "檢查重複")) { showsDuplicateAudit = true }
+                        .accessibilityIdentifier("saves.duplicateAudit")
+                }
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
             }
 
             ScrollView(showsIndicators: false) {
@@ -323,7 +350,10 @@ struct SaveLibraryView: View {
     }
 
     private var sortedPlaces: [Place] {
-        places.sorted { $0.createdAt > $1.createdAt }
+        places.sorted {
+            if $0.createdAt != $1.createdAt { return $0.createdAt > $1.createdAt }
+            return $0.id.uuidString < $1.id.uuidString
+        }
     }
 
     private var firstViewportPlaces: [Place] {
@@ -335,12 +365,7 @@ struct SaveLibraryView: View {
     }
 
     private var sortedCandidates: [PlaceReviewCandidate] {
-        reviewCandidates.sorted { lhs, rhs in
-            if lhs.hasSavableLocation != rhs.hasSavableLocation {
-                return lhs.hasSavableLocation
-            }
-            return lhs.createdAt > rhs.createdAt
-        }
+        reviewCandidates.sorted(by: PlaceReviewCandidate.newestFirst)
     }
 
     private static let firstViewportTicketLimit = 3
@@ -367,6 +392,9 @@ struct SaveLibraryView: View {
                     Text(candidateKindTitle(candidate))
                         .font(SaveAtlasType.body(12))
                         .foregroundStyle(SaveAtlasPalette.forest)
+                    Text(collectionDate(candidate.createdAt))
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
                     Text(candidateDetail(candidate))
                         .font(SaveAtlasType.body(13))
                         .foregroundStyle(SaveAtlasPalette.muted)
@@ -388,7 +416,7 @@ struct SaveLibraryView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(
-            "\(candidateKindTitle(candidate)), \(candidate.name), \(candidateDetail(candidate))"
+            "\(candidateKindTitle(candidate)), \(candidate.name), \(collectionDate(candidate.createdAt)), \(candidateDetail(candidate))"
         )
         .accessibilityHint(localized(
             "Open this clue in Review",
@@ -452,6 +480,11 @@ struct SaveLibraryView: View {
         return address.isEmpty
             ? localized("Shared link", "分享連結")
             : address
+    }
+
+    private func collectionDate(_ date: Date) -> String {
+        let value = date.formatted(date: .abbreviated, time: .omitted)
+        return localized("Saved \(value)", "收藏於 \(value)")
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
@@ -672,7 +705,9 @@ private struct SaveAtlasMapStampTicket: View {
                 "From \(place.sourcePlatform.displayName)",
                 "來自 \(place.sourcePlatform.displayName)"
             )
-        return location.isEmpty ? source : "\(location) · \(source)"
+        let date = place.createdAt.formatted(date: .abbreviated, time: .omitted)
+        let saved = localized("Saved \(date)", "收藏於 \(date)")
+        return [saved, location, source].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
@@ -917,5 +952,69 @@ struct SaveCaptureResultNotice: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(message)
         .accessibilityIdentifier("capture.results.notice")
+    }
+}
+
+private struct SaveReviewDuplicateAuditView: View {
+    let candidates: [PlaceReviewCandidate]
+    let places: [Place]
+    let load: () async throws -> [SaveReviewDuplicateGroup]
+    let onOpen: (PlaceReviewCandidate) -> Void
+    @Environment(\.appLanguageSettings) private var language
+    @Environment(\.dismiss) private var dismiss
+    @State private var groups: [SaveReviewDuplicateGroup] = []
+    @State private var isLoading = true
+    @State private var error: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Text(language.localized(
+                    english: "Sources are kept. Open a group to confirm its exact place; uncertain branches remain separate.",
+                    traditionalChinese: "來源都會保留。打開項目確認精確地點；無法確定的分店會保持分開。"
+                ))
+                .font(SaveAtlasType.body(14))
+                if isLoading { ProgressView() }
+                else if let error { Text(error) }
+                else if groups.isEmpty {
+                    Text(language.localized(english: "No definite duplicates found.", traditionalChinese: "沒有找到可確定的重複項目。"))
+                }
+                ForEach(groups) { group in
+                    Section {
+                        ForEach(candidates.filter { group.pendingCandidateIDs.contains($0.id) }) { candidate in
+                            Button { onOpen(candidate) } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(candidate.name)
+                                    Text(candidate.createdAt.formatted(date: .abbreviated, time: .omitted))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        ForEach(places.filter { group.savedPlaceIDs.contains($0.id) }) { place in
+                            Label(place.name, systemImage: "checkmark.seal")
+                        }
+                    } header: {
+                        Text(group.reason == "same_source_clue"
+                            ? language.localized(english: "Same source", traditionalChinese: "相同來源")
+                            : language.localized(english: "Same place", traditionalChinese: "相同地點"))
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(SaveAtlasPalette.canvas)
+            .tint(SaveAtlasPalette.forest)
+            .navigationTitle(language.localized(english: "Duplicate review", traditionalChinese: "重複項目檢查"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(language.localized(english: "Done", traditionalChinese: "完成")) { dismiss() }
+                }
+            }
+            .task {
+                do { groups = try await load() }
+                catch { self.error = error.localizedDescription }
+                isLoading = false
+            }
+        }
     }
 }

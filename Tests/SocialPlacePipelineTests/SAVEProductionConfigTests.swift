@@ -371,6 +371,229 @@ private final class TransportFailureURLProtocol: URLProtocol {
 
 @MainActor
 final class SAVEAnalysisTransportTests: XCTestCase {
+    @MainActor
+    func testMemoryImportSendsOriginalDateAndSourceOnlyState() async throws {
+        let id = UUID()
+        let capture = UUID()
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertEqual(body["created_at"] as? String, "2020-01-02T03:04:05Z")
+            if request.url?.path.hasSuffix("/captures") == true {
+                return (200, "{\"id\":\"\(capture)\"}")
+            }
+            XCTAssertEqual(body["status"] as? String, "source_only")
+            return (200, "{\"id\":\"\(id)\",\"capture_id\":\"\(capture)\",\"name\":\"Clue\",\"status\":\"source_only\",\"created_at\":\"2020-01-02T03:04:05Z\"}")
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let pending = PendingReviewCandidate(candidateName: "Clue", address: "", category: "other",
+            sourceURL: "https://example.com/post", sourceText: "clue", evidence: [], confidence: 0,
+            missingInfo: [], savedAt: ISO8601DateFormatter().date(from: "2020-01-02T03:04:05Z")!, isSourceOnly: true)
+        let captured = try await service.createMemoryCapture(from: pending, userId: "test-owner")
+        XCTAssertEqual(captured, capture)
+        let candidate = try await service.createPlaceCandidate(pending, captureId: captured, userId: "test-owner")
+        XCTAssertEqual(candidate, id)
+    }
+
+    @MainActor
+    func testExactConfirmationPublishesReconciledDateForNewAndExistingStamps() async throws {
+        let oldDate = ISO8601DateFormatter().date(from: "2020-01-02T03:04:05Z")!
+        for isExisting in [false, true] {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+            let clue = PlaceReviewCandidate(id: UUID(), captureId: UUID(), name: "Cafe", address: "1 Road", city: nil,
+                latitude: nil, longitude: nil, evidence: [], confidence: nil, missingInfo: [], status: "review",
+                createdAt: oldDate.addingTimeInterval(1000))
+            let candidate = SaveMapCandidate(id: "exact-cafe", title: "Cafe", subtitle: "1 Road", latitude: 25, longitude: 121, category: .cafe)
+            var existing = Place.from(clue)
+            existing.latitude = 25
+            existing.longitude = 121
+            existing.note = "Latest user note"
+            var savedID = existing.id
+            var saveCount = 0
+            var decisionFails = !isExisting
+            AnalysisRequestURLProtocol.handler = { request in
+                if decisionFails, request.httpMethod == "PATCH", request.url?.path.contains("/candidates/") == true {
+                    return (503, "{\"error\":\"decision offline\"}")
+                }
+                if request.httpMethod == "GET", request.url?.path.hasSuffix("/places") == true {
+                    return (200, "[{\"id\":\"\(savedID)\",\"user_id\":\"owner\",\"name\":\"Cafe\",\"address\":\"1 Road\",\"latitude\":25,\"longitude\":121,\"category\":\"cafe\",\"status\":\"wantToGo\",\"source_platform\":\"other\",\"note\":\"stale note\",\"created_at\":\"2020-01-02T03:04:05.000Z\"}]")
+                }
+                return (200, request.httpMethod == "GET" ? "[]" : "{}")
+            }
+            let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+            let map = MapViewModel(supabaseService: service,
+                mapCandidatePlaceSaver: { place, _ in savedID = place.id; saveCount += 1 }, mapCandidateUserIDProvider: { "owner" },
+                saveLocalVaultService: vault, correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("corrections.json")))
+            if isExisting { map.places = [existing] }
+            map.reviewCandidates = [clue]
+            map.mapCandidates = [candidate]
+            map.beginExactSearchResolution(for: clue)
+            if !isExisting {
+                do {
+                    _ = try await map.saveMapCandidateAsPlace(candidate)
+                    XCTFail("The failed decision must keep the clue pending")
+                } catch {}
+                XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+                XCTAssertEqual(map.places.first?.id, savedID)
+                decisionFails = false
+            }
+            let saved = try await map.saveMapCandidateAsPlace(candidate)
+            XCTAssertEqual(saveCount, isExisting ? 0 : 1, "Retry must reuse the already inserted stamp")
+            XCTAssertEqual(saved.createdAt, oldDate)
+            XCTAssertEqual(map.places.first?.createdAt, oldDate)
+            XCTAssertEqual(try vault.confirmedPlaces().first?.createdAt, oldDate)
+            XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+            if isExisting { XCTAssertTrue(saved.note?.contains("Latest user note") == true) }
+
+            AnalysisRequestURLProtocol.handler = { _ in (503, "{\"error\":\"offline\"}") }
+            let fallback = await map.refreshedConfirmedPlace(saved)
+            XCTAssertEqual(fallback, saved, "A readback failure must not retry a committed save")
+        }
+    }
+
+    @MainActor
+    func testMemoryFetchPreservesServerDatesWithAndWithoutFractionalSeconds() async throws {
+        let id = UUID()
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let base = ISO8601DateFormatter().date(from: "2020-01-02T03:04:05Z")!
+        for (timestamp, fraction) in [("2020-01-02T03:04:05Z", 0.0), ("2020-01-02T03:04:05.123Z", 0.123), ("2020-01-02T03:04:05.123456+00:00", 0.123456)] {
+            AnalysisRequestURLProtocol.handler = { request in
+                if request.url?.path.hasSuffix("/candidates") == true {
+                    return (200, "[{\"id\":\"\(id)\",\"name\":\"Clue\",\"status\":\"review\",\"created_at\":\"\(timestamp)\"}]")
+                }
+                return (200, "[{\"id\":\"\(id)\",\"user_id\":\"owner\",\"name\":\"Cafe\",\"address\":\"1 Road\",\"latitude\":25,\"longitude\":121,\"category\":\"food\",\"status\":\"wantToGo\",\"source_platform\":\"other\",\"created_at\":\"\(timestamp)\"}]")
+            }
+            let candidates = try await service.fetchReviewCandidates()
+            let places = try await service.fetchPlaces(for: "owner")
+            XCTAssertEqual(try XCTUnwrap(candidates.first).createdAt.timeIntervalSince(base), fraction, accuracy: 0.001)
+            XCTAssertEqual(try XCTUnwrap(places.first).createdAt.timeIntervalSince(base), fraction, accuracy: 0.001)
+        }
+    }
+
+    @MainActor
+    func testRetryUsesExistingCaptureAndHidesOnlySupersededClueAfterReload() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        var stampID = UUID()
+        var readbackFails = false
+        let capture = UUID(), oldID = UUID(), newID = UUID(), secondID = UUID(), run = UUID(), firstRun = UUID(), secondRun = UUID()
+        let oldJSON = "{\"id\":\"\(oldID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(run)\",\"name\":\"Clue\",\"status\":\"source_only\",\"created_at\":\"2020-01-02T03:04:05Z\",\"superseded_by_candidate_id\":\"\(newID)\",\"superseded_by_candidate_ids\":[\"\(newID)\",\"\(secondID)\"]}"
+        let newJSON = "{\"id\":\"\(newID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(firstRun)\",\"name\":\"Cafe\",\"status\":\"review\",\"created_at\":\"2020-01-02T03:04:05Z\"}"
+        let secondJSON = "{\"id\":\"\(secondID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(secondRun)\",\"name\":\"Museum\",\"status\":\"review\",\"created_at\":\"2020-01-02T03:04:05Z\"}"
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.url?.path == "/v0/analysis" {
+                let id = try XCTUnwrap(AnalysisRequestURLProtocol.body(request)["id"] as? String)
+                return (200, "{\"analysis_id\":\"\(id)\"}")
+            }
+            if request.url?.path.hasSuffix("/search-recovery") == true {
+                XCTAssertTrue(request.url!.path.contains(capture.uuidString))
+                let body = try AnalysisRequestURLProtocol.body(request)
+                XCTAssertEqual(body["workflow_run_id"] as? String, run.uuidString)
+                XCTAssertEqual(body["explicit_retry"] as? Bool, true)
+                return (200, "{\"created_candidates\":[\(newJSON),\(secondJSON)]}")
+            }
+            if request.url?.path.hasSuffix("/candidates") == true { return (200, "[\(oldJSON),\(newJSON),\(secondJSON)]") }
+            if request.url?.path.hasSuffix("/places") == true {
+                if readbackFails { return (503, "{}") }
+                return (200, "[{\"id\":\"\(stampID)\",\"user_id\":\"owner\",\"name\":\"Cafe\",\"address\":\"1 Road\",\"latitude\":25,\"longitude\":121,\"category\":\"cafe\",\"status\":\"wantToGo\",\"source_platform\":\"other\",\"note\":\"stale server note\",\"created_at\":\"2020-01-02T03:04:05Z\"}]")
+            }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault)
+        let old = PlaceReviewCandidate(id: oldID, captureId: capture, workflowRunId: run, name: "Clue", address: "",
+            city: nil, latitude: nil, longitude: nil, evidence: [], confidence: nil, missingInfo: [],
+            status: "source_only", createdAt: Date(timeIntervalSince1970: 1))
+        let ids = try await map.reanalyzeReviewSource(old)
+        XCTAssertEqual(ids, [newID, secondID])
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [newID, secondID])
+        XCTAssertEqual(map.reviewCandidates.map(\.workflowRunId), [firstRun, secondRun])
+        let pending = PendingReviewCandidate(candidateName: "Clue", address: "", category: "other",
+            sourceURL: nil, sourceText: "source", evidence: [], confidence: 0, missingInfo: [], savedAt: Date(), isSourceOnly: true)
+        var stampClue = old
+        stampClue.latitude = 25
+        stampClue.longitude = 121
+        var stamp = Place.from(stampClue)
+        stampID = stamp.id
+        stamp.createdAt = Date()
+        stamp.note = "Latest local note"
+        map.places = [stamp]
+        let reusedIDs = try await map.reuseImportedCandidate(pending, captureId: capture, userId: "owner")
+        XCTAssertEqual(reusedIDs, [newID, secondID], "A repeated source returns every successor, not an arbitrary first venue")
+        XCTAssertEqual(map.places.first?.createdAt, ISO8601DateFormatter().date(from: "2020-01-02T03:04:05Z"))
+        XCTAssertEqual(map.places.first?.note, "Latest local note")
+        XCTAssertEqual(try vault.confirmedPlaces().first?.createdAt, map.places.first?.createdAt)
+        readbackFails = true
+        let repeatedAfterReadbackFailure = try await map.reuseImportedCandidate(pending, captureId: capture, userId: "owner")
+        XCTAssertEqual(repeatedAfterReadbackFailure, reusedIDs, "Date readback failure must not retry a committed import")
+        XCTAssertTrue(AnalysisRequestURLProtocol.requests.allSatisfy {
+            $0.httpMethod != "POST" || !$0.url!.path.hasSuffix("/captures")
+        })
+        try await map.refreshReviewCandidates()
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [newID, secondID])
+    }
+
+    func testPlaceMergeSendsEarliestKnownDateAndOmitsUnknownFallback() async throws {
+        let early = ISO8601DateFormatter().date(from: "2020-01-02T03:04:05Z")!
+        let clue = PlaceReviewCandidate(id: UUID(), captureId: nil, name: "Cafe", address: "1 Road",
+            city: nil, latitude: 25, longitude: 121, evidence: [], confidence: nil, missingInfo: [], status: "review", createdAt: early)
+        var existing = Place.from(clue)
+        existing.createdAt = early.addingTimeInterval(1000)
+        var incoming = Place.from(clue)
+        incoming.note = "Earlier source evidence"
+        let merged = existing.mergingSources(from: incoming)
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        var expectsDate = true
+        AnalysisRequestURLProtocol.handler = { request in
+            XCTAssertEqual(request.httpMethod, "PATCH")
+            let body = try AnalysisRequestURLProtocol.body(request)
+            if expectsDate {
+                XCTAssertEqual(body["created_at"] as? String, "2020-01-02T03:04:05Z")
+                XCTAssertTrue((body["note"] as? String)?.contains("Earlier source evidence") == true)
+            } else { XCTAssertNil(body["created_at"]) }
+            return (200, "{}")
+        }
+        try await service.updatePlace(merged)
+        expectsDate = false
+        var unknown = merged
+        unknown.createdAt = .distantPast
+        try await service.updatePlace(unknown)
+    }
+
+    func testEmptyRetryDistinguishesExistingSuccessorsFromUnresolvedSource() async throws {
+        for status in ["saved", "confirmed", "rejected", "review", "missing", "unresolved"] {
+            let capture = UUID(), source = UUID(), successor = UUID()
+            let marker = status == "unresolved" ? "" : ",\"superseded_by_candidate_ids\":[\"\(successor)\"]"
+            let sourceJSON = "{\"id\":\"\(source)\",\"capture_id\":\"\(capture)\",\"name\":\"Saved source\",\"status\":\"source_only\",\"created_at\":\"2020-01-01T00:00:00Z\"\(marker)}"
+            let successorJSON = ["unresolved", "missing"].contains(status) ? "" : ",{\"id\":\"\(successor)\",\"capture_id\":\"\(capture)\",\"name\":\"Cafe\",\"status\":\"\(status)\",\"created_at\":\"2020-01-01T00:00:00Z\"}"
+            AnalysisRequestURLProtocol.handler = { request in
+                if request.url?.path == "/v0/analysis" {
+                    let id = try XCTUnwrap(AnalysisRequestURLProtocol.body(request)["id"] as? String)
+                    return (200, "{\"analysis_id\":\"\(id)\"}")
+                }
+                if request.url?.path.hasSuffix("/search-recovery") == true { return (200, "{\"created_candidates\":[]}") }
+                if request.url?.path.hasSuffix("/candidates") == true { return (200, "[\(sourceJSON)\(successorJSON)]") }
+                if request.httpMethod == "GET" { return (200, "[]") }
+                return (200, "{}")
+            }
+            let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+            let map = MapViewModel(supabaseService: service, usesRemotePersistence: true)
+            let clue = PlaceReviewCandidate(id: source, captureId: capture, name: "Saved source", address: "",
+                city: nil, latitude: nil, longitude: nil, evidence: [], confidence: nil, missingInfo: [], status: "source_only", createdAt: Date())
+            do {
+                let ids = try await map.reanalyzeReviewSource(clue)
+                XCTAssertFalse(["saved", "confirmed", "rejected"].contains(status), "Terminal successors must acknowledge already reviewed")
+                XCTAssertEqual(ids, status == "review" ? [successor] : [])
+                if status == "unresolved" { XCTAssertTrue(map.reviewCandidates.contains { $0.id == source }) }
+            } catch ReviewCandidateError.sourceAlreadyReviewed {
+                XCTAssertTrue(["saved", "confirmed", "rejected"].contains(status))
+            }
+        }
+    }
+
     override func tearDown() {
         AnalysisRequestURLProtocol.reset()
         super.tearDown()

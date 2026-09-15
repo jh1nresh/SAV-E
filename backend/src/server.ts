@@ -1,3 +1,4 @@
+import { prepareCandidate, reconcileSavedCandidates, reuseCapture, supersedeSourceOnlyCandidates, duplicateCandidateGroups, supersededCandidateID, externalCandidateEvidence, sameCandidateIdentity, isGenericSourceOnlyCandidate, supersededCandidateIDs } from "./memoryStorage.js";
 import { AnalysisControlError, AnalysisUsageStore, analysisID, analysisLimits, analysisPrices, geminiTokens, trackAnalysisOperation, withAnalysisUsage } from "./analysisUsage.js";
 import { runAnalysisRecovery } from "./analysisRecovery.js";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -1541,8 +1542,20 @@ async function handlePlaces(
     const rawBody = await readJson(request);
     const providerFieldError = providerCoordinateFieldError(rawBody);
     if (providerFieldError) return sendJson(response, { error: providerFieldError }, 400);
+    const createdAt = rawBody.created_at;
+    if (createdAt !== undefined && (typeof createdAt !== "string" || !Number.isFinite(Date.parse(createdAt)))) {
+      return sendJson(response, { error: "created_at must be a valid timestamp" }, 400);
+    }
     const body = writableFields(rawBody, ["id", "user_id", "created_at", "updated_at"]);
-    const update = buildUpdate("places", body, placeFields);
+    let update = buildUpdate("places", body, placeFields);
+    if (typeof createdAt === "string") {
+      const separator = update ? "," : "";
+      update ??= { sql: "update places set", values: [] };
+      update.values.push(new Date(createdAt).toISOString());
+      // Source merges retain the earliest collection time, even with concurrent
+      // updates; an incoming timestamp can never move the owned Stamp later.
+      update.sql += `${separator} created_at = least(created_at, $${update.values.length}::timestamptz)`;
+    }
     if (!update) return sendJson(response, { error: "No writable fields" }, 400);
 
     const values = [...update.values, placeId, userId];
@@ -4261,6 +4274,11 @@ async function handleMemory(
 ): Promise<void> {
   const [kind, id] = segments;
 
+  if (kind === "duplicate-audit" && request.method === "GET") {
+    const { rows } = await pool.query("select pc.*, c.source_url from place_candidates pc join captures c on c.id=pc.capture_id where c.user_id=$1 order by pc.created_at, pc.id", [userId]);
+    const places = await pool.query("select id, name, address, latitude, longitude from places where user_id=$1", [userId]);
+    return sendJson(response, { groups: duplicateCandidateGroups(rows, places.rows) });
+  }
   if (kind === "captures" && id && segments[2] === "search-recovery") {
     return await handleCaptureSearchRecovery(request, response, id, userId);
   }
@@ -4297,9 +4315,11 @@ async function handleCaptureSearchRecovery(
 
   if(body.include_media_evidence !== undefined && typeof body.include_media_evidence !== "boolean") throw new ApiError(400,"include_media_evidence must be a boolean");
   const requestedAnalysis=requestAnalysisId(request,body);
+  if (body.explicit_retry !== undefined && typeof body.explicit_retry !== "boolean") throw new ApiError(400, "explicit_retry must be a boolean");
+  if (body.explicit_retry === true && !requestedAnalysis) throw new ApiError(400, "explicit_retry requires an analysis ID");
   if(requestedAnalysis) await analysisUsageStore.owner(userId,requestedAnalysis);
   const input={sourceUrl:stringValue(capture.source_url),rawText:stringValue(capture.raw_text),title:stringValue(capture.title),suggestedSearchQueries:requestedQueries,maxQueries,includeMediaEvidence:body.include_media_evidence !== false,videoAnalysisVersion:process.env.SAVE_ENABLE_VIDEO_VENUE_ANALYSIS === "true" ? "frames-v1" : null};
-  const result=await runAnalysisRecovery(pool,userId,captureId,{...input,workflowRunId},async()=>{
+  const result=await runAnalysisRecovery(pool,userId,captureId,{...input,workflowRunId,...(body.explicit_retry === true ? { retryAnalysisId: requestedAnalysis } : {})},async()=>{
     const aid=requestedAnalysis ?? await analysisUsageStore.start(userId,randomUUID(),false);
     let completed=false;
     let investigatingVersion:string|undefined;
@@ -4311,28 +4331,52 @@ async function handleCaptureSearchRecovery(
         const recovery=await runSourceSearchRecovery(input,undefined,undefined,{persistedSourceResolution:capture.source_resolution,includeMediaEvidence:input.includeMediaEvidence});
         const client=await pool.connect();
         const createdCandidates:JsonBody[]=[];
+        const persistedSuccessorIds:string[]=[];
+        const supersededCandidateIds:string[]=[];
+        let effectiveWorkflowRunId = workflowRunId;
         const sourceResolution=recovery.sourceResolution ? sourceResolutionResponseBody(recovery.sourceResolution) : null;
         try {
           await client.query("begin");
           await client.query("set local statement_timeout='10s'");
+          const originalRun = workflowRunId ? await lockedWorkflowRun(client, workflowRunId, userId) : undefined;
           await client.query("select id from captures where id=$1 and user_id=$2 for update",[captureId,userId]);
-          const existing=await client.query("select name,address from place_candidates where capture_id=$1",[captureId]);
-          const keys=new Set(existing.rows.map(row=>candidateKey(row.name,row.address)));
+          const assignedRuns = new Set<string>();
           for(const candidate of recovery.candidates) {
-            const key=candidateKey(candidate.name,candidate.address);
-            if(keys.has(key)) continue;
-            keys.add(key);
-            const insert=buildInsert("place_candidates",sourceSearchCandidateBody(candidate,captureId,workflowRunId),placeCandidateFields);
-            const inserted=await client.query(`${insert.sql} returning *`,insert.values);
-            createdCandidates.push(formatPlaceCandidate(inserted.rows[0]));
+            const workflow = await captureRecoveryWorkflow(client, userId, capture, originalRun, candidate, body.explicit_retry === true, assignedRuns, recovery.errors.length === 0 && recovery.candidates.every(candidate => sameCandidateIdentity(candidate, candidate)));
+            const candidateBody = sourceSearchCandidateBody(candidate,captureId,workflow.runId);
+            const terminal = workflow.existing.find(row => ["saved", "confirmed", "rejected"].includes(String(row.status)) && sameCandidateIdentity(row, candidateBody));
+            if (terminal) candidateBody.workflow_run_id = terminal.workflow_run_id ?? null;
+            const prepared = await prepareCandidate(client, candidateBody);
+            const insert=buildInsert("place_candidates",prepared.body,placeCandidateFields);
+            const row = prepared.existing ?? (await client.query(`${insert.sql} returning *`,insert.values)).rows[0];
+            if (["review", "needs_more_evidence", "saved", "confirmed"].includes(row.status)) persistedSuccessorIds.push(String(row.id));
+            if (["review", "needs_more_evidence", "source_only"].includes(row.status)) {
+              if (row.workflow_run_id) assignedRuns.add(String(row.workflow_run_id));
+              if (!createdCandidates.some(candidate => candidate.id === row.id)) createdCandidates.push(formatPlaceCandidate(row));
+            }
+            if (workflow.resultAttemptNo && workflow.runId) {
+              if (!["review", "needs_more_evidence"].includes(row.status)) throw new WorkflowConflictError("Recovery candidate changed; refresh saved places before retrying");
+              await recordPlaceRecoveryResult(workflow.runId, userId, normalizePlaceRecoveryWorkerResult({
+                result_type: "review_candidate", evidence_tier: "weak",
+                attempt_no: workflow.resultAttemptNo, explicit_retry: true,
+                candidate_refs: [row.id], evidence_refs: [captureId, row.id],
+                idempotency_key: `source-retry:${aid}`, operator_id: "save-backend",
+                permission_snapshot: { scopes: ["place_recovery.explicit_retry"] },
+              }), client);
+            }
           }
+          if (createdCandidates.length) {
+            const runIds = new Set(createdCandidates.map(candidate => stringValue(candidate.workflow_run_id)));
+            effectiveWorkflowRunId = runIds.size === 1 ? [...runIds][0] : undefined;
+          }
+          if (recovery.candidates.length && recovery.errors.length === 0) supersededCandidateIds.push(...await supersedeSourceOnlyCandidates(client, captureId, body.explicit_retry === true ? persistedSuccessorIds : undefined));
           await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,captureId,userId]);
           await client.query("update captures set status='review',source_resolution=coalesce($3::jsonb,source_resolution),updated_at=now() where id=$1 and user_id=$2",[captureId,userId,sourceResolution?JSON.stringify(sourceResolution):null]);
           await client.query("commit");
         } catch(error) { await client.query("rollback"); throw error; } finally { client.release(); }
         if(!requestedAnalysis) await analysisUsageStore.finish(userId,aid,recovery.candidates.length ? "review_candidate":"source_only",[captureId]);
         completed=true;
-        return {capture_id:captureId,analysis_id:aid,queries:recovery.queries,search_results:recovery.searchResults,created_candidates:createdCandidates,media_evidence:recovery.mediaEvidence,source_resolution:sourceResolution,errors:recovery.errors,receipt:recovery.receipt};
+        return {capture_id:captureId,analysis_id:aid,workflow_run_id:effectiveWorkflowRunId ?? null,queries:recovery.queries,search_results:recovery.searchResults,created_candidates:createdCandidates,superseded_candidate_ids:supersededCandidateIds,media_evidence:recovery.mediaEvidence,source_resolution:sourceResolution,errors:recovery.errors,receipt:recovery.receipt};
       });
     } finally {
       if(!completed && investigatingVersion) {
@@ -4356,6 +4400,63 @@ async function handleCaptureSearchRecovery(
     result.created_candidates=current.rows.map(formatPlaceCandidate);
   }
   return sendJson(response,result);
+}
+
+// The prior run is locked before its capture. Settled user decisions remain
+// immutable; each actionable venue gets its own independently settleable run.
+async function captureRecoveryWorkflow(
+  client: PoolClient, userId: string, capture: JsonBody, original: JsonBody | undefined,
+  candidate: SourceSearchCandidate, explicitRetry: boolean, assignedRuns: Set<string>, completeBatchIdentity: boolean,
+): Promise<{ runId?: string; resultAttemptNo?: number; existing: JsonBody[] }> {
+  const { rows } = await client.query(
+    `select pc.*, wr.status as run_status, wr.credit_settlement as run_settlement,
+       wr.result_candidate_refs as run_candidate_refs,
+       exists(select 1 from workflow_receipts receipt where receipt.run_id=wr.id
+         and receipt.receipt_type='analysis' and receipt.is_current) as has_receipt
+     from place_candidates pc left join workflow_runs wr on wr.id=pc.workflow_run_id and wr.user_id=$2
+     where pc.capture_id=$1 order by pc.created_at, pc.id`, [capture.id, userId]);
+  const unchanged = { runId: original ? String(original.id) : undefined, existing: rows };
+  if (!original || (!explicitRetry && original.credit_settlement === "pending" && !["completed", "failed"].includes(String(original.status)))) return unchanged;
+  if (rows.some(row => ["saved", "confirmed", "rejected"].includes(row.status) && sameCandidateIdentity(row, candidate))) return unchanged;
+  if (!explicitRetry) throw new WorkflowConflictError("A settled workflow requires an explicit source retry");
+  if (!rows.some(row => row.workflow_run_id === original.id)) throw new WorkflowConflictError("Workflow does not belong to this capture");
+  const compatible = rows.find(row =>
+    ["review", "needs_more_evidence"].includes(row.status) && row.run_settlement === "pending"
+    && row.run_status === "needs_review" && row.has_receipt
+    && Array.isArray(row.run_candidate_refs) && row.run_candidate_refs.length === 1 && row.run_candidate_refs[0] === row.id
+    && sameCandidateIdentity(row, candidate));
+  const reusable = compatible ? String(compatible.workflow_run_id) : undefined;
+  if (reusable) {
+    const run = await lockedWorkflowRun(client, reusable, userId);
+    if (run.credit_settlement === "pending" && run.status === "needs_review") return { ...unchanged, runId: reusable };
+    throw new WorkflowConflictError("Recovery candidate changed; refresh the saved place state before retrying");
+  }
+  if (original.credit_settlement === "pending" && !assignedRuns.has(String(original.id))) {
+    const receipt = await currentAnalysisReceipt(client, String(original.id));
+    const originalCandidates = rows.filter(row => row.workflow_run_id === original.id);
+    // Spend the existing reservation on the first venue through the supported
+    // next-attempt transition; keep the earlier source-only receipt as history.
+    if ((original.result_type === "source_only_clue" || !receipt)
+      && originalCandidates.length > 0 && originalCandidates.every(isGenericSourceOnlyCandidate)
+      && completeBatchIdentity && rows.every(row => ["source_only", "rejected"].includes(row.status))) {
+      return { ...unchanged, resultAttemptNo: receipt ? Number(receipt.attempt_no) + 1 : Number(original.current_attempt_no) };
+    }
+  }
+  const input = { source_url: capture.source_url ?? undefined, source_type: capture.source_type,
+    input_ref: capture.id, credit_reserved: original.credit_reserved,
+    budget_policy: { credit_reserved: original.credit_reserved, retry_of_run_id: original.id } };
+  const run = normalizePlaceRecoveryRunCreate(input);
+  const order = await createPlaceRecoveryWorkOrder(client, userId, normalizePlaceRecoveryWorkOrderCreate(input));
+  const insert = buildInsert("workflow_runs", {
+    work_order_id: order.id, workflow_id: run.workflowId, listing_id: run.listingId, user_id: userId,
+    source_url: run.sourceUrl ?? null, source_type: run.sourceType, status: "queued",
+    current_attempt_no: 1, credit_reserved: run.creditReserved, credit_settlement: "pending",
+  }, workflowRunFields);
+  const created = (await client.query(`${insert.sql} returning *`, insert.values)).rows[0];
+  await client.query("update work_orders set status='running' where id=$1 and user_id=$2", [order.id, userId]);
+  await insertCreditLedger(client, { run_id: created.id, user_id: userId, attempt_no: 1,
+    settlement_key: "reserve", delta: -run.creditReserved, reason: "reserve", settlement: "pending" });
+  return { runId: String(created.id), resultAttemptNo: 1, existing: rows };
 }
 
 async function handleMemoryCaptures(
@@ -4389,7 +4490,8 @@ async function handleMemoryCaptures(
     try {
       await client.query("begin");
       if(aid) await analysisUsageStore.owner(userId,aid,client);
-      const { rows } = await client.query(`${insert.sql} returning *`, insert.values);
+      const reused = await reuseCapture(client, userId, body);
+      const rows = reused ? [reused] : (await client.query(`${insert.sql} returning *`, insert.values)).rows;
       if(aid) await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,rows[0].id,userId]);
       await client.query("commit");
       return sendJson(response, formatCapture(rows[0]), 201);
@@ -4449,29 +4551,44 @@ async function handleMemoryCandidates(
     if (body.workflow_run_id) await ensureWorkflowRunOwner(body.workflow_run_id, userId);
     await ensureOwnedPlaceReference(body.place_id, userId);
 
-    const insert = buildInsert("place_candidates", body, placeCandidateFields);
-    const { rows } = await pool.query(`${insert.sql} returning *`, insert.values);
-    return sendJson(response, formatPlaceCandidate(rows[0]), 201);
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      const prepared = await prepareCandidate(client, body);
+      const insert = buildInsert("place_candidates", prepared.body, placeCandidateFields);
+      const row = prepared.existing ?? (await client.query(`${insert.sql} returning *`, insert.values)).rows[0];
+      await client.query("commit");
+      return sendJson(response, formatPlaceCandidate(row), prepared.existing ? 200 : 201);
+    } catch (error) { await client.query("rollback"); throw error; }
+    finally { client.release(); }
   }
 
   if (request.method === "PATCH" && candidateId) {
     const body = writableFields(await readJson(request), ["id", "capture_id", "created_at", "updated_at"]);
+    if (body.evidence !== undefined) body.evidence = externalCandidateEvidence(body.evidence);
     await ensureOwnedPlaceReference(body.place_id, userId);
     const update = buildUpdate("place_candidates", body, placeCandidateFields);
     if (!update) return sendJson(response, { error: "No writable fields" }, 400);
 
     const values = [...update.values, candidateId, userId];
-    const { rows } = await pool.query(
-      `${update.sql}
-       from captures c
-       where place_candidates.capture_id = c.id
-         and place_candidates.id = $${values.length - 1}
-         and c.user_id = $${values.length}
-       returning place_candidates.*`,
-      values,
-    );
-    if (!rows[0]) return sendJson(response, { error: "Candidate not found" }, 404);
-    return sendJson(response, formatPlaceCandidate(rows[0]));
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [`candidate-decision:${userId}`]);
+      const { rows } = await client.query(
+        `${update.sql}
+         from captures c
+         where place_candidates.capture_id = c.id
+           and place_candidates.id = $${values.length - 1}
+           and c.user_id = $${values.length}
+         returning place_candidates.*`, values,
+      );
+      if (!rows[0]) throw new ApiError(404, "Candidate not found");
+      if (body.status === "saved" || body.status === "confirmed") await reconcileSavedCandidates(client, userId, candidateId);
+      await client.query("commit");
+      return sendJson(response, formatPlaceCandidate(rows[0]));
+    } catch (error) { await client.query("rollback"); throw error; }
+    finally { client.release(); }
   }
 
   return sendJson(response, { error: "Unsupported memory candidates route" }, 405);
@@ -4929,14 +5046,6 @@ function sourceSearchCandidateBody(candidate: SourceSearchCandidate, captureId: 
     missing_info: candidate.missingInfo,
     status: "review",
   };
-}
-
-function candidateKey(name: string, address: string): string {
-  return `${canonicalCandidateValue(name)}|${canonicalCandidateValue(address)}`;
-}
-
-function canonicalCandidateValue(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, " ").trim();
 }
 
 function stringArray(value: unknown): string[] | undefined {
@@ -5672,13 +5781,14 @@ async function validateDecisionReferences(
 ): Promise<void> {
   if (decision.candidateId) {
     const { rows } = await client.query(
-      `select pc.id
+      `select pc.id, pc.evidence
        from place_candidates pc
        join captures c on c.id = pc.capture_id
        where pc.id = $1 and pc.workflow_run_id = $2 and c.user_id = $3`,
       [decision.candidateId, runId, userId],
     );
     if (!rows[0]) throw new ApiError(404, "Workflow candidate not found");
+    if (supersededCandidateID(rows[0])) throw new WorkflowConflictError("This source clue has been superseded; decide on its recovered candidates");
   }
   if (decision.finalPlaceId) {
     const { rows } = await client.query("select id from places where id = $1 and user_id = $2", [decision.finalPlaceId, userId]);
@@ -5703,6 +5813,7 @@ async function updateDecisionCandidateState(
   decision: UserDecisionInput,
 ): Promise<void> {
   if (!decision.candidateId) return;
+  await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [`candidate-decision:${userId}`]);
   const status = decision.action === "reject"
     ? "rejected"
     : decision.action === "source_only"
@@ -5721,6 +5832,7 @@ async function updateDecisionCandidateState(
      where pc.capture_id = c.id and pc.id = $3 and c.user_id = $4`,
     [status, decision.finalPlaceId ?? null, decision.candidateId, userId],
   );
+  if (status === "saved" || status === "confirmed") await reconcileSavedCandidates(client, userId, decision.candidateId);
 }
 
 async function persistWorkflowResultSteps(
@@ -6559,7 +6671,7 @@ function formatCapture(row: JsonBody): JsonBody {
 }
 
 function formatPlaceCandidate(row: JsonBody): JsonBody {
-  return formatDates(row);
+  return formatDates({ ...row, superseded_by_candidate_id: supersededCandidateID(row) ?? null, superseded_by_candidate_ids: supersededCandidateIDs(row) });
 }
 
 function formatAgentDecision(row: JsonBody): JsonBody {

@@ -988,10 +988,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemo(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        let reviewClues = app.descendants(matching: .any)["home.review"]
-        XCTAssertTrue(reviewClues.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(reviewClues.isHittable)
-        reviewClues.tap()
+        openSavesFromHome(app: app)
 
         XCTAssertTrue(
             app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout),
@@ -1002,7 +999,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.descendants(matching: .any)["drawer.root"].exists,
             "Home Review clues should not present a drawer."
         )
+        XCTAssertTrue(app.staticTexts["Newest saved first"].exists)
+        XCTAssertTrue(app.buttons["saves.duplicateAudit"].exists)
         attach(app, name: "home-review-opens-saves")
+        app.buttons["saves.segment.mapStamps"].tap()
+        XCTAssertTrue(app.buttons["saves.segment.mapStamps"].isSelected)
+        attach(app, name: "saves-stamps-chronology")
+        app.buttons["saves.duplicateAudit"].tap()
+        XCTAssertTrue(app.navigationBars["Duplicate review"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "saves-duplicate-audit")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.buttons["saves.segment.mapStamps"].waitForExistence(timeout: stepTimeout))
     }
 
     @MainActor

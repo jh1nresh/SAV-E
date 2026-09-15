@@ -5,9 +5,15 @@ import SwiftUI
 enum ReviewCandidateError: LocalizedError {
     case needsReliableCoordinates
     case alreadySavedMapStamp(String)
+    case sourceStillUnresolved
+    case sourceAlreadyReviewed
 
     var errorDescription: String? {
         switch self {
+        case .sourceAlreadyReviewed:
+            return "This source was already saved or reviewed. No new review was added."
+        case .sourceStillUnresolved:
+            return "The source still needs a city, address, or map link. Your original clue is kept in Review."
         case .needsReliableCoordinates:
             return "This candidate needs Google Places refinement or a map link before it can be saved."
         case .alreadySavedMapStamp(let name):
@@ -932,6 +938,22 @@ final class MapViewModel: ObservableObject {
         return merged
     }
 
+    /// Confirmation can reconcile an older source on the server. Read back its
+    /// date without replacing current user edits or retrying a committed save.
+    func refreshedConfirmedPlace(_ place: Place) async -> Place {
+        guard usesRemotePersistence, let userID = mapCandidateUserIDProvider() else { return place }
+        do {
+            let remote = try await supabaseService.fetchPlaces(for: userID)
+            guard let saved = remote.first(where: { $0.id == place.id }) else { return place }
+            var refreshed = place
+            refreshed.createdAt = min(place.createdAt, saved.createdAt)
+            return refreshed
+        } catch {
+            print("MapViewModel: confirmed place date refresh deferred: \(error)")
+            return place
+        }
+    }
+
     private func importPendingPlaces(for userId: String) async throws {
         let pending = pendingImportService.consumePendingPlaces()
         guard !pending.isEmpty else { return }
@@ -980,12 +1002,16 @@ final class MapViewModel: ObservableObject {
         var failedCandidates = Array(pending.dropFirst(Self.pendingReviewImportBatchLimit))
 
         for var candidate in currentBatch {
-            let localRecordID = candidate.localVaultRecordID ?? UUID()
-            candidate.localVaultRecordID = localRecordID
             do {
-                _ = try saveLocalVaultService.saveReviewCandidate(candidate, recordID: localRecordID, preservingExisting: true)
+                let localRecord = try saveLocalVaultService.saveReviewCandidate(
+                    candidate, recordID: candidate.localVaultRecordID, preservingExisting: true
+                )
+                let localRecordID = localRecord.id
+                candidate.localVaultRecordID = localRecordID
+                candidate.savedAt = min(candidate.savedAt, localRecord.createdAt)
                 try await withImportAnalysis {
-                    let refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
+                    var refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
+                    refinedCandidate.savedAt = candidate.savedAt
                     _ = try saveLocalVaultService.saveReviewCandidate(refinedCandidate, recordID: localRecordID)
                     // A remote failure must retry the refined payload, not the original thin clue.
                     candidate = refinedCandidate
@@ -993,6 +1019,11 @@ final class MapViewModel: ObservableObject {
                     var run: PlaceRecoveryWorkflowRun?
                     var failedStep = "validate_input"
                     do {
+                        let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
+                        await SAVEAnalysisScope.current?.addCapture(captureId)
+                        if try await reuseImportedCandidate(refinedCandidate, captureId: captureId, userId: userId) != nil {
+                            return
+                        }
                         let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(
                             sourceURL: refinedCandidate.sourceURL,
                             sourceType: nil
@@ -1004,8 +1035,6 @@ final class MapViewModel: ObservableObject {
                         )
                         run = createdRun
                         failedStep = "persist_candidate"
-                        let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
-                        await SAVEAnalysisScope.current?.addCapture(captureId)
                         let candidateId = try await supabaseService.createPlaceCandidate(
                             refinedCandidate,
                             captureId: captureId,
@@ -1048,8 +1077,10 @@ final class MapViewModel: ObservableObject {
             candidate.sourceFailureReason = importFailureReasons[candidate.id]
             return candidate
         }.filter { candidate in
-            candidate.status == "review" || candidate.status == "confirmed" ||
+            candidate.replacementCandidateIDs.isEmpty && (
+                candidate.status == "review" || candidate.status == "confirmed" ||
                 candidate.status == "needs_more_evidence" || candidate.status == "source_only"
+            )
         }
         if let resolution = exactSearchResolution {
             if let refreshedClue = reviewCandidates.first(where: { $0.id == resolution.clue.id }) {
@@ -1078,7 +1109,7 @@ final class MapViewModel: ObservableObject {
             throw URLError(.badURL)
         }
         guard !analysisInput.isEmpty else { throw URLError(.badURL) }
-        if let sourceURL {
+        if usesRemotePersistence, let sourceURL {
             _ = try saveLocalVaultService.saveSourceOnly(url: sourceURL, note: normalizedShare.captionEvidence)
         }
 
@@ -1110,7 +1141,7 @@ final class MapViewModel: ObservableObject {
                     confidence: pendingCandidate.confidence,
                     missingInfo: pendingCandidate.missingInfo,
                     status: pendingCandidate.isSourceOnly ? "source_only" : "review",
-                    createdAt: pendingCandidate.savedAt,
+                    createdAt: record.createdAt,
                     placeHighlights: pendingCandidate.placeHighlights,
                     recommendedItems: pendingCandidate.recommendedItems,
                     vibeTags: pendingCandidate.vibeTags,
@@ -1118,7 +1149,7 @@ final class MapViewModel: ObservableObject {
                     sourceHandle: pendingCandidate.sourceHandle
                 )
             }
-            reviewCandidates = importedCandidates + reviewCandidates
+            reviewCandidates = localReviewCandidates()
             return importedCandidates.map(\.id)
         }
 
@@ -1146,12 +1177,16 @@ final class MapViewModel: ObservableObject {
                 var run: PlaceRecoveryWorkflowRun?
                 var failedStep = "validate_input"
                 do {
+                    let captureId = try await supabaseService.createMemoryCapture(from: candidate, userId: userId)
+                    await SAVEAnalysisScope.current?.addCapture(captureId)
+                    if let existingIDs = try await reuseImportedCandidate(candidate, captureId: captureId, userId: userId) {
+                        importedCandidateIDs.append(contentsOf: existingIDs)
+                        continue
+                    }
                     let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(sourceURL: candidate.sourceURL, sourceType: nil)
                     let createdRun = try await supabaseService.createPlaceRecoveryRun(workOrderId: workOrder.id, sourceURL: candidate.sourceURL, sourceType: nil)
                     run = createdRun
                     failedStep = "persist_candidate"
-                    let captureId = try await supabaseService.createMemoryCapture(from: candidate, userId: userId)
-                    await SAVEAnalysisScope.current?.addCapture(captureId)
                     let candidateId = try await supabaseService.createPlaceCandidate(
                         candidate,
                         captureId: captureId,
@@ -1182,7 +1217,91 @@ final class MapViewModel: ObservableObject {
                 }
             }
             try await refreshReviewCandidates()
-            return Array(Set(importedCandidateIDs))
+            return try Self.reviewImportResultIDs(importedCandidateIDs, visibleCandidates: reviewCandidates)
+        }
+    }
+
+    static func reviewImportResultIDs(_ importedIDs: [UUID], visibleCandidates: [PlaceReviewCandidate]) throws -> [UUID] {
+        let visibleIDs = Set(visibleCandidates.map(\.id))
+        var seen = Set<UUID>()
+        let results = importedIDs.filter { visibleIDs.contains($0) && seen.insert($0).inserted }
+        if !importedIDs.isEmpty && results.isEmpty { throw ReviewCandidateError.sourceAlreadyReviewed }
+        return results
+    }
+
+    /// Repeated imports reuse the original workflow. A candidate cannot be
+    /// reassigned to a fresh run without invalidating its confirmation receipt.
+    func reuseImportedCandidate(_ pending: PendingReviewCandidate, captureId: UUID, userId: String) async throws -> [UUID]? {
+        let candidates = try await supabaseService.fetchReviewCandidates(captureId: captureId)
+        let existing = candidates.sorted { $0.createdAt < $1.createdAt }.first { $0.matchesImport(pending) }
+        guard let existing else { return nil }
+        let availableIDs = Set(candidates.map(\.id))
+        let replacements = existing.replacementCandidateIDs.filter { availableIDs.contains($0) }
+        if !replacements.isEmpty {
+            await refreshSavedCollectionDates(userId: userId)
+            return replacements
+        }
+        var preserved = pending
+        preserved.savedAt = min(existing.createdAt, pending.savedAt)
+        let reusedID = try await supabaseService.createPlaceCandidate(
+            preserved, captureId: captureId, userId: userId, workflowRunId: existing.workflowRunId
+        )
+        await refreshSavedCollectionDates(userId: userId)
+        return [reusedID]
+    }
+
+    private func refreshSavedCollectionDates(userId: String) async {
+        guard !places.isEmpty else { return }
+        do {
+            for remote in try await supabaseService.fetchPlaces(for: userId) {
+                guard remote.createdAt > .distantPast,
+                      let index = places.firstIndex(where: { $0.id == remote.id }),
+                      remote.createdAt < places[index].createdAt else { continue }
+                places[index].createdAt = remote.createdAt
+                mirrorToLocalVault(places[index])
+            }
+        } catch {
+            print("MapViewModel: imported collection date refresh deferred: \(error)")
+        }
+    }
+
+    func reviewDuplicateAudit() async throws -> [SaveReviewDuplicateGroup] {
+        guard usesRemotePersistence else { return [] }
+        return try await supabaseService.fetchReviewDuplicateAudit()
+    }
+
+    /// Explicit, metered retry of the existing source. It never creates a Map
+    /// Stamp and leaves the original clue available when no match is found.
+    @discardableResult
+    func reanalyzeReviewSource(_ candidate: PlaceReviewCandidate) async throws -> [UUID] {
+        guard usesRemotePersistence, let captureId = candidate.captureId else {
+            throw SupabaseError.invalidResponse("This clue has no synced source. Add a city, address, or map link to find the place.")
+        }
+        return try await withImportAnalysis {
+            await SAVEAnalysisScope.current?.addCapture(captureId)
+            let result = try await supabaseService.recoverSourceOnlyReviewCandidates(
+                captureId: captureId, workflowRunId: candidate.workflowRunId, explicitRetry: true
+            )
+            if let reason = result.failureReason {
+                importFailureReasons[candidate.id] = reason
+                if reason.kind == .providerFailure { await SAVEAnalysisScope.current?.markProviderFailure() }
+            } else {
+                importFailureReasons.removeValue(forKey: candidate.id)
+            }
+            if !result.createdCandidates.isEmpty { await SAVEAnalysisScope.current?.foundReviewCandidate() }
+            try await refreshReviewCandidates()
+            if result.createdCandidates.isEmpty {
+                let captured = try await supabaseService.fetchReviewCandidates(captureId: captureId)
+                let replacementIDs = captured.first { $0.id == candidate.id }?.replacementCandidateIDs ?? []
+                let replacements = captured.filter { replacementIDs.contains($0.id) }
+                let pending = replacements.filter { ["review", "needs_more_evidence", "source_only"].contains($0.status) }
+                if !pending.isEmpty { return pending.map(\.id) }
+                if !replacementIDs.isEmpty, replacements.count == replacementIDs.count,
+                   replacements.allSatisfy({ ["saved", "confirmed", "rejected"].contains($0.status) }) {
+                    throw ReviewCandidateError.sourceAlreadyReviewed
+                }
+            }
+            return result.createdCandidates.map(\.id)
         }
     }
 
@@ -1275,6 +1394,12 @@ final class MapViewModel: ObservableObject {
     }
 
     func investigateReviewCandidateMore(_ candidate: PlaceReviewCandidate) async throws {
+        if candidate.captureId != nil {
+            guard try await !reanalyzeReviewSource(candidate).isEmpty else {
+                throw ReviewCandidateError.sourceStillUnresolved
+            }
+            return
+        }
         try await markReviewCandidateNeedsMoreEvidence(
             candidate,
             eventType: .investigateMore,
@@ -1330,7 +1455,7 @@ final class MapViewModel: ObservableObject {
         }
 
         if let match = existingSavedPlace(matching: place) {
-            let existing = try await mergeSavedSources(place, into: match)
+            var existing = try await mergeSavedSources(place, into: match)
             var updatedCandidate = candidate
             updatedCandidate.name = existing.name
             updatedCandidate.address = existing.address
@@ -1344,10 +1469,14 @@ final class MapViewModel: ObservableObject {
                 userFinalPlaceId: existing.id,
                 reason: "User confirmed review candidate, but matching Map Stamp already exists."
             )
+            existing = await refreshedConfirmedPlace(existing)
+            mirrorToLocalVault(existing)
+            places = Place.consolidated(places.filter { $0.id != existing.id } + [existing])
             reviewCandidates.removeAll { $0.id == candidate.id }
             if selectedReviewCandidate?.id == candidate.id {
                 selectedReviewCandidate = nil
             }
+            await refreshReviewCandidatesLoggingFailures()
             focusSavedPlace(existing, showStampMoment: false)
             clearExactSearchResolution(matching: candidate.id)
             return existing
@@ -1384,15 +1513,17 @@ final class MapViewModel: ObservableObject {
                 throw error
             }
         }
-        mirrorToLocalVault(place)
-        places = [place] + places
+        let confirmedPlace = await refreshedConfirmedPlace(place)
+        mirrorToLocalVault(confirmedPlace)
+        places = [confirmedPlace] + places
         reviewCandidates.removeAll { $0.id == candidate.id }
         if selectedReviewCandidate?.id == candidate.id {
             selectedReviewCandidate = nil
         }
-        revealImportedPlaces([place])
+        await refreshReviewCandidatesLoggingFailures()
+        revealImportedPlaces([confirmedPlace])
         clearExactSearchResolution(matching: candidate.id)
-        return place
+        return confirmedPlace
     }
 
     @discardableResult
@@ -1408,11 +1539,14 @@ final class MapViewModel: ObservableObject {
             category: candidate.category,
             sourceURL: candidate.sourceURL,
             sourcePlatform: candidate.sourcePlatform,
-            evidence: candidate.evidence,
+            evidence: (candidate.evidence + (exactResolution?.clue.evidence ?? [])).reduce(into: [String]()) {
+                if !$0.contains($1) { $0.append($1) }
+            },
             externalRating: candidate.rating,
             externalReviewCount: candidate.reviewCount
         )
         var place = try await saveSearchController.saveMapCandidate(draft)
+        if let exactResolution { place.createdAt = min(place.createdAt, exactResolution.clue.createdAt) }
         place.sourceImageUrl = candidate.photoURL
         place.businessPhotoUrls = candidate.businessPhotoURLStrings
         if candidate.sourcePlatform == .googleMaps,
@@ -1422,12 +1556,17 @@ final class MapViewModel: ObservableObject {
         }
 
         if let match = existingSavedPlace(matching: place) {
-            let existing = try await mergeSavedSources(place, into: match)
+            var existing = try await mergeSavedSources(place, into: match)
             let resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
                 resolution: exactResolution,
                 candidateID: candidate.id,
                 to: existing
             )
+            if resolvedExactSearch {
+                existing = await refreshedConfirmedPlace(existing)
+                mirrorToLocalVault(existing)
+                places = Place.consolidated(places.filter { $0.id != existing.id } + [existing])
+            }
             mapCandidates.removeAll { $0.id == candidate.id }
             selectedMapCandidate = nil
             focusSavedPlace(existing, showStampMoment: false)
@@ -1450,15 +1589,23 @@ final class MapViewModel: ObservableObject {
             }
         }
 
+        let resolvedExactSearch: Bool
+        do {
+            resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
+                resolution: exactResolution, candidateID: candidate.id, to: place
+            )
+        } catch {
+            // The place insert already succeeded. Retain its ID so retrying the
+            // pending decision reuses this stamp instead of inserting another.
+            mirrorToLocalVault(place)
+            if !places.contains(where: { $0.matches(place) }) { places = [place] + places }
+            throw error
+        }
+        if resolvedExactSearch { place = await refreshedConfirmedPlace(place) }
         mirrorToLocalVault(place)
         if !places.contains(where: { $0.matches(place) }) {
             places = [place] + places
         }
-        _ = try await resolveExactSearchClueIfNeeded(
-            resolution: exactResolution,
-            candidateID: candidate.id,
-            to: place
-        )
         mapCandidates.removeAll { $0.id == candidate.id }
         selectedMapCandidate = nil
         revealImportedPlaces([place])
@@ -1511,6 +1658,7 @@ final class MapViewModel: ObservableObject {
         if exactSearchResolution?.clue.id == clue.id {
             exactSearchResolution = nil
         }
+        if usesRemotePersistence { await refreshReviewCandidatesLoggingFailures() }
         return true
     }
 

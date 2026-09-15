@@ -194,6 +194,7 @@ struct ContentView: View {
     @State private var fullScreenCandidateActionID: UUID?
     @State private var fullScreenMapCandidateActionID: String?
     @State private var fullScreenActionError: String?
+    @State private var fullScreenSourceAlreadyReviewed = false
     @State private var isMapPanelExpanded = false
     @State private var suppressPendingOnboardingCaptureResume = false
     @State private var exactSearchRequestID: UUID?
@@ -813,13 +814,21 @@ struct ContentView: View {
                 }
             }
             .alert(
-                languageSettings.localized(english: "Couldn’t finish that action", traditionalChinese: "無法完成這個動作"),
+                fullScreenSourceAlreadyReviewed
+                    ? languageSettings.localized(english: "Source already reviewed", traditionalChinese: "來源已處理")
+                    : languageSettings.localized(english: "Couldn’t finish that action", traditionalChinese: "無法完成這個動作"),
                 isPresented: Binding(
                     get: { fullScreenActionError != nil },
                     set: { if !$0 { fullScreenActionError = nil } }
                 )
             ) {
-                Button(languageSettings.text(.ok)) { fullScreenActionError = nil }
+                Button(languageSettings.text(.ok)) {
+                    fullScreenActionError = nil
+                    if fullScreenSourceAlreadyReviewed {
+                        fullScreenRoute = nil
+                        fullScreenSourceAlreadyReviewed = false
+                    }
+                }
             } message: {
                 Text(fullScreenActionError ?? "")
             }
@@ -1131,7 +1140,8 @@ struct ContentView: View {
             onOpenReviewCandidate: { openReviewCandidate($0, tripID: captureResultIDs == nil ? nil : pendingCaptureTripID) },
             onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
             onOpenPassport: openPassport,
-            captureResultCount: captureResultIDs?.count
+            captureResultCount: captureResultIDs?.count,
+            onLoadDuplicateAudit: { try await mapVM.reviewDuplicateAudit() }
         )
         .navigationTitle(languageSettings.localized(
             english: captureResultIDs == nil ? "Saves" : "This capture",
@@ -1185,8 +1195,15 @@ struct ContentView: View {
 
     private func investigateFullScreenCandidate(_ candidate: PlaceReviewCandidate) {
         performFullScreenCandidateAction(candidate) {
-            try await mapVM.investigateReviewCandidateMore(candidate)
-            openExactSearch(candidate)
+            if candidate.captureId != nil {
+                let ids = try await mapVM.reanalyzeReviewSource(candidate)
+                guard !ids.isEmpty else { throw ReviewCandidateError.sourceStillUnresolved }
+                fullScreenRoute = nil
+                rootPath = [.captureResults(ids)]
+            } else {
+                try await mapVM.investigateReviewCandidateMore(candidate)
+                openExactSearch(candidate)
+            }
         }
     }
 
@@ -1195,10 +1212,17 @@ struct ContentView: View {
         action: @escaping () async throws -> Void
     ) {
         fullScreenCandidateActionID = candidate.id
+        fullScreenSourceAlreadyReviewed = false
         Task {
             defer { fullScreenCandidateActionID = nil }
             do {
                 try await action()
+            } catch ReviewCandidateError.sourceAlreadyReviewed {
+                fullScreenSourceAlreadyReviewed = true
+                fullScreenActionError = languageSettings.localized(
+                    english: "This source was already saved or reviewed. No new review was added.",
+                    traditionalChinese: "這個來源已收藏或處理過，沒有新增待確認項目。"
+                )
             } catch {
                 fullScreenActionError = error.localizedDescription
             }
@@ -1714,6 +1738,11 @@ private struct SaveCaptureFlowView: View {
                     return
                 }
                 onComplete(candidateIDs)
+            } catch ReviewCandidateError.sourceAlreadyReviewed {
+                errorMessage = localized(
+                    "This source was already saved or reviewed. No new review was added.",
+                    "這個來源已收藏或處理過，沒有新增待確認項目。"
+                )
             } catch {
                 errorMessage = localized("Analysis could not finish. Please try again later.", "分析暫時無法完成，請稍後再試。")
             }
