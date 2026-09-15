@@ -1266,12 +1266,13 @@ struct ShareExtensionView: View {
                 sharedText: sharedText,
                 sourceURLString: parseContent
             )
-            if let captionCandidate = await socialCaptionVenueReviewCandidate(
+            if candidates.isEmpty || candidates.allSatisfy({ $0.isSourceOnly || $0.isPlaceBearingSource || $0.isUnresolvedPlaceCandidate }),
+               let captionCandidate = await socialCaptionVenueReviewCandidate(
                 from: metadata,
                 sharedTitle: sharedTitle,
                 sharedText: sharedText,
                 sourceURLString: parseContent
-            ), candidates.isEmpty || candidates.allSatisfy({ $0.isSourceOnly || $0.isPlaceBearingSource || $0.isUnresolvedPlaceCandidate }) {
+            ) {
                 reviewCandidates = [captionCandidate]
                 selectedCategory = captionCandidate.category
                 isParsing = false
@@ -2181,7 +2182,7 @@ struct ShareExtensionView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !caption.isEmpty else { return nil }
 
-        let boundedCaption = String(caption.prefix(1_200))
+        let boundedCaption = SocialCaptionVenueExtractionPolicy.boundedCaption(caption)
         let prompt = SocialCaptionVenueExtractionPolicy.prompt(caption: boundedCaption)
         guard let text = try? await generateGeminiText(prompt: prompt, temperature: 0, maxOutputTokens: 256),
               let extraction = SocialCaptionVenueExtractionPolicy.parseExtraction(from: text) else {
@@ -2189,7 +2190,7 @@ struct ShareExtensionView: View {
         }
 
         let name = cleanPlaceName(extraction.name)
-        guard SocialCaptionVenueExtractionPolicy.isAcceptedVenueName(name, in: boundedCaption) else {
+        guard SocialCaptionVenueExtractionPolicy.isAcceptedVenueName(name, in: caption) else {
             return nil
         }
 

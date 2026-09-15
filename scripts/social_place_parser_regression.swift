@@ -389,6 +389,24 @@ struct SocialPlaceParserRegressionRunner {
             }
         }
 
+        for caption in ["", "📍百年土種參雞湯\n台北市中華路88號", "Café de la Plaza, México"] {
+            additionalCaseCount += 1
+            if SocialCaptionVenueExtractionPolicy.boundedCaption(caption) != caption {
+                failures.append("Short caption evidence changed: \(caption)")
+            }
+        }
+        for tail in ["📍Aquarela Coffee\nLos Angeles", "📍百年土種參雞湯\n台北市中華路88號"] {
+            additionalCaseCount += 1
+            let caption = "A weekend in town.\n" + String(repeating: "散步👨‍👩‍👧‍👦。", count: 400) + "\n" + tail
+            let bounded = SocialCaptionVenueExtractionPolicy.boundedCaption(caption)
+            if bounded.count != 1_200 || !bounded.hasPrefix("A weekend in town.") || !bounded.hasSuffix(tail) {
+                failures.append("Bounded caption lost original head/tail or exceeded budget: \(tail)")
+            }
+            if SocialCaptionVenueExtractionPolicy.isAcceptedVenueName("Blue Bottle Coffee", in: caption) {
+                failures.append("Caption selection accepted an invented venue")
+            }
+        }
+
         let caseCount = cases.count + sourceIntentCases.count + additionalCaseCount
         if failures.isEmpty {
             print("social place parser regression: PASS (\(caseCount) cases)")
