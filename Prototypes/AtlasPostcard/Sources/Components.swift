@@ -255,7 +255,7 @@ struct RoundStamp: View {
     }
 }
 
-struct ScallopedRectangle: Shape {
+nonisolated struct ScallopedRectangle: Shape {
     var depth: CGFloat = 4
     var pitch: CGFloat = 11
 
@@ -325,7 +325,7 @@ struct PerforatedMedallion: View {
     }
 }
 
-private struct SealShape: Shape {
+nonisolated private struct SealShape: Shape {
     func path(in rect: CGRect) -> Path {
         let center = CGPoint(x: rect.midX, y: rect.midY)
         let baseRadius = min(rect.width, rect.height) / 2 - 2
