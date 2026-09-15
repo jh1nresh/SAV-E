@@ -156,6 +156,101 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       assert.equal((await api("/v0/memory/candidates", input, owner)).body.status, "confirmed");
     });
 
+    await t.test("delayed older imports repair reused capture and candidate dates before stamp confirmation", async () => {
+      const delayedOwner = await newGuest();
+      const source = `https://fixture.invalid/delayed/${randomUUID()}`;
+      const captureInput = { source_url: source, created_at: "2025-06-01T00:00:00Z", raw_text: "June sync" };
+      const capture = await api("/v0/memory/captures", captureInput, delayedOwner);
+      const input = { capture_id: capture.body.id, name: "Delayed Cafe", address: "1 Delayed Road", latitude: 25, longitude: 121, created_at: captureInput.created_at, evidence: [{ text: "June evidence" }] };
+      const candidate = await api("/v0/memory/candidates", input, delayedOwner);
+      const olderCapture = await api("/v0/memory/captures", { ...captureInput, created_at: "2025-03-01T00:00:00Z", raw_text: "March offline evidence" }, delayedOwner);
+      assert.equal(olderCapture.body.id, capture.body.id);
+      assert.equal(olderCapture.body.created_at, "2025-03-01T00:00:00Z");
+      assert.match(olderCapture.body.raw_text, /June sync/); assert.match(olderCapture.body.raw_text, /March offline evidence/);
+      const inherited = await api("/v0/memory/candidates", input, delayedOwner);
+      assert.equal(inherited.body.id, candidate.body.id);
+      assert.equal(inherited.body.created_at, "2025-03-01T00:00:00Z", "existing candidates inherit newly discovered earlier capture chronology");
+      const delayed = await api("/v0/memory/candidates", { ...input, created_at: "2025-01-01T00:00:00Z", evidence: [{ text: "January offline evidence" }] }, delayedOwner);
+      assert.equal(delayed.body.id, candidate.body.id); assert.equal(delayed.body.created_at, "2025-01-01T00:00:00Z");
+      assert.deepEqual(delayed.body.evidence, [{ text: "June evidence" }, { text: "January offline evidence" }]);
+      for (const created_at of ["2026-01-01T00:00:00Z", "invalid", null]) {
+        assert.equal((await api("/v0/memory/captures", { ...captureInput, created_at }, delayedOwner)).body.created_at, "2025-03-01T00:00:00Z");
+        assert.equal((await api("/v0/memory/candidates", { ...input, created_at }, delayedOwner)).body.created_at, "2025-01-01T00:00:00Z");
+      }
+      const place = randomUUID();
+      await pool.query("insert into places(id,user_id,name,address,latitude,longitude,created_at) values($1,$2,'Delayed Cafe','1 Delayed Road',25,121,'2025-06-01T00:00:00Z')", [place, delayedOwner.guest_id]);
+      const saved = await fetch(base + `/v0/memory/candidates/${candidate.body.id}`, { method: "PATCH", headers: { "content-type": "application/json", "x-save-guest-token": delayedOwner.guest_token }, body: JSON.stringify({ status: "saved", place_id: place }) });
+      assert.equal(saved.status, 200);
+      const reload = await api("/v0/places", undefined, delayedOwner);
+      assert.equal((reload.body as any).find((row: any) => row.id === place).created_at, "2025-01-01T00:00:00Z");
+      const pendingDuplicate = randomUUID();
+      await pool.query("insert into place_candidates(id,capture_id,name,address,latitude,longitude) values($1,$2,'Delayed Cafe','1 Delayed Road',25,121)", [pendingDuplicate, capture.body.id]);
+      const earlierSaved = await api("/v0/memory/candidates", { ...input, created_at: "2024-01-01T00:00:00Z" }, delayedOwner);
+      assert.equal(earlierSaved.body.id, candidate.body.id); assert.equal(earlierSaved.body.status, "saved");
+      assert.equal(earlierSaved.body.place_id, place);
+      assert.equal(earlierSaved.body.created_at, "2024-01-01T00:00:00Z");
+      const savedReload = await api("/v0/places", undefined, delayedOwner);
+      assert.equal((savedReload.body as any).find((row: any) => row.id === place).created_at, "2024-01-01T00:00:00Z", "earlier saved source history updates the owned Stamp without another decision");
+      assert.equal((await pool.query("select status from place_candidates where id=$1", [pendingDuplicate])).rows[0].status, "review", "date-only reuse must not reconcile pending reviews");
+      await api("/v0/memory/candidates", { ...input, created_at: "invalid" }, delayedOwner);
+      assert.equal((await pool.query("select created_at from places where id=$1", [place])).rows[0].created_at.toISOString(), "2024-01-01T00:00:00.000Z");
+    });
+
+    await t.test("duplicate confirmation preserves independent pending workflow reservations and decisions", async () => {
+      const duplicateOwner = await newGuest();
+      const reviews = [];
+      for (const created_at of ["2025-06-01T00:00:00Z", "2025-01-01T00:00:00Z"]) {
+        const capture = await api("/v0/memory/captures", { source_type: "note", created_at }, duplicateOwner);
+        const run = await api("/v0/workflows/place-recovery/runs", { source_type: "note" }, duplicateOwner);
+        assert.equal(run.status, 201, JSON.stringify(run.body));
+        const candidate = await api("/v0/memory/candidates", { capture_id: capture.body.id, workflow_run_id: run.body.id, name: "Reserved Cafe", address: "1 Reserved Road", latitude: 25, longitude: 121, evidence: [{ text: created_at }] }, duplicateOwner);
+        assert.equal(candidate.status, 201, JSON.stringify(candidate.body));
+        assert.equal((await api(`/v0/workflows/place-recovery/runs/${run.body.id}/result`, { result_type: "review_candidate", evidence_tier: "weak", candidate_refs: [candidate.body.id], evidence_refs: [candidate.body.id] }, duplicateOwner)).status, 201);
+        reviews.push({ candidate: candidate.body, run: run.body, capture: capture.body });
+      }
+      const other = reviews[1];
+      const snapshot = async () => ({
+        run: (await pool.query("select * from workflow_runs where id=$1", [other.run.id])).rows,
+        receipts: (await pool.query("select * from workflow_receipts where run_id=$1 order by id", [other.run.id])).rows,
+        ledger: (await pool.query("select * from credit_ledger where run_id=$1 order by id", [other.run.id])).rows,
+        candidate: (await pool.query("select * from place_candidates where id=$1", [other.candidate.id])).rows,
+      });
+      const before = await snapshot();
+      assert.equal(before.run[0].credit_settlement, "pending");
+      assert.equal(before.ledger.filter(row => row.reason === "reserve").length, 1);
+      const sameRunDuplicate = randomUUID();
+      await pool.query("insert into place_candidates(id,capture_id,workflow_run_id,name,address,latitude,longitude) values($1,$2,$3,'Reserved Cafe','1 Reserved Road',25,121)", [sameRunDuplicate, reviews[0].capture.id, reviews[0].run.id]);
+      const place = randomUUID();
+      await pool.query("insert into places(id,user_id,name,address,latitude,longitude,created_at) values($1,$2,'Reserved Cafe','1 Reserved Road',25,121,'2025-07-01T00:00:00Z')", [place, duplicateOwner.guest_id]);
+      const confirmed = await api(`/v0/workflows/place-recovery/runs/${reviews[0].run.id}/decision`, { action: "confirm", candidate_id: reviews[0].candidate.id, final_place_id: place }, duplicateOwner);
+      assert.equal(confirmed.status, 201, JSON.stringify(confirmed.body));
+      assert.deepEqual(await snapshot(), before, "a separate pending candidate and its reservation history must stay actionable and unchanged");
+      assert.equal((await pool.query("select status from place_candidates where id=$1", [sameRunDuplicate])).rows[0].status, "saved", "the decided run can complete its exact duplicate rows");
+      const visible = await api("/v0/memory/candidates", undefined, duplicateOwner);
+      assert.ok((visible.body as any).some((row: any) => row.id === other.candidate.id && row.status === "review" && !row.superseded_by_candidate_id));
+      assert.equal((await pool.query("select created_at from places where id=$1", [place])).rows[0].created_at.toISOString(), "2025-06-01T00:00:00.000Z", "unconfirmed independent source dates do not change the stamp yet");
+      const second = await api(`/v0/workflows/place-recovery/runs/${other.run.id}/decision`, { action: "confirm", candidate_id: other.candidate.id, final_place_id: place }, duplicateOwner);
+      assert.equal(second.status, 201, JSON.stringify(second.body));
+      assert.equal(second.body.run.credit_settlement, "consumed");
+      assert.equal((await pool.query("select created_at from places where id=$1", [place])).rows[0].created_at.toISOString(), "2025-01-01T00:00:00.000Z");
+      const after = await snapshot();
+      assert.deepEqual(after.receipts.filter(row => row.receipt_type === "analysis"), before.receipts);
+      assert.deepEqual(after.ledger.filter(row => row.reason === "reserve"), before.ledger);
+      assert.equal(after.ledger.filter(row => row.reason === "consumed").length, 1);
+      const thirdRun = await api("/v0/workflows/place-recovery/runs", { source_type: "note" }, duplicateOwner);
+      assert.equal(thirdRun.status, 201);
+      const independent = await api("/v0/memory/candidates", { capture_id: other.capture.id, workflow_run_id: thirdRun.body.id, name: "Reserved Cafe", address: "1 Reserved Road", latitude: 25, longitude: 121 }, duplicateOwner);
+      assert.equal(independent.status, 201, JSON.stringify(independent.body));
+      assert.equal(independent.body.status, "review", "a new pending workflow must not inherit an older workflow's saved status");
+      assert.equal(independent.body.place_id, null);
+      assert.equal(independent.body.workflow_run_id, thirdRun.body.id);
+      assert.deepEqual(await snapshot(), after, "original terminal review, receipts and ledger stay unchanged");
+      assert.equal((await api(`/v0/workflows/place-recovery/runs/${thirdRun.body.id}/result`, { result_type: "review_candidate", evidence_tier: "weak", candidate_refs: [independent.body.id], evidence_refs: [independent.body.id] }, duplicateOwner)).status, 201);
+      const third = await api(`/v0/workflows/place-recovery/runs/${thirdRun.body.id}/decision`, { action: "confirm", candidate_id: independent.body.id, final_place_id: place }, duplicateOwner);
+      assert.equal(third.status, 201, JSON.stringify(third.body));
+      assert.equal(third.body.run.credit_settlement, "consumed");
+    });
+
     await t.test("correcting a venue or branch completes only duplicates of the final owned place", async () => {
       for (const finalName of ["Corrected Cafe", "Original Cafe"]) {
         const captured = await api("/v0/memory/captures", { source_type: "note" }, owner);

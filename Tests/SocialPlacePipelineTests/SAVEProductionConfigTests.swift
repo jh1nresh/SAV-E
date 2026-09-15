@@ -513,6 +513,37 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         XCTAssertEqual(map.reviewCandidates.map(\.id), [newID, secondID])
     }
 
+    func testEmptyRetryDistinguishesExistingSuccessorsFromUnresolvedSource() async throws {
+        for status in ["saved", "confirmed", "rejected", "review", "missing", "unresolved"] {
+            let capture = UUID(), source = UUID(), successor = UUID()
+            let marker = status == "unresolved" ? "" : ",\"superseded_by_candidate_ids\":[\"\(successor)\"]"
+            let sourceJSON = "{\"id\":\"\(source)\",\"capture_id\":\"\(capture)\",\"name\":\"Saved source\",\"status\":\"source_only\",\"created_at\":\"2020-01-01T00:00:00Z\"\(marker)}"
+            let successorJSON = ["unresolved", "missing"].contains(status) ? "" : ",{\"id\":\"\(successor)\",\"capture_id\":\"\(capture)\",\"name\":\"Cafe\",\"status\":\"\(status)\",\"created_at\":\"2020-01-01T00:00:00Z\"}"
+            AnalysisRequestURLProtocol.handler = { request in
+                if request.url?.path == "/v0/analysis" {
+                    let id = try XCTUnwrap(AnalysisRequestURLProtocol.body(request)["id"] as? String)
+                    return (200, "{\"analysis_id\":\"\(id)\"}")
+                }
+                if request.url?.path.hasSuffix("/search-recovery") == true { return (200, "{\"created_candidates\":[]}") }
+                if request.url?.path.hasSuffix("/candidates") == true { return (200, "[\(sourceJSON)\(successorJSON)]") }
+                if request.httpMethod == "GET" { return (200, "[]") }
+                return (200, "{}")
+            }
+            let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+            let map = MapViewModel(supabaseService: service, usesRemotePersistence: true)
+            let clue = PlaceReviewCandidate(id: source, captureId: capture, name: "Saved source", address: "",
+                city: nil, latitude: nil, longitude: nil, evidence: [], confidence: nil, missingInfo: [], status: "source_only", createdAt: Date())
+            do {
+                let ids = try await map.reanalyzeReviewSource(clue)
+                XCTAssertFalse(["saved", "confirmed", "rejected"].contains(status), "Terminal successors must acknowledge already reviewed")
+                XCTAssertEqual(ids, status == "review" ? [successor] : [])
+                if status == "unresolved" { XCTAssertTrue(map.reviewCandidates.contains { $0.id == source }) }
+            } catch ReviewCandidateError.sourceAlreadyReviewed {
+                XCTAssertTrue(["saved", "confirmed", "rejected"].contains(status))
+            }
+        }
+    }
+
     override func tearDown() {
         AnalysisRequestURLProtocol.reset()
         super.tearDown()

@@ -1270,6 +1270,17 @@ final class MapViewModel: ObservableObject {
             }
             if !result.createdCandidates.isEmpty { await SAVEAnalysisScope.current?.foundReviewCandidate() }
             try await refreshReviewCandidates()
+            if result.createdCandidates.isEmpty {
+                let captured = try await supabaseService.fetchReviewCandidates(captureId: captureId)
+                let replacementIDs = captured.first { $0.id == candidate.id }?.replacementCandidateIDs ?? []
+                let replacements = captured.filter { replacementIDs.contains($0.id) }
+                let pending = replacements.filter { ["review", "needs_more_evidence", "source_only"].contains($0.status) }
+                if !pending.isEmpty { return pending.map(\.id) }
+                if !replacementIDs.isEmpty, replacements.count == replacementIDs.count,
+                   replacements.allSatisfy({ ["saved", "confirmed", "rejected"].contains($0.status) }) {
+                    throw ReviewCandidateError.sourceAlreadyReviewed
+                }
+            }
             return result.createdCandidates.map(\.id)
         }
     }

@@ -59,7 +59,7 @@ export async function reuseCapture(client: PoolClient, userId: string, body: Row
   const { rows } = await client.query("select * from captures where user_id=$1 and source_url is not null order by created_at, id for update", [userId]);
   const existing = rows.find(row => normalizedCaptureURL(row.source_url) === key);
   if (!existing) return undefined;
-  const updated = await client.query("update captures set raw_text=$3, title=coalesce(title,$4), updated_at=now() where id=$1 and user_id=$2 returning *", [existing.id, userId, mergedCaptureText(existing, body), body.title ?? null]);
+  const updated = await client.query("update captures set raw_text=$3, title=coalesce(title,$4), created_at=coalesce($5::timestamptz,created_at), updated_at=now() where id=$1 and user_id=$2 returning *", [existing.id, userId, mergedCaptureText(existing, body), body.title ?? null, earliestKnownDate([existing.created_at, body.created_at]) ?? null]);
   return updated.rows[0];
 }
 
@@ -82,23 +82,34 @@ export async function prepareCandidate(client: PoolClient, body: Row): Promise<{
   const capture = await client.query("select created_at from captures where id=$1 for update", [body.capture_id]);
   const { rows } = await client.query("select * from place_candidates where capture_id=$1 order by created_at, id for update", [body.capture_id]);
   const matches = rows.filter(row => sameCandidateIdentity(row, body));
+  const createdAt = earliestKnownDate([capture.rows[0]?.created_at, ...matches.map(row => row.created_at), body.created_at]);
   const existing = matches.find(row => (row.workflow_run_id ?? null) === (body.workflow_run_id ?? null));
   if (existing) {
-    const updated = await client.query("update place_candidates set evidence=$2::jsonb, updated_at=now() where id=$1 returning *", [existing.id, JSON.stringify(mergedEvidence(existing.evidence, body.evidence))]);
+    const updated = await client.query("update place_candidates set evidence=$2::jsonb, created_at=coalesce($3::timestamptz,created_at), updated_at=now() where id=$1 returning *", [existing.id, JSON.stringify(mergedEvidence(existing.evidence, body.evidence)), createdAt ?? null]);
+    if (["saved", "confirmed"].includes(existing.status) && existing.place_id && createdAt !== undefined) {
+      // An already confirmed source can refine collection time without a new
+      // decision, candidate reconciliation, or changes to workflow receipts.
+      await client.query("update places p set created_at=$3 from captures c where c.id=$2 and p.id=$1 and p.user_id=c.user_id and p.created_at>$3::timestamptz", [existing.place_id, body.capture_id, createdAt]);
+    }
     return { existing: updated.rows[0], body };
   }
   // Never transfer a candidate between workflows: old analysis receipts refer to it.
-  const completed = matches.find(row => terminal.has(row.status));
+  let completed = matches.find(row => terminal.has(row.status));
+  if (completed && body.workflow_run_id) {
+    const target = await client.query("select credit_settlement from workflow_runs where id=$1", [body.workflow_run_id]);
+    // This separate reservation needs an actionable result and its own decision.
+    if (target.rows[0]?.credit_settlement === "pending") completed = undefined;
+  }
   return { body: {
     ...body,
-    created_at: earliestKnownDate([capture.rows[0]?.created_at, ...matches.map(row => row.created_at), body.created_at]),
+    created_at: createdAt,
     ...(completed ? { status: completed.status, place_id: completed.place_id, evidence: mergedEvidence(completed.evidence, body.evidence) }
       : matches[0] ? { evidence: mergedEvidence(matches[0].evidence, body.evidence) } : {}),
   } };
 }
 
 export async function reconcileSavedCandidates(client: PoolClient, userId: string, candidateId: string): Promise<string[]> {
-  const { rows } = await client.query("select pc.*, c.created_at as capture_created_at from place_candidates pc join captures c on c.id=pc.capture_id where c.user_id=$1 order by pc.id for update of pc", [userId]);
+  const { rows } = await client.query("select pc.*, c.created_at as capture_created_at, wr.credit_settlement as run_settlement from place_candidates pc join captures c on c.id=pc.capture_id left join workflow_runs wr on wr.id=pc.workflow_run_id where c.user_id=$1 order by pc.id for update of pc", [userId]);
   const saved = rows.find(row => row.id === candidateId);
   if (!saved || !["saved", "confirmed"].includes(saved.status)) return [];
   let confirmedIdentity = saved;
@@ -108,7 +119,11 @@ export async function reconcileSavedCandidates(client: PoolClient, userId: strin
     // A correction confirms the final owned place, not the old candidate label.
     confirmedIdentity = { ...places.rows[0], place_id: saved.place_id };
   }
-  const duplicates = rows.filter(row => row.id !== candidateId && pending.has(row.status) && sameCandidateIdentity(confirmedIdentity, row));
+  // A separate pending run still needs its own user decision and settlement.
+  // Keep its review actionable instead of hiding a reserved workflow.
+  const duplicates = rows.filter(row => row.id !== candidateId && pending.has(row.status)
+    && !(row.workflow_run_id && row.workflow_run_id !== saved.workflow_run_id && row.run_settlement === "pending")
+    && sameCandidateIdentity(confirmedIdentity, row));
   if (saved.place_id) {
     // The user just confirmed these source records into the owned place. Persist
     // chronology here so every client observes it without arbitrary date PATCHes.

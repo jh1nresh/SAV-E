@@ -74,7 +74,7 @@ test("real database preserves workflow ownership chronology and ambiguous source
     assert.equal(same.existing?.id, candidate); assert.equal(same.existing?.status, "rejected"); assert.equal(same.existing?.evidence.length, 2);
     assert.equal(new Date(same.existing!.created_at).getUTCFullYear(), 2025);
     const separate = await prepareCandidate(client, { ...body, workflow_run_id: otherRun });
-    assert.equal(separate.existing, undefined); assert.equal(separate.body.workflow_run_id, otherRun); assert.equal(separate.body.status, "rejected");
+    assert.equal(separate.existing, undefined); assert.equal(separate.body.workflow_run_id, otherRun); assert.equal(separate.body.status, "review", "a separate pending reservation remains actionable without changing the original rejected row");
     assert.equal((await client.query("select workflow_run_id from place_candidates where id=$1", [candidate])).rows[0].workflow_run_id, run);
     assert.equal(await reuseCapture(client, foreign, { source_url: "https://fixture.invalid/one" }), undefined);
     const clueCapture = randomUUID(), clue = randomUUID(), named = randomUUID();

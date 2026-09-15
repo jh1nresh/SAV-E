@@ -1068,6 +1068,12 @@ struct AIDrawerView: View {
             do {
                 try await action()
                 addSpotStatus = successMessage
+            } catch ReviewCandidateError.sourceAlreadyReviewed {
+                openReviewInbox()
+                addSpotStatus = languageSettings.localized(
+                    english: "This source was already saved or reviewed. No new review was added.",
+                    traditionalChinese: "這個來源已收藏或處理過，沒有新增待確認項目。"
+                )
             } catch {
                 addSpotStatus = error.localizedDescription
             }
