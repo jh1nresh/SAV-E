@@ -288,8 +288,22 @@ function inputWithSourceMetadata(
 ): SourceSearchInput {
   if (!metadata && !resolution) return input;
   const metadataText = [metadata?.title, metadata?.description].filter(Boolean).join("\n");
+  // Exact caption text can recover an unindexed Reel through a public mirror.
+  // Keep caller queries first and share the existing four-query budget.
+  const sourceURL = safeURL(resolution?.resolvedURL ?? metadata?.resolvedURL ?? input.sourceUrl ?? "");
+  const quotedCaption = decodeHTML(metadata?.title ?? "").match(/\bon\s+Instagram:\s*["“]([^"”]+)/i)?.[1]
+    // Persisted captures may still have the old creator-only Twitter title.
+    ?? decodeHTML(metadata?.description ?? "").match(/\bon\s+[^:\n]{1,80}:\s*["“]([^"”]+)/i)?.[1];
+  const caption = sourceURL && hostMatchesDomain(normalizedHostname(sourceURL), "instagram.com")
+    ? quotedCaption?.split(/[#\n\r]/, 1)[0]?.trim()
+    : undefined;
+  const captionQuery = caption && caption.length >= 12 && caption.length <= 160
+    && !cityQualifiedVenueClue(cleanText([input.title, input.rawText, metadataText].filter(Boolean).join(" ")))
+    ? `"${caption}" place`
+    : undefined;
   return {
     ...input,
+    suggestedSearchQueries: unique([...(input.suggestedSearchQueries ?? []), ...(captionQuery ? [captionQuery] : [])]),
     sourceUrl: resolution?.resolvedURL ?? metadata?.resolvedURL ?? input.sourceUrl,
     title: [input.title, metadata?.title].filter(Boolean).join(" "),
     rawText: [input.rawText, metadataText].filter(Boolean).join("\n"),
@@ -1242,7 +1256,7 @@ function normalizeTaiwanCity(city: string): string {
 
 function duckDuckGoHTMLURL(query: string): string {
   const params = new URLSearchParams({ q: query });
-  return `https://duckduckgo.com/html/?${params.toString()}`;
+  return `https://html.duckduckgo.com/html/?${params.toString()}`;
 }
 
 export async function searchPublicWebResults(
@@ -1676,13 +1690,15 @@ function hasUsableSourceCaption(value: string | undefined): boolean {
 }
 
 function metadataValue(html: string, keys: string[]): string | undefined {
-  const keySet = new Set(keys.map((key) => key.toLowerCase()));
   const tags = html.match(/<meta\b[^>]*>/gi) ?? [];
-  for (const tag of tags) {
-    const property = attrValue(tag, "property") ?? attrValue(tag, "name");
-    if (!property || !keySet.has(property.toLowerCase())) continue;
-    const content = attrValue(tag, "content");
-    if (content) return content;
+  // Respect the requested priority rather than the provider's HTML tag order.
+  for (const key of keys) {
+    for (const tag of tags) {
+      const property = attrValue(tag, "property") ?? attrValue(tag, "name");
+      if (property?.toLowerCase() !== key.toLowerCase()) continue;
+      const content = attrValue(tag, "content");
+      if (content?.trim()) return content;
+    }
   }
   return undefined;
 }
