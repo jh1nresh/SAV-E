@@ -6,9 +6,12 @@ enum ReviewCandidateError: LocalizedError {
     case needsReliableCoordinates
     case alreadySavedMapStamp(String)
     case sourceStillUnresolved
+    case sourceAlreadyReviewed
 
     var errorDescription: String? {
         switch self {
+        case .sourceAlreadyReviewed:
+            return "This source was already saved or reviewed. No new review was added."
         case .sourceStillUnresolved:
             return "The source still needs a city, address, or map link. Your original clue is kept in Review."
         case .needsReliableCoordinates:
@@ -935,6 +938,22 @@ final class MapViewModel: ObservableObject {
         return merged
     }
 
+    /// Confirmation can reconcile an older source on the server. Read back its
+    /// date without replacing current user edits or retrying a committed save.
+    func refreshedConfirmedPlace(_ place: Place) async -> Place {
+        guard usesRemotePersistence, let userID = mapCandidateUserIDProvider() else { return place }
+        do {
+            let remote = try await supabaseService.fetchPlaces(for: userID)
+            guard let saved = remote.first(where: { $0.id == place.id }) else { return place }
+            var refreshed = place
+            refreshed.createdAt = min(place.createdAt, saved.createdAt)
+            return refreshed
+        } catch {
+            print("MapViewModel: confirmed place date refresh deferred: \(error)")
+            return place
+        }
+    }
+
     private func importPendingPlaces(for userId: String) async throws {
         let pending = pendingImportService.consumePendingPlaces()
         guard !pending.isEmpty else { return }
@@ -1198,8 +1217,16 @@ final class MapViewModel: ObservableObject {
                 }
             }
             try await refreshReviewCandidates()
-            return Array(Set(importedCandidateIDs))
+            return try Self.reviewImportResultIDs(importedCandidateIDs, visibleCandidates: reviewCandidates)
         }
+    }
+
+    static func reviewImportResultIDs(_ importedIDs: [UUID], visibleCandidates: [PlaceReviewCandidate]) throws -> [UUID] {
+        let visibleIDs = Set(visibleCandidates.map(\.id))
+        var seen = Set<UUID>()
+        let results = importedIDs.filter { visibleIDs.contains($0) && seen.insert($0).inserted }
+        if !importedIDs.isEmpty && results.isEmpty { throw ReviewCandidateError.sourceAlreadyReviewed }
+        return results
     }
 
     /// Repeated imports reuse the original workflow. A candidate cannot be
@@ -1396,7 +1423,7 @@ final class MapViewModel: ObservableObject {
         }
 
         if let match = existingSavedPlace(matching: place) {
-            let existing = try await mergeSavedSources(place, into: match)
+            var existing = try await mergeSavedSources(place, into: match)
             var updatedCandidate = candidate
             updatedCandidate.name = existing.name
             updatedCandidate.address = existing.address
@@ -1410,6 +1437,9 @@ final class MapViewModel: ObservableObject {
                 userFinalPlaceId: existing.id,
                 reason: "User confirmed review candidate, but matching Map Stamp already exists."
             )
+            existing = await refreshedConfirmedPlace(existing)
+            mirrorToLocalVault(existing)
+            places = Place.consolidated(places.filter { $0.id != existing.id } + [existing])
             reviewCandidates.removeAll { $0.id == candidate.id }
             if selectedReviewCandidate?.id == candidate.id {
                 selectedReviewCandidate = nil
@@ -1451,16 +1481,17 @@ final class MapViewModel: ObservableObject {
                 throw error
             }
         }
-        mirrorToLocalVault(place)
-        places = [place] + places
+        let confirmedPlace = await refreshedConfirmedPlace(place)
+        mirrorToLocalVault(confirmedPlace)
+        places = [confirmedPlace] + places
         reviewCandidates.removeAll { $0.id == candidate.id }
         if selectedReviewCandidate?.id == candidate.id {
             selectedReviewCandidate = nil
         }
         await refreshReviewCandidatesLoggingFailures()
-        revealImportedPlaces([place])
+        revealImportedPlaces([confirmedPlace])
         clearExactSearchResolution(matching: candidate.id)
-        return place
+        return confirmedPlace
     }
 
     @discardableResult
@@ -1481,6 +1512,7 @@ final class MapViewModel: ObservableObject {
             externalReviewCount: candidate.reviewCount
         )
         var place = try await saveSearchController.saveMapCandidate(draft)
+        if let exactResolution { place.createdAt = min(place.createdAt, exactResolution.clue.createdAt) }
         place.sourceImageUrl = candidate.photoURL
         place.businessPhotoUrls = candidate.businessPhotoURLStrings
         if candidate.sourcePlatform == .googleMaps,
@@ -1490,12 +1522,17 @@ final class MapViewModel: ObservableObject {
         }
 
         if let match = existingSavedPlace(matching: place) {
-            let existing = try await mergeSavedSources(place, into: match)
+            var existing = try await mergeSavedSources(place, into: match)
             let resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
                 resolution: exactResolution,
                 candidateID: candidate.id,
                 to: existing
             )
+            if resolvedExactSearch {
+                existing = await refreshedConfirmedPlace(existing)
+                mirrorToLocalVault(existing)
+                places = Place.consolidated(places.filter { $0.id != existing.id } + [existing])
+            }
             mapCandidates.removeAll { $0.id == candidate.id }
             selectedMapCandidate = nil
             focusSavedPlace(existing, showStampMoment: false)
@@ -1518,15 +1555,23 @@ final class MapViewModel: ObservableObject {
             }
         }
 
+        let resolvedExactSearch: Bool
+        do {
+            resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
+                resolution: exactResolution, candidateID: candidate.id, to: place
+            )
+        } catch {
+            // The place insert already succeeded. Retain its ID so retrying the
+            // pending decision reuses this stamp instead of inserting another.
+            mirrorToLocalVault(place)
+            if !places.contains(where: { $0.matches(place) }) { places = [place] + places }
+            throw error
+        }
+        if resolvedExactSearch { place = await refreshedConfirmedPlace(place) }
         mirrorToLocalVault(place)
         if !places.contains(where: { $0.matches(place) }) {
             places = [place] + places
         }
-        _ = try await resolveExactSearchClueIfNeeded(
-            resolution: exactResolution,
-            candidateID: candidate.id,
-            to: place
-        )
         mapCandidates.removeAll { $0.id == candidate.id }
         selectedMapCandidate = nil
         revealImportedPlaces([place])
@@ -1579,6 +1624,7 @@ final class MapViewModel: ObservableObject {
         if exactSearchResolution?.clue.id == clue.id {
             exactSearchResolution = nil
         }
+        if usesRemotePersistence { await refreshReviewCandidatesLoggingFailures() }
         return true
     }
 

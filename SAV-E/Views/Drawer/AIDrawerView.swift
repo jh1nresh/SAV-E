@@ -80,6 +80,7 @@ struct AIDrawerView: View {
         case idle
         case analyzing
         case ready(Set<UUID>)
+        case alreadyReviewed
         case failed(String)
     }
 
@@ -1403,6 +1404,10 @@ struct AIDrawerView: View {
                 let candidateIDs = try await onImportSharedTextAsReviewCandidates(sharedText)
                 linkAnalysisState = .ready(Set(candidateIDs))
                 onOpenReview()
+            } catch ReviewCandidateError.sourceAlreadyReviewed {
+                linkAnalysisState = .alreadyReviewed
+                viewModel.returnToCommands()
+                withAnimation { drawerDetent = .medium }
             } catch {
                 linkAnalysisState = .failed(languageSettings.localized(english: "Analysis could not finish. Please try again later.", traditionalChinese: "分析暫時無法完成，請稍後再試。"))
                 viewModel.returnToCommands()
@@ -1446,6 +1451,17 @@ struct AIDrawerView: View {
                 ),
                 isLoading: false,
                 tone: count == 0 ? SaveAtlasPalette.kraft : SaveAtlasPalette.mint
+            )
+        case .alreadyReviewed:
+            LinkAnalysisStatusCard(
+                systemImage: "checkmark.circle",
+                title: languageSettings.localized(english: "Already reviewed", traditionalChinese: "已處理過"),
+                message: languageSettings.localized(
+                    english: "This source was already saved or reviewed. No new review was added.",
+                    traditionalChinese: "這個來源已收藏或處理過，沒有新增待確認項目。"
+                ),
+                isLoading: false,
+                tone: SaveAtlasPalette.mint
             )
         case .failed(let message):
             LinkAnalysisStatusCard(

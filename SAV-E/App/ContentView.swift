@@ -1722,6 +1722,11 @@ private struct SaveCaptureFlowView: View {
                     return
                 }
                 onComplete(candidateIDs)
+            } catch ReviewCandidateError.sourceAlreadyReviewed {
+                errorMessage = localized(
+                    "This source was already saved or reviewed. No new review was added.",
+                    "這個來源已收藏或處理過，沒有新增待確認項目。"
+                )
             } catch {
                 errorMessage = localized("Analysis could not finish. Please try again later.", "分析暫時無法完成，請稍後再試。")
             }

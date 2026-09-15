@@ -146,6 +146,21 @@ final class PlaceDeduplicationTests: XCTestCase {
     }
 
     @MainActor
+    func testRepeatedTerminalImportsNeverAnnounceNewClues() throws {
+        let savedID = UUID(), rejectedID = UUID()
+        let pending = review(date: 2, located: true)
+        for id in [savedID, rejectedID] {
+            XCTAssertThrowsError(try MapViewModel.reviewImportResultIDs([id], visibleCandidates: [])) { error in
+                guard case ReviewCandidateError.sourceAlreadyReviewed = error else {
+                    return XCTFail("Expected an already-reviewed acknowledgement")
+                }
+            }
+        }
+        XCTAssertEqual(try MapViewModel.reviewImportResultIDs([savedID, pending.id, rejectedID, pending.id], visibleCandidates: [pending]), [pending.id])
+        XCTAssertEqual(try MapViewModel.reviewImportResultIDs([], visibleCandidates: [pending]), [])
+    }
+
+    @MainActor
     func testNewestReviewComesFirstEvenWhenItHasNoLocation() {
         let ready = review(date: 1, located: true)
         let clue = review(date: 2, located: false)

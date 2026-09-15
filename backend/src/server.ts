@@ -1,4 +1,4 @@
-import { prepareCandidate, reconcileSavedCandidates, reuseCapture, supersedeSourceOnlyCandidates, duplicateCandidateGroups, supersededCandidateID, externalCandidateEvidence } from "./memoryStorage.js";
+import { prepareCandidate, reconcileSavedCandidates, reuseCapture, supersedeSourceOnlyCandidates, duplicateCandidateGroups, supersededCandidateID, externalCandidateEvidence, sameCandidateIdentity } from "./memoryStorage.js";
 import { AnalysisControlError, AnalysisUsageStore, analysisID, analysisLimits, analysisPrices, geminiTokens, trackAnalysisOperation, withAnalysisUsage } from "./analysisUsage.js";
 import { runAnalysisRecovery } from "./analysisRecovery.js";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -4320,16 +4320,32 @@ async function handleCaptureSearchRecovery(
         const client=await pool.connect();
         const createdCandidates:JsonBody[]=[];
         const supersededCandidateIds:string[]=[];
+        let effectiveWorkflowRunId = workflowRunId;
         const sourceResolution=recovery.sourceResolution ? sourceResolutionResponseBody(recovery.sourceResolution) : null;
         try {
           await client.query("begin");
           await client.query("set local statement_timeout='10s'");
+          const originalRun = workflowRunId ? await lockedWorkflowRun(client, workflowRunId, userId) : undefined;
           await client.query("select id from captures where id=$1 and user_id=$2 for update",[captureId,userId]);
+          const workflow = await captureRecoveryWorkflow(client, userId, capture, originalRun, recovery.candidates, body.explicit_retry === true);
+          effectiveWorkflowRunId = workflow.runId;
           for(const candidate of recovery.candidates) {
-            const prepared = await prepareCandidate(client, sourceSearchCandidateBody(candidate,captureId,workflowRunId));
+            const candidateBody = sourceSearchCandidateBody(candidate,captureId,effectiveWorkflowRunId);
+            const terminal = workflow.existing.find(row => ["saved", "confirmed", "rejected"].includes(String(row.status)) && sameCandidateIdentity(row, candidateBody));
+            if (terminal) candidateBody.workflow_run_id = terminal.workflow_run_id ?? null;
+            const prepared = await prepareCandidate(client, candidateBody);
             const insert=buildInsert("place_candidates",prepared.body,placeCandidateFields);
             const row = prepared.existing ?? (await client.query(`${insert.sql} returning *`,insert.values)).rows[0];
             if (["review", "needs_more_evidence", "source_only"].includes(row.status)) createdCandidates.push(formatPlaceCandidate(row));
+          }
+          if (workflow.created && effectiveWorkflowRunId) {
+            const refs = createdCandidates.map(candidate => candidate.id);
+            await recordPlaceRecoveryResult(effectiveWorkflowRunId, userId, normalizePlaceRecoveryWorkerResult({
+              result_type: "review_candidate", evidence_tier: "weak",
+              candidate_refs: refs, evidence_refs: [captureId, ...refs],
+              idempotency_key: `source-retry:${aid}`, operator_id: "save-backend",
+              permission_snapshot: { scopes: ["place_recovery.explicit_retry"] },
+            }), client);
           }
           if (recovery.candidates.length) supersededCandidateIds.push(...await supersedeSourceOnlyCandidates(client, captureId));
           await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,captureId,userId]);
@@ -4338,7 +4354,7 @@ async function handleCaptureSearchRecovery(
         } catch(error) { await client.query("rollback"); throw error; } finally { client.release(); }
         if(!requestedAnalysis) await analysisUsageStore.finish(userId,aid,recovery.candidates.length ? "review_candidate":"source_only",[captureId]);
         completed=true;
-        return {capture_id:captureId,analysis_id:aid,queries:recovery.queries,search_results:recovery.searchResults,created_candidates:createdCandidates,superseded_candidate_ids:supersededCandidateIds,media_evidence:recovery.mediaEvidence,source_resolution:sourceResolution,errors:recovery.errors,receipt:recovery.receipt};
+        return {capture_id:captureId,analysis_id:aid,workflow_run_id:effectiveWorkflowRunId ?? null,queries:recovery.queries,search_results:recovery.searchResults,created_candidates:createdCandidates,superseded_candidate_ids:supersededCandidateIds,media_evidence:recovery.mediaEvidence,source_resolution:sourceResolution,errors:recovery.errors,receipt:recovery.receipt};
       });
     } finally {
       if(!completed && investigatingVersion) {
@@ -4362,6 +4378,54 @@ async function handleCaptureSearchRecovery(
     result.created_candidates=current.rows.map(formatPlaceCandidate);
   }
   return sendJson(response,result);
+}
+
+// The prior run is locked before its capture. Settled user decisions remain
+// immutable; a new actionable result gets its own ordinary run and receipts.
+async function captureRecoveryWorkflow(
+  client: PoolClient, userId: string, capture: JsonBody, original: JsonBody | undefined,
+  candidates: SourceSearchCandidate[], explicitRetry: boolean,
+): Promise<{ runId?: string; created: boolean; existing: JsonBody[] }> {
+  const { rows } = await client.query(
+    `select pc.*, wr.status as run_status, wr.credit_settlement as run_settlement,
+       wr.result_candidate_refs as run_candidate_refs,
+       exists(select 1 from workflow_receipts receipt where receipt.run_id=wr.id
+         and receipt.receipt_type='analysis' and receipt.is_current) as has_receipt
+     from place_candidates pc left join workflow_runs wr on wr.id=pc.workflow_run_id and wr.user_id=$2
+     where pc.capture_id=$1 order by pc.created_at, pc.id`, [capture.id, userId]);
+  const unchanged = { runId: original ? String(original.id) : undefined, created: false, existing: rows };
+  if (!original || (original.credit_settlement === "pending" && !["completed", "failed"].includes(String(original.status)))) return unchanged;
+  const actionable = candidates.filter(candidate => !rows.some(row =>
+    ["saved", "confirmed", "rejected"].includes(row.status) && sameCandidateIdentity(row, candidate)));
+  if (!actionable.length) return unchanged;
+  if (!explicitRetry) throw new WorkflowConflictError("A settled workflow requires an explicit source retry");
+  if (!rows.some(row => row.workflow_run_id === original.id)) throw new WorkflowConflictError("Workflow does not belong to this capture");
+  const compatibleRuns = actionable.map(candidate => rows.filter(row =>
+    ["review", "needs_more_evidence"].includes(row.status) && row.run_settlement === "pending"
+    && row.run_status === "needs_review" && row.has_receipt
+    && Array.isArray(row.run_candidate_refs) && row.run_candidate_refs.includes(row.id)
+    && sameCandidateIdentity(row, candidate)).map(row => String(row.workflow_run_id)));
+  const reusable = compatibleRuns[0]?.find(runId => compatibleRuns.every(ids => ids.includes(runId)));
+  if (reusable) {
+    const run = await lockedWorkflowRun(client, reusable, userId);
+    if (run.credit_settlement === "pending" && run.status === "needs_review") return { ...unchanged, runId: reusable };
+    throw new WorkflowConflictError("Recovery candidate changed; refresh the saved place state before retrying");
+  }
+  const input = { source_url: capture.source_url ?? undefined, source_type: capture.source_type,
+    input_ref: capture.id, credit_reserved: original.credit_reserved,
+    budget_policy: { credit_reserved: original.credit_reserved, retry_of_run_id: original.id } };
+  const run = normalizePlaceRecoveryRunCreate(input);
+  const order = await createPlaceRecoveryWorkOrder(client, userId, normalizePlaceRecoveryWorkOrderCreate(input));
+  const insert = buildInsert("workflow_runs", {
+    work_order_id: order.id, workflow_id: run.workflowId, listing_id: run.listingId, user_id: userId,
+    source_url: run.sourceUrl ?? null, source_type: run.sourceType, status: "queued",
+    current_attempt_no: 1, credit_reserved: run.creditReserved, credit_settlement: "pending",
+  }, workflowRunFields);
+  const created = (await client.query(`${insert.sql} returning *`, insert.values)).rows[0];
+  await client.query("update work_orders set status='running' where id=$1 and user_id=$2", [order.id, userId]);
+  await insertCreditLedger(client, { run_id: created.id, user_id: userId, attempt_no: 1,
+    settlement_key: "reserve", delta: -run.creditReserved, reason: "reserve", settlement: "pending" });
+  return { runId: String(created.id), created: true, existing: rows };
 }
 
 async function handleMemoryCaptures(

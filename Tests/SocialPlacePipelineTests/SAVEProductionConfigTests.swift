@@ -395,6 +395,64 @@ final class SAVEAnalysisTransportTests: XCTestCase {
     }
 
     @MainActor
+    func testExactConfirmationPublishesReconciledDateForNewAndExistingStamps() async throws {
+        let oldDate = ISO8601DateFormatter().date(from: "2020-01-02T03:04:05Z")!
+        for isExisting in [false, true] {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+            let clue = PlaceReviewCandidate(id: UUID(), captureId: UUID(), name: "Cafe", address: "1 Road", city: nil,
+                latitude: nil, longitude: nil, evidence: [], confidence: nil, missingInfo: [], status: "review",
+                createdAt: oldDate.addingTimeInterval(1000))
+            let candidate = SaveMapCandidate(id: "exact-cafe", title: "Cafe", subtitle: "1 Road", latitude: 25, longitude: 121, category: .cafe)
+            var existing = Place.from(clue)
+            existing.latitude = 25
+            existing.longitude = 121
+            existing.note = "Latest user note"
+            var savedID = existing.id
+            var saveCount = 0
+            var decisionFails = !isExisting
+            AnalysisRequestURLProtocol.handler = { request in
+                if decisionFails, request.httpMethod == "PATCH", request.url?.path.contains("/candidates/") == true {
+                    return (503, "{\"error\":\"decision offline\"}")
+                }
+                if request.httpMethod == "GET", request.url?.path.hasSuffix("/places") == true {
+                    return (200, "[{\"id\":\"\(savedID)\",\"user_id\":\"owner\",\"name\":\"Cafe\",\"address\":\"1 Road\",\"latitude\":25,\"longitude\":121,\"category\":\"cafe\",\"status\":\"wantToGo\",\"source_platform\":\"other\",\"note\":\"stale note\",\"created_at\":\"2020-01-02T03:04:05.000Z\"}]")
+                }
+                return (200, request.httpMethod == "GET" ? "[]" : "{}")
+            }
+            let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+            let map = MapViewModel(supabaseService: service,
+                mapCandidatePlaceSaver: { place, _ in savedID = place.id; saveCount += 1 }, mapCandidateUserIDProvider: { "owner" },
+                saveLocalVaultService: vault, correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("corrections.json")))
+            if isExisting { map.places = [existing] }
+            map.reviewCandidates = [clue]
+            map.mapCandidates = [candidate]
+            map.beginExactSearchResolution(for: clue)
+            if !isExisting {
+                do {
+                    _ = try await map.saveMapCandidateAsPlace(candidate)
+                    XCTFail("The failed decision must keep the clue pending")
+                } catch {}
+                XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+                XCTAssertEqual(map.places.first?.id, savedID)
+                decisionFails = false
+            }
+            let saved = try await map.saveMapCandidateAsPlace(candidate)
+            XCTAssertEqual(saveCount, isExisting ? 0 : 1, "Retry must reuse the already inserted stamp")
+            XCTAssertEqual(saved.createdAt, oldDate)
+            XCTAssertEqual(map.places.first?.createdAt, oldDate)
+            XCTAssertEqual(try vault.confirmedPlaces().first?.createdAt, oldDate)
+            XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+            if isExisting { XCTAssertTrue(saved.note?.contains("Latest user note") == true) }
+
+            AnalysisRequestURLProtocol.handler = { _ in (503, "{\"error\":\"offline\"}") }
+            let fallback = await map.refreshedConfirmedPlace(saved)
+            XCTAssertEqual(fallback, saved, "A readback failure must not retry a committed save")
+        }
+    }
+
+    @MainActor
     func testMemoryFetchPreservesServerDatesWithAndWithoutFractionalSeconds() async throws {
         let id = UUID()
         let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
