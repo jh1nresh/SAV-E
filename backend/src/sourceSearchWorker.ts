@@ -1,3 +1,4 @@
+import { recoverInstagramVideoVenues, type VideoVenueEvidence } from "./videoVenueAnalysis.js";
 import { AnalysisControlError, trackAnalysisOperation, type AnalysisOperation } from "./analysisUsage.js";
 import { createHash } from "node:crypto";
 import { lookup } from "node:dns/promises";
@@ -80,7 +81,7 @@ export type SourceMediaEvidence = {
   sha256?: string;
   frameSecond?: number;
   text?: string;
-  textSource?: "ocr" | "asr";
+  textSource?: "ocr" | "asr" | "vision";
 };
 
 export type SourceResolutionStatus = "resolved" | "blocked_login" | "expired" | "opaque_unresolved";
@@ -135,6 +136,7 @@ export type SourceSearchWorkerOptions = {
   sourceDocumentResolver?: SourceDocumentResolver;
   persistedSourceResolution?: unknown;
   includeMediaEvidence?: boolean;
+  videoVenueRecovery?: (sourceURL: string) => Promise<VideoVenueEvidence[]>;
 };
 
 type PlacesCorroboration = {
@@ -208,11 +210,39 @@ export async function runSourceSearchRecovery(
     }
   }
 
-  const candidateDrafts = dedupeCandidates([
+  let candidateDrafts = dedupeCandidates([
     ...candidatesFromSourceMetadata(sourceMetadata),
     ...candidatesFromMediaEvidence(mediaEvidence, sourceMetadata),
     ...candidatesFromSearchResults(searchResults),
   ]);
+  // Expensive fallback only after the existing evidence routes found no venue.
+  // Public captures enter through the authenticated, metered recovery handler.
+  if (includeMediaEvidence && candidateDrafts.length === 0 && input.sourceUrl) {
+    try {
+      const recoverVideo = options.videoVenueRecovery
+        ?? (sourceURL => recoverInstagramVideoVenues(sourceURL, fetchBoundedMedia));
+      const venues = await recoverVideo(input.sourceUrl);
+      candidateDrafts = venues.filter(venue => isUsableCandidateName(venue.name)).map(venue => ({
+        name: venue.name,
+        address: "",
+        evidence: [
+          `Video frame at ${venue.timestampSeconds}s: ${venue.quote}`,
+          `Source video: ${input.sourceUrl}`,
+          "AI visual extraction; verify the named venue before saving",
+        ],
+        confidence: 0.44,
+        missingInfo: ["Verified address", "Verified coordinates", "User confirmation before saving as Map Stamp"],
+      }));
+      for (const venue of venues) {
+        mediaEvidence.push({ kind: "video_keyframe", url: input.sourceUrl,
+          frameSecond: venue.timestampSeconds, text: venue.quote, textSource: "vision" });
+      }
+    } catch (error) {
+      if (error instanceof AnalysisControlError) throw error;
+      errors.push("Video venue analysis unavailable; source preserved");
+      providerFailure ??= { kind: "provider_failure", stage: "media" };
+    }
+  }
   const candidates = await finalizeCandidates(
     candidateDrafts,
     {
@@ -915,7 +945,7 @@ function mediaEvidencePlaceName(text: string, address?: string): string | undefi
 function mediaEvidenceTextEvidence(mediaEvidence: SourceMediaEvidence[]): string[] {
   return mediaEvidence.flatMap((item) => {
     if (!item.text?.trim()) return [];
-    const label = item.textSource === "asr" ? "ASR transcript" : "Keyframe OCR";
+    const label = item.textSource === "vision" ? "AI video frame" : item.textSource === "asr" ? "ASR transcript" : "Keyframe OCR";
     const frame = typeof item.frameSecond === "number" ? ` at ${item.frameSecond}s` : "";
     return [`${label}${frame}: ${cleanText(item.text).slice(0, 240)}`];
   });

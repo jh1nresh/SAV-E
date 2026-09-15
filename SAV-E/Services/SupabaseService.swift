@@ -1019,6 +1019,10 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         if path.hasPrefix("/v0/friend-ratings") { request.cachePolicy = .reloadIgnoringLocalCacheData }
         request.httpMethod = method
         if path.hasPrefix("/v0/analysis") { request.timeoutInterval = 8 }
+        // Public video recovery includes a bounded download and frame analysis.
+        if path.hasPrefix("/memory/captures/"), path.hasSuffix("/search-recovery") {
+            request.timeoutInterval = 180
+        }
         request.setValue(SAVEAnalysisScope.current?.id.uuidString, forHTTPHeaderField: "x-save-analysis-id")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         for (name, value) in additionalHeaders {

@@ -1,0 +1,9 @@
+# Instagram video venue fallback
+
+After ordinary capture recovery produces no venue, `SAVE_ENABLE_VIDEO_VENUE_ANALYSIS=true` enables a bounded visual fallback. It uses public Instagram video content, samples up to eight frames throughout a short clip, and asks the existing Gemini 2.5 Flash model for explicit venue text and frame seconds. It does not transcribe or upload audio. Results remain review candidates and follow the existing Places/rubric/user-confirmation route.
+
+Deployment must include `nixpacks.toml` and the pinned `requirements-video.txt`. The runtime needs yt-dlp, ffmpeg, ffprobe and the existing GEMINI_API_KEY (or GOOGLE_GEMINI_API_KEY). `/health/source-recovery` checks required tools when enabled. No cookies, accounts, public multimodal proxy or provider tools are enabled. Setting the flag false disables the fallback without a migration. Enabling or deploying production remains a separate authorized action.
+
+Limits: public Instagram post URLs only, 24MB download, 90-second clip, eight bounded JPEG frames, one model request with bounded output and timeout. Usage reservations and token settlement use the existing analysis session; quota denial stops the flow. Unsupported/private/deleted videos, no readable venue text, or provider failures preserve the original clue; provider failures remain diagnostic. Temporary video and frames are removed after each attempt. Successful capture recovery is reused by the existing ownership-scoped recovery cache; the video pipeline version participates in its key.
+
+The real regression source is Reel DcTZXFrjfJG: its caption and thumbnail do not name the store, but the storefront near24s reads 江牛樓. The committed tests use redacted metadata, mocked model output and boundary fixtures. The local public-video proof is not a live production Gemini quality benchmark. Production readiness still requires an authenticated end-to-end test under the real usage ledger.
