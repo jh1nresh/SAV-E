@@ -60,7 +60,12 @@ export async function reuseCapture(client: PoolClient, userId: string, body: Row
   const existing = rows.find(row => normalizedCaptureURL(row.source_url) === key);
   if (!existing) return undefined;
   const updated = await client.query("update captures set raw_text=$3, title=coalesce(title,$4), created_at=coalesce($5::timestamptz,created_at), updated_at=now() where id=$1 and user_id=$2 returning *", [existing.id, userId, mergedCaptureText(existing, body), body.title ?? null, earliestKnownDate([existing.created_at, body.created_at]) ?? null]);
-  return updated.rows[0];
+  const capture = updated.rows[0];
+  // Capture-only repeat imports may return saved successor IDs without posting
+  // candidates again. Keep their collection dates aligned without new decisions.
+  await client.query("update place_candidates set created_at=$2 where capture_id=$1 and created_at>$2::timestamptz", [capture.id, capture.created_at]);
+  await client.query("update places p set created_at=$3 where p.user_id=$2 and p.created_at>$3::timestamptz and exists (select 1 from place_candidates pc where pc.capture_id=$1 and pc.place_id=p.id and pc.status in ('saved','confirmed'))", [capture.id, userId, capture.created_at]);
+  return capture;
 }
 
 export function earliestKnownDate(values: unknown[]): string | Date | undefined {

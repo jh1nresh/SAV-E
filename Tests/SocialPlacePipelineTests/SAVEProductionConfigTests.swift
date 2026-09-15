@@ -473,6 +473,11 @@ final class SAVEAnalysisTransportTests: XCTestCase {
 
     @MainActor
     func testRetryUsesExistingCaptureAndHidesOnlySupersededClueAfterReload() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        var stampID = UUID()
+        var readbackFails = false
         let capture = UUID(), oldID = UUID(), newID = UUID(), secondID = UUID(), run = UUID(), firstRun = UUID(), secondRun = UUID()
         let oldJSON = "{\"id\":\"\(oldID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(run)\",\"name\":\"Clue\",\"status\":\"source_only\",\"created_at\":\"2020-01-02T03:04:05Z\",\"superseded_by_candidate_id\":\"\(newID)\",\"superseded_by_candidate_ids\":[\"\(newID)\",\"\(secondID)\"]}"
         let newJSON = "{\"id\":\"\(newID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(firstRun)\",\"name\":\"Cafe\",\"status\":\"review\",\"created_at\":\"2020-01-02T03:04:05Z\"}"
@@ -490,11 +495,15 @@ final class SAVEAnalysisTransportTests: XCTestCase {
                 return (200, "{\"created_candidates\":[\(newJSON),\(secondJSON)]}")
             }
             if request.url?.path.hasSuffix("/candidates") == true { return (200, "[\(oldJSON),\(newJSON),\(secondJSON)]") }
+            if request.url?.path.hasSuffix("/places") == true {
+                if readbackFails { return (503, "{}") }
+                return (200, "[{\"id\":\"\(stampID)\",\"user_id\":\"owner\",\"name\":\"Cafe\",\"address\":\"1 Road\",\"latitude\":25,\"longitude\":121,\"category\":\"cafe\",\"status\":\"wantToGo\",\"source_platform\":\"other\",\"note\":\"stale server note\",\"created_at\":\"2020-01-02T03:04:05Z\"}]")
+            }
             if request.httpMethod == "GET" { return (200, "[]") }
             return (200, "{}")
         }
         let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
-        let map = MapViewModel(supabaseService: service)
+        let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault)
         let old = PlaceReviewCandidate(id: oldID, captureId: capture, workflowRunId: run, name: "Clue", address: "",
             city: nil, latitude: nil, longitude: nil, evidence: [], confidence: nil, missingInfo: [],
             status: "source_only", createdAt: Date(timeIntervalSince1970: 1))
@@ -504,13 +513,54 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         XCTAssertEqual(map.reviewCandidates.map(\.workflowRunId), [firstRun, secondRun])
         let pending = PendingReviewCandidate(candidateName: "Clue", address: "", category: "other",
             sourceURL: nil, sourceText: "source", evidence: [], confidence: 0, missingInfo: [], savedAt: Date(), isSourceOnly: true)
+        var stampClue = old
+        stampClue.latitude = 25
+        stampClue.longitude = 121
+        var stamp = Place.from(stampClue)
+        stampID = stamp.id
+        stamp.createdAt = Date()
+        stamp.note = "Latest local note"
+        map.places = [stamp]
         let reusedIDs = try await map.reuseImportedCandidate(pending, captureId: capture, userId: "owner")
         XCTAssertEqual(reusedIDs, [newID, secondID], "A repeated source returns every successor, not an arbitrary first venue")
+        XCTAssertEqual(map.places.first?.createdAt, ISO8601DateFormatter().date(from: "2020-01-02T03:04:05Z"))
+        XCTAssertEqual(map.places.first?.note, "Latest local note")
+        XCTAssertEqual(try vault.confirmedPlaces().first?.createdAt, map.places.first?.createdAt)
+        readbackFails = true
+        let repeatedAfterReadbackFailure = try await map.reuseImportedCandidate(pending, captureId: capture, userId: "owner")
+        XCTAssertEqual(repeatedAfterReadbackFailure, reusedIDs, "Date readback failure must not retry a committed import")
         XCTAssertTrue(AnalysisRequestURLProtocol.requests.allSatisfy {
             $0.httpMethod != "POST" || !$0.url!.path.hasSuffix("/captures")
         })
         try await map.refreshReviewCandidates()
         XCTAssertEqual(map.reviewCandidates.map(\.id), [newID, secondID])
+    }
+
+    func testPlaceMergeSendsEarliestKnownDateAndOmitsUnknownFallback() async throws {
+        let early = ISO8601DateFormatter().date(from: "2020-01-02T03:04:05Z")!
+        let clue = PlaceReviewCandidate(id: UUID(), captureId: nil, name: "Cafe", address: "1 Road",
+            city: nil, latitude: 25, longitude: 121, evidence: [], confidence: nil, missingInfo: [], status: "review", createdAt: early)
+        var existing = Place.from(clue)
+        existing.createdAt = early.addingTimeInterval(1000)
+        var incoming = Place.from(clue)
+        incoming.note = "Earlier source evidence"
+        let merged = existing.mergingSources(from: incoming)
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        var expectsDate = true
+        AnalysisRequestURLProtocol.handler = { request in
+            XCTAssertEqual(request.httpMethod, "PATCH")
+            let body = try AnalysisRequestURLProtocol.body(request)
+            if expectsDate {
+                XCTAssertEqual(body["created_at"] as? String, "2020-01-02T03:04:05Z")
+                XCTAssertTrue((body["note"] as? String)?.contains("Earlier source evidence") == true)
+            } else { XCTAssertNil(body["created_at"]) }
+            return (200, "{}")
+        }
+        try await service.updatePlace(merged)
+        expectsDate = false
+        var unknown = merged
+        unknown.createdAt = .distantPast
+        try await service.updatePlace(unknown)
     }
 
     func testEmptyRetryDistinguishesExistingSuccessorsFromUnresolvedSource() async throws {

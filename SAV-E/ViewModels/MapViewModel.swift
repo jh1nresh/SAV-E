@@ -1237,12 +1237,32 @@ final class MapViewModel: ObservableObject {
         guard let existing else { return nil }
         let availableIDs = Set(candidates.map(\.id))
         let replacements = existing.replacementCandidateIDs.filter { availableIDs.contains($0) }
-        if !replacements.isEmpty { return replacements }
+        if !replacements.isEmpty {
+            await refreshSavedCollectionDates(userId: userId)
+            return replacements
+        }
         var preserved = pending
         preserved.savedAt = min(existing.createdAt, pending.savedAt)
-        return [try await supabaseService.createPlaceCandidate(
+        let reusedID = try await supabaseService.createPlaceCandidate(
             preserved, captureId: captureId, userId: userId, workflowRunId: existing.workflowRunId
-        )]
+        )
+        await refreshSavedCollectionDates(userId: userId)
+        return [reusedID]
+    }
+
+    private func refreshSavedCollectionDates(userId: String) async {
+        guard !places.isEmpty else { return }
+        do {
+            for remote in try await supabaseService.fetchPlaces(for: userId) {
+                guard remote.createdAt > .distantPast,
+                      let index = places.firstIndex(where: { $0.id == remote.id }),
+                      remote.createdAt < places[index].createdAt else { continue }
+                places[index].createdAt = remote.createdAt
+                mirrorToLocalVault(places[index])
+            }
+        } catch {
+            print("MapViewModel: imported collection date refresh deferred: \(error)")
+        }
     }
 
     func reviewDuplicateAudit() async throws -> [SaveReviewDuplicateGroup] {

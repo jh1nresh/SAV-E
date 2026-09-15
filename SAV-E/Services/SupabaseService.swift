@@ -228,7 +228,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     func updatePlace(_ place: Place) async throws {
         guard isConfigured else { return }
 
-        let updates: [String: Any?] = [
+        var updates: [String: Any?] = [
             "name": place.name,
             "address": place.address,
             "category": place.category.rawValue,
@@ -245,6 +245,9 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             "source_image_url": place.sourceImageUrl,
             "business_photo_urls": place.businessPhotoUrls,
         ]
+        if place.createdAt > .distantPast {
+            updates["created_at"] = ISO8601DateFormatter().string(from: place.createdAt)
+        }
         let body = try Self.jsonBody(updates)
 
         try await request(path: "/places/\(place.id)", method: "PATCH", body: body)

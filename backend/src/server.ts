@@ -1542,8 +1542,20 @@ async function handlePlaces(
     const rawBody = await readJson(request);
     const providerFieldError = providerCoordinateFieldError(rawBody);
     if (providerFieldError) return sendJson(response, { error: providerFieldError }, 400);
+    const createdAt = rawBody.created_at;
+    if (createdAt !== undefined && (typeof createdAt !== "string" || !Number.isFinite(Date.parse(createdAt)))) {
+      return sendJson(response, { error: "created_at must be a valid timestamp" }, 400);
+    }
     const body = writableFields(rawBody, ["id", "user_id", "created_at", "updated_at"]);
-    const update = buildUpdate("places", body, placeFields);
+    let update = buildUpdate("places", body, placeFields);
+    if (typeof createdAt === "string") {
+      const separator = update ? "," : "";
+      update ??= { sql: "update places set", values: [] };
+      update.values.push(new Date(createdAt).toISOString());
+      // Source merges retain the earliest collection time, even with concurrent
+      // updates; an incoming timestamp can never move the owned Stamp later.
+      update.sql += `${separator} created_at = least(created_at, $${update.values.length}::timestamptz)`;
+    }
     if (!update) return sendJson(response, { error: "No writable fields" }, 400);
 
     const values = [...update.values, placeId, userId];

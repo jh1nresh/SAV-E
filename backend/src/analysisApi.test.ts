@@ -302,9 +302,29 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
         const laterCandidate = await api("/v0/memory/candidates", { capture_id: laterCapture.body.id, name: "Chronology Cafe", address: "1 Chronology Street", latitude: 25, longitude: 121 }, owner);
         assert.equal((await patchCandidate(laterCandidate.body.id)).status, 200);
         assert.equal((await pool.query("select created_at from places where id=$1", [place])).rows[0].created_at.toISOString(), "2025-01-01T00:00:00.000Z", "later confirmations cannot move the date forward");
-        const arbitraryPatch = await fetch(base + `/v0/places/${place}`, { method: "PATCH", headers: { "content-type": "application/json", "x-save-guest-token": owner.guest_token }, body: JSON.stringify({ created_at: "2000-01-01T00:00:00Z" }) });
-        assert.equal(arbitraryPatch.status, 400, "ordinary place patches cannot rewrite timestamps");
+        const laterPatch = await fetch(base + `/v0/places/${place}`, { method: "PATCH", headers: { "content-type": "application/json", "x-save-guest-token": owner.guest_token }, body: JSON.stringify({ created_at: "2030-01-01T00:00:00Z" }) });
+        assert.equal(laterPatch.status, 200);
+        assert.equal((await laterPatch.json() as any).created_at, originalDate, "ordinary place merges cannot move timestamps later");
       }
+    });
+
+    await t.test("ordinary owned stamp merges persist only earlier valid dates", async () => {
+      const mergeOwner = await newGuest();
+      const place = randomUUID();
+      const created = await api("/v0/places", { id: place, name: "Merged Cafe", address: "1 Merge Road", latitude: 25, longitude: 121, created_at: "2025-06-01T00:00:00Z" }, mergeOwner);
+      assert.equal(created.status, 201, JSON.stringify(created.body));
+      const patch = (body: any, guest = mergeOwner) => fetch(base + `/v0/places/${place}`, { method: "PATCH", headers: { "content-type": "application/json", "x-save-guest-token": guest.guest_token }, body: JSON.stringify(body) });
+      assert.equal((await patch({ created_at: "2024-01-01T00:00:00Z" }, other)).status, 404);
+      const earlier = await patch({ created_at: "2025-01-01T00:00:00Z", name: "Merged Cafe Updated" });
+      assert.equal(earlier.status, 200);
+      assert.equal((await earlier.json() as any).created_at, "2025-01-01T00:00:00Z");
+      assert.equal((await patch({ created_at: "2026-01-01T00:00:00Z" })).status, 200);
+      for (const created_at of ["invalid", null, 0, {}, ""]) {
+        assert.equal((await patch({ created_at, name: "Must not write" })).status, 400);
+      }
+      const reload = await api("/v0/places", undefined, mergeOwner);
+      const row = (reload.body as any).find((row: any) => row.id === place);
+      assert.equal(row.created_at, "2025-01-01T00:00:00Z"); assert.equal(row.name, "Merged Cafe Updated");
     });
 
     await t.test("explicit source retry reuses capture time and persists supersession without changing user truth or receipts", async () => {
@@ -491,6 +511,30 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
         assert.equal(finalRows.length, 4);
         assert.deepEqual(finalRows.find(row => row.id === clue.body.id)!.evidence, source.evidence, "repeat complete batch does not append duplicate provenance");
         assert.equal(finalRows.find(row => row.id === third.id)!.status, "review");
+        const sourceURL = `https://fixture.invalid/successor-dates/${capture.body.id}`;
+        await pool.query("update captures set source_url=$2 where id=$1", [capture.body.id, sourceURL]);
+        const runIDs = [...new Set(finalRows.map(row => row.workflow_run_id))];
+        const history = async () => ({
+          runs: (await pool.query("select * from workflow_runs where id=any($1::uuid[]) order by id", [runIDs])).rows,
+          receipts: (await pool.query("select * from workflow_receipts where run_id=any($1::uuid[]) order by id", [runIDs])).rows,
+          ledger: (await pool.query("select * from credit_ledger where run_id=any($1::uuid[]) order by id", [runIDs])).rows,
+        });
+        const beforeHistory = await history();
+        const earlier = await api("/v0/memory/captures", { source_url: sourceURL, created_at: "2020-01-01T00:00:00Z" }, guest);
+        assert.equal(earlier.body.id, capture.body.id);
+        const backdated = (await pool.query("select * from place_candidates where capture_id=$1", [capture.body.id])).rows;
+        for (const row of backdated) {
+          assert.equal(row.created_at.toISOString(), "2020-01-01T00:00:00.000Z", "a capture-only repeat backdates every persisted successor and source row");
+          const previous = finalRows.find(previous => previous.id === row.id)!;
+          assert.deepEqual({ ...row, created_at: previous.created_at, updated_at: previous.updated_at }, previous, "capture date propagation changes no candidate state, evidence or ownership");
+        }
+        const stampReload = await api("/v0/places", undefined, guest);
+        for (const saved of backdated.filter(row => row.status === "saved")) {
+          assert.equal((stampReload.body as any).find((row: any) => row.id === saved.place_id).created_at, "2020-01-01T00:00:00Z");
+        }
+        assert.deepEqual(await history(), beforeHistory, "source chronology cannot rewrite lifecycle or billing history");
+        const candidateReload = await api(`/v0/memory/candidates?capture_id=${capture.body.id}`, undefined, guest);
+        assert.ok((candidateReload.body as any).every((row: any) => row.created_at === "2020-01-01T00:00:00Z"));
       }
     });
 
