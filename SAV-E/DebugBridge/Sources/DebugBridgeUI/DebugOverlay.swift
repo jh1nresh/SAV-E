@@ -120,7 +120,7 @@ private struct OverlayRoot: View {
     }
 }
 
-private struct BorderShape: Shape {
+nonisolated private struct BorderShape: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         p.addRoundedRect(in: rect.insetBy(dx: 2, dy: 2), cornerSize: CGSize(width: 16, height: 16))

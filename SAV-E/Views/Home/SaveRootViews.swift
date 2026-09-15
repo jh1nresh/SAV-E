@@ -758,7 +758,7 @@ private struct SaveAtlasReviewPocket: View {
     }
 }
 
-private struct SaveAtlasPocketStitch: Shape {
+nonisolated private struct SaveAtlasPocketStitch: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
         let edgeY = rect.minY + rect.height * 0.16
@@ -818,7 +818,7 @@ private struct SaveAtlasPerforatedMedallion: View {
     }
 }
 
-private struct SaveAtlasScallopedRectangle: Shape {
+nonisolated private struct SaveAtlasScallopedRectangle: Shape {
     var depth: CGFloat = 4
     var pitch: CGFloat = 11
 
@@ -871,7 +871,7 @@ private struct SaveAtlasScallopedRectangle: Shape {
     }
 }
 
-private struct SaveAtlasSealShape: Shape {
+nonisolated private struct SaveAtlasSealShape: Shape {
     func path(in rect: CGRect) -> Path {
         let center = CGPoint(x: rect.midX, y: rect.midY)
         let baseRadius = min(rect.width, rect.height) / 2 - 2

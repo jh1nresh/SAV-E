@@ -1616,7 +1616,7 @@ private struct ClipAtlasChip: View {
     }
 }
 
-private struct ClipScallopedRectangle: Shape {
+nonisolated private struct ClipScallopedRectangle: Shape {
     var depth: CGFloat = 4
     var pitch: CGFloat = 11
 
