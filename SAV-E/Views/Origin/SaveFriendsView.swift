@@ -35,6 +35,7 @@ struct SaveFriendsView: View {
         }
         .frame(width: AtlasMetrics.width, height: AtlasMetrics.height)
         .background(SaveAtlasPalette.canvas)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("friends.root")
     }
 }

@@ -32,7 +32,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             openRootTab("Friends", app: app)
             attach(app, name: "friends-after-opening-\(language)")
             let title = app.staticTexts["friends.comingSoon"]
-            XCTAssertTrue(title.waitForExistence(timeout: stepTimeout))
+            if !title.waitForExistence(timeout: stepTimeout) {
+                print(app.debugDescription)
+                XCTFail("The visible localized Coming soon heading must remain accessible.")
+            }
             XCTAssertEqual(title.label, expectedTitle)
             XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'root.tab.'")).count, 5)
             XCTAssertFalse(rootTabButton("Plan", app: app).exists)
