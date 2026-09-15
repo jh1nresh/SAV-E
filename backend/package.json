@@ -10,6 +10,7 @@
     "prestart": "npm run build && npm run check:source-recovery",
     "test": "npm run build && node --test \"dist/**/*.test.js\"",
     "audit:production": "node scripts/audit-production.mjs",
+    "apply:sql": "bash scripts/apply-sql.sh",
     "validate": "npm test && npm run audit:production",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
