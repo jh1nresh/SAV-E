@@ -291,31 +291,57 @@ final class SocialLinkReviewCandidateService {
 
     private func reviewCandidates(from url: URL, sharedCaption: String?) async -> [PendingReviewCandidate] {
         let metadata = await fetchMetadata(from: url)
-        let ocrLines = await thumbnailOCRLines(from: metadata.imageURL)
-        let ocrEvidence = ocrLines.isEmpty ? nil : ocrLines.joined(separator: "\n")
         let videoEvidence = metadata.videoURL.map { "Video metadata URL: \($0.absoluteString)" }
-        let evidenceText = ([sharedCaption] + metadata.evidenceLines + [videoEvidence, ocrEvidence])
+        let evidenceText = ([sharedCaption] + metadata.evidenceLines + [videoEvidence])
             .compactMap { $0 }
             .map(cleanHTMLText)
             .filter { !$0.isEmpty }
             .joined(separator: "\n")
 
         let sourceURL = metadata.resolvedURL ?? url.absoluteString
+        let resolved = await reviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL) {
+            await self.thumbnailOCRLines(from: metadata.imageURL)
+        }
+        // Fetch diagnostics remain available even when text made OCR unnecessary.
+        return resolved.map { $0.withSocialFetchDiagnostic(metadata.fetchDiagnosticLines) }
+    }
+
+    /// Only a concrete text identity can skip thumbnail work. An area, bare
+    /// venue stem, or unresolved clue still needs the existing OCR/recovery path.
+    func reviewCandidates(
+        fromEvidenceText text: String,
+        sourceURL: String,
+        thumbnailText: () async -> [String]
+    ) async -> [PendingReviewCandidate] {
+        let initial = reviewCandidatesOrSourceOnly(fromEvidenceText: text, sourceURL: sourceURL)
+        let hasConcreteTextIdentity = !initial.isEmpty
+            && !deterministicYieldedUnreliableProseFragment(initial)
+            && initial.allSatisfy {
+                !$0.isSourceOnly && !$0.isPlaceBearingSource
+                    && !isAddressOnlyPlaceClue($0)
+                    && $0.reviewState != "unresolved_place_candidate"
+                    && ($0.hasReliableCoordinates || hasExplicitThumbnailSkipAddress($0.address))
+            }
+        let ocrLines = hasConcreteTextIdentity ? [] : await thumbnailText()
+        let evidenceText = ([text] + ocrLines).filter { !$0.isEmpty }.joined(separator: "\n")
         // Never hard-fail a link the user pasted: if recovery search throws,
         // fall back to the deterministic local parse / source-only path.
         let resolved = (try? await recoverReviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL))
             ?? reviewCandidatesOrSourceOnly(fromEvidenceText: evidenceText, sourceURL: sourceURL)
-        // Attach a lightweight fetch receipt to every candidate so a future
-        // source-only degrade (Instagram's flaky logged-out wall) is
-        // diagnosable: it records whether og:title/description/image were
-        // present, the decoded caption length, and the parse stage reached.
-        let candidates = resolved.map { candidate in
-            candidate.withSocialFetchDiagnostic(metadata.fetchDiagnosticLines)
-        }
-        guard !ocrLines.isEmpty else { return candidates }
-        return candidates.map { candidate in
+        guard !ocrLines.isEmpty else { return resolved }
+        return resolved.map { candidate in
             candidate.withThumbnailOCREvidence(ocrLines)
         }
+    }
+
+    private func hasExplicitThumbnailSkipAddress(_ address: String) -> Bool {
+        // The general address recognizer also accepts areas such as Bangkok
+        // and Los Angeles, CA. Only numbered streets can skip extra evidence.
+        // Unrecognized international address formats keep the OCR fallback.
+        looksLikeWesternStreetAddress(address) || address.range(
+            of: #"[路街道巷弄][^\n\r]{0,40}\d+[號号]"#,
+            options: .regularExpression
+        ) != nil
     }
 
     // Each entry point owns this state; concurrent analyses never share caches.

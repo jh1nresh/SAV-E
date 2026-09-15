@@ -4332,6 +4332,99 @@ final class SocialPlacePipelineTests: XCTestCase {
                       "Deterministic recovery succeeded; the LLM caption extractor must not be called")
     }
 
+    @MainActor
+    func testLinkAnalysisSkipsThumbnailForExplicitVenueAndStreetAddress() async throws {
+        let extractor = FakeCaptionVenueExtractor(trigger: "百年", venue: nil)
+        let search = CountingAnalysisSearch()
+        let service = SocialLinkReviewCandidateService(
+            googlePlacesService: EmptyGooglePlacesService(),
+            publicSourceSearchService: search,
+            captionVenueExtractor: extractor
+        )
+        var thumbnailLoads = 0
+        let candidates = await service.reviewCandidates(
+            fromEvidenceText: "弘大必喝「百年土種參雞湯」\n台北市萬華區中華路一段88號3樓",
+            sourceURL: "https://www.instagram.com/p/TextComplete/",
+            thumbnailText: {
+                thumbnailLoads += 1
+                return ["Unrelated Thumbnail Cafe"]
+            }
+        )
+        XCTAssertEqual(thumbnailLoads, 0)
+        XCTAssertTrue(extractor.captions.isEmpty)
+        XCTAssertTrue(search.queries.isEmpty)
+        let candidate = try XCTUnwrap(candidates.first)
+        XCTAssertEqual(candidate.candidateName, "百年土種參雞湯")
+        XCTAssertTrue(candidate.address.contains("88號"))
+        XCTAssertFalse(candidate.hasReliableCoordinates, "Skipping OCR must not grant verified coordinates")
+        XCTAssertFalse(candidate.missingInfo.isEmpty)
+    }
+
+    @MainActor
+    func testLinkAnalysisKeepsThumbnailForMissingOrIncompleteTextIdentity() async {
+        let service = SocialLinkReviewCandidateService(
+            googlePlacesService: EmptyGooglePlacesService(),
+            publicSourceSearchService: CountingAnalysisSearch(),
+            captionVenueExtractor: nil
+        )
+        for caption in [
+            "", "Log in to Instagram", "📍Ulaman, Bali, Indonesia", "Aurora Museum opens in London.",
+            "Aquarela Coffee\nBangkok", "Aquarela Coffee\nLos Angeles, CA",
+            "Aquarela Coffee\nBangkok 10110", "123 Main Street",
+            "1. Juniper Coffee\n123 Main Street\n2. Aquarela Coffee\nBangkok"
+        ] {
+            var thumbnailLoads = 0
+            _ = await service.reviewCandidates(
+                fromEvidenceText: caption,
+                sourceURL: "https://www.instagram.com/p/NeedsImage/",
+                thumbnailText: {
+                    thumbnailLoads += 1
+                    return []
+                }
+            )
+            XCTAssertEqual(thumbnailLoads, 1, "Missing/area-only identity still needs OCR: \(caption)")
+        }
+    }
+
+    @MainActor
+    func testLinkAnalysisRetainsVenueEvidenceReadFromThumbnail() async throws {
+        let service = SocialLinkReviewCandidateService(
+            googlePlacesService: EmptyGooglePlacesService(),
+            publicSourceSearchService: CountingAnalysisSearch(),
+            captionVenueExtractor: nil
+        )
+        let candidates = await service.reviewCandidates(
+            fromEvidenceText: "",
+            sourceURL: "https://www.instagram.com/p/ImageOnly/",
+            thumbnailText: { ["弘大必喝「百年土種參雞湯」", "台北市萬華區中華路一段88號3樓"] }
+        )
+        let candidate = try XCTUnwrap(candidates.first)
+        XCTAssertEqual(candidate.candidateName, "百年土種參雞湯")
+        XCTAssertFalse(candidate.hasReliableCoordinates)
+        XCTAssertTrue(candidate.evidence.contains { $0.contains("OCR") })
+    }
+
+    func testBoundedCaptionPreservesLongCaptionVenueAtEndWithoutExpandingBudget() {
+        let caption = "A weekend in town.\n" + String(repeating: "The walk was lovely. ", count: 100)
+            + "\n📍Aquarela Coffee\nLos Angeles"
+        let bounded = SocialCaptionVenueExtractionPolicy.boundedCaption(caption)
+        XCTAssertLessThanOrEqual(bounded.count, 1_200)
+        XCTAssertTrue(bounded.hasPrefix("A weekend in town."))
+        XCTAssertTrue(bounded.hasSuffix("📍Aquarela Coffee\nLos Angeles"))
+        XCTAssertTrue(SocialCaptionVenueExtractionPolicy.isAcceptedVenueName("Aquarela Coffee", in: caption))
+        XCTAssertFalse(SocialCaptionVenueExtractionPolicy.isAcceptedVenueName("Blue Bottle Coffee", in: caption))
+    }
+
+    func testBoundedCaptionPreservesShortAndUnicodeEvidence() {
+        for caption in ["", "📍百年土種參雞湯\n台北市中華路88號", "Café de la Plaza, México"] {
+            XCTAssertEqual(SocialCaptionVenueExtractionPolicy.boundedCaption(caption), caption)
+        }
+        let caption = String(repeating: "一家人👨‍👩‍👧‍👦散步。", count: 300) + "\n📍百年土種參雞湯\n台北市中華路88號"
+        let bounded = SocialCaptionVenueExtractionPolicy.boundedCaption(caption)
+        XCTAssertEqual(bounded.count, 1_200)
+        XCTAssertTrue(bounded.hasSuffix("📍百年土種參雞湯\n台北市中華路88號"))
+    }
+
     // MARK: - Analysis-scoped search recovery and request accounting
 
     private final class CountingAnalysisResolver: PlaceResolverServiceProtocol {

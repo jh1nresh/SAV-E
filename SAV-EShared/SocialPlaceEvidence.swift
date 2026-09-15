@@ -25,6 +25,19 @@ struct SocialCaptionVenueExtraction: Equatable {
 }
 
 enum SocialCaptionVenueExtractionPolicy {
+    /// Keep both the introduction and the venue/address often placed at the end.
+    /// A separator preserves the boundary between excerpts instead of joining
+    /// unrelated fragments into a new name. The original caption remains evidence.
+    static func boundedCaption(_ caption: String) -> String {
+        let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+        let limit = 1_200
+        guard trimmed.count > limit else { return trimmed }
+        let separator = "\n…\n"
+        let headCount = (limit - separator.count) / 2
+        let tailCount = limit - separator.count - headCount
+        return String(trimmed.prefix(headCount)) + separator + String(trimmed.suffix(tailCount))
+    }
+
     static func prompt(caption: String) -> String {
         """
         You extract the single real-world venue (restaurant, cafe, bar, shop, hotel, attraction) mentioned in a social media caption for a travel app.
