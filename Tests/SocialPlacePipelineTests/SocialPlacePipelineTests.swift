@@ -4404,6 +4404,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.evidence.contains { $0.contains("OCR") })
     }
 
+    @MainActor
     func testBoundedCaptionPreservesLongCaptionVenueAtEndWithoutExpandingBudget() {
         let caption = "A weekend in town.\n" + String(repeating: "The walk was lovely. ", count: 100)
             + "\n📍Aquarela Coffee\nLos Angeles"
@@ -4415,6 +4416,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertFalse(SocialCaptionVenueExtractionPolicy.isAcceptedVenueName("Blue Bottle Coffee", in: caption))
     }
 
+    @MainActor
     func testBoundedCaptionPreservesShortAndUnicodeEvidence() {
         for caption in ["", "📍百年土種參雞湯\n台北市中華路88號", "Café de la Plaza, México"] {
             XCTAssertEqual(SocialCaptionVenueExtractionPolicy.boundedCaption(caption), caption)
