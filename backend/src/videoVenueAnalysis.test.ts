@@ -63,7 +63,7 @@ test("disabled and unsupported sources perform no I/O", async t => {
   const f = await fixture(t); f.options.env = {};
   assert.deepEqual(await recoverInstagramVideoVenues(reel, f.fetchMedia, f.options), []);
   f.options.env = { SAVE_ENABLE_VIDEO_VENUE_ANALYSIS: "true", GEMINI_API_KEY: "fixture" };
-  for (const source of ["http://instagram.com/reel/abc/", "https://instagram.com.evil.test/reel/abc/", "https://name:pass@instagram.com/reel/abc/", "https://instagram.com:444/reel/abc/", "https://127.0.0.1/reel/abc/", "https://instagram.com/accounts/login", "https://instagram.com/reel/abc/extra", "https://instagram.com/reel/a%2Fb/"]) {
+  for (const source of ["http://instagram.com/reel/abc/", "https://instagram.com.evil.test/reel/abc/", "https://name:pass@instagram.com/reel/abc/", "https://instagram.com:444/reel/abc/", "https://127.0.0.1/reel/abc/", "https://instagram.com/accounts/login", "https://instagram.com/reel/abc/extra", "https://instagram.com/reel/a%2Fb/", "https://www.instagram.com/share/reel/ShareCode/"]) {
     assert.deepEqual(await recoverInstagramVideoVenues(source, f.fetchMedia, f.options), [], source);
   }
   assert.equal(f.commands.length, 0); assert.equal(f.providerCalls, 0); assert.equal(f.mediaCalls, 0);

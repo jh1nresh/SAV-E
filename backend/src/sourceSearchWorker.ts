@@ -221,20 +221,21 @@ export async function runSourceSearchRecovery(
     try {
       const recoverVideo = options.videoVenueRecovery
         ?? (sourceURL => recoverInstagramVideoVenues(sourceURL, fetchBoundedMedia));
-      const venues = await recoverVideo(input.sourceUrl);
+      const videoSourceUrl = enrichedInput.sourceUrl ?? input.sourceUrl;
+      const venues = await recoverVideo(videoSourceUrl);
       candidateDrafts = venues.filter(venue => isUsableCandidateName(venue.name)).map(venue => ({
         name: venue.name,
         address: "",
         evidence: [
           `Video frame at ${venue.timestampSeconds}s: ${venue.quote}`,
-          `Source video: ${input.sourceUrl}`,
+          `Source video: ${videoSourceUrl}`,
           "AI visual extraction; verify the named venue before saving",
         ],
         confidence: 0.44,
         missingInfo: ["Verified address", "Verified coordinates", "User confirmation before saving as Map Stamp"],
       }));
       for (const venue of venues) {
-        mediaEvidence.push({ kind: "video_keyframe", url: input.sourceUrl,
+        mediaEvidence.push({ kind: "video_keyframe", url: videoSourceUrl,
           frameSecond: venue.timestampSeconds, text: venue.quote, textSource: "vision" });
       }
     } catch (error) {
