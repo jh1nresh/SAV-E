@@ -473,9 +473,10 @@ final class SAVEAnalysisTransportTests: XCTestCase {
 
     @MainActor
     func testRetryUsesExistingCaptureAndHidesOnlySupersededClueAfterReload() async throws {
-        let capture = UUID(), oldID = UUID(), newID = UUID(), run = UUID()
-        let oldJSON = "{\"id\":\"\(oldID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(run)\",\"name\":\"Clue\",\"status\":\"source_only\",\"created_at\":\"2020-01-02T03:04:05Z\",\"superseded_by_candidate_id\":\"\(newID)\"}"
-        let newJSON = "{\"id\":\"\(newID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(run)\",\"name\":\"Cafe\",\"status\":\"review\",\"created_at\":\"2020-01-02T03:04:05Z\"}"
+        let capture = UUID(), oldID = UUID(), newID = UUID(), secondID = UUID(), run = UUID(), firstRun = UUID(), secondRun = UUID()
+        let oldJSON = "{\"id\":\"\(oldID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(run)\",\"name\":\"Clue\",\"status\":\"source_only\",\"created_at\":\"2020-01-02T03:04:05Z\",\"superseded_by_candidate_id\":\"\(newID)\",\"superseded_by_candidate_ids\":[\"\(newID)\",\"\(secondID)\"]}"
+        let newJSON = "{\"id\":\"\(newID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(firstRun)\",\"name\":\"Cafe\",\"status\":\"review\",\"created_at\":\"2020-01-02T03:04:05Z\"}"
+        let secondJSON = "{\"id\":\"\(secondID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(secondRun)\",\"name\":\"Museum\",\"status\":\"review\",\"created_at\":\"2020-01-02T03:04:05Z\"}"
         AnalysisRequestURLProtocol.handler = { request in
             if request.url?.path == "/v0/analysis" {
                 let id = try XCTUnwrap(AnalysisRequestURLProtocol.body(request)["id"] as? String)
@@ -486,9 +487,9 @@ final class SAVEAnalysisTransportTests: XCTestCase {
                 let body = try AnalysisRequestURLProtocol.body(request)
                 XCTAssertEqual(body["workflow_run_id"] as? String, run.uuidString)
                 XCTAssertEqual(body["explicit_retry"] as? Bool, true)
-                return (200, "{\"created_candidates\":[\(newJSON)]}")
+                return (200, "{\"created_candidates\":[\(newJSON),\(secondJSON)]}")
             }
-            if request.url?.path.hasSuffix("/candidates") == true { return (200, "[\(oldJSON),\(newJSON)]") }
+            if request.url?.path.hasSuffix("/candidates") == true { return (200, "[\(oldJSON),\(newJSON),\(secondJSON)]") }
             if request.httpMethod == "GET" { return (200, "[]") }
             return (200, "{}")
         }
@@ -498,13 +499,18 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             city: nil, latitude: nil, longitude: nil, evidence: [], confidence: nil, missingInfo: [],
             status: "source_only", createdAt: Date(timeIntervalSince1970: 1))
         let ids = try await map.reanalyzeReviewSource(old)
-        XCTAssertEqual(ids, [newID])
-        XCTAssertEqual(map.reviewCandidates.map(\.id), [newID])
+        XCTAssertEqual(ids, [newID, secondID])
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [newID, secondID])
+        XCTAssertEqual(map.reviewCandidates.map(\.workflowRunId), [firstRun, secondRun])
+        let pending = PendingReviewCandidate(candidateName: "Clue", address: "", category: "other",
+            sourceURL: nil, sourceText: "source", evidence: [], confidence: 0, missingInfo: [], savedAt: Date(), isSourceOnly: true)
+        let reusedIDs = try await map.reuseImportedCandidate(pending, captureId: capture, userId: "owner")
+        XCTAssertEqual(reusedIDs, [newID, secondID], "A repeated source returns every successor, not an arbitrary first venue")
         XCTAssertTrue(AnalysisRequestURLProtocol.requests.allSatisfy {
             $0.httpMethod != "POST" || !$0.url!.path.hasSuffix("/captures")
         })
         try await map.refreshReviewCandidates()
-        XCTAssertEqual(map.reviewCandidates.map(\.id), [newID])
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [newID, secondID])
     }
 
     override func tearDown() {

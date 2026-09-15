@@ -1077,7 +1077,7 @@ final class MapViewModel: ObservableObject {
             candidate.sourceFailureReason = importFailureReasons[candidate.id]
             return candidate
         }.filter { candidate in
-            candidate.supersededByCandidateID == nil && (
+            candidate.replacementCandidateIDs.isEmpty && (
                 candidate.status == "review" || candidate.status == "confirmed" ||
                 candidate.status == "needs_more_evidence" || candidate.status == "source_only"
             )
@@ -1179,8 +1179,8 @@ final class MapViewModel: ObservableObject {
                 do {
                     let captureId = try await supabaseService.createMemoryCapture(from: candidate, userId: userId)
                     await SAVEAnalysisScope.current?.addCapture(captureId)
-                    if let existingID = try await reuseImportedCandidate(candidate, captureId: captureId, userId: userId) {
-                        importedCandidateIDs.append(existingID)
+                    if let existingIDs = try await reuseImportedCandidate(candidate, captureId: captureId, userId: userId) {
+                        importedCandidateIDs.append(contentsOf: existingIDs)
                         continue
                     }
                     let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(sourceURL: candidate.sourceURL, sourceType: nil)
@@ -1231,17 +1231,18 @@ final class MapViewModel: ObservableObject {
 
     /// Repeated imports reuse the original workflow. A candidate cannot be
     /// reassigned to a fresh run without invalidating its confirmation receipt.
-    private func reuseImportedCandidate(_ pending: PendingReviewCandidate, captureId: UUID, userId: String) async throws -> UUID? {
+    func reuseImportedCandidate(_ pending: PendingReviewCandidate, captureId: UUID, userId: String) async throws -> [UUID]? {
         let candidates = try await supabaseService.fetchReviewCandidates(captureId: captureId)
         let existing = candidates.sorted { $0.createdAt < $1.createdAt }.first { $0.matchesImport(pending) }
         guard let existing else { return nil }
-        if let replacementID = existing.supersededByCandidateID,
-           candidates.contains(where: { $0.id == replacementID }) { return replacementID }
+        let availableIDs = Set(candidates.map(\.id))
+        let replacements = existing.replacementCandidateIDs.filter { availableIDs.contains($0) }
+        if !replacements.isEmpty { return replacements }
         var preserved = pending
         preserved.savedAt = min(existing.createdAt, pending.savedAt)
-        return try await supabaseService.createPlaceCandidate(
+        return [try await supabaseService.createPlaceCandidate(
             preserved, captureId: captureId, userId: userId, workflowRunId: existing.workflowRunId
-        )
+        )]
     }
 
     func reviewDuplicateAudit() async throws -> [SaveReviewDuplicateGroup] {
@@ -1507,7 +1508,9 @@ final class MapViewModel: ObservableObject {
             category: candidate.category,
             sourceURL: candidate.sourceURL,
             sourcePlatform: candidate.sourcePlatform,
-            evidence: candidate.evidence,
+            evidence: (candidate.evidence + (exactResolution?.clue.evidence ?? [])).reduce(into: [String]()) {
+                if !$0.contains($1) { $0.append($1) }
+            },
             externalRating: candidate.rating,
             externalReviewCount: candidate.reviewCount
         )

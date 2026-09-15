@@ -2057,6 +2057,7 @@ private struct SourceSearchRecoveryRow: Codable {
 
 private struct PlaceCandidateRow: Codable {
     let superseded_by_candidate_id: UUID?
+    let superseded_by_candidate_ids: [UUID]?
     let id: UUID
     let capture_id: UUID?
     let workflow_run_id: UUID?
@@ -2088,6 +2089,7 @@ private struct PlaceCandidateRow: Codable {
             createdAt: memoryCollectionDate(created_at)
         )
         candidate.supersededByCandidateID = superseded_by_candidate_id
+        candidate.supersededByCandidateIDs = superseded_by_candidate_ids ?? []
         return candidate
     }
 }

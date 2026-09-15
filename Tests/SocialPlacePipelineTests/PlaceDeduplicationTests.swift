@@ -146,6 +146,16 @@ final class PlaceDeduplicationTests: XCTestCase {
     }
 
     @MainActor
+    func testSourceReplacementSupportsLegacySingleAndAllNewSuccessors() {
+        var source = review(date: 1, located: false)
+        let first = UUID(), second = UUID()
+        source.supersededByCandidateID = first
+        XCTAssertEqual(source.replacementCandidateIDs, [first])
+        source.supersededByCandidateIDs = [first, second]
+        XCTAssertEqual(source.replacementCandidateIDs, [first, second])
+    }
+
+    @MainActor
     func testRepeatedTerminalImportsNeverAnnounceNewClues() throws {
         let savedID = UUID(), rejectedID = UUID()
         let pending = review(date: 2, located: true)

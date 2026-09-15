@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
 
 const databaseURL = process.env.SAVE_ANALYSIS_TEST_DATABASE_URL;
+const fixtureRequestLimit = 4;
 const fixtureHook = `
 import { appendFileSync } from 'node:fs';
 import dns from 'node:dns/promises';
@@ -30,6 +31,8 @@ globalThis.fetch = async (input, init) => {
   const publicSearch = ['duckduckgo.com', 'html.duckduckgo.com'].includes(url.hostname) && url.pathname === '/html/';
   if (publicSearch) {
     appendFileSync(process.env.ANALYSIS_FIXTURE_CALLS, JSON.stringify({ provider: 'public_search', failed: false })+'\\n');
+    if (url.searchParams.get('q') === 'fixture-recovery-partial-failure') return new Response('Synthetic partial search failure', { status: 503 });
+    if (url.searchParams.get('q')?.startsWith('fixture-multi-venue')) return new Response('<div class="result"><a class="result__a" href="https://alpha.invalid/">Alpha Fixture Cafe - Official</a><a class="result__snippet">1111 Park Ave, Tustin, CA 92782</a></div><div class="result"><a class="result__a" href="https://beta.invalid/">Beta Fixture Cafe - Official</a><a class="result__snippet">2222 Park Ave, Tustin, CA 92782</a></div>' + (url.searchParams.get('q').endsWith('-third') ? '<div class="result"><a class="result__a" href="https://gamma.invalid/">Gamma Fixture Cafe - Official</a><a class="result__snippet">3333 Park Ave, Tustin, CA 92782</a></div>' : ''));
     return new Response('<html><body>No fixture matches</body></html>');
   }
   if (!google && !gemini) {
@@ -39,6 +42,8 @@ globalThis.fetch = async (input, init) => {
   const failed = google ? url.searchParams.get('query') === 'fixture-provider-failure' : String(init?.body).includes('fixture-provider-failure');
   appendFileSync(process.env.ANALYSIS_FIXTURE_CALLS, JSON.stringify({ provider: google ? 'google' : 'gemini', failed })+'\\n');
   if (failed) return Response.json({ error: { message: 'synthetic provider failure' } }, { status: 503 });
+  const multiVenue = google ? /Alpha Fixture Cafe|Beta Fixture Cafe|Gamma Fixture Cafe/.exec(url.searchParams.get('query') ?? '')?.[0] : undefined;
+  if (multiVenue) return Response.json({ status: 'OK', results: [{ place_id: 'fixture-' + multiVenue, name: multiVenue, formatted_address: multiVenue.startsWith('Alpha') ? '1111 Park Ave, Tustin, CA 92782' : multiVenue.startsWith('Beta') ? '2222 Park Ave, Tustin, CA 92782' : '3333 Park Ave, Tustin, CA 92782', geometry: { location: { lat: multiVenue.startsWith('Alpha') ? 25 : multiVenue.startsWith('Beta') ? 26 : 27, lng: 121 } } }] });
   return Response.json(google
     ? { status: 'OK', results: [{ place_id: 'fixture-place', name: 'Fixture Cafe', formatted_address: '1 Fixture Street', geometry: { location: { lat: 25, lng: 121 } } }] }
     : { candidates: [{ content: { parts: [{ text: 'Fixture response' }] } }], usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 30, thoughtsTokenCount: 20, totalTokenCount: 150, cachedContentTokenCount: 10 } });
@@ -70,7 +75,7 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       DATABASE_URL: databaseURL, PGSSLMODE: "disable", PRIVY_APP_ID: "fixture-app", PRIVY_VERIFICATION_KEY: "fixture-unused-key",
       SAVE_GUEST_SESSION_SECRET: "analysis-api-fixture-only", SLLR_NOTIFY_INTERVAL_MS: "0",
       GOOGLE_PLACES_API_KEY: "synthetic-google-key", GEMINI_API_KEY: "synthetic-gemini-key",
-      SAVE_ANALYSIS_LIMITS_ENABLED: "true", SAVE_ANALYSIS_ACCOUNT_DAILY_LIMIT: "10000", SAVE_ANALYSIS_REQUEST_LIMIT: "3",
+      SAVE_ANALYSIS_LIMITS_ENABLED: "true", SAVE_ANALYSIS_ACCOUNT_DAILY_LIMIT: "10000", SAVE_ANALYSIS_REQUEST_LIMIT: String(fixtureRequestLimit),
       SAVE_ANALYSIS_ACCOUNT_DAILY_BUDGET_MICROS: "1000000000000", SAVE_ANALYSIS_GLOBAL_DAILY_BUDGET_MICROS: "1000000000000",
       SAVE_ANALYSIS_BUDGET_MICROS: "1000000000", ANALYSIS_FIXTURE_CALLS: callsPath,
     }, stdio: ["ignore", "pipe", "pipe"],
@@ -289,6 +294,111 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       assert.equal(replay.status, 200); assert.equal(replay.body.workflow_run_id, recovered.workflow_run_id); assert.deepEqual(replay.body.created_candidates, []);
     });
 
+    await t.test("two venues recovered from pending or settled clues can each be confirmed in either order", async () => {
+      for (const { settled, reversed, generic, partial } of [...[true, false].flatMap(settled => [false, true].map(reversed => ({ settled, reversed, generic: true, partial: false }))), { settled: false, reversed: false, generic: false, partial: false }, { settled: false, reversed: false, generic: true, partial: true }]) {
+        const retiresSource = generic && !partial;
+        const multiOwner = await newGuest();
+        const capture = await api("/v0/memory/captures", { source_type: "note", raw_text: "two venue clues" }, multiOwner);
+        const run = await api("/v0/workflows/place-recovery/runs", { source_type: "note" }, multiOwner);
+        const clue = await api("/v0/memory/candidates", { capture_id: capture.body.id, workflow_run_id: run.body.id, name: generic ? "Saved source" : "Named uncertain venue", status: "source_only", evidence: [{ text: "two venue clues" }] }, multiOwner);
+        assert.equal((await api(`/v0/workflows/place-recovery/runs/${run.body.id}/result`, { result_type: "source_only_clue", evidence_tier: "weak", candidate_refs: [clue.body.id], evidence_refs: [clue.body.id] }, multiOwner)).status, 201);
+        if (settled) assert.equal((await api(`/v0/workflows/place-recovery/runs/${run.body.id}/decision`, { action: "source_only", candidate_id: clue.body.id }, multiOwner)).status, 201);
+        const originalReceipts = (await pool.query("select * from workflow_receipts where run_id=$1 order by id", [run.body.id])).rows;
+        const retryBody = { workflow_run_id: run.body.id, explicit_retry: true, queries: partial ? ["fixture-multi-venue", "fixture-recovery-partial-failure"] : ["fixture-multi-venue"], max_queries: partial ? 2 : 1, include_media_evidence: false };
+        const aid = await start(multiOwner);
+        const recovered = await api(`/v0/memory/captures/${capture.body.id}/search-recovery`, retryBody, multiOwner, { "x-save-analysis-id": aid });
+        assert.equal(recovered.status, 200, JSON.stringify(recovered.body));
+        assert.equal(recovered.body.created_candidates.length, 2, JSON.stringify(recovered.body));
+        if (partial) assert.ok(recovered.body.errors.length > 0, "fixture persists venues while retaining an explicit partial recovery error");
+        const candidates = recovered.body.created_candidates as Array<Record<string, any>>;
+        assert.notEqual(candidates[0].name, candidates[1].name);
+        assert.deepEqual(recovered.body.superseded_candidate_ids, retiresSource ? [clue.body.id] : []);
+        const sourceReload = await api(`/v0/memory/candidates?capture_id=${capture.body.id}`, undefined, multiOwner);
+        const sourceRow = (sourceReload.body as any).find((row: any) => row.id === clue.body.id);
+        assert.equal(sourceRow.status, "source_only"); assert.equal(sourceRow.workflow_run_id, run.body.id);
+        assert.deepEqual(sourceRow.superseded_by_candidate_ids.sort(), retiresSource ? candidates.map(row => row.id).sort() : []);
+        assert.equal(sourceRow.evidence[0].text, "two venue clues");
+        assert.equal((await api(`/v0/memory/captures/${capture.body.id}`, undefined, multiOwner)).body.raw_text, "two venue clues");
+        if (!settled && retiresSource) {
+          const staleDecision = await api(`/v0/workflows/place-recovery/runs/${run.body.id}/decision`, { action: "source_only", candidate_id: clue.body.id }, multiOwner);
+          assert.equal(staleDecision.status, 409, "stale source-only action cannot settle its successor venue");
+          assert.equal((await pool.query("select credit_settlement from workflow_runs where id=$1", [run.body.id])).rows[0].credit_settlement, "pending");
+        }
+        const fresh = await api(`/v0/memory/captures/${capture.body.id}/search-recovery`, retryBody, multiOwner, { "x-save-analysis-id": await start(multiOwner) });
+        assert.equal(fresh.status, 200, JSON.stringify(fresh.body));
+        assert.deepEqual(fresh.body.created_candidates.map((row: any) => [row.id, row.workflow_run_id]).sort(), candidates.map(row => [row.id, row.workflow_run_id]).sort());
+        const order = reversed ? [...candidates].reverse() : candidates;
+        for (let index = 0; index < order.length; index++) {
+          const candidate = order[index], place = randomUUID();
+          await pool.query("insert into places(id,user_id,name,address,latitude,longitude) values($1,$2,$3,$4,$5,$6)", [place, multiOwner.guest_id, candidate.name, candidate.address, candidate.latitude, candidate.longitude]);
+          const confirmed = await api(`/v0/workflows/place-recovery/runs/${candidate.workflow_run_id}/decision`, { action: "confirm", candidate_id: candidate.id, final_place_id: place }, multiOwner);
+          assert.equal(confirmed.status, 201, JSON.stringify(confirmed.body));
+          if (index === 0) assert.equal((await pool.query("select status from place_candidates where id=$1", [order[1].id])).rows[0].status, "review", "first venue confirmation does not complete the other venue");
+        }
+        assert.notEqual(candidates[0].workflow_run_id, candidates[1].workflow_run_id);
+        assert.equal(recovered.body.workflow_run_id, null, "multi-venue response must not imply one confirmable run");
+        for (const candidate of candidates) {
+          const receipts = (await pool.query("select receipt_type from workflow_receipts where run_id=$1", [candidate.workflow_run_id])).rows;
+          assert.deepEqual(receipts.map(row => row.receipt_type).sort(), candidate.workflow_run_id === run.body.id ? ["analysis", "analysis", "decision"] : ["analysis", "decision"]);
+        }
+        assert.equal((await pool.query("select count(*)::int as count from place_candidates where capture_id=$1", [capture.body.id])).rows[0].count, 3);
+        if (!retiresSource) {
+          assert.ok(candidates.every(candidate => candidate.workflow_run_id !== run.body.id), "visible named uncertainty keeps its own pending reservation");
+          assert.equal((await pool.query("select credit_settlement from workflow_runs where id=$1", [run.body.id])).rows[0].credit_settlement, "pending");
+        }
+        const finalParentReceipts = (await pool.query("select * from workflow_receipts where run_id=$1 order by id", [run.body.id])).rows;
+        if (settled || !retiresSource) assert.deepEqual(finalParentReceipts, originalReceipts);
+        else {
+          assert.ok(candidates.some(candidate => candidate.workflow_run_id === run.body.id), "one venue uses the original pending reservation");
+          for (const receipt of originalReceipts) assert.deepEqual(finalParentReceipts.find(row => row.id === receipt.id), { ...receipt, is_current: false });
+          const reserve = await pool.query("select count(*)::int as count from credit_ledger where run_id=$1 and reason='reserve'", [run.body.id]);
+          assert.equal(reserve.rows[0].count, 1, "original pending credit is reused, never stranded or reserved again");
+        }
+      }
+    });
+
+    await t.test("source successor provenance grows from two to three venues and retains settled successors", async () => {
+      for (const settleBeforeExtension of [false, true]) {
+        const guest = await newGuest();
+        const capture = await api("/v0/memory/captures", { source_type: "note", raw_text: "preserved expanding source" }, guest);
+        const run = await api("/v0/workflows/place-recovery/runs", { source_type: "note" }, guest);
+        const clue = await api("/v0/memory/candidates", { capture_id: capture.body.id, workflow_run_id: run.body.id, name: "Saved source", status: "source_only", evidence: [{ text: "original evidence" }] }, guest);
+        await api(`/v0/workflows/place-recovery/runs/${run.body.id}/result`, { result_type: "source_only_clue", evidence_tier: "weak", candidate_refs: [clue.body.id], evidence_refs: [clue.body.id] }, guest);
+        await api(`/v0/workflows/place-recovery/runs/${run.body.id}/decision`, { action: "source_only", candidate_id: clue.body.id }, guest);
+        const retry = async (query: string) => api(`/v0/memory/captures/${capture.body.id}/search-recovery`, { workflow_run_id: run.body.id, explicit_retry: true, queries: [query], max_queries: 1, include_media_evidence: false }, guest, { "x-save-analysis-id": await start(guest) });
+        const first = await retry("fixture-multi-venue");
+        assert.equal(first.status, 200, JSON.stringify(first.body)); assert.equal(first.body.created_candidates.length, 2);
+        const firstIDs = first.body.created_candidates.map((row: any) => row.id);
+        const beforeEvidence = (await pool.query("select evidence from place_candidates where id=$1", [clue.body.id])).rows[0].evidence;
+        const confirmFirst = async () => {
+          for (const row of first.body.created_candidates) {
+            const place = randomUUID();
+            await pool.query("insert into places(id,user_id,name,address,latitude,longitude) values($1,$2,$3,$4,$5,$6)", [place, guest.guest_id, row.name, row.address, row.latitude, row.longitude]);
+            const result = await api(`/v0/workflows/place-recovery/runs/${row.workflow_run_id}/decision`, { action: "confirm", candidate_id: row.id, final_place_id: place }, guest);
+            assert.equal(result.status, 201, JSON.stringify(result.body));
+          }
+        };
+        if (settleBeforeExtension) await confirmFirst();
+        const expanded = await retry("fixture-multi-venue-third");
+        assert.equal(expanded.status, 200, JSON.stringify(expanded.body));
+        const third = expanded.body.created_candidates.find((row: any) => row.name === "Gamma Fixture Cafe");
+        assert.ok(third, JSON.stringify(expanded.body));
+        if (!settleBeforeExtension) await confirmFirst();
+        const reload = await api(`/v0/memory/candidates?capture_id=${capture.body.id}`, undefined, guest);
+        const source = (reload.body as any).find((row: any) => row.id === clue.body.id);
+        assert.deepEqual(source.superseded_by_candidate_ids.sort(), [...firstIDs, third.id].sort(), "repeat source reaches C even after A and B have settled");
+        assert.deepEqual(source.evidence.slice(0, beforeEvidence.length), beforeEvidence, "original evidence and first successor event remain unchanged");
+        assert.equal(source.status, "source_only");
+        const repeated = await retry("fixture-multi-venue-third");
+        assert.equal(repeated.status, 200, JSON.stringify(repeated.body));
+        assert.deepEqual(repeated.body.created_candidates.map((row: any) => [row.id, row.workflow_run_id]), [[third.id, third.workflow_run_id]]);
+        const finalRows = (await pool.query("select * from place_candidates where capture_id=$1", [capture.body.id])).rows;
+        assert.equal(finalRows.length, 4);
+        assert.deepEqual(finalRows.find(row => row.id === clue.body.id)!.evidence, source.evidence, "repeat complete batch does not append duplicate provenance");
+        assert.equal(finalRows.find(row => row.id === third.id)!.status, "review");
+      }
+    });
+
     await t.test("session routes reject foreign owners and forged analysis context before provider calls", async () => {
       const id = await start(owner); const before = (await calls()).length;
       assert.equal((await api("/v0/analysis", { id }, other)).status, 404);
@@ -335,14 +445,14 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       assert.ok(!JSON.stringify(rows).includes("fixture-caption"));
       const summary = await api(`/v0/analysis/${id}`, undefined, owner); assert.equal(summary.status, 200);
       assert.equal(summary.body.cost_complete, false, "An open analysis has incomplete accounting");
-      assert.equal((await api(`/v0/analysis/${id}/places`, { query: "fixture" }, owner)).status, 200);
+      for (let n = 2; n < fixtureRequestLimit; n++) assert.equal((await api(`/v0/analysis/${id}/places`, { query: "fixture" }, owner)).status, 200);
       const before = (await calls()).length;
       const denied = await api(`/v0/analysis/${id}/places`, { query: "fixture" }, owner);
       assert.equal(denied.status, 429); assert.equal(denied.body.code, "analysis_limit_exceeded");
       const deniedGemini = await api("/v0/llm/gemini-generate-content", geminiBody(), owner, { "x-save-analysis-id": id });
       assert.equal(deniedGemini.status, 429); assert.equal(deniedGemini.body.code, "analysis_limit_exceeded");
       assert.equal((await calls()).length, before, "quota denial must happen before provider fetch");
-      assert.equal((await pool.query("select * from analysis_usage_events where analysis_id=$1", [id])).rowCount, 3);
+      assert.equal((await pool.query("select * from analysis_usage_events where analysis_id=$1", [id])).rowCount, fixtureRequestLimit);
       const finished = await api(`/v0/analysis/${id}/finish`, { outcome: "source_only" }, owner);
       assert.equal(finished.status, 200); assert.equal(finished.body.cost_complete, false, "Expected client events have not arrived");
       assert.equal((await api(`/v0/analysis/${id}/client-events`, { events: [] }, owner)).status, 200);
@@ -392,7 +502,7 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       const id=await start(owner);
       const captured=await api("/v0/memory/captures",{source_type:"note",raw_text:"A lovely day outside"},owner,{"x-save-analysis-id":id});
       assert.equal(captured.status,201);
-      for(let n=0;n<3;n++) assert.equal((await api(`/v0/analysis/${id}/places`,{query:"fixture"},owner)).status,200);
+      for(let n=0;n<fixtureRequestLimit;n++) assert.equal((await api(`/v0/analysis/${id}/places`,{query:"fixture"},owner)).status,200);
       const before=(await calls()).length;
       const path=`/v0/memory/captures/${captured.body.id}/search-recovery`;
       const body={queries:["fixture recovery"],max_queries:1,include_media_evidence:false};

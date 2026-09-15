@@ -269,7 +269,7 @@ final class SaveLocalVaultService: Sendable {
         try withLock {
             try withCoordinatedVaultWrite { url in
                 var records = try loadRecords(from: url)
-                records.removeAll { $0.state == .reviewCandidate && $0.id == candidateID }
+                records.removeAll { ($0.state == .reviewCandidate || $0.state == .sourceOnly) && $0.id == candidateID }
                 try save(records, to: url)
             }
         }
@@ -496,7 +496,10 @@ private extension SaveMemoryRecord {
             city: nil,
             latitude: latitude,
             longitude: longitude,
-            evidence: evidence + (sourceURL.map { ["Source URL: \($0)"] } ?? []),
+            evidence: (evidence + [sourceText ?? ""] + (sourceURL.map { ["Source URL: \($0)"] } ?? []))
+                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.reduce(into: [String]()) {
+                    if !$0.contains($1) { $0.append($1) }
+                },
             confidence: nil,
             missingInfo: evidenceDiagnostic?.missingFields ?? [],
             status: state == .sourceOnly ? "source_only" : "review",

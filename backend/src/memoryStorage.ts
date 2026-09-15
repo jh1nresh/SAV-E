@@ -123,15 +123,39 @@ export async function reconcileSavedCandidates(client: PoolClient, userId: strin
   return duplicates.map(row => row.id);
 }
 
-export async function supersedeSourceOnlyCandidates(client: PoolClient, captureId: string): Promise<string[]> {
-  const { rows } = await client.query("select * from place_candidates where capture_id=$1 for update", [captureId]);
+export function isGenericSourceOnlyCandidate(row: Row): boolean {
+  return row.status === "source_only" && !identityText(row.address) && !row.place_id
+    && row.latitude == null && row.longitude == null
+    && ["saved link", "saved source", "social link", "instagram reel", "instagram link", "xiaohongshu link",
+      "douyin link", "dianping link", "meituan link", "taobao instant commerce link", "taobao product link",
+      "tiktok link", "google maps link", "apple maps link"].includes(identityText(row.name));
+}
+
+export async function supersedeSourceOnlyCandidates(client: PoolClient, captureId: string, successorIds?: string[]): Promise<string[]> {
+  const { rows } = await client.query("select pc.*, wr.credit_settlement as run_settlement from place_candidates pc left join workflow_runs wr on wr.id=pc.workflow_run_id where pc.capture_id=$1 for update of pc", [captureId]);
   const named = rows.filter(row => row.status !== "source_only" && row.status !== "rejected");
-  // A source-only row has no verified venue. Do not silently choose among multiple
-  // locations or discard a named/partially resolved predecessor.
-  if (!named.length || named.some(row => !sameCandidateIdentity(named[0], row))) return [];
-  const ids = rows.filter(row => !supersededCandidateID(row) && row.status === "source_only" && !identityText(row.address) && !row.place_id && row.latitude == null && row.longitude == null).map(row => row.id);
-  if (ids.length) await client.query("update place_candidates set evidence=evidence || $2::jsonb, updated_at=now() where id=any($1::uuid[])", [ids, JSON.stringify([{ superseded_by_candidate_id: named[0].id }])]);
-  return ids;
+  let successors = named.length ? [named[0]] : [];
+  if (successorIds) {
+    const ids = [...new Set(successorIds)];
+    successors = ids.map(id => rows.find(row => row.id === id)).filter(Boolean);
+    // Accept only a fully persisted batch; existing settled successors remain
+    // part of the source history even when a later retry discovers another venue.
+    if (!ids.length || successors.length !== ids.length || successors.some(row => !["review", "needs_more_evidence", "saved", "confirmed"].includes(row.status))) return [];
+  } else if (!named.length || named.some(row => !sameCandidateIdentity(named[0], row))) return [];
+  const changed: string[] = [];
+  for (const source of rows.filter(isGenericSourceOnlyCandidate)) {
+    const previous = supersededCandidateIDs(source);
+    const replacements = [...new Set([...previous, ...successors.map(row => String(row.id))])];
+    const represented = rows.filter(row => replacements.includes(row.id));
+    if (named.some(row => !represented.some(successor => sameCandidateIdentity(successor, row)))) continue;
+    if (!previous.length && source.workflow_run_id && source.run_settlement === "pending"
+      && !successors.some(successor => successor.workflow_run_id === source.workflow_run_id)) continue;
+    if (replacements.length === previous.length) continue;
+    // Append a cumulative event rather than altering prior evidence/provenance.
+    await client.query("update place_candidates set evidence=evidence || $2::jsonb, updated_at=now() where id=$1", [source.id, JSON.stringify([{ superseded_by_candidate_id: replacements[0], superseded_by_candidate_ids: replacements }])]);
+    changed.push(source.id);
+  }
+  return changed;
 }
 
 export function duplicateCandidateGroups(rows: Row[], places: Row[] = []): Row[] {
@@ -170,12 +194,25 @@ export function supersededCandidateID(row: Row): string | undefined {
     && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(item.superseded_by_candidate_id))?.superseded_by_candidate_id;
 }
 
+export function supersededCandidateIDs(row: Row): string[] {
+  if (!Array.isArray(row.evidence)) return [];
+  const validID = (id: unknown): id is string => typeof id === "string"
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  const ids: string[] = [];
+  for (const item of row.evidence) {
+    if (!item || typeof item !== "object") continue;
+    if (validID(item.superseded_by_candidate_id)) ids.push(item.superseded_by_candidate_id);
+    if (Array.isArray(item.superseded_by_candidate_ids) && item.superseded_by_candidate_ids.every(validID)) ids.push(...item.superseded_by_candidate_ids);
+  }
+  return [...new Set(ids)];
+}
+
 // Reconciliation provenance is authored by the service, not imported evidence.
 export function externalCandidateEvidence(value: unknown): unknown[] {
   if (!Array.isArray(value)) return [];
   return value.map(item => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return item;
-    const { superseded_by_candidate_id, completed_by_candidate_id, ...evidence } = item;
+    const { superseded_by_candidate_id, superseded_by_candidate_ids, completed_by_candidate_id, ...evidence } = item;
     return evidence;
   }).filter(item => !item || typeof item !== "object" || Object.keys(item).length > 0);
 }

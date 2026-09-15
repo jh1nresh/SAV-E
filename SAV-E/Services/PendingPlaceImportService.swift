@@ -337,6 +337,10 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     // Transient display state; excluded from Codable/evidence/share payloads.
     var sourceFailureReason: SourceSearchFailureReason? = nil
     var supersededByCandidateID: UUID? = nil
+    var supersededByCandidateIDs: [UUID] = []
+    var replacementCandidateIDs: [UUID] {
+        supersededByCandidateIDs.isEmpty ? supersededByCandidateID.map { [$0] } ?? [] : supersededByCandidateIDs
+    }
     var id: UUID
     var captureId: UUID?
     var workflowRunId: UUID?
@@ -399,6 +403,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
 
     private enum CodingKeys: String, CodingKey {
         case supersededByCandidateID
+        case supersededByCandidateIDs
         case id
         case captureId
         case workflowRunId
@@ -422,6 +427,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         supersededByCandidateID = try container.decodeIfPresent(UUID.self, forKey: .supersededByCandidateID)
+        supersededByCandidateIDs = try container.decodeIfPresent([UUID].self, forKey: .supersededByCandidateIDs) ?? []
         id = try container.decode(UUID.self, forKey: .id)
         captureId = try container.decodeIfPresent(UUID.self, forKey: .captureId)
         workflowRunId = try container.decodeIfPresent(UUID.self, forKey: .workflowRunId)
