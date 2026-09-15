@@ -48,7 +48,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             openRootTab("Friends", app: app)
             XCTAssertTrue(title.waitForExistence(timeout: stepTimeout))
             XCTAssertEqual(title.label, expectedTitle)
-            app.terminate()
+            openRootTab("Passport", app: app)
+            let sharedRatings = app.buttons["profile.sharedRatings"]
+            XCTAssertTrue(scrollUntilHittable(sharedRatings, in: app.scrollViews.firstMatch, maxSwipes: 10))
+            sharedRatings.tap()
+            let emptyRatings = app.staticTexts["profile.sharedRatings.empty"]
+            XCTAssertTrue(emptyRatings.waitForExistence(timeout: stepTimeout))
+            XCTAssertEqual(emptyRatings.label, language == "en" ? "No shared restaurant ratings" : "沒有已分享的餐廳評分")
+            attach(app, name: "passport-shared-ratings-\(language)")
+            app.buttons["profile.sharedRatings.done"].tap()
+            XCTAssertTrue(emptyRatings.waitForNonExistence(timeout: stepTimeout))
+            terminate(app)
         }
     }
 

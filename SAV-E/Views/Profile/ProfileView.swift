@@ -2446,6 +2446,7 @@ private struct PassportVisibilityPanel: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let places: [Place]
     let onUpdate: (Place, PlaceVisibility) async throws -> Void
+    @State private var showsSharedRatings = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
@@ -2463,6 +2464,26 @@ private struct PassportVisibilityPanel: View {
                     .tracking(0.9)
                     .foregroundStyle(SaveAtlasPalette.forest)
                 Spacer()
+            }
+
+            Button {
+                showsSharedRatings = true
+            } label: {
+                HStack {
+                    Text(languageSettings.localized(
+                        english: "Shared restaurant ratings",
+                        traditionalChinese: "已分享的餐廳評分"
+                    ))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                }
+                .font(SaveTheme.Typography.supporting)
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .frame(minHeight: 44)
+            }
+            .accessibilityIdentifier("profile.sharedRatings")
+            .sheet(isPresented: $showsSharedRatings) {
+                PassportSharedRatingsSheet(places: places)
             }
 
             if places.isEmpty {
@@ -2500,6 +2521,92 @@ private struct PassportVisibilityPanel: View {
                 )
         }
         .padding(.horizontal)
+    }
+}
+
+private struct PassportSharedRatingsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @ObservedObject private var auth = PrivyAuthService.shared
+    @StateObject private var model = SharedRestaurantRatingsViewModel()
+    let places: [Place]
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Text(languageSettings.localized(
+                        english: "Stop sharing a rating with friends. Your saved place and personal rating stay in your account.",
+                        traditionalChinese: "停止向朋友分享評分。你的已保存地點與個人評分仍會保留。"
+                    ))
+                    .font(SaveTheme.Typography.supporting)
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                }
+                .listRowBackground(SaveAtlasPalette.paper)
+
+                if model.isLoading {
+                    ProgressView()
+                } else if model.hasError {
+                    Section {
+                        Text(languageSettings.localized(
+                            english: "Couldn’t update shared ratings. Please try again.",
+                            traditionalChinese: "無法更新已分享的評分，請再試一次。"
+                        ))
+                        Button(languageSettings.localized(english: "Retry", traditionalChinese: "重試")) {
+                            Task { await model.load() }
+                        }
+                    }
+                } else if model.ratings.isEmpty {
+                    Text(languageSettings.localized(
+                        english: "No shared restaurant ratings",
+                        traditionalChinese: "沒有已分享的餐廳評分"
+                    ))
+                    .accessibilityIdentifier("profile.sharedRatings.empty")
+                }
+
+                ForEach(model.ratings, id: \.place_id) { rating in
+                    VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
+                        Text(rating.place_name ?? places.first(where: { $0.id == rating.place_id })?.name
+                             ?? languageSettings.localized(english: "Saved restaurant", traditionalChinese: "已保存的餐廳"))
+                            .font(SaveTheme.Typography.stamp)
+                        if rating.place_name == nil && !places.contains(where: { $0.id == rating.place_id }) {
+                            Text(rating.place_id.uuidString)
+                                .font(.caption2)
+                                .textSelection(.enabled)
+                        }
+                        HStack {
+                            Label(String(format: "%.1f", rating.stars), systemImage: "star.fill")
+                            Spacer()
+                            Button(languageSettings.localized(english: "Stop sharing", traditionalChinese: "停止分享")) {
+                                Task { await model.stopSharing(rating.place_id) }
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(model.withdrawingID != nil || model.isLoading)
+                            .accessibilityIdentifier("profile.sharedRatings.withdraw.\(rating.place_id.uuidString)")
+                        }
+                    }
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .listRowBackground(SaveAtlasPalette.paper)
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(SaveAtlasPalette.canvas)
+            .navigationTitle(languageSettings.localized(english: "Shared ratings", traditionalChinese: "已分享的評分"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(languageSettings.localized(english: "Done", traditionalChinese: "完成")) { dismiss() }
+                        .accessibilityIdentifier("profile.sharedRatings.done")
+                }
+            }
+            .tint(SaveAtlasPalette.forest)
+            .task { await model.load() }
+            .onChange(of: auth.sessionGeneration) { _, _ in
+                model.invalidate()
+                dismiss()
+            }
+            .onDisappear { model.invalidate() }
+        }
     }
 }
 

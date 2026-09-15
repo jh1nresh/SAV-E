@@ -775,6 +775,11 @@ Existing saved places, ratings, sharing permissions and backend data remain
 unchanged; this page does not expose controls to modify them. Restoring the
 sharing experience requires a separate product decision.
 
+Passport → Sharing & Privacy retains a withdrawal-only list of existing shared
+restaurant ratings. It includes shares whose places are currently private, and
+withdrawing a rating does not change the place visibility or delete its memory.
+Only an explicit owner action withdraws a share; Friends never opens this list.
+
 ### Share Extension
 
 Share Extension is a quick capture surface.

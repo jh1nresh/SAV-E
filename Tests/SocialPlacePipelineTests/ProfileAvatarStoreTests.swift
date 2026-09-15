@@ -224,3 +224,98 @@ private enum ProfileUpdateTestError: LocalizedError {
 
     var errorDescription: String? { "Offline" }
 }
+
+@MainActor
+final class SharedRestaurantRatingsTests: XCTestCase {
+    func testListsEverySharedRatingAndWithdrawsOnlySelectedRating() async {
+        let shared = (0..<8).map { _ in OwnRestaurantRating(place_id: UUID(), stars: 4.5, shared: true) }
+        let privateRating = OwnRestaurantRating(place_id: UUID(), stars: 3, shared: false)
+        var withdrawn: [UUID] = []
+        let model = SharedRestaurantRatingsViewModel(
+            fetch: { shared + [privateRating] },
+            withdraw: { withdrawn.append($0) },
+            currentSession: { 1 }
+        )
+        await model.load()
+        XCTAssertEqual(model.ratings.map(\.place_id), shared.map(\.place_id),
+                       "Owner shares must not depend on local place count or visibility.")
+        await model.stopSharing(shared[6].place_id)
+        XCTAssertEqual(withdrawn, [shared[6].place_id])
+        XCTAssertEqual(model.ratings.count, 7)
+        XCTAssertFalse(model.ratings.contains { $0.place_id == shared[6].place_id })
+    }
+
+    func testFailedWithdrawalRetainsRatingForRetry() async {
+        let rating = OwnRestaurantRating(place_id: UUID(), stars: 4, shared: true)
+        var attempts = 0
+        let model = SharedRestaurantRatingsViewModel(fetch: { [rating] }, withdraw: { _ in
+            attempts += 1
+            if attempts == 1 { throw URLError(.notConnectedToInternet) }
+        }, currentSession: { 1 })
+        await model.load()
+        await model.stopSharing(rating.place_id)
+        XCTAssertTrue(model.hasError)
+        XCTAssertEqual(model.ratings.count, 1)
+        XCTAssertNil(model.withdrawingID)
+        await model.stopSharing(rating.place_id)
+        XCTAssertFalse(model.hasError)
+        XCTAssertTrue(model.ratings.isEmpty)
+    }
+
+    func testSessionChangeDiscardsFetchAndBlocksStaleWithdrawal() async {
+        let rating = OwnRestaurantRating(place_id: UUID(), stars: 4, shared: true)
+        var session: Int? = 1
+        var calls = 0
+        let model = SharedRestaurantRatingsViewModel(fetch: {
+            session = 2
+            return [rating]
+        }, withdraw: { _ in calls += 1 }, currentSession: { session })
+        await model.load()
+        XCTAssertTrue(model.ratings.isEmpty)
+        await model.stopSharing(rating.place_id)
+        XCTAssertEqual(calls, 0)
+        XCTAssertFalse(model.hasError)
+    }
+
+    func testLogoutAfterLoadingCannotWithdrawWithNewSession() async {
+        let rating = OwnRestaurantRating(place_id: UUID(), stars: 4, shared: true)
+        var session: Int? = 1
+        var calls = 0
+        let model = SharedRestaurantRatingsViewModel(fetch: { [rating] },
+            withdraw: { _ in calls += 1 }, currentSession: { session })
+        await model.load()
+        session = nil
+        await model.stopSharing(rating.place_id)
+        XCTAssertEqual(calls, 0)
+        model.invalidate()
+        XCTAssertTrue(model.ratings.isEmpty)
+    }
+
+    func testLateWithdrawalFailureCannotPopulateAnotherSession() async {
+        let rating = OwnRestaurantRating(place_id: UUID(), stars: 4, shared: true)
+        var session: Int? = 1
+        let model = SharedRestaurantRatingsViewModel(fetch: { [rating] }, withdraw: { _ in
+            session = 2
+            throw URLError(.notConnectedToInternet)
+        }, currentSession: { session })
+        await model.load()
+        await model.stopSharing(rating.place_id)
+        XCTAssertTrue(model.ratings.isEmpty)
+        XCTAssertFalse(model.hasError)
+        XCTAssertNil(model.withdrawingID)
+    }
+
+    func testDismissalDiscardsPendingLoadAndAnonymousSessionDoesNotFetch() async {
+        var model: SharedRestaurantRatingsViewModel!
+        model = SharedRestaurantRatingsViewModel(fetch: {
+            model.invalidate()
+            return [OwnRestaurantRating(place_id: UUID(), stars: 4, shared: true)]
+        }, currentSession: { 1 })
+        await model.load()
+        XCTAssertTrue(model.ratings.isEmpty)
+        var calls = 0
+        let anonymous = SharedRestaurantRatingsViewModel(fetch: { calls += 1; return [] }, currentSession: { nil })
+        await anonymous.load()
+        XCTAssertEqual(calls, 0)
+    }
+}

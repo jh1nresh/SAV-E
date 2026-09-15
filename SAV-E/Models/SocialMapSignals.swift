@@ -20,6 +20,7 @@ struct OwnRestaurantRating: Decodable {
     let place_id: UUID
     let stars: Double
     let shared: Bool
+    var place_name: String? = nil
 }
 
 enum PlaceVisibility: String, Codable, CaseIterable, Hashable {
