@@ -7,7 +7,7 @@ Railway-hosted API for Savvy mobile persistence. It replaces the previous Supaba
 ```bash
 DATABASE_URL=postgresql://...
 DATABASE_CA_CERT=
-PGSSLMODE=
+PGSSLMODE=require
 PRIVY_APP_ID=...
 PRIVY_APP_SECRET=...
 PRIVY_VERIFICATION_KEY='-----BEGIN PUBLIC KEY-----...'
@@ -33,7 +33,7 @@ SAVE_MAAT_GEMINI_MODEL=gemini-3.5-flash
 YELP_API_KEY=
 ```
 
-Railway provides `DATABASE_URL` and `PORT`. Set the Privy values and a stable `SAVE_GUEST_SESSION_SECRET` on the backend service. `PRIVY_APP_SECRET` enables server-side import of iMessage phone users into Privy; if omitted, Sendblue users still get Savvy backend profiles and verified channel bindings, but no Privy user is pre-created. If the guest secret is omitted, the backend generates an ephemeral process-local secret, which is only suitable for local development because guest sessions will expire on restart. External Postgres TLS verifies certificates by default; use Railway internal URLs, set `DATABASE_CA_CERT`, or use `PGSSLMODE=no-verify` only for a deliberately accepted temporary environment.
+Railway provides `DATABASE_URL` and `PORT`. Set the Privy values and a stable `SAVE_GUEST_SESSION_SECRET` on the backend service. `PRIVY_APP_SECRET` enables server-side import of iMessage phone users into Privy; if omitted, Sendblue users still get Savvy backend profiles and verified channel bindings, but no Privy user is pre-created. If the guest secret is omitted, the backend generates an ephemeral process-local secret, which is only suitable for local development because guest sessions will expire on restart. External Postgres TLS verifies certificates by default; use a Railway internal URL, set `DATABASE_CA_CERT`, or set `PGSSLMODE` to a valid libpq value (`disable`, `allow`, `prefer`, `require`, `verify-ca`, `verify-full`). Prefer `require`. Modern libpq / `psql` reject `no-verify` (including `sslmode=no-verify` on pooler URLs). For a founder-owned apply, strip the query string and override that process only: `PGSSLMODE=require psql "${DATABASE_URL%%\?*}" …`. Do not change an already-working Railway service `PGSSLMODE`; Node `pg` still accepts the legacy `no-verify` token so a live service variable is not a rollout blocker.
 
 `SAVE_INTERNAL_AGENT_TOKEN` gates `GET /internal/r8/pilot-metrics?days=30&limit=100`. Generate at least 32 random bytes with an OS cryptographic random generator, store the value only in Railway's secret manager and approved server-side agent runtime, and never ship it to the app or browser. The endpoint is read-only and returns cohort totals plus HMAC-pseudonymous per-user analysis and outcome counts; it never returns raw user IDs or recommendation payloads. If the token is missing or too short, the route fails closed with `503`; invalid bearer credentials return `401`. Successful reads emit a metadata-only audit log with the window, requested limit, and aggregate user counts. Rotating the token also rotates the v0 pseudonymous user references.
 
@@ -52,10 +52,16 @@ npm run check:source-recovery
 npm run start
 ```
 
-Apply schema:
+Apply schema / pending SQL (see **Deploy checklist** below and `sql/README.md`):
 
 ```bash
+# From repository root, new empty database only:
 psql "$DATABASE_URL" -f backend/sql/schema.sql
+
+# From backend/: pending additive file (dry-read, then apply). Founder-owned.
+cd backend
+./scripts/apply-sql.sh friend-ratings.sql
+./scripts/apply-sql.sh friend-ratings.sql --apply
 ```
 
 Production source recovery readiness:
@@ -69,14 +75,54 @@ curl "$RAILWAY_PUBLIC_DOMAIN/health/source-recovery"
 
 `npm start` builds the TypeScript backend and runs `check:source-recovery` before boot. The check stays green when OCR, ASR, and external rubric are disabled. It fails when an enabled OCR/ASR adapter is missing its executable or when `SAVE_EVIDENCE_RUBRIC_URL` is not an HTTPS public URL. Railway also uses `/health/source-recovery` as the deployment healthcheck, so source-recovery adapter misconfiguration blocks rollout instead of silently falling back in production.
 
+## Deploy checklist
+
+Merge does not migrate. The backend does not auto-apply SQL on boot.
+Production `psql` apply is founder-owned. Do not treat a merged PR as
+authorization to migrate or deploy.
+
+1. Apply pending SQL against the target database (local first; production only
+   with founder approval). Order:
+   - `sql/schema.sql` — new empty database only
+   - pending additive files, oldest first: `sql/analysis-usage.sql` (if those
+     tables are not already present), then `sql/friend-ratings.sql`, then any
+     later file listed in `sql/README.md`
+   - `friend-ratings.sql` creates `idx_places_id_user_id` if missing before the
+     composite FK, so a database that already has `places` but lacks that index
+     does not fail the way the #241 prod apply did
+   - From `backend/`: dry-read, then apply: `./scripts/apply-sql.sh friend-ratings.sql`
+     then `./scripts/apply-sql.sh friend-ratings.sql --apply`
+   - If `psql` rejects `sslmode=no-verify` (from `backend/`; known prod URL
+     only carries that query param):
+     `PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -v ON_ERROR_STOP=1 -1 -f sql/friend-ratings.sql`
+     Use the helper when the URL has other libpq query params — it drops
+     `sslmode` only.
+2. Verify tables (read-only). Expect `t|t|t`:
+
+   ```bash
+   PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -tAc \
+     "select to_regclass('public.idx_places_id_user_id') is not null,
+             to_regclass('public.friend_restaurant_ratings') is not null,
+             to_regclass('public.friend_rating_saves') is not null;"
+   ```
+
+3. Railway-deploy this backend (separate human approval; not this repository
+   change and not `npm start`).
+4. Distribute the matching iOS build (separate human approval).
+
+Do not re-apply SQL to production from a docs/hygiene PR. Do not enable
+analysis spend limits from this checklist. Do not rewrite a live Railway
+`PGSSLMODE` if the Node service is already running.
+
 ## Social-analysis accounting and admission
 
-Deploy in this order after release approval: apply `backend/sql/analysis-usage.sql`
-(or the complete `schema.sql`), deploy this backend, then distribute the matching
-iOS build. The new iOS import requires `/v0/analysis`; missing tables/routes fail
-closed and preserve the local source. The additive migration does not change
-existing places or decisions. Roll back application code with enforcement off;
-do not drop operational tables or user records as rollback.
+Same deploy order as the checklist above: apply `backend/sql/analysis-usage.sql`
+(or the complete `schema.sql` on a new database), verify tables, deploy this
+backend, then distribute the matching iOS build. The new iOS import requires
+`/v0/analysis`; missing tables/routes fail closed and preserve the local source.
+The additive migration does not change existing places or decisions. Roll back
+application code with enforcement off; do not drop operational tables or user
+records as rollback.
 
 Each active social import/refinement creates an owner-scoped UUID with
 `POST /v0/analysis {"id":"UUID"}`. Its Google searches use

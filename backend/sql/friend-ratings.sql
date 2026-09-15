@@ -1,6 +1,18 @@
--- Draft migration. Apply only to a local/test database until separately approved.
+-- Pending additive migration. Founder-owned apply. Never run on boot.
+-- Merge does not migrate. The app does not auto-apply SQL.
 -- Same one-way follower audience as place_visibility('friends'). Never backfill
 -- shared stars from imported place metadata or a user's saved/visited status.
+--
+-- Requires `places` (from schema.sql). Idempotent: IF NOT EXISTS throughout.
+-- Composite FK (place_id, user_id) -> places(id, user_id) needs a unique
+-- index on those referenced columns. A database can already have `places`
+-- without idx_places_id_user_id (the #241 prod apply failure). Create that
+-- index first so this file is self-contained on a fresh or drifted apply.
+
+-- 1. Prerequisite unique index (also declared in schema.sql).
+create unique index if not exists idx_places_id_user_id on places(id, user_id);
+
+-- 2. Rating row, then composite owner FK that depends on the index above.
 create table if not exists friend_restaurant_ratings (
     place_id uuid primary key,
     user_id text not null,
