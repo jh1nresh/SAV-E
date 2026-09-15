@@ -1,19 +1,18 @@
-// Local-only authenticated HTTP/native fixture. Never reads production credentials.
+// Local-only authenticated HTTP fixture. Never reads production credentials.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createServer } from 'node:http';
 import { Pool } from 'pg';
 import { generateKeyPair, exportSPKI, SignJWT } from 'jose';
+assert.ok(!process.argv.includes('--native'), 'Native Friends sharing fixture is retired; use --check for HTTP privacy verification.');
 const databaseURL = process.env.SAVE_FRIENDS_TEST_DATABASE_URL;
 const db = new URL(databaseURL ?? 'invalid:');
 assert.ok(['127.0.0.1', 'localhost'].includes(db.hostname));
 assert.equal(db.pathname, '/savvy_friends_test');
-const native = process.argv.includes('--native');
-const port = native ? 55440 : 55442;
+const port = 55442;
 const base = `http://127.0.0.1:${port}`;
 const pool = new Pool({ connectionString: databaseURL });
 const placeID = '33333333-3333-4333-8333-333333333333';
@@ -63,7 +62,6 @@ async function api(who, path, method = 'GET', body) {
   const text = await response.text();
   return { status: response.status, body: text ? JSON.parse(text) : null, cache: response.headers.get('cache-control') };
 }
-let control;
 try {
   let ready = false;
   for (let i = 0; i < 100; i++) {
@@ -72,50 +70,36 @@ try {
     await new Promise(resolve => setTimeout(resolve, 100));
   }
   assert.ok(ready, log);
-  if (native) {
-    // Only this disposable loopback fixture exposes its own short-lived test tokens.
-    control = createServer(async (req, res) => {
-      if (req.url === '/fixture') {
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ users, tokens, placeID, base }));
-      } else { res.writeHead(404); res.end(); }
-    });
-    control.listen(55441, '127.0.0.1'); await once(control, 'listening');
-    console.log('Native fixture ready: backend 55440, local test credentials 55441. No production providers.');
-    await new Promise(resolve => { process.once('SIGTERM', resolve); process.once('SIGINT', resolve); });
-  } else {
-    assert.equal((await api(null, '/v0/friend-ratings')).status, 401);
-    const path = `/v0/friend-ratings/${placeID}`;
-    assert.equal((await api(0, path, 'PUT', { stars: 4, eaten: true, shared: true })).status, 404);
-    assert.equal((await api(1, path, 'PUT', { stars: 4, eaten: true, shared: true, user_id: users[0] })).status, 400);
-    const signals = async () => (await api(0, '/v0/social/signals?lens=friends')).body;
-    assert.deepEqual((await signals()).map(p => p.id), [legacyID]);
-    assert.equal((await api(1, path, 'PUT', { stars: 4.5, eaten: true, shared: true })).status, 200);
-    const feed = await api(0, '/v0/friend-ratings');
-    assert.equal(feed.body.items[0].id, placeID); assert.equal(feed.cache, 'private, no-store');
-    assert.doesNotMatch(JSON.stringify(feed.body), /PRIVATE NOTE|note|recommender|visited_at/);
-    assert.deepEqual((await signals()).map(p => p.id), [legacyID], 'shared rating cannot enter legacy save path');
-    assert.equal((await api(2, path)).status, 404);
-    assert.equal((await api(2, path + '/save', 'POST', {})).status, 404);
-    const saved = await api(0, path + '/save', 'POST', {});
-    assert.equal(saved.status, 201); assert.equal(saved.body.status, 'wantToGo');
-    assert.equal(saved.body.recommender, null); assert.equal(saved.body.rating, null);
-    assert.equal((await api(1, path, 'DELETE')).status, 204);
-    assert.equal((await api(0, path)).status, 404);
-    assert.equal((await api(0, path + '/save', 'POST', {})).status, 404);
-    assert.deepEqual((await api(0, '/v0/friend-ratings/saved')).body, []);
-    assert.deepEqual((await signals()).map(p => p.id), [legacyID], 'withdrawn identity cannot leak through social signals');
-    await api(1, path, 'PUT', { stars: 4, eaten: true, shared: true });
-    await api(1, path, 'PUT', { stars: 4, eaten: true, shared: false });
-    assert.deepEqual((await signals()).map(p => p.id), [legacyID], 'private edit must revoke alternate surface too');
-    assert.equal((await api(0, path)).status, 404);
-    const retained = (await pool.query('select status,rating,note,recommender from places where id=$1', [saved.body.id])).rows[0];
-    assert.deepEqual(retained, { status: 'wantToGo', rating: null, note: null, recommender: null });
-    console.log('PASS authenticated HTTP: share/save/withdraw/private edit, nonfollower denial, legacy routing and independent legacy sharing preserved.');
-  }
+  assert.equal((await api(null, '/v0/friend-ratings')).status, 401);
+  const path = `/v0/friend-ratings/${placeID}`;
+  assert.equal((await api(0, path, 'PUT', { stars: 4, eaten: true, shared: true })).status, 404);
+  assert.equal((await api(1, path, 'PUT', { stars: 4, eaten: true, shared: true, user_id: users[0] })).status, 400);
+  const signals = async () => (await api(0, '/v0/social/signals?lens=friends')).body;
+  assert.deepEqual((await signals()).map(p => p.id), [legacyID]);
+  assert.equal((await api(1, path, 'PUT', { stars: 4.5, eaten: true, shared: true })).status, 200);
+  const feed = await api(0, '/v0/friend-ratings');
+  assert.equal(feed.body.items[0].id, placeID); assert.equal(feed.cache, 'private, no-store');
+  assert.doesNotMatch(JSON.stringify(feed.body), /PRIVATE NOTE|note|recommender|visited_at/);
+  assert.deepEqual((await signals()).map(p => p.id), [legacyID], 'shared rating cannot enter legacy save path');
+  assert.equal((await api(2, path)).status, 404);
+  assert.equal((await api(2, path + '/save', 'POST', {})).status, 404);
+  const saved = await api(0, path + '/save', 'POST', {});
+  assert.equal(saved.status, 201); assert.equal(saved.body.status, 'wantToGo');
+  assert.equal(saved.body.recommender, null); assert.equal(saved.body.rating, null);
+  assert.equal((await api(1, path, 'DELETE')).status, 204);
+  assert.equal((await api(0, path)).status, 404);
+  assert.equal((await api(0, path + '/save', 'POST', {})).status, 404);
+  assert.deepEqual((await api(0, '/v0/friend-ratings/saved')).body, []);
+  assert.deepEqual((await signals()).map(p => p.id), [legacyID], 'withdrawn identity cannot leak through social signals');
+  await api(1, path, 'PUT', { stars: 4, eaten: true, shared: true });
+  await api(1, path, 'PUT', { stars: 4, eaten: true, shared: false });
+  assert.deepEqual((await signals()).map(p => p.id), [legacyID], 'private edit must revoke alternate surface too');
+  assert.equal((await api(0, path)).status, 404);
+  const retained = (await pool.query('select status,rating,note,recommender from places where id=$1', [saved.body.id])).rows[0];
+  assert.deepEqual(retained, { status: 'wantToGo', rating: null, note: null, recommender: null });
+  console.log('PASS authenticated HTTP: share/save/withdraw/private edit, nonfollower denial, legacy routing and independent legacy sharing preserved.');
 } catch (error) { console.error(log); throw error; }
 finally {
-  if (control) await new Promise(resolve => control.close(resolve));
   child.kill('SIGTERM'); await exited;
   await pool.end();
   await writeFile(join(dir, 'server.log'), log);

@@ -154,7 +154,7 @@ Use these product nouns:
 - Memory Card
 - Evidence Receipt
 - Passport
-- Friends (朋友): explicitly shared restaurant ratings from people you follow
+- Friends (朋友): reserved root destination, currently showing Coming soon
 - Your quests (探索任務): live next steps in Passport
 - Plan
 - Plan around this
@@ -763,21 +763,22 @@ Rules:
 
 ### Friends
 
-Home / Map / + / Friends / Passport is the root bar. Existing Plan and Trips
-child routes remain secondary. Friends is a compact recent-first restaurant
-rating list, with friend identity, restaurant, stars, and Save to try.
+Home / Map / + / Friends / Passport remains the root bar. Friends is temporarily
+an informational placeholder while its product direction is deferred. Show the
+localized page title, the existing friends icon, and “Coming soon” / “即將推出”
+in Atlas colors. Keep the layout quiet and the five-tab bar usable.
 
-An author's self-reported visit is not verified attendance. Entering stars or
-marking Visited never implies sharing. Explicit sharing discloses that all
-current and future followers may see the author's name, venue and stars; mutual
-following is not required. Private notes, photos and source receipts stay private.
-Use an optional share toggle, not mandatory post composition. My ratings allows
-editing and withdrawal. Empty states use real absence, never production seeds.
+Do not show the rating feed, invitation field, follow management, rating editor,
+loading/error states, notification signup, sample activity, or a release date.
+Opening or returning to this page must not load friend ratings or start a share.
+Existing saved places, ratings, sharing permissions and backend data remain
+unchanged; this page does not expose controls to modify them. Restoring the
+sharing experience requires a separate product decision.
 
-The recipient's Save creates a want-to-go Map Stamp, without the author's stars
-or visit state. Before saving, show Save to try rather than claiming the
-restaurant is already in the recipient's memory. Refresh, account changes and
-returning from background discard the previous feed projection.
+Passport → Sharing & Privacy retains a withdrawal-only list of existing shared
+restaurant ratings. It includes shares whose places are currently private, and
+withdrawing a rating does not change the place visibility or delete its memory.
+Only an explicit owner action withdraws a share; Friends never opens this list.
 
 ### Share Extension
 

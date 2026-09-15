@@ -88,6 +88,15 @@ test("PostgreSQL: explicit share, pagination, recipient save and revocation", { 
     assert.equal((await ownFriendRatings(pool, B)).find((r) => r.place_id === placeID)?.shared, false);
     await putFriendRating(pool, B, placeID, { stars: 4, eaten: true, shared: true });
     await pool.query("update place_visibility set visibility = 'private' where place_id = $1", [placeID]);
+    const ownerShare = (await ownFriendRatings(pool, B)).find((r) => r.place_id === placeID);
+    assert.equal(ownerShare?.shared, true, "private place must retain owner-visible explicit consent for withdrawal");
+    await assert.rejects(getFriendRating(pool, A, placeID), { status: 404 });
+    assert.equal(ownerShare?.place_name, "Test restaurant");
+    await withdrawFriendRating(pool, B, placeID);
+    assert.equal((await ownFriendRatings(pool, B)).find((r) => r.place_id === placeID)?.shared, false);
+    assert.equal((await pool.query("select visibility from place_visibility where place_id = $1", [placeID])).rows[0].visibility, "private");
+    await pool.query("update place_visibility set visibility = 'friends' where place_id = $1", [placeID]);
+    await assert.rejects(getFriendRating(pool, A, placeID), { status: 404 }, "restoring place visibility cannot restore withdrawn consent");
     await assert.rejects(getFriendRating(pool, A, placeID), { status: 404 });
     assert.equal((await savedFriendAttributions(pool, A)).length, 0);
     await putFriendRating(pool, B, placeID, { stars: 4, eaten: true, shared: true });
