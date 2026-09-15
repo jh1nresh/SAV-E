@@ -1,0 +1,7 @@
+# Preserve the Node provider plan while adding the optional video-analysis tools.
+[phases.setup]
+nixPkgs = ['...', 'python3', 'ffmpeg']
+
+[phases.install]
+cmds = ['...', 'python3 -m venv /app/.video-tools && /app/.video-tools/bin/pip install --no-cache-dir -r requirements-video.txt']
+paths = ['...', '/app/.video-tools/bin']

@@ -4298,7 +4298,7 @@ async function handleCaptureSearchRecovery(
   if(body.include_media_evidence !== undefined && typeof body.include_media_evidence !== "boolean") throw new ApiError(400,"include_media_evidence must be a boolean");
   const requestedAnalysis=requestAnalysisId(request,body);
   if(requestedAnalysis) await analysisUsageStore.owner(userId,requestedAnalysis);
-  const input={sourceUrl:stringValue(capture.source_url),rawText:stringValue(capture.raw_text),title:stringValue(capture.title),suggestedSearchQueries:requestedQueries,maxQueries,includeMediaEvidence:body.include_media_evidence !== false};
+  const input={sourceUrl:stringValue(capture.source_url),rawText:stringValue(capture.raw_text),title:stringValue(capture.title),suggestedSearchQueries:requestedQueries,maxQueries,includeMediaEvidence:body.include_media_evidence !== false,videoAnalysisVersion:process.env.SAVE_ENABLE_VIDEO_VENUE_ANALYSIS === "true" ? "frames-v1" : null};
   const result=await runAnalysisRecovery(pool,userId,captureId,{...input,workflowRunId},async()=>{
     const aid=requestedAnalysis ?? await analysisUsageStore.start(userId,randomUUID(),false);
     let completed=false;

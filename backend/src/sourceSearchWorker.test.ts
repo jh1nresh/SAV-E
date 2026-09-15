@@ -1437,3 +1437,107 @@ test("retry of a persisted Reel recovers caption even when the old title was cre
   assert.equal(output.queries[0], '"日本人挑戰開牛肉麵店 榮獲米其林推薦 必吃" place');
   assert.deepEqual(output.candidates, []);
 });
+
+test("video fallback upgrades the reported source-only Reel from its late storefront frame", async () => {
+  const sourceUrl = "https://www.instagram.com/reel/DcTZXFrjfJG/";
+  let videoCalls = 0;
+  const output = await runSourceSearchRecovery({ sourceUrl },
+    async url => url.includes("instagram.com") ? reportedReelMetadata : "", async () => [], {
+      videoVenueRecovery: async url => {
+        assert.equal(url, sourceUrl); videoCalls += 1;
+        return [{ name: "江牛樓", quote: "江牛樓", timestampSeconds: 24 }];
+      },
+      placesCorroborator: async candidate => {
+        assert.equal(candidate.name, "江牛樓");
+        return { name: "江牛樓", address: "臺北市大同區民樂街6號", latitude: 25.054, longitude: 121.51 };
+      },
+      rubricEvaluator: () => ({ confidenceReason: "Test fixture corroboration", evidenceTier: "corroborated", missingInfo: ["User confirmation"] }),
+    });
+  assert.equal(videoCalls, 1);
+  assert.equal(output.candidates[0]?.name, "江牛樓");
+  assert.ok(output.candidates[0]?.evidence.includes("Video frame at 24s: 江牛樓"));
+  assert.ok(output.candidates[0]?.missingInfo.some(item => /User confirmation/.test(item)));
+  assert.equal(output.receipt.output, "review_candidate");
+  assert.equal(output.mediaEvidence[0]?.textSource, "vision");
+});
+
+test("video fallback uses the resolved Reel URL when the stored source is a share route", async () => {
+  const shareUrl = "https://www.instagram.com/share/reel/ShareCode/";
+  const resolvedUrl = "https://www.instagram.com/reel/DcTZXFrjfJG/";
+  let videoCalls = 0;
+  const output = await runSourceSearchRecovery(
+    { sourceUrl: shareUrl },
+    async () => "",
+    async () => [],
+    {
+      persistedSourceResolution: {
+        original_url: shareUrl,
+        resolved_url: resolvedUrl,
+        redirect_chain: [shareUrl, resolvedUrl],
+        status: "resolved",
+        title: "Wendy三分熟 (@wendyismediumrare) • Instagram reel",
+        caption: '177 likes, 2 comments - wendyismediumrare on August 21, 2026: "日本人挑戰開牛肉麵店 榮獲米其林推薦 必吃 #台北牛肉麵推薦".',
+      },
+      videoVenueRecovery: async url => {
+        assert.equal(url, resolvedUrl);
+        videoCalls += 1;
+        return [{ name: "江牛樓", quote: "江牛樓", timestampSeconds: 24 }];
+      },
+      placesCorroborator: async candidate => {
+        assert.equal(candidate.name, "江牛樓");
+        return { name: "江牛樓", address: "臺北市大同區民樂街6號", latitude: 25.054, longitude: 121.51 };
+      },
+      rubricEvaluator: () => ({ confidenceReason: "Test fixture corroboration", evidenceTier: "corroborated", missingInfo: ["User confirmation"] }),
+    },
+  );
+  assert.equal(videoCalls, 1);
+  assert.equal(output.candidates[0]?.name, "江牛樓");
+  assert.ok(output.candidates[0]?.evidence.includes(`Source video: ${resolvedUrl}`));
+  assert.ok(!output.candidates[0]?.evidence.some(item => item.includes("/share/reel/")));
+  assert.equal(output.mediaEvidence[0]?.url, resolvedUrl);
+  assert.equal(output.mediaEvidence[0]?.kind, "video_keyframe");
+  assert.equal(output.mediaEvidence[0]?.textSource, "vision");
+  assert.equal(output.receipt.output, "review_candidate");
+});
+
+test("video fallback does no work when media is disabled or metadata already names a venue", async () => {
+  for (const includeMediaEvidence of [false, true]) {
+    let calls = 0;
+    await runSourceSearchRecovery({sourceUrl: "https://www.instagram.com/reel/AlreadyNamed/"},
+      async url => url.includes("instagram.com")
+        ? '<meta property="og:description" content="店名：江牛樓 地址：台北市大同區民樂街6號">' : "",
+      async () => [], {
+        includeMediaEvidence,
+        videoVenueRecovery: async () => { calls += 1; return []; },
+        placesCorroborator: async () => undefined,
+        rubricEvaluator: () => ({ confidenceReason: "Source", evidenceTier: "weak", missingInfo: ["User confirmation"] }),
+      });
+    assert.equal(calls, 0);
+  }
+});
+
+test("video provider failure preserves clue and does not swallow quota denial", async () => {
+  const input = {sourceUrl: "https://www.instagram.com/reel/DcTZXFrjfJG/"};
+  const options = {videoVenueRecovery: async (): Promise<never> => { throw new Error("private upstream detail"); }};
+  const output = await runSourceSearchRecovery(input, async () => "", async () => [], options);
+  assert.equal(output.receipt.output, "source_only_clue");
+  assert.deepEqual(output.receipt.failureReason, {kind:"provider_failure",stage:"media"});
+  assert.ok(!JSON.stringify(output).includes("private upstream detail"));
+  const denied = new AnalysisControlError(429,"analysis_budget_exceeded","Budget exceeded");
+  await assert.rejects(runSourceSearchRecovery(input, async () => "", async () => [], {
+    videoVenueRecovery: async () => { throw denied; },
+  }), error => error === denied);
+});
+
+test("source-only media opt-out never invokes video recovery", async () => {
+  let calls = 0;
+  const output = await runSourceSearchRecovery(
+    { sourceUrl: "https://www.instagram.com/reel/DcTZXFrjfJG/" },
+    async () => "", async () => [], {
+      includeMediaEvidence: false,
+      videoVenueRecovery: async () => { calls += 1; return []; },
+    },
+  );
+  assert.equal(output.receipt.output, "source_only_clue");
+  assert.equal(calls, 0);
+});
