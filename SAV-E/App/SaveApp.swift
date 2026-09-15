@@ -157,9 +157,7 @@ struct SaveApp: App {
     @ViewBuilder
     private var rootContent: some View {
 #if DEBUG
-        if SaveFriendsLocalFixture.isEnabled {
-            SaveFriendsLocalFixture()
-        } else if stampFeedFixtureActive {
+        if stampFeedFixtureActive {
             SaveStampFeedFixtureView()
         } else if relatedSourcesHarnessActive {
             SaveRelatedSourcesHarnessView()

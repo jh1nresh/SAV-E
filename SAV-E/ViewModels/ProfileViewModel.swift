@@ -277,3 +277,76 @@ private enum ProfileImageError: LocalizedError {
         }
     }
 }
+
+/// Keeps withdrawal available while the Friends sharing experience is deferred.
+@MainActor
+final class SharedRestaurantRatingsViewModel: ObservableObject {
+    @Published private(set) var ratings: [OwnRestaurantRating] = []
+    @Published private(set) var isLoading = false
+    @Published private(set) var withdrawingID: UUID?
+    @Published private(set) var hasError = false
+
+    private let fetch: () async throws -> [OwnRestaurantRating]
+    private let withdraw: (UUID) async throws -> Void
+    private let currentSession: () -> Int?
+    private let session: Int?
+    private var isActive = true
+
+    init(
+        fetch: @escaping () async throws -> [OwnRestaurantRating] = {
+            try await SupabaseService.shared.fetchOwnRestaurantRatings()
+        },
+        withdraw: @escaping (UUID) async throws -> Void = {
+            try await SupabaseService.shared.withdrawRestaurantRating(placeID: $0)
+        },
+        currentSession: @escaping () -> Int? = {
+            let auth = PrivyAuthService.shared
+            return auth.isAuthenticated && !auth.isReviewerDemo ? auth.sessionGeneration : nil
+        }
+    ) {
+        self.fetch = fetch
+        self.withdraw = withdraw
+        self.currentSession = currentSession
+        self.session = currentSession()
+    }
+
+    private var canApply: Bool {
+        isActive && session != nil && currentSession() == session && !Task.isCancelled
+    }
+
+    func load() async {
+        guard canApply, !isLoading else { return }
+        isLoading = true
+        hasError = false
+        defer { isLoading = false }
+        do {
+            let result = try await fetch()
+            guard canApply else { invalidate(); return }
+            ratings = result.filter(\.shared)
+        } catch {
+            guard canApply else { invalidate(); return }
+            hasError = true
+        }
+    }
+
+    func stopSharing(_ placeID: UUID) async {
+        guard canApply, withdrawingID == nil, ratings.contains(where: { $0.place_id == placeID }) else { return }
+        withdrawingID = placeID
+        hasError = false
+        defer { withdrawingID = nil }
+        do {
+            try await withdraw(placeID)
+            guard canApply else { invalidate(); return }
+            ratings.removeAll { $0.place_id == placeID }
+        } catch {
+            guard canApply else { invalidate(); return }
+            hasError = true
+        }
+    }
+
+    func invalidate() {
+        isActive = false
+        ratings = []
+        hasError = false
+    }
+}

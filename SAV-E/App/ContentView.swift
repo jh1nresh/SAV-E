@@ -178,7 +178,6 @@ struct ContentView: View {
     @Binding private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     @Binding private var pendingOnboardingClue: String
     private let storageScope: ContentStorageScope
-    private let friendsAPI: SupabaseService
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.scenePhase) private var scenePhase
     @State private var isRootSheetPresented: Bool
@@ -208,16 +207,13 @@ struct ContentView: View {
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
         pendingOnboardingClue: Binding<String> = .constant(""),
-        storageScope: ContentStorageScope = .production,
-        mapViewModel: MapViewModel? = nil,
-        friendsAPI: SupabaseService = .shared
+        storageScope: ContentStorageScope = .production
     ) {
-        _mapVM = StateObject(wrappedValue: mapViewModel ?? storageScope.makeMapViewModel())
+        _mapVM = StateObject(wrappedValue: storageScope.makeMapViewModel())
         _tripStore = StateObject(wrappedValue: storageScope.makeTripPackStore())
         _incomingPlaceReceipt = incomingPlaceReceipt
         _pendingOnboardingClue = pendingOnboardingClue
         self.storageScope = storageScope
-        self.friendsAPI = friendsAPI
         let hasInitialReceipt = incomingPlaceReceipt.wrappedValue != nil
         _isRootSheetPresented = State(initialValue: hasInitialReceipt)
         _drawerDetent = State(initialValue: .large)
@@ -549,7 +545,7 @@ struct ContentView: View {
                                 onOpenPassport: openPassport
                             )
                         case .friends:
-                            SaveFriendsView(mapViewModel: mapVM, api: friendsAPI)
+                            SaveFriendsView()
                         case .profile:
                             passportView(isRootTab: true)
                         case .capture:

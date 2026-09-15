@@ -61,16 +61,16 @@ began with 25.6 GiB free. No simulator deletion is authorized.
 - Independent source review identified the legacy leak and permanent
   attribution path; both are fixed and the follow-up found no new reachable
   privacy blocker. Final head-bound verdict is recorded in the delivery receipt.
-- Native test `SAVEScreenshotRailTests/testLocalFriendsAuthenticatedFlow`
-  exercises production ContentView/Friends/MapViewModel with injected local
-  HTTP service and isolated vault. The entry is Debug + simulator only,
-  requires an explicit flag and fixed loopback URL, and visibly says LOCAL TEST.
-  Its local JWTs are generated at runtime; no production tokens or keys are used.
-  Without the fixture, this optional test skips; CI is not local-account proof.
-- Reproduce backend/native fixture with
-  `SAVE_FRIENDS_TEST_DATABASE_URL=postgresql://friends_test@127.0.0.1:55439/savvy_friends_test node backend/scripts/friends-local-fixture.mjs --native`.
-  Backend listens only on 127.0.0.1:55440; the test-only credential handoff is
-  127.0.0.1:55441. Stop the fixture and PostgreSQL after verification.
+- Native sharing UI and its optional `testLocalFriendsAuthenticatedFlow` fixture
+  were retired when Friends became Coming soon. The native results below are
+  historical evidence for PR #241, not current acceptance or runnable commands.
+  Current native acceptance is `SAVEScreenshotRailTests/testFriendsComingSoon`;
+  existing rating shares can be withdrawn from Passport → Sharing & Privacy.
+- Reproduce the retained authenticated HTTP privacy fixture with
+  `SAVE_FRIENDS_TEST_DATABASE_URL=postgresql://friends_test@127.0.0.1:55439/savvy_friends_test node backend/scripts/friends-local-fixture.mjs --check`.
+  Build the backend first. It listens only on 127.0.0.1:55442 and exits after
+  its checks. `--native` fails immediately; the credential handoff server is
+  retired. Stop the disposable PostgreSQL cluster after verification.
 - SQL draft `backend/sql/friend-ratings.sql` must be applied before deploying
   this backend. It has only been applied to the local disposable database.
   Production migration, merge, deployment, signing and distribution remain

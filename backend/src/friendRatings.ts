@@ -67,11 +67,12 @@ export async function getFriendRating(pool: Pool, userId: string, placeID: strin
 }
 
 export async function ownFriendRatings(pool: Pool, userId: string) {
-  const { rows } = await pool.query(`select r.place_id, r.stars,
-    (r.shared_at is not null and p.status = 'visited' and pv.allow_friend_signal = true
-      and pv.visibility <> 'private') as shared
-    from friend_restaurant_ratings r join places p on p.id = r.place_id
-    left join place_visibility pv on pv.place_id = r.place_id
+  // Owners manage explicit sharing consent even when the place is currently
+  // private or unvisited. Recipient reads still enforce every visibility gate.
+  const { rows } = await pool.query(`select r.place_id, p.name as place_name, r.stars,
+    (r.shared_at is not null) as shared
+    from friend_restaurant_ratings r
+    join places p on (p.id, p.user_id) = (r.place_id, r.user_id)
     where r.user_id = $1 order by r.updated_at desc`, [userId]);
   return rows;
 }
