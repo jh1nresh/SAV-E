@@ -38,9 +38,6 @@ protocol SocialCaptionVenueExtractor {
 /// source-only receipt, it never throws into the recovery flow.
 final class GeminiCaptionVenueExtractor: SocialCaptionVenueExtractor {
     private let geminiTransport: SAVEGeminiTransport
-    /// Caption text is bounded before it reaches the prompt: a venue name lives
-    /// in the first lines, and a multi-thousand-char caption only burns tokens.
-    private let maxCaptionLength = 1_200
 
     init(
         apiKey: String? = nil,
@@ -75,7 +72,7 @@ final class GeminiCaptionVenueExtractor: SocialCaptionVenueExtractor {
     func extractVenue(caption: String, sourceURL: String) async -> ExtractedVenue? {
         let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        let boundedCaption = String(trimmed.prefix(maxCaptionLength))
+        let boundedCaption = SocialCaptionVenueExtractionPolicy.boundedCaption(trimmed)
 
         let prompt = SocialCaptionVenueExtractionPolicy.prompt(caption: boundedCaption)
         do {
