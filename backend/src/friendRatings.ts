@@ -22,7 +22,9 @@ const joins = `from friend_restaurant_ratings r
   join profiles actor on actor.id = r.user_id
   join place_visibility pv on (pv.place_id, pv.user_id) = (p.id, p.user_id)`;
 
-const visible = `r.shared_at is not null and p.status = 'visited'
+const legacyRating = `r.stars is not null and coalesce(to_jsonb(r)->>'shared_status', 'visited') = 'visited'`;
+
+const visible = `r.shared_at is not null and p.status = 'visited' and ${legacyRating}
   and pv.visibility in ('friends', 'public_link', 'public_guide')
   and pv.allow_friend_signal = true
   and exists (select 1 from follows f where f.follower_id = $1 and f.following_id = r.user_id)`;
@@ -73,7 +75,7 @@ export async function ownFriendRatings(pool: Pool, userId: string) {
     (r.shared_at is not null) as shared
     from friend_restaurant_ratings r
     join places p on (p.id, p.user_id) = (r.place_id, r.user_id)
-    where r.user_id = $1 order by r.updated_at desc`, [userId]);
+    where r.user_id = $1 and ${legacyRating} and ${restaurant} order by r.updated_at desc`, [userId]);
   return rows;
 }
 
@@ -92,9 +94,15 @@ export async function putFriendRating(pool: Pool, userId: string, placeID: strin
     if (!rows[0]) throw new FriendRatingError("Confirmed restaurant not found", 404);
     await client.query(`update places set status = 'visited', updated_at = now()
       where id = $1 and user_id = $2`, [placeID, userId]);
-    await client.query(`insert into friend_restaurant_ratings (place_id, user_id, stars, shared_at)
-      values ($1, $2, $3, case when $4 then date_trunc('milliseconds', now()) else null end)
-      on conflict (place_id) do update set stars = excluded.stars,
+    // Keep legacy clients usable before and after the additive post migration.
+    const columns = await client.query(`select exists (select 1 from pg_attribute
+      where attrelid = 'friend_restaurant_ratings'::regclass and attname = 'shared_status' and not attisdropped) as posts`);
+    const statusColumn = columns.rows[0]?.posts ? ", shared_status" : "";
+    const statusValue = columns.rows[0]?.posts ? ", 'visited'" : "";
+    const statusUpdate = columns.rows[0]?.posts ? "shared_status = 'visited'," : "";
+    await client.query(`insert into friend_restaurant_ratings (place_id, user_id, stars, shared_at${statusColumn})
+      values ($1, $2, $3, case when $4 then date_trunc('milliseconds', now()) else null end${statusValue})
+      on conflict (place_id) do update set stars = excluded.stars, ${statusUpdate}
         shared_at = case when $4 then coalesce(friend_restaurant_ratings.shared_at, date_trunc('milliseconds', now())) else null end,
         updated_at = now()`, [placeID, userId, body.stars, body.shared]);
     if (body.shared) {

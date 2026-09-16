@@ -26,6 +26,7 @@ BASELINE = [RAIL + name for name in (
     "testTripUsesPlanMapAndTopSharePostcardPocket",
     "testRapidChromeTransitionsKeepAppAlive",
     "testPassportAndPostalImportSurfacesAreReachable",
+    "testSocialPassportGridAndComposer",
 )] + [ONBOARDING, RAIL + "testPassportTutorialReplaysWithoutAddingPlaces"]
 
 # Exact-file allowlist: adding another view/service requires coverage review.
@@ -50,7 +51,7 @@ TESTS = {
         "testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch",
     )],
 }
-# Full/main stays the frozen 17-selector gate. Plan extras belong on the
+# Full/main retains every frozen selector plus the social passport flow. Plan extras belong on the
 # Plan route only. Folding them into FULL made this CI-scoping PR require
 # testPlanTabDraftsFromSavedMapStamps, which is not on current main and
 # failed 3/3 on run 34019378064 after compose never produced plan.draft.

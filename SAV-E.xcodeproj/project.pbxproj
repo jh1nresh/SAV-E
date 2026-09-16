@@ -198,6 +198,9 @@
 		2E9E04D1E05884323D7D7CB0 /* ProfileAvatarStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64498D790D52838FAEDFDD87 /* ProfileAvatarStoreTests.swift */; };
 		3E10C3F5A752111C4DEC2C8C /* PlaceVisibilityPersistenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACD02E7815D5890EC1455CEE /* PlaceVisibilityPersistenceTests.swift */; };
 		1AE4DC4AD22B334B0138E9E1 /* RelatedPlaceSourcesPanelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E393C7E632BDC8FB412669B /* RelatedPlaceSourcesPanelTests.swift */; };
+		A10100000000000000000011 /* SharedPlacePost.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000001 /* SharedPlacePost.swift */; };
+		A10100000000000000000012 /* SharedPostsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000002 /* SharedPostsStore.swift */; };
+		A10100000000000000000013 /* SharedPostViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000003 /* SharedPostViews.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -486,6 +489,9 @@
 		64498D790D52838FAEDFDD87 /* ProfileAvatarStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileAvatarStoreTests.swift; sourceTree = "<group>"; };
 		ACD02E7815D5890EC1455CEE /* PlaceVisibilityPersistenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaceVisibilityPersistenceTests.swift; sourceTree = "<group>"; };
 		5E393C7E632BDC8FB412669B /* RelatedPlaceSourcesPanelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelatedPlaceSourcesPanelTests.swift; sourceTree = "<group>"; };
+		A10100000000000000000001 /* SharedPlacePost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPlacePost.swift; sourceTree = "<group>"; };
+		A10100000000000000000002 /* SharedPostsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPostsStore.swift; sourceTree = "<group>"; };
+		A10100000000000000000003 /* SharedPostViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPostViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -946,6 +952,7 @@
 				EC9FCFE1797E4DF4630338E4 /* AIDrawerViewModel.swift */,
 				74DCE926696754031AE2C514 /* MapViewModel.swift */,
 				FF35DBF54C036C8685EC2236 /* ProfileViewModel.swift */,
+				A10100000000000000000002 /* SharedPostsStore.swift */,
 				8FE1A3AEC5BB812BBC6D7E14 /* TripPackStore.swift */,
 			);
 			path = ViewModels;
@@ -997,6 +1004,7 @@
 				DE718959747F6AEEAE3393B7 /* SaveSearchModels.swift */,
 				85338A305203F41DF18FAE27 /* SharedTripData.swift */,
 				87D86203F9ECA96AB9E58AA6 /* SocialMapSignals.swift */,
+				A10100000000000000000001 /* SharedPlacePost.swift */,
 				F50ABA09CC51700F3AB8F9A9 /* Trip.swift */,
 				F32313D7425E554355EEDF42 /* UserProfile.swift */,
 			);
@@ -1008,6 +1016,7 @@
 			children = (
 				528E2A03828D35E2952E7422 /* SaveOriginView.swift */,
 				F815A0000000000000000002 /* SaveFriendsView.swift */,
+				A10100000000000000000003 /* SharedPostViews.swift */,
 			);
 			path = Origin;
 			sourceTree = "<group>";
@@ -1524,6 +1533,7 @@
 				C0E9F65DE2C65F3F28DE1A6A /* PrivyAuthService.swift in Sources */,
 				283787AE9627CB588A26B5A1 /* ProfileView.swift in Sources */,
 				CCA908BE75D42562E30A5CE9 /* ProfileViewModel.swift in Sources */,
+				A10100000000000000000012 /* SharedPostsStore.swift in Sources */,
 				8CD63C6946186279A955FAF5 /* RelatedPlaceSources.swift in Sources */,
 				C89917420BEA87BFA892B556 /* RelatedPlaceSourcesPanel.swift in Sources */,
 				E0A5663B068E5D2C3AD4D762 /* ReviewDemoService.swift in Sources */,
@@ -1549,6 +1559,7 @@
 				B5B0D5A5DFDD5AE0909E3F1B /* SaveMemoryVaultAppender.swift in Sources */,
 				6755C99242C0B500485AFAC9 /* SaveOriginView.swift in Sources */,
 				F815A0000000000000000001 /* SaveFriendsView.swift in Sources */,
+				A10100000000000000000013 /* SharedPostViews.swift in Sources */,
 				3F8A1B2C4D5E6F708192A3B4 /* SavePlanView.swift in Sources */,
 				6B7C8D9E0F1A2B3C4D5E6F70 /* SaveDayRhythmScheduler.swift in Sources */,
 				A117DCD202609100000000001 /* SavePlanAgent.swift in Sources */,
@@ -1572,6 +1583,7 @@
 				57E8DF73087D818758660998 /* SocialCaptionVenueExtractor.swift in Sources */,
 				FD6208D015EEAD7A1B6BEA66 /* SocialLinkReviewCandidateService.swift in Sources */,
 				FFFB2F9105F65B9FC37DD8B6 /* SocialMapSignals.swift in Sources */,
+				A10100000000000000000011 /* SharedPlacePost.swift in Sources */,
 				F7BD41AE9368769E22D71E33 /* SocialOCRCandidateHeuristics.swift in Sources */,
 				9BBD5A95B6C4D533DE2AA0A6 /* SocialPlaceEvidence.swift in Sources */,
 				5EE4A497DC36DECB61368061 /* SocialPlaceParser.swift in Sources */,

@@ -109,6 +109,7 @@ struct SaveFollowedFriend: Codable, Identifiable, Hashable {
     let displayName: String
     let handle: String?
     let avatarUrl: String?
+    var profileId: String? = nil
 
     var handleLabel: String? {
         guard let handle, !handle.isEmpty else { return nil }

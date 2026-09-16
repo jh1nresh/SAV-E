@@ -15,5 +15,6 @@
   "SAVEUITests/SAVEScreenshotRailTests/testPassportAndPostalImportSurfacesAreReachable",
   "SAVEUITests/SAVEOnboardingCarouselTests",
   "SAVEUITests/SAVEScreenshotRailTests/testPassportTutorialReplaysWithoutAddingPlaces",
-  "SAVEUITests/SAVEScreenshotRailTests/testTripStopEditorSurfaceIsReachable"
+  "SAVEUITests/SAVEScreenshotRailTests/testTripStopEditorSurfaceIsReachable",
+  "SAVEUITests/SAVEScreenshotRailTests/testSocialPassportGridAndComposer"
 ]
