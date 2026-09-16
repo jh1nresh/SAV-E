@@ -62,7 +62,7 @@ struct SharedPostsGrid: View {
                 .padding(.vertical, 28)
                 .accessibilityIdentifier("posts.empty")
             }
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5), count: textSize.isAccessibilitySize ? 2 : 3), spacing: 14) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5, alignment: .top), count: textSize.isAccessibilitySize ? 2 : 3), spacing: 14) {
                 ForEach(store.posts) { post in
                     Button { onSelect(post) } label: {
                         VStack(alignment: .leading, spacing: 6) {
