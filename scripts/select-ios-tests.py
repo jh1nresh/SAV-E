@@ -27,6 +27,7 @@ BASELINE = [RAIL + name for name in (
     "testRapidChromeTransitionsKeepAppAlive",
     "testPassportAndPostalImportSurfacesAreReachable",
     "testSocialPassportGridAndComposer",
+    "testPassportListsEntryOpensListsDirectly",
 )] + [ONBOARDING, RAIL + "testPassportTutorialReplaysWithoutAddingPlaces"]
 
 # Exact-file allowlist: adding another view/service requires coverage review.

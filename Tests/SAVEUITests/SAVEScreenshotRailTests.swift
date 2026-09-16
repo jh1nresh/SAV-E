@@ -1958,10 +1958,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let lists = app.buttons["profile.lists"]
         XCTAssertTrue(scrollUntilHittable(lists, in: app.scrollViews.firstMatch, maxSwipes: 6))
         for _ in 0..<3 {
-            if lists.frame.maxY < rootTabButton("Passport", app: app).frame.minY - 12 { break }
+            if lists.frame.maxY < app.frame.maxY - 24 { break }
             app.scrollViews.firstMatch.swipeUp()
         }
-        XCTAssertLessThan(lists.frame.maxY, rootTabButton("Passport", app: app).frame.minY - 12)
+        XCTAssertLessThan(lists.frame.maxY, app.frame.maxY - 24)
         attach(app, name: "passport-lists-entry")
         lists.tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.connections.root"].waitForExistence(timeout: stepTimeout))
