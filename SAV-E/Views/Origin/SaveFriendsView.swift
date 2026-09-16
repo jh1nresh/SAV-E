@@ -30,14 +30,18 @@ struct SaveFriendsView: View {
                 if store.error != nil { SocialLoadError() }
                 if !store.isLoading && store.error == nil && store.posts.isEmpty {
                     VStack(spacing: 16) {
-                        Image(systemName: "postcard").font(.system(size: 46, weight: .light))
+                        Image(systemName: "person.2").font(.system(size: 46, weight: .light))
                         Text(language.localized(english: "Their next place could be yours", traditionalChinese: "下一個想去的地方，從朋友開始"))
                             .font(SaveAtlasType.strong(21)).multilineTextAlignment(.center)
                             .accessibilityIdentifier("friends.empty")
                         Text(language.localized(english: "Follow someone with their Savvy link. Their shared places will appear here.", traditionalChinese: "透過 Savvy 連結追蹤朋友，他們主動分享的地點就會出現在這裡。"))
                             .font(SaveAtlasType.body(14)).foregroundStyle(SaveAtlasPalette.muted).multilineTextAlignment(.center)
-                        Button(language.localized(english: "Find friends", traditionalChinese: "追蹤朋友"), action: onConnections)
-                            .buttonStyle(.borderedProminent).tint(SaveAtlasPalette.forest)
+                        Button(action: onConnections) {
+                            Text(language.localized(english: "Find friends", traditionalChinese: "追蹤朋友"))
+                                .foregroundStyle(SaveAtlasPalette.paper)
+                        }
+                        .buttonStyle(.borderedProminent).tint(SaveAtlasPalette.forest)
+                        .accessibilityIdentifier("friends.findFriends")
                     }.padding(.horizontal, 16).padding(.vertical, 60)
                 }
                 LazyVStack(spacing: 24) {
