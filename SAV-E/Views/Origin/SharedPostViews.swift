@@ -247,7 +247,9 @@ struct SharedPostComposer: View {
                     Section(language.localized(english: "Rating · optional", traditionalChinese: "評分 · 選填")) {
                         Picker(language.localized(english: "Rating", traditionalChinese: "評分"), selection: $draft.stars) {
                             Text(language.localized(english: "No rating", traditionalChinese: "不評分")).tag(nil as Double?)
-                            ForEach(1...5, id: \.self) { value in Text("\(value) ★").tag(Optional(Double(value))) }
+                            ForEach(ratingOptions, id: \.self) { value in
+                                Text(String(format: "%.1f ★", value)).tag(Optional(value))
+                            }
                         }
                     }
                 }
@@ -278,6 +280,12 @@ struct SharedPostComposer: View {
             .task { await prepare() }
             .interactiveDismissDisabled(busy)
         }
+    }
+
+    private var ratingOptions: [Double] {
+        // Older explicit shares may carry half-stars or another valid fraction.
+        // Always include the current value so opening the editor cannot lose it.
+        Array(Set((2...10).map { Double($0) / 2 } + (draft.stars.map { [$0] } ?? []))).sorted()
     }
 
     private func prepare() async {

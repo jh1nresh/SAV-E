@@ -89,7 +89,8 @@ test("PostgreSQL: generalized posts preserve private memory and all live audienc
     const followers = await listFollowedFriendsPage(B, normalizeFollowListOptions({ search: null, limit: null, cursor: null }), (sql, args) => pool.query(sql, [...args]), "followers");
     assert.equal(followers.items[0].profileId, A);
     assert.equal((await listFriendRatings(pool, A, url)).items.length, 0);
-    assert.deepEqual(await ownFriendRatings(pool, B), []);
+    assert.deepEqual(await ownFriendRatings(pool, B), [{ place_id: first, place_name: "Museum", stars: 4, shared: true }],
+      "the withdrawal-only legacy owner list accepts rated posts; it must not hide consent after category edits");
     const [saved, repeated] = await Promise.all([saveSharedPost(pool, A, first), saveSharedPost(pool, A, first)]);
     assert.equal(saved.id, repeated.id); assert.equal(saved.status, "wantToGo"); assert.equal(saved.note, null); assert.equal(saved.rating, null);
     assert.equal((await savedPostAttributions(pool, A))[0].recipient_place_id, saved.id);

@@ -69,13 +69,15 @@ export async function getFriendRating(pool: Pool, userId: string, placeID: strin
 }
 
 export async function ownFriendRatings(pool: Pool, userId: string) {
+  // This owner-only list is also the legacy withdrawal route. A later category
+  // or coordinate edit must not hide the owner's explicit sharing consent.
   // Owners manage explicit sharing consent even when the place is currently
   // private or unvisited. Recipient reads still enforce every visibility gate.
   const { rows } = await pool.query(`select r.place_id, p.name as place_name, r.stars,
     (r.shared_at is not null) as shared
     from friend_restaurant_ratings r
     join places p on (p.id, p.user_id) = (r.place_id, r.user_id)
-    where r.user_id = $1 and ${legacyRating} and ${restaurant} order by r.updated_at desc`, [userId]);
+    where r.user_id = $1 and ${legacyRating} order by r.updated_at desc`, [userId]);
   return rows;
 }
 
