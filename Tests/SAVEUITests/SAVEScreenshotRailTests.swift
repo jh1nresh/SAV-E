@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 /// App Store screenshot rail for the Savvy root shell and Trip workspace.
 ///
@@ -43,6 +44,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'friends.save.' OR identifier BEGINSWITH 'friends.rate.'")).firstMatch.exists)
             XCTAssertLessThan(title.frame.maxY, rootTabButton("Friends", app: app).frame.minY)
             attach(app, name: "friends-coming-soon-\(language)")
+            let findFriends = app.buttons["friends.findFriends"]
+            XCTAssertTrue(findFriends.isHittable)
+            XCTAssertEqual(findFriends.label, language == "en" ? "Find friends" : "追蹤朋友")
+            try assertReadableButtonLabel(findFriends)
+            findFriends.tap()
+            XCTAssertTrue(app.descendants(matching: .any)["profile.connections.root"].waitForExistence(timeout: stepTimeout))
+            app.buttons["profile.connections.back"].tap()
             openRootTab("Home", app: app)
             XCTAssertTrue(app.descendants(matching: .any)["home.root"].firstMatch.waitForExistence(timeout: stepTimeout))
             openRootTab("Friends", app: app)
@@ -61,6 +69,34 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertTrue(emptyRatings.waitForNonExistence(timeout: stepTimeout))
             terminate(app)
         }
+    }
+
+    /// Accessibility can still expose a label painted in the same color as its
+    /// fill. Sample the rendered center, excluding rounded edges and shadows.
+    @MainActor
+    private func assertReadableButtonLabel(_ button: XCUIElement) throws {
+        let image = try XCTUnwrap(button.screenshot().image.cgImage)
+        let center = CGRect(x: CGFloat(image.width) * 0.2, y: CGFloat(image.height) * 0.25,
+                            width: CGFloat(image.width) * 0.6, height: CGFloat(image.height) * 0.5)
+        let crop = try XCTUnwrap(image.cropping(to: center.integral))
+        var pixels = [UInt8](repeating: 0, count: crop.width * crop.height * 4)
+        try pixels.withUnsafeMutableBytes { bytes in
+            let context = try XCTUnwrap(CGContext(data: bytes.baseAddress, width: crop.width, height: crop.height,
+                bitsPerComponent: 8, bytesPerRow: crop.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue))
+            context.draw(crop, in: CGRect(x: 0, y: 0, width: crop.width, height: crop.height))
+        }
+        func linear(_ byte: UInt8) -> Double {
+            let value = Double(byte) / 255
+            return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        let luminances = stride(from: 0, to: pixels.count, by: 4).map { offset in
+            0.2126 * linear(pixels[offset]) + 0.7152 * linear(pixels[offset + 1]) + 0.0722 * linear(pixels[offset + 2])
+        }.sorted()
+        let low = luminances[luminances.count / 20]
+        let high = luminances[luminances.count * 19 / 20]
+        XCTAssertGreaterThanOrEqual((high + 0.05) / (low + 0.05), 4.5,
+            "The visible button label must contrast with its fill, not merely exist in accessibility.")
     }
 
     @MainActor

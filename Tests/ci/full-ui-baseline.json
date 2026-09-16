@@ -17,5 +17,6 @@
   "SAVEUITests/SAVEScreenshotRailTests/testPassportTutorialReplaysWithoutAddingPlaces",
   "SAVEUITests/SAVEScreenshotRailTests/testTripStopEditorSurfaceIsReachable",
   "SAVEUITests/SAVEScreenshotRailTests/testSocialPassportGridAndComposer",
-  "SAVEUITests/SAVEScreenshotRailTests/testPassportListsEntryOpensListsDirectly"
+  "SAVEUITests/SAVEScreenshotRailTests/testPassportListsEntryOpensListsDirectly",
+  "SAVEUITests/SAVEScreenshotRailTests/testFriendsComingSoon"
 ]
