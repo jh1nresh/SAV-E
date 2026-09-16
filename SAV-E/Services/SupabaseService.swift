@@ -795,6 +795,57 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         return try JSONDecoder.supabase.decode(PlaceRow.self, from: data).toPlace()
     }
 
+    // Explicit follower posts, independent of the owner's private place memory.
+    func fetchSharedPosts(mine: Bool, filter: SharedPostFilter, cursor: String?) async throws -> SharedPlacePostsPage {
+        let path = Self.sharedPostsPath(base: mine ? "/v0/shared-posts/mine" : "/v0/shared-posts", filter: filter, cursor: cursor)
+        return try JSONDecoder().decode(SharedPlacePostsPage.self, from: await request(path: path))
+    }
+
+    func fetchSharedPost(id: UUID) async throws -> SharedPlacePost {
+        try JSONDecoder().decode(SharedPlacePost.self, from: await request(path: "/v0/shared-posts/\(id)"))
+    }
+
+    func fetchSocialProfileCounts() async throws -> SocialProfileCounts {
+        try JSONDecoder().decode(SocialProfileCounts.self, from: await request(path: "/v0/social-profile"))
+    }
+
+    func fetchSharedPassport(authorID: String, filter: SharedPostFilter, cursor: String?) async throws -> SharedPassportPage {
+        guard let author = authorID.urlPathEncoded else { throw SupabaseError.recordNotFound }
+        let path = Self.sharedPostsPath(base: "/v0/passports/\(author)", filter: filter, cursor: cursor)
+        return try JSONDecoder().decode(SharedPassportPage.self, from: await request(path: path))
+    }
+
+    func putSharedPost(id: UUID, draft: SharedPostDraft) async throws -> SharedPlacePost {
+        guard draft.isValid else { throw SupabaseError.invalidResponse("Invalid post") }
+        let body = try JSONEncoder().encode(draft)
+        return try JSONDecoder().decode(SharedPlacePost.self, from: await request(path: "/v0/shared-posts/\(id)", method: "PUT", body: body))
+    }
+
+    func withdrawSharedPost(id: UUID) async throws {
+        try await request(path: "/v0/shared-posts/\(id)", method: "DELETE")
+    }
+
+    func saveSharedPost(id: UUID) async throws -> Place {
+        let data = try await request(path: "/v0/shared-posts/\(id)/save", method: "POST", body: Data("{}".utf8))
+        return try JSONDecoder.supabase.decode(PlaceRow.self, from: data).toPlace()
+    }
+
+    func fetchFollowers(cursor: String?) async throws -> SaveFollowedFriendsPage {
+        var components = URLComponents()
+        components.path = "/v0/followers"
+        components.queryItems = [URLQueryItem(name: "limit", value: "50")]
+        if let cursor { components.queryItems?.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return try JSONDecoder().decode(SaveFollowedFriendsPage.self, from: await request(path: components.string!))
+    }
+
+    static func sharedPostsPath(base: String, filter: SharedPostFilter, cursor: String?) -> String {
+        var components = URLComponents()
+        components.path = base
+        components.queryItems = [URLQueryItem(name: "limit", value: "24"), URLQueryItem(name: "status", value: filter.rawValue)]
+        if let cursor { components.queryItems?.append(URLQueryItem(name: "cursor", value: cursor)) }
+        return components.string ?? base
+    }
+
     func fetchFollowedFriends(query: String, cursor: String?, limit: Int) async throws -> SaveFollowedFriendsPage {
         guard isConfigured else { return SaveFollowedFriendsPage(items: [], nextCursor: nil) }
 
@@ -1034,7 +1085,8 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         additionalHeaders: [String: String] = [:],
         baseURLOverride: String? = nil
     ) async throws -> (Data, HTTPURLResponse) {
-        let friendSession: Int? = path.hasPrefix("/v0/friend-ratings")
+        let isSocialRequest = ["/v0/friend-ratings", "/v0/shared-posts", "/v0/passports", "/v0/social-profile", "/v0/follows", "/v0/followers"].contains { path.hasPrefix($0) }
+        let friendSession: Int? = isSocialRequest
             ? await MainActor.run { PrivyAuthService.shared.sessionGeneration } : nil
         guard let base = baseURLOverride ?? apiBaseURL else { throw SupabaseError.notConfigured }
 
@@ -1043,7 +1095,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }
 
         var request = URLRequest(url: url)
-        if path.hasPrefix("/v0/friend-ratings") { request.cachePolicy = .reloadIgnoringLocalCacheData }
+        if isSocialRequest { request.cachePolicy = .reloadIgnoringLocalCacheData }
         request.httpMethod = method
         if path.hasPrefix("/v0/analysis") { request.timeoutInterval = 8 }
         // Public video recovery includes a bounded download and frame analysis.
@@ -1083,6 +1135,12 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
                 throw CancellationError()
             }
             throw SupabaseError.networkError(error)
+        }
+
+        if let friendSession {
+            let stillCurrent = await MainActor.run { PrivyAuthService.shared.sessionGeneration == friendSession }
+            guard stillCurrent else { throw CancellationError() }
+            try Task.checkCancellation()
         }
 
         guard let http = response as? HTTPURLResponse else {

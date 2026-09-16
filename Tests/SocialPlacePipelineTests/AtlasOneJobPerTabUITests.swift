@@ -4,6 +4,29 @@ import XCTest
 @testable import SAVE
 
 final class AtlasOneJobPerTabUITests: XCTestCase {
+    @MainActor
+    func testUnratedPostEncodesExplicitNullAndNoPrivateFields() throws {
+        let draft = SharedPostDraft(status: .wantToGo, stars: nil, caption: "")
+        XCTAssertTrue(draft.isValid)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(draft)) as? [String: Any])
+        XCTAssertTrue(json["stars"] is NSNull)
+        XCTAssertEqual(json["status"] as? String, "wantToGo")
+        XCTAssertEqual(Set(json.keys), ["status", "stars", "caption"])
+        XCTAssertFalse(SharedPostDraft(status: .wantToGo, stars: 4, caption: "").isValid)
+        XCTAssertFalse(SharedPostDraft(status: .visited, stars: .nan, caption: "").isValid)
+        XCTAssertFalse(SharedPostDraft(status: .visited, stars: nil, caption: String(repeating: "a", count: 501)).isValid)
+        XCTAssertTrue(SharedPostDraft(status: .visited, stars: 4.5, caption: String(repeating: "a", count: 500)).isValid)
+    }
+
+    @MainActor
+    func testPostPaginationEncodesCursorWithoutChangingFilter() throws {
+        let path = SupabaseService.sharedPostsPath(base: "/v0/shared-posts/mine", filter: .visited, cursor: "a+/=&cursor")
+        let components = try XCTUnwrap(URLComponents(string: path))
+        XCTAssertEqual(components.path, "/v0/shared-posts/mine")
+        XCTAssertEqual(components.queryItems?.first(where: { $0.name == "cursor" })?.value, "a+/=&cursor")
+        XCTAssertEqual(components.queryItems?.first(where: { $0.name == "status" })?.value, "visited")
+    }
+
     func testPrimaryLoadingSurfacesShareTheAtlasLoadingCard() throws {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
@@ -521,8 +544,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             < passport.range(of: "profile.fieldStreak")!.lowerBound)
         XCTAssertTrue(passport.range(of: "profile.stampLedger")!.lowerBound
             < passport.range(of: "profile.fieldStreak")!.lowerBound)
-        XCTAssertTrue(passport.range(of: "profile.stampLedger")!.lowerBound
-            < passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound)
+        XCTAssertTrue(passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound
+            < passport.range(of: "SharedPostsGrid")!.lowerBound)
         XCTAssertTrue(passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound
             < passport.range(of: "profile.controlPocket")!.lowerBound)
         XCTAssertTrue(passport.range(of: "profile.controlPocket")!.lowerBound

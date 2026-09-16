@@ -110,7 +110,7 @@ Rules:
 
 ### Passport
 
-The Passport is the user's memory archive and control surface.
+The Passport is the user’s personal profile and explicit sharing surface. Home owns the full private saved-place library.
 
 Rules:
 
@@ -121,8 +121,8 @@ Rules:
 - Proof-backed count stays `0` until Savvy has user-attached proof evidence.
   Public map metadata, friend-saved places, and self-marked Visited status do
   not count as proof.
-- Do not call it a profile unless referring to the implementation file.
-- Passport should look like a notebook cover plus stamp ledger, not a settings table.
+- Keep Passport as the navigation name; its behavior is a personal profile.
+- Passport uses a compact profile header, quests above a shared-post grid, and a separate settings entry.
 - Passport identity uses the chosen photo saved for the current account on this
   device when available; otherwise it uses `SavvyLogo`. This photo has no cloud
   avatar representation and does not sync between devices.
@@ -154,7 +154,7 @@ Use these product nouns:
 - Memory Card
 - Evidence Receipt
 - Passport
-- Friends (朋友): reserved root destination, currently showing Coming soon
+- Friends (朋友): recent explicitly shared place posts from followed authors
 - Your quests (探索任務): live next steps in Passport
 - Plan
 - Plan around this
@@ -512,28 +512,18 @@ view or disclosure, not in every card body.
 
 Source: `SAV-E/Views/Profile/ProfileView.swift`.
 
-Required content:
+Required root content, in order:
 
-- Passport identity: the current account's device-local chosen photo when
-  available, otherwise `SavvyLogo`.
-- Passport name.
-- Map Stamps count.
-- Visited count; proof verification is a separate future evidence state.
-- Cities count.
-- Waiting clues count.
-- Member since.
-- Field streak: consecutive local days with a real memory action (confirm a waiting clue, save a Map Stamp, or mark Visited). Not a login check-in calendar.
-- Collection: Map Stamps, Visited, Cities, and Waiting clues as memory progress, not a reward track.
-- Today on Savvy: at most three live incomplete next steps, including a return step when an unvisited Map Stamp exists. Hide the whole strip when none apply. Label it Your quests (探索任務); it is visible by default.
-- Language and local memory controls.
+1. Account identity, real post/following/follower counts and edit/settings actions.
+2. Owner-only Your quests, at most three existing live next steps. Hide if empty.
+3. Shared places: explicit new-post action, All / Want to go / Visited filters,
+   three-column post grid (adapt at accessibility text sizes).
 
-Passport section order on the root tab:
-
-1. Compact identity (account photo or SavvyLogo + passport name)
-2. Compact collection ledger
-3. Your quests (visible live next steps)
-4. Field activity disclosure
-5. Control pocket
+Tapping a post opens its detail; the owner can edit or withdraw. Only explicit
+shares appear here. Home retains the full private collection and review queue.
+The settings route retains the collection ledger, activity, language, private
+memory controls, sharing/privacy, Pro, tutorial and account controls. Existing
+lists remain reachable. No XP, rewards or entitlement changes.
 
 ## State Model
 
@@ -556,7 +546,7 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 
 ### Primary Navigation
 
-- Root controls are Home / Map / + / Passport, in that order.
+- Root controls are Home / Map / + / Friends / Passport, in that order.
 - Home owns saved places and waiting clues. Do not add a duplicate Saves tab.
 - + opens capture and leaves the previous destination selected when dismissed.
 - Plan is a secondary route while planning demand remains unvalidated.
@@ -732,53 +722,36 @@ Rules:
 
 ### Passport
 
-Passport is the user's memory ledger.
+Passport is the user's personal profile and sharing manager. Quests are above
+posts, visible only to the owner. A visitor passport contains only currently
+accessible explicit posts and a minimal author identity; no tasks or private
+memory totals. The owner sees paused posts as paused, not silently published.
 
-Daily streak is visible below the stamp ledger. A successful saved place (including
-confirming a candidate) or a new user-marked Visited transition counts once per
-local calendar day. Yesterday's streak remains active until today ends; a missing
-full day resets it. Show the last seven days, today last. This is device-local
-activity, not attendance proof, and editing an already visited place does not count.
-
-Rules:
-
-- Keep settings subordinate to memory stats.
-- Local Memory debug surfaces must not dominate the default Passport.
-- Waiting clues should be visible but not alarming.
-- Cities come from saved place addresses.
-- Visited comes from places the user marked as visited; do not imply Savvy has
-  verified real-world attendance without proof evidence.
-- Proof-backed is a separate slot from Visited. It remains `0` until receipt,
-  original photo, or location evidence can be attached by the user.
-- Field streak lives in a Field activity disclosure after quests. Count only confirm /
-  save Map Stamp / mark Visited days. Opening the app does not count. Do not
-  render a streak month calendar, XP bar, or gem balance.
-- Collection is the stamp ledger reframed as memory progress: Map Stamps,
-  Visited, Cities, Waiting clues. It does not unlock rewards.
-- Your quests sits after Collection, visible without a disclosure. Use compact
-  rounded paper rows, the same Atlas type and spacing as Home.
-  It may observe a waiting clue, an unvisited Map Stamp, a private Map Stamp,
-  or a missing friend connection. It does not grant Pro, XP, or rewards. If no
-  live step applies, hide the strip. Do not show an empty quest card.
+Daily activity stays in settings with the collection ledger. Count confirm/save/
+new Visited transitions once per local day; not logins, rewards or attendance
+proof. Visited never means evidence-verified. No private notes, imported reviews,
+source clues or visit timestamps appear in post projections.
 
 ### Friends
 
-Home / Map / + / Friends / Passport remains the root bar. Friends is temporarily
-an informational placeholder while its product direction is deferred. Show the
-localized page title, the existing friends icon, and “Coming soon” / “即將推出”
-in Atlas colors. Keep the layout quiet and the five-tab bar usable.
+Home / Map / + / Friends / Passport remains the root bar. Friends is a recent
+feed of explicit posts by followed authors. No separate friend-showcase section.
+An author opens a read-only passport under the same live follower audience gate.
+Loading, retry, empty and withdrawn states are explicit; sample activity exists
+only in isolated UI fixtures. A follow or private memory update never publishes.
 
-Do not show the rating feed, invitation field, follow management, rating editor,
-loading/error states, notification signup, sample activity, or a release date.
-Opening or returning to this page must not load friend ratings or start a share.
-Existing saved places, ratings, sharing permissions and backend data remain
-unchanged; this page does not expose controls to modify them. Restoring the
-sharing experience requires a separate product decision.
+A post may represent Want to go or Visited. Caption is optional; a rating is
+optional and allowed only for Visited. Post status is the author's explicit
+snapshot, independent of later private place changes. Category artwork is used
+when no safe shared image exists; do not publish private photos automatically.
 
-Passport → Sharing & Privacy retains a withdrawal-only list of existing shared
-restaurant ratings. It includes shares whose places are currently private, and
-withdrawing a rating does not change the place visibility or delete its memory.
-Only an explicit owner action withdraws a share; Friends never opens this list.
+Sharing explicitly opts into the existing one-way follower audience, labeled
+“Visible to people who follow you” / “追蹤你的人可見”. Withdrawal stops the follower
+post and its live attribution, while preserving owner and recipient saved places.
+Separately published public links/cards retain their own consent lifecycle; the
+withdrawal confirmation states this. Recipient saves are idempotent and never
+copy author notes or ratings or overwrite recipient memory. Legacy restaurant
+rating withdrawals remain available in Sharing & Privacy.
 
 ### Share Extension
 

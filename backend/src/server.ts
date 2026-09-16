@@ -227,6 +227,7 @@ import {
   FriendRatingError, listFriendRatings, getFriendRating, ownFriendRatings,
   putFriendRating, withdrawFriendRating, saveFriendRating, savedFriendAttributions,
 } from "./friendRatings.js";
+import { listSharedPosts, getSharedPost, putSharedPost, withdrawSharedPost, saveSharedPost, savedPostAttributions, getPassport, getSocialProfile } from "./sharedPosts.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -1103,6 +1104,45 @@ createServer(async (request, response) => {
     }
     if (isV0 && resource === "places" && id && segments[2] === "trust-summary") {
       return await handlePlaceTrustSummary(request, response, id, userId);
+    }
+    if (isV0 && ["shared-posts", "passports", "social-profile", "followers"].includes(resource)) {
+      response.setHeader("Cache-Control", "private, no-store");
+      response.setHeader("Vary", "Authorization");
+      if (resource === "social-profile" && request.method === "GET" && segments.length === 1) {
+        return sendJson(response, await getSocialProfile(pool, userId));
+      }
+      if (resource === "passports" && request.method === "GET" && id && segments.length === 2) {
+        return sendJson(response, await getPassport(pool, userId, decodeURIComponent(id), url));
+      }
+      if (resource === "followers" && request.method === "GET" && segments.length === 1) {
+        try {
+          return sendJson(response, await listFollowedFriendsPage(userId, normalizeFollowListOptions({
+            search: url.searchParams.get("q"), limit: url.searchParams.get("limit"), cursor: url.searchParams.get("cursor"),
+          }), (sql, values) => pool.query(sql, [...values] as QueryValue[]), "followers"));
+        } catch (error) {
+          if (error instanceof FollowListInputError) return sendJson(response, { error: error.message }, 400);
+          throw error;
+        }
+      }
+      if (resource === "shared-posts") {
+        if (request.method === "GET" && segments.length === 1) return sendJson(response, await listSharedPosts(pool, userId, url));
+        if (request.method === "GET" && segments.length === 2 && id === "mine") return sendJson(response, await listSharedPosts(pool, userId, url, "mine"));
+        if (request.method === "GET" && segments.length === 2 && id === "saved") return sendJson(response, await savedPostAttributions(pool, userId));
+        if (id && segments.length === 2) {
+          if (request.method === "GET") return sendJson(response, await getSharedPost(pool, userId, id));
+          if (request.method === "PUT") return sendJson(response, await putSharedPost(pool, userId, id, await readJson(request, 4096)));
+          if (request.method === "DELETE") {
+            await withdrawSharedPost(pool, userId, id);
+            return sendJson(response, null, 204);
+          }
+        }
+        if (id && request.method === "POST" && segments.length === 3 && segments[2] === "save") {
+          const body = await readJson(request, 2048);
+          if (Object.keys(body).length) return sendJson(response, { error: "Save accepts only the shared post id" }, 400);
+          return sendJson(response, formatPlace(await saveSharedPost(pool, userId, id)), 201);
+        }
+      }
+      return sendJson(response, { error: "Unsupported social route" }, 405);
     }
     if (isV0 && resource === "friend-ratings") {
       response.setHeader("Cache-Control", "private, no-store");

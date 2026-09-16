@@ -7,6 +7,11 @@ struct ProfileView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.appLanguageSettings) private var languageSettings
     @StateObject private var viewModel = ProfileViewModel()
+    @StateObject private var posts = SharedPostsStore()
+    @State private var showSettings = false
+    @State private var showNewPost = false
+    @State private var showFollowers = false
+    @State private var selectedPost: SharedPlacePost?
     @State private var showEditProfile = false
     @State private var showLanguageSettings = false
     @State private var showTutorial = false
@@ -43,6 +48,7 @@ struct ProfileView: View {
     var onReviewAll: () -> Void = {}
     var onUpdatePlace: (Place) async throws -> Void = { _ in }
     var isRootTab = false
+    @Binding var requestsConnections: Bool
     @State private var opensConnections = false
     @State private var opensListsDirectly = false
     @State private var shareFocusPlace: Place?
@@ -79,15 +85,10 @@ struct ProfileView: View {
                 VStack(spacing: SaveTheme.Spacing.lg) {
                     PassportTopBar(
                         waitingClues: waitingClues,
-                        allowsEditing: !PrivyAuthService.shared.isReviewerDemo,
+                        allowsEditing: true,
                         showsCloseButton: !isRootTab,
                         onClose: { dismiss() },
-                        onEdit: {
-                            SaveHaptics.tap()
-                            draftDisplayName = viewModel.profile.displayName
-                            draftAvatarData = nil
-                            showEditProfile = true
-                        }
+                        onEdit: { showSettings = true }
                     )
                     .padding(.horizontal)
                     .padding(
@@ -97,21 +98,10 @@ struct ProfileView: View {
                             : SaveTheme.Spacing.lg
                     )
 
-                    PassportHero(
-                        profile: viewModel.profile,
-                        localAvatarData: viewModel.localAvatarData,
-                        isAuthenticated: viewModel.isAuthenticated,
-                        allowsEditing: !PrivyAuthService.shared.isReviewerDemo,
-                        onEdit: {
-                            SaveHaptics.tap()
-                            draftDisplayName = viewModel.profile.displayName
-                            draftAvatarData = nil
-                            showEditProfile = true
-                        }
-                    )
-                    .padding(.horizontal)
-                    .accessibilityElement(children: .contain)
-                    .accessibilityIdentifier("profile.cover")
+                    passportIdentity
+                        .padding(.horizontal, 16)
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("profile.cover")
 
                     if let errorMessage = viewModel.errorMessage {
                         HStack(spacing: SaveTheme.Spacing.sm) {
@@ -128,170 +118,21 @@ struct ProfileView: View {
                         .padding(.horizontal)
                     }
 
-                    PassportStampSection(stats: passportStats)
-                        .accessibilityIdentifier("profile.stampLedger")
-
-                    PassportFieldStreakStrip(
-                        streak: fieldStreak,
-                        hasActionToday: hasFieldActionToday,
-                        recentActivity: recentFieldActivity
-                    )
-                    .accessibilityIdentifier("profile.fieldStreak")
-
                     if !todayMissions.isEmpty {
                         PassportTodayOnSavvyStrip(missions: todayMissions) { missionID in
                             handleTodayMission(missionID, scrollProxy: proxy)
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
-                        DisclosureGroup {
-                            SettingsRow(
-                                icon: "globe.asia.australia",
-                                title: languageSettings.text(.language),
-                                detail: languageSettings.language.displayName,
-                                color: .saveCocoa,
-                                accessibilityIdentifier: "profile.language"
-                            ) {
-                                SaveHaptics.tap()
-                                showLanguageSettings = true
-                            }
-
-                            if SAVEProAccessPolicy.shouldOfferProFromPassport(
-                                hasConfirmedMapStamp: !passportPlaces.isEmpty
-                            ) {
-                                SettingsRow(
-                                    icon: "sparkles",
-                                    title: languageSettings.localized(
-                                        english: "Savvy Pro",
-                                        traditionalChinese: "Savvy Pro"
-                                    ),
-                                    detail: languageSettings.localized(
-                                        english: "Core place memory stays free",
-                                        traditionalChinese: "核心地點記憶維持免費"
-                                    ),
-                                    color: SaveAtlasPalette.lavender,
-                                    accessibilityIdentifier: "profile.pro"
-                                ) {
-                                    SaveHaptics.tap()
-                                    showProPaywall = true
-                                }
-                            }
-                        } label: {
-                            Text(languageSettings.text(.passportControls))
-                                .font(SaveTheme.Typography.eyebrow)
-                                .foregroundColor(.saveCocoa)
-                        }
-                        .padding(.horizontal, SaveTheme.Spacing.xs)
-                        .accessibilityIdentifier("profile.controlsDisclosure")
-
-                        SettingsRow(
-                            icon: "book.pages",
-                            title: languageSettings.localized(english: "How to use Savvy", traditionalChinese: "Savvy 使用教學"),
-                            detail: languageSettings.localized(english: "Try a clue, review it, then make a Map Stamp", traditionalChinese: "從線索、確認到地圖章，跟著做一次"),
-                            color: SaveAtlasPalette.forest,
-                            accessibilityIdentifier: "profile.tutorial"
-                        ) {
-                            showTutorial = true
-                        }
-
-                        NavigationLink {
-                            SaveMemoryDebugView(
-                                localVaultService: PrivyAuthService.shared.isReviewerDemo
-                                    ? ReviewDemoStorage.localVaultService
-                                    : .shared
-                            )
-                        } label: {
-                            SettingsRow(
-                                icon: "brain.head.profile",
-                                title: languageSettings.localized(english: "Memory & Preferences", traditionalChinese: "記憶與偏好"),
-                                detail: languageSettings.localized(english: "Inspect and control what Savvy remembers", traditionalChinese: "查看並控制 Savvy 記住的內容"),
-                                color: .saveCocoa
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
-                        .accessibilityIdentifier("profile.memoryPreferences")
-
-                        Button {
-                            SaveHaptics.tap()
-                            opensListsDirectly = false
-                            opensConnections = true
-                        } label: {
-                            SettingsRow(
-                                icon: "person.2.fill",
-                                title: languageSettings.localized(english: "Friends & Lists", traditionalChinese: "朋友與清單"),
-                                detail: languageSettings.localized(
-                                    english: "\(followedFriends.count) friends · \(collaborativeLists.count) lists",
-                                    traditionalChinese: "\(followedFriends.count) 位朋友 · \(collaborativeLists.count) 個清單"
-                                ),
-                                color: SaveAtlasPalette.mint
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("profile.connections")
-
-                        SettingsRow(
-                            icon: "list.bullet.rectangle",
-                            title: languageSettings.localized(english: "Your lists", traditionalChinese: "你的清單"),
-                            detail: languageSettings.localized(
-                                english: "\(collaborativeLists.count) shared place collections",
-                                traditionalChinese: "\(collaborativeLists.count) 個共享地點清單"
-                            ),
-                            color: SaveAtlasPalette.kraft,
-                            accessibilityIdentifier: "profile.lists"
-                        ) {
-                            SaveHaptics.tap()
-                            opensListsDirectly = true
-                            opensConnections = true
-                        }
-
-                        SettingsRow(
-                            icon: "arrow.right.square",
-                            title: languageSettings.text(.signOut),
-                            color: .saveError,
-                            accessibilityIdentifier: "profile.signOut"
-                        ) {
-                            SaveHaptics.tap()
-                            Task { await viewModel.signOut() }
-                        }
-
-                        if !PrivyAuthService.shared.isReviewerDemo {
-                            SettingsRow(
-                                icon: "trash.fill",
-                                title: languageSettings.localized(
-                                    english: "Delete Account",
-                                    traditionalChinese: "刪除帳號"
-                                ),
-                                detail: languageSettings.localized(
-                                    english: "Permanently delete your account and saved data",
-                                    traditionalChinese: "永久刪除帳號與已儲存資料"
-                                ),
-                                color: .saveError,
-                                accessibilityIdentifier: "profile.deleteAccount"
-                            ) {
-                                SaveHaptics.tap()
-                                showDeleteAccountConfirmation = true
-                            }
-                            .disabled(viewModel.isDeletingAccount)
-                        }
-                    }
-                    .padding(.horizontal, SaveTheme.Spacing.md)
-                    .padding(.top, SaveTheme.Spacing.lg)
-                    .padding(.bottom, SaveTheme.Spacing.xl)
-                    .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16))
-                    .overlay { RoundedRectangle(cornerRadius: 16).stroke(SaveAtlasPalette.line.opacity(0.3)) }
-                    .padding(.horizontal)
-                    .accessibilityElement(children: .contain)
-                    .accessibilityIdentifier("profile.controlPocket")
-
-                    PassportCountingRulesPanel(stats: passportStats)
-
-                    PassportVisibilityPanel(
-                        places: visibilityPlaces,
-                        onUpdate: updatePlaceVisibility
-                    )
-                    .id("profile.sharingPrivacy")
+                    HStack {
+                        Text(languageSettings.localized(english: "Shared places", traditionalChinese: "我的分享"))
+                            .font(SaveAtlasType.strong(18))
+                        Spacer()
+                        Label(languageSettings.localized(english: "Followers only", traditionalChinese: "追蹤你的人可見"), systemImage: "eye")
+                            .font(SaveAtlasType.body(11)).foregroundStyle(SaveAtlasPalette.muted)
+                    }.foregroundStyle(SaveAtlasPalette.forest).padding(.horizontal, 16)
+                    SharedPostsGrid(store: posts) { selectedPost = $0 }
+                        .padding(.horizontal, 16)
                 }
                 .padding(
                     .bottom,
@@ -305,9 +146,225 @@ struct ProfileView: View {
             .background(SaveAtlasPalette.canvas.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .accessibilityIdentifier("profile.root")
+            .refreshable { await posts.refresh(.mine) }
+            .navigationDestination(isPresented: $showSettings) {
+                ScrollView {
+                    VStack(spacing: 20) {
+                        PassportStampSection(stats: passportStats).accessibilityIdentifier("profile.stampLedger")
+                        PassportFieldStreakStrip(streak: fieldStreak, hasActionToday: hasFieldActionToday, recentActivity: recentFieldActivity)
+                            .accessibilityIdentifier("profile.fieldStreak")
+                        settingsContent
+                    }.padding(.vertical, 20)
+                }
+                .background(SaveAtlasPalette.canvas)
+                .navigationTitle(languageSettings.localized(english: "Passport settings", traditionalChinese: "護照設定"))
+                .toolbar(.visible, for: .navigationBar)
+            }
             .navigationDestination(isPresented: $opensConnections) {
                 connectionsDestination
             }
+    }
+
+    private var settingsContent: some View {
+        VStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
+                DisclosureGroup {
+                    SettingsRow(
+                        icon: "globe.asia.australia",
+                        title: languageSettings.text(.language),
+                        detail: languageSettings.language.displayName,
+                        color: .saveCocoa,
+                        accessibilityIdentifier: "profile.language"
+                    ) {
+                        SaveHaptics.tap()
+                        showLanguageSettings = true
+                    }
+
+                    if SAVEProAccessPolicy.shouldOfferProFromPassport(
+                        hasConfirmedMapStamp: !passportPlaces.isEmpty
+                    ) {
+                        SettingsRow(
+                            icon: "sparkles",
+                            title: languageSettings.localized(
+                                english: "Savvy Pro",
+                                traditionalChinese: "Savvy Pro"
+                            ),
+                            detail: languageSettings.localized(
+                                english: "Core place memory stays free",
+                                traditionalChinese: "核心地點記憶維持免費"
+                            ),
+                            color: SaveAtlasPalette.lavender,
+                            accessibilityIdentifier: "profile.pro"
+                        ) {
+                            SaveHaptics.tap()
+                            showProPaywall = true
+                        }
+                    }
+                } label: {
+                    Text(languageSettings.text(.passportControls))
+                        .font(SaveTheme.Typography.eyebrow)
+                        .foregroundColor(.saveCocoa)
+                }
+                .padding(.horizontal, SaveTheme.Spacing.xs)
+                .accessibilityIdentifier("profile.controlsDisclosure")
+
+                SettingsRow(
+                    icon: "book.pages",
+                    title: languageSettings.localized(english: "How to use Savvy", traditionalChinese: "Savvy 使用教學"),
+                    detail: languageSettings.localized(english: "Try a clue, review it, then make a Map Stamp", traditionalChinese: "從線索、確認到地圖章，跟著做一次"),
+                    color: SaveAtlasPalette.forest,
+                    accessibilityIdentifier: "profile.tutorial"
+                ) {
+                    showTutorial = true
+                }
+
+                NavigationLink {
+                    SaveMemoryDebugView(
+                        localVaultService: PrivyAuthService.shared.isReviewerDemo
+                            ? ReviewDemoStorage.localVaultService
+                            : .shared
+                    )
+                } label: {
+                    SettingsRow(
+                        icon: "brain.head.profile",
+                        title: languageSettings.localized(english: "Memory & Preferences", traditionalChinese: "記憶與偏好"),
+                        detail: languageSettings.localized(english: "Inspect and control what Savvy remembers", traditionalChinese: "查看並控制 Savvy 記住的內容"),
+                        color: .saveCocoa
+                    )
+                }
+                .buttonStyle(.plain)
+                .simultaneousGesture(TapGesture().onEnded { SaveHaptics.tap() })
+                .accessibilityIdentifier("profile.memoryPreferences")
+
+                Button {
+                    SaveHaptics.tap()
+                    opensListsDirectly = false
+                    opensConnections = true
+                } label: {
+                    SettingsRow(
+                        icon: "person.2.fill",
+                        title: languageSettings.localized(english: "Friends & Lists", traditionalChinese: "朋友與清單"),
+                        detail: languageSettings.localized(
+                            english: "\(followedFriends.count) friends · \(collaborativeLists.count) lists",
+                            traditionalChinese: "\(followedFriends.count) 位朋友 · \(collaborativeLists.count) 個清單"
+                        ),
+                        color: SaveAtlasPalette.mint
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("profile.connections")
+
+                SettingsRow(
+                    icon: "list.bullet.rectangle",
+                    title: languageSettings.localized(english: "Your lists", traditionalChinese: "你的清單"),
+                    detail: languageSettings.localized(
+                        english: "\(collaborativeLists.count) shared place collections",
+                        traditionalChinese: "\(collaborativeLists.count) 個共享地點清單"
+                    ),
+                    color: SaveAtlasPalette.kraft,
+                    accessibilityIdentifier: "profile.lists"
+                ) {
+                    SaveHaptics.tap()
+                    opensListsDirectly = true
+                    opensConnections = true
+                }
+
+                SettingsRow(
+                    icon: "arrow.right.square",
+                    title: languageSettings.text(.signOut),
+                    color: .saveError,
+                    accessibilityIdentifier: "profile.signOut"
+                ) {
+                    SaveHaptics.tap()
+                    Task { await viewModel.signOut() }
+                }
+
+                if !PrivyAuthService.shared.isReviewerDemo {
+                    SettingsRow(
+                        icon: "trash.fill",
+                        title: languageSettings.localized(
+                            english: "Delete Account",
+                            traditionalChinese: "刪除帳號"
+                        ),
+                        detail: languageSettings.localized(
+                            english: "Permanently delete your account and saved data",
+                            traditionalChinese: "永久刪除帳號與已儲存資料"
+                        ),
+                        color: .saveError,
+                        accessibilityIdentifier: "profile.deleteAccount"
+                    ) {
+                        SaveHaptics.tap()
+                        showDeleteAccountConfirmation = true
+                    }
+                    .disabled(viewModel.isDeletingAccount)
+                }
+            }
+            .padding(.horizontal, SaveTheme.Spacing.md)
+            .padding(.top, SaveTheme.Spacing.lg)
+            .padding(.bottom, SaveTheme.Spacing.xl)
+            .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16))
+            .overlay { RoundedRectangle(cornerRadius: 16).stroke(SaveAtlasPalette.line.opacity(0.3)) }
+            .padding(.horizontal)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("profile.controlPocket")
+
+            PassportCountingRulesPanel(stats: passportStats)
+
+            PassportVisibilityPanel(
+                places: visibilityPlaces,
+                onUpdate: updatePlaceVisibility
+            )
+            .id("profile.sharingPrivacy")
+        }
+    }
+
+
+    private var passportIdentity: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 18) {
+                Button { editIdentity() } label: {
+                    ProfileAvatarView(avatarURLString: viewModel.profile.avatarUrl, localAvatarData: viewModel.localAvatarData, size: 72)
+                }
+                .buttonStyle(.plain).disabled(PrivyAuthService.shared.isReviewerDemo)
+                .accessibilityLabel(languageSettings.localized(english: "Change Passport photo", traditionalChinese: "變更護照照片"))
+                .accessibilityIdentifier("profile.editAvatar")
+                HStack(spacing: 8) {
+                    profileCount(posts.counts?.postCount, title: languageSettings.localized(english: "Posts", traditionalChinese: "分享"))
+                    Button { opensConnections = true } label: {
+                        profileCount(posts.counts?.followingCount, title: languageSettings.localized(english: "Following", traditionalChinese: "追蹤"))
+                    }.buttonStyle(.plain).accessibilityIdentifier("profile.following")
+                    Button { showFollowers = true } label: {
+                        profileCount(posts.counts?.followerCount, title: languageSettings.localized(english: "Followers", traditionalChinese: "粉絲"))
+                    }.buttonStyle(.plain).accessibilityIdentifier("profile.followers")
+                }
+            }
+            Text(viewModel.profile.displayName).font(SaveAtlasType.strong(22))
+            Text(languageSettings.localized(english: "Places I dream of. Places I remember.", traditionalChinese: "收藏想去的風景，分享走過的日常。"))
+                .font(SaveAtlasType.body(13)).foregroundStyle(SaveAtlasPalette.muted)
+            HStack(spacing: 10) {
+                Button { editIdentity() } label: {
+                    Text(languageSettings.localized(english: "Edit profile", traditionalChinese: "編輯個人資料")).frame(maxWidth: .infinity, minHeight: 38)
+                }.disabled(PrivyAuthService.shared.isReviewerDemo).accessibilityIdentifier("profile.edit")
+                Button { showNewPost = true } label: {
+                    Label(languageSettings.localized(english: "New post", traditionalChinese: "新增分享"), systemImage: "plus").frame(maxWidth: .infinity, minHeight: 38)
+                }.accessibilityIdentifier("posts.new")
+            }
+            .font(SaveAtlasType.strong(13)).buttonStyle(.bordered).tint(SaveAtlasPalette.forest)
+        }
+        .foregroundStyle(SaveAtlasPalette.forest)
+    }
+
+    private func profileCount(_ count: Int?, title: String) -> some View {
+        VStack(spacing: 4) {
+            Text(count.map(String.init) ?? "—").font(SaveAtlasType.strong(21)).monospacedDigit()
+            Text(title).font(SaveAtlasType.body(12))
+        }.frame(maxWidth: .infinity, minHeight: 48)
+    }
+
+    private func editIdentity() {
+        draftDisplayName = viewModel.profile.displayName
+        draftAvatarData = nil
+        showEditProfile = true
     }
 
     var body: some View {
@@ -318,6 +375,13 @@ struct ProfileView: View {
                 NavigationStack { passportContent }
             }
         }
+        .onChange(of: requestsConnections) { _, requested in
+            if requested { opensConnections = true; requestsConnections = false }
+        }
+        .onAppear {
+            if requestsConnections { opensConnections = true; requestsConnections = false }
+        }
+        .task(id: posts.filter) { await posts.refresh(.mine) }
         .task(id: currentUserID) {
             viewModel.resetForCurrentSession()
             draftAvatarData = nil
@@ -327,9 +391,10 @@ struct ProfileView: View {
             hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
             inviteURLAvailable = await onLoadMyReferralURL() != nil
             await viewModel.loadProfile()
+            await posts.refresh(.mine)
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { refreshFieldStreak() }
+            if phase == .active { refreshFieldStreak(); Task { await posts.refresh(.mine) } }
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
             refreshFieldStreak()
@@ -342,10 +407,14 @@ struct ProfileView: View {
             guard !isOpen else { return }
             hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
             opensListsDirectly = false
+            Task { await posts.refresh(.mine) }
         }
         .sheet(item: $shareFocusPlace) { place in
-            shareMissionSheet(place)
+            SharedPostComposer(id: place.id, name: place.name, status: place.status, store: posts) {}
         }
+        .sheet(isPresented: $showNewPost) { SharedPlacePicker(places: passportPlaces, store: posts) }
+        .sheet(isPresented: $showFollowers) { PassportFollowersView() }
+        .sheet(item: $selectedPost) { SharedPostDetail(initialPost: $0, store: posts, isOwner: true) }
         .sheet(item: $visitFocusPlace) { place in
             visitMissionSheet(place)
         }
@@ -455,12 +524,12 @@ struct ProfileView: View {
             visitError = nil
             visitFocusPlace = SavePassportTodayCatalog.firstVisitEligiblePlace(in: passportPlaces)
             withAnimation(SaveTheme.Motion.standardSpring) {
-                scrollProxy.scrollTo("profile.stampLedger", anchor: .center)
+                scrollProxy.scrollTo("profile.today", anchor: .center)
             }
         case .shareRecommendation:
             shareFocusPlace = SavePassportTodayCatalog.firstShareEligiblePlace(in: passportPlaces)
             withAnimation(SaveTheme.Motion.standardSpring) {
-                scrollProxy.scrollTo("profile.sharingPrivacy", anchor: .center)
+                scrollProxy.scrollTo("profile.posts", anchor: .top)
             }
         case .inviteOrFollowFriend:
             opensConnections = true
@@ -560,41 +629,6 @@ struct ProfileView: View {
     }
 
 
-    private func shareMissionSheet(_ place: Place) -> some View {
-        VStack(alignment: .leading, spacing: SaveTheme.Spacing.md) {
-            HStack(spacing: SaveTheme.Spacing.md) {
-                PassportIconButton(systemName: "xmark") {
-                    SaveHaptics.tap()
-                    shareFocusPlace = nil
-                }
-                .accessibilityLabel(languageSettings.localized(english: "Close", traditionalChinese: "關閉"))
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(languageSettings.localized(
-                        english: "SHARING & PRIVACY",
-                        traditionalChinese: "分享與隱私"
-                    ))
-                    .font(SaveAtlasType.strong(11))
-                    .tracking(0.9)
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    Text(languageSettings.localized(
-                        english: "Share one Map Stamp",
-                        traditionalChinese: "分享一個地圖章推薦"
-                    ))
-                    .font(SaveAtlasType.body(13))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                }
-            }
-
-            PassportVisibilityRow(place: place, onUpdate: updatePlaceVisibility)
-            Spacer(minLength: 0)
-        }
-        .padding(SaveTheme.Spacing.lg)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(SaveDottedBackground().ignoresSafeArea())
-        .presentationDetents([.medium, .large])
-    }
-
     private func updatePlaceVisibility(_ place: Place, visibility: PlaceVisibility) async throws {
         try await onUpdatePlaceVisibility(place, visibility)
         if let index = localSavedPlaces.firstIndex(where: { $0.id == place.id }) {
@@ -603,6 +637,7 @@ struct ProfileView: View {
         if shareFocusPlace?.id == place.id {
             shareFocusPlace?.visibility = visibility
         }
+        await posts.refresh(.mine)
     }
 }
 
@@ -1904,6 +1939,7 @@ private struct PassportFieldStreakStrip: View {
 
 private struct PassportTodayOnSavvyStrip: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+    @State private var expanded = false
     let missions: [SavePassportTodayMission]
     let onSelect: (SavePassportTodayMissionID) -> Void
 
@@ -1914,17 +1950,22 @@ private struct PassportTodayOnSavvyStrip: View {
                     .font(SaveAtlasType.strong(17))
                     .foregroundStyle(SaveAtlasPalette.forest)
                 Spacer()
-                Text(languageSettings.localized(english: "\(missions.count) next steps", traditionalChinese: "\(missions.count) 件可以做的事"))
-                    .font(SaveAtlasType.body(12))
-                    .foregroundStyle(SaveAtlasPalette.muted)
+                if missions.count > 1 {
+                    Button {
+                        expanded.toggle()
+                    } label: {
+                        Label(languageSettings.localized(english: expanded ? "Less" : "All \(missions.count)", traditionalChinese: expanded ? "收起" : "全部 \(missions.count) 項"), systemImage: expanded ? "chevron.up" : "chevron.down")
+                            .font(SaveAtlasType.body(12)).frame(minHeight: 44)
+                    }.accessibilityIdentifier("profile.today.expand")
+                }
             }
             VStack(spacing: 0) {
-                ForEach(missions) { mission in
+                ForEach(expanded ? missions : Array(missions.prefix(1))) { mission in
                     PassportTodayMissionRow(mission: mission) {
                         SaveHaptics.tap()
                         onSelect(mission.id)
                     }
-                    if mission.id != missions.last?.id {
+                    if expanded && mission.id != missions.last?.id {
                         Rectangle()
                             .fill(SaveAtlasPalette.line.opacity(0.2))
                             .frame(height: 1)
@@ -2109,7 +2150,7 @@ private struct PassportTopBar: View {
 
             if allowsEditing {
                 Button(action: onEdit) {
-                    Image(systemName: "pencil")
+                    Image(systemName: "line.3.horizontal")
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(SaveAtlasPalette.ink)
                         .frame(width: 44, height: 44)
@@ -2120,8 +2161,8 @@ private struct PassportTopBar: View {
                         }
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(languageSettings.text(.edit))
-                .accessibilityIdentifier("profile.edit")
+                .accessibilityLabel(languageSettings.localized(english: "Settings", traditionalChinese: "設定"))
+                .accessibilityIdentifier("profile.settings")
             }
         }
         .padding(.vertical, SaveTheme.Spacing.xs)
@@ -2144,62 +2185,6 @@ private struct PassportIconButton: View {
                 }
         }
         .buttonStyle(.plain)
-    }
-}
-
-private struct PassportHero: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    let profile: UserProfile
-    let localAvatarData: Data?
-    let isAuthenticated: Bool
-    let allowsEditing: Bool
-    let onEdit: () -> Void
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Button(action: onEdit) {
-                ProfileAvatarView(
-                    avatarURLString: profile.avatarUrl,
-                    localAvatarData: localAvatarData,
-                    size: 48
-                )
-            }
-            .buttonStyle(.plain)
-            .disabled(!allowsEditing)
-            .accessibilityLabel(languageSettings.localized(english: "Change Passport photo", traditionalChinese: "變更護照照片"))
-            .accessibilityIdentifier("profile.editAvatar")
-            VStack(alignment: .leading, spacing: 6) {
-                Text(profile.displayName)
-                    .font(SaveAtlasType.strong(22, relativeTo: .title2))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(profile.email ?? sessionSubtitle)
-                    .font(SaveAtlasType.body(13))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                    .lineLimit(1)
-                Text("\(languageSettings.text(.memberSince)) · \(profile.createdAt.formatted(date: .abbreviated, time: .omitted))")
-                    .font(SaveAtlasType.body(12))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 18))
-        .overlay(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 3)
-                .fill(SaveAtlasPalette.forest)
-                .frame(width: 5)
-                .padding(.vertical, 20)
-        }
-        .overlay { RoundedRectangle(cornerRadius: 18).stroke(SaveAtlasPalette.line.opacity(0.35)) }
-    }
-
-    private var sessionSubtitle: String {
-        if isAuthenticated {
-            return languageSettings.localized(english: "Signed in to Savvy", traditionalChinese: "已登入 Savvy")
-        }
-        return languageSettings.localized(english: "Savvy on this device", traditionalChinese: "這台裝置上的 Savvy")
     }
 }
 
@@ -2891,6 +2876,6 @@ private struct LanguageSettingsSheet: View {
 }
 
 #Preview {
-    ProfileView()
+    ProfileView(requestsConnections: .constant(false))
         .environment(\.appLanguageSettings, AppLanguageSettings())
 }

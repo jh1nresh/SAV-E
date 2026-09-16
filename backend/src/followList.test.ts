@@ -39,7 +39,7 @@ test("versioned follow list is owner-scoped, searchable, and returns an opaque n
   assert.deepEqual(page.items.map((friend) => friend.id), [firstId, secondId]);
   assert.ok(page.nextCursor);
   assert.doesNotMatch(page.nextCursor ?? "", /Memo|2026|2222/);
-  assert.deepEqual(Object.keys(page.items[0] ?? {}).sort(), ["avatarUrl", "displayName", "handle", "id"]);
+  assert.deepEqual(Object.keys(page.items[0] ?? {}).sort(), ["avatarUrl", "displayName", "handle", "id", "profileId"]);
 });
 
 test("next page cursor binds timestamp, relationship id, and normalized search", async () => {
@@ -161,6 +161,7 @@ test("follow list fails closed without an authenticated user id", async () => {
 function followedRow(id: string, createdAt: string, displayName: string) {
   return {
     follow_id: id,
+    profile_id: "profile-" + id,
     created_at: createdAt,
     display_name: displayName,
     handle: displayName.toLowerCase().replace(/\s+/g, "-"),
@@ -172,3 +173,24 @@ function followedRow(id: string, createdAt: string, displayName: string) {
     phone: "+15550000000",
   };
 }
+
+test("follow cursors bind the viewer and direction, and reverse lists expose only profile identity", async () => {
+  const options = normalizeFollowListOptions({ search: null, limit: "1", cursor: null });
+  const page = await listFollowedFriendsPage("viewer", options, async () => ({ rows: [
+    followedRow(firstId, "2026-09-16T00:00:00Z", "One"), followedRow(secondId, "2026-09-16T00:00:00Z", "Two"),
+  ] }));
+  const next = { ...options, cursor: page.nextCursor };
+  const noQuery = async () => { throw new Error("must reject before querying"); };
+  await assert.rejects(listFollowedFriendsPage("other", next, noQuery), FollowListInputError);
+  await assert.rejects(listFollowedFriendsPage("viewer", next, noQuery, "followers"), FollowListInputError);
+  let sql = "";
+  const reverse = await listFollowedFriendsPage("viewer", options, async value => {
+    sql = value;
+    return { rows: [followedRow(firstId, "2026-09-16T00:00:00Z", "One")] };
+  }, "followers");
+  assert.match(sql, /followed.id = f.follower_id/);
+  assert.match(sql, /where f.following_id = \$1/);
+  assert.equal(reverse.items[0].id, firstId);
+  assert.equal(reverse.items[0].profileId, "profile-" + firstId);
+  assert.doesNotMatch(JSON.stringify(reverse), /private@example|phone|referral|privy/);
+});

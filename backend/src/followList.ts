@@ -8,6 +8,7 @@ const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}
 
 export interface FollowedFriend {
   id: string;
+  profileId: string;
   displayName: string;
   handle: string | null;
   avatarUrl: string | null;
@@ -28,6 +29,8 @@ interface DecodedCursor {
   createdAt: string;
   id: string;
   search: string;
+  user: string;
+  direction: string;
 }
 
 interface FollowListQueryResult {
@@ -54,21 +57,26 @@ export async function listFollowedFriendsPage(
   userId: string,
   options: FollowListOptions,
   query: FollowListQuery,
+  direction: "following" | "followers" = "following",
 ): Promise<FollowedFriendPage> {
   if (!userId.trim()) throw new Error("Authenticated user id is required");
 
   const cursor = options.cursor ? decodeCursor(options.cursor, options.search) : null;
+  if (cursor && (cursor.user !== userId || cursor.direction !== direction)) {
+    throw new FollowListInputError("Invalid or mismatched follow cursor");
+  }
   const searchPattern = options.search ? `%${escapeLike(options.search)}%` : null;
   const { rows } = await query(
     `select
        f.id::text as follow_id,
        f.created_at,
+       followed.id as profile_id,
        followed.display_name,
        followed.handle,
        followed.avatar_url
      from follows f
-     join profiles followed on followed.id = f.following_id
-     where f.follower_id = $1
+     join profiles followed on followed.id = f.${direction === "following" ? "following_id" : "follower_id"}
+     where f.${direction === "following" ? "follower_id" : "following_id"} = $1
        and (
          $2::text is null
          or coalesce(followed.display_name, '') ilike $2 escape '\\'
@@ -97,6 +105,7 @@ export async function listFollowedFriendsPage(
     return [{
       friend: {
         id,
+        profileId: stringValue(row.profile_id) ?? "",
         displayName: stringValue(row.display_name) ?? stringValue(row.handle) ?? "Savvy User",
         handle: stringValue(row.handle) ?? null,
         avatarUrl: stringValue(row.avatar_url) ?? null,
@@ -110,7 +119,7 @@ export async function listFollowedFriendsPage(
   return {
     items: pageRows.map((row) => row.friend),
     nextCursor: mapped.length > options.limit && last
-      ? encodeCursor({ createdAt: last.createdAt, id: last.friend.id, search: options.search })
+      ? encodeCursor({ createdAt: last.createdAt, id: last.friend.id, search: options.search, user: userId, direction })
       : null,
   };
 }
@@ -171,11 +180,14 @@ function encodeCursor(cursor: DecodedCursor): string {
     createdAt: cursor.createdAt,
     id: cursor.id,
     search: cursor.search,
+    user: cursor.user,
+    direction: cursor.direction,
   })).toString("base64url");
 }
 
 function decodeCursor(value: string, expectedSearch: string): DecodedCursor {
   try {
+    if (value.length > 2048) throw new Error("invalid cursor size");
     const decoded = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Record<string, unknown>;
     const createdAt = timestampValue(decoded.createdAt);
     const id = stringValue(decoded.id);
@@ -183,7 +195,8 @@ function decodeCursor(value: string, expectedSearch: string): DecodedCursor {
     if (decoded.v !== 1 || !createdAt || !id || !uuidPattern.test(id) || search !== expectedSearch) {
       throw new Error("invalid cursor payload");
     }
-    return { createdAt, id, search };
+    if (typeof decoded.user !== "string" || !["following", "followers"].includes(String(decoded.direction))) throw new Error("invalid cursor scope");
+    return { createdAt, id, search, user: decoded.user, direction: String(decoded.direction) };
   } catch {
     throw new FollowListInputError("Invalid or mismatched follow cursor");
   }

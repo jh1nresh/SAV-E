@@ -189,6 +189,7 @@ struct ContentView: View {
     @State private var activeTripID: UUID?
     @State private var drawerLaunchRequest: DrawerLaunchRequest
     @State private var selectedRootTab: SaveRootTab
+    @State private var requestsSocialConnections = false
     @State private var rootPath: [SaveRootRoute]
     @State private var fullScreenRoute: SaveFullScreenRoute?
     @State private var fullScreenCandidateActionID: UUID?
@@ -455,7 +456,8 @@ struct ContentView: View {
             onUpdatePlace: { place in
                 try await mapVM.updatePlace(place)
             },
-            isRootTab: isRootTab
+            isRootTab: isRootTab,
+            requestsConnections: $requestsSocialConnections
         )
         .environment(\.appLanguageSettings, languageSettings)
     }
@@ -546,7 +548,11 @@ struct ContentView: View {
                                 onOpenPassport: openPassport
                             )
                         case .friends:
-                            SaveFriendsView()
+                            SaveFriendsView(
+                                currentUserID: PrivyAuthService.shared.currentUserId,
+                                onSaved: { await mapVM.loadPlaces(force: true) },
+                                onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
+                            )
                         case .profile:
                             passportView(isRootTab: true)
                         case .capture:

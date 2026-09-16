@@ -32,6 +32,7 @@ async function seed() {
   await pool.query(await readFile(new URL('../sql/schema.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('../../supabase/migrations/20260815010000_places_provider_coordinates.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('../sql/friend-ratings.sql', import.meta.url), 'utf8'));
+  await pool.query(await readFile(new URL('../sql/shared-posts.sql', import.meta.url), 'utf8'));
   await pool.query('delete from profiles where id = any($1)', [users]);
   for (const [i, user] of users.entries()) {
     await pool.query('insert into profiles(id,display_name,handle,referral_code) values($1,$2,$3,$4)',
@@ -97,7 +98,53 @@ try {
   assert.equal((await api(0, path)).status, 404);
   const retained = (await pool.query('select status,rating,note,recommender from places where id=$1', [saved.body.id])).rows[0];
   assert.deepEqual(retained, { status: 'wantToGo', rating: null, note: null, recommender: null });
-  console.log('PASS authenticated HTTP: share/save/withdraw/private edit, nonfollower denial, legacy routing and independent legacy sharing preserved.');
+  // The same authenticated API now supports explicit unrated, unvisited venues.
+  await pool.query("update places set category='museum',status='wantToGo' where id=$1", [placeID]);
+  const postPath = `/v0/shared-posts/${placeID}`;
+  const post = { status: 'wantToGo', stars: null, caption: 'A public caption' };
+  assert.equal((await api(null, '/v0/shared-posts')).status, 401);
+  assert.equal((await api(0, postPath, 'PUT', post)).status, 404);
+  assert.equal((await api(1, postPath, 'PUT', { ...post, user_id: users[0] })).status, 400);
+  assert.equal((await api(1, postPath, 'PUT', { ...post, stars: 4 })).status, 400);
+  const published = await api(1, postPath, 'PUT', post);
+  assert.equal(published.status, 200); assert.equal(published.body.stars, null);
+  assert.equal(published.body.status, 'wantToGo'); assert.equal(published.body.author_id, users[1]);
+  const posts = await api(0, '/v0/shared-posts');
+  assert.equal(posts.cache, 'private, no-store'); assert.equal(posts.body.items[0].id, placeID);
+  assert.doesNotMatch(JSON.stringify(posts.body), /PRIVATE NOTE|note|recommender|visited_at|email/);
+  assert.equal((await api(1, '/v0/shared-posts/mine')).body.items[0].id, placeID);
+  assert.deepEqual((await api(0, '/v0/friend-ratings')).body.items, []);
+  assert.deepEqual((await api(1, '/v0/friend-ratings/mine')).body, []);
+  assert.deepEqual((await signals()).map(p => p.id), [legacyID]);
+  assert.equal((await api(2, postPath)).status, 404);
+  assert.equal((await api(2, `/v0/passports/${users[1]}`)).status, 404);
+  const passport = await api(0, `/v0/passports/${users[1]}`);
+  assert.equal(passport.status, 200); assert.equal(passport.body.profile.postCount, 1);
+  assert.equal(passport.body.items.length, 1); assert.doesNotMatch(JSON.stringify(passport.body), /email|PRIVATE/);
+  assert.deepEqual((await api(1, '/v0/social-profile')).body, { postCount: 1, followingCount: 0, followerCount: 1 });
+  const follows = await api(0, '/v0/follows');
+  assert.equal(follows.body.items[0].profileId, users[1]); assert.notEqual(follows.body.items[0].id, users[1]);
+  assert.equal((await api(1, '/v0/followers')).body.items[0].profileId, users[0]);
+  assert.equal((await api(0, postPath + '/save', 'POST', {})).body.id, saved.body.id);
+  assert.equal((await api(0, '/v0/shared-posts/saved')).body[0].recipient_place_id, saved.body.id);
+  await pool.query("update place_visibility set visibility='private' where place_id=$1", [placeID]);
+  assert.equal((await api(0, postPath)).status, 404);
+  assert.equal((await api(0, postPath + '/save', 'POST', {})).status, 404);
+  assert.deepEqual((await api(0, '/v0/shared-posts/saved')).body, []);
+  assert.equal((await api(1, '/v0/shared-posts/mine')).body.items[0].visible_to_followers, false);
+  assert.equal((await api(0, `/v0/passports/${users[1]}`)).body.items.length, 0);
+  await api(1, postPath, 'PUT', post);
+  assert.equal((await api(1, postPath, 'DELETE')).status, 204);
+  assert.equal((await api(0, postPath)).status, 404);
+  assert.deepEqual((await api(0, '/v0/shared-posts/saved')).body, []);
+  await api(1, postPath, 'PUT', post);
+  await pool.query('delete from follows where follower_id=$1', [users[0]]);
+  assert.equal((await api(0, `/v0/passports/${users[1]}`)).status, 404);
+  assert.equal((await api(0, postPath + '/save', 'POST', {})).status, 404);
+  assert.deepEqual((await api(0, '/v0/shared-posts')).body.items, []);
+  assert.deepEqual((await api(0, '/v0/shared-posts/saved')).body, []);
+  assert.equal((await pool.query('select id from places where id=$1', [saved.body.id])).rowCount, 1);
+  console.log('PASS authenticated HTTP: generalized posts, passport, social counts, follower identity, legacy decoding, live privacy/revocation and saved-memory retention.');
 } catch (error) { console.error(log); throw error; }
 finally {
   child.kill('SIGTERM'); await exited;
