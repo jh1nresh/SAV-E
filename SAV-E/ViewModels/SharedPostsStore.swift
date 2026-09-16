@@ -39,7 +39,7 @@ final class SharedPostsStore: ObservableObject {
             // is requested. It never reads or publishes real social records.
             if ReviewDemo.isOfflineUITestMode && ProcessInfo.processInfo.arguments.contains("--uitest-social-posts") {
                 let items = Self.fixturePosts
-                posts = items.filter { filter == .all || $0.status.rawValue == filter.rawValue }
+                posts = items.filter { (route == .mine || $0.visible_to_followers) && (filter == .all || $0.status.rawValue == filter.rawValue) }
                 counts = SocialProfileCounts(postCount: items.count, followingCount: 2, followerCount: 3)
             } else {
                 posts = []
@@ -117,7 +117,7 @@ final class SharedPostsStore: ObservableObject {
             SharedPlacePost(id: UUID(uuidString: id)!, name: name, address: address, category: category, status: status,
                 stars: nil, caption: status == .visited ? "留一點時間，慢慢走。" : nil,
                 shared_at: "2026-09-16T00:00:00Z", author_id: "sample", author_name: "Alex · 範例",
-                author_handle: "sample", author_avatar_url: nil, visible_to_followers: true)
+                author_handle: "sample", author_avatar_url: nil, visible_to_followers: status != .visited)
         }
     }
 }

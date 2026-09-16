@@ -140,8 +140,11 @@ struct SharedPostDetail: View {
                         if let caption = post.caption, !caption.isEmpty {
                             Text(caption).font(SaveAtlasType.body(16)).textSelection(.enabled)
                         }
-                        Text(language.localized(english: "Visible to people who follow the author", traditionalChinese: "追蹤作者的人可見"))
+                        Text(post.visible_to_followers
+                            ? language.localized(english: "Visible to people who follow the author", traditionalChinese: "追蹤作者的人可見")
+                            : language.localized(english: "Sharing paused — only you can view this post", traditionalChinese: "分享已暫停，目前只有你能查看"))
                             .font(SaveAtlasType.body(12)).foregroundStyle(SaveAtlasPalette.muted)
+                            .accessibilityIdentifier("posts.audience")
                         if isOwner {
                             Button(language.localized(english: "Edit post", traditionalChinese: "編輯貼文")) { showEdit = true }
                                 .buttonStyle(.borderedProminent).tint(SaveAtlasPalette.forest)

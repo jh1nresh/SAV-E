@@ -407,6 +407,7 @@ struct ProfileView: View {
             guard !isOpen else { return }
             hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
             opensListsDirectly = false
+            Task { await posts.refresh(.mine) }
         }
         .sheet(item: $shareFocusPlace) { place in
             SharedPostComposer(id: place.id, name: place.name, status: place.status, store: posts) {}
@@ -636,6 +637,7 @@ struct ProfileView: View {
         if shareFocusPlace?.id == place.id {
             shareFocusPlace?.visibility = visibility
         }
+        await posts.refresh(.mine)
     }
 }
 

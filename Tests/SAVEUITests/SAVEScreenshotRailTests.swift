@@ -85,6 +85,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.buttons["posts.item.11111111-1111-4111-8111-111111111111"].exists)
         visited.tap()
         XCTAssertTrue(app.buttons["posts.edit"].waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(app.staticTexts["posts.audience"].label, "分享已暫停，目前只有你能查看")
         attach(app, name: "social-passport-post-detail")
         app.buttons["完成"].firstMatch.tap()
         openRootTab("Friends", app: app)
