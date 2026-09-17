@@ -1,3 +1,5 @@
+// Historical parser fixtures exercise the retained non-social/legacy helper.
+// socialSemanticRecovery.test.ts covers the production social routing contract.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AnalysisControlError, withAnalysisUsage, type AnalysisUsageStore } from "./analysisUsage.js";
@@ -11,7 +13,7 @@ import {
   parseDuckDuckGoResults,
   parsePersistedSourceResolution,
   resolveSourceDocument,
-  runSourceSearchRecovery,
+  runLegacySourceSearchRecovery as runSourceSearchRecovery,
   sourceResolutionResponseBody,
   searchPublicWebResults,
 } from "./sourceSearchWorker.js";
@@ -72,7 +74,7 @@ test("defaultFetchMetadataHTML reads social metadata without failing on large pa
 test("defaultFetchMetadataHTML follows safe social short-link redirects", async () => {
   const html = `<!doctype html><html><head>
     <meta name="description" content="【京都 先斗町】 先斗町しゃぶしゃぶすき焼き きらく 位于京都先斗町的人气和牛寿喜烧名店。地址：京都府京都市中京区先斗町通四条上る柏屋町169-2">
-  </head><body>${"x".repeat(1_000_000)}</body></html>`;
+  </head><body><script>{"caption":{"text":"完整原文店名與地址"}}</script></body></html>`;
   const seen: string[] = [];
   const fetcher = async (url: string | URL | Request) => {
     const value = url.toString();
@@ -94,7 +96,7 @@ test("defaultFetchMetadataHTML follows safe social short-link redirects", async 
     "https://www.xiaohongshu.com/discovery/item/6a20eacb000000000f03ac00",
   ]);
   assert.match(head, /先斗町しゃぶしゃぶすき焼き きらく/);
-  assert.doesNotMatch(head, /x{1000}/);
+  assert.match(head, /完整原文店名與地址/);
 });
 
 test("defaultFetchMetadataHTML blocks redirects to private hosts", async () => {

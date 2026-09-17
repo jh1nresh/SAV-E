@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import { createHash } from "node:crypto";
 
 type Row = Record<string, any>;
 const pending = new Set(["review", "needs_more_evidence", "source_only"]);
@@ -23,12 +24,44 @@ function identityText(value: unknown): string {
   return typeof value === "string" ? value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase() : "";
 }
 
+function semanticSourceKey(row: Row): string | undefined {
+  const entries = Array.isArray(row.evidence) ? row.evidence : [];
+  const keys = entries.flatMap((entry: any) => {
+    const source = entry?.semantic_source;
+    if (!source || !identityText(source.name) || !identityText(source.address)
+      || (source.branch != null && typeof source.branch !== "string")) return [];
+    return [JSON.stringify([identityText(source.name), identityText(source.branch), identityText(source.address)])];
+  });
+  return new Set(keys).size === 1 ? keys[0] : undefined;
+}
+function hasCoordinates(row: Row): boolean {
+  return typeof row.latitude === "number" && typeof row.longitude === "number"
+    && Number.isFinite(row.latitude) && Number.isFinite(row.longitude)
+    && Math.abs(row.latitude) <= 90 && Math.abs(row.longitude) <= 180 && (row.latitude !== 0 || row.longitude !== 0);
+}
+function unresolvedSemantic(row: Row): boolean {
+  return pending.has(row.status) && !row.place_id && !hasCoordinates(row) && semanticSourceKey(row) !== undefined;
+}
+
 export function sameCandidateIdentity(left: Row, right: Row): boolean {
+  // A user-confirmed app identity takes precedence over earlier provider evidence.
+  if (left.place_id && right.place_id) return left.place_id === right.place_id;
+  // Distinct provider entities remain alternatives even at the same address.
+  // Quotes are plain text; only explicit structured provider metadata counts.
+  const providerIDs = [left, right].flatMap(row => Array.isArray(row.evidence)
+    ? row.evidence.map((entry: any) => entry && typeof entry === "object" && typeof entry.google_place_id === "string" ? entry.google_place_id.trim() : "").filter(Boolean)
+    : []);
+  if (new Set(providerIDs).size > 1) return false;
   if ((left.status === "source_only" || right.status === "source_only")
     && left.capture_id === right.capture_id && left.capture_id
     && [left, right].every(row => !row.place_id && !identityText(row.address) && row.latitude == null && row.longitude == null)
     && (left.status === right.status || (identityText(left.name) && identityText(left.name) === identityText(right.name)))) return true;
-  if (left.place_id && right.place_id) return left.place_id === right.place_id;
+  // Only a pending original extraction in this capture can bridge to its
+  // canonical verified identity; this does not rewrite terminal decisions.
+  if (left.capture_id && left.capture_id === right.capture_id
+    && ((unresolvedSemantic(left) && hasCoordinates(right) && !terminal.has(right.status))
+      || (unresolvedSemantic(right) && hasCoordinates(left) && !terminal.has(left.status)))
+    && semanticSourceKey(left) === semanticSourceKey(right)) return true;
   const name = identityText(left.name), address = identityText(left.address);
   if (!name || !address || name !== identityText(right.name) || address !== identityText(right.address)) return false;
   if ([left.latitude, left.longitude, right.latitude, right.longitude].every(value => typeof value === "number" && Number.isFinite(value))) {
@@ -46,10 +79,39 @@ export function mergedEvidence(left: unknown, right: unknown): unknown[] {
 
 export function mergedCaptureText(existing: Row, incoming: Row): string | null {
   let text = typeof existing.raw_text === "string" ? existing.raw_text : "";
-  for (const value of [incoming.raw_text, incoming.title !== existing.title ? incoming.title : null]) {
+  for (const value of [incoming.raw_text]) {
     if (typeof value === "string" && value.trim() && !text.includes(value.trim())) text += `${text ? "\n\n" : ""}${value.trim()}`;
   }
   return text || null;
+}
+
+// Legacy raw_text may contain generated titles. Keep that history, but only
+// separately recorded incoming source text is evidence for semantic analysis.
+function captureTextHash(row: Row): string {
+  return createHash("sha256").update(JSON.stringify([row.source_url, row.raw_text])).digest("hex");
+}
+export function capturedSourceTexts(row: Row): string[] {
+  const evidence = row.source_resolution?.captured_text_v1;
+  return evidence?.hash === captureTextHash(row) && Array.isArray(evidence.texts)
+    && evidence.texts.every((text: unknown) => typeof text === "string") ? evidence.texts : [];
+}
+export function capturedSourceResolution(row: Row, incomingText: unknown, priorTexts = capturedSourceTexts(row)): Row | undefined {
+  if (typeof row.source_url !== "string" || typeof incomingText !== "string") return undefined;
+  const texts = [...new Set([...priorTexts, incomingText].filter(text => text.trim()))];
+  return { original_url: row.source_url, resolved_url: row.source_url, redirect_chain: [row.source_url], status: "opaque_unresolved",
+    ...row.source_resolution, captured_text_v1: { hash: captureTextHash(row), texts } };
+}
+export async function recordCapturedSourceText(client: PoolClient, row: Row, incomingText: unknown, priorTexts?: string[]): Promise<Row> {
+  const resolution = capturedSourceResolution(row, incomingText, priorTexts);
+  if (!resolution) return row;
+  return (await client.query("update captures set source_resolution=$3::jsonb where id=$1 and user_id=$2 returning *", [row.id, row.user_id, JSON.stringify(resolution)])).rows[0];
+}
+
+// Completing analysis does not confirm a place or settle a separate workflow.
+export async function completeEmptySourceAnalysis(client: PoolClient, captureId: string, workflowRunId?: string): Promise<void> {
+  await client.query(`update place_candidates set missing_info=array(select item from unnest(missing_info) item where lower(item) <> 'analysis pending'), updated_at=now()
+    where capture_id=$1 and workflow_run_id is not distinct from $2::uuid and status='source_only'
+      and exists(select 1 from unnest(missing_info) item where lower(item)='analysis pending')`, [captureId, workflowRunId ?? null]);
 }
 
 export async function reuseCapture(client: PoolClient, userId: string, body: Row): Promise<Row | undefined> {
@@ -65,7 +127,7 @@ export async function reuseCapture(client: PoolClient, userId: string, body: Row
   // candidates again. Keep their collection dates aligned without new decisions.
   await client.query("update place_candidates set created_at=$2 where capture_id=$1 and created_at>$2::timestamptz", [capture.id, capture.created_at]);
   await client.query("update places p set created_at=$3 where p.user_id=$2 and p.created_at>$3::timestamptz and exists (select 1 from place_candidates pc where pc.capture_id=$1 and pc.place_id=p.id and pc.status in ('saved','confirmed'))", [capture.id, userId, capture.created_at]);
-  return capture;
+  return recordCapturedSourceText(client, capture, body.raw_text, capturedSourceTexts(existing));
 }
 
 export function earliestKnownDate(values: unknown[]): string | Date | undefined {
@@ -90,6 +152,20 @@ export async function prepareCandidate(client: PoolClient, body: Row): Promise<{
   const createdAt = earliestKnownDate([capture.rows[0]?.created_at, ...matches.map(row => row.created_at), body.created_at]);
   const existing = matches.find(row => (row.workflow_run_id ?? null) === (body.workflow_run_id ?? null));
   if (existing) {
+    if (pending.has(existing.status) && !existing.place_id && body.status === "review"
+      && !hasCoordinates(existing) && hasCoordinates(body)) {
+      // Verification may arrive on a repeat after a Maps outage. Upgrade only
+      // this actionable workflow row; terminal user decisions remain untouched.
+      await client.query("update place_candidates set latitude=$2, longitude=$3, confidence=$4, missing_info=$5, name=$6, address=$7, status='review' where id=$1",
+        [existing.id, body.latitude, body.longitude, body.confidence ?? existing.confidence, body.missing_info ?? existing.missing_info, body.name, body.address]);
+    }
+    if (existing.status === "source_only" && body.status === "source_only"
+      && Array.isArray(body.missing_info) && body.missing_info.includes("No place evidence in source")
+      && !body.missing_info.some((item: unknown) => typeof item === "string" && item.toLowerCase() === "analysis pending")) {
+      // A completed native retry settles only the matched source row, never
+      // another pending clue or workflow attached to the same capture.
+      await client.query("update place_candidates set missing_info=array(select item from unnest(missing_info) item where lower(item) <> 'analysis pending') where id=$1", [existing.id]);
+    }
     const updated = await client.query("update place_candidates set evidence=$2::jsonb, created_at=coalesce($3::timestamptz,created_at), updated_at=now() where id=$1 returning *", [existing.id, JSON.stringify(mergedEvidence(existing.evidence, body.evidence)), createdAt ?? null]);
     if (["saved", "confirmed"].includes(existing.status) && existing.place_id && createdAt !== undefined) {
       // An already confirmed source can refine collection time without a new
@@ -146,7 +222,7 @@ export async function reconcileSavedCandidates(client: PoolClient, userId: strin
 export function isGenericSourceOnlyCandidate(row: Row): boolean {
   return row.status === "source_only" && !identityText(row.address) && !row.place_id
     && row.latitude == null && row.longitude == null
-    && ["saved link", "saved source", "social link", "instagram reel", "instagram link", "xiaohongshu link",
+    && ["saved link", "saved source", "source clue", "social link", "instagram reel", "instagram link", "xiaohongshu link",
       "douyin link", "dianping link", "meituan link", "taobao instant commerce link", "taobao product link",
       "tiktok link", "google maps link", "apple maps link"].includes(identityText(row.name));
 }
@@ -154,22 +230,27 @@ export function isGenericSourceOnlyCandidate(row: Row): boolean {
 export async function supersedeSourceOnlyCandidates(client: PoolClient, captureId: string, successorIds?: string[]): Promise<string[]> {
   const { rows } = await client.query("select pc.*, wr.credit_settlement as run_settlement from place_candidates pc left join workflow_runs wr on wr.id=pc.workflow_run_id where pc.capture_id=$1 for update of pc", [captureId]);
   const named = rows.filter(row => row.status !== "source_only" && row.status !== "rejected");
-  let successors = named.length ? [named[0]] : [];
+  let successors = named.length ? [named.find(hasCoordinates) ?? named[0]] : [];
   if (successorIds) {
     const ids = [...new Set(successorIds)];
     successors = ids.map(id => rows.find(row => row.id === id)).filter(Boolean);
     // Accept only a fully persisted batch; existing settled successors remain
     // part of the source history even when a later retry discovers another venue.
     if (!ids.length || successors.length !== ids.length || successors.some(row => !["review", "needs_more_evidence", "saved", "confirmed"].includes(row.status))) return [];
-  } else if (!named.length || named.some(row => !sameCandidateIdentity(named[0], row))) return [];
+  } else if (!named.length || named.some(row => named.some(other => !sameCandidateIdentity(row, other)))) return [];
   const changed: string[] = [];
-  for (const source of rows.filter(isGenericSourceOnlyCandidate)) {
+  for (const source of rows.filter(row => isGenericSourceOnlyCandidate(row) || unresolvedSemantic(row))) {
+    const generic = isGenericSourceOnlyCandidate(source);
+    const applicable = generic ? successors : successors.filter(successor =>
+      successor.id !== source.id && hasCoordinates(successor) && sameCandidateIdentity(source, successor));
+    if (!applicable.length) continue;
     const previous = supersededCandidateIDs(source);
-    const replacements = [...new Set([...previous, ...successors.map(row => String(row.id))])];
+    const replacements = [...new Set([...previous, ...applicable.map(row => String(row.id))])];
     const represented = rows.filter(row => replacements.includes(row.id));
-    if (named.some(row => !represented.some(successor => sameCandidateIdentity(successor, row)))) continue;
+    const related = generic ? named : named.filter(row => sameCandidateIdentity(source, row));
+    if (related.some(row => !represented.some(successor => sameCandidateIdentity(successor, row)))) continue;
     if (!previous.length && source.workflow_run_id && source.run_settlement === "pending"
-      && !successors.some(successor => successor.workflow_run_id === source.workflow_run_id)) continue;
+      && !applicable.some(successor => successor.workflow_run_id === source.workflow_run_id)) continue;
     if (replacements.length === previous.length) continue;
     // Append a cumulative event rather than altering prior evidence/provenance.
     await client.query("update place_candidates set evidence=evidence || $2::jsonb, updated_at=now() where id=$1", [source.id, JSON.stringify([{ superseded_by_candidate_id: replacements[0], superseded_by_candidate_ids: replacements }])]);

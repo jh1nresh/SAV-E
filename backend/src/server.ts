@@ -1,4 +1,5 @@
-import { prepareCandidate, reconcileSavedCandidates, reuseCapture, supersedeSourceOnlyCandidates, duplicateCandidateGroups, supersededCandidateID, externalCandidateEvidence, sameCandidateIdentity, isGenericSourceOnlyCandidate, supersededCandidateIDs } from "./memoryStorage.js";
+import { analyzeSocialCaption } from "./socialSemanticExtraction.js";
+import { capturedSourceTexts, recordCapturedSourceText, completeEmptySourceAnalysis, prepareCandidate, reconcileSavedCandidates, reuseCapture, supersedeSourceOnlyCandidates, duplicateCandidateGroups, supersededCandidateID, externalCandidateEvidence, sameCandidateIdentity, isGenericSourceOnlyCandidate, supersededCandidateIDs } from "./memoryStorage.js";
 import { AnalysisControlError, AnalysisUsageStore, analysisID, analysisLimits, analysisPrices, geminiTokens, trackAnalysisOperation, withAnalysisUsage } from "./analysisUsage.js";
 import { runAnalysisRecovery } from "./analysisRecovery.js";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -2409,6 +2410,15 @@ async function handleAnalysis(request:IncomingMessage,response:ServerResponse,se
       await analysisUsageStore.clientEvents(userId,aid,body.events,body.events_truncated ?? false);
       return sendJson(response,{recorded:true});
     }
+    if(action === "extract-place-clues") {
+      await analysisUsageStore.owner(userId,aid);
+      if (typeof body.caption !== "string" || (body.ocrText !== undefined && typeof body.ocrText !== "string")) {
+        throw new ApiError(400,"Invalid source text");
+      }
+      const result = await withAnalysisUsage(analysisUsageStore,userId,aid,() =>
+        analyzeSocialCaption({ caption: body.caption as string, ocrText: body.ocrText as string | undefined }));
+      return sendJson(response,result);
+    }
     if(action === "places") {
       await analysisUsageStore.owner(userId,aid);
       const query=typeof body.query === "string" ? body.query.trim() : "";
@@ -4358,7 +4368,7 @@ async function handleCaptureSearchRecovery(
   if (body.explicit_retry !== undefined && typeof body.explicit_retry !== "boolean") throw new ApiError(400, "explicit_retry must be a boolean");
   if (body.explicit_retry === true && !requestedAnalysis) throw new ApiError(400, "explicit_retry requires an analysis ID");
   if(requestedAnalysis) await analysisUsageStore.owner(userId,requestedAnalysis);
-  const input={sourceUrl:stringValue(capture.source_url),rawText:stringValue(capture.raw_text),title:stringValue(capture.title),suggestedSearchQueries:requestedQueries,maxQueries,includeMediaEvidence:body.include_media_evidence !== false,videoAnalysisVersion:process.env.SAVE_ENABLE_VIDEO_VENUE_ANALYSIS === "true" ? "frames-v1" : null};
+  const input={sourceUrl:stringValue(capture.source_url),rawText:stringValue(capture.raw_text),semanticSourceText:capturedSourceTexts(capture).join("\n\n") || null,title:stringValue(capture.title),suggestedSearchQueries:requestedQueries,maxQueries,includeMediaEvidence:body.include_media_evidence !== false,semanticAnalysisVersion:"grounded-caption-v2",videoAnalysisVersion:process.env.SAVE_ENABLE_VIDEO_VENUE_ANALYSIS === "true" ? "frames-v1" : null};
   const result=await runAnalysisRecovery(pool,userId,captureId,{...input,workflowRunId,...(body.explicit_retry === true ? { retryAnalysisId: requestedAnalysis } : {})},async()=>{
     const aid=requestedAnalysis ?? await analysisUsageStore.start(userId,randomUUID(),false);
     let completed=false;
@@ -4410,11 +4420,12 @@ async function handleCaptureSearchRecovery(
             effectiveWorkflowRunId = runIds.size === 1 ? [...runIds][0] : undefined;
           }
           if (recovery.candidates.length && recovery.errors.length === 0) supersededCandidateIds.push(...await supersedeSourceOnlyCandidates(client, captureId, body.explicit_retry === true ? persistedSuccessorIds : undefined));
+          if (recovery.semanticStatus === "no_place_evidence" && recovery.errors.length === 0) await completeEmptySourceAnalysis(client, captureId, workflowRunId);
           await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,captureId,userId]);
-          await client.query("update captures set status='review',source_resolution=coalesce($3::jsonb,source_resolution),updated_at=now() where id=$1 and user_id=$2",[captureId,userId,sourceResolution?JSON.stringify(sourceResolution):null]);
+          await client.query("update captures set status='review',source_resolution=case when $3::jsonb is null then source_resolution else coalesce(source_resolution,'{}'::jsonb) || $3::jsonb end,updated_at=now() where id=$1 and user_id=$2",[captureId,userId,sourceResolution?JSON.stringify(sourceResolution):null]);
           await client.query("commit");
         } catch(error) { await client.query("rollback"); throw error; } finally { client.release(); }
-        if(!requestedAnalysis) await analysisUsageStore.finish(userId,aid,recovery.candidates.length ? "review_candidate":"source_only",[captureId]);
+        if(!requestedAnalysis) await analysisUsageStore.finish(userId,aid,recovery.receipt.failureReason?.kind === "provider_failure" ? "failed" : recovery.candidates.length ? "review_candidate":"source_only",[captureId]);
         completed=true;
         return {capture_id:captureId,analysis_id:aid,workflow_run_id:effectiveWorkflowRunId ?? null,queries:recovery.queries,search_results:recovery.searchResults,created_candidates:createdCandidates,superseded_candidate_ids:supersededCandidateIds,media_evidence:recovery.mediaEvidence,source_resolution:sourceResolution,errors:recovery.errors,receipt:recovery.receipt};
       });
@@ -4532,6 +4543,7 @@ async function handleMemoryCaptures(
       if(aid) await analysisUsageStore.owner(userId,aid,client);
       const reused = await reuseCapture(client, userId, body);
       const rows = reused ? [reused] : (await client.query(`${insert.sql} returning *`, insert.values)).rows;
+      if (!reused) rows[0] = await recordCapturedSourceText(client, rows[0], body.raw_text);
       if(aid) await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,rows[0].id,userId]);
       await client.query("commit");
       return sendJson(response, formatCapture(rows[0]), 201);
@@ -5073,6 +5085,10 @@ function isMissingRelationError(error: unknown): boolean {
 }
 
 function sourceSearchCandidateBody(candidate: SourceSearchCandidate, captureId: string, workflowRunId?: string): JsonBody {
+  const hasProviderIdentity = typeof candidate.placeId === "string" && candidate.placeId.trim() === candidate.placeId
+    && candidate.placeId.length > 0 && candidate.placeId.length <= 300 && !/[\u0000-\u001f\u007f]/.test(candidate.placeId)
+    && typeof candidate.latitude === "number" && Number.isFinite(candidate.latitude) && Math.abs(candidate.latitude) <= 90
+    && typeof candidate.longitude === "number" && Number.isFinite(candidate.longitude) && Math.abs(candidate.longitude) <= 180;
   return {
     capture_id: captureId,
     workflow_run_id: workflowRunId,
@@ -5081,7 +5097,9 @@ function sourceSearchCandidateBody(candidate: SourceSearchCandidate, captureId: 
     city: "",
     latitude: candidate.latitude ?? null,
     longitude: candidate.longitude ?? null,
-    evidence: candidate.evidence.map((text) => ({ text })),
+    evidence: [...candidate.evidence.map((text) => ({ text })),
+      ...(candidate.semanticSource ? [{ semantic_source: candidate.semanticSource }] : []),
+      ...(hasProviderIdentity ? [{ google_place_id: candidate.placeId, google_types: candidate.types ?? [] }] : [])],
     confidence: candidate.confidence,
     missing_info: candidate.missingInfo,
     status: "review",

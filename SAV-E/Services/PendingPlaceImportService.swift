@@ -197,6 +197,19 @@ struct SocialPlaceRejectedEvidence: Codable, Hashable {
     var reason: String
 }
 
+nonisolated struct SemanticSourceIdentity: Codable, Hashable, Sendable {
+    var name: String
+    var branch: String?
+    var address: String
+
+    @MainActor func matches(_ other: Self) -> Bool {
+        !name.isEmpty && !address.isEmpty
+            && SaveSourceIdentity.text(name) == SaveSourceIdentity.text(other.name)
+            && SaveSourceIdentity.text(branch ?? "") == SaveSourceIdentity.text(other.branch ?? "")
+            && SaveSourceIdentity.text(address) == SaveSourceIdentity.text(other.address)
+    }
+}
+
 struct PendingReviewCandidate: Codable {
     // Local queue identity survives remote failures; never part of place evidence.
     var localVaultRecordID: UUID? = nil
@@ -205,6 +218,9 @@ struct PendingReviewCandidate: Codable {
     var category: String
     var latitude: Double? = nil
     var longitude: Double? = nil
+    var semanticSource: SemanticSourceIdentity? = nil
+    var googlePlaceId: String? = nil
+    var googleTypes: [String] = []
     var sourceURL: String?
     var sourceText: String?
     var evidence: [String]
@@ -240,8 +256,14 @@ struct PendingReviewCandidate: Codable {
         vibeTags: [String] = [],
         accessNotes: [String] = [],
         sourceHandle: String? = nil,
-        localVaultRecordID: UUID? = nil
+        localVaultRecordID: UUID? = nil,
+        googlePlaceId: String? = nil,
+        googleTypes: [String] = [],
+        semanticSource: SemanticSourceIdentity? = nil
     ) {
+        self.semanticSource = semanticSource
+        self.googlePlaceId = googlePlaceId
+        self.googleTypes = googleTypes
         self.localVaultRecordID = localVaultRecordID
         self.candidateName = candidateName
         self.address = address
@@ -266,6 +288,9 @@ struct PendingReviewCandidate: Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case semanticSource
+        case googlePlaceId
+        case googleTypes
         case localVaultRecordID
         case candidateName
         case address
@@ -290,6 +315,9 @@ struct PendingReviewCandidate: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        semanticSource = try container.decodeIfPresent(SemanticSourceIdentity.self, forKey: .semanticSource)
+        googlePlaceId = try container.decodeIfPresent(String.self, forKey: .googlePlaceId)
+        googleTypes = try container.decodeIfPresent([String].self, forKey: .googleTypes) ?? []
         localVaultRecordID = try container.decodeIfPresent(UUID.self, forKey: .localVaultRecordID)
         candidateName = try container.decode(String.self, forKey: .candidateName)
         address = try container.decode(String.self, forKey: .address)
@@ -313,6 +341,10 @@ struct PendingReviewCandidate: Codable {
         sourceHandle = try container.decodeIfPresent(String.self, forKey: .sourceHandle) ?? extracted.sourceHandle
     }
 
+    var shouldRecoverSourceOnServer: Bool {
+        isSourceOnly && (reviewState != "analysis_pending" || missingInfo.contains("Source text unavailable"))
+    }
+
     var hasReliableCoordinates: Bool {
         guard let latitude, let longitude else { return false }
         return SaveChromeNavigation.isTrustworthyMapCoordinate(
@@ -333,7 +365,24 @@ struct PendingReviewCandidate: Codable {
     }
 }
 
+struct ReviewImportSummary {
+    let candidateCount: Int
+    let sourceCount: Int
+    let pendingCount: Int
+
+    init(candidateIDs: Set<UUID>, candidates: [PlaceReviewCandidate]) {
+        let imported = candidates.filter { candidateIDs.contains($0.id) }
+        candidateCount = imported.filter { $0.status != "source_only" && $0.hasReliableCoordinates }.count
+        sourceCount = imported.count - candidateCount
+        pendingCount = imported.filter(\.isAnalysisPending).count
+    }
+}
+
 struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
+    var isAnalysisPending: Bool {
+        status == "source_only" && missingInfo.contains { $0.caseInsensitiveCompare("Analysis pending") == .orderedSame }
+    }
+
     // Transient display state; excluded from Codable/evidence/share payloads.
     var sourceFailureReason: SourceSearchFailureReason? = nil
     var supersededByCandidateID: UUID? = nil
@@ -359,6 +408,9 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     var vibeTags: [String]
     var accessNotes: [String]
     var sourceHandle: String?
+    var semanticSource: SemanticSourceIdentity? = nil
+    var googlePlaceId: String? = nil
+    var category: PlaceCategory? = nil
 
     init(
         id: UUID,
@@ -378,8 +430,14 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         recommendedItems: [RecommendedItem] = [],
         vibeTags: [String] = [],
         accessNotes: [String] = [],
-        sourceHandle: String? = nil
+        sourceHandle: String? = nil,
+        googlePlaceId: String? = nil,
+        category: PlaceCategory? = nil,
+        semanticSource: SemanticSourceIdentity? = nil
     ) {
+        self.semanticSource = semanticSource
+        self.googlePlaceId = googlePlaceId
+        self.category = category
         self.id = id
         self.captureId = captureId
         self.workflowRunId = workflowRunId
@@ -422,12 +480,18 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         case vibeTags
         case accessNotes
         case sourceHandle
+        case semanticSource
+        case googlePlaceId
+        case category
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         supersededByCandidateID = try container.decodeIfPresent(UUID.self, forKey: .supersededByCandidateID)
         supersededByCandidateIDs = try container.decodeIfPresent([UUID].self, forKey: .supersededByCandidateIDs) ?? []
+        semanticSource = try container.decodeIfPresent(SemanticSourceIdentity.self, forKey: .semanticSource)
+        googlePlaceId = try container.decodeIfPresent(String.self, forKey: .googlePlaceId)
+        category = try container.decodeIfPresent(PlaceCategory.self, forKey: .category)
         id = try container.decode(UUID.self, forKey: .id)
         captureId = try container.decodeIfPresent(UUID.self, forKey: .captureId)
         workflowRunId = try container.decodeIfPresent(UUID.self, forKey: .workflowRunId)
@@ -475,6 +539,12 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
                 && latitude == nil && longitude == nil
                 && pending.latitude == nil && pending.longitude == nil
         }
+        if let left = googlePlaceId, !left.isEmpty,
+           let right = pending.googlePlaceId, !right.isEmpty, left != right { return false }
+        if ["review", "needs_more_evidence"].contains(status),
+           !hasReliableCoordinates || !pending.hasReliableCoordinates,
+           let original = semanticSource, let incoming = pending.semanticSource,
+           original.matches(incoming) { return true }
         let normalizedName = SaveSourceIdentity.text(name)
         let normalizedAddress = SaveSourceIdentity.text(address)
         guard !normalizedName.isEmpty, !normalizedAddress.isEmpty,
@@ -806,8 +876,8 @@ extension Place {
             address: refinedMatch?.address ?? candidate.address,
             latitude: latitude,
             longitude: longitude,
-            googlePlaceId: refinedMatch?.id,
-            category: PlaceCategory.from(googleTypes: refinedMatch?.types ?? []) ??
+            googlePlaceId: refinedMatch?.id ?? candidate.googlePlaceId,
+            category: PlaceCategory.from(googleTypes: refinedMatch?.types ?? []) ?? candidate.category ??
                 PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
             status: .wantToGo,
             rating: nil,
@@ -887,7 +957,11 @@ private func sourceURL(from evidence: [String]) -> String? {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if isHTTPURL(value) { return value }
         }
-        if let url = firstHTTPURL(in: trimmed) { return url }
+    }
+    // Explicit provenance wins over URLs inside quoted caption text, including
+    // evidence merged before the source marker was added.
+    for line in evidence {
+        if let url = firstHTTPURL(in: line) { return url }
     }
     return nil
 }

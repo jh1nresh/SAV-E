@@ -146,6 +146,35 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         return started.analysis_id
     }
 
+    func analyzeSocialCaption(caption: String, ocrText: String?) async throws -> SocialSemanticResult {
+        if let context = SAVEAnalysisScope.current {
+            try await context.checkAllowed()
+            var fields: [String: Any] = ["caption": caption]
+            if let ocrText { fields["ocrText"] = ocrText }
+            let body = try Self.jsonBody(fields)
+            let data = try await request(path: "/v0/analysis/\(context.id.uuidString)/extract-place-clues", method: "POST", body: body)
+            let result = try JSONDecoder().decode(SocialSemanticResult.self, from: data)
+            if result.status == "analysis_pending", result.reason == "semantic_analysis_unavailable" {
+                await context.markProviderFailure()
+            }
+            return result
+        }
+        // Intents may run outside the import scope. They still need normal
+        // authentication, owned accounting and the same backend extraction.
+        let context = SAVEAnalysisContext(id: UUID())
+        do {
+            _ = try await startAnalysis(id: context.id)
+            let result = try await SAVEAnalysisScope.$current.withValue(context) {
+                try await analyzeSocialCaption(caption: caption, ocrText: ocrText)
+            }
+            await finishAnalysis(context, outcome: result.status == "ready" ? "review_candidate" : result.status == "analysis_pending" && result.reason != "source_out_of_bounds" ? "failed" : "source_only")
+            return result
+        } catch {
+            await finishAnalysis(context, outcome: error is CancellationError ? "cancelled" : "failed")
+            throw error
+        }
+    }
+
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {
         let snapshot = await context.snapshot(outcome: outcome)
         // An unstructured task can finish the receipt even when its import was cancelled.
@@ -549,7 +578,21 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID? = nil) async throws -> UUID {
         guard isConfigured else { throw SupabaseError.notConfigured }
 
-        let evidence = candidate.evidence.map { ["text": $0] }
+        var sourceEvidence = candidate.evidence
+        if let sourceURL = candidate.sourceURL, !sourceURL.isEmpty {
+            let marker = "Source URL: \(sourceURL)"
+            sourceEvidence = [marker] + sourceEvidence.filter { $0 != marker }
+        }
+        var evidence: [[String: Any]] = sourceEvidence.map { ["text": $0] }
+        if !candidate.isSourceOnly, candidate.hasReliableCoordinates,
+           let placeID = candidate.googlePlaceId, !placeID.isEmpty {
+            evidence.append(["google_place_id": placeID, "google_types": candidate.googleTypes])
+        }
+        if let original = candidate.semanticSource, !original.name.isEmpty, !original.address.isEmpty {
+            var fields: [String: Any] = ["name": original.name, "address": original.address]
+            if let branch = original.branch { fields["branch"] = branch }
+            evidence.append(["semantic_source": fields])
+        }
         let body = try Self.jsonBody([
             "capture_id": captureId.uuidString,
             "workflow_run_id": workflowRunId?.uuidString,
@@ -1086,8 +1129,9 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         baseURLOverride: String? = nil
     ) async throws -> (Data, HTTPURLResponse) {
         let isSocialRequest = ["/v0/friend-ratings", "/v0/shared-posts", "/v0/passports", "/v0/social-profile", "/v0/follows", "/v0/followers"].contains { path.hasPrefix($0) }
-        let friendSession: Int? = isSocialRequest
-            ? await MainActor.run { PrivyAuthService.shared.sessionGeneration } : nil
+        let sessionBound = isSocialRequest || path.hasPrefix("/v0/analysis")
+        let friendSession: (Int, String?)? = sessionBound
+            ? await MainActor.run { (PrivyAuthService.shared.sessionGeneration, PrivyAuthService.shared.currentUserId) } : nil
         guard let base = baseURLOverride ?? apiBaseURL else { throw SupabaseError.notConfigured }
 
         guard let url = URL(string: "\(base)\(path)") else {
@@ -1097,7 +1141,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         var request = URLRequest(url: url)
         if isSocialRequest { request.cachePolicy = .reloadIgnoringLocalCacheData }
         request.httpMethod = method
-        if path.hasPrefix("/v0/analysis") { request.timeoutInterval = 8 }
+        if path.hasPrefix("/v0/analysis") { request.timeoutInterval = path.hasSuffix("/extract-place-clues") ? 90 : 8 }
         // Public video recovery includes a bounded download and frame analysis.
         if path.hasPrefix("/memory/captures/"), path.hasSuffix("/search-recovery") {
             request.timeoutInterval = 180
@@ -1118,7 +1162,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }
 
         if let friendSession {
-            let stillCurrent = await MainActor.run { PrivyAuthService.shared.sessionGeneration == friendSession }
+            let stillCurrent = await MainActor.run { PrivyAuthService.shared.sessionGeneration == friendSession.0 && PrivyAuthService.shared.currentUserId == friendSession.1 }
             guard stillCurrent else { throw CancellationError() }
             try Task.checkCancellation()
         }
@@ -1138,7 +1182,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }
 
         if let friendSession {
-            let stillCurrent = await MainActor.run { PrivyAuthService.shared.sessionGeneration == friendSession }
+            let stillCurrent = await MainActor.run { PrivyAuthService.shared.sessionGeneration == friendSession.0 && PrivyAuthService.shared.currentUserId == friendSession.1 }
             guard stillCurrent else { throw CancellationError() }
             try Task.checkCancellation()
         }
@@ -2149,6 +2193,18 @@ private struct PlaceCandidateRow: Codable {
             status: status,
             createdAt: memoryCollectionDate(created_at)
         )
+        // Provider metadata is structured evidence, never parsed from quoted captions.
+        let identities = (evidence ?? []).filter { $0.google_place_id?.isEmpty == false }
+        if candidate.hasReliableCoordinates, candidate.status != "source_only",
+           Set(identities.compactMap(\.google_place_id)).count == 1,
+           let identity = identities.first {
+            candidate.googlePlaceId = identity.google_place_id
+            candidate.category = PlaceCategory.from(googleTypes: Array(Set(identities.flatMap { $0.google_types ?? [] })).sorted())
+        }
+        let originals = Set((evidence ?? []).compactMap(\.semantic_source))
+        if originals.count == 1, Set(identities.compactMap(\.google_place_id)).count <= 1 {
+            candidate.semanticSource = originals.first
+        }
         candidate.supersededByCandidateID = superseded_by_candidate_id
         candidate.supersededByCandidateIDs = superseded_by_candidate_ids ?? []
         return candidate
@@ -2157,6 +2213,9 @@ private struct PlaceCandidateRow: Codable {
 
 private struct PlaceCandidateEvidenceRow: Codable {
     let text: String?
+    let google_place_id: String?
+    let google_types: [String]?
+    let semantic_source: SemanticSourceIdentity?
 }
 
 private struct TripRow: Codable {

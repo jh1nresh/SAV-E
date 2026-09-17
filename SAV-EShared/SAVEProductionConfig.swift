@@ -162,6 +162,7 @@ struct SourceSearchFailureReason: Codable, Hashable, Sendable {
         if kind == .providerFailure { return "Your source is kept. A lookup service could not finish. Please try again later." }
         switch reason {
         case "login_required": return "This post needs a login. Add its caption, an address, or a screenshot to identify the place."
+        case "source_out_of_bounds": return "Your source is kept. The text is too long to analyze; use a shorter source or screenshot."
         case "expired": return "This link has expired. Add the post caption, an address, or a screenshot to identify the place."
         default: return "Your source is kept. Add the post caption, an address, or a screenshot to identify the place."
         }
@@ -170,6 +171,7 @@ struct SourceSearchFailureReason: Codable, Hashable, Sendable {
         if kind == .providerFailure { return "來源已保留。查詢服務暫時無法完成，請稍後再試。" }
         switch reason {
         case "login_required": return "這則貼文需要登入。請補上貼文文字、地址或截圖，協助辨識地點。"
+        case "source_out_of_bounds": return "來源已保留。文字太長，尚未完成分析；請改用較短的原文或截圖。"
         case "expired": return "這個連結已失效。請補上貼文文字、地址或截圖，協助辨識地點。"
         default: return "來源已保留。請補上貼文文字、地址或截圖，協助辨識地點。"
         }

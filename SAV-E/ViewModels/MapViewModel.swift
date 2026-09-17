@@ -998,19 +998,22 @@ final class MapViewModel: ObservableObject {
         let pending = pendingImportService.consumePendingReviewCandidates()
         guard !pending.isEmpty else { return }
 
+        let importGeneration = authService.sessionGeneration
         let currentBatch = Array(pending.prefix(Self.pendingReviewImportBatchLimit))
         var failedCandidates = Array(pending.dropFirst(Self.pendingReviewImportBatchLimit))
 
         for var candidate in currentBatch {
             do {
+                guard authService.sessionGeneration == importGeneration, authService.currentUserId == userId else { throw CancellationError() }
                 let localRecord = try saveLocalVaultService.saveReviewCandidate(
                     candidate, recordID: candidate.localVaultRecordID, preservingExisting: true
                 )
                 let localRecordID = localRecord.id
                 candidate.localVaultRecordID = localRecordID
                 candidate.savedAt = min(candidate.savedAt, localRecord.createdAt)
-                try await withImportAnalysis {
+                try await withImportAnalysis { checkSession in
                     var refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
+                    try checkSession()
                     refinedCandidate.savedAt = candidate.savedAt
                     _ = try saveLocalVaultService.saveReviewCandidate(refinedCandidate, recordID: localRecordID)
                     // A remote failure must retry the refined payload, not the original thin clue.
@@ -1021,7 +1024,7 @@ final class MapViewModel: ObservableObject {
                     do {
                         let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
                         await SAVEAnalysisScope.current?.addCapture(captureId)
-                        if try await reuseImportedCandidate(refinedCandidate, captureId: captureId, userId: userId) != nil {
+                        if try await reuseImportedCandidate(refinedCandidate, captureId: captureId, userId: userId, queuedForAnalysis: true) != nil {
                             return
                         }
                         let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(
@@ -1047,7 +1050,7 @@ final class MapViewModel: ObservableObject {
                             placeRecoveryResult(for: refinedCandidate, candidateId: candidateId),
                             for: createdRun.id
                         )
-                        if runSourceRecovery && refinedCandidate.isSourceOnly {
+                        if refinedCandidate.isSourceOnly && (runSourceRecovery || refinedCandidate.reviewState == "analysis_pending") {
                             await recoverImportSource(captureId: captureId, candidateId: candidateId, workflowRunId: createdRun.id)
                         }
                     } catch {
@@ -1115,7 +1118,7 @@ final class MapViewModel: ObservableObject {
 
         let candidates: [PendingReviewCandidate]
         if !usesRemotePersistence {
-            candidates = socialLinkReviewCandidateService
+            let extracted = socialLinkReviewCandidateService
                 .reviewCandidatesOrSourceOnly(
                     fromEvidenceText: normalizedShare.captionEvidence.isEmpty
                         ? analysisInput
@@ -1127,6 +1130,15 @@ final class MapViewModel: ObservableObject {
                     if sourceURL == nil { candidate.sourceURL = nil }
                     return candidate
                 }
+            // Local vaults still surface handle clues from this capture. Park a
+            // pending source only when the caption has no concrete place.
+            if normalizedShare.platform.includesCaptionInAnalysis,
+               extracted.allSatisfy(\.isSourceOnly) {
+                candidates = [socialLinkReviewCandidateService.pendingSemanticSource(
+                    caption: normalizedShare.captionEvidence, sourceURL: sourceURL?.absoluteString ?? "")]
+            } else {
+                candidates = extracted
+            }
             let importedCandidates = try candidates.map { pendingCandidate in
                 let record = try saveLocalVaultService.saveReviewCandidate(pendingCandidate)
                 return PlaceReviewCandidate(
@@ -1163,7 +1175,7 @@ final class MapViewModel: ObservableObject {
                 savedAt: Date(), isSourceOnly: true
             ))
         }
-        return try await withImportAnalysis {
+        return try await withImportAnalysis { checkSession in
             let candidates = await socialLinkReviewCandidateService
                 .reviewCandidates(fromSharedText: analysisInput)
                 .map { candidate in
@@ -1171,8 +1183,10 @@ final class MapViewModel: ObservableObject {
                     if sourceURL == nil { candidate.sourceURL = nil }
                     return candidate
                 }
+            try checkSession()
             var importedCandidateIDs: [UUID] = []
             for candidate in candidates {
+                try checkSession()
                 mirrorToLocalVault(candidate)
                 var run: PlaceRecoveryWorkflowRun?
                 var failedStep = "validate_input"
@@ -1200,7 +1214,7 @@ final class MapViewModel: ObservableObject {
                         placeRecoveryResult(for: candidate, candidateId: candidateId),
                         for: createdRun.id
                     )
-                    if candidate.isSourceOnly {
+                    if candidate.shouldRecoverSourceOnServer {
                         let recovered = await recoverImportSource(captureId: captureId, candidateId: candidateId, workflowRunId: createdRun.id)
                         importedCandidateIDs.append(contentsOf: recovered)
                     }
@@ -1231,7 +1245,7 @@ final class MapViewModel: ObservableObject {
 
     /// Repeated imports reuse the original workflow. A candidate cannot be
     /// reassigned to a fresh run without invalidating its confirmation receipt.
-    func reuseImportedCandidate(_ pending: PendingReviewCandidate, captureId: UUID, userId: String) async throws -> [UUID]? {
+    func reuseImportedCandidate(_ pending: PendingReviewCandidate, captureId: UUID, userId: String, queuedForAnalysis: Bool = false) async throws -> [UUID]? {
         let candidates = try await supabaseService.fetchReviewCandidates(captureId: captureId)
         let existing = candidates.sorted { $0.createdAt < $1.createdAt }.first { $0.matchesImport(pending) }
         guard let existing else { return nil }
@@ -1247,6 +1261,11 @@ final class MapViewModel: ObservableObject {
             preserved, captureId: captureId, userId: userId, workflowRunId: existing.workflowRunId
         )
         await refreshSavedCollectionDates(userId: userId)
+        if pending.reviewState == "analysis_pending", (queuedForAnalysis || pending.shouldRecoverSourceOnServer),
+           existing.isAnalysisPending, let workflowRunId = existing.workflowRunId {
+            let recovered = await recoverImportSource(captureId: captureId, candidateId: reusedID, workflowRunId: workflowRunId)
+            return [reusedID] + recovered
+        }
         return [reusedID]
     }
 
@@ -1277,11 +1296,12 @@ final class MapViewModel: ObservableObject {
         guard usesRemotePersistence, let captureId = candidate.captureId else {
             throw SupabaseError.invalidResponse("This clue has no synced source. Add a city, address, or map link to find the place.")
         }
-        return try await withImportAnalysis {
+        return try await withImportAnalysis { checkSession in
             await SAVEAnalysisScope.current?.addCapture(captureId)
             let result = try await supabaseService.recoverSourceOnlyReviewCandidates(
                 captureId: captureId, workflowRunId: candidate.workflowRunId, explicitRetry: true
             )
+            try checkSession()
             if let reason = result.failureReason {
                 importFailureReasons[candidate.id] = reason
                 if reason.kind == .providerFailure { await SAVEAnalysisScope.current?.markProviderFailure() }
@@ -1305,12 +1325,22 @@ final class MapViewModel: ObservableObject {
         }
     }
 
-    private func withImportAnalysis<T>(_ work: () async throws -> T) async throws -> T {
-        try Task.checkCancellation()
+    private func withImportAnalysis<T>(_ work: (_ checkSession: () throws -> Void) async throws -> T) async throws -> T {
+        let generation = authService.sessionGeneration
+        let userID = authService.currentUserId
+        let checkSession = { [self] in
+            try Task.checkCancellation()
+            guard authService.sessionGeneration == generation, authService.currentUserId == userID else { throw CancellationError() }
+        }
+        try checkSession()
         let context = SAVEAnalysisContext(id: UUID())
         do {
             // Protocol fakes can opt out without starting real network sessions.
-            guard try await supabaseService.startAnalysis(id: context.id) != nil else { return try await work() }
+            guard try await supabaseService.startAnalysis(id: context.id) != nil else {
+                try checkSession()
+                return try await work(checkSession)
+            }
+            try checkSession()
         } catch {
             // Start may have reached the server even if its response was lost.
             await supabaseService.finishAnalysis(context, outcome: Task.isCancelled ? "cancelled" : "failed")
@@ -1318,9 +1348,9 @@ final class MapViewModel: ObservableObject {
         }
         return try await SAVEAnalysisScope.$current.withValue(context) {
             do {
-                try Task.checkCancellation()
-                let result = try await work()
-                try Task.checkCancellation()
+                try checkSession()
+                let result = try await work(checkSession)
+                try checkSession()
                 await supabaseService.finishAnalysis(context, outcome: nil)
                 return result
             } catch {

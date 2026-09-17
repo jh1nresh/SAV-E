@@ -98,7 +98,7 @@ final class SaveLocalVaultService: Sendable {
             placeName: candidate.isSourceOnly ? nil : candidate.candidateName,
             address: candidate.address.isEmpty ? nil : candidate.address,
             evidence: candidate.evidence,
-            evidenceDiagnostic: candidate.evidenceDiagnostic,
+            evidenceDiagnostic: preservingMissingInfo(candidate.missingInfo, diagnostic: candidate.evidenceDiagnostic),
             placeHighlights: candidate.placeHighlights,
             recommendedItems: candidate.recommendedItems,
             vibeTags: candidate.vibeTags,
@@ -110,7 +110,9 @@ final class SaveLocalVaultService: Sendable {
                 ? nil
                 : PlaceCategory(rawValue: candidate.category)
                     ?? PlaceCategory.inferred(from: "\(candidate.candidateName) \(candidate.address)"),
-            createdAt: candidate.savedAt
+            createdAt: candidate.savedAt,
+            googlePlaceId: candidate.isSourceOnly ? nil : candidate.googlePlaceId,
+            semanticSource: candidate.semanticSource
         )
         guard let recordID else {
             return try upsertReviewRecord(record, matchSourceIdentity: true)
@@ -146,6 +148,7 @@ final class SaveLocalVaultService: Sendable {
             placeName: candidate.name,
             address: candidate.address.isEmpty ? nil : candidate.address,
             evidence: candidate.evidence,
+            evidenceDiagnostic: preservingMissingInfo(candidate.missingInfo, diagnostic: nil),
             placeHighlights: candidate.placeHighlights,
             recommendedItems: candidate.recommendedItems,
             vibeTags: candidate.vibeTags,
@@ -153,10 +156,19 @@ final class SaveLocalVaultService: Sendable {
             sourceHandle: candidate.sourceHandle,
             latitude: candidate.latitude,
             longitude: candidate.longitude,
-            category: PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
-            createdAt: candidate.createdAt
+            category: candidate.category ?? PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
+            createdAt: candidate.createdAt,
+            googlePlaceId: candidate.googlePlaceId,
+            semanticSource: candidate.semanticSource
         )
         return try upsertReviewRecord(record, matchSourceIdentity: false)
+    }
+
+    private func preservingMissingInfo(_ fields: [String], diagnostic: SocialPlaceEvidenceDiagnostic?) -> SocialPlaceEvidenceDiagnostic? {
+        guard !fields.isEmpty else { return diagnostic }
+        var result = diagnostic ?? SocialPlaceEvidenceDiagnostic(found: [], attempts: [], missingFields: [], nextBestClue: "")
+        for field in fields where !result.missingFields.contains(field) { result.missingFields.append(field) }
+        return result
     }
 
     private func upsertReviewRecord(_ incoming: SaveMemoryRecord, matchSourceIdentity: Bool) throws -> SaveMemoryRecord {
@@ -175,7 +187,7 @@ final class SaveLocalVaultService: Sendable {
                         candidateName: incoming.displayTitle, address: incoming.address ?? "", category: "other",
                         latitude: incoming.latitude, longitude: incoming.longitude,
                         sourceURL: incoming.sourceURL, sourceText: incoming.sourceText, evidence: incoming.evidence,
-                        confidence: 0, missingInfo: [], savedAt: incoming.createdAt
+                        confidence: 0, missingInfo: [], savedAt: incoming.createdAt, googlePlaceId: incoming.googlePlaceId, semanticSource: incoming.semanticSource
                     ))
                 }
                 let record: SaveMemoryRecord
@@ -508,7 +520,10 @@ private extension SaveMemoryRecord {
             recommendedItems: recommendedItems,
             vibeTags: vibeTags,
             accessNotes: accessNotes,
-            sourceHandle: sourceHandle
+            sourceHandle: sourceHandle,
+            googlePlaceId: googlePlaceId,
+            category: category,
+            semanticSource: semanticSource
         )
     }
 

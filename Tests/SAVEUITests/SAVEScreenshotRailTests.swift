@@ -209,6 +209,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         app.buttons["capture.analyze"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: timeout(20)))
         XCTAssertTrue(app.descendants(matching: .any)["capture.results.notice"].firstMatch.label.contains("Found 1 clue"))
+        XCTAssertTrue(app.staticTexts["Source saved; analysis pending"].firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.staticTexts["Analysis ready"].exists)
         XCTAssertNotEqual(app.buttons["drawer.review.primaryAction"].label, "Confirm and save")
         attach(app, name: "review-flow-source-only")
     }

@@ -1440,20 +1440,23 @@ struct AIDrawerView: View {
                 tone: SaveAtlasPalette.kraft
             )
         case .ready(let candidateIDs):
-            let count = candidateIDs.count
+            let summary = ReviewImportSummary(candidateIDs: candidateIDs, candidates: reviewCandidates)
+            let count = summary.candidateCount
+            let pending = summary.pendingCount > 0
+            let sourceSaved = summary.sourceCount > 0
             LinkAnalysisStatusCard(
-                systemImage: count == 0 ? "questionmark.circle.fill" : "checkmark.seal.fill",
+                systemImage: count > 0 ? "checkmark.seal.fill" : pending ? "clock" : "questionmark.circle.fill",
                 title: languageSettings.localized(
-                    english: count == 0 ? "Needs another clue" : "Analysis ready",
-                    traditionalChinese: count == 0 ? "需要更多線索" : "分析完成"
+                    english: count > 0 ? "Places to review" : pending ? "Source saved; analysis pending" : sourceSaved ? "Source saved" : "Needs another clue",
+                    traditionalChinese: count > 0 ? "地點待確認" : pending ? "來源已保存，分析待完成" : sourceSaved ? "來源已保存" : "需要更多線索"
                 ),
                 message: languageSettings.localized(
                     english: count == 0
-                        ? "No new place could be isolated. Try a map link, address, or clearer caption; no place was saved."
-                        : "Found \(count) possible place\(count == 1 ? "" : "s"). Open each one, then confirm only the exact places you want to save.",
+                        ? (pending ? "Your source is preserved. Retry analysis later; no place was saved to your map." : "No new place could be isolated. Try a map link, address, or clearer caption; no place was saved.")
+                        : "Found \(count) possible place\(count == 1 ? "" : "s"). Open each one, then confirm only the exact places you want to save." + (pending ? " Other saved sources are still awaiting analysis." : ""),
                     traditionalChinese: count == 0
-                        ? "目前無法辨識出新地點。請補上地圖連結、地址或更清楚的貼文說明；尚未收藏任何地點。"
-                        : "找到 \(count) 個可能地點。請逐一打開檢查，只確認你要收藏的精確地點。"
+                        ? (pending ? "原始來源已保留，稍後可重新解析；尚未存入任何地圖地點。" : "目前無法辨識出新地點。請補上地圖連結、地址或更清楚的貼文說明；尚未收藏任何地點。")
+                        : "找到 \(count) 個可能地點。請逐一打開檢查，只確認你要收藏的精確地點。" + (pending ? "其他已保存來源仍待分析。" : "")
                 ),
                 isLoading: false,
                 tone: count == 0 ? SaveAtlasPalette.kraft : SaveAtlasPalette.mint
@@ -3796,6 +3799,9 @@ private struct ReviewCandidateNextStepPanel: View {
     }
 
     private var nextStepText: String {
+        if candidate.isAnalysisPending {
+            return languageSettings.localized(english: "Source saved; analysis pending", traditionalChinese: "來源已保存，分析待完成")
+        }
         if candidate.hasReliableCoordinates {
             return languageSettings.localized(
                 english: "Check the name/address. If it is correct, tap Confirm and save.",
@@ -3815,6 +3821,12 @@ private struct ReviewCandidateNextStepPanel: View {
     }
 
     private var summaryText: String {
+        if candidate.isAnalysisPending {
+            return languageSettings.localized(
+                english: "The original source is preserved. Use Reanalyze source later; no place has been saved to your map.",
+                traditionalChinese: "原始來源已保留，稍後可點「重新解析來源」；尚未存入任何地圖地點。"
+            )
+        }
         if candidate.hasReliableCoordinates {
             let address = candidate.address.trimmingCharacters(in: .whitespacesAndNewlines)
             if !address.isEmpty {

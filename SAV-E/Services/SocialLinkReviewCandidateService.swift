@@ -165,6 +165,8 @@ final class SocialLinkReviewCandidateService {
     /// rejects. `nil` when no LLM path is configured — the service then keeps its
     /// deterministic-only behavior. Injected as a fake (no network) in tests.
     private let captionVenueExtractor: SocialCaptionVenueExtractor?
+    private let socialSemanticAnalyzer: SocialSemanticAnalyzing
+    private let metadataSession: URLSession
     private let thumbnailImageByteLimit = 6_000_000
     private let analysisDiagnosticsObserver: (AnalysisSearchDiagnostics) -> Void
     private static let analysisLogger = Logger(subsystem: "Savvy", category: "SocialAnalysisSearch")
@@ -186,11 +188,15 @@ final class SocialLinkReviewCandidateService {
         publicSourceSearchService: PublicSourceSearchServiceProtocol = PublicSourceSearchService.shared,
         placeResolverService: PlaceResolverServiceProtocol? = nil,
         captionVenueExtractor: SocialCaptionVenueExtractor? = GeminiCaptionVenueExtractor.liveFromConfig(),
+        socialSemanticAnalyzer: SocialSemanticAnalyzing = BackendSocialSemanticAnalyzer(),
+        metadataSession: URLSession = .shared,
         analysisDiagnosticsObserver: ((AnalysisSearchDiagnostics) -> Void)? = nil
     ) {
         self.placeResolverService = placeResolverService ?? PlaceResolverService(googlePlacesService: googlePlacesService)
         self.publicSourceSearchService = publicSourceSearchService
         self.captionVenueExtractor = captionVenueExtractor
+        self.socialSemanticAnalyzer = socialSemanticAnalyzer
+        self.metadataSession = metadataSession
         self.analysisDiagnosticsObserver = analysisDiagnosticsObserver ?? Self.logAnalysisDiagnostics
     }
 
@@ -292,14 +298,15 @@ final class SocialLinkReviewCandidateService {
     private func reviewCandidates(from url: URL, sharedCaption: String?) async -> [PendingReviewCandidate] {
         let metadata = await fetchMetadata(from: url)
         let videoEvidence = metadata.videoURL.map { "Video metadata URL: \($0.absoluteString)" }
-        let evidenceText = ([sharedCaption] + metadata.evidenceLines + [videoEvidence])
+        let evidenceText = ([sharedCaption] + (metadata.jsonCaption.map { [$0] } ?? metadata.evidenceLines) + [videoEvidence])
             .compactMap { $0 }
             .map(cleanHTMLText)
             .filter { !$0.isEmpty }
             .joined(separator: "\n")
 
         let sourceURL = metadata.resolvedURL ?? url.absoluteString
-        let resolved = await reviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL) {
+        let resolved = await reviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL,
+            sourceReadFailed: metadata.fetchReturnedNothing && sharedCaption?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false) {
             await self.thumbnailOCRLines(from: metadata.imageURL)
         }
         // Fetch diagnostics remain available even when text made OCR unnecessary.
@@ -311,37 +318,91 @@ final class SocialLinkReviewCandidateService {
     func reviewCandidates(
         fromEvidenceText text: String,
         sourceURL: String,
+        sourceReadFailed: Bool = false,
         thumbnailText: () async -> [String]
     ) async -> [PendingReviewCandidate] {
-        let initial = reviewCandidatesOrSourceOnly(fromEvidenceText: text, sourceURL: sourceURL)
-        let hasConcreteTextIdentity = !initial.isEmpty
-            && !deterministicYieldedUnreliableProseFragment(initial)
-            && initial.allSatisfy {
-                !$0.isSourceOnly && !$0.isPlaceBearingSource
-                    && !isAddressOnlyPlaceClue($0)
-                    && $0.reviewState != "unresolved_place_candidate"
-                    && ($0.hasReliableCoordinates || hasExplicitThumbnailSkipAddress($0.address))
-            }
-        let ocrLines = hasConcreteTextIdentity ? [] : await thumbnailText()
-        let evidenceText = ([text] + ocrLines).filter { !$0.isEmpty }.joined(separator: "\n")
-        // Never hard-fail a link the user pasted: if recovery search throws,
-        // fall back to the deterministic local parse / source-only path.
-        let resolved = (try? await recoverReviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL))
-            ?? reviewCandidatesOrSourceOnly(fromEvidenceText: evidenceText, sourceURL: sourceURL)
-        guard !ocrLines.isEmpty else { return resolved }
-        return resolved.map { candidate in
-            candidate.withThumbnailOCREvidence(ocrLines)
+        // Structured map/web routes retain their existing parser. Social prose
+        // always starts with the common backend semantic contract.
+        guard SocialShareTextNormalizer.platform(forURLString: sourceURL).includesCaptionInAnalysis else {
+            return (try? await recoverReviewCandidates(fromEvidenceText: text, sourceURL: sourceURL))
+                ?? reviewCandidatesOrSourceOnly(fromEvidenceText: text, sourceURL: sourceURL)
         }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasCaption = !trimmed.isEmpty && trimmed != sourceURL
+        var result = hasCaption ? await socialSemanticAnalyzer.analyze(caption: text, ocrText: nil)
+            : SocialSemanticResult(status: "no_place_evidence", venues: [])
+        var ocrLines: [String] = []
+        let insufficientText = result.status == "no_place_evidence"
+            || (result.status == "ready" && result.venues.contains { $0.address == nil })
+        if insufficientText && !Task.isCancelled {
+            ocrLines = await thumbnailText()
+            if !ocrLines.isEmpty {
+                let supplemented = await socialSemanticAnalyzer.analyze(caption: text, ocrText: ocrLines.joined(separator: "\n"))
+                result = result.supplemented(by: supplemented)
+            }
+        }
+        if !Task.isCancelled, result.status == "no_place_evidence", (sourceReadFailed || !hasCaption),
+           ocrLines.allSatisfy({ $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+            var pending = pendingSemanticSource(caption: text, sourceURL: sourceURL)
+            pending.missingInfo.append("Source text unavailable")
+            return [pending]
+        }
+        return semanticCandidates(result, sourceURL: sourceURL, caption: text, ocrLines: ocrLines)
     }
 
-    private func hasExplicitThumbnailSkipAddress(_ address: String) -> Bool {
-        // The general address recognizer also accepts areas such as Bangkok
-        // and Los Angeles, CA. Only numbered streets can skip extra evidence.
-        // Unrecognized international address formats keep the OCR fallback.
-        looksLikeWesternStreetAddress(address) || address.range(
-            of: #"[路街道巷弄][^\n\r]{0,40}\d+[號号]"#,
-            options: .regularExpression
-        ) != nil
+    func pendingSemanticSource(caption: String, sourceURL: String) -> PendingReviewCandidate {
+        PendingReviewCandidate(candidateName: "Source clue", address: "", category: "other",
+            sourceURL: sourceURL, sourceText: caption, evidence: ["Source URL: \(sourceURL)", "Source preserved; semantic analysis pending"],
+            confidence: 0, missingInfo: ["Analysis pending", "Exact place", "User confirmation"],
+            savedAt: Date(), isSourceOnly: true, reviewState: "analysis_pending")
+    }
+
+    private func semanticCandidates(_ result: SocialSemanticResult, sourceURL: String, caption: String, ocrLines: [String]) -> [PendingReviewCandidate] {
+        guard result.status != "cancelled", !Task.isCancelled else { return [] }
+        guard result.status == "ready", !result.venues.isEmpty else {
+            var pending = pendingSemanticSource(caption: caption, sourceURL: sourceURL)
+            if result.status == "no_place_evidence" {
+                pending.reviewState = "source_only"
+                pending.missingInfo = ["No place evidence in source", "Exact place", "User confirmation"]
+            }
+            return [pending]
+        }
+        return result.venues.flatMap { venue -> [PendingReviewCandidate] in
+            let name = [venue.name.value, venue.branch?.value].compactMap { $0 }.joined(separator: " ")
+            let fields = [venue.name, venue.branch, venue.address, venue.transport].compactMap { $0 }
+            // Defensive response validation keeps unsupported backend fields out
+            // of a saved clue, even if a malformed deployment responds 200.
+            guard fields.allSatisfy({ field in
+                let source = field.source == "caption" ? caption : field.source == "ocr" ? ocrLines.joined(separator: "\n") : ""
+                return !field.quote.isEmpty && source.contains(field.quote)
+            }) else { return [pendingSemanticSource(caption: caption, sourceURL: sourceURL)] }
+            let semanticSource = venue.address.map {
+                SemanticSourceIdentity(name: venue.name.value, branch: venue.branch?.value, address: $0.value)
+            }
+            let evidence = ["Source URL: \(sourceURL)"] + fields.map { "Source \($0.source) quote: \($0.quote)" }
+                + ["Extracted venue: \(name)", "Map identity: \(venue.mapStatus)"]
+            let matches = venue.matches.filter { match in
+                !match.id.isEmpty && !match.name.isEmpty && !match.address.isEmpty
+                    && match.latitude.isFinite && match.longitude.isFinite
+                    && abs(match.latitude) <= 90 && abs(match.longitude) <= 180
+            }
+            if semanticSource != nil && ((venue.mapStatus == "matched" && matches.count == 1) || (venue.mapStatus == "ambiguous" && matches.count > 1)) {
+                return matches.map { match in
+                    PendingReviewCandidate(candidateName: match.name, address: match.address,
+                        category: (PlaceCategory.from(googleTypes: match.types ?? []) ?? PlaceCategory.inferred(from: "\(match.name) \(match.address)")).rawValue,
+                        latitude: match.latitude, longitude: match.longitude, sourceURL: sourceURL, sourceText: caption,
+                        evidence: evidence + ["Google Place ID: \(match.id)"], confidence: venue.mapStatus == "matched" ? 0.85 : 0.6,
+                        missingInfo: ["User confirmation before saving as Map Stamp"] + (venue.mapStatus == "ambiguous" ? ["Choose the correct map candidate"] : []),
+                        savedAt: Date(), reviewState: "review_candidate", accessNotes: venue.transport.map { [$0.value] } ?? [],
+                        googlePlaceId: match.id, googleTypes: match.types ?? [], semanticSource: semanticSource)
+                }
+            }
+            return [PendingReviewCandidate(candidateName: name, address: venue.address?.value ?? "", category: "other",
+                sourceURL: sourceURL, sourceText: caption,
+                evidence: evidence + matches.map { "Conflicting map alternative: \($0.name) — \($0.address)" }, confidence: 0.45,
+                missingInfo: ["Map identity not verified", "Verified coordinates", "User confirmation before saving as Map Stamp"],
+                savedAt: Date(), reviewState: "unresolved_place_candidate", accessNotes: venue.transport.map { [$0.value] } ?? [], semanticSource: semanticSource)]
+        }
     }
 
     // Each entry point owns this state; concurrent analyses never share caches.
@@ -1597,7 +1658,7 @@ final class SocialLinkReviewCandidateService {
         for attempt in 1...maxAttempts {
             do {
                 let (data, response) = try await SAVEAnalysisScope.measure(.metadata, outcome: SAVEAnalysisScope.httpOutcome) {
-                    try await URLSession.shared.data(for: request)
+                    try await metadataSession.data(for: request)
                 }
                 let canonicalURL = SocialShareURLCanonicalizer.analysisURL(
                     originalURL: url,
@@ -1605,17 +1666,27 @@ final class SocialLinkReviewCandidateService {
                 )
                 // Login/error-shell metadata is not place evidence. Keep the
                 // recovered source identity but discard the shell document.
-                let shouldUseResponseMetadata = response.url == nil || canonicalURL == response.url
+                let statusOK = (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? true
+                let shouldUseResponseMetadata = statusOK && (response.url == nil || canonicalURL == response.url)
                 // Lossy decode keeps partially valid UTF-8 metadata readable.
                 let html = shouldUseResponseMetadata
                     ? String(decoding: data.prefix(300_000), as: UTF8.self)
                     : ""
-                let title = metadataValue(in: html, keys: ["og:title", "twitter:title", "title"])
+                let rawTitle = metadataValue(in: html, keys: ["og:title", "twitter:title", "title"])
+                let genericTitle = #"(?i)^(?:美团|美團|美团外卖|美團外賣|淘宝|淘寶|淘宝闪购|淘寶閃購|饿了么|餓了麼|小红书|小紅書|抖音|大众点评|大眾點評|Ele\.me|Instagram|TikTok|Threads)$"#
+                let title = rawTitle?.trimmingCharacters(in: .whitespacesAndNewlines).range(of: genericTitle, options: .regularExpression) == nil ? rawTitle : nil
                 let description = metadataValue(in: html, keys: ["og:description", "twitter:description", "description"])
                 let keywords = metadataValue(in: html, keys: ["keywords"])
                 let imageURL = metadataImageURL(in: html, baseURL: canonicalURL)
                 let videoURL = metadataVideoURL(in: html, baseURL: canonicalURL)
-                let jsonCaption = embeddedSocialCaption(in: html)
+                let jsonCaption = embeddedSocialCaption(in: html, sourceURL: canonicalURL)
+                let loginPattern = #"(?i)^(?:log\s*in|sign\s*in|登入|登录|登錄)(?:\b|[ •·|:：—-])"#
+                let loginShell = [rawTitle, description].compactMap { $0 }.contains {
+                    $0.trimmingCharacters(in: .whitespacesAndNewlines).range(of: loginPattern, options: .regularExpression) != nil
+                }
+                if loginShell && jsonCaption == nil {
+                    return PublicMetadata(resolvedURL: canonicalURL.absoluteString, fetchReturnedNothing: true)
+                }
                 return PublicMetadata(
                     resolvedURL: canonicalURL.absoluteString,
                     title: title,
@@ -1623,7 +1694,8 @@ final class SocialLinkReviewCandidateService {
                     keywords: keywords,
                     imageURL: imageURL,
                     videoURL: videoURL,
-                    jsonCaption: jsonCaption
+                    jsonCaption: jsonCaption,
+                    fetchReturnedNothing: !shouldUseResponseMetadata || [title, description, jsonCaption].allSatisfy { $0?.isEmpty != false }
                 )
             } catch {
                 guard attempt < maxAttempts, isTransientNetworkError(error) else { break }
@@ -1669,23 +1741,44 @@ final class SocialLinkReviewCandidateService {
         return isSafePublicHTTPURL(url) ? url : nil
     }
 
-    private func embeddedSocialCaption(in html: String) -> String? {
-        let patterns = [
-            #"\"caption\"\s*:\s*\{[^{}]*\"text\"\s*:\s*\"((?:\\.|[^\"])*)\""#,
-            #"\"edge_media_to_caption\"\s*:\s*\{.*?\"text\"\s*:\s*\"((?:\\.|[^\"])*)\""#,
-            #"\"accessibility_caption\"\s*:\s*\"((?:\\.|[^\"])*)\""#
-        ]
-        for pattern in patterns {
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else { continue }
-            let range = NSRange(html.startIndex..<html.endIndex, in: html)
-            guard let match = regex.firstMatch(in: html, range: range),
-                  match.numberOfRanges > 1,
-                  let valueRange = Range(match.range(at: 1), in: html) else { continue }
-            let decoded = decodeJSONStringFragment(String(html[valueRange]))
-            let cleaned = cleanHTMLText(decoded)
-            if !cleaned.isEmpty { return cleaned }
+    func embeddedSocialCaption(in html: String, sourceURL: URL) -> String? {
+        guard SocialShareTextNormalizer.platform(forURLString: sourceURL.absoluteString).includesCaptionInAnalysis else { return nil }
+        let parts = sourceURL.path.split(separator: "/").map(String.init)
+        let markers = ["p", "reel", "reels", "tv", "post", "explore", "item", "video", "note"]
+        let pathID = parts.indices.first { markers.contains(parts[$0].lowercased()) && $0 + 1 < parts.count }.map { parts[$0 + 1] }
+        let queryID = URLComponents(url: sourceURL, resolvingAgainstBaseURL: false)?.queryItems?.first {
+            ["id", "noteid", "note_id", "videoid", "video_id"].contains($0.name.lowercased())
+        }?.value
+        guard let contentID = pathID ?? queryID, !contentID.isEmpty,
+              let regex = try? NSRegularExpression(pattern: #"<script\b[^>]*>([\s\S]*?)</script>"#, options: [.caseInsensitive]) else { return nil }
+        let identities = ["shortcode", "code", "id", "noteId", "note_id", "aweme_id"]
+        var captions = Set<String>()
+        var visited = 0
+        for match in regex.matches(in: html, range: NSRange(html.startIndex..<html.endIndex, in: html)) {
+            guard let range = Range(match.range(at: 1), in: html),
+                  let data = String(html[range]).data(using: .utf8),
+                  let root = try? JSONSerialization.jsonObject(with: data) else { continue }
+            var pending: [(Any, Int)] = [(root, 0)]
+            while let (value, depth) = pending.popLast() {
+                visited += 1
+                guard visited <= 20_000 else { return nil }
+                guard depth <= 64 else { continue }
+                if let children = value as? [Any] {
+                    pending.append(contentsOf: children.map { ($0, depth + 1) })
+                    continue
+                }
+                guard let node = value as? [String: Any] else { continue }
+                if identities.contains(where: { (node[$0] as? String ?? (node[$0] as? NSNumber)?.stringValue) == contentID }) {
+                    var texts = [(node["caption"] as? [String: Any])?["text"] as? String, node["caption"] as? String, node["desc"] as? String].compactMap { $0 }
+                    if let edges = (node["edge_media_to_caption"] as? [String: Any])?["edges"] as? [[String: Any]] {
+                        texts += edges.compactMap { ($0["node"] as? [String: Any])?["text"] as? String }
+                    }
+                    captions.formUnion(texts.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+                }
+                pending.append(contentsOf: node.values.map { ($0, depth + 1) })
+            }
         }
-        return nil
+        return captions.count == 1 ? captions.first : nil
     }
 
     private func thumbnailOCRLines(from imageURL: URL?) async -> [String] {
@@ -3813,18 +3906,6 @@ final class SocialLinkReviewCandidateService {
             .replacingOccurrences(of: "&nbsp;", with: " ")
             .replacingOccurrences(of: #"[ \t]+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func decodeJSONStringFragment(_ value: String) -> String {
-        let wrapped = "\"\(value)\""
-        guard let data = wrapped.data(using: .utf8),
-              let decoded = try? JSONDecoder().decode(String.self, from: data) else {
-            return value
-                .replacingOccurrences(of: #"\n"#, with: "\n")
-                .replacingOccurrences(of: #"\/"#, with: "/")
-                .replacingOccurrences(of: #"\""#, with: "\"")
-        }
-        return decoded
     }
 
     private func decodeNumericHTMLEntities(in value: String) -> String {

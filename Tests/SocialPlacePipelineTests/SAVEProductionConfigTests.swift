@@ -371,6 +371,251 @@ private final class TransportFailureURLProtocol: URLProtocol {
 
 @MainActor
 final class SAVEAnalysisTransportTests: XCTestCase {
+    func testPendingAnalysisSurvivesLocalVaultRoundTrip() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        let pending = SocialLinkReviewCandidateService().pendingSemanticSource(caption: "Unfinished source", sourceURL: "https://instagram.com/p/pending/")
+        _ = try vault.saveReviewCandidate(pending)
+        let reloaded = SaveLocalVaultService(overrideVaultURL: url)
+        let clue = try XCTUnwrap(reloaded.reviewCandidates().first)
+        XCTAssertTrue(clue.isAnalysisPending)
+        XCTAssertFalse(clue.hasSavableLocation)
+        // Remote candidates mirrored to the vault must preserve the same state.
+        _ = try reloaded.saveReviewCandidate(clue)
+        XCTAssertTrue(try XCTUnwrap(SaveLocalVaultService(overrideVaultURL: url).reviewCandidates().first).isAnalysisPending)
+    }
+
+    func testNativeMetadataLoginAndHTTPFailuresStayPendingButSharedCaptionRemainsUsable() async throws {
+        final class EmptySemanticAnalyzer: SocialSemanticAnalyzing {
+            var captions: [String] = []
+            func analyze(caption: String, ocrText: String?) async -> SocialSemanticResult {
+                captions.append(caption)
+                return .init(status: "no_place_evidence", venues: [])
+            }
+        }
+        let analyzer = EmptySemanticAnalyzer()
+        let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: analyzer, metadataSession: session())
+        let url = try XCTUnwrap(URL(string: "https://www.instagram.com/p/native-unavailable/"))
+        for (status, html) in [(200, "<meta property='og:title' content='Log in • Instagram'>"), (200, "<title>Instagram</title>"), (200, "<title>Threads</title>"), (200, "<title>Instagram</title><meta name='description' content='Log in to Instagram to see this post'>"), (200, "<meta name='description' content='  登入 以查看貼文'>"), (200, "<meta property='og:title' content='TikTok'>"), (503, "<meta property='og:title' content='Unavailable'>"), (200, "")] {
+            AnalysisRequestURLProtocol.handler = { _ in (status, html) }
+            let candidates = try await service.reviewCandidates(from: url)
+            XCTAssertEqual(candidates.first?.reviewState, "analysis_pending")
+        }
+        XCTAssertTrue(analyzer.captions.isEmpty, "login/error shells cannot become semantic source text")
+        AnalysisRequestURLProtocol.handler = { _ in (200, "<meta property='og:title' content='Log in • Instagram'>") }
+        let captured = await service.reviewCandidates(fromSharedText: "A quiet walk\n" + url.absoluteString)
+        XCTAssertEqual(captured.first?.reviewState, "source_only")
+        XCTAssertTrue(analyzer.captions.last?.contains("A quiet walk") == true)
+        XCTAssertFalse(analyzer.captions.last?.contains("Log in") == true)
+        AnalysisRequestURLProtocol.handler = { _ in (200, "<meta property='og:title' content='Instagram'><meta property='og:description' content='A quiet walk'>") }
+        let described = try await service.reviewCandidates(from: url)
+        XCTAssertEqual(described.first?.reviewState, "source_only")
+        XCTAssertEqual(analyzer.captions.last, "A quiet walk")
+    }
+
+    func testImportSummarySeparatesPendingSourcesFromGroundedCandidates() {
+        let source = PlaceReviewCandidate(id: UUID(), captureId: UUID(), name: "Source clue", address: "", city: nil,
+            latitude: nil, longitude: nil, evidence: [], confidence: nil, missingInfo: ["Analysis pending", "Exact place"], status: "source_only", createdAt: Date())
+        var candidate = source
+        candidate.id = UUID(); candidate.status = "review"; candidate.name = "Pikul"; candidate.missingInfo = ["User confirmation"]
+        let unresolved = ReviewImportSummary(candidateIDs: [candidate.id], candidates: [candidate])
+        XCTAssertEqual(unresolved.candidateCount, 0)
+        XCTAssertEqual(unresolved.sourceCount, 1)
+        candidate.latitude = 25; candidate.longitude = 121
+        let pending = ReviewImportSummary(candidateIDs: [source.id], candidates: [source, candidate])
+        XCTAssertEqual(pending.candidateCount, 0)
+        XCTAssertEqual(pending.sourceCount, 1)
+        XCTAssertEqual(pending.pendingCount, 1)
+        let mixed = ReviewImportSummary(candidateIDs: [source.id, candidate.id], candidates: [source, candidate])
+        XCTAssertEqual(mixed.candidateCount, 1)
+        XCTAssertEqual(mixed.pendingCount, 1)
+        var saved = source; saved.status = "confirmed"
+        XCTAssertFalse(saved.isAnalysisPending, "An old marker cannot relabel a confirmed place as pending")
+    }
+
+
+    func testSemanticCaptionWireContractOmitsAbsentOCRAndPreservesFullText() async throws {
+        let caption = "商業午餐\n📍初泰Pikul  信義象山門市\n臺北市信義區信義路五段122號"
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertEqual(body["caption"] as? String, caption)
+            // Mirrors the backend's strict optional-string contract.
+            XCTAssertFalse(body["ocrText"] is NSNull)
+            if body["ocrText"] != nil { XCTAssertEqual(body["ocrText"] as? String, "cover text") }
+            XCTAssertEqual(request.timeoutInterval, 90)
+            return (200, #"{"status":"no_place_evidence","venues":[]}"#)
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let context = SAVEAnalysisContext(id: UUID())
+        for ocr in [nil, "cover text"] {
+            let result = try await SAVEAnalysisScope.$current.withValue(context) {
+                try await service.analyzeSocialCaption(caption: caption, ocrText: ocr)
+            }
+            XCTAssertEqual(result.status, "no_place_evidence")
+        }
+        XCTAssertEqual(AnalysisRequestURLProtocol.requests.count, 2)
+        XCTAssertNil(try AnalysisRequestURLProtocol.body(AnalysisRequestURLProtocol.requests[0])["ocrText"])
+    }
+
+    func testSemanticPendingResponseRecordsProviderFailureWithoutMislabelingEmptyEvidence() async throws {
+        for (status, reason, outcome) in [("analysis_pending", "semantic_analysis_unavailable", "failed"), ("analysis_pending", "source_out_of_bounds", "source_only"), ("no_place_evidence", "", "source_only")] {
+            AnalysisRequestURLProtocol.handler = { _ in
+                let body: [String: Any] = ["status": status, "reason": reason, "venues": []]
+                return (200, String(decoding: try JSONSerialization.data(withJSONObject: body), as: UTF8.self))
+            }
+            let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+            let context = SAVEAnalysisContext(id: UUID())
+            let result = try await SAVEAnalysisScope.$current.withValue(context) {
+                try await service.analyzeSocialCaption(caption: "Original caption", ocrText: nil)
+            }
+            XCTAssertEqual(result.status, status)
+            let snapshot = await context.snapshot()
+            XCTAssertEqual(snapshot.outcome, outcome)
+        }
+    }
+
+    func testUnscopedOversizedSemanticAnalysisFinishesAsSourceOnly() async throws {
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.url?.path == "/v0/analysis" {
+                let body = try AnalysisRequestURLProtocol.body(request)
+                return (200, String(decoding: try JSONSerialization.data(withJSONObject: ["analysis_id": body["id"]!]), as: UTF8.self))
+            }
+            if request.url?.path.hasSuffix("extract-place-clues") == true {
+                return (200, #"{"status":"analysis_pending","reason":"source_out_of_bounds","venues":[]}"#)
+            }
+            return (200, "{}")
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let result = try await service.analyzeSocialCaption(caption: String(repeating: "x", count: 20_001), ocrText: nil)
+        XCTAssertEqual(result.reason, "source_out_of_bounds")
+        let finish = try XCTUnwrap(AnalysisRequestURLProtocol.requests.first { $0.url?.path.hasSuffix("finish") == true })
+        XCTAssertEqual(try AnalysisRequestURLProtocol.body(finish)["outcome"] as? String, "source_only")
+        let reason = SourceSearchFailureReason(kind: .insufficientSource, reason: "source_out_of_bounds", stage: nil)
+        XCTAssertTrue(reason.englishMessage.contains("too long"))
+        XCTAssertTrue(reason.traditionalChineseMessage.contains("文字太長"))
+    }
+
+    func testSemanticResponseFromPreviousAccountIsDiscarded() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original }
+        auth.authState = .authenticated(userId: "semantic-account-A")
+        let arrived = expectation(description: "semantic request in flight")
+        let release = DispatchSemaphore(value: 0)
+        AnalysisRequestURLProtocol.handler = { _ in
+            arrived.fulfill()
+            _ = release.wait(timeout: .now() + 10)
+            return (200, #"{"status":"ready","venues":[]}"#)
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let context = SAVEAnalysisContext(id: UUID())
+        let task = Task {
+            try await SAVEAnalysisScope.$current.withValue(context) {
+                try await service.analyzeSocialCaption(caption: "Pikul", ocrText: nil)
+            }
+        }
+        await fulfillment(of: [arrived], timeout: 5)
+        auth.authState = .authenticated(userId: "semantic-account-B")
+        release.signal()
+        do { _ = try await task.value; XCTFail("Old account response must be discarded") }
+        catch is CancellationError {} catch { XCTFail("Unexpected: \(error)") }
+    }
+
+    func testDirectAndQueuedImportsRecoverOnlyUnanalyzedSources() async throws {
+        final class PendingAnalyzer: SocialSemanticAnalyzing {
+            func analyze(caption: String, ocrText: String?) async -> SocialSemanticResult { .pending }
+        }
+        let auth = PrivyAuthService.shared, original = PrivyAuthService.shared.authState
+        defer { auth.authState = original }
+        auth.authState = .authenticated(userId: "source-recovery-fixture")
+        for (modelOutage, existingPending, queued) in [(false, false, false), (true, false, false), (false, true, false), (true, true, false), (true, false, true), (true, true, true)] {
+            AnalysisRequestURLProtocol.reset()
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let capture = UUID(), candidate = UUID(), run = UUID(), order = UUID()
+            let row = "{\"id\":\"\(candidate)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(run)\",\"name\":\"Source clue\",\"status\":\"source_only\",\"missing_info\":[\"Analysis pending\"],\"created_at\":\"2020-01-02T03:04:05Z\"}"
+            let workflow = "{\"id\":\"\(run)\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"source_type\":\"social_url\",\"status\":\"pending\",\"evidence_tier\":\"weak\",\"result_evidence_refs\":[],\"result_candidate_refs\":[],\"credit_reserved\":1,\"credit_settlement\":\"pending\"}"
+            let workOrder = "{\"id\":\"\(order)\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"intent\":\"recover\",\"input_type\":\"social_url\",\"evaluator_policy_id\":\"fixture\",\"settlement_mode\":\"fixture\",\"status\":\"pending\"}"
+            let receipt = "{\"id\":\"\(UUID())\",\"run_id\":\"\(run)\",\"workflow_id\":\"fixture\",\"verdict\":\"source_only\",\"settlement\":\"pending\",\"evaluator_summary\":\"fixture\",\"evidence_refs\":[],\"candidate_refs\":[],\"receipt_hash\":\"fixture\",\"anchor_status\":\"none\"}"
+            var persisted = existingPending
+            AnalysisRequestURLProtocol.handler = { request in
+                let path = request.url?.path ?? ""
+                if request.url?.host == "www.instagram.com" { return (200, "<meta property='og:title' content='Log in • Instagram'>") }
+                if path == "/v0/analysis" {
+                    let body = try AnalysisRequestURLProtocol.body(request)
+                    return (200, String(decoding: try JSONSerialization.data(withJSONObject: ["analysis_id": body["id"]!]), as: UTF8.self))
+                }
+                if path.hasSuffix("/search-recovery") { return (200, #"{"created_candidates":[]}"#) }
+                if path.hasSuffix("/captures") && request.httpMethod == "POST" { return (200, "{\"id\":\"\(capture)\"}") }
+                if path.hasSuffix("/work-orders") { return (200, workOrder) }
+                if path.hasSuffix("/runs") { return (200, workflow) }
+                if path.hasSuffix("/result") { return (200, "{\"run\":\(workflow),\"receipt\":\(receipt)}") }
+                if path.hasSuffix("/candidates") {
+                    if request.httpMethod == "POST" { persisted = true; return (200, row) }
+                    return (200, persisted ? "[\(row)]" : "[]")
+                }
+                return (200, request.httpMethod == "GET" ? "[]" : "{}")
+            }
+            let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+            let social = SocialLinkReviewCandidateService(socialSemanticAnalyzer: PendingAnalyzer(), metadataSession: session())
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let queue = PendingPlaceImportService(overrideContainerURL: directory)
+            let map = MapViewModel(supabaseService: service, pendingImportService: queue, socialLinkReviewCandidateService: social,
+                saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json")))
+            let text = (modelOutage ? "Original readable caption\n" : "") + "https://www.instagram.com/p/direct-recovery/"
+            if queued {
+                queue.restorePendingReviewCandidates([PendingReviewCandidate(candidateName: "Source clue", address: "", category: "other",
+                    sourceURL: "https://www.instagram.com/p/direct-recovery/", sourceText: text, evidence: [], confidence: 0,
+                    missingInfo: ["Analysis pending"], savedAt: Date(), isSourceOnly: true, reviewState: "analysis_pending")])
+                await map.loadPlaces(force: true)
+                XCTAssertTrue(queue.consumePendingReviewCandidates().isEmpty)
+            } else {
+                let ids = try await map.importSharedTextAsReviewCandidates(text)
+                XCTAssertEqual(ids, [candidate])
+            }
+            let recoveries = AnalysisRequestURLProtocol.requests.filter { $0.url?.path.hasSuffix("/search-recovery") == true }
+            XCTAssertEqual(recoveries.count, queued || !modelOutage ? 1 : 0)
+            if existingPending {
+                XCTAssertFalse(AnalysisRequestURLProtocol.requests.contains { $0.url?.path.hasSuffix("/work-orders") == true }, "repeat import retains its workflow")
+            }
+        }
+    }
+
+    func testImportRecoveryRejectsAccountSwitchBeforeApplyingResults() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original }
+        auth.authState = .authenticated(userId: "recovery-account-A")
+        let arrived = expectation(description: "recovery in flight")
+        let release = DispatchSemaphore(value: 0)
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.url?.path == "/v0/analysis" {
+                let id = try XCTUnwrap(AnalysisRequestURLProtocol.body(request)["id"] as? String)
+                return (200, "{\"analysis_id\":\"\(id)\"}")
+            }
+            if request.url?.path.hasSuffix("/search-recovery") == true {
+                arrived.fulfill()
+                _ = release.wait(timeout: .now() + 10)
+                return (200, #"{"created_candidates":[]}"#)
+            }
+            XCTAssertFalse(request.httpMethod == "GET" && request.url?.path == "/memory/candidates", "Must not refresh another account after stale analysis")
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let map = MapViewModel(supabaseService: service)
+        let clue = PlaceReviewCandidate(id: UUID(), captureId: UUID(), name: "Original", address: "", city: nil,
+            latitude: nil, longitude: nil, evidence: [], confidence: nil, missingInfo: [], status: "source_only", createdAt: Date())
+        map.reviewCandidates = [clue]
+        let task = Task { try await map.reanalyzeReviewSource(clue) }
+        await fulfillment(of: [arrived], timeout: 5)
+        auth.authState = .authenticated(userId: "recovery-account-B")
+        release.signal()
+        do { _ = try await task.value; XCTFail("Stale import must stop") }
+        catch is CancellationError {} catch { XCTFail("Unexpected: \(error)") }
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [clue.id])
+    }
     @MainActor
     func testMemoryImportSendsOriginalDateAndSourceOnlyState() async throws {
         let id = UUID()
@@ -382,16 +627,78 @@ final class SAVEAnalysisTransportTests: XCTestCase {
                 return (200, "{\"id\":\"\(capture)\"}")
             }
             XCTAssertEqual(body["status"] as? String, "source_only")
-            return (200, "{\"id\":\"\(id)\",\"capture_id\":\"\(capture)\",\"name\":\"Clue\",\"status\":\"source_only\",\"created_at\":\"2020-01-02T03:04:05Z\"}")
+            let evidence = try XCTUnwrap(body["evidence"] as? [[String: String]])
+            XCTAssertEqual(evidence.first?["text"], "Source URL: https://example.com/post")
+            var reloadedBody = body
+            reloadedBody["id"] = id.uuidString
+            let reloadedData = try JSONSerialization.data(withJSONObject: reloadedBody)
+            return (200, String(decoding: reloadedData, as: UTF8.self))
         }
         let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
         let pending = PendingReviewCandidate(candidateName: "Clue", address: "", category: "other",
-            sourceURL: "https://example.com/post", sourceText: "clue", evidence: [], confidence: 0,
+            sourceURL: "https://example.com/post", sourceText: "clue", evidence: ["Source caption quote: https://unrelated.example/menu"], confidence: 0,
             missingInfo: [], savedAt: ISO8601DateFormatter().date(from: "2020-01-02T03:04:05Z")!, isSourceOnly: true)
         let captured = try await service.createMemoryCapture(from: pending, userId: "test-owner")
         XCTAssertEqual(captured, capture)
         let candidate = try await service.createPlaceCandidate(pending, captureId: captured, userId: "test-owner")
         XCTAssertEqual(candidate, id)
+        var persisted = try AnalysisRequestURLProtocol.body(XCTUnwrap(AnalysisRequestURLProtocol.requests.last))
+        persisted["id"] = id.uuidString
+        let response = try JSONSerialization.data(withJSONObject: ["created_candidates": [persisted]])
+        let reloaded = try XCTUnwrap(SupabaseService.decodeSourceSearchRecoveryResponse(response).createdCandidates.first)
+        XCTAssertEqual(Place.from(reloaded).sourceUrl, "https://example.com/post")
+    }
+
+    @MainActor
+    func testVerifiedProviderMetadataSurvivesCandidateHTTPPersistenceAndConfirmation() async throws {
+        for (name, type, category) in [("Walmart", "department_store", PlaceCategory.shopping), ("Ritz-Carlton", "lodging", .stay)] {
+            let id = UUID()
+            AnalysisRequestURLProtocol.handler = { request in
+                var body = try AnalysisRequestURLProtocol.body(request)
+                body["id"] = id.uuidString
+                return (200, String(decoding: try JSONSerialization.data(withJSONObject: body), as: UTF8.self))
+            }
+            let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+            let pending = PendingReviewCandidate(candidateName: name, address: "1 Main Street", category: category.rawValue,
+                latitude: 25, longitude: 121, sourceURL: "https://instagram.com/p/provider/", sourceText: name,
+                evidence: ["Source caption quote: Google Place ID: fabricated"], confidence: 0.85,
+                missingInfo: ["User confirmation before saving as Map Stamp"], savedAt: Date(),
+                googlePlaceId: "verified-\(name)", googleTypes: [type],
+                semanticSource: .init(name: name, branch: nil, address: "1 Main Street"))
+            _ = try await service.createPlaceCandidate(pending, captureId: UUID(), userId: "test-owner")
+            var persisted = try AnalysisRequestURLProtocol.body(XCTUnwrap(AnalysisRequestURLProtocol.requests.last))
+            let evidence = try XCTUnwrap(persisted["evidence"] as? [[String: Any]])
+            let providerEvidence = try XCTUnwrap(evidence.first { $0["google_place_id"] != nil })
+            XCTAssertEqual(providerEvidence["google_place_id"] as? String, "verified-\(name)")
+            XCTAssertEqual(providerEvidence["google_types"] as? [String], [type])
+            persisted["id"] = id.uuidString
+            persisted["evidence"] = [["google_place_id": "verified-\(name)", "google_types": []]] + evidence
+            let response = try JSONSerialization.data(withJSONObject: ["created_candidates": [persisted]])
+            let reloaded = try XCTUnwrap(SupabaseService.decodeSourceSearchRecoveryResponse(response).createdCandidates.first)
+            XCTAssertEqual(reloaded.semanticSource, pending.semanticSource)
+            let confirmed = Place.from(reloaded)
+            XCTAssertEqual(confirmed.googlePlaceId, "verified-\(name)")
+            XCTAssertEqual(confirmed.category, category)
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let vaultURL = directory.appendingPathComponent("vault.json")
+            _ = try SaveLocalVaultService(overrideVaultURL: vaultURL).saveReviewCandidate(reloaded)
+            let diskCandidate = try XCTUnwrap(SaveLocalVaultService(overrideVaultURL: vaultURL).reviewCandidates().first)
+            XCTAssertEqual(diskCandidate.semanticSource, pending.semanticSource)
+            let fromDisk = Place.from(diskCandidate)
+            XCTAssertEqual(fromDisk.googlePlaceId, confirmed.googlePlaceId)
+            XCTAssertEqual(fromDisk.category, category)
+            var otherBranch = Place.from(reloaded)
+            otherBranch.googlePlaceId = "different-branch"
+            XCTAssertFalse(confirmed.matches(otherBranch))
+            // Original quotes and conflicting metadata cannot impersonate one provider identity.
+            persisted["evidence"] = [["text": "Google Place ID: fabricated"]]
+            let noMetadata = try JSONSerialization.data(withJSONObject: ["created_candidates": [persisted]])
+            XCTAssertNil(Place.from(try XCTUnwrap(SupabaseService.decodeSourceSearchRecoveryResponse(noMetadata).createdCandidates.first)).googlePlaceId)
+            persisted["evidence"] = [["google_place_id": "a"], ["google_place_id": "b"]]
+            let conflict = try JSONSerialization.data(withJSONObject: ["created_candidates": [persisted]])
+            XCTAssertNil(Place.from(try XCTUnwrap(SupabaseService.decodeSourceSearchRecoveryResponse(conflict).createdCandidates.first)).googlePlaceId)
+        }
     }
 
     @MainActor

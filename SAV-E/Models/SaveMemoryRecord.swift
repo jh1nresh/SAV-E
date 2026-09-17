@@ -35,6 +35,7 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
     var status: PlaceStatus?
     var rating: Double?
     var createdAt: Date
+    var semanticSource: SemanticSourceIdentity?
     var googlePlaceId: String?
     var sourceImageUrl: String?
     var businessPhotoUrls: [String]?
@@ -64,7 +65,8 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         googlePlaceId: String? = nil,
         sourceImageUrl: String? = nil,
         businessPhotoUrls: [String]? = nil,
-        mergedPlaceIDs: [UUID]? = nil
+        mergedPlaceIDs: [UUID]? = nil,
+        semanticSource: SemanticSourceIdentity? = nil
     ) {
         self.id = id
         self.state = state
@@ -87,6 +89,7 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         self.status = status
         self.rating = rating
         self.createdAt = createdAt
+        self.semanticSource = semanticSource
         self.googlePlaceId = googlePlaceId
         self.sourceImageUrl = GooglePlacesPhotoURL.persistableString(sourceImageUrl)
         self.businessPhotoUrls = GooglePlacesPhotoURL.persistableStrings(businessPhotoUrls)
@@ -120,6 +123,7 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         case status
         case rating
         case createdAt
+        case semanticSource
         case googlePlaceId
         case sourceImageUrl
         case businessPhotoUrls
@@ -150,6 +154,7 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         status = try container.decodeIfPresent(PlaceStatus.self, forKey: .status)
         rating = try container.decodeIfPresent(Double.self, forKey: .rating)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
+        semanticSource = try container.decodeIfPresent(SemanticSourceIdentity.self, forKey: .semanticSource)
         googlePlaceId = try container.decodeIfPresent(String.self, forKey: .googlePlaceId)
         sourceImageUrl = GooglePlacesPhotoURL.persistableString(
             try container.decodeIfPresent(String.self, forKey: .sourceImageUrl)
