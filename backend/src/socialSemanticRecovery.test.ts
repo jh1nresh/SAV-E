@@ -60,9 +60,14 @@ test("full embedded caption wins over teaser with paragraph boundaries intact", 
   assert.equal(sourceMetadataFromHTML(`<meta property="og:description" content="teaser"><script>{"shortcode":"fixture","caption":{"text":${JSON.stringify(full)}}}</script>`, input.sourceUrl).description, full);
 });
 
-test("oversized social documents fail instead of analyzing a silently clipped caption", async () => {
-  await assert.rejects(defaultFetchMetadataHTML("https://www.instagram.com/p/oversize-semantic/", 1000,
-    async () => new Response('<head><meta property="og:description" content="teaser"></head>' + "x".repeat(2000))), /Response too large/);
+test("oversized social documents preserve only a complete bounded metadata head", async () => {
+  const head = '<head><meta property="og:description" content="Fixture Cafe&#10;1 Main Street"></head>';
+  const html = await defaultFetchMetadataHTML("https://www.instagram.com/p/oversize-semantic-head/", 1000,
+    async () => new Response(head + '<script>{"caption":"incomplete' + "x".repeat(2000), { headers: { "content-length": "5000" } }));
+  assert.equal(html, head, "partial body caption must never become evidence");
+  assert.equal(sourceMetadataFromHTML(html, input.sourceUrl).description, "Fixture Cafe\n1 Main Street");
+  await assert.rejects(defaultFetchMetadataHTML("https://www.instagram.com/p/oversize-semantic-no-head/", 1000,
+    async () => new Response('<head><meta property="og:description" content="' + "x".repeat(2000))), /Response too large/);
 });
 
 test("queued Threads sources use semantic recovery and cannot fall back to venue guesses", async () => {
@@ -214,4 +219,11 @@ test("source transport outage stays a source provider failure while captured tex
   });
   assert.equal(captured.semanticStatus, "ready"); assert.equal(captured.candidates.length, 1);
   assert.equal(captured.receipt.failureReason, undefined);
+  assert.deepEqual(captured.errors, [], "nonfatal metadata outage cannot block successful successor persistence");
+  const emptyAnalysis = await runSourceSearchRecovery(input, noPublicSearch, async () => [], {
+    sourceDocumentResolver: resolver, includeMediaEvidence: false,
+    semanticAnalyzer: async () => ({ status: "no_place_evidence", venues: [] }),
+  });
+  assert.equal(emptyAnalysis.semanticStatus, "no_place_evidence");
+  assert.deepEqual(emptyAnalysis.errors, [], "completed empty analysis also clears its own pending marker");
 });

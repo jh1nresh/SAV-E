@@ -26,6 +26,7 @@ syncBuiltinESMExports();
 globalThis.fetch = async (input, init) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
   if (url.hostname === 'www.instagram.com' && url.pathname === '/reel/memory-fixture/') return new Response('<meta property="og:title" content="fixture on Instagram: &quot;店名「Fixture Cafe」 📍台北市大安區安和路一段100號&quot;">');
+  if (url.hostname === 'www.instagram.com' && url.pathname === '/reel/metadata-outage/') return new Response('Synthetic metadata outage', { status: 503 });
   if (url.hostname === 'www.instagram.com' && url.pathname === '/reel/blocked-semantic/') return new Response('<title>Log in</title>Log in to continue');
   if (url.hostname === 'www.instagram.com' && url.pathname === '/reel/empty-semantic/') return new Response('<meta property="og:description" content="A quiet walk">');
   const google = url.hostname === 'maps.googleapis.com' && url.pathname === '/maps/api/place/textsearch/json';
@@ -382,6 +383,20 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       const row = (await pool.query("select * from place_candidates where id=$1", [clue.body.id])).rows[0];
       assert.deepEqual(row.missing_info, ["Analysis pending"]); assert.equal(row.status, "source_only");
       assert.equal((await calls()).filter(call => call.provider === "gemini").length, before);
+    });
+
+    await t.test("captured caption recovery supersedes pending clues despite a metadata outage", async () => {
+      const id = await start(owner);
+      const captured = await api("/v0/memory/captures", { source_url: "https://www.instagram.com/reel/metadata-outage/",
+        raw_text: "Fixture Cafe\n台北市大安區安和路一段100號" }, owner);
+      const clue = await api("/v0/memory/candidates", { capture_id: captured.body.id, name: "Source clue", status: "source_only", missing_info: ["Analysis pending"] }, owner);
+      const recovered = await api(`/v0/memory/captures/${captured.body.id}/search-recovery`, { explicit_retry: true, include_media_evidence: false }, owner, { "x-save-analysis-id": id });
+      assert.equal(recovered.status, 200, JSON.stringify(recovered.body));
+      assert.equal(recovered.body.created_candidates.length, 1);
+      assert.deepEqual(recovered.body.errors, []);
+      assert.deepEqual(recovered.body.superseded_candidate_ids, [clue.body.id]);
+      const reload = await api(`/v0/memory/candidates?capture_id=${captured.body.id}`, undefined, owner);
+      assert.equal(reload.body.find((row: any) => row.id === clue.body.id).superseded_by_candidate_id, recovered.body.created_candidates[0].id);
     });
 
     await t.test("explicit source retry reuses capture time and persists supersession without changing user truth or receipts", async () => {

@@ -192,6 +192,7 @@ export async function runSourceSearchRecovery(
   const errors: string[] = [];
   const document = await fetchSourceDocument(input.sourceUrl, fetchText, errors,
     options.sourceDocumentResolver, undefined);
+  const sourceFetchErrorCount = errors.length;
   const metadata = document?.metadata;
   // Legacy persisted resolutions have no caption-to-post provenance. Fetch the
   // requested post again rather than trusting an older unscoped JSON caption.
@@ -241,6 +242,9 @@ export async function runSourceSearchRecovery(
     errors.push("Source content unavailable; analysis remains pending");
   }
   if (result.status === "analysis_pending" && !sourceFailure) errors.push("Semantic analysis unavailable; source preserved for retry");
+  // A complete grounded result from captured text does not depend on metadata.
+  // Provider usage retains the failed fetch, but it must not block successor persistence.
+  if (result.status !== "analysis_pending") errors.splice(0, sourceFetchErrorCount);
   const candidates = semanticRecoveryCandidates(result, url.href);
   return {
     queries: [], searchResults: [], candidates, mediaEvidence, semanticStatus: result.status,
@@ -1484,9 +1488,7 @@ export async function resolveSourceDocument(
           return { redirect };
         }
         if (!response.ok && ![401, 403, 404, 410].includes(response.status)) throw new Error(`HTTP ${response.status}`);
-        const html = isPlacePlatformURL(currentURL)
-          ? await boundedResponseText(response, maxBytes)
-          : await boundedHeadResponseText(response, maxBytes);
+        const html = await boundedHeadResponseText(response, maxBytes, isPlacePlatformURL(currentURL));
         const canonicalURL = canonicalSourceURL(html, currentURL) ?? recoveredOriginalURL(currentURL) ?? currentURL;
         const resolvedURL = canonicalURL.toString();
         const metadata = sourceMetadataFromHTML(html, resolvedURL);
@@ -2190,7 +2192,7 @@ async function boundedResponseText(response: Response, maxBytes: number): Promis
   return new TextDecoder().decode(data);
 }
 
-async function boundedHeadResponseText(response: Response, maxBytes: number): Promise<string> {
+async function boundedHeadResponseText(response: Response, maxBytes: number, scanFullBody = false): Promise<string> {
   if (!response.body) return "";
 
   const reader = response.body.getReader();
@@ -2212,11 +2214,11 @@ async function boundedHeadResponseText(response: Response, maxBytes: number): Pr
       if (headEnd?.index !== undefined) {
         const headLength = headEnd.index + headEnd[0].length;
         const head = text.slice(0, headLength);
-        if (/<title\b|<meta\b[^>]*(?:description|og:|twitter:)/i.test(head)) {
+        if ((!scanFullBody || exceedsLimit) && /<title\b|<meta\b[^>]*(?:description|og:|twitter:)/i.test(head)) {
           await reader.cancel();
           return head;
         }
-        if (text.length >= headLength + 8_192) {
+        if (!scanFullBody && text.length >= headLength + 8_192) {
           await reader.cancel();
           return text.slice(0, headLength + 8_192);
         }
