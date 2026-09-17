@@ -1673,7 +1673,7 @@ final class SocialLinkReviewCandidateService {
                     ? String(decoding: data.prefix(300_000), as: UTF8.self)
                     : ""
                 let rawTitle = metadataValue(in: html, keys: ["og:title", "twitter:title", "title"])
-                let genericTitle = #"(?i)^(?:美团|美團|美团外卖|美團外賣|淘宝|淘寶|淘宝闪购|淘寶閃購|饿了么|餓了麼|小红书|小紅書|抖音|大众点评|大眾點評|Ele\.me|Instagram|TikTok)$"#
+                let genericTitle = #"(?i)^(?:美团|美團|美团外卖|美團外賣|淘宝|淘寶|淘宝闪购|淘寶閃購|饿了么|餓了麼|小红书|小紅書|抖音|大众点评|大眾點評|Ele\.me|Instagram|TikTok|Threads)$"#
                 let title = rawTitle?.trimmingCharacters(in: .whitespacesAndNewlines).range(of: genericTitle, options: .regularExpression) == nil ? rawTitle : nil
                 let description = metadataValue(in: html, keys: ["og:description", "twitter:description", "description"])
                 let keywords = metadataValue(in: html, keys: ["keywords"])

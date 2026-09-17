@@ -273,7 +273,7 @@ test("empty caption analysis with failed media recovery remains actionable pendi
 });
 
 test("generic platform shells are not caption evidence; real source text still works", async () => {
-  for (const title of ["Instagram", "TikTok", "小紅書", "\n Instagram \n"]) {
+  for (const title of ["Instagram", "TikTok", "Threads", "小紅書", "\n Instagram \n"]) {
     let calls = 0;
     const options = { semanticAnalyzer: async (value: { caption: string }) => {
       calls++; assert.equal(value.caption, "A quiet walk");

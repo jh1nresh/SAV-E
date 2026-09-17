@@ -1859,7 +1859,7 @@ function isBlockedLoginDocument(status: number, title: string | undefined, text:
   if (status === 401 || status === 403) return true;
   const loginSignal = /(请先|請先)?(?:登录|登入)|\b(?:log\s*in|sign\s*in|login required)\b|安全验(?:证|證)|安全驗證|访问受限|訪問受限/i;
   const openAppSignal = /(?:打开|打開).{0,16}(?:App|应用|應用)|\bopen (?:this )?(?:in|with) (?:the )?app\b/i;
-  const genericTitle = /^(?:美团|美團|美团外卖|美團外賣|淘宝|淘寶|淘宝闪购|淘寶閃購|饿了么|餓了麼|小红书|小紅書|抖音|大众点评|大眾點評|Ele\.me|Instagram|TikTok)$/i;
+  const genericTitle = /^(?:美团|美團|美团外卖|美團外賣|淘宝|淘寶|淘宝闪购|淘寶閃購|饿了么|餓了麼|小红书|小紅書|抖音|大众点评|大眾點評|Ele\.me|Instagram|TikTok|Threads)$/i;
   return loginSignal.test(title ?? "") ||
     (!hasUsableSourceTitle(title) && loginSignal.test(text)) ||
     (genericTitle.test(title ?? "") && openAppSignal.test(text));
@@ -1867,7 +1867,7 @@ function isBlockedLoginDocument(status: number, title: string | undefined, text:
 
 function hasUsableSourceTitle(value: string | undefined): boolean {
   if (!value || value.length < 2) return false;
-  return !/^(?:登录|登入|log\s*in|sign\s*in|美团|美團|美团外卖|美團外賣|淘宝|淘寶|淘宝闪购|淘寶閃購|饿了么|餓了麼|小红书|小紅書|抖音|大众点评|大眾點評|Ele\.me|Instagram|TikTok)$/i.test(value);
+  return !/^(?:登录|登入|log\s*in|sign\s*in|美团|美團|美团外卖|美團外賣|淘宝|淘寶|淘宝闪购|淘寶閃購|饿了么|餓了麼|小红书|小紅書|抖音|大众点评|大眾點評|Ele\.me|Instagram|TikTok|Threads)$/i.test(value);
 }
 
 function hasUsableSourceCaption(value: string | undefined): boolean {

@@ -398,7 +398,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         let analyzer = EmptySemanticAnalyzer()
         let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: analyzer, metadataSession: session())
         let url = try XCTUnwrap(URL(string: "https://www.instagram.com/p/native-unavailable/"))
-        for (status, html) in [(200, "<meta property='og:title' content='Log in • Instagram'>"), (200, "<title>Instagram</title>"), (200, "<meta property='og:title' content='TikTok'>"), (503, "<meta property='og:title' content='Unavailable'>"), (200, "")] {
+        for (status, html) in [(200, "<meta property='og:title' content='Log in • Instagram'>"), (200, "<title>Instagram</title>"), (200, "<title>Threads</title>"), (200, "<meta property='og:title' content='TikTok'>"), (503, "<meta property='og:title' content='Unavailable'>"), (200, "")] {
             AnalysisRequestURLProtocol.handler = { _ in (status, html) }
             let candidates = try await service.reviewCandidates(from: url)
             XCTAssertEqual(candidates.first?.reviewState, "analysis_pending")

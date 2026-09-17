@@ -1234,6 +1234,21 @@ struct ShareExtensionView: View {
             return
         }
 
+        if let sourceURL = URL(string: resolvedShareURLString),
+           isSocialURL(sourceURL) {
+            // The extension has no authenticated backend session. Queue the
+            // full source for the same server-owned analysis used by the app;
+            // never label a regex guess or a direct client model call as success.
+            let caption = SocialShareTextNormalizer.normalize([sharedTitle, sharedText, resolvedShareURLString].filter { !$0.isEmpty }.joined(separator: "\n")).captionEvidence
+            reviewCandidates = [PendingReviewCandidate(candidateName: "Source clue", address: "", category: "other",
+                sourceURL: resolvedShareURLString, sourceText: caption, evidence: ["Source preserved; semantic analysis pending"],
+                confidence: 0, missingInfo: ["Analysis pending", "Exact place", "User confirmation"],
+                savedAt: Date(), isSourceOnly: true, reviewState: "analysis_pending")]
+            selectedCategory = "other"
+            isParsing = false
+            return
+        }
+
         let metadata = await shareMetadata(from: resolvedShareURLString)
         let parseContent = metadata.resolvedURL.flatMap { $0.isEmpty ? nil : $0 } ?? content
 
@@ -1289,21 +1304,6 @@ struct ShareExtensionView: View {
         if let mapCandidate = deterministicMapReviewCandidate(from: parseContent, title: sharedTitle, text: sharedText) {
             reviewCandidates = [mapCandidate]
             selectedCategory = mapCandidate.category
-            isParsing = false
-            return
-        }
-
-        if let sourceURL = URL(string: parseContent),
-           isSocialURL(sourceURL) {
-            // The extension has no authenticated backend session. Queue the
-            // full source for the same server-owned analysis used by the app;
-            // never label a regex guess or a direct client model call as success.
-            let caption = publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText)
-            reviewCandidates = [PendingReviewCandidate(candidateName: "Source clue", address: "", category: "other",
-                sourceURL: parseContent, sourceText: caption, evidence: ["Source preserved; semantic analysis pending"],
-                confidence: 0, missingInfo: ["Analysis pending", "Exact place", "User confirmation"],
-                savedAt: Date(), isSourceOnly: true, reviewState: "analysis_pending")]
-            selectedCategory = "other"
             isParsing = false
             return
         }
