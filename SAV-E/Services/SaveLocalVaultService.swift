@@ -155,8 +155,9 @@ final class SaveLocalVaultService: Sendable {
             sourceHandle: candidate.sourceHandle,
             latitude: candidate.latitude,
             longitude: candidate.longitude,
-            category: PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
-            createdAt: candidate.createdAt
+            category: candidate.category ?? PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
+            createdAt: candidate.createdAt,
+            googlePlaceId: candidate.googlePlaceId
         )
         return try upsertReviewRecord(record, matchSourceIdentity: false)
     }

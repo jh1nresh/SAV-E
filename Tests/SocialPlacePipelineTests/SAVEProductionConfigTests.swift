@@ -562,6 +562,14 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             let confirmed = Place.from(reloaded)
             XCTAssertEqual(confirmed.googlePlaceId, "verified-\(name)")
             XCTAssertEqual(confirmed.category, category)
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let vaultURL = directory.appendingPathComponent("vault.json")
+            _ = try SaveLocalVaultService(overrideVaultURL: vaultURL).saveReviewCandidate(reloaded)
+            let diskCandidate = try XCTUnwrap(SaveLocalVaultService(overrideVaultURL: vaultURL).reviewCandidates().first)
+            let fromDisk = Place.from(diskCandidate)
+            XCTAssertEqual(fromDisk.googlePlaceId, confirmed.googlePlaceId)
+            XCTAssertEqual(fromDisk.category, category)
             var otherBranch = Place.from(reloaded)
             otherBranch.googlePlaceId = "different-branch"
             XCTAssertFalse(confirmed.matches(otherBranch))
