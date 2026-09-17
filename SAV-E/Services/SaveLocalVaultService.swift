@@ -98,7 +98,7 @@ final class SaveLocalVaultService: Sendable {
             placeName: candidate.isSourceOnly ? nil : candidate.candidateName,
             address: candidate.address.isEmpty ? nil : candidate.address,
             evidence: candidate.evidence,
-            evidenceDiagnostic: candidate.evidenceDiagnostic,
+            evidenceDiagnostic: preservingMissingInfo(candidate.missingInfo, diagnostic: candidate.evidenceDiagnostic),
             placeHighlights: candidate.placeHighlights,
             recommendedItems: candidate.recommendedItems,
             vibeTags: candidate.vibeTags,
@@ -146,6 +146,7 @@ final class SaveLocalVaultService: Sendable {
             placeName: candidate.name,
             address: candidate.address.isEmpty ? nil : candidate.address,
             evidence: candidate.evidence,
+            evidenceDiagnostic: preservingMissingInfo(candidate.missingInfo, diagnostic: nil),
             placeHighlights: candidate.placeHighlights,
             recommendedItems: candidate.recommendedItems,
             vibeTags: candidate.vibeTags,
@@ -157,6 +158,13 @@ final class SaveLocalVaultService: Sendable {
             createdAt: candidate.createdAt
         )
         return try upsertReviewRecord(record, matchSourceIdentity: false)
+    }
+
+    private func preservingMissingInfo(_ fields: [String], diagnostic: SocialPlaceEvidenceDiagnostic?) -> SocialPlaceEvidenceDiagnostic? {
+        guard !fields.isEmpty else { return diagnostic }
+        var result = diagnostic ?? SocialPlaceEvidenceDiagnostic(found: [], attempts: [], missingFields: [], nextBestClue: "")
+        for field in fields where !result.missingFields.contains(field) { result.missingFields.append(field) }
+        return result
     }
 
     private func upsertReviewRecord(_ incoming: SaveMemoryRecord, matchSourceIdentity: Bool) throws -> SaveMemoryRecord {

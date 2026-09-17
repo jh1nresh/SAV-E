@@ -371,6 +371,22 @@ private final class TransportFailureURLProtocol: URLProtocol {
 
 @MainActor
 final class SAVEAnalysisTransportTests: XCTestCase {
+    func testPendingAnalysisSurvivesLocalVaultRoundTrip() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        let pending = SocialLinkReviewCandidateService().pendingSemanticSource(caption: "Unfinished source", sourceURL: "https://instagram.com/p/pending/")
+        _ = try vault.saveReviewCandidate(pending)
+        let reloaded = SaveLocalVaultService(overrideVaultURL: url)
+        let clue = try XCTUnwrap(reloaded.reviewCandidates().first)
+        XCTAssertTrue(clue.isAnalysisPending)
+        XCTAssertFalse(clue.hasSavableLocation)
+        // Remote candidates mirrored to the vault must preserve the same state.
+        _ = try reloaded.saveReviewCandidate(clue)
+        XCTAssertTrue(try XCTUnwrap(SaveLocalVaultService(overrideVaultURL: url).reviewCandidates().first).isAnalysisPending)
+    }
+
     func testImportSummarySeparatesPendingSourcesFromGroundedCandidates() {
         let source = PlaceReviewCandidate(id: UUID(), captureId: UUID(), name: "Source clue", address: "", city: nil,
             latitude: nil, longitude: nil, evidence: [], confidence: nil, missingInfo: ["Analysis pending", "Exact place"], status: "source_only", createdAt: Date())
