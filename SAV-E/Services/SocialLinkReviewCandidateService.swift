@@ -386,7 +386,7 @@ final class SocialLinkReviewCandidateService {
                     && match.latitude.isFinite && match.longitude.isFinite
                     && abs(match.latitude) <= 90 && abs(match.longitude) <= 180
             }
-            if (venue.mapStatus == "matched" && matches.count == 1) || (venue.mapStatus == "ambiguous" && matches.count > 1) {
+            if semanticSource != nil && ((venue.mapStatus == "matched" && matches.count == 1) || (venue.mapStatus == "ambiguous" && matches.count > 1)) {
                 return matches.map { match in
                     PendingReviewCandidate(candidateName: match.name, address: match.address,
                         category: (PlaceCategory.from(googleTypes: match.types ?? []) ?? PlaceCategory.inferred(from: "\(match.name) \(match.address)")).rawValue,

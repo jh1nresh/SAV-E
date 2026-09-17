@@ -4518,6 +4518,21 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidates.allSatisfy { $0.missingInfo.contains("Choose the correct map candidate") })
     }
     @MainActor
+    func testNameOnlyAmbiguousMapsRemainsUnresolved() async throws {
+        let maps = ["a", "b"].map { SocialSemanticMapPlace(id: $0, name: "初泰Pikul", address: "地址\($0)", latitude: 25, longitude: 121) }
+        var result = pikulResult(matches: maps, mapStatus: "ambiguous")
+        result.venues[0].address = nil
+        let analyzer = SemanticAnalyzerStub { _, _ in result }
+        let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: analyzer)
+        let candidates = await service.reviewCandidates(fromEvidenceText: pikulCaption, sourceURL: "https://instagram.com/p/semantic/", thumbnailText: { [] })
+        XCTAssertEqual(candidates.count, 1)
+        let clue = try XCTUnwrap(candidates.first)
+        XCTAssertFalse(clue.hasReliableCoordinates); XCTAssertNil(clue.googlePlaceId)
+        XCTAssertEqual(clue.address, ""); XCTAssertEqual(clue.reviewState, "unresolved_place_candidate")
+        XCTAssertEqual(clue.evidence.filter { $0.hasPrefix("Conflicting map alternative:") }.count, 2)
+    }
+
+    @MainActor
     func testSemanticProviderIdentityAndCategorySurviveLocalVaultReload() async throws {
         for (name, type, category) in [("Walmart", "department_store", PlaceCategory.shopping), ("Ritz-Carlton", "lodging", .stay)] {
             let caption = "\(name)\n1 Main Street"

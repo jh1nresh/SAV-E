@@ -2199,7 +2199,7 @@ private struct PlaceCandidateRow: Codable {
            Set(identities.compactMap(\.google_place_id)).count == 1,
            let identity = identities.first {
             candidate.googlePlaceId = identity.google_place_id
-            candidate.category = PlaceCategory.from(googleTypes: identity.google_types ?? [])
+            candidate.category = PlaceCategory.from(googleTypes: Array(Set(identities.flatMap { $0.google_types ?? [] })).sorted())
         }
         let originals = Set((evidence ?? []).compactMap(\.semantic_source))
         if originals.count == 1, Set(identities.compactMap(\.google_place_id)).count <= 1 {

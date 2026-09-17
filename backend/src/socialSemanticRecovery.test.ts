@@ -247,3 +247,27 @@ test("optional OCR outage does not block a grounded caption successor", async ()
   assert.equal(result.candidates[0].latitude, undefined);
   assert.deepEqual(result.errors, [], "successful caption result may supersede its pending source");
 });
+
+ test("name-only provider ambiguity remains an unresolved source identity", () => {
+  const result = structuredClone(extracted); result.venues[0].address = null;
+  result.venues[0].mapStatus = "ambiguous";
+  result.venues[0].matches = ["a", "b"].map(id => ({ id, name: "初泰Pikul", address: `${id} Road`, latitude: 25, longitude: 121 }));
+  const candidates = semanticRecoveryCandidates(result, input.sourceUrl);
+  assert.equal(candidates.length, 1); assert.equal(candidates[0].address, "");
+  assert.equal(candidates[0].latitude, undefined); assert.equal(candidates[0].placeId, undefined);
+  assert.equal(candidates[0].evidence.filter(line => line.startsWith("Conflicting map alternative:")).length, 2);
+});
+test("empty caption analysis with failed media recovery remains actionable pending", async () => {
+  for (const failedStage of ["ocr", "video"]) {
+    const result = await runSourceSearchRecovery(input,
+      async () => '<meta property="og:image" content="https://example.com/cover.jpg">',
+      async () => { if (failedStage === "ocr") throw new Error("Synthetic OCR failure"); return []; }, {
+        semanticAnalyzer: async () => ({ status: "no_place_evidence", venues: [] }),
+        videoVenueRecovery: async () => { if (failedStage === "video") throw new Error("Synthetic video failure"); return []; },
+      });
+    assert.equal(result.semanticStatus, "analysis_pending");
+    assert.deepEqual(result.receipt.failureReason, { kind: "provider_failure", stage: "media" });
+    assert.ok(result.receipt.missing.includes("Analysis pending"));
+    assert.match(result.receipt.nextBestClue, /pending/); assert.deepEqual(result.candidates, []);
+  }
+});

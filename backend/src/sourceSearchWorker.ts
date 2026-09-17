@@ -250,6 +250,10 @@ export async function runSourceSearchRecovery(
   // Provider usage retains those failures without blocking successor persistence.
   if (result.status === "ready" && result.venues.length) errors.splice(0);
   else if (result.status !== "analysis_pending") errors.splice(0, sourceFetchErrorCount);
+  if (result.status === "no_place_evidence" && errors.length) {
+    result = { status: "analysis_pending", venues: [] };
+    sourceFailure = { kind: "provider_failure", stage: "media" };
+  }
   const candidates = semanticRecoveryCandidates(result, url.href);
   return {
     queries: [], searchResults: [], candidates, mediaEvidence, semanticStatus: result.status,
@@ -271,7 +275,7 @@ export function semanticRecoveryCandidates(result: SemanticAnalysisResult, sourc
     const semanticSource = venue.address?.value.trim() ? { name: venue.name.value, branch: venue.branch?.value ?? null, address: venue.address.value } : undefined;
     const quotes = [`Source URL: ${sourceURL}`, ...[venue.name, venue.branch, venue.address, venue.transport]
       .filter(field => field != null).map(field => `Source ${field.source} quote: ${field.quote}`)];
-    const options = venue.mapStatus === "matched" || venue.mapStatus === "ambiguous" ? venue.matches : [];
+    const options = semanticSource && (venue.mapStatus === "matched" || venue.mapStatus === "ambiguous") ? venue.matches : [];
     if (options.length) return options.map(match => ({
       name: match.name, address: match.address, semanticSource,
       latitude: match.latitude, longitude: match.longitude, placeId: match.id,

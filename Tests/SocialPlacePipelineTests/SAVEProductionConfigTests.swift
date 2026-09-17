@@ -519,14 +519,14 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         catch is CancellationError {} catch { XCTFail("Unexpected: \(error)") }
     }
 
-    func testDirectImportTriesServerForUnreadableSourceButNotModelOutage() async throws {
+    func testDirectAndQueuedImportsRecoverOnlyUnanalyzedSources() async throws {
         final class PendingAnalyzer: SocialSemanticAnalyzing {
             func analyze(caption: String, ocrText: String?) async -> SocialSemanticResult { .pending }
         }
         let auth = PrivyAuthService.shared, original = PrivyAuthService.shared.authState
         defer { auth.authState = original }
         auth.authState = .authenticated(userId: "source-recovery-fixture")
-        for (modelOutage, existingPending) in [(false, false), (true, false), (false, true), (true, true)] {
+        for (modelOutage, existingPending, queued) in [(false, false, false), (true, false, false), (false, true, false), (true, true, false), (true, false, true), (true, true, true)] {
             AnalysisRequestURLProtocol.reset()
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
             defer { try? FileManager.default.removeItem(at: directory) }
@@ -556,13 +556,23 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             }
             let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
             let social = SocialLinkReviewCandidateService(socialSemanticAnalyzer: PendingAnalyzer(), metadataSession: session())
-            let map = MapViewModel(supabaseService: service, socialLinkReviewCandidateService: social,
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let queue = PendingPlaceImportService(overrideContainerURL: directory)
+            let map = MapViewModel(supabaseService: service, pendingImportService: queue, socialLinkReviewCandidateService: social,
                 saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json")))
             let text = (modelOutage ? "Original readable caption\n" : "") + "https://www.instagram.com/p/direct-recovery/"
-            let ids = try await map.importSharedTextAsReviewCandidates(text)
-            XCTAssertEqual(ids, [candidate])
+            if queued {
+                queue.restorePendingReviewCandidates([PendingReviewCandidate(candidateName: "Source clue", address: "", category: "other",
+                    sourceURL: "https://www.instagram.com/p/direct-recovery/", sourceText: text, evidence: [], confidence: 0,
+                    missingInfo: ["Analysis pending"], savedAt: Date(), isSourceOnly: true, reviewState: "analysis_pending")])
+                await map.loadPlaces(force: true)
+                XCTAssertTrue(queue.consumePendingReviewCandidates().isEmpty)
+            } else {
+                let ids = try await map.importSharedTextAsReviewCandidates(text)
+                XCTAssertEqual(ids, [candidate])
+            }
             let recoveries = AnalysisRequestURLProtocol.requests.filter { $0.url?.path.hasSuffix("/search-recovery") == true }
-            XCTAssertEqual(recoveries.count, modelOutage ? 0 : 1)
+            XCTAssertEqual(recoveries.count, queued || !modelOutage ? 1 : 0)
             if existingPending {
                 XCTAssertFalse(AnalysisRequestURLProtocol.requests.contains { $0.url?.path.hasSuffix("/work-orders") == true }, "repeat import retains its workflow")
             }
@@ -658,6 +668,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             XCTAssertEqual(providerEvidence["google_place_id"] as? String, "verified-\(name)")
             XCTAssertEqual(providerEvidence["google_types"] as? [String], [type])
             persisted["id"] = id.uuidString
+            persisted["evidence"] = [["google_place_id": "verified-\(name)", "google_types": []]] + evidence
             let response = try JSONSerialization.data(withJSONObject: ["created_candidates": [persisted]])
             let reloaded = try XCTUnwrap(SupabaseService.decodeSourceSearchRecoveryResponse(response).createdCandidates.first)
             XCTAssertEqual(reloaded.semanticSource, pending.semanticSource)

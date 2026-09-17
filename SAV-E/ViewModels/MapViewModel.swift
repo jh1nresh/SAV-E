@@ -1024,7 +1024,7 @@ final class MapViewModel: ObservableObject {
                     do {
                         let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
                         await SAVEAnalysisScope.current?.addCapture(captureId)
-                        if try await reuseImportedCandidate(refinedCandidate, captureId: captureId, userId: userId) != nil {
+                        if try await reuseImportedCandidate(refinedCandidate, captureId: captureId, userId: userId, queuedForAnalysis: true) != nil {
                             return
                         }
                         let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(
@@ -1241,7 +1241,7 @@ final class MapViewModel: ObservableObject {
 
     /// Repeated imports reuse the original workflow. A candidate cannot be
     /// reassigned to a fresh run without invalidating its confirmation receipt.
-    func reuseImportedCandidate(_ pending: PendingReviewCandidate, captureId: UUID, userId: String) async throws -> [UUID]? {
+    func reuseImportedCandidate(_ pending: PendingReviewCandidate, captureId: UUID, userId: String, queuedForAnalysis: Bool = false) async throws -> [UUID]? {
         let candidates = try await supabaseService.fetchReviewCandidates(captureId: captureId)
         let existing = candidates.sorted { $0.createdAt < $1.createdAt }.first { $0.matchesImport(pending) }
         guard let existing else { return nil }
@@ -1257,7 +1257,7 @@ final class MapViewModel: ObservableObject {
             preserved, captureId: captureId, userId: userId, workflowRunId: existing.workflowRunId
         )
         await refreshSavedCollectionDates(userId: userId)
-        if pending.reviewState == "analysis_pending", pending.shouldRecoverSourceOnServer,
+        if pending.reviewState == "analysis_pending", (queuedForAnalysis || pending.shouldRecoverSourceOnServer),
            existing.isAnalysisPending, let workflowRunId = existing.workflowRunId {
             let recovered = await recoverImportSource(captureId: captureId, candidateId: reusedID, workflowRunId: workflowRunId)
             return [reusedID] + recovered

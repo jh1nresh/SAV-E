@@ -106,6 +106,11 @@ test("real database preserves workflow ownership chronology and ambiguous source
     assert.deepEqual(capturedSourceTexts(reusedSource!), ["Fresh source"]);
     assert.equal(reusedSource!.raw_text, "Original text\n\nFresh source");
     await client.query("insert into place_candidates(id,capture_id,workflow_run_id,name,status,missing_info) values($1,$3,$4,'Saved link','source_only',array['Analysis pending','Exact place needed']),($2,$3,$5,'Other run','source_only',array['Analysis pending'])", [emptyCandidate, independent, emptyCapture, run, otherRun]);
+    const emptyRetry = { capture_id: emptyCapture, workflow_run_id: run, name: "Saved link", status: "source_only", missing_info: ["No place evidence in source", "Exact place", "User confirmation"] };
+    await prepareCandidate(client, { ...emptyRetry, missing_info: ["Analysis pending"] });
+    assert.ok((await client.query("select missing_info from place_candidates where id=$1", [emptyCandidate])).rows[0].missing_info.includes("Analysis pending"));
+    const completedRetry = (await prepareCandidate(client, emptyRetry)).existing!;
+    assert.equal(completedRetry.id, emptyCandidate); assert.deepEqual(completedRetry.missing_info, ["Exact place needed"]);
     await completeEmptySourceAnalysis(client, emptyCapture, run);
     const completedSource = (await client.query("select * from place_candidates where id=$1", [emptyCandidate])).rows[0];
     assert.deepEqual(completedSource.missing_info, ["Exact place needed"]); assert.equal(completedSource.status, "source_only");

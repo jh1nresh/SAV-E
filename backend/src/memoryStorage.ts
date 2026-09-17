@@ -159,6 +159,13 @@ export async function prepareCandidate(client: PoolClient, body: Row): Promise<{
       await client.query("update place_candidates set latitude=$2, longitude=$3, confidence=$4, missing_info=$5, name=$6, address=$7, status='review' where id=$1",
         [existing.id, body.latitude, body.longitude, body.confidence ?? existing.confidence, body.missing_info ?? existing.missing_info, body.name, body.address]);
     }
+    if (existing.status === "source_only" && body.status === "source_only"
+      && Array.isArray(body.missing_info) && body.missing_info.includes("No place evidence in source")
+      && !body.missing_info.some((item: unknown) => typeof item === "string" && item.toLowerCase() === "analysis pending")) {
+      // A completed native retry settles only the matched source row, never
+      // another pending clue or workflow attached to the same capture.
+      await client.query("update place_candidates set missing_info=array(select item from unnest(missing_info) item where lower(item) <> 'analysis pending') where id=$1", [existing.id]);
+    }
     const updated = await client.query("update place_candidates set evidence=$2::jsonb, created_at=coalesce($3::timestamptz,created_at), updated_at=now() where id=$1 returning *", [existing.id, JSON.stringify(mergedEvidence(existing.evidence, body.evidence)), createdAt ?? null]);
     if (["saved", "confirmed"].includes(existing.status) && existing.place_id && createdAt !== undefined) {
       // An already confirmed source can refine collection time without a new
