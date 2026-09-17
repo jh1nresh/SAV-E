@@ -333,7 +333,24 @@ struct PendingReviewCandidate: Codable {
     }
 }
 
+struct ReviewImportSummary {
+    let candidateCount: Int
+    let sourceCount: Int
+    let pendingCount: Int
+
+    init(candidateIDs: Set<UUID>, candidates: [PlaceReviewCandidate]) {
+        let imported = candidates.filter { candidateIDs.contains($0.id) }
+        candidateCount = imported.filter { $0.status != "source_only" }.count
+        sourceCount = imported.filter { $0.status == "source_only" }.count
+        pendingCount = imported.filter(\.isAnalysisPending).count
+    }
+}
+
 struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
+    var isAnalysisPending: Bool {
+        status == "source_only" && missingInfo.contains { $0.caseInsensitiveCompare("Analysis pending") == .orderedSame }
+    }
+
     // Transient display state; excluded from Codable/evidence/share payloads.
     var sourceFailureReason: SourceSearchFailureReason? = nil
     var supersededByCandidateID: UUID? = nil

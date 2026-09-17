@@ -371,6 +371,22 @@ private final class TransportFailureURLProtocol: URLProtocol {
 
 @MainActor
 final class SAVEAnalysisTransportTests: XCTestCase {
+    func testImportSummarySeparatesPendingSourcesFromGroundedCandidates() {
+        let source = PlaceReviewCandidate(id: UUID(), captureId: UUID(), name: "Source clue", address: "", city: nil,
+            latitude: nil, longitude: nil, evidence: [], confidence: nil, missingInfo: ["Analysis pending", "Exact place"], status: "source_only", createdAt: Date())
+        var candidate = source
+        candidate.id = UUID(); candidate.status = "review"; candidate.name = "Pikul"; candidate.missingInfo = ["User confirmation"]
+        let pending = ReviewImportSummary(candidateIDs: [source.id], candidates: [source, candidate])
+        XCTAssertEqual(pending.candidateCount, 0)
+        XCTAssertEqual(pending.sourceCount, 1)
+        XCTAssertEqual(pending.pendingCount, 1)
+        let mixed = ReviewImportSummary(candidateIDs: [source.id, candidate.id], candidates: [source, candidate])
+        XCTAssertEqual(mixed.candidateCount, 1)
+        XCTAssertEqual(mixed.pendingCount, 1)
+        var saved = source; saved.status = "confirmed"
+        XCTAssertFalse(saved.isAnalysisPending, "An old marker cannot relabel a confirmed place as pending")
+    }
+
 
     func testSemanticCaptionWireContractOmitsAbsentOCRAndPreservesFullText() async throws {
         let caption = "商業午餐\n📍初泰Pikul  信義象山門市\n臺北市信義區信義路五段122號"

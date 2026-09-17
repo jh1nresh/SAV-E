@@ -454,6 +454,9 @@ struct SaveLibraryView: View {
     }
 
     private func candidateDetail(_ candidate: PlaceReviewCandidate) -> String {
+        if candidate.isAnalysisPending {
+            return localized("Source saved; analysis pending", "來源已保存，分析待完成")
+        }
         if candidateKind(candidate) == .sourceClue {
             return localized("Missing exact place", "缺少精確地點")
         }
