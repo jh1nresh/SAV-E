@@ -56,6 +56,12 @@ jobs:
         if: steps.scope.outputs.run == 'true'
         run: scripts/test-package-google-places-secrets.sh
 
+      - name: Verify account preservation fixtures
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          scripts/check-account-export.sh
+          python3 -B -m unittest discover -s Tests/account_preservation -p 'test_*.py' -v
+
       - name: Cache SwiftPM packages
         if: steps.scope.outputs.run == 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -274,6 +280,7 @@ jobs:
             -string 'CI_BUILD_ONLY_NON_SECRET_VALUE' \
             "$release_plist"
           chmod 600 "$release_plist"
+          SAVE_EXPECTED_API_URL="https://wanderly-api-production.up.railway.app" \
           SAVE_RELEASE_SECRETS_PLIST="$release_plist" scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
             -scheme SAV-E \
