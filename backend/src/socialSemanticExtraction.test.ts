@@ -329,3 +329,21 @@ test("optional Google types survive matches while malformed type lists cannot le
   const absent = await analyzeSocialCaption({ caption }, deps());
   assert.equal(absent.venues[0].matches[0].types, undefined);
 });
+
+test("US ZIP within locality component preserves exact source address matching", async () => {
+  const source = "1600 Amphitheatre Pkwy, Mountain View, CA";
+  const f = (value: string) => ({ value, quote: value, source: "caption" });
+  const raw = { venues: [{ name: f("Google"), branch: null, address: f(source), transport: null }] };
+  for (const suffix of [" 94043, USA", " 94043-1234, United States"]) {
+    const result = await analyzeSocialCaption({ caption: `Google\n${source}` }, deps(raw, [place({ name: "Google", address: source + suffix })]));
+    assert.equal(result.venues[0].mapStatus, "matched");
+  }
+  for (const address of [source.replace("1600", "1601") + " 94043, USA", source.replace("CA", "WA") + " 94043, USA"]) {
+    const result = await analyzeSocialCaption({ caption: `Google\n${source}` }, deps(raw, [place({ name: "Google", address })]));
+    assert.equal(result.venues[0].mapStatus, "conflict");
+  }
+  const explicitZIP = source + " 94040";
+  const explicitRaw = { venues: [{ name: f("Google"), branch: null, address: f(explicitZIP), transport: null }] };
+  const conflict = await analyzeSocialCaption({ caption: `Google\n${explicitZIP}` }, deps(explicitRaw, [place({ name: "Google", address: source + " 94043, USA" })]));
+  assert.equal(conflict.venues[0].mapStatus, "conflict");
+});

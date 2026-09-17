@@ -109,9 +109,15 @@ function congruent(venue: SemanticVenue, place: SemanticMapPlace): boolean {
     // Compare only at component boundaries, never an arbitrary street substring.
     const components = place.address.normalize("NFKC").split(",");
     const agrees = components.some((_, index) => {
-      const actual = normalized(components.slice(0, index + 1).join(","));
-      return actual.endsWith(expected)
-        && !(/^\d/.test(expected) && /\d/.test(actual[actual.length - expected.length - 1] ?? ""));
+      const prefix = components.slice(0, index + 1).join(",");
+      // US providers put ZIP codes in the state component ("CA 94043").
+      // Strip only this bounded state+ZIP form, never unit or street numbers.
+      const withoutZIP = prefix.replace(/\b(AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\s+\d{5}(?:-\d{4})?\s*$/i, "$1");
+      return [prefix, withoutZIP].some(value => {
+        const actual = normalized(value);
+        return actual.endsWith(expected)
+          && !(/^\d/.test(expected) && /\d/.test(actual[actual.length - expected.length - 1] ?? ""));
+      });
     });
     if (!agrees) return false;
   }
