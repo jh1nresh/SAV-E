@@ -2355,6 +2355,36 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testLocalInstagramHandleListImportExcludesOlderClues() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("instagram-handle-list-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        _ = try vault.saveReviewCandidate(ReviewDemoSeed.reviewCandidates()[0])
+        let map = MapViewModel(
+            saveLocalVaultService: vault,
+            usesRemotePersistence: false
+        )
+        await map.loadPlaces(force: true)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.name == ReviewDemoSeed.harborOvenPizzaName })
+
+        let importedIDs = try await map.importSharedTextAsReviewCandidates("""
+        The coffee shops in Los Angeles County I always return to
+        @theboyandthebearco @stereoscopecoffee @musocoffeela
+        @elorea @archives.ofus @fasttimescoffee @est.today.cafe @moducafe
+        https://www.instagram.com/reel/DYsbskQyclc/
+        """)
+
+        XCTAssertEqual(importedIDs.count, 8)
+        let imported = map.reviewCandidates.filter { importedIDs.contains($0.id) }
+        XCTAssertEqual(imported.count, 8)
+        XCTAssertFalse(imported.contains { $0.name.localizedCaseInsensitiveContains("Harbor Oven") })
+        XCTAssertTrue(map.reviewCandidates.contains { $0.name == ReviewDemoSeed.harborOvenPizzaName })
+        XCTAssertTrue(imported.contains { $0.name == "Theboyandthebearco" })
+        XCTAssertTrue(imported.contains { $0.name == "Moducafe" })
+    }
+
+    @MainActor
     func testMapNonRouteActionsClearStaleTripRoute() {
         let map = MapViewModel()
         var route = [

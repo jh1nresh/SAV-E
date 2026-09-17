@@ -1118,11 +1118,7 @@ final class MapViewModel: ObservableObject {
 
         let candidates: [PendingReviewCandidate]
         if !usesRemotePersistence {
-            if normalizedShare.platform.includesCaptionInAnalysis {
-                candidates = [socialLinkReviewCandidateService.pendingSemanticSource(
-                    caption: normalizedShare.captionEvidence, sourceURL: sourceURL?.absoluteString ?? "")]
-            } else {
-                candidates = socialLinkReviewCandidateService
+            let extracted = socialLinkReviewCandidateService
                 .reviewCandidatesOrSourceOnly(
                     fromEvidenceText: normalizedShare.captionEvidence.isEmpty
                         ? analysisInput
@@ -1134,6 +1130,14 @@ final class MapViewModel: ObservableObject {
                     if sourceURL == nil { candidate.sourceURL = nil }
                     return candidate
                 }
+            // Local vaults still surface handle clues from this capture. Park a
+            // pending source only when the caption has no concrete place.
+            if normalizedShare.platform.includesCaptionInAnalysis,
+               extracted.allSatisfy(\.isSourceOnly) {
+                candidates = [socialLinkReviewCandidateService.pendingSemanticSource(
+                    caption: normalizedShare.captionEvidence, sourceURL: sourceURL?.absoluteString ?? "")]
+            } else {
+                candidates = extracted
             }
             let importedCandidates = try candidates.map { pendingCandidate in
                 let record = try saveLocalVaultService.saveReviewCandidate(pendingCandidate)
