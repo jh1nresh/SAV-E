@@ -398,7 +398,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         let analyzer = EmptySemanticAnalyzer()
         let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: analyzer, metadataSession: session())
         let url = try XCTUnwrap(URL(string: "https://www.instagram.com/p/native-unavailable/"))
-        for (status, html) in [(200, "<meta property='og:title' content='Log in • Instagram'>"), (503, "<meta property='og:title' content='Unavailable'>"), (200, "")] {
+        for (status, html) in [(200, "<meta property='og:title' content='Log in • Instagram'>"), (200, "<title>Instagram</title>"), (200, "<meta property='og:title' content='TikTok'>"), (503, "<meta property='og:title' content='Unavailable'>"), (200, "")] {
             AnalysisRequestURLProtocol.handler = { _ in (status, html) }
             let candidates = try await service.reviewCandidates(from: url)
             XCTAssertEqual(candidates.first?.reviewState, "analysis_pending")
@@ -409,6 +409,10 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         XCTAssertEqual(captured.first?.reviewState, "source_only")
         XCTAssertTrue(analyzer.captions.last?.contains("A quiet walk") == true)
         XCTAssertFalse(analyzer.captions.last?.contains("Log in") == true)
+        AnalysisRequestURLProtocol.handler = { _ in (200, "<meta property='og:title' content='Instagram'><meta property='og:description' content='A quiet walk'>") }
+        let described = try await service.reviewCandidates(from: url)
+        XCTAssertEqual(described.first?.reviewState, "source_only")
+        XCTAssertEqual(analyzer.captions.last, "A quiet walk")
     }
 
     func testImportSummarySeparatesPendingSourcesFromGroundedCandidates() {

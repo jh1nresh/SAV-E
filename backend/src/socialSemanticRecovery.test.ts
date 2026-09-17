@@ -271,3 +271,17 @@ test("empty caption analysis with failed media recovery remains actionable pendi
     assert.match(result.receipt.nextBestClue, /pending/); assert.deepEqual(result.candidates, []);
   }
 });
+
+test("generic platform shells are not caption evidence; real source text still works", async () => {
+  for (const title of ["Instagram", "TikTok", "小紅書"]) {
+    let calls = 0;
+    const options = { semanticAnalyzer: async (value: { caption: string }) => {
+      calls++; assert.equal(value.caption, "A quiet walk");
+      return { status: "no_place_evidence" as const, venues: [] };
+    }, videoVenueRecovery: async () => [] };
+    const shell = await runSourceSearchRecovery({ sourceUrl: input.sourceUrl }, async () => `<title>${title}</title>`, async () => [], options);
+    assert.equal(shell.semanticStatus, "analysis_pending"); assert.equal(calls, 0);
+    const described = await runSourceSearchRecovery({ sourceUrl: input.sourceUrl }, async () => `<title>${title}</title><meta property="og:description" content="A quiet walk">`, async () => [], options);
+    assert.equal(described.semanticStatus, "no_place_evidence"); assert.equal(calls, 1);
+  }
+});
