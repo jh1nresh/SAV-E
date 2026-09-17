@@ -246,9 +246,10 @@ export async function runSourceSearchRecovery(
     errors.push("Source exceeds analysis length limit; source preserved");
   }
   if (result.status === "analysis_pending" && !sourceFailure) errors.push("Semantic analysis unavailable; source preserved for retry");
-  // A complete grounded result from captured text does not depend on metadata.
-  // Provider usage retains the failed fetch, but it must not block successor persistence.
-  if (result.status !== "analysis_pending") errors.splice(0, sourceFetchErrorCount);
+  // Grounded caption candidates survive failed optional source/media enrichment.
+  // Provider usage retains those failures without blocking successor persistence.
+  if (result.status === "ready" && result.venues.length) errors.splice(0);
+  else if (result.status !== "analysis_pending") errors.splice(0, sourceFetchErrorCount);
   const candidates = semanticRecoveryCandidates(result, url.href);
   return {
     queries: [], searchResults: [], candidates, mediaEvidence, semanticStatus: result.status,

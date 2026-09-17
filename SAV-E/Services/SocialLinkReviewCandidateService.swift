@@ -341,9 +341,11 @@ final class SocialLinkReviewCandidateService {
                 result = result.supplemented(by: supplemented)
             }
         }
-        if result.status == "no_place_evidence", (sourceReadFailed || !hasCaption),
+        if !Task.isCancelled, result.status == "no_place_evidence", (sourceReadFailed || !hasCaption),
            ocrLines.allSatisfy({ $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
-            result = .pending
+            var pending = pendingSemanticSource(caption: text, sourceURL: sourceURL)
+            pending.missingInfo.append("Source text unavailable")
+            return [pending]
         }
         return semanticCandidates(result, sourceURL: sourceURL, caption: text, ocrLines: ocrLines)
     }

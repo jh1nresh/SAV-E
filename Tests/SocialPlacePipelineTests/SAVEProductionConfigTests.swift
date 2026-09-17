@@ -519,6 +519,56 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         catch is CancellationError {} catch { XCTFail("Unexpected: \(error)") }
     }
 
+    func testDirectImportTriesServerForUnreadableSourceButNotModelOutage() async throws {
+        final class PendingAnalyzer: SocialSemanticAnalyzing {
+            func analyze(caption: String, ocrText: String?) async -> SocialSemanticResult { .pending }
+        }
+        let auth = PrivyAuthService.shared, original = PrivyAuthService.shared.authState
+        defer { auth.authState = original }
+        auth.authState = .authenticated(userId: "source-recovery-fixture")
+        for (modelOutage, existingPending) in [(false, false), (true, false), (false, true), (true, true)] {
+            AnalysisRequestURLProtocol.reset()
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let capture = UUID(), candidate = UUID(), run = UUID(), order = UUID()
+            let row = "{\"id\":\"\(candidate)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(run)\",\"name\":\"Source clue\",\"status\":\"source_only\",\"missing_info\":[\"Analysis pending\"],\"created_at\":\"2020-01-02T03:04:05Z\"}"
+            let workflow = "{\"id\":\"\(run)\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"source_type\":\"social_url\",\"status\":\"pending\",\"evidence_tier\":\"weak\",\"result_evidence_refs\":[],\"result_candidate_refs\":[],\"credit_reserved\":1,\"credit_settlement\":\"pending\"}"
+            let workOrder = "{\"id\":\"\(order)\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"intent\":\"recover\",\"input_type\":\"social_url\",\"evaluator_policy_id\":\"fixture\",\"settlement_mode\":\"fixture\",\"status\":\"pending\"}"
+            let receipt = "{\"id\":\"\(UUID())\",\"run_id\":\"\(run)\",\"workflow_id\":\"fixture\",\"verdict\":\"source_only\",\"settlement\":\"pending\",\"evaluator_summary\":\"fixture\",\"evidence_refs\":[],\"candidate_refs\":[],\"receipt_hash\":\"fixture\",\"anchor_status\":\"none\"}"
+            var persisted = existingPending
+            AnalysisRequestURLProtocol.handler = { request in
+                let path = request.url?.path ?? ""
+                if request.url?.host == "www.instagram.com" { return (200, "<meta property='og:title' content='Log in • Instagram'>") }
+                if path == "/v0/analysis" {
+                    let body = try AnalysisRequestURLProtocol.body(request)
+                    return (200, String(decoding: try JSONSerialization.data(withJSONObject: ["analysis_id": body["id"]!]), as: UTF8.self))
+                }
+                if path.hasSuffix("/search-recovery") { return (200, #"{"created_candidates":[]}"#) }
+                if path.hasSuffix("/captures") && request.httpMethod == "POST" { return (200, "{\"id\":\"\(capture)\"}") }
+                if path.hasSuffix("/work-orders") { return (200, workOrder) }
+                if path.hasSuffix("/runs") { return (200, workflow) }
+                if path.hasSuffix("/result") { return (200, "{\"run\":\(workflow),\"receipt\":\(receipt)}") }
+                if path.hasSuffix("/candidates") {
+                    if request.httpMethod == "POST" { persisted = true; return (200, row) }
+                    return (200, persisted ? "[\(row)]" : "[]")
+                }
+                return (200, request.httpMethod == "GET" ? "[]" : "{}")
+            }
+            let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+            let social = SocialLinkReviewCandidateService(socialSemanticAnalyzer: PendingAnalyzer(), metadataSession: session())
+            let map = MapViewModel(supabaseService: service, socialLinkReviewCandidateService: social,
+                saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json")))
+            let text = (modelOutage ? "Original readable caption\n" : "") + "https://www.instagram.com/p/direct-recovery/"
+            let ids = try await map.importSharedTextAsReviewCandidates(text)
+            XCTAssertEqual(ids, [candidate])
+            let recoveries = AnalysisRequestURLProtocol.requests.filter { $0.url?.path.hasSuffix("/search-recovery") == true }
+            XCTAssertEqual(recoveries.count, modelOutage ? 0 : 1)
+            if existingPending {
+                XCTAssertFalse(AnalysisRequestURLProtocol.requests.contains { $0.url?.path.hasSuffix("/work-orders") == true }, "repeat import retains its workflow")
+            }
+        }
+    }
+
     func testImportRecoveryRejectsAccountSwitchBeforeApplyingResults() async throws {
         let auth = PrivyAuthService.shared
         let original = auth.authState

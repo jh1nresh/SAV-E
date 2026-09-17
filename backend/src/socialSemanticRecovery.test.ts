@@ -235,3 +235,15 @@ test("oversized source recovery retains input failure instead of claiming provid
   assert.deepEqual(result.candidates, []);
   assert.match(result.receipt.nextBestClue!, /shorter/);
 });
+
+test("optional OCR outage does not block a grounded caption successor", async () => {
+  const partial = structuredClone(extracted); partial.venues[0].address = null;
+  const result = await runSourceSearchRecovery(input,
+    async () => '<meta property="og:image" content="https://example.com/cover.jpg">',
+    async () => { throw new Error("Synthetic optional OCR outage"); },
+    { semanticAnalyzer: async () => partial });
+  assert.equal(result.semanticStatus, "ready"); assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0].name, "初泰Pikul 信義象山門市");
+  assert.equal(result.candidates[0].latitude, undefined);
+  assert.deepEqual(result.errors, [], "successful caption result may supersede its pending source");
+});

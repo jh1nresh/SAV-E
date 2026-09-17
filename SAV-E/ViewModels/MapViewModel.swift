@@ -1210,7 +1210,7 @@ final class MapViewModel: ObservableObject {
                         placeRecoveryResult(for: candidate, candidateId: candidateId),
                         for: createdRun.id
                     )
-                    if candidate.isSourceOnly && candidate.reviewState != "analysis_pending" {
+                    if candidate.shouldRecoverSourceOnServer {
                         let recovered = await recoverImportSource(captureId: captureId, candidateId: candidateId, workflowRunId: createdRun.id)
                         importedCandidateIDs.append(contentsOf: recovered)
                     }
@@ -1257,6 +1257,11 @@ final class MapViewModel: ObservableObject {
             preserved, captureId: captureId, userId: userId, workflowRunId: existing.workflowRunId
         )
         await refreshSavedCollectionDates(userId: userId)
+        if pending.reviewState == "analysis_pending", pending.shouldRecoverSourceOnServer,
+           existing.isAnalysisPending, let workflowRunId = existing.workflowRunId {
+            let recovered = await recoverImportSource(captureId: captureId, candidateId: reusedID, workflowRunId: workflowRunId)
+            return [reusedID] + recovered
+        }
         return [reusedID]
     }
 

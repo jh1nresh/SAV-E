@@ -4356,6 +4356,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         for text in ["", " \n ", url] {
             let results = await service.reviewCandidates(fromEvidenceText: text, sourceURL: url) { [] }
             XCTAssertEqual(results.first?.reviewState, "analysis_pending")
+            XCTAssertTrue(results.first?.shouldRecoverSourceOnServer == true)
         }
         XCTAssertTrue(analyzer.calls.isEmpty, "unreadable source must not send an empty semantic request")
         let failed = await service.reviewCandidates(fromEvidenceText: "Login shell", sourceURL: url, sourceReadFailed: true) { [] }
@@ -4457,6 +4458,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         let candidate = try XCTUnwrap(candidates.first)
         XCTAssertTrue(candidate.isSourceOnly); XCTAssertEqual(candidate.reviewState, "analysis_pending")
         XCTAssertEqual(candidate.sourceText, pikulCaption); XCTAssertNil(candidate.latitude); XCTAssertEqual(loads, 0)
+        XCTAssertFalse(candidate.shouldRecoverSourceOnServer, "model outage cannot trigger immediate duplicate analysis")
     }
     @MainActor
     func testLinkAnalysisInsufficientTextUsesOCRThroughSameSemanticService() async throws {

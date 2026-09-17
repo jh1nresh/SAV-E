@@ -341,6 +341,10 @@ struct PendingReviewCandidate: Codable {
         sourceHandle = try container.decodeIfPresent(String.self, forKey: .sourceHandle) ?? extracted.sourceHandle
     }
 
+    var shouldRecoverSourceOnServer: Bool {
+        isSourceOnly && (reviewState != "analysis_pending" || missingInfo.contains("Source text unavailable"))
+    }
+
     var hasReliableCoordinates: Bool {
         guard let latitude, let longitude else { return false }
         return SaveChromeNavigation.isTrustworthyMapCoordinate(
