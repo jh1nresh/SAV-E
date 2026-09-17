@@ -166,6 +166,7 @@ final class SocialLinkReviewCandidateService {
     /// deterministic-only behavior. Injected as a fake (no network) in tests.
     private let captionVenueExtractor: SocialCaptionVenueExtractor?
     private let socialSemanticAnalyzer: SocialSemanticAnalyzing
+    private let metadataSession: URLSession
     private let thumbnailImageByteLimit = 6_000_000
     private let analysisDiagnosticsObserver: (AnalysisSearchDiagnostics) -> Void
     private static let analysisLogger = Logger(subsystem: "Savvy", category: "SocialAnalysisSearch")
@@ -188,12 +189,14 @@ final class SocialLinkReviewCandidateService {
         placeResolverService: PlaceResolverServiceProtocol? = nil,
         captionVenueExtractor: SocialCaptionVenueExtractor? = GeminiCaptionVenueExtractor.liveFromConfig(),
         socialSemanticAnalyzer: SocialSemanticAnalyzing = BackendSocialSemanticAnalyzer(),
+        metadataSession: URLSession = .shared,
         analysisDiagnosticsObserver: ((AnalysisSearchDiagnostics) -> Void)? = nil
     ) {
         self.placeResolverService = placeResolverService ?? PlaceResolverService(googlePlacesService: googlePlacesService)
         self.publicSourceSearchService = publicSourceSearchService
         self.captionVenueExtractor = captionVenueExtractor
         self.socialSemanticAnalyzer = socialSemanticAnalyzer
+        self.metadataSession = metadataSession
         self.analysisDiagnosticsObserver = analysisDiagnosticsObserver ?? Self.logAnalysisDiagnostics
     }
 
@@ -302,7 +305,8 @@ final class SocialLinkReviewCandidateService {
             .joined(separator: "\n")
 
         let sourceURL = metadata.resolvedURL ?? url.absoluteString
-        let resolved = await reviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL) {
+        let resolved = await reviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL,
+            sourceReadFailed: metadata.fetchReturnedNothing && sharedCaption?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false) {
             await self.thumbnailOCRLines(from: metadata.imageURL)
         }
         // Fetch diagnostics remain available even when text made OCR unnecessary.
@@ -314,6 +318,7 @@ final class SocialLinkReviewCandidateService {
     func reviewCandidates(
         fromEvidenceText text: String,
         sourceURL: String,
+        sourceReadFailed: Bool = false,
         thumbnailText: () async -> [String]
     ) async -> [PendingReviewCandidate] {
         // Structured map/web routes retain their existing parser. Social prose
@@ -322,7 +327,10 @@ final class SocialLinkReviewCandidateService {
             return (try? await recoverReviewCandidates(fromEvidenceText: text, sourceURL: sourceURL))
                 ?? reviewCandidatesOrSourceOnly(fromEvidenceText: text, sourceURL: sourceURL)
         }
-        var result = await socialSemanticAnalyzer.analyze(caption: text, ocrText: nil)
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasCaption = !trimmed.isEmpty && trimmed != sourceURL
+        var result = hasCaption ? await socialSemanticAnalyzer.analyze(caption: text, ocrText: nil)
+            : SocialSemanticResult(status: "no_place_evidence", venues: [])
         var ocrLines: [String] = []
         let insufficientText = result.status == "no_place_evidence"
             || (result.status == "ready" && result.venues.contains { $0.address == nil })
@@ -332,6 +340,10 @@ final class SocialLinkReviewCandidateService {
                 let supplemented = await socialSemanticAnalyzer.analyze(caption: text, ocrText: ocrLines.joined(separator: "\n"))
                 result = result.supplemented(by: supplemented)
             }
+        }
+        if result.status == "no_place_evidence", (sourceReadFailed || !hasCaption),
+           ocrLines.allSatisfy({ $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+            result = .pending
         }
         return semanticCandidates(result, sourceURL: sourceURL, caption: text, ocrLines: ocrLines)
     }
@@ -1644,7 +1656,7 @@ final class SocialLinkReviewCandidateService {
         for attempt in 1...maxAttempts {
             do {
                 let (data, response) = try await SAVEAnalysisScope.measure(.metadata, outcome: SAVEAnalysisScope.httpOutcome) {
-                    try await URLSession.shared.data(for: request)
+                    try await metadataSession.data(for: request)
                 }
                 let canonicalURL = SocialShareURLCanonicalizer.analysisURL(
                     originalURL: url,
@@ -1652,7 +1664,8 @@ final class SocialLinkReviewCandidateService {
                 )
                 // Login/error-shell metadata is not place evidence. Keep the
                 // recovered source identity but discard the shell document.
-                let shouldUseResponseMetadata = response.url == nil || canonicalURL == response.url
+                let statusOK = (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? true
+                let shouldUseResponseMetadata = statusOK && (response.url == nil || canonicalURL == response.url)
                 // Lossy decode keeps partially valid UTF-8 metadata readable.
                 let html = shouldUseResponseMetadata
                     ? String(decoding: data.prefix(300_000), as: UTF8.self)
@@ -1663,6 +1676,11 @@ final class SocialLinkReviewCandidateService {
                 let imageURL = metadataImageURL(in: html, baseURL: canonicalURL)
                 let videoURL = metadataVideoURL(in: html, baseURL: canonicalURL)
                 let jsonCaption = embeddedSocialCaption(in: html, sourceURL: canonicalURL)
+                let loginPattern = #"(?i)^(?:log\s*in|sign\s*in|登入|登录|登錄)(?:\b|[ •·|:：—-])"#
+                let loginShell = (title ?? "").range(of: loginPattern, options: .regularExpression) != nil
+                if loginShell && jsonCaption == nil {
+                    return PublicMetadata(resolvedURL: canonicalURL.absoluteString, fetchReturnedNothing: true)
+                }
                 return PublicMetadata(
                     resolvedURL: canonicalURL.absoluteString,
                     title: title,
@@ -1670,7 +1688,8 @@ final class SocialLinkReviewCandidateService {
                     keywords: keywords,
                     imageURL: imageURL,
                     videoURL: videoURL,
-                    jsonCaption: jsonCaption
+                    jsonCaption: jsonCaption,
+                    fetchReturnedNothing: !shouldUseResponseMetadata || [title, description, jsonCaption].allSatisfy { $0?.isEmpty != false }
                 )
             } catch {
                 guard attempt < maxAttempts, isTransientNetworkError(error) else { break }

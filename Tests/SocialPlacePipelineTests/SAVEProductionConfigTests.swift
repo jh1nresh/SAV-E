@@ -387,11 +387,39 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         XCTAssertTrue(try XCTUnwrap(SaveLocalVaultService(overrideVaultURL: url).reviewCandidates().first).isAnalysisPending)
     }
 
+    func testNativeMetadataLoginAndHTTPFailuresStayPendingButSharedCaptionRemainsUsable() async throws {
+        final class EmptySemanticAnalyzer: SocialSemanticAnalyzing {
+            var captions: [String] = []
+            func analyze(caption: String, ocrText: String?) async -> SocialSemanticResult {
+                captions.append(caption)
+                return .init(status: "no_place_evidence", venues: [])
+            }
+        }
+        let analyzer = EmptySemanticAnalyzer()
+        let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: analyzer, metadataSession: session())
+        let url = try XCTUnwrap(URL(string: "https://www.instagram.com/p/native-unavailable/"))
+        for (status, html) in [(200, "<meta property='og:title' content='Log in • Instagram'>"), (503, "<meta property='og:title' content='Unavailable'>"), (200, "")] {
+            AnalysisRequestURLProtocol.handler = { _ in (status, html) }
+            let candidates = try await service.reviewCandidates(from: url)
+            XCTAssertEqual(candidates.first?.reviewState, "analysis_pending")
+        }
+        XCTAssertTrue(analyzer.captions.isEmpty, "login/error shells cannot become semantic source text")
+        AnalysisRequestURLProtocol.handler = { _ in (200, "<meta property='og:title' content='Log in • Instagram'>") }
+        let captured = await service.reviewCandidates(fromSharedText: "A quiet walk\n" + url.absoluteString)
+        XCTAssertEqual(captured.first?.reviewState, "source_only")
+        XCTAssertTrue(analyzer.captions.last?.contains("A quiet walk") == true)
+        XCTAssertFalse(analyzer.captions.last?.contains("Log in") == true)
+    }
+
     func testImportSummarySeparatesPendingSourcesFromGroundedCandidates() {
         let source = PlaceReviewCandidate(id: UUID(), captureId: UUID(), name: "Source clue", address: "", city: nil,
             latitude: nil, longitude: nil, evidence: [], confidence: nil, missingInfo: ["Analysis pending", "Exact place"], status: "source_only", createdAt: Date())
         var candidate = source
         candidate.id = UUID(); candidate.status = "review"; candidate.name = "Pikul"; candidate.missingInfo = ["User confirmation"]
+        let unresolved = ReviewImportSummary(candidateIDs: [candidate.id], candidates: [candidate])
+        XCTAssertEqual(unresolved.candidateCount, 0)
+        XCTAssertEqual(unresolved.sourceCount, 1)
+        candidate.latitude = 25; candidate.longitude = 121
         let pending = ReviewImportSummary(candidateIDs: [source.id], candidates: [source, candidate])
         XCTAssertEqual(pending.candidateCount, 0)
         XCTAssertEqual(pending.sourceCount, 1)

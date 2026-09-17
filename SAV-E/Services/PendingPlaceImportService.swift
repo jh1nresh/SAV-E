@@ -368,8 +368,8 @@ struct ReviewImportSummary {
 
     init(candidateIDs: Set<UUID>, candidates: [PlaceReviewCandidate]) {
         let imported = candidates.filter { candidateIDs.contains($0.id) }
-        candidateCount = imported.filter { $0.status != "source_only" }.count
-        sourceCount = imported.filter { $0.status == "source_only" }.count
+        candidateCount = imported.filter { $0.status != "source_only" && $0.hasReliableCoordinates }.count
+        sourceCount = imported.count - candidateCount
         pendingCount = imported.filter(\.isAnalysisPending).count
     }
 }

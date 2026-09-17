@@ -4349,6 +4349,24 @@ final class SocialPlacePipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testUnreadableSemanticSourceStaysPendingUntilTextOrOCRIsAvailable() async throws {
+        let url = "https://instagram.com/p/unavailable/"
+        let analyzer = SemanticAnalyzerStub { _, _ in .init(status: "no_place_evidence", venues: []) }
+        let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: analyzer)
+        for text in ["", " \n ", url] {
+            let results = await service.reviewCandidates(fromEvidenceText: text, sourceURL: url) { [] }
+            XCTAssertEqual(results.first?.reviewState, "analysis_pending")
+        }
+        XCTAssertTrue(analyzer.calls.isEmpty, "unreadable source must not send an empty semantic request")
+        let failed = await service.reviewCandidates(fromEvidenceText: "Login shell", sourceURL: url, sourceReadFailed: true) { [] }
+        XCTAssertEqual(failed.first?.reviewState, "analysis_pending")
+        let readable = await service.reviewCandidates(fromEvidenceText: "A quiet walk", sourceURL: url) { [] }
+        XCTAssertEqual(readable.first?.reviewState, "source_only")
+        let ocr = await service.reviewCandidates(fromEvidenceText: "", sourceURL: url, sourceReadFailed: true) { ["A quiet walk"] }
+        XCTAssertEqual(ocr.first?.reviewState, "source_only", "successful OCR can establish that readable source has no venue")
+    }
+
+    @MainActor
     func testThreadsPreservesCaptionAndUsesSemanticPendingState() async {
         for host in ["www.threads.net", "www.threads.com"] {
             let url = "https://\(host)/@savvy/post/fixture"
@@ -4446,7 +4464,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         let analyzer = SemanticAnalyzerStub { _, ocr in ocr == nil ? .init(status: "no_place_evidence", venues: []) : result }
         let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(), captionVenueExtractor: nil, socialSemanticAnalyzer: analyzer)
         let candidates = await service.reviewCandidates(fromEvidenceText: "", sourceURL: "https://instagram.com/p/semantic/", thumbnailText: { [self.pikulCaption] })
-        XCTAssertEqual(analyzer.calls.count, 2); XCTAssertEqual(analyzer.calls.last?.1, pikulCaption)
+        XCTAssertEqual(analyzer.calls.count, 1); XCTAssertEqual(analyzer.calls.last?.1, pikulCaption)
         XCTAssertEqual(candidates.first?.candidateName, "初泰Pikul 信義象山門市"); XCTAssertFalse(candidates.first?.hasReliableCoordinates ?? true)
     }
     @MainActor
@@ -4469,7 +4487,7 @@ final class SocialPlacePipelineTests: XCTestCase {
         let analyzer = SemanticAnalyzerStub { _, ocr in ocr == nil ? .init(status: "no_place_evidence", venues: []) : .pending }
         let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(), captionVenueExtractor: nil, socialSemanticAnalyzer: analyzer)
         let candidates = await service.reviewCandidates(fromEvidenceText: "", sourceURL: "https://instagram.com/p/semantic/", thumbnailText: { [self.pikulCaption] })
-        XCTAssertEqual(analyzer.calls.count, 2)
+        XCTAssertEqual(analyzer.calls.count, 1)
         XCTAssertEqual(candidates.first?.reviewState, "analysis_pending")
         XCTAssertTrue(candidates.first?.isSourceOnly ?? false)
     }
