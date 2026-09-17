@@ -427,6 +427,23 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         XCTAssertNil(try AnalysisRequestURLProtocol.body(AnalysisRequestURLProtocol.requests[0])["ocrText"])
     }
 
+    func testSemanticPendingResponseRecordsProviderFailureWithoutMislabelingEmptyEvidence() async throws {
+        for (status, reason, outcome) in [("analysis_pending", "semantic_analysis_unavailable", "failed"), ("analysis_pending", "source_out_of_bounds", "source_only"), ("no_place_evidence", "", "source_only")] {
+            AnalysisRequestURLProtocol.handler = { _ in
+                let body: [String: Any] = ["status": status, "reason": reason, "venues": []]
+                return (200, String(decoding: try JSONSerialization.data(withJSONObject: body), as: UTF8.self))
+            }
+            let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+            let context = SAVEAnalysisContext(id: UUID())
+            let result = try await SAVEAnalysisScope.$current.withValue(context) {
+                try await service.analyzeSocialCaption(caption: "Original caption", ocrText: nil)
+            }
+            XCTAssertEqual(result.status, status)
+            let snapshot = await context.snapshot()
+            XCTAssertEqual(snapshot.outcome, outcome)
+        }
+    }
+
     func testSemanticResponseFromPreviousAccountIsDiscarded() async throws {
         let auth = PrivyAuthService.shared
         let original = auth.authState
@@ -497,16 +514,26 @@ final class SAVEAnalysisTransportTests: XCTestCase {
                 return (200, "{\"id\":\"\(capture)\"}")
             }
             XCTAssertEqual(body["status"] as? String, "source_only")
-            return (200, "{\"id\":\"\(id)\",\"capture_id\":\"\(capture)\",\"name\":\"Clue\",\"status\":\"source_only\",\"created_at\":\"2020-01-02T03:04:05Z\"}")
+            let evidence = try XCTUnwrap(body["evidence"] as? [[String: String]])
+            XCTAssertEqual(evidence.first?["text"], "Source URL: https://example.com/post")
+            var reloadedBody = body
+            reloadedBody["id"] = id.uuidString
+            let reloadedData = try JSONSerialization.data(withJSONObject: reloadedBody)
+            return (200, String(decoding: reloadedData, as: UTF8.self))
         }
         let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
         let pending = PendingReviewCandidate(candidateName: "Clue", address: "", category: "other",
-            sourceURL: "https://example.com/post", sourceText: "clue", evidence: [], confidence: 0,
+            sourceURL: "https://example.com/post", sourceText: "clue", evidence: ["Source caption quote: https://unrelated.example/menu"], confidence: 0,
             missingInfo: [], savedAt: ISO8601DateFormatter().date(from: "2020-01-02T03:04:05Z")!, isSourceOnly: true)
         let captured = try await service.createMemoryCapture(from: pending, userId: "test-owner")
         XCTAssertEqual(captured, capture)
         let candidate = try await service.createPlaceCandidate(pending, captureId: captured, userId: "test-owner")
         XCTAssertEqual(candidate, id)
+        var persisted = try AnalysisRequestURLProtocol.body(XCTUnwrap(AnalysisRequestURLProtocol.requests.last))
+        persisted["id"] = id.uuidString
+        let response = try JSONSerialization.data(withJSONObject: ["created_candidates": [persisted]])
+        let reloaded = try XCTUnwrap(SupabaseService.decodeSourceSearchRecoveryResponse(response).createdCandidates.first)
+        XCTAssertEqual(Place.from(reloaded).sourceUrl, "https://example.com/post")
     }
 
     @MainActor

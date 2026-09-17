@@ -361,6 +361,11 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
         assert.deepEqual((await pool.query("select missing_info from place_candidates where id=$1", [otherClue.body.id])).rows[0].missing_info, ["Analysis pending"]);
         const reloaded = await api(`/v0/memory/captures/${captureId}`, undefined, owner);
         assert.deepEqual(reloaded.body.source_resolution.captured_text_v1.texts, [text]);
+        if (failed) {
+          const unscoped = await api(`/v0/memory/captures/${captureId}/search-recovery`, { workflow_run_id: run.body.id, include_media_evidence: false, max_queries: 2 }, owner);
+          assert.equal(unscoped.status, 200); assert.ok(unscoped.body.errors.length);
+          assert.equal((await pool.query("select outcome from analysis_sessions where id=$1", [unscoped.body.analysis_id])).rows[0].outcome, "failed");
+        }
       }
     });
 
@@ -376,6 +381,8 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       assert.equal(retry.body.created_candidates.length, 1, JSON.stringify(retry.body));
       assert.deepEqual(retry.body.superseded_candidate_ids, [clue.body.id]);
       const recovered = retry.body.created_candidates[0];
+      assert.equal(recovered.evidence[0].text, `Source URL: ${captured.body.source_url}`);
+      assert.deepEqual((await pool.query("select evidence from place_candidates where id=$1", [recovered.id])).rows[0].evidence, recovered.evidence);
       assert.equal(recovered.created_at, captured.body.created_at); assert.notEqual(recovered.workflow_run_id, run);
       assert.equal(retry.body.workflow_run_id, recovered.workflow_run_id);
       const reload = await api(`/v0/memory/candidates?capture_id=${captured.body.id}`, undefined, owner);

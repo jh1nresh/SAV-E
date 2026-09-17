@@ -153,7 +153,11 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             if let ocrText { fields["ocrText"] = ocrText }
             let body = try Self.jsonBody(fields)
             let data = try await request(path: "/v0/analysis/\(context.id.uuidString)/extract-place-clues", method: "POST", body: body)
-            return try JSONDecoder().decode(SocialSemanticResult.self, from: data)
+            let result = try JSONDecoder().decode(SocialSemanticResult.self, from: data)
+            if result.status == "analysis_pending", result.reason == "semantic_analysis_unavailable" {
+                await context.markProviderFailure()
+            }
+            return result
         }
         // Intents may run outside the import scope. They still need normal
         // authentication, owned accounting and the same backend extraction.
@@ -574,7 +578,12 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID? = nil) async throws -> UUID {
         guard isConfigured else { throw SupabaseError.notConfigured }
 
-        let evidence = candidate.evidence.map { ["text": $0] }
+        var sourceEvidence = candidate.evidence
+        if let sourceURL = candidate.sourceURL, !sourceURL.isEmpty {
+            let marker = "Source URL: \(sourceURL)"
+            sourceEvidence = [marker] + sourceEvidence.filter { $0 != marker }
+        }
+        let evidence = sourceEvidence.map { ["text": $0] }
         let body = try Self.jsonBody([
             "capture_id": captureId.uuidString,
             "workflow_run_id": workflowRunId?.uuidString,

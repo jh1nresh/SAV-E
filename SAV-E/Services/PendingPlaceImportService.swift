@@ -904,7 +904,11 @@ private func sourceURL(from evidence: [String]) -> String? {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if isHTTPURL(value) { return value }
         }
-        if let url = firstHTTPURL(in: trimmed) { return url }
+    }
+    // Explicit provenance wins over URLs inside quoted caption text, including
+    // evidence merged before the source marker was added.
+    for line in evidence {
+        if let url = firstHTTPURL(in: line) { return url }
     }
     return nil
 }

@@ -14,6 +14,7 @@ test("complete social caption reaches semantic analysis before any media or rege
     videoVenueRecovery: async () => { throw new Error("unexpected video"); },
   });
   assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0].evidence[0], `Source URL: ${input.sourceUrl}`);
   assert.equal(result.candidates[0].name, "初泰Pikul 信義象山門市");
   assert.equal(result.candidates[0].latitude, undefined);
   assert.deepEqual(result.queries, []);
@@ -40,12 +41,14 @@ test("OCR supplements insufficient text through same analyzer; failures preserve
 test("ambiguous Maps alternatives stay separate and conflicts retain source identity", () => {
   const result = structuredClone(extracted); result.venues[0].mapStatus = "ambiguous";
   result.venues[0].matches = ["A", "B"].map(id => ({ id, name: `初泰Pikul ${id}`, address: `地址${id}`, latitude: 25, longitude: 121 }));
-  const candidates = semanticRecoveryCandidates(result);
+  const candidates = semanticRecoveryCandidates(result, input.sourceUrl);
   assert.deepEqual(candidates.map(row => row.placeId), ["A", "B"]);
+  assert.ok(candidates.every(row => row.evidence[0] === `Source URL: ${input.sourceUrl}`));
   assert.ok(candidates.every(row => row.missingInfo.includes("Choose the correct map candidate")));
   result.venues[0].mapStatus = "conflict";
-  const conflict = semanticRecoveryCandidates(result)[0]; assert.equal(conflict.name, "初泰Pikul 信義象山門市"); assert.equal(conflict.latitude, undefined);
+  const conflict = semanticRecoveryCandidates(result, input.sourceUrl)[0]; assert.equal(conflict.name, "初泰Pikul 信義象山門市"); assert.equal(conflict.latitude, undefined);
   assert.ok(conflict.evidence.some(line => line.includes("地址B")));
+  assert.equal(conflict.evidence[0], `Source URL: ${input.sourceUrl}`);
 });
 test("budget controls cannot fall through to heuristics", async () => {
   await assert.rejects(runSourceSearchRecovery(input, noPublicSearch, async () => [], {
@@ -118,7 +121,7 @@ test("a unique name match without a source address never becomes a coordinate ca
     extract: async () => ({ venues: [fields] }),
     search: async () => ["初泰Pikul 信義象山門市", "Unrelated venue"].map((name, i) => ({ id: String(i), name, address: "Provider address", latitude: 25, longitude: 121 })),
   });
-  const candidate = semanticRecoveryCandidates(result)[0];
+  const candidate = semanticRecoveryCandidates(result, input.sourceUrl)[0];
   assert.equal(candidate.latitude, undefined); assert.equal(candidate.longitude, undefined);
   assert.equal(candidate.name, "初泰Pikul 信義象山門市");
 });

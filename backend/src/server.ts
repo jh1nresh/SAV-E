@@ -4425,7 +4425,7 @@ async function handleCaptureSearchRecovery(
           await client.query("update captures set status='review',source_resolution=case when $3::jsonb is null then source_resolution else coalesce(source_resolution,'{}'::jsonb) || $3::jsonb end,updated_at=now() where id=$1 and user_id=$2",[captureId,userId,sourceResolution?JSON.stringify(sourceResolution):null]);
           await client.query("commit");
         } catch(error) { await client.query("rollback"); throw error; } finally { client.release(); }
-        if(!requestedAnalysis) await analysisUsageStore.finish(userId,aid,recovery.candidates.length ? "review_candidate":"source_only",[captureId]);
+        if(!requestedAnalysis) await analysisUsageStore.finish(userId,aid,recovery.semanticStatus === "analysis_pending" ? "failed" : recovery.candidates.length ? "review_candidate":"source_only",[captureId]);
         completed=true;
         return {capture_id:captureId,analysis_id:aid,workflow_run_id:effectiveWorkflowRunId ?? null,queries:recovery.queries,search_results:recovery.searchResults,created_candidates:createdCandidates,superseded_candidate_ids:supersededCandidateIds,media_evidence:recovery.mediaEvidence,source_resolution:sourceResolution,errors:recovery.errors,receipt:recovery.receipt};
       });

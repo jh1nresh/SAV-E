@@ -338,7 +338,7 @@ final class SocialLinkReviewCandidateService {
 
     func pendingSemanticSource(caption: String, sourceURL: String) -> PendingReviewCandidate {
         PendingReviewCandidate(candidateName: "Source clue", address: "", category: "other",
-            sourceURL: sourceURL, sourceText: caption, evidence: ["Source preserved; semantic analysis pending"],
+            sourceURL: sourceURL, sourceText: caption, evidence: ["Source URL: \(sourceURL)", "Source preserved; semantic analysis pending"],
             confidence: 0, missingInfo: ["Analysis pending", "Exact place", "User confirmation"],
             savedAt: Date(), isSourceOnly: true, reviewState: "analysis_pending")
     }
@@ -362,7 +362,7 @@ final class SocialLinkReviewCandidateService {
                 let source = field.source == "caption" ? caption : field.source == "ocr" ? ocrLines.joined(separator: "\n") : ""
                 return !field.quote.isEmpty && source.contains(field.quote)
             }) else { return [pendingSemanticSource(caption: caption, sourceURL: sourceURL)] }
-            let evidence = fields.map { "Source \($0.source) quote: \($0.quote)" }
+            let evidence = ["Source URL: \(sourceURL)"] + fields.map { "Source \($0.source) quote: \($0.quote)" }
                 + ["Extracted venue: \(name)", "Map identity: \(venue.mapStatus)"]
             let matches = venue.matches.filter { match in
                 !match.id.isEmpty && !match.name.isEmpty && !match.address.isEmpty

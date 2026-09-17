@@ -4398,6 +4398,28 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidate.missingInfo.contains("Map identity not verified"))
     }
     @MainActor
+    func testSemanticSourceLinkSurvivesCandidateReloadAndQuotedUnrelatedURL() async throws {
+        let source = "https://instagram.com/p/semantic/"
+        let text = pikulCaption + "\nhttps://unrelated.example/menu"
+        var result = pikulResult()
+        result.venues[0].name.quote = text
+        let analyzer = SemanticAnalyzerStub { _, _ in result }
+        let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: analyzer)
+        let candidates = await service.reviewCandidates(fromEvidenceText: text, sourceURL: source, thumbnailText: { [] })
+        let candidate = try XCTUnwrap(candidates.first)
+        XCTAssertEqual(candidate.evidence.first, "Source URL: \(source)")
+        // A prior source quote can precede newly merged explicit provenance.
+        let review = PlaceReviewCandidate(id: UUID(), captureId: UUID(), name: candidate.candidateName, address: candidate.address,
+            city: nil, latitude: nil, longitude: nil,
+            evidence: ["Source caption quote: https://unrelated.example/menu"] + candidate.evidence,
+            confidence: candidate.confidence, missingInfo: candidate.missingInfo, status: "review", createdAt: Date())
+        let reloaded = try JSONDecoder().decode(PlaceReviewCandidate.self, from: JSONEncoder().encode(review))
+        XCTAssertEqual(Place.from(reloaded).sourceUrl, source)
+        let pending = service.pendingSemanticSource(caption: text, sourceURL: source)
+        XCTAssertEqual(pending.evidence.first, "Source URL: \(source)")
+    }
+
+    @MainActor
     func testLinkAnalysisUnavailablePreservesSourceWithoutRegexOrOCR() async throws {
         let analyzer = SemanticAnalyzerStub { _, _ in .pending }
         let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(), captionVenueExtractor: nil, socialSemanticAnalyzer: analyzer)

@@ -227,7 +227,7 @@ export async function runSourceSearchRecovery(
     }
   }
   if (result.status === "analysis_pending") errors.push("Semantic analysis unavailable; source preserved for retry");
-  const candidates = semanticRecoveryCandidates(result);
+  const candidates = semanticRecoveryCandidates(result, url.href);
   return {
     queries: [], searchResults: [], candidates, mediaEvidence, semanticStatus: result.status,
     sourceResolution: document?.resolution, errors,
@@ -242,11 +242,11 @@ export async function runSourceSearchRecovery(
   };
 }
 
-export function semanticRecoveryCandidates(result: SemanticAnalysisResult): SourceSearchCandidate[] {
+export function semanticRecoveryCandidates(result: SemanticAnalysisResult, sourceURL: string): SourceSearchCandidate[] {
   return result.venues.flatMap(venue => {
     const name = [venue.name.value, venue.branch?.value].filter(Boolean).join(" ");
-    const quotes = [venue.name, venue.branch, venue.address, venue.transport]
-      .filter(field => field != null).map(field => `Source ${field.source} quote: ${field.quote}`);
+    const quotes = [`Source URL: ${sourceURL}`, ...[venue.name, venue.branch, venue.address, venue.transport]
+      .filter(field => field != null).map(field => `Source ${field.source} quote: ${field.quote}`)];
     const options = venue.mapStatus === "matched" || venue.mapStatus === "ambiguous" ? venue.matches : [];
     if (options.length) return options.map(match => ({
       name: match.name, address: match.address,
