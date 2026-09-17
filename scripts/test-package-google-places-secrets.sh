@@ -22,6 +22,7 @@ run_packager() {
     TARGET_BUILD_DIR="$build_directory" \
     UNLOCALIZED_RESOURCES_FOLDER_PATH="SAVE.app" \
     SAVE_RELEASE_SECRETS_PLIST="$release_plist" \
+    SAVE_EXPECTED_API_URL="${4-https://wanderly-api-production.up.railway.app}" \
     "$packager"
 }
 
@@ -77,6 +78,18 @@ wrong_type_plist="${temporary_root}/wrong-type-release-secrets.plist"
 cp "$template" "$wrong_type_plist"
 plutil -replace GOOGLE_PLACES_API_KEY -integer 123 "$wrong_type_plist"
 expect_failure release_wrong_type run_packager Release "${temporary_root}/release-wrong-type-build" "$wrong_type_plist"
+
+expect_failure release_target_missing run_packager Release "${temporary_root}/no-target" "$dummy_plist" ""
+expect_failure release_stale_backend run_packager Release "${temporary_root}/stale-backend" "$dummy_plist" "https://save-backend-production.up.railway.app"
+[[ ! -e "${temporary_root}/stale-backend/SAVE.app/Secrets.plist" ]] || exit 1
+managed_plist="${temporary_root}/managed.plist"
+cp "$dummy_plist" "$managed_plist"
+plutil -replace SAVE_API_URL -string 'https://save-backend-production.up.railway.app' "$managed_plist"
+plutil -replace WANDERLY_API_URL -string 'https://wanderly-api-production.up.railway.app' "$managed_plist"
+expect_failure release_conflicting_alias run_packager Release "${temporary_root}/conflicting" "$managed_plist" "https://save-backend-production.up.railway.app"
+plutil -replace WANDERLY_API_URL -string 'https://save-backend-production.up.railway.app' "$managed_plist"
+run_packager Release "${temporary_root}/managed" "$managed_plist" "https://save-backend-production.up.railway.app"
+assert_private_copy "$managed_plist" "${temporary_root}/managed/SAVE.app/Secrets.plist"
 
 release_build="${temporary_root}/release-build"
 run_packager Release "$release_build" "$dummy_plist"
