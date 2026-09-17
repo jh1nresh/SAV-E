@@ -93,9 +93,13 @@ SAVE_EXPECTED_API_URL=https://save-backend-production.up.railway.app \
 ```
 
 Use the independently verified deployment origin, not a value inferred from the
-old archive. The packager checks `SAVE_API_URL` and any `WANDERLY_API_URL` alias
-against that origin before copying secrets into main app or App Clip. Missing,
-conflicting, malformed and stale target settings fail without printing values.
+old archive. The same `Package App Secrets.plist` phase runs for `SAVE` and
+`SAVEClip`. The packager checks `SAVE_API_URL` and any `WANDERLY_API_URL` alias
+against that origin before copying secrets into each target's own bundle. The
+embedded App Clip therefore reads the packaged origin through
+`SAVEProductionConfig.URLConfigValue` instead of falling back to
+`defaultAPIBaseURL`. Missing, conflicting, malformed and stale target settings
+fail without printing values.
 This is a target consistency gate, not permission to switch: backup, inventory,
 conflict resolution and actual account verification still precede cutover.
 CI's unsigned synthetic candidate explicitly retains its legacy fixture target;
@@ -103,7 +107,8 @@ CI is not an authenticated production or migration check.
 
 ## Verification and execution order
 
-1. `scripts/test-package-google-places-secrets.sh` reproduces the build125 mismatch.
+1. `scripts/test-package-google-places-secrets.sh` reproduces the build125 mismatch
+   and checks that `SAVEClip` has the same packaging phase and destination contract.
 2. `scripts/check-account-export.sh` compiles the real exporter with service stubs.
 3. `python3 -B -m unittest discover -s Tests/account_preservation -p 'test_*.py' -v`
    covers checksum, identity, partial-failure, ownership and conflict boundaries.

@@ -1169,6 +1169,7 @@
 			buildPhases = (
 				DB1F01A934E70753F0FDD4CC /* Sources */,
 				6633DCB42E9B78BEEDC31E68 /* Resources */,
+				C9F14A72E8B3056D1A0E47B3 /* Package App Secrets.plist */,
 			);
 			buildRules = (
 			);
@@ -1327,6 +1328,27 @@
 
 /* Begin PBXShellScriptBuildPhase section */
 		1C05DC3D4BB69D3CD871D981 /* Package App Secrets.plist */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Package App Secrets.plist";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Secrets.plist",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/package-google-places-secrets.sh\"";
+			showEnvVarsInLog = 0;
+		};
+		C9F14A72E8B3056D1A0E47B3 /* Package App Secrets.plist */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;

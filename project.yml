@@ -160,6 +160,15 @@ targets:
       - path: SAV-EShared/SAVEProductionConfig.swift
       - path: SAV-E/Resources/Assets.xcassets
         buildPhase: resources
+    # Same Release origin gate as SAVE. Without this phase the Clip bundle has
+    # no Secrets.plist and SharedTripData falls back to defaultAPIBaseURL.
+    postBuildScripts:
+      - name: Package App Secrets.plist
+        script: '"${SRCROOT}/scripts/package-google-places-secrets.sh"'
+        basedOnDependencyAnalysis: false
+        showEnvVars: false
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/Secrets.plist
     settings:
       base:
         DEVELOPMENT_TEAM: JC6858UYM9
