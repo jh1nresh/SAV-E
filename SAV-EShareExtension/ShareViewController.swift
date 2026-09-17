@@ -232,7 +232,7 @@ private struct ShareEvidenceReceipt: View {
                     .foregroundColor(SaveTheme.muted)
             }
 
-            ShareEvidenceRow(text: "Source saved", isComplete: candidate.sourceURL != nil)
+            ShareEvidenceRow(text: "Source link available", isComplete: candidate.sourceURL != nil)
             ShareEvidenceRow(text: "Place name detected", isComplete: !candidate.candidateName.isEmpty && !candidate.isSourceOnly)
             ShareEvidenceRow(text: candidate.address.isEmpty ? "Address still needed" : "Address found", isComplete: !candidate.address.isEmpty)
         }
@@ -884,7 +884,9 @@ struct ShareExtensionView: View {
                         .foregroundColor(SaveTheme.ink)
                     }
 
-                    ShareBadge(text: candidate.address.isEmpty ? "Almost ready · 1 clue missing" : "Ready to review")
+                    ShareBadge(text: candidate.reviewState == "analysis_pending" ? semanticPendingLabel
+                        : candidate.isSourceOnly ? "Source clue"
+                        : candidate.address.isEmpty ? "Almost ready · 1 clue missing" : "Ready to review")
 
                     Text(candidateExplanation(candidate))
                         .font(ShareAtlasType.body(14))
@@ -1031,6 +1033,14 @@ struct ShareExtensionView: View {
     }
 
     private func candidateExplanation(_ candidate: PendingReviewCandidate) -> String {
+        if candidate.reviewState == "analysis_pending" {
+            return Locale.preferredLanguages.first?.hasPrefix("zh") == true
+                ? "先保存來源，再開啟 Savvy 完成分析與地圖核對。"
+                : "Save this source, then open Savvy to finish analysis and map verification."
+        }
+        if candidate.isSourceOnly {
+            return "Keep this source, then add a caption, screenshot, or map link in Savvy to identify the place."
+        }
         if candidate.address.isEmpty {
             return "I found the likely place, but I still need the exact address before saving it as a map pin."
         }
@@ -1055,11 +1065,6 @@ struct ShareExtensionView: View {
     private func candidateIntro(_ candidates: [PendingReviewCandidate]) -> String {
         guard candidates.count == 1, let candidate = candidates.first else {
             return "Savvy found a few possible places. Pick what you want to save."
-        }
-        if candidate.reviewState == "analysis_pending" {
-            return Locale.preferredLanguages.first?.hasPrefix("zh") == true
-                ? "先保存來源，再開啟 Savvy 完成分析與地圖核對。"
-                : "Save this source, then open Savvy to finish analysis and map verification."
         }
         if candidate.isSourceOnly {
             return "Savvy saved this share. Add a caption, screenshot, or map link when you want it turned into a place."
