@@ -298,3 +298,19 @@ test("OCR retains all caption identities and cannot downgrade map evidence", asy
   assert.deepEqual(preserveGroundedSemanticResult(partial, original), original);
   assert.equal(preserveGroundedSemanticResult({ status: "no_place_evidence", venues: [] }, { status: "analysis_pending", venues: [] }).status, "analysis_pending");
 });
+
+
+test("an exact brand and explicit address resolve an omitted provider branch label", async () => {
+  const text = "Starbucks\nDowntown Branch\n1 Main Street";
+  const raw = { venues: [{ name: f("Starbucks"), branch: f("Downtown Branch"), address: f("1 Main Street"), transport: null }] };
+  const provider = place({ name: "Starbucks", address: "1 Main Street" });
+  const matched = await analyzeSocialCaption({ caption: text }, deps(raw, [provider]));
+  assert.equal(matched.venues[0].mapStatus, "matched"); assert.deepEqual(matched.venues[0].matches, [provider]);
+  for (const wrong of [place({ ...provider, name: "Starbucks Uptown Branch" }), place({ ...provider, address: "2 Main Street" }), place({ ...provider, name: "Starbucksy" })]) {
+    assert.equal((await analyzeSocialCaption({ caption: text }, deps(raw, [wrong]))).venues[0].mapStatus, "conflict");
+  }
+  const noAddress = { venues: [{ ...raw.venues[0], address: null }] };
+  assert.notEqual((await analyzeSocialCaption({ caption: text }, deps(noAddress, [provider]))).venues[0].mapStatus, "matched");
+  const ambiguous = await analyzeSocialCaption({ caption: text }, deps(raw, [provider, { ...provider, id: "other" }]));
+  assert.equal(ambiguous.venues[0].mapStatus, "ambiguous"); assert.equal(ambiguous.venues[0].matches.length, 2);
+});

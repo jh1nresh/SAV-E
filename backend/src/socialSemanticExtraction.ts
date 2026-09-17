@@ -90,8 +90,12 @@ function identityContained(container: string, identity: string): boolean {
 function congruent(venue: SemanticVenue, place: SemanticMapPlace): boolean {
   const identity = (value: string) => value.normalize("NFKC").toLowerCase().replace(/臺/g, "台").replace(/\s+/g, " ").trim();
   const name = identity(place.name);
-  if (!identityContained(name, identity(venue.name.value))
-    || (venue.branch && !identityContained(name, identity(venue.branch.value)))) return false;
+  if (!identityContained(name, identity(venue.name.value))) return false;
+  const branchNamed = !venue.branch || identityContained(name, identity(venue.branch.value));
+  // A provider may omit the branch entirely. Only an exact brand name plus
+  // the explicit matching address below can resolve that omission; a provider
+  // naming a different branch remains conflicting.
+  if (!branchNamed && (!venue.address || name !== identity(venue.name.value))) return false;
   // Accept the same complete address with a provider country/postcode prefix.
   // Do not treat a differing unit, number, road or branch as the same venue.
   if (venue.address) {
