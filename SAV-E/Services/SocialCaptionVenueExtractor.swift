@@ -149,6 +149,22 @@ struct SocialSemanticResult: Codable, Equatable {
     var reason: String?
 
     static let pending = SocialSemanticResult(status: "analysis_pending", venues: [], reason: nil)
+
+    func supplemented(by next: SocialSemanticResult) -> SocialSemanticResult {
+        if next.status == "cancelled" || status != "ready" { return next }
+        guard next.status == "ready" else { return self }
+        func normalized(_ value: String) -> String {
+            value.precomposedStringWithCompatibilityMapping.lowercased().replacingOccurrences(of: "臺", with: "台").filter { !$0.isWhitespace }
+        }
+        let rank = ["matched": 3, "ambiguous": 2, "unverified": 1, "conflict": 1]
+        let retains = venues.allSatisfy { old in next.venues.contains { updated in
+            let fields: [(SocialSemanticField?, SocialSemanticField?)] = [(old.name, updated.name), (old.branch, updated.branch), (old.address, updated.address), (old.transport, updated.transport)]
+            return fields.allSatisfy { before, after in before == nil || (after != nil && normalized(before!.value) == normalized(after!.value)) }
+                && (rank[updated.mapStatus] ?? 0) >= (rank[old.mapStatus] ?? 0)
+                && (old.matches.isEmpty || !updated.matches.isEmpty)
+        } }
+        return retains ? next : self
+    }
 }
 
 protocol SocialSemanticAnalyzing {

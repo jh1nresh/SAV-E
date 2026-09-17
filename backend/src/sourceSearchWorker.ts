@@ -1,4 +1,4 @@
-import { analyzeSocialCaption, type SemanticAnalysisResult } from "./socialSemanticExtraction.js";
+import { analyzeSocialCaption, preserveGroundedSemanticResult, type SemanticAnalysisResult } from "./socialSemanticExtraction.js";
 import { recoverInstagramVideoVenues, type VideoVenueEvidence } from "./videoVenueAnalysis.js";
 import { AnalysisControlError, trackAnalysisOperation, type AnalysisOperation } from "./analysisUsage.js";
 import { createHash } from "node:crypto";
@@ -206,7 +206,7 @@ export async function runSourceSearchRecovery(
     const ocrText = mediaEvidence.filter(item => item.textSource === "ocr").map(item => item.text ?? "").join("\n");
     if (ocrText.trim()) {
       const supplemented = await analyze({ caption, ocrText });
-      if (supplemented.status !== "analysis_pending") result = supplemented;
+      result = preserveGroundedSemanticResult(result, supplemented);
     }
   }
   if (result.status === "no_place_evidence" && options.includeMediaEvidence !== false && input.sourceUrl) {

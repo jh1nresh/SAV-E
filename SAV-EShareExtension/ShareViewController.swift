@@ -620,11 +620,19 @@ struct ShareExtensionView: View {
         .accessibilityIdentifier("share.capture.loading")
     }
 
+    private var savedSourceOnly: Bool {
+        savedReviewCandidateCount != nil && !reviewCandidates.isEmpty && reviewCandidates.allSatisfy(\.isSourceOnly)
+    }
+
+    private var savedAnalysisPending: Bool {
+        savedSourceOnly && reviewCandidates.contains { $0.reviewState == "analysis_pending" }
+    }
+
     private var savedConfirmationView: some View {
         VStack(spacing: 14) {
             ShareStatusPill(
-                text: savedReviewCandidateCount == nil ? "Map Stamp saved" : "Added to Review",
-                fill: savedReviewCandidateCount == nil ? SaveTheme.mint : SaveTheme.sky
+                text: savedSourceOnly ? (Locale.preferredLanguages.first?.hasPrefix("zh") == true ? "來源線索已保存" : "Source clue saved") : savedReviewCandidateCount == nil ? "Map Stamp saved" : "Added to Review",
+                fill: savedSourceOnly ? SaveTheme.yellow : savedReviewCandidateCount == nil ? SaveTheme.mint : SaveTheme.sky
             )
 
             VStack(alignment: .leading, spacing: 14) {
@@ -651,8 +659,13 @@ struct ShareExtensionView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     ShareEvidenceRow(text: "Source saved", isComplete: true)
-                    ShareEvidenceRow(text: savedReviewCandidateCount == nil ? "Map pin ready" : "Waiting in Review", isComplete: true)
-                    ShareEvidenceRow(text: "Open Savvy to confirm", isComplete: savedReviewCandidateCount != nil)
+                    if savedSourceOnly {
+                        ShareEvidenceRow(text: savedAnalysisPending ? semanticPendingLabel : "Exact place still needed", isComplete: false)
+                        ShareEvidenceRow(text: Locale.preferredLanguages.first?.hasPrefix("zh") == true ? "開啟 Savvy 完成分析" : "Open Savvy to finish analysis", isComplete: false)
+                    } else {
+                        ShareEvidenceRow(text: savedReviewCandidateCount == nil ? "Map pin ready" : "Waiting in Review", isComplete: true)
+                        ShareEvidenceRow(text: "Open Savvy to confirm", isComplete: savedReviewCandidateCount != nil)
+                    }
                 }
                 .padding(12)
                 .background(SaveTheme.sky.opacity(0.30))

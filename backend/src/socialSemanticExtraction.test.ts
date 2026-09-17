@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AnalysisControlError, withAnalysisUsage, type AnalysisUsageStore } from "./analysisUsage.js";
-import { analyzeSocialCaption, type SemanticField, type SemanticMapPlace } from "./socialSemanticExtraction.js";
+import { analyzeSocialCaption, preserveGroundedSemanticResult, type SemanticField, type SemanticMapPlace } from "./socialSemanticExtraction.js";
 
 const caption = "商業午餐\n火山排骨\n📍初泰Pikul  信義象山門市\n📍臺北市信義區信義路五段122號\n (近捷運象山站2號出口)";
 const f = (value: string, quote = value, source: SemanticField["source"] = "caption"): SemanticField => ({ value, quote, source });
@@ -267,4 +267,34 @@ test("provider address suffixes tolerate country and postal components without w
     const result = await analyzeSocialCaption({ caption: `Cafe\n${source}` }, deps(raw, [place({ name: "Cafe", address: actual })]));
     assert.equal(result.venues[0].mapStatus, "conflict");
   }
+});
+
+
+test("dish words inside a grounded brand do not contradict venue identity", async () => {
+  const text = "Pizza Hut\n1 Main Street\nWe ate pizza";
+  const raw = { venues: [{ name: f("Pizza Hut"), branch: null, address: f("1 Main Street"), transport: null }], nonPlaceMentions: [{ ...f("pizza"), kind: "dish" }] };
+  const result = await analyzeSocialCaption({ caption: text }, deps(raw, [place({ name: "Pizza Hut", address: "1 Main Street" })]));
+  assert.equal(result.venues[0].mapStatus, "matched");
+  raw.venues[0].name = f("pizza");
+  assert.equal((await analyzeSocialCaption({ caption: text }, deps(raw))).status, "analysis_pending");
+});
+
+test("one congruent name-only result remains unverified among unrelated results", async () => {
+  const result = await analyzeSocialCaption({ caption }, deps({ venues: [{ ...venue(), address: null }] }, [place(), place({ id: "other", name: "Other venue" })]));
+  assert.equal(result.venues[0].mapStatus, "unverified");
+  assert.deepEqual(result.venues[0].matches, [place()]);
+});
+
+test("OCR retains all caption identities and cannot downgrade map evidence", async () => {
+  const original = await analyzeSocialCaption({ caption }, deps());
+  for (const next of [{ status: "no_place_evidence" as const, venues: [] }, { status: "analysis_pending" as const, venues: [] }, { status: "ready" as const, venues: [] }]) {
+    assert.deepEqual(preserveGroundedSemanticResult(original, next), original);
+  }
+  const weaker = structuredClone(original); weaker.venues[0].mapStatus = "unverified"; weaker.venues[0].matches = [];
+  assert.deepEqual(preserveGroundedSemanticResult(original, weaker), original);
+  const multiple = structuredClone(original); multiple.venues.push({ ...multiple.venues[0], name: f("Other venue") });
+  assert.deepEqual(preserveGroundedSemanticResult(multiple, original), multiple);
+  const partial = structuredClone(original); partial.venues[0].address = null; partial.venues[0].mapStatus = "unverified"; partial.venues[0].matches = [];
+  assert.deepEqual(preserveGroundedSemanticResult(partial, original), original);
+  assert.equal(preserveGroundedSemanticResult({ status: "no_place_evidence", venues: [] }, { status: "analysis_pending", venues: [] }).status, "analysis_pending");
 });

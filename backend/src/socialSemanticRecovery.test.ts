@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { runSourceSearchRecovery, semanticRecoveryCandidates, sourceMetadataFromHTML, defaultFetchMetadataHTML } from "./sourceSearchWorker.js";
 import { AnalysisControlError } from "./analysisUsage.js";
-import type { SemanticAnalysisResult } from "./socialSemanticExtraction.js";
+import { analyzeSocialCaption, type SemanticAnalysisResult } from "./socialSemanticExtraction.js";
 const caption = "商業午餐\n火山排骨\n📍初泰Pikul  信義象山門市\n📍臺北市信義區信義路五段122號\n (近捷運象山站2號出口)";
 const field = (value: string) => ({ value, quote: value, source: "caption" as const });
 const extracted: SemanticAnalysisResult = { status: "ready", venues: [{ name: field("初泰Pikul"), branch: field("信義象山門市"), address: field("臺北市信義區信義路五段122號"), transport: field("近捷運象山站2號出口"), mapStatus: "unverified", matches: [] }] };
@@ -92,4 +92,33 @@ test("embedded captions must belong to the requested social post", () => {
   assert.equal(sourceMetadataFromHTML(conflicting, input.sourceUrl).description, "page description");
   const unknown = '<meta property="og:description" content="page description"><script>{"caption":{"text":"Unbound venue"}}</script>';
   assert.equal(sourceMetadataFromHTML(unknown, input.sourceUrl).description, "page description");
+});
+
+
+test("OCR empty or omitted venues cannot erase a grounded caption candidate", async () => {
+  const partial = structuredClone(extracted); partial.venues[0].address = null;
+  for (const next of [{ status: "no_place_evidence" as const, venues: [] }, { status: "ready" as const, venues: [] }, extracted]) {
+    let calls = 0;
+    const result = await runSourceSearchRecovery(input,
+      async () => '<meta property="og:image" content="https://example.com/cover.jpg">',
+      async metadata => [{ kind: "thumbnail", url: metadata.imageURL!, text: "visible address", textSource: "ocr" }], {
+        semanticAnalyzer: async () => ++calls === 1 ? partial : structuredClone(next),
+        videoVenueRecovery: async () => { throw new Error("existing caption venue must prevent video recovery"); },
+      });
+    assert.equal(calls, 2); assert.equal(result.candidates[0].name, "初泰Pikul 信義象山門市");
+    assert.equal(result.candidates[0].latitude, undefined);
+    if (next === extracted) assert.equal(result.candidates[0].address, "臺北市信義區信義路五段122號");
+  }
+});
+
+test("a unique name match without a source address never becomes a coordinate candidate", async () => {
+  const original = structuredClone(extracted); original.venues[0].address = null;
+  const { mapStatus, matches, ...fields } = original.venues[0];
+  const result = await analyzeSocialCaption({ caption }, {
+    extract: async () => ({ venues: [fields] }),
+    search: async () => ["初泰Pikul 信義象山門市", "Unrelated venue"].map((name, i) => ({ id: String(i), name, address: "Provider address", latitude: 25, longitude: 121 })),
+  });
+  const candidate = semanticRecoveryCandidates(result)[0];
+  assert.equal(candidate.latitude, undefined); assert.equal(candidate.longitude, undefined);
+  assert.equal(candidate.name, "初泰Pikul 信義象山門市");
 });

@@ -330,7 +330,7 @@ final class SocialLinkReviewCandidateService {
             ocrLines = await thumbnailText()
             if !ocrLines.isEmpty {
                 let supplemented = await socialSemanticAnalyzer.analyze(caption: text, ocrText: ocrLines.joined(separator: "\n"))
-                if supplemented.status != "analysis_pending" { result = supplemented }
+                result = result.supplemented(by: supplemented)
             }
         }
         return semanticCandidates(result, sourceURL: sourceURL, caption: text, ocrLines: ocrLines)

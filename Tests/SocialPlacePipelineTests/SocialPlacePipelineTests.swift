@@ -4417,6 +4417,45 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(candidates.first?.candidateName, "初泰Pikul 信義象山門市"); XCTAssertFalse(candidates.first?.hasReliableCoordinates ?? true)
     }
     @MainActor
+    func testLinkAnalysisOCRCannotEraseGroundedCaptionVenue() async throws {
+        var partial = pikulResult(); partial.venues[0].address = nil
+        for next in [SocialSemanticResult(status: "no_place_evidence", venues: []), .init(status: "ready", venues: []), .pending, pikulResult()] {
+            let analyzer = SemanticAnalyzerStub { _, ocr in ocr == nil ? partial : next }
+            let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(), captionVenueExtractor: nil, socialSemanticAnalyzer: analyzer)
+            let candidates = await service.reviewCandidates(fromEvidenceText: pikulCaption, sourceURL: "https://instagram.com/p/semantic/", thumbnailText: { [self.pikulCaption] })
+            XCTAssertEqual(analyzer.calls.count, 2)
+            let candidate = try XCTUnwrap(candidates.first)
+            XCTAssertEqual(candidate.candidateName, "初泰Pikul 信義象山門市")
+            XCTAssertFalse(candidate.isSourceOnly); XCTAssertFalse(candidate.hasReliableCoordinates)
+            if next == pikulResult() { XCTAssertEqual(candidate.address, "臺北市信義區信義路五段122號") }
+        }
+    }
+
+    @MainActor
+    func testLinkAnalysisOCRFailureWithoutCaptionVenueRemainsPending() async throws {
+        let analyzer = SemanticAnalyzerStub { _, ocr in ocr == nil ? .init(status: "no_place_evidence", venues: []) : .pending }
+        let service = SocialLinkReviewCandidateService(googlePlacesService: EmptyGooglePlacesService(), captionVenueExtractor: nil, socialSemanticAnalyzer: analyzer)
+        let candidates = await service.reviewCandidates(fromEvidenceText: "", sourceURL: "https://instagram.com/p/semantic/", thumbnailText: { [self.pikulCaption] })
+        XCTAssertEqual(analyzer.calls.count, 2)
+        XCTAssertEqual(candidates.first?.reviewState, "analysis_pending")
+        XCTAssertTrue(candidates.first?.isSourceOnly ?? false)
+    }
+
+    @MainActor
+    func testSemanticSupplementPreservesEveryVenueAndStrongerMapEvidence() {
+        let map = SocialSemanticMapPlace(id: "pikul", name: "初泰Pikul", address: "臺北市信義區信義路五段122號", latitude: 25, longitude: 121)
+        let original = pikulResult(matches: [map], mapStatus: "matched")
+        XCTAssertEqual(original.supplemented(by: pikulResult()), original)
+        var multiple = original
+        var other = original.venues[0]; other.name.value = "Other venue"; other.name.quote = "Other venue"
+        multiple.venues.append(other)
+        XCTAssertEqual(multiple.supplemented(by: original), multiple)
+        var partial = pikulResult(); partial.venues[0].address = nil
+        XCTAssertEqual(partial.supplemented(by: original), original)
+        XCTAssertEqual(original.supplemented(by: .init(status: "cancelled", venues: [])).status, "cancelled")
+    }
+
+    @MainActor
     func testLinkAnalysisAmbiguousMapsKeepsChoicesAndConfirmation() async throws {
         let maps = ["a", "b"].map { SocialSemanticMapPlace(id: $0, name: "初泰Pikul \($0)", address: "地址\($0)", latitude: 25, longitude: 121) }
         let result = pikulResult(matches: maps, mapStatus: "ambiguous"); let analyzer = SemanticAnalyzerStub { _, _ in result }

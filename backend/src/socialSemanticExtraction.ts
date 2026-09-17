@@ -57,7 +57,7 @@ function extraction(raw: unknown, input: Input): SemanticVenue[] {
     // provider identity corroboration remains a separate operation below.
     for (const identity of [name, branch].filter((value): value is SemanticField => value !== null)) {
       if (/[$＄€£¥￥]\s*\d|\d\s*(?:元|円|折|%|％)|(?:捷運|地铁|地鐵|地下鉄).*(?:站|駅)|\d+\s*(?:號|号)?出口/i.test(identity.value)
-        || nonPlaces.some(other => normalized(identity.value).includes(normalized(other.value)))) throw failure();
+        || nonPlaces.some(other => normalized(identity.value) === normalized(other.value))) throw failure();
     }
     if (address && (/[$＄€£¥￥]\s*\d|\d\s*(?:元|円|折|%|％)|(?:捷運|地铁|地鐵|地下鉄).*(?:站|駅)|\d+\s*(?:號|号)?出口/i.test(address.value)
       || nonPlaces.some(other => normalized(address.value) === normalized(other.value))
@@ -197,7 +197,7 @@ export async function analyzeSocialCaption(input: Input, deps: Dependencies = {}
       // A unique search result is not address evidence. Without an explicit
       // source address, leave the entity unresolved even when its name agrees.
       venue.mapStatus = !venue.address
-        ? (matches.length === 0 && places.length ? "conflict" : places.length > 1 ? "ambiguous" : "unverified")
+        ? (matches.length === 0 && places.length ? "conflict" : matches.length > 1 ? "ambiguous" : "unverified")
         : matches.length === 1 ? "matched" : matches.length > 1 ? "ambiguous" : places.length ? "conflict" : "unverified";
       // Only congruent identities may become coordinate-bearing candidates.
       // Conflicting provider alternatives remain evidence on an unresolved clue.
@@ -209,4 +209,17 @@ export async function analyzeSocialCaption(input: Input, deps: Dependencies = {}
     }
   }
   return { status: "ready", venues };
+}
+
+// OCR may add evidence, but cannot erase grounded caption identities or a
+// stronger existing map result. An empty first pass can adopt any new outcome.
+export function preserveGroundedSemanticResult(previous: SemanticAnalysisResult, supplemented: SemanticAnalysisResult): SemanticAnalysisResult {
+  if (previous.status !== "ready") return supplemented;
+  if (supplemented.status !== "ready") return previous;
+  const rank = { matched: 3, ambiguous: 2, unverified: 1, conflict: 1 };
+  const retains = previous.venues.every(old => supplemented.venues.some(next =>
+    (["name", "branch", "address", "transport"] as const).every(key => !old[key] || (next[key] && normalized(old[key]!.value) === normalized(next[key]!.value)))
+    && rank[next.mapStatus] >= rank[old.mapStatus]
+    && (!old.matches.length || next.matches.length > 0)));
+  return retains ? supplemented : previous;
 }
