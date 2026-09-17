@@ -88,9 +88,10 @@ function identityContained(container: string, identity: string): boolean {
   return false;
 }
 function congruent(venue: SemanticVenue, place: SemanticMapPlace): boolean {
-  const name = normalized(place.name);
-  if (!identityContained(name, normalized(venue.name.value))
-    || (venue.branch && !identityContained(name, normalized(venue.branch.value)))) return false;
+  const identity = (value: string) => value.normalize("NFKC").toLowerCase().replace(/臺/g, "台").replace(/\s+/g, " ").trim();
+  const name = identity(place.name);
+  if (!identityContained(name, identity(venue.name.value))
+    || (venue.branch && !identityContained(name, identity(venue.branch.value)))) return false;
   // Accept the same complete address with a provider country/postcode prefix.
   // Do not treat a differing unit, number, road or branch as the same venue.
   if (venue.address) {
@@ -190,9 +191,9 @@ export async function analyzeSocialCaption(input: Input, deps: Dependencies = {}
       venue.mapStatus = !venue.address
         ? (matches.length === 0 && places.length ? "conflict" : places.length > 1 ? "ambiguous" : "unverified")
         : matches.length === 1 ? "matched" : matches.length > 1 ? "ambiguous" : places.length ? "conflict" : "unverified";
-      const matchingIDs = new Set(matches.map(place => place.id));
-      const alternatives = [...matches, ...places.filter(place => !matchingIDs.has(place.id))];
-      venue.matches = venue.mapStatus === "matched" ? matches : alternatives.slice(0, 5);
+      // Only congruent identities may become coordinate-bearing candidates.
+      // Conflicting provider alternatives remain evidence on an unresolved clue.
+      venue.matches = (venue.mapStatus === "conflict" ? places : matches).slice(0, 5);
     } catch (error) {
       if (error instanceof AnalysisControlError) throw error;
       // Preserve grounded fields if corroboration is unavailable; no fallback

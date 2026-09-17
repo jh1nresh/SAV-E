@@ -344,6 +344,7 @@ final class SocialLinkReviewCandidateService {
     }
 
     private func semanticCandidates(_ result: SocialSemanticResult, sourceURL: String, caption: String, ocrLines: [String]) -> [PendingReviewCandidate] {
+        guard result.status != "cancelled", !Task.isCancelled else { return [] }
         guard result.status == "ready", !result.venues.isEmpty else {
             var pending = pendingSemanticSource(caption: caption, sourceURL: sourceURL)
             if result.status == "no_place_evidence" {

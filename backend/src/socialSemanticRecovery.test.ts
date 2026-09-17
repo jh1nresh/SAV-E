@@ -61,3 +61,14 @@ test("oversized social documents fail instead of analyzing a silently clipped ca
   await assert.rejects(defaultFetchMetadataHTML("https://www.instagram.com/p/oversize-semantic/", 1000,
     async () => new Response('<head><meta property="og:description" content="teaser"></head>' + "x".repeat(2000))), /Response too large/);
 });
+
+test("queued Threads sources use semantic recovery and cannot fall back to venue guesses", async () => {
+  for (const host of ["www.threads.net", "www.threads.com"]) {
+    let calls = 0;
+    const result = await runSourceSearchRecovery({ ...input, sourceUrl: `https://${host}/@savvy/post/fixture` },
+      async () => "", async () => { throw new Error("no OCR during outage"); }, {
+        semanticAnalyzer: async value => { calls++; assert.equal(value.caption, caption); return { status: "analysis_pending", venues: [] }; },
+      });
+    assert.equal(calls, 1); assert.deepEqual(result.candidates, []); assert.deepEqual(result.queries, []);
+  }
+});

@@ -998,19 +998,22 @@ final class MapViewModel: ObservableObject {
         let pending = pendingImportService.consumePendingReviewCandidates()
         guard !pending.isEmpty else { return }
 
+        let importGeneration = authService.sessionGeneration
         let currentBatch = Array(pending.prefix(Self.pendingReviewImportBatchLimit))
         var failedCandidates = Array(pending.dropFirst(Self.pendingReviewImportBatchLimit))
 
         for var candidate in currentBatch {
             do {
+                guard authService.sessionGeneration == importGeneration, authService.currentUserId == userId else { throw CancellationError() }
                 let localRecord = try saveLocalVaultService.saveReviewCandidate(
                     candidate, recordID: candidate.localVaultRecordID, preservingExisting: true
                 )
                 let localRecordID = localRecord.id
                 candidate.localVaultRecordID = localRecordID
                 candidate.savedAt = min(candidate.savedAt, localRecord.createdAt)
-                try await withImportAnalysis {
+                try await withImportAnalysis { checkSession in
                     var refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
+                    try checkSession()
                     refinedCandidate.savedAt = candidate.savedAt
                     _ = try saveLocalVaultService.saveReviewCandidate(refinedCandidate, recordID: localRecordID)
                     // A remote failure must retry the refined payload, not the original thin clue.
@@ -1168,7 +1171,7 @@ final class MapViewModel: ObservableObject {
                 savedAt: Date(), isSourceOnly: true
             ))
         }
-        return try await withImportAnalysis {
+        return try await withImportAnalysis { checkSession in
             let candidates = await socialLinkReviewCandidateService
                 .reviewCandidates(fromSharedText: analysisInput)
                 .map { candidate in
@@ -1176,8 +1179,10 @@ final class MapViewModel: ObservableObject {
                     if sourceURL == nil { candidate.sourceURL = nil }
                     return candidate
                 }
+            try checkSession()
             var importedCandidateIDs: [UUID] = []
             for candidate in candidates {
+                try checkSession()
                 mirrorToLocalVault(candidate)
                 var run: PlaceRecoveryWorkflowRun?
                 var failedStep = "validate_input"
@@ -1282,11 +1287,12 @@ final class MapViewModel: ObservableObject {
         guard usesRemotePersistence, let captureId = candidate.captureId else {
             throw SupabaseError.invalidResponse("This clue has no synced source. Add a city, address, or map link to find the place.")
         }
-        return try await withImportAnalysis {
+        return try await withImportAnalysis { checkSession in
             await SAVEAnalysisScope.current?.addCapture(captureId)
             let result = try await supabaseService.recoverSourceOnlyReviewCandidates(
                 captureId: captureId, workflowRunId: candidate.workflowRunId, explicitRetry: true
             )
+            try checkSession()
             if let reason = result.failureReason {
                 importFailureReasons[candidate.id] = reason
                 if reason.kind == .providerFailure { await SAVEAnalysisScope.current?.markProviderFailure() }
@@ -1310,12 +1316,22 @@ final class MapViewModel: ObservableObject {
         }
     }
 
-    private func withImportAnalysis<T>(_ work: () async throws -> T) async throws -> T {
-        try Task.checkCancellation()
+    private func withImportAnalysis<T>(_ work: (_ checkSession: () throws -> Void) async throws -> T) async throws -> T {
+        let generation = authService.sessionGeneration
+        let userID = authService.currentUserId
+        let checkSession = { [self] in
+            try Task.checkCancellation()
+            guard authService.sessionGeneration == generation, authService.currentUserId == userID else { throw CancellationError() }
+        }
+        try checkSession()
         let context = SAVEAnalysisContext(id: UUID())
         do {
             // Protocol fakes can opt out without starting real network sessions.
-            guard try await supabaseService.startAnalysis(id: context.id) != nil else { return try await work() }
+            guard try await supabaseService.startAnalysis(id: context.id) != nil else {
+                try checkSession()
+                return try await work(checkSession)
+            }
+            try checkSession()
         } catch {
             // Start may have reached the server even if its response was lost.
             await supabaseService.finishAnalysis(context, outcome: Task.isCancelled ? "cancelled" : "failed")
@@ -1323,9 +1339,9 @@ final class MapViewModel: ObservableObject {
         }
         return try await SAVEAnalysisScope.$current.withValue(context) {
             do {
-                try Task.checkCancellation()
-                let result = try await work()
-                try Task.checkCancellation()
+                try checkSession()
+                let result = try await work(checkSession)
+                try checkSession()
                 await supabaseService.finishAnalysis(context, outcome: nil)
                 return result
             } catch {

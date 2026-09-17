@@ -371,6 +371,89 @@ private final class TransportFailureURLProtocol: URLProtocol {
 
 @MainActor
 final class SAVEAnalysisTransportTests: XCTestCase {
+
+    func testSemanticCaptionWireContractOmitsAbsentOCRAndPreservesFullText() async throws {
+        let caption = "商業午餐\n📍初泰Pikul  信義象山門市\n臺北市信義區信義路五段122號"
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertEqual(body["caption"] as? String, caption)
+            // Mirrors the backend's strict optional-string contract.
+            XCTAssertFalse(body["ocrText"] is NSNull)
+            if body["ocrText"] != nil { XCTAssertEqual(body["ocrText"] as? String, "cover text") }
+            XCTAssertEqual(request.timeoutInterval, 90)
+            return (200, #"{"status":"no_place_evidence","venues":[]}"#)
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let context = SAVEAnalysisContext(id: UUID())
+        for ocr in [nil, "cover text"] {
+            let result = try await SAVEAnalysisScope.$current.withValue(context) {
+                try await service.analyzeSocialCaption(caption: caption, ocrText: ocr)
+            }
+            XCTAssertEqual(result.status, "no_place_evidence")
+        }
+        XCTAssertEqual(AnalysisRequestURLProtocol.requests.count, 2)
+        XCTAssertNil(try AnalysisRequestURLProtocol.body(AnalysisRequestURLProtocol.requests[0])["ocrText"])
+    }
+
+    func testSemanticResponseFromPreviousAccountIsDiscarded() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original }
+        auth.authState = .authenticated(userId: "semantic-account-A")
+        let arrived = expectation(description: "semantic request in flight")
+        let release = DispatchSemaphore(value: 0)
+        AnalysisRequestURLProtocol.handler = { _ in
+            arrived.fulfill()
+            _ = release.wait(timeout: .now() + 10)
+            return (200, #"{"status":"ready","venues":[]}"#)
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let context = SAVEAnalysisContext(id: UUID())
+        let task = Task {
+            try await SAVEAnalysisScope.$current.withValue(context) {
+                try await service.analyzeSocialCaption(caption: "Pikul", ocrText: nil)
+            }
+        }
+        await fulfillment(of: [arrived], timeout: 5)
+        auth.authState = .authenticated(userId: "semantic-account-B")
+        release.signal()
+        do { _ = try await task.value; XCTFail("Old account response must be discarded") }
+        catch is CancellationError {} catch { XCTFail("Unexpected: \(error)") }
+    }
+
+    func testImportRecoveryRejectsAccountSwitchBeforeApplyingResults() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original }
+        auth.authState = .authenticated(userId: "recovery-account-A")
+        let arrived = expectation(description: "recovery in flight")
+        let release = DispatchSemaphore(value: 0)
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.url?.path == "/v0/analysis" {
+                let id = try XCTUnwrap(AnalysisRequestURLProtocol.body(request)["id"] as? String)
+                return (200, "{\"analysis_id\":\"\(id)\"}")
+            }
+            if request.url?.path.hasSuffix("/search-recovery") == true {
+                arrived.fulfill()
+                _ = release.wait(timeout: .now() + 10)
+                return (200, #"{"created_candidates":[]}"#)
+            }
+            XCTAssertFalse(request.httpMethod == "GET" && request.url?.path == "/memory/candidates", "Must not refresh another account after stale analysis")
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let map = MapViewModel(supabaseService: service)
+        let clue = PlaceReviewCandidate(id: UUID(), captureId: UUID(), name: "Original", address: "", city: nil,
+            latitude: nil, longitude: nil, evidence: [], confidence: nil, missingInfo: [], status: "source_only", createdAt: Date())
+        map.reviewCandidates = [clue]
+        let task = Task { try await map.reanalyzeReviewSource(clue) }
+        await fulfillment(of: [arrived], timeout: 5)
+        auth.authState = .authenticated(userId: "recovery-account-B")
+        release.signal()
+        do { _ = try await task.value; XCTFail("Stale import must stop") }
+        catch is CancellationError {} catch { XCTFail("Unexpected: \(error)") }
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [clue.id])
+    }
     @MainActor
     func testMemoryImportSendsOriginalDateAndSourceOnlyState() async throws {
         let id = UUID()

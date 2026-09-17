@@ -149,22 +149,24 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     func analyzeSocialCaption(caption: String, ocrText: String?) async throws -> SocialSemanticResult {
         if let context = SAVEAnalysisScope.current {
             try await context.checkAllowed()
-            let body = try Self.jsonBody(["caption": caption, "ocrText": ocrText])
+            var fields: [String: Any] = ["caption": caption]
+            if let ocrText { fields["ocrText"] = ocrText }
+            let body = try Self.jsonBody(fields)
             let data = try await request(path: "/v0/analysis/\(context.id.uuidString)/extract-place-clues", method: "POST", body: body)
             return try JSONDecoder().decode(SocialSemanticResult.self, from: data)
         }
         // Intents may run outside the import scope. They still need normal
         // authentication, owned accounting and the same backend extraction.
         let context = SAVEAnalysisContext(id: UUID())
-        _ = try await startAnalysis(id: context.id)
         do {
+            _ = try await startAnalysis(id: context.id)
             let result = try await SAVEAnalysisScope.$current.withValue(context) {
                 try await analyzeSocialCaption(caption: caption, ocrText: ocrText)
             }
             await finishAnalysis(context, outcome: result.status == "ready" ? "review_candidate" : result.status == "analysis_pending" ? "failed" : "source_only")
             return result
         } catch {
-            await finishAnalysis(context, outcome: "failed")
+            await finishAnalysis(context, outcome: error is CancellationError ? "cancelled" : "failed")
             throw error
         }
     }
@@ -1109,8 +1111,9 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         baseURLOverride: String? = nil
     ) async throws -> (Data, HTTPURLResponse) {
         let isSocialRequest = ["/v0/friend-ratings", "/v0/shared-posts", "/v0/passports", "/v0/social-profile", "/v0/follows", "/v0/followers"].contains { path.hasPrefix($0) }
-        let friendSession: Int? = isSocialRequest
-            ? await MainActor.run { PrivyAuthService.shared.sessionGeneration } : nil
+        let sessionBound = isSocialRequest || path.hasPrefix("/v0/analysis")
+        let friendSession: (Int, String?)? = sessionBound
+            ? await MainActor.run { (PrivyAuthService.shared.sessionGeneration, PrivyAuthService.shared.currentUserId) } : nil
         guard let base = baseURLOverride ?? apiBaseURL else { throw SupabaseError.notConfigured }
 
         guard let url = URL(string: "\(base)\(path)") else {
@@ -1141,7 +1144,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }
 
         if let friendSession {
-            let stillCurrent = await MainActor.run { PrivyAuthService.shared.sessionGeneration == friendSession }
+            let stillCurrent = await MainActor.run { PrivyAuthService.shared.sessionGeneration == friendSession.0 && PrivyAuthService.shared.currentUserId == friendSession.1 }
             guard stillCurrent else { throw CancellationError() }
             try Task.checkCancellation()
         }
@@ -1161,7 +1164,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }
 
         if let friendSession {
-            let stillCurrent = await MainActor.run { PrivyAuthService.shared.sessionGeneration == friendSession }
+            let stillCurrent = await MainActor.run { PrivyAuthService.shared.sessionGeneration == friendSession.0 && PrivyAuthService.shared.currentUserId == friendSession.1 }
             guard stillCurrent else { throw CancellationError() }
             try Task.checkCancellation()
         }

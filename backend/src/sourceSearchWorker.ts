@@ -665,6 +665,8 @@ function isPlacePlatformURL(url: URL): boolean {
   const host = url.hostname.toLowerCase();
   return [
     "instagram.com",
+    "threads.net",
+    "threads.com",
     "tiktok.com",
     "xiaohongshu.com",
     "xhslink.com",

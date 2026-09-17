@@ -110,10 +110,10 @@ test("wrong address or branch remains conflict with alternatives and unchanged e
   }
 });
 
-test("ambiguous matches preserve all provider alternatives and do not select coordinates", async () => {
+test("ambiguous matches preserve only congruent provider alternatives and do not select coordinates", async () => {
   const places = [place(), place({ id: "other-same-name", latitude: 25.033 }), place({ id: "wrong", name: "Other" })];
   const result = await analyzeSocialCaption({ caption }, deps(payload(), places));
-  assert.equal(result.venues[0].mapStatus, "ambiguous"); assert.deepEqual(result.venues[0].matches, places);
+  assert.equal(result.venues[0].mapStatus, "ambiguous"); assert.deepEqual(result.venues[0].matches, places.slice(0, 2));
   assert.equal(Object.hasOwn(result.venues[0], "latitude"), false);
 });
 
@@ -229,7 +229,7 @@ test("emit at most five alternatives after evaluating all twenty provider result
   const matching = [place(), place({ id: "second-match" })];
   const ambiguous = await analyzeSocialCaption({ caption }, deps(payload(), [...wrong, ...matching]));
   assert.equal(ambiguous.venues[0].mapStatus, "ambiguous");
-  assert.equal(ambiguous.venues[0].matches.length, 5);
+  assert.equal(ambiguous.venues[0].matches.length, 2);
   assert.deepEqual(ambiguous.venues[0].matches.slice(0, 2), matching);
   const conflict = await analyzeSocialCaption({ caption }, deps(payload(), wrong));
   assert.equal(conflict.venues[0].mapStatus, "conflict");
@@ -237,4 +237,14 @@ test("emit at most five alternatives after evaluating all twenty provider result
   const unique = await analyzeSocialCaption({ caption }, deps(payload(), [...wrong, place()]));
   assert.equal(unique.venues[0].mapStatus, "matched");
   assert.deepEqual(unique.venues[0].matches, [place()]);
+});
+
+test("Latin brand and branch retain token boundaries during map identity comparison", async () => {
+  const english = "Pikul\nBranch A\n12 Main Street";
+  const f = (value: string) => ({ value, quote: value, source: "caption" });
+  const raw = { venues: [{ name: f("Pikul"), branch: f("Branch A"), address: f("12 Main Street"), transport: null }] };
+  const matched = await analyzeSocialCaption({ caption: english }, deps(raw, [place({ name: "Pikul Branch A", address: "12 Main Street" })]));
+  assert.equal(matched.venues[0].mapStatus, "matched");
+  const unrelated = await analyzeSocialCaption({ caption: english }, deps(raw, [place({ name: "Pikulia Branch A", address: "12 Main Street" })]));
+  assert.equal(unrelated.venues[0].mapStatus, "conflict");
 });

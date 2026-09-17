@@ -4332,6 +4332,22 @@ final class SocialPlacePipelineTests: XCTestCase {
                       "Deterministic recovery succeeded; the LLM caption extractor must not be called")
     }
 
+    @MainActor
+    func testThreadsPreservesCaptionAndUsesSemanticPendingState() async {
+        for host in ["www.threads.net", "www.threads.com"] {
+            let url = "https://\(host)/@savvy/post/fixture"
+            let text = "商業午餐\n火山排骨\n初泰Pikul"
+            let bundle = SocialShareTextNormalizer.normalize(text + "\n" + url)
+            XCTAssertTrue(bundle.platform.includesCaptionInAnalysis)
+            XCTAssertTrue(bundle.captionEvidence.contains(text))
+            let analyzer = SemanticAnalyzerStub { _, _ in .pending }
+            let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: analyzer)
+            let results = await service.reviewCandidates(fromEvidenceText: text, sourceURL: url) { XCTFail("No OCR on outage"); return [] }
+            XCTAssertTrue(results.first?.isSourceOnly == true)
+            XCTAssertEqual(results.first?.reviewState, "analysis_pending")
+        }
+    }
+
     private final class SemanticAnalyzerStub: SocialSemanticAnalyzing {
         var calls: [(String, String?)] = []
         var response: (String, String?) -> SocialSemanticResult

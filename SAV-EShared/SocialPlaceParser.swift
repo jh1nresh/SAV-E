@@ -121,6 +121,7 @@ enum SocialSharePlatform: String, Codable {
     case taobaoInstantCommerce = "taobao_instant_commerce"
     case tiktok
     case instagram
+    case threads
     case googleMaps
     case appleMaps
     case chinaMaps
@@ -128,7 +129,7 @@ enum SocialSharePlatform: String, Codable {
 
     var includesCaptionInAnalysis: Bool {
         switch self {
-        case .douyin, .xiaohongshu, .dianping, .meituan, .taobaoInstantCommerce, .tiktok, .instagram:
+        case .douyin, .xiaohongshu, .dianping, .meituan, .taobaoInstantCommerce, .tiktok, .instagram, .threads:
             return true
         case .googleMaps, .appleMaps, .chinaMaps, .generic:
             return false
@@ -222,6 +223,7 @@ enum SocialShareTextNormalizer {
         if isHost(host, domain: "ele.me") { return .taobaoInstantCommerce }
         if isHost(host, domain: "tiktok.com") { return .tiktok }
         if isHost(host, domain: "instagram.com") { return .instagram }
+        if isHost(host, domain: "threads.net") || isHost(host, domain: "threads.com") { return .threads }
         if isHost(host, domain: "amap.com") || isHost(host, domain: "map.baidu.com") { return .chinaMaps }
         if host == "maps.app.goo.gl" || (isHost(host, domain: "goo.gl") && path.contains("maps")) { return .googleMaps }
         if isHost(host, domain: "google.com") && path.contains("/maps") { return .googleMaps }
@@ -293,7 +295,7 @@ enum SocialShareTextNormalizer {
             return 3
         case .tiktok:
             return 4
-        case .instagram:
+        case .instagram, .threads:
             return 5
         case .generic:
             return 6

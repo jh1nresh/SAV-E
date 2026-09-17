@@ -159,6 +159,8 @@ struct BackendSocialSemanticAnalyzer: SocialSemanticAnalyzing {
     func analyze(caption: String, ocrText: String?) async -> SocialSemanticResult {
         do {
             return try await SupabaseService.shared.analyzeSocialCaption(caption: caption, ocrText: ocrText)
+        } catch is CancellationError {
+            return SocialSemanticResult(status: "cancelled", venues: [], reason: nil)
         } catch {
             await SAVEAnalysisScope.current?.markProviderFailure()
             return .pending
