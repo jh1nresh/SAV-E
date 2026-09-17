@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { duplicateCandidateGroups, earliestKnownDate, mergedCaptureText, mergedEvidence, normalizedCaptureURL, sameCandidateIdentity, externalCandidateEvidence, supersededCandidateIDs } from "./memoryStorage.js";
+import { capturedSourceTexts, capturedSourceResolution, completeEmptySourceAnalysis, duplicateCandidateGroups, earliestKnownDate, mergedCaptureText, mergedEvidence, normalizedCaptureURL, sameCandidateIdentity, externalCandidateEvidence, supersededCandidateIDs } from "./memoryStorage.js";
 
 const cafe = { id: "one", name: "Fixture Cafe", address: "1 Fixture Road", latitude: 25, longitude: 121, status: "review" };
 test("capture identity drops tracking while preserving meaningful URLs and malformed inputs", () => {
@@ -31,7 +31,7 @@ test("source-only reuse stays inside one capture and preserves rejected clue ide
 });
 test("additional evidence and capture text are retained without resetting prior data", () => {
   assert.deepEqual(mergedEvidence([{ text: "old" }], [{ text: "old" }, { text: "new" }]), [{ text: "old" }, { text: "new" }]);
-  assert.equal(mergedCaptureText({ raw_text: "old caption", title: "old" }, { raw_text: "new caption", title: "new title" }), "old caption\n\nnew caption\n\nnew title");
+  assert.equal(mergedCaptureText({ raw_text: "old caption", title: "old" }, { raw_text: "new caption", title: "new title" }), "old caption\n\nnew caption");
 });
 test("plural successor provenance validates UUID arrays and cannot be imported", () => {
   const first = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", second = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -77,6 +77,17 @@ test("real database preserves workflow ownership chronology and ambiguous source
     assert.equal(separate.existing, undefined); assert.equal(separate.body.workflow_run_id, otherRun); assert.equal(separate.body.status, "review", "a separate pending reservation remains actionable without changing the original rejected row");
     assert.equal((await client.query("select workflow_run_id from place_candidates where id=$1", [candidate])).rows[0].workflow_run_id, run);
     assert.equal(await reuseCapture(client, foreign, { source_url: "https://fixture.invalid/one" }), undefined);
+    const emptyCapture = randomUUID(), emptyCandidate = randomUUID(), independent = randomUUID();
+    await client.query("insert into captures(id,user_id,source_url,raw_text) values($1,$2,'https://instagram.com/p/provenance/','Original text')", [emptyCapture, owner]);
+    const reusedSource = await reuseCapture(client, owner, { source_url: "https://instagram.com/p/provenance/", raw_text: "Fresh source", title: "Generated label" });
+    assert.deepEqual(capturedSourceTexts(reusedSource!), ["Fresh source"]);
+    assert.equal(reusedSource!.raw_text, "Original text\n\nFresh source");
+    await client.query("insert into place_candidates(id,capture_id,workflow_run_id,name,status,missing_info) values($1,$3,$4,'Saved link','source_only',array['Analysis pending','Exact place needed']),($2,$3,$5,'Other run','source_only',array['Analysis pending'])", [emptyCandidate, independent, emptyCapture, run, otherRun]);
+    await completeEmptySourceAnalysis(client, emptyCapture, run);
+    const completedSource = (await client.query("select * from place_candidates where id=$1", [emptyCandidate])).rows[0];
+    assert.deepEqual(completedSource.missing_info, ["Exact place needed"]); assert.equal(completedSource.status, "source_only");
+    assert.equal(completedSource.workflow_run_id, run);
+    assert.deepEqual((await client.query("select missing_info from place_candidates where id=$1", [independent])).rows[0].missing_info, ["Analysis pending"]);
     const clueCapture = randomUUID(), clue = randomUUID(), named = randomUUID();
     await client.query("insert into captures(id,user_id) values($1,$2)", [clueCapture, owner]);
     await client.query("insert into place_candidates(id,capture_id,name,status) values($1,$2,'Saved link','source_only')", [clue, clueCapture]);
@@ -113,4 +124,19 @@ test("real database preserves workflow ownership chronology and ambiguous source
     await client.query("update place_candidates set status='confirmed' where id=$1", [named]);
     assert.deepEqual(await reconcileSavedCandidates(client, foreign, named), []);
   } finally { await client.query("rollback"); client.release(); await pool.end(); }
+});
+
+
+test("capture provenance excludes legacy merged titles and survives safe repeated imports", () => {
+  const old = { source_url: "https://instagram.com/p/source/", raw_text: "caption\n\nGenerated guess", title: "Generated guess" };
+  assert.deepEqual(capturedSourceTexts(old), []);
+  const current = { ...old, raw_text: mergedCaptureText(old, { raw_text: "Actual complete caption\naddress", title: "Another guess" }) };
+  const recorded = { ...current, source_resolution: capturedSourceResolution(current, "Actual complete caption\naddress") };
+  assert.deepEqual(capturedSourceTexts(recorded), ["Actual complete caption\naddress"]);
+  assert.equal(recorded.raw_text, "caption\n\nGenerated guess\n\nActual complete caption\naddress", "legacy history is retained, not reclassified as source evidence");
+  assert.deepEqual(capturedSourceTexts({ ...recorded, source_url: "https://instagram.com/p/another/" }), []);
+  assert.deepEqual(capturedSourceTexts({ ...recorded, raw_text: "edited" }), []);
+  const repeat = { ...recorded, raw_text: mergedCaptureText(recorded, { raw_text: "More original context", title: "New guess" }) };
+  const updated = { ...repeat, source_resolution: capturedSourceResolution(repeat, "More original context", capturedSourceTexts(recorded)) };
+  assert.deepEqual(capturedSourceTexts(updated), ["Actual complete caption\naddress", "More original context"]);
 });

@@ -122,3 +122,14 @@ test("a unique name match without a source address never becomes a coordinate ca
   assert.equal(candidate.latitude, undefined); assert.equal(candidate.longitude, undefined);
   assert.equal(candidate.name, "初泰Pikul 信義象山門市");
 });
+
+
+test("legacy merged raw text is excluded when persisted source provenance is absent", async () => {
+  const result = await runSourceSearchRecovery({ ...input, rawText: "Generated guess", semanticSourceText: null },
+    async () => '<meta property="og:description" content="Actual original caption">', async () => [], {
+      semanticAnalyzer: async value => { assert.equal(value.caption, "Actual original caption"); return { status: "no_place_evidence", venues: [] }; },
+      videoVenueRecovery: async () => [],
+    });
+  assert.equal(result.semanticStatus, "no_place_evidence"); assert.deepEqual(result.errors, []);
+  assert.deepEqual(result.candidates, []); assert.ok(!result.receipt.missing.includes("Analysis pending"));
+});

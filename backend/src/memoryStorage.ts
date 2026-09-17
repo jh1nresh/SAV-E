@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import { createHash } from "node:crypto";
 
 type Row = Record<string, any>;
 const pending = new Set(["review", "needs_more_evidence", "source_only"]);
@@ -46,10 +47,39 @@ export function mergedEvidence(left: unknown, right: unknown): unknown[] {
 
 export function mergedCaptureText(existing: Row, incoming: Row): string | null {
   let text = typeof existing.raw_text === "string" ? existing.raw_text : "";
-  for (const value of [incoming.raw_text, incoming.title !== existing.title ? incoming.title : null]) {
+  for (const value of [incoming.raw_text]) {
     if (typeof value === "string" && value.trim() && !text.includes(value.trim())) text += `${text ? "\n\n" : ""}${value.trim()}`;
   }
   return text || null;
+}
+
+// Legacy raw_text may contain generated titles. Keep that history, but only
+// separately recorded incoming source text is evidence for semantic analysis.
+function captureTextHash(row: Row): string {
+  return createHash("sha256").update(JSON.stringify([row.source_url, row.raw_text])).digest("hex");
+}
+export function capturedSourceTexts(row: Row): string[] {
+  const evidence = row.source_resolution?.captured_text_v1;
+  return evidence?.hash === captureTextHash(row) && Array.isArray(evidence.texts)
+    && evidence.texts.every((text: unknown) => typeof text === "string") ? evidence.texts : [];
+}
+export function capturedSourceResolution(row: Row, incomingText: unknown, priorTexts = capturedSourceTexts(row)): Row | undefined {
+  if (typeof row.source_url !== "string" || typeof incomingText !== "string") return undefined;
+  const texts = [...new Set([...priorTexts, incomingText].filter(text => text.trim()))];
+  return { original_url: row.source_url, resolved_url: row.source_url, redirect_chain: [row.source_url], status: "opaque_unresolved",
+    ...row.source_resolution, captured_text_v1: { hash: captureTextHash(row), texts } };
+}
+export async function recordCapturedSourceText(client: PoolClient, row: Row, incomingText: unknown, priorTexts?: string[]): Promise<Row> {
+  const resolution = capturedSourceResolution(row, incomingText, priorTexts);
+  if (!resolution) return row;
+  return (await client.query("update captures set source_resolution=$3::jsonb where id=$1 and user_id=$2 returning *", [row.id, row.user_id, JSON.stringify(resolution)])).rows[0];
+}
+
+// Completing analysis does not confirm a place or settle a separate workflow.
+export async function completeEmptySourceAnalysis(client: PoolClient, captureId: string, workflowRunId?: string): Promise<void> {
+  await client.query(`update place_candidates set missing_info=array(select item from unnest(missing_info) item where lower(item) <> 'analysis pending'), updated_at=now()
+    where capture_id=$1 and workflow_run_id is not distinct from $2::uuid and status='source_only'
+      and exists(select 1 from unnest(missing_info) item where lower(item)='analysis pending')`, [captureId, workflowRunId ?? null]);
 }
 
 export async function reuseCapture(client: PoolClient, userId: string, body: Row): Promise<Row | undefined> {
@@ -65,7 +95,7 @@ export async function reuseCapture(client: PoolClient, userId: string, body: Row
   // candidates again. Keep their collection dates aligned without new decisions.
   await client.query("update place_candidates set created_at=$2 where capture_id=$1 and created_at>$2::timestamptz", [capture.id, capture.created_at]);
   await client.query("update places p set created_at=$3 where p.user_id=$2 and p.created_at>$3::timestamptz and exists (select 1 from place_candidates pc where pc.capture_id=$1 and pc.place_id=p.id and pc.status in ('saved','confirmed'))", [capture.id, userId, capture.created_at]);
-  return capture;
+  return recordCapturedSourceText(client, capture, body.raw_text, capturedSourceTexts(existing));
 }
 
 export function earliestKnownDate(values: unknown[]): string | Date | undefined {

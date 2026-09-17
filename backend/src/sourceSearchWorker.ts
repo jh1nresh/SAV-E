@@ -36,6 +36,8 @@ const execFileAsync = promisify(execFile);
 export type SourceSearchInput = {
   sourceUrl?: string | null;
   rawText?: string | null;
+  // Null explicitly excludes legacy stored text with unknown provenance.
+  semanticSourceText?: string | null;
   title?: string | null;
   suggestedSearchQueries?: string[];
   maxQueries?: number;
@@ -111,6 +113,7 @@ export type SourceSearchOutput = {
   sourceResolution?: SourceResolution;
   errors: string[];
   receipt: SourceRecoveryReceipt;
+  semanticStatus?: SemanticAnalysisResult["status"];
 };
 
 export type SourceMetadata = {
@@ -192,7 +195,7 @@ export async function runSourceSearchRecovery(
   // requested post again rather than trusting an older unscoped JSON caption.
   // Keep source paragraph boundaries and every available character, not a
   // head/tail sample or a list of regex-selected venue lines.
-  const caption = unique([input.rawText, metadata?.description, metadata?.title]
+  const caption = unique([input.semanticSourceText !== undefined ? input.semanticSourceText : input.rawText, metadata?.description, metadata?.title]
     .filter((value): value is string => typeof value === "string" && value.trim().length > 0)).join("\n\n");
   const analyze = options.semanticAnalyzer ?? analyzeSocialCaption;
   let result = await analyze({ caption });
@@ -226,7 +229,7 @@ export async function runSourceSearchRecovery(
   if (result.status === "analysis_pending") errors.push("Semantic analysis unavailable; source preserved for retry");
   const candidates = semanticRecoveryCandidates(result);
   return {
-    queries: [], searchResults: [], candidates, mediaEvidence,
+    queries: [], searchResults: [], candidates, mediaEvidence, semanticStatus: result.status,
     sourceResolution: document?.resolution, errors,
     receipt: {
       input: "social_url", capabilityLevel: mediaEvidence.length ? "media_evidence_recovery" : "metadata_enrichment",

@@ -26,6 +26,7 @@ syncBuiltinESMExports();
 globalThis.fetch = async (input, init) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
   if (url.hostname === 'www.instagram.com' && url.pathname === '/reel/memory-fixture/') return new Response('<meta property="og:title" content="fixture on Instagram: &quot;店名「Fixture Cafe」 📍台北市大安區安和路一段100號&quot;">');
+  if (url.hostname === 'www.instagram.com' && url.pathname === '/reel/empty-semantic/') return new Response('<meta property="og:description" content="A quiet walk">');
   const google = url.hostname === 'maps.googleapis.com' && url.pathname === '/maps/api/place/textsearch/json';
   const gemini = url.hostname === 'generativelanguage.googleapis.com' && url.pathname.startsWith('/v1beta/models/');
   const publicSearch = ['duckduckgo.com', 'html.duckduckgo.com'].includes(url.hostname) && url.pathname === '/html/';
@@ -42,6 +43,15 @@ globalThis.fetch = async (input, init) => {
   const failed = google ? url.searchParams.get('query') === 'fixture-provider-failure' : String(init?.body).includes('fixture-provider-failure');
   appendFileSync(process.env.ANALYSIS_FIXTURE_CALLS, JSON.stringify({ provider: google ? 'google' : 'gemini', failed })+'\\n');
   if (failed) return Response.json({ error: { message: 'synthetic provider failure' } }, { status: 503 });
+  const prompt = gemini ? JSON.parse(init.body).contents?.[0]?.parts?.[0]?.text ?? '' : '';
+  if (gemini && prompt.includes('SOURCE_JSON')) {
+    const source = JSON.parse(prompt.slice(prompt.indexOf('{', prompt.indexOf('SOURCE_JSON'))));
+    if (source.caption.includes('Generated guess')) throw new Error('Generated capture label leaked into original evidence');
+    const field = value => ({ value, quote: value, source: 'caption' });
+    const venues = source.caption.includes('Fixture Cafe') ? [{ name: field('Fixture Cafe'), branch: null, address: field('台北市大安區安和路一段100號'), transport: null }] : [];
+    return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ venues }) }] } }], usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 30 } });
+  }
+  if (google && url.searchParams.get('query')?.includes('台北市大安區安和路一段100號')) return Response.json({ status: 'OK', results: [{ place_id: 'fixture-pikul-flow', name: 'Fixture Cafe', formatted_address: '台北市大安區安和路一段100號', geometry: { location: { lat: 25, lng: 121 } } }] });
   const multiVenue = google ? /Alpha Fixture Cafe|Beta Fixture Cafe|Gamma Fixture Cafe/.exec(url.searchParams.get('query') ?? '')?.[0] : undefined;
   if (multiVenue) return Response.json({ status: 'OK', results: [{ place_id: 'fixture-' + multiVenue, name: multiVenue, formatted_address: multiVenue.startsWith('Alpha') ? '1111 Park Ave, Tustin, CA 92782' : multiVenue.startsWith('Beta') ? '2222 Park Ave, Tustin, CA 92782' : '3333 Park Ave, Tustin, CA 92782', geometry: { location: { lat: multiVenue.startsWith('Alpha') ? 25 : multiVenue.startsWith('Beta') ? 26 : 27, lng: 121 } } }] });
   return Response.json(google
@@ -325,6 +335,33 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       const reload = await api("/v0/places", undefined, mergeOwner);
       const row = (reload.body as any).find((row: any) => row.id === place);
       assert.equal(row.created_at, "2025-01-01T00:00:00Z"); assert.equal(row.name, "Merged Cafe Updated");
+    });
+
+    await t.test("social source provenance and completed-empty state survive real HTTP persistence", async () => {
+      for (const failed of [false, true]) {
+        const source = `https://www.instagram.com/reel/empty-semantic/?failure=${failed}`;
+        const captureId = randomUUID();
+        await pool.query("insert into captures(id,user_id,source_url,raw_text,title) values($1,$2,$3,'Old caption\n\nGenerated guess','Generated guess')", [captureId, owner.guest_id, source]);
+        const text = failed ? "fixture-provider-failure" : "No venue in this caption";
+        const repeated = await api("/v0/memory/captures", { source_url: source, raw_text: text, title: "Generated guess 2" }, owner);
+        assert.equal(repeated.status, 201); assert.equal(repeated.body.id, captureId);
+        assert.ok(!repeated.body.raw_text.includes("Generated guess 2"));
+        assert.deepEqual(repeated.body.source_resolution.captured_text_v1.texts, [text]);
+        const run = await api("/v0/workflows/place-recovery/runs", { source_url: source }, owner);
+        const independent = await api("/v0/workflows/place-recovery/runs", { source_url: source }, owner);
+        const clue = await api("/v0/memory/candidates", { capture_id: captureId, workflow_run_id: run.body.id, name: "Saved link", status: "source_only", missing_info: ["Analysis pending", "Exact place needed"] }, owner);
+        const otherClue = await api("/v0/memory/candidates", { capture_id: captureId, workflow_run_id: independent.body.id, name: "Saved link", status: "source_only", missing_info: ["Analysis pending"] }, owner);
+        const aid = await start(owner);
+        const result = await api(`/v0/memory/captures/${captureId}/search-recovery`, { workflow_run_id: run.body.id, include_media_evidence: false }, owner, { "x-save-analysis-id": aid });
+        assert.equal(result.status, 200, JSON.stringify(result.body)); assert.deepEqual(result.body.created_candidates, []);
+        assert.equal(result.body.errors.length > 0, failed, JSON.stringify(result.body));
+        const persisted = (await pool.query("select * from place_candidates where id=$1", [clue.body.id])).rows[0];
+        assert.deepEqual(persisted.missing_info, failed ? ["Analysis pending", "Exact place needed"] : ["Exact place needed"]);
+        assert.equal(persisted.status, "source_only"); assert.equal(persisted.workflow_run_id, run.body.id);
+        assert.deepEqual((await pool.query("select missing_info from place_candidates where id=$1", [otherClue.body.id])).rows[0].missing_info, ["Analysis pending"]);
+        const reloaded = await api(`/v0/memory/captures/${captureId}`, undefined, owner);
+        assert.deepEqual(reloaded.body.source_resolution.captured_text_v1.texts, [text]);
+      }
     });
 
     await t.test("explicit source retry reuses capture time and persists supersession without changing user truth or receipts", async () => {
