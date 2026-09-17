@@ -89,6 +89,16 @@ test("real database preserves workflow ownership chronology and ambiguous source
     const alternativeBody = { capture_id: alternativesCapture, name: "Shared Building", address: "1 Road", latitude: 25, longitude: 121, status: "review", evidence: [{ google_place_id: "second-provider" }] };
     assert.equal((await prepareCandidate(client, alternativeBody)).existing, undefined, "distinct provider alternative remains a separate candidate");
     assert.equal((await prepareCandidate(client, { ...alternativeBody, evidence: [{ google_place_id: "first-provider" }] })).existing?.id, firstAlternative, "same provider repeat still reuses its candidate");
+    const upgradeCapture = randomUUID(), weak = randomUUID(), rejected = randomUUID();
+    await client.query("insert into captures(id,user_id) values($1,$2)", [upgradeCapture, owner]);
+    await client.query("insert into place_candidates(id,capture_id,workflow_run_id,name,address,status,missing_info) values($1,$3,$4,'Verified Later','2 Road','needs_more_evidence',array['Verified coordinates']),($2,$3,$5,'Verified Later','2 Road','rejected',array['Verified coordinates'])", [weak, rejected, upgradeCapture, run, otherRun]);
+    const verified = { capture_id: upgradeCapture, workflow_run_id: run, name: "Verified Later", address: "2 Road", status: "review", latitude: 25, longitude: 121, confidence: 0.85, missing_info: ["User confirmation before saving as Map Stamp"], evidence: [{ google_place_id: "verified-later", google_types: ["lodging"] }] };
+    const promoted = (await prepareCandidate(client, verified)).existing!;
+    assert.equal(promoted.id, weak); assert.equal(promoted.workflow_run_id, run);
+    assert.equal(promoted.latitude, 25); assert.equal(promoted.longitude, 121); assert.equal(promoted.status, "review");
+    assert.deepEqual(promoted.missing_info, verified.missing_info); assert.deepEqual(promoted.evidence, verified.evidence);
+    const terminal = (await prepareCandidate(client, { ...verified, workflow_run_id: otherRun })).existing!;
+    assert.equal(terminal.id, rejected); assert.equal(terminal.status, "rejected"); assert.equal(terminal.latitude, null);
     const emptyCapture = randomUUID(), emptyCandidate = randomUUID(), independent = randomUUID();
     await client.query("insert into captures(id,user_id,source_url,raw_text) values($1,$2,'https://instagram.com/p/provenance/','Original text')", [emptyCapture, owner]);
     const reusedSource = await reuseCapture(client, owner, { source_url: "https://instagram.com/p/provenance/", raw_text: "Fresh source", title: "Generated label" });

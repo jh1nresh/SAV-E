@@ -1670,10 +1670,12 @@ function socialCaptionFromHTML(html: string, sourceURL: URL | undefined): string
 
 export function sourceMetadataFromHTML(html: string, resolvedURL?: string): SourceMetadata {
   const baseURL = resolvedURL ? safeURL(resolvedURL) : undefined;
+  const title = metadataValue(html, ["og:title", "twitter:title"]) ?? htmlTitle(html);
+  const description = metadataValue(html, ["og:description", "twitter:description", "description"]);
   return {
     resolvedURL,
-    title: metadataValue(html, ["og:title", "twitter:title"]) ?? htmlTitle(html),
-    description: socialCaptionFromHTML(html, baseURL) ?? metadataValue(html, ["og:description", "twitter:description", "description"]),
+    title: title === undefined ? undefined : decodeHTML(title),
+    description: socialCaptionFromHTML(html, baseURL) ?? (description === undefined ? undefined : decodeHTML(description)),
     imageURL: safePublicMediaURL(metadataValue(html, ["og:image:secure_url", "og:image", "twitter:image"]), baseURL),
     videoURL: safePublicMediaURL(metadataValue(html, ["og:video:secure_url", "og:video", "og:video:url", "twitter:player:stream"]), baseURL),
   };
@@ -2262,9 +2264,13 @@ function stripTags(value: string): string {
 }
 
 export function decodeHTML(value: string): string {
+  const character = (code: string, radix: number) => {
+    const point = Number.parseInt(code, radix);
+    return point > 0 && point <= 0x10ffff && !(point >= 0xd800 && point <= 0xdfff) ? String.fromCodePoint(point) : "\uFFFD";
+  };
   return value
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
-    .replace(/&#([0-9]+);/g, (_, code) => String.fromCodePoint(Number.parseInt(code, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => character(code, 16))
+    .replace(/&#([0-9]+);/g, (_, code) => character(code, 10))
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, "\"")
     .replace(/&#034;/g, "\"")

@@ -126,6 +126,16 @@ export async function prepareCandidate(client: PoolClient, body: Row): Promise<{
   const createdAt = earliestKnownDate([capture.rows[0]?.created_at, ...matches.map(row => row.created_at), body.created_at]);
   const existing = matches.find(row => (row.workflow_run_id ?? null) === (body.workflow_run_id ?? null));
   if (existing) {
+    const hasCoordinates = (row: Row) => typeof row.latitude === "number" && typeof row.longitude === "number"
+      && Number.isFinite(row.latitude) && Number.isFinite(row.longitude)
+      && Math.abs(row.latitude) <= 90 && Math.abs(row.longitude) <= 180 && (row.latitude !== 0 || row.longitude !== 0);
+    if (pending.has(existing.status) && !existing.place_id && body.status === "review"
+      && !hasCoordinates(existing) && hasCoordinates(body)) {
+      // Verification may arrive on a repeat after a Maps outage. Upgrade only
+      // this actionable workflow row; terminal user decisions remain untouched.
+      await client.query("update place_candidates set latitude=$2, longitude=$3, confidence=$4, missing_info=$5, status='review' where id=$1",
+        [existing.id, body.latitude, body.longitude, body.confidence ?? existing.confidence, body.missing_info ?? existing.missing_info]);
+    }
     const updated = await client.query("update place_candidates set evidence=$2::jsonb, created_at=coalesce($3::timestamptz,created_at), updated_at=now() where id=$1 returning *", [existing.id, JSON.stringify(mergedEvidence(existing.evidence, body.evidence)), createdAt ?? null]);
     if (["saved", "confirmed"].includes(existing.status) && existing.place_id && createdAt !== undefined) {
       // An already confirmed source can refine collection time without a new

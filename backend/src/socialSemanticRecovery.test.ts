@@ -154,3 +154,18 @@ test("Google identity and types propagate only from matched or ambiguous provide
     }
   }
 });
+
+test("HTML metadata entities are decoded before grounding without changing JSON caption text", async () => {
+  const html = '<meta property="og:title" content="A&amp;W"><meta property="og:description" content="Joe&#39;s&#10;1 Main Street&#10;A&amp;W">';
+  const metadata = sourceMetadataFromHTML(html, input.sourceUrl);
+  assert.equal(metadata.title, "A&W"); assert.equal(metadata.description, "Joe's\n1 Main Street\nA&W");
+  await runSourceSearchRecovery({ sourceUrl: input.sourceUrl }, async () => html, async () => [], {
+    semanticAnalyzer: async value => {
+      assert.ok(value.caption.includes("Joe's\n1 Main Street\nA&W"));
+      return { status: "no_place_evidence", venues: [] };
+    }, includeMediaEvidence: false,
+  });
+  const literal = 'Literal &amp;W';
+  assert.equal(sourceMetadataFromHTML(html + `<script>{"shortcode":"fixture","caption":{"text":${JSON.stringify(literal)}}}</script>`, input.sourceUrl).description, literal);
+  assert.equal(sourceMetadataFromHTML('<meta property="og:description" content="Joe&#99999999;s">').description, "Joe\uFFFDs");
+});
