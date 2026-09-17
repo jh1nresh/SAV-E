@@ -1681,7 +1681,9 @@ final class SocialLinkReviewCandidateService {
                 let videoURL = metadataVideoURL(in: html, baseURL: canonicalURL)
                 let jsonCaption = embeddedSocialCaption(in: html, sourceURL: canonicalURL)
                 let loginPattern = #"(?i)^(?:log\s*in|sign\s*in|登入|登录|登錄)(?:\b|[ •·|:：—-])"#
-                let loginShell = (title ?? "").range(of: loginPattern, options: .regularExpression) != nil
+                let loginShell = [rawTitle, description].compactMap { $0 }.contains {
+                    $0.trimmingCharacters(in: .whitespacesAndNewlines).range(of: loginPattern, options: .regularExpression) != nil
+                }
                 if loginShell && jsonCaption == nil {
                     return PublicMetadata(resolvedURL: canonicalURL.absoluteString, fetchReturnedNothing: true)
                 }
