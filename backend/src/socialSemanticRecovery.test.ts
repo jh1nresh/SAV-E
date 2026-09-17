@@ -54,7 +54,7 @@ test("budget controls cannot fall through to heuristics", async () => {
 });
 test("full embedded caption wins over teaser with paragraph boundaries intact", () => {
   const full = "開始\n" + "上下文。".repeat(650) + "\n" + caption + "\n結尾";
-  assert.equal(sourceMetadataFromHTML(`<meta property="og:description" content="teaser"><script>{"caption":{"text":${JSON.stringify(full)}}}</script>`).description, full);
+  assert.equal(sourceMetadataFromHTML(`<meta property="og:description" content="teaser"><script>{"shortcode":"fixture","caption":{"text":${JSON.stringify(full)}}}</script>`, input.sourceUrl).description, full);
 });
 
 test("oversized social documents fail instead of analyzing a silently clipped caption", async () => {
@@ -71,4 +71,25 @@ test("queued Threads sources use semantic recovery and cannot fall back to venue
       });
     assert.equal(calls, 1); assert.deepEqual(result.candidates, []); assert.deepEqual(result.queries, []);
   }
+});
+
+test("generated capture titles and legacy unscoped captions are not original evidence", async () => {
+  let fetched = 0;
+  await runSourceSearchRecovery({ ...input, title: "Earlier guessed restaurant" }, async () => { fetched++; return ""; }, async () => [], {
+    persistedSourceResolution: { original_url: input.sourceUrl, resolved_url: input.sourceUrl, redirect_chain: [input.sourceUrl], status: "resolved", caption: "Earlier unrelated embedded caption" },
+    semanticAnalyzer: async value => { assert.equal(value.caption, caption); return structuredClone(extracted); },
+  });
+  assert.equal(fetched, 1);
+});
+
+test("embedded captions must belong to the requested social post", () => {
+  const item = (id: string, text: string) => ({ shortcode: id, caption: { text } });
+  const html = `<meta property="og:description" content="page description"><script>${JSON.stringify({ recommendations: [item("other", "Unrelated venue")], target: item("fixture", caption) })}</script>`;
+  assert.equal(sourceMetadataFromHTML(html, input.sourceUrl).description, caption);
+  assert.equal(sourceMetadataFromHTML(html, "https://example.com/post/fixture").description, "page description");
+  assert.equal(sourceMetadataFromHTML(html, "https://instagram.com/p/missing/").description, "page description");
+  const conflicting = `<meta property="og:description" content="page description"><script>${JSON.stringify([item("fixture", caption), item("fixture", "Conflicting caption")])}</script>`;
+  assert.equal(sourceMetadataFromHTML(conflicting, input.sourceUrl).description, "page description");
+  const unknown = '<meta property="og:description" content="page description"><script>{"caption":{"text":"Unbound venue"}}</script>';
+  assert.equal(sourceMetadataFromHTML(unknown, input.sourceUrl).description, "page description");
 });

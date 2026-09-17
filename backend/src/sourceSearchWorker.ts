@@ -186,11 +186,13 @@ export async function runSourceSearchRecovery(
   }
   const errors: string[] = [];
   const document = await fetchSourceDocument(input.sourceUrl, fetchText, errors,
-    options.sourceDocumentResolver, options.persistedSourceResolution);
+    options.sourceDocumentResolver, undefined);
   const metadata = document?.metadata;
+  // Legacy persisted resolutions have no caption-to-post provenance. Fetch the
+  // requested post again rather than trusting an older unscoped JSON caption.
   // Keep source paragraph boundaries and every available character, not a
   // head/tail sample or a list of regex-selected venue lines.
-  const caption = unique([input.rawText, metadata?.description, input.title, metadata?.title]
+  const caption = unique([input.rawText, metadata?.description, metadata?.title]
     .filter((value): value is string => typeof value === "string" && value.trim().length > 0)).join("\n\n");
   const analyze = options.semanticAnalyzer ?? analyzeSocialCaption;
   let result = await analyze({ caption });
@@ -1632,16 +1634,33 @@ function cacheResolvedSourceDocument(cacheKey: string, document: ResolvedSourceD
   });
 }
 
-function socialCaptionFromHTML(html: string): string | undefined {
-  for (const pattern of [
-    /"caption"\s*:\s*\{[^{}]*"text"\s*:\s*("(?:\\.|[^"\\])*")/s,
-    /"edge_media_to_caption"\s*:\s*\{.*?"text"\s*:\s*("(?:\\.|[^"\\])*")/s,
-  ]) {
-    const quoted = html.match(pattern)?.[1];
-    if (quoted) { try { const text: unknown = JSON.parse(quoted); if (typeof text === "string" && text.trim()) return text; } catch {} }
+function socialCaptionFromHTML(html: string, sourceURL: URL | undefined): string | undefined {
+  if (!sourceURL || !isPlacePlatformURL(sourceURL)) return undefined;
+  const contentID = canonicalContentIDFromURL(sourceURL);
+  if (!contentID) return undefined;
+  const captions = new Set<string>();
+  const identityKeys = ["shortcode", "code", "id", "noteId", "note_id", "aweme_id"];
+  let visited = 0;
+  for (const script of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
+    let root: unknown;
+    try { root = JSON.parse(script[1]); } catch { continue; }
+    const pending: Array<{ value: unknown; depth: number }> = [{ value: root, depth: 0 }];
+    while (pending.length && ++visited <= 20_000) {
+      const { value, depth } = pending.pop()!;
+      if (!value || typeof value !== "object" || depth > 64) continue;
+      if (Array.isArray(value)) { for (const child of value) pending.push({ value: child, depth: depth + 1 }); continue; }
+      const node = value as Record<string, any>;
+      if (identityKeys.some(key => String(node[key] ?? "") === contentID)) {
+        const texts = [node.caption?.text, typeof node.caption === "string" ? node.caption : undefined, node.desc,
+          ...(Array.isArray(node.edge_media_to_caption?.edges) ? node.edge_media_to_caption.edges.map((edge: any) => edge?.node?.text) : [])];
+        for (const text of texts) if (typeof text === "string" && text.trim()) captions.add(text);
+      }
+      for (const child of Object.values(node)) pending.push({ value: child, depth: depth + 1 });
+    }
+    if (visited > 20_000) return undefined;
   }
-  const description = metadataValue(html, ["og:description", "twitter:description", "description"]);
-  return description ? decodeHTML(description) : undefined;
+  // Conflicting captions for one post are not resolved by choosing the first.
+  return captions.size === 1 ? [...captions][0] : undefined;
 }
 
 export function sourceMetadataFromHTML(html: string, resolvedURL?: string): SourceMetadata {
@@ -1649,7 +1668,7 @@ export function sourceMetadataFromHTML(html: string, resolvedURL?: string): Sour
   return {
     resolvedURL,
     title: metadataValue(html, ["og:title", "twitter:title"]) ?? htmlTitle(html),
-    description: socialCaptionFromHTML(html) ?? metadataValue(html, ["og:description", "twitter:description", "description"]),
+    description: socialCaptionFromHTML(html, baseURL) ?? metadataValue(html, ["og:description", "twitter:description", "description"]),
     imageURL: safePublicMediaURL(metadataValue(html, ["og:image:secure_url", "og:image", "twitter:image"]), baseURL),
     videoURL: safePublicMediaURL(metadataValue(html, ["og:video:secure_url", "og:video", "og:video:url", "twitter:player:stream"]), baseURL),
   };
@@ -1763,6 +1782,7 @@ function canonicalContentIDFromURL(url: URL | undefined): string | undefined {
   if (hostMatchesDomain(host, "dianping.com")) markers.push("shop", "feed", "review");
   if (hostMatchesDomain(host, "meituan.com")) markers.push("restaurant", "shop", "poi");
   if (hostMatchesDomain(host, "instagram.com")) markers.push("reel", "reels", "p", "tv");
+  if (hostMatchesDomain(host, "threads.net") || hostMatchesDomain(host, "threads.com")) markers.push("post");
   if (hostMatchesDomain(host, "tiktok.com")) markers.push("video");
 
   for (const marker of markers) {

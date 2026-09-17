@@ -4333,6 +4333,22 @@ final class SocialPlacePipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testEmbeddedSocialCaptionRequiresMatchingPostIdentity() throws {
+        let service = SocialLinkReviewCandidateService()
+        let caption = "前文\n" + String(repeating: "完整上下文。", count: 500) + "\n初泰Pikul 信義象山門市"
+        func item(_ id: String, _ text: String) -> [String: Any] { ["shortcode": id, "caption": ["text": text]] }
+        func html(_ objects: [[String: Any]]) throws -> String {
+            "<script>" + String(decoding: try JSONSerialization.data(withJSONObject: objects), as: UTF8.self) + "</script>"
+        }
+        let document = try html([item("other", "Unrelated venue"), item("target", caption)])
+        XCTAssertEqual(service.embeddedSocialCaption(in: document, sourceURL: URL(string: "https://instagram.com/p/target/")!), caption)
+        XCTAssertNil(service.embeddedSocialCaption(in: document, sourceURL: URL(string: "https://example.com/p/target/")!))
+        XCTAssertNil(service.embeddedSocialCaption(in: document, sourceURL: URL(string: "https://instagram.com/p/missing/")!))
+        XCTAssertNil(service.embeddedSocialCaption(in: try html([item("target", caption), item("target", "Conflicting")]), sourceURL: URL(string: "https://instagram.com/p/target/")!))
+        XCTAssertNil(service.embeddedSocialCaption(in: "<script>{\"caption\":{\"text\":\"Unbound venue\"}}</script>", sourceURL: URL(string: "https://instagram.com/p/target/")!))
+    }
+
+    @MainActor
     func testThreadsPreservesCaptionAndUsesSemanticPendingState() async {
         for host in ["www.threads.net", "www.threads.com"] {
             let url = "https://\(host)/@savvy/post/fixture"

@@ -1657,7 +1657,7 @@ final class SocialLinkReviewCandidateService {
                 let keywords = metadataValue(in: html, keys: ["keywords"])
                 let imageURL = metadataImageURL(in: html, baseURL: canonicalURL)
                 let videoURL = metadataVideoURL(in: html, baseURL: canonicalURL)
-                let jsonCaption = embeddedSocialCaption(in: html)
+                let jsonCaption = embeddedSocialCaption(in: html, sourceURL: canonicalURL)
                 return PublicMetadata(
                     resolvedURL: canonicalURL.absoluteString,
                     title: title,
@@ -1711,23 +1711,44 @@ final class SocialLinkReviewCandidateService {
         return isSafePublicHTTPURL(url) ? url : nil
     }
 
-    private func embeddedSocialCaption(in html: String) -> String? {
-        let patterns = [
-            #"\"caption\"\s*:\s*\{[^{}]*\"text\"\s*:\s*\"((?:\\.|[^\"])*)\""#,
-            #"\"edge_media_to_caption\"\s*:\s*\{.*?\"text\"\s*:\s*\"((?:\\.|[^\"])*)\""#,
-            #"\"accessibility_caption\"\s*:\s*\"((?:\\.|[^\"])*)\""#
-        ]
-        for pattern in patterns {
-            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else { continue }
-            let range = NSRange(html.startIndex..<html.endIndex, in: html)
-            guard let match = regex.firstMatch(in: html, range: range),
-                  match.numberOfRanges > 1,
-                  let valueRange = Range(match.range(at: 1), in: html) else { continue }
-            let decoded = decodeJSONStringFragment(String(html[valueRange]))
-            let cleaned = cleanHTMLText(decoded)
-            if !cleaned.isEmpty { return cleaned }
+    func embeddedSocialCaption(in html: String, sourceURL: URL) -> String? {
+        guard SocialShareTextNormalizer.platform(forURLString: sourceURL.absoluteString).includesCaptionInAnalysis else { return nil }
+        let parts = sourceURL.path.split(separator: "/").map(String.init)
+        let markers = ["p", "reel", "reels", "tv", "post", "explore", "item", "video", "note"]
+        let pathID = parts.indices.first { markers.contains(parts[$0].lowercased()) && $0 + 1 < parts.count }.map { parts[$0 + 1] }
+        let queryID = URLComponents(url: sourceURL, resolvingAgainstBaseURL: false)?.queryItems?.first {
+            ["id", "noteid", "note_id", "videoid", "video_id"].contains($0.name.lowercased())
+        }?.value
+        guard let contentID = pathID ?? queryID, !contentID.isEmpty,
+              let regex = try? NSRegularExpression(pattern: #"<script\b[^>]*>([\s\S]*?)</script>"#, options: [.caseInsensitive]) else { return nil }
+        let identities = ["shortcode", "code", "id", "noteId", "note_id", "aweme_id"]
+        var captions = Set<String>()
+        var visited = 0
+        for match in regex.matches(in: html, range: NSRange(html.startIndex..<html.endIndex, in: html)) {
+            guard let range = Range(match.range(at: 1), in: html),
+                  let data = String(html[range]).data(using: .utf8),
+                  let root = try? JSONSerialization.jsonObject(with: data) else { continue }
+            var pending: [(Any, Int)] = [(root, 0)]
+            while let (value, depth) = pending.popLast() {
+                visited += 1
+                guard visited <= 20_000 else { return nil }
+                guard depth <= 64 else { continue }
+                if let children = value as? [Any] {
+                    pending.append(contentsOf: children.map { ($0, depth + 1) })
+                    continue
+                }
+                guard let node = value as? [String: Any] else { continue }
+                if identities.contains(where: { (node[$0] as? String ?? (node[$0] as? NSNumber)?.stringValue) == contentID }) {
+                    var texts = [(node["caption"] as? [String: Any])?["text"] as? String, node["caption"] as? String, node["desc"] as? String].compactMap { $0 }
+                    if let edges = (node["edge_media_to_caption"] as? [String: Any])?["edges"] as? [[String: Any]] {
+                        texts += edges.compactMap { ($0["node"] as? [String: Any])?["text"] as? String }
+                    }
+                    captions.formUnion(texts.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
+                }
+                pending.append(contentsOf: node.values.map { ($0, depth + 1) })
+            }
         }
-        return nil
+        return captions.count == 1 ? captions.first : nil
     }
 
     private func thumbnailOCRLines(from imageURL: URL?) async -> [String] {
@@ -3855,18 +3876,6 @@ final class SocialLinkReviewCandidateService {
             .replacingOccurrences(of: "&nbsp;", with: " ")
             .replacingOccurrences(of: #"[ \t]+"#, with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func decodeJSONStringFragment(_ value: String) -> String {
-        let wrapped = "\"\(value)\""
-        guard let data = wrapped.data(using: .utf8),
-              let decoded = try? JSONDecoder().decode(String.self, from: data) else {
-            return value
-                .replacingOccurrences(of: #"\n"#, with: "\n")
-                .replacingOccurrences(of: #"\/"#, with: "/")
-                .replacingOccurrences(of: #"\""#, with: "\"")
-        }
-        return decoded
     }
 
     private func decodeNumericHTMLEntities(in value: String) -> String {
