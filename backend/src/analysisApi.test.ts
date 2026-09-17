@@ -26,6 +26,7 @@ syncBuiltinESMExports();
 globalThis.fetch = async (input, init) => {
   const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
   if (url.hostname === 'www.instagram.com' && url.pathname === '/reel/memory-fixture/') return new Response('<meta property="og:title" content="fixture on Instagram: &quot;店名「Fixture Cafe」 📍台北市大安區安和路一段100號&quot;">');
+  if (url.hostname === 'www.instagram.com' && url.pathname === '/reel/blocked-semantic/') return new Response('<title>Log in</title>Log in to continue');
   if (url.hostname === 'www.instagram.com' && url.pathname === '/reel/empty-semantic/') return new Response('<meta property="og:description" content="A quiet walk">');
   const google = url.hostname === 'maps.googleapis.com' && url.pathname === '/maps/api/place/textsearch/json';
   const gemini = url.hostname === 'generativelanguage.googleapis.com' && url.pathname.startsWith('/v1beta/models/');
@@ -367,6 +368,20 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
           assert.equal((await pool.query("select outcome from analysis_sessions where id=$1", [unscoped.body.analysis_id])).rows[0].outcome, "failed");
         }
       }
+    });
+
+    await t.test("URL-only login wall preserves pending state through HTTP reload", async () => {
+      const source = "https://www.instagram.com/reel/blocked-semantic/";
+      const capture = await api("/v0/memory/captures", { source_url: source, raw_text: source }, owner);
+      const run = await api("/v0/workflows/place-recovery/runs", { source_url: source }, owner);
+      const clue = await api("/v0/memory/candidates", { capture_id: capture.body.id, workflow_run_id: run.body.id, name: "Source clue", status: "source_only", missing_info: ["Analysis pending"] }, owner);
+      const before = (await calls()).filter(call => call.provider === "gemini").length;
+      const result = await api(`/v0/memory/captures/${capture.body.id}/search-recovery`, { workflow_run_id: run.body.id, include_media_evidence: false }, owner, { "x-save-analysis-id": await start(owner) });
+      assert.equal(result.status, 200, JSON.stringify(result.body)); assert.deepEqual(result.body.created_candidates, []);
+      assert.deepEqual(result.body.receipt.failureReason, { kind: "insufficient_source", reason: "login_required" });
+      const row = (await pool.query("select * from place_candidates where id=$1", [clue.body.id])).rows[0];
+      assert.deepEqual(row.missing_info, ["Analysis pending"]); assert.equal(row.status, "source_only");
+      assert.equal((await calls()).filter(call => call.provider === "gemini").length, before);
     });
 
     await t.test("explicit source retry reuses capture time and persists supersession without changing user truth or receipts", async () => {

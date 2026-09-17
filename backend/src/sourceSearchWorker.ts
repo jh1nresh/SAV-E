@@ -196,10 +196,14 @@ export async function runSourceSearchRecovery(
   // requested post again rather than trusting an older unscoped JSON caption.
   // Keep source paragraph boundaries and every available character, not a
   // head/tail sample or a list of regex-selected venue lines.
-  const caption = unique([input.semanticSourceText !== undefined ? input.semanticSourceText : input.rawText, metadata?.description, metadata?.title]
+  const captured = input.semanticSourceText !== undefined ? input.semanticSourceText : input.rawText;
+  const capturedCaption = typeof captured === "string" && safeURL(captured.trim())?.href === url.href ? undefined : captured;
+  const caption = unique([capturedCaption, metadata?.description, metadata?.title]
     .filter((value): value is string => typeof value === "string" && value.trim().length > 0)).join("\n\n");
   const analyze = options.semanticAnalyzer ?? analyzeSocialCaption;
-  let result = await analyze({ caption });
+  const sourceUnavailable = !caption.trim() && document?.resolution.status !== "resolved";
+  let result: SemanticAnalysisResult = caption.trim()
+    ? await analyze({ caption }) : { status: "no_place_evidence", venues: [] };
   let mediaEvidence: SourceMediaEvidence[] = [];
   const needsText = result.status === "no_place_evidence"
     || (result.status === "ready" && result.venues.some(venue => !venue.address));
@@ -213,7 +217,7 @@ export async function runSourceSearchRecovery(
       result = preserveGroundedSemanticResult(result, supplemented);
     }
   }
-  if (result.status === "no_place_evidence" && options.includeMediaEvidence !== false && input.sourceUrl) {
+  if (!sourceUnavailable && result.status === "no_place_evidence" && options.includeMediaEvidence !== false && input.sourceUrl) {
     try {
       const recoverVideo = options.videoVenueRecovery ?? (sourceURL => recoverInstagramVideoVenues(sourceURL, fetchBoundedMedia));
       const frames = await recoverVideo(input.sourceUrl);
@@ -227,18 +231,26 @@ export async function runSourceSearchRecovery(
       errors.push("Video evidence unavailable; source preserved");
     }
   }
-  if (result.status === "analysis_pending") errors.push("Semantic analysis unavailable; source preserved for retry");
+  let sourceFailure: SourceRecoveryFailureReason | undefined;
+  if (!caption.trim() && !mediaEvidence.some(item => item.text?.trim())) {
+    const status = document?.resolution.status;
+    sourceFailure = { kind: "insufficient_source", reason: status === "blocked_login" ? "login_required"
+      : status === "expired" ? "expired" : status === "opaque_unresolved" ? "unresolved_source" : "caption_missing" };
+    result = { status: "analysis_pending", venues: [] };
+    errors.push("Source content unavailable; analysis remains pending");
+  }
+  if (result.status === "analysis_pending" && !sourceFailure) errors.push("Semantic analysis unavailable; source preserved for retry");
   const candidates = semanticRecoveryCandidates(result, url.href);
   return {
     queries: [], searchResults: [], candidates, mediaEvidence, semanticStatus: result.status,
     sourceResolution: document?.resolution, errors,
     receipt: {
       input: "social_url", capabilityLevel: mediaEvidence.length ? "media_evidence_recovery" : "metadata_enrichment",
-      found: caption ? ["source_text"] : [], tried: ["grounded_semantic_extraction", ...(result.venues.length ? ["map_identity_verification"] : [])],
+      found: caption ? ["source_text"] : [], tried: [...(caption.trim() || mediaEvidence.some(item => item.text?.trim()) ? ["grounded_semantic_extraction"] : []), ...(result.venues.length ? ["map_identity_verification"] : [])],
       missing: result.status === "analysis_pending" ? ["Analysis pending"] : candidates.flatMap(candidate => candidate.missingInfo),
       output: candidates.length ? "review_candidate" : "source_only_clue",
       nextBestClue: result.status === "analysis_pending" ? "Source saved; analysis pending. Retry when analysis is available." : "Confirm the exact place before saving.",
-      ...(result.status === "analysis_pending" ? { failureReason: { kind: "provider_failure" as const, stage: "public_search" as const } } : {}),
+      ...(sourceFailure ? { failureReason: sourceFailure } : result.status === "analysis_pending" ? { failureReason: { kind: "provider_failure" as const, stage: "public_search" as const } } : {}),
     },
   };
 }

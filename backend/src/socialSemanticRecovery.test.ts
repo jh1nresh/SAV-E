@@ -169,3 +169,21 @@ test("HTML metadata entities are decoded before grounding without changing JSON 
   assert.equal(sourceMetadataFromHTML(html + `<script>{"shortcode":"fixture","caption":{"text":${JSON.stringify(literal)}}}</script>`, input.sourceUrl).description, literal);
   assert.equal(sourceMetadataFromHTML('<meta property="og:description" content="Joe&#99999999;s">').description, "Joe\uFFFDs");
 });
+
+test("unavailable URL-only sources stay pending with their source failure and no empty semantic calls", async () => {
+  for (const [status, reason] of [["blocked_login", "login_required"], ["expired", "expired"], ["opaque_unresolved", "unresolved_source"], ["resolved", "caption_missing"]] as const) {
+    const result = await runSourceSearchRecovery({ sourceUrl: input.sourceUrl, rawText: input.sourceUrl }, noPublicSearch, async () => [], {
+      sourceDocumentResolver: async () => ({ html: "", resolution: { originalURL: input.sourceUrl, resolvedURL: input.sourceUrl, redirectChain: [input.sourceUrl], status } }),
+      semanticAnalyzer: async () => { throw new Error("Empty unavailable text must not be reported as analyzed"); },
+      videoVenueRecovery: async () => [],
+    });
+    assert.equal(result.semanticStatus, "analysis_pending"); assert.ok(result.errors.length);
+    assert.deepEqual(result.receipt.failureReason, { kind: "insufficient_source", reason });
+    assert.deepEqual(result.receipt.tried, []); assert.deepEqual(result.candidates, []);
+  }
+  const captured = await runSourceSearchRecovery(input, noPublicSearch, async () => [], {
+    sourceDocumentResolver: async () => ({ html: "", resolution: { originalURL: input.sourceUrl, resolvedURL: input.sourceUrl, redirectChain: [input.sourceUrl], status: "blocked_login" } }),
+    semanticAnalyzer: async value => { assert.equal(value.caption, caption); return structuredClone(extracted); },
+  });
+  assert.equal(captured.semanticStatus, "ready", "actual captured text remains usable behind a login wall");
+});

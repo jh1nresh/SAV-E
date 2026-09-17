@@ -186,7 +186,7 @@ enum SocialShareTextNormalizer {
         let captionLines = working
             .components(separatedBy: .newlines)
             .map(SocialPlaceEvidenceScorer.cleanText)
-            .filter { !$0.isEmpty && !looksLikeShareTokenNoise($0) }
+            .filter { !looksLikeShareTokenNoise($0) }
 
         return SocialShareSourceBundle(
             rawShareText: rawShareText,
@@ -194,8 +194,8 @@ enum SocialShareTextNormalizer {
             primaryURLString: primary,
             platform: primary.map(platform(forURLString:)) ?? .generic,
             captionEvidence: primary.map { platform(forURLString: $0).includesCaptionInAnalysis } == true
-                ? working.trimmingCharacters(in: .whitespacesAndNewlines)
-                : captionLines.joined(separator: "\n"),
+                ? captionLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+                : captionLines.filter { !$0.isEmpty }.joined(separator: "\n"),
             creatorName: creatorName
         )
     }

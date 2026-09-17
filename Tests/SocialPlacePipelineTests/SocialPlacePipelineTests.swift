@@ -4364,6 +4364,17 @@ final class SocialPlacePipelineTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testSocialCaptionKeepsParagraphsWithoutOpaqueShareTokens() async throws {
+        let original = "初泰Pikul  信義象山門市\n\n  臺北市信義區信義路五段122號  \nAb1:/ Q9@ \n\n商業午餐與火山排骨\nhttps://instagram.com/p/token/"
+        let bundle = SocialShareTextNormalizer.normalize(original)
+        XCTAssertEqual(bundle.rawShareText, original)
+        XCTAssertTrue(bundle.captionEvidence.contains("初泰Pikul 信義象山門市\n\n臺北市信義區信義路五段122號"))
+        XCTAssertTrue(bundle.captionEvidence.contains("商業午餐與火山排骨"))
+        XCTAssertFalse(bundle.captionEvidence.contains("Ab1:/"))
+        XCTAssertFalse(try XCTUnwrap(bundle.privacyScopedAnalysisInput).contains("Q9@"))
+    }
+
     private final class SemanticAnalyzerStub: SocialSemanticAnalyzing {
         var calls: [(String, String?)] = []
         var response: (String, String?) -> SocialSemanticResult
