@@ -4511,6 +4511,13 @@ final class SocialPlacePipelineTests: XCTestCase {
             let place = Place.from(codable)
             XCTAssertEqual(place.googlePlaceId, match.id)
             XCTAssertEqual(place.category, category)
+            var otherEntity = queued
+            otherEntity.googlePlaceId = "different-provider"
+            XCTAssertFalse(reloaded.matchesImport(otherEntity))
+            _ = try SaveLocalVaultService(overrideVaultURL: url).saveReviewCandidate(otherEntity)
+            XCTAssertEqual(try SaveLocalVaultService(overrideVaultURL: url).reviewCandidates().count, 2)
+            _ = try SaveLocalVaultService(overrideVaultURL: url).saveReviewCandidate(queued)
+            XCTAssertEqual(try SaveLocalVaultService(overrideVaultURL: url).reviewCandidates().count, 2, "same provider repeat reuses its candidate")
         }
     }
 

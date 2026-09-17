@@ -21,6 +21,12 @@ test("candidate identity preserves different venues branches and weak evidence",
   assert.equal(sameCandidateIdentity({ ...cafe, place_id: "one" }, { ...cafe, place_id: "two" }), false);
   assert.equal(sameCandidateIdentity({ ...cafe, place_id: "one" }, { ...cafe, place_id: "one", name: "Alias" }), true);
 });
+test("provider alternatives at one address cannot collapse into one candidate", () => {
+  const first = { ...cafe, evidence: [{ google_place_id: "first" }] };
+  assert.equal(sameCandidateIdentity(first, { ...cafe, evidence: [{ google_place_id: "second" }] }), false);
+  assert.equal(sameCandidateIdentity(first, { ...cafe, evidence: [{ google_place_id: "first" }] }), true);
+  assert.equal(sameCandidateIdentity(first, { ...cafe, evidence: [{ text: "Google Place ID: second" }] }), true);
+});
 test("source-only reuse stays inside one capture and preserves rejected clue identity", () => {
   const clue = { capture_id: "capture", name: "Saved link", status: "source_only" };
   assert.equal(sameCandidateIdentity(clue, { ...clue }), true);
@@ -77,6 +83,12 @@ test("real database preserves workflow ownership chronology and ambiguous source
     assert.equal(separate.existing, undefined); assert.equal(separate.body.workflow_run_id, otherRun); assert.equal(separate.body.status, "review", "a separate pending reservation remains actionable without changing the original rejected row");
     assert.equal((await client.query("select workflow_run_id from place_candidates where id=$1", [candidate])).rows[0].workflow_run_id, run);
     assert.equal(await reuseCapture(client, foreign, { source_url: "https://fixture.invalid/one" }), undefined);
+    const alternativesCapture = randomUUID(), firstAlternative = randomUUID();
+    await client.query("insert into captures(id,user_id) values($1,$2)", [alternativesCapture, owner]);
+    await client.query("insert into place_candidates(id,capture_id,name,address,latitude,longitude,status,evidence) values($1,$2,'Shared Building','1 Road',25,121,'review',$3::jsonb)", [firstAlternative, alternativesCapture, JSON.stringify([{ google_place_id: "first-provider" }])]);
+    const alternativeBody = { capture_id: alternativesCapture, name: "Shared Building", address: "1 Road", latitude: 25, longitude: 121, status: "review", evidence: [{ google_place_id: "second-provider" }] };
+    assert.equal((await prepareCandidate(client, alternativeBody)).existing, undefined, "distinct provider alternative remains a separate candidate");
+    assert.equal((await prepareCandidate(client, { ...alternativeBody, evidence: [{ google_place_id: "first-provider" }] })).existing?.id, firstAlternative, "same provider repeat still reuses its candidate");
     const emptyCapture = randomUUID(), emptyCandidate = randomUUID(), independent = randomUUID();
     await client.query("insert into captures(id,user_id,source_url,raw_text) values($1,$2,'https://instagram.com/p/provenance/','Original text')", [emptyCapture, owner]);
     const reusedSource = await reuseCapture(client, owner, { source_url: "https://instagram.com/p/provenance/", raw_text: "Fresh source", title: "Generated label" });

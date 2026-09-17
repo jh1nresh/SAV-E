@@ -30,6 +30,12 @@ export function sameCandidateIdentity(left: Row, right: Row): boolean {
     && [left, right].every(row => !row.place_id && !identityText(row.address) && row.latitude == null && row.longitude == null)
     && (left.status === right.status || (identityText(left.name) && identityText(left.name) === identityText(right.name)))) return true;
   if (left.place_id && right.place_id) return left.place_id === right.place_id;
+  // Distinct provider entities remain alternatives even at the same address.
+  // Quotes are plain text; only explicit structured provider metadata counts.
+  const providerIDs = [left, right].flatMap(row => Array.isArray(row.evidence)
+    ? row.evidence.map((entry: any) => entry && typeof entry === "object" && typeof entry.google_place_id === "string" ? entry.google_place_id.trim() : "").filter(Boolean)
+    : []);
+  if (new Set(providerIDs).size > 1) return false;
   const name = identityText(left.name), address = identityText(left.address);
   if (!name || !address || name !== identityText(right.name) || address !== identityText(right.address)) return false;
   if ([left.latitude, left.longitude, right.latitude, right.longitude].every(value => typeof value === "number" && Number.isFinite(value))) {

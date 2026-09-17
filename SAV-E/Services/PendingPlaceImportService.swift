@@ -512,6 +512,8 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
                 && latitude == nil && longitude == nil
                 && pending.latitude == nil && pending.longitude == nil
         }
+        if let left = googlePlaceId, !left.isEmpty,
+           let right = pending.googlePlaceId, !right.isEmpty, left != right { return false }
         let normalizedName = SaveSourceIdentity.text(name)
         let normalizedAddress = SaveSourceIdentity.text(address)
         guard !normalizedName.isEmpty, !normalizedAddress.isEmpty,

@@ -185,7 +185,7 @@ final class SaveLocalVaultService: Sendable {
                         candidateName: incoming.displayTitle, address: incoming.address ?? "", category: "other",
                         latitude: incoming.latitude, longitude: incoming.longitude,
                         sourceURL: incoming.sourceURL, sourceText: incoming.sourceText, evidence: incoming.evidence,
-                        confidence: 0, missingInfo: [], savedAt: incoming.createdAt
+                        confidence: 0, missingInfo: [], savedAt: incoming.createdAt, googlePlaceId: incoming.googlePlaceId
                     ))
                 }
                 let record: SaveMemoryRecord
