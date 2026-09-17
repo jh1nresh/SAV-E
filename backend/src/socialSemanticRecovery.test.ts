@@ -187,3 +187,31 @@ test("unavailable URL-only sources stay pending with their source failure and no
   });
   assert.equal(captured.semanticStatus, "ready", "actual captured text remains usable behind a login wall");
 });
+
+test("semantic identity survives canonical Maps names and requires explicit source address", () => {
+  const result = structuredClone(extracted);
+  const source = { name: "初泰Pikul", branch: "信義象山門市", address: "臺北市信義區信義路五段122號" };
+  assert.deepEqual(semanticRecoveryCandidates(result, input.sourceUrl)[0].semanticSource, source);
+  result.venues[0].mapStatus = "matched";
+  result.venues[0].matches = [{ id: "pikul", name: "初泰 信義店", address: "110台灣台北市信義區信義路五段122號", latitude: 25, longitude: 121 }];
+  const verified = semanticRecoveryCandidates(result, input.sourceUrl)[0];
+  assert.equal(verified.name, "初泰 信義店"); assert.deepEqual(verified.semanticSource, source);
+  result.venues[0].address = null;
+  assert.equal(semanticRecoveryCandidates(result, input.sourceUrl)[0].semanticSource, undefined);
+});
+
+test("source transport outage stays a source provider failure while captured text remains usable", async () => {
+  const resolver = async () => { throw new Error("DNS or HTTP outage"); };
+  const empty = await runSourceSearchRecovery({ sourceUrl: input.sourceUrl }, noPublicSearch, async () => [], {
+    sourceDocumentResolver: resolver,
+    semanticAnalyzer: async () => { throw new Error("Empty source must not invoke semantic analysis"); },
+  });
+  assert.equal(empty.semanticStatus, "analysis_pending"); assert.deepEqual(empty.candidates, []);
+  assert.deepEqual(empty.receipt.failureReason, { kind: "provider_failure", stage: "source" });
+  const captured = await runSourceSearchRecovery(input, noPublicSearch, async () => [], {
+    sourceDocumentResolver: resolver,
+    semanticAnalyzer: async value => { assert.equal(value.caption, caption); return structuredClone(extracted); },
+  });
+  assert.equal(captured.semanticStatus, "ready"); assert.equal(captured.candidates.length, 1);
+  assert.equal(captured.receipt.failureReason, undefined);
+});

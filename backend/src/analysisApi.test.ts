@@ -400,6 +400,9 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       assert.deepEqual(recovered.evidence.filter((entry: any) => entry.google_place_id), [
         { google_place_id: "fixture-pikul-flow", google_types: ["cafe", "food", "point_of_interest"] },
       ]);
+      assert.deepEqual(recovered.evidence.filter((entry: any) => entry.semantic_source), [
+        { semantic_source: { name: "Fixture Cafe", branch: null, address: "台北市大安區安和路一段100號" } },
+      ]);
       assert.equal(recovered.place_id, null, "provider identity must not replace the app place UUID");
       assert.deepEqual((await pool.query("select evidence from place_candidates where id=$1", [recovered.id])).rows[0].evidence, recovered.evidence);
       assert.equal(recovered.created_at, captured.body.created_at); assert.notEqual(recovered.workflow_run_id, run);

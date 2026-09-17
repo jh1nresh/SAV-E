@@ -57,6 +57,7 @@ export type SourceSearchCandidate = {
   longitude?: number;
   placeId?: string;
   types?: string[];
+  semanticSource?: { name: string; branch?: string | null; address: string };
   evidence: string[];
   confidence: number;
   missingInfo: string[];
@@ -234,7 +235,7 @@ export async function runSourceSearchRecovery(
   let sourceFailure: SourceRecoveryFailureReason | undefined;
   if (!caption.trim() && !mediaEvidence.some(item => item.text?.trim())) {
     const status = document?.resolution.status;
-    sourceFailure = { kind: "insufficient_source", reason: status === "blocked_login" ? "login_required"
+    sourceFailure = !document && errors.length > 0 ? { kind: "provider_failure", stage: "source" } : { kind: "insufficient_source", reason: status === "blocked_login" ? "login_required"
       : status === "expired" ? "expired" : status === "opaque_unresolved" ? "unresolved_source" : "caption_missing" };
     result = { status: "analysis_pending", venues: [] };
     errors.push("Source content unavailable; analysis remains pending");
@@ -258,18 +259,19 @@ export async function runSourceSearchRecovery(
 export function semanticRecoveryCandidates(result: SemanticAnalysisResult, sourceURL: string): SourceSearchCandidate[] {
   return result.venues.flatMap(venue => {
     const name = [venue.name.value, venue.branch?.value].filter(Boolean).join(" ");
+    const semanticSource = venue.address?.value.trim() ? { name: venue.name.value, branch: venue.branch?.value ?? null, address: venue.address.value } : undefined;
     const quotes = [`Source URL: ${sourceURL}`, ...[venue.name, venue.branch, venue.address, venue.transport]
       .filter(field => field != null).map(field => `Source ${field.source} quote: ${field.quote}`)];
     const options = venue.mapStatus === "matched" || venue.mapStatus === "ambiguous" ? venue.matches : [];
     if (options.length) return options.map(match => ({
-      name: match.name, address: match.address,
+      name: match.name, address: match.address, semanticSource,
       latitude: match.latitude, longitude: match.longitude, placeId: match.id,
       ...(match.types === undefined ? {} : { types: match.types }),
       evidence: [...quotes, `Extracted venue: ${name}`, `Map identity: ${venue.mapStatus}`, `Google Place ID: ${match.id}`],
       confidence: venue.mapStatus === "matched" ? 0.85 : 0.6,
       missingInfo: ["User confirmation before saving as Map Stamp", ...(venue.mapStatus === "ambiguous" ? ["Choose the correct map candidate"] : [])],
     }));
-    return [{ name, address: venue.address?.value ?? "", evidence: [...quotes,
+    return [{ name, address: venue.address?.value ?? "", semanticSource, evidence: [...quotes,
       `Map identity: ${venue.mapStatus}`,
       ...venue.matches.map(match => `Conflicting map alternative: ${match.name} — ${match.address}`)],
       confidence: 0.45, missingInfo: ["Map identity not verified", "Verified coordinates", "User confirmation before saving as Map Stamp"] }];

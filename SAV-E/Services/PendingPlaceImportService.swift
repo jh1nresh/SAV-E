@@ -197,6 +197,19 @@ struct SocialPlaceRejectedEvidence: Codable, Hashable {
     var reason: String
 }
 
+nonisolated struct SemanticSourceIdentity: Codable, Hashable, Sendable {
+    var name: String
+    var branch: String?
+    var address: String
+
+    @MainActor func matches(_ other: Self) -> Bool {
+        !name.isEmpty && !address.isEmpty
+            && SaveSourceIdentity.text(name) == SaveSourceIdentity.text(other.name)
+            && SaveSourceIdentity.text(branch ?? "") == SaveSourceIdentity.text(other.branch ?? "")
+            && SaveSourceIdentity.text(address) == SaveSourceIdentity.text(other.address)
+    }
+}
+
 struct PendingReviewCandidate: Codable {
     // Local queue identity survives remote failures; never part of place evidence.
     var localVaultRecordID: UUID? = nil
@@ -205,6 +218,7 @@ struct PendingReviewCandidate: Codable {
     var category: String
     var latitude: Double? = nil
     var longitude: Double? = nil
+    var semanticSource: SemanticSourceIdentity? = nil
     var googlePlaceId: String? = nil
     var googleTypes: [String] = []
     var sourceURL: String?
@@ -244,8 +258,10 @@ struct PendingReviewCandidate: Codable {
         sourceHandle: String? = nil,
         localVaultRecordID: UUID? = nil,
         googlePlaceId: String? = nil,
-        googleTypes: [String] = []
+        googleTypes: [String] = [],
+        semanticSource: SemanticSourceIdentity? = nil
     ) {
+        self.semanticSource = semanticSource
         self.googlePlaceId = googlePlaceId
         self.googleTypes = googleTypes
         self.localVaultRecordID = localVaultRecordID
@@ -272,6 +288,7 @@ struct PendingReviewCandidate: Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case semanticSource
         case googlePlaceId
         case googleTypes
         case localVaultRecordID
@@ -298,6 +315,7 @@ struct PendingReviewCandidate: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        semanticSource = try container.decodeIfPresent(SemanticSourceIdentity.self, forKey: .semanticSource)
         googlePlaceId = try container.decodeIfPresent(String.self, forKey: .googlePlaceId)
         googleTypes = try container.decodeIfPresent([String].self, forKey: .googleTypes) ?? []
         localVaultRecordID = try container.decodeIfPresent(UUID.self, forKey: .localVaultRecordID)
@@ -386,6 +404,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     var vibeTags: [String]
     var accessNotes: [String]
     var sourceHandle: String?
+    var semanticSource: SemanticSourceIdentity? = nil
     var googlePlaceId: String? = nil
     var category: PlaceCategory? = nil
 
@@ -409,8 +428,10 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         accessNotes: [String] = [],
         sourceHandle: String? = nil,
         googlePlaceId: String? = nil,
-        category: PlaceCategory? = nil
+        category: PlaceCategory? = nil,
+        semanticSource: SemanticSourceIdentity? = nil
     ) {
+        self.semanticSource = semanticSource
         self.googlePlaceId = googlePlaceId
         self.category = category
         self.id = id
@@ -455,6 +476,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         case vibeTags
         case accessNotes
         case sourceHandle
+        case semanticSource
         case googlePlaceId
         case category
     }
@@ -463,6 +485,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         supersededByCandidateID = try container.decodeIfPresent(UUID.self, forKey: .supersededByCandidateID)
         supersededByCandidateIDs = try container.decodeIfPresent([UUID].self, forKey: .supersededByCandidateIDs) ?? []
+        semanticSource = try container.decodeIfPresent(SemanticSourceIdentity.self, forKey: .semanticSource)
         googlePlaceId = try container.decodeIfPresent(String.self, forKey: .googlePlaceId)
         category = try container.decodeIfPresent(PlaceCategory.self, forKey: .category)
         id = try container.decode(UUID.self, forKey: .id)
@@ -514,6 +537,10 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         }
         if let left = googlePlaceId, !left.isEmpty,
            let right = pending.googlePlaceId, !right.isEmpty, left != right { return false }
+        if ["review", "needs_more_evidence"].contains(status),
+           !hasReliableCoordinates || !pending.hasReliableCoordinates,
+           let original = semanticSource, let incoming = pending.semanticSource,
+           original.matches(incoming) { return true }
         let normalizedName = SaveSourceIdentity.text(name)
         let normalizedAddress = SaveSourceIdentity.text(address)
         guard !normalizedName.isEmpty, !normalizedAddress.isEmpty,

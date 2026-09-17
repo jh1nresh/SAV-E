@@ -4533,6 +4533,34 @@ final class SocialPlacePipelineTests: XCTestCase {
     }
 
     @MainActor
+    func testCanonicalSemanticVerificationReusesTheGroundedUnresolvedCandidate() async throws {
+        let analyzer = SemanticAnalyzerStub { _, _ in self.pikulResult() }
+        let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: analyzer)
+        let initial = await service.reviewCandidates(fromEvidenceText: pikulCaption, sourceURL: "https://instagram.com/p/canonical/", thumbnailText: { [] })
+        let unresolved = try XCTUnwrap(initial.first)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        _ = try SaveLocalVaultService(overrideVaultURL: url).saveReviewCandidate(unresolved)
+        let old = try XCTUnwrap(SaveLocalVaultService(overrideVaultURL: url).reviewCandidates().first)
+        let match = SocialSemanticMapPlace(id: "canonical-pikul", name: "初泰Pikul 信義象山門市", address: "臺北市信義區信義路五段122號, Taiwan", latitude: 25, longitude: 121)
+        analyzer.response = { _, _ in self.pikulResult(matches: [match], mapStatus: "matched") }
+        let results = await service.reviewCandidates(fromEvidenceText: pikulCaption, sourceURL: "https://instagram.com/p/canonical/", thumbnailText: { [] })
+        let verified = try XCTUnwrap(results.first)
+        XCTAssertTrue(old.matchesImport(verified))
+        var unrelated = verified
+        unrelated.semanticSource?.branch = "不同門市"
+        XCTAssertFalse(old.matchesImport(unrelated))
+        _ = try SaveLocalVaultService(overrideVaultURL: url).saveReviewCandidate(verified)
+        let reloaded = try SaveLocalVaultService(overrideVaultURL: url).reviewCandidates()
+        XCTAssertEqual(reloaded.count, 1)
+        XCTAssertEqual(reloaded.first?.id, old.id)
+        XCTAssertEqual(reloaded.first?.address, match.address)
+        XCTAssertEqual(reloaded.first?.googlePlaceId, match.id)
+        XCTAssertTrue(reloaded.first?.hasReliableCoordinates == true)
+    }
+
+    @MainActor
     func testLinkAnalysisRejectsUngroundedBackendQuote() async throws {
         var result = pikulResult(); result.venues[0].name.quote = "not in source"
         let analyzer = SemanticAnalyzerStub { _, _ in result }

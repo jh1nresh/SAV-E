@@ -588,6 +588,11 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
            let placeID = candidate.googlePlaceId, !placeID.isEmpty {
             evidence.append(["google_place_id": placeID, "google_types": candidate.googleTypes])
         }
+        if let original = candidate.semanticSource, !original.name.isEmpty, !original.address.isEmpty {
+            var fields: [String: Any] = ["name": original.name, "address": original.address]
+            if let branch = original.branch { fields["branch"] = branch }
+            evidence.append(["semantic_source": fields])
+        }
         let body = try Self.jsonBody([
             "capture_id": captureId.uuidString,
             "workflow_run_id": workflowRunId?.uuidString,
@@ -2196,6 +2201,10 @@ private struct PlaceCandidateRow: Codable {
             candidate.googlePlaceId = identity.google_place_id
             candidate.category = PlaceCategory.from(googleTypes: identity.google_types ?? [])
         }
+        let originals = Set((evidence ?? []).compactMap(\.semantic_source))
+        if originals.count == 1, Set(identities.compactMap(\.google_place_id)).count <= 1 {
+            candidate.semanticSource = originals.first
+        }
         candidate.supersededByCandidateID = superseded_by_candidate_id
         candidate.supersededByCandidateIDs = superseded_by_candidate_ids ?? []
         return candidate
@@ -2206,6 +2215,7 @@ private struct PlaceCandidateEvidenceRow: Codable {
     let text: String?
     let google_place_id: String?
     let google_types: [String]?
+    let semantic_source: SemanticSourceIdentity?
 }
 
 private struct TripRow: Codable {

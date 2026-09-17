@@ -347,3 +347,13 @@ test("US ZIP within locality component preserves exact source address matching",
   const conflict = await analyzeSocialCaption({ caption: `Google\n${explicitZIP}` }, deps(explicitRaw, [place({ name: "Google", address: source + " 94043, USA" })]));
   assert.equal(conflict.venues[0].mapStatus, "conflict");
 });
+
+test("equivalent street suffixes and abbreviation punctuation match without changing door numbers", async () => {
+  for (const [source, actual] of [["1 Main Street", "1 Main St."], ["12 Oak Avenue, Boston, MA", "12 Oak Ave, Boston, MA 02101, USA"], ["1600 Amphitheatre Parkway", "1600 Amphitheatre Pkwy"], ["1 Main St", "1 Main Street"]]) {
+    const raw = { venues: [{ name: f("Cafe"), branch: null, address: f(source), transport: null }] };
+    assert.equal((await analyzeSocialCaption({ caption: `Cafe\n${source}` }, deps(raw, [place({ name: "Cafe", address: actual })]))).venues[0].mapStatus, "matched");
+    for (const wrong of [actual.replace(/^\d+/, "999"), actual.replace(/Main|Oak|Amphitheatre/, "Other")]) {
+      assert.equal((await analyzeSocialCaption({ caption: `Cafe\n${source}` }, deps(raw, [place({ name: "Cafe", address: wrong })]))).venues[0].mapStatus, "conflict");
+    }
+  }
+});

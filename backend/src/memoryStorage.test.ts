@@ -26,6 +26,7 @@ test("provider alternatives at one address cannot collapse into one candidate", 
   assert.equal(sameCandidateIdentity(first, { ...cafe, evidence: [{ google_place_id: "second" }] }), false);
   assert.equal(sameCandidateIdentity(first, { ...cafe, evidence: [{ google_place_id: "first" }] }), true);
   assert.equal(sameCandidateIdentity(first, { ...cafe, evidence: [{ text: "Google Place ID: second" }] }), true);
+  assert.equal(sameCandidateIdentity({ ...first, place_id: "user-confirmed" }, { ...cafe, place_id: "user-confirmed", evidence: [{ google_place_id: "second" }] }), true, "confirmed user identity outranks old provider evidence");
 });
 test("source-only reuse stays inside one capture and preserves rejected clue identity", () => {
   const clue = { capture_id: "capture", name: "Saved link", status: "source_only" };
@@ -161,4 +162,78 @@ test("capture provenance excludes legacy merged titles and survives safe repeate
   const repeat = { ...recorded, raw_text: mergedCaptureText(recorded, { raw_text: "More original context", title: "New guess" }) };
   const updated = { ...repeat, source_resolution: capturedSourceResolution(repeat, "More original context", capturedSourceTexts(recorded)) };
   assert.deepEqual(capturedSourceTexts(updated), ["Actual complete caption\naddress", "More original context"]);
+});
+
+test("real database promotes grounded semantic identities and safely links retry successors", { skip: !databaseURL }, async () => {
+  const url = new URL(databaseURL!);
+  assert.equal(url.pathname, "/save_analysis_fixture"); assert.equal(url.port, "55437");
+  assert.equal(url.searchParams.get("host"), "/tmp/save-analysis-completion/pg-socket");
+  const pool = new Pool({ connectionString: databaseURL }); const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const owner = `semantic-memory-${randomUUID()}`, run = randomUUID(), retry = randomUUID();
+    await client.query("insert into profiles(id) values($1)", [owner]);
+    await client.query("insert into workflow_runs(id,workflow_id,listing_id,user_id) values($1,'fixture','fixture',$3),($2,'fixture','fixture',$3)", [run, retry, owner]);
+    const evidence = [{ semantic_source: { name: "初泰Pikul", branch: "信義象山門市", address: "臺北市信義區信義路五段122號" } }];
+    const original = { name: "初泰Pikul 信義象山門市", address: "臺北市信義區信義路五段122號", status: "review", evidence };
+    const canonical = { ...original, name: "初泰 信義店", address: "110台灣台北市信義區信義路五段122號", latitude: 25, longitude: 121, evidence: [...evidence, { google_place_id: "pikul" }] };
+    async function capture() {
+      const id = randomUUID(); await client.query("insert into captures(id,user_id) values($1,$2)", [id, owner]); return id;
+    }
+    async function insert(captureId: string, workflow: string | null, row: Record<string, any>) {
+      const id = randomUUID();
+      await client.query("insert into place_candidates(id,capture_id,workflow_run_id,name,address,status,evidence,latitude,longitude) values($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9)",
+        [id, captureId, workflow, row.name, row.address, row.status, JSON.stringify(row.evidence), row.latitude ?? null, row.longitude ?? null]);
+      return id;
+    }
+    const sameCapture = await capture(), originalID = await insert(sameCapture, run, original);
+    const promoted = (await prepareCandidate(client, { ...canonical, capture_id: sameCapture, workflow_run_id: run })).existing!;
+    assert.equal(promoted.id, originalID); assert.equal(promoted.name, canonical.name); assert.equal(promoted.address, canonical.address);
+    assert.equal(promoted.latitude, 25); assert.equal(promoted.workflow_run_id, run);
+    const rejectedCapture = await capture(), rejected = await insert(rejectedCapture, run, { ...original, status: "rejected" });
+    await prepareCandidate(client, { ...canonical, capture_id: rejectedCapture, workflow_run_id: run });
+    const terminal = (await client.query("select * from place_candidates where id=$1", [rejected])).rows[0];
+    assert.equal(terminal.status, "rejected"); assert.equal(terminal.name, original.name); assert.equal(terminal.latitude, null);
+    const retryCapture = await capture(), predecessor = await insert(retryCapture, run, original);
+    const successor = await insert(retryCapture, retry, canonical);
+    assert.deepEqual(await supersedeSourceOnlyCandidates(client, retryCapture, [successor]), [], "independent pending reservation stays visible");
+    await client.query("update workflow_runs set credit_settlement='refunded' where id=$1", [run]);
+    assert.deepEqual(await supersedeSourceOnlyCandidates(client, retryCapture, [successor]), [predecessor]);
+    const old = (await client.query("select * from place_candidates where id=$1", [predecessor])).rows[0];
+    assert.equal(old.name, original.name); assert.equal(old.workflow_run_id, run); assert.equal(old.status, "review");
+    assert.deepEqual(supersededCandidateIDs(old), [successor]);
+    const multiCapture = await capture();
+    const secondEvidence = [{ semantic_source: { name: "Second Cafe", address: "20 Main Street" } }];
+    const secondOriginal = { ...original, name: "Second Cafe", address: "20 Main Street", evidence: secondEvidence };
+    const secondCanonical = { ...secondOriginal, name: "Second Cafe Official", address: "20 Main St, Taipei", latitude: 25.1, longitude: 121.1,
+      evidence: [...secondEvidence, { google_place_id: "second-cafe" }] };
+    const oldA = await insert(multiCapture, run, original), oldB = await insert(multiCapture, run, secondOriginal);
+    const reserved = await insert(multiCapture, retry, original);
+    const newA = await insert(multiCapture, null, canonical), newB = await insert(multiCapture, null, secondCanonical);
+    assert.deepEqual(await supersedeSourceOnlyCandidates(client, multiCapture, [newA, randomUUID()]), [], "incomplete batch leaves both predecessors intact");
+    assert.deepEqual(new Set(await supersedeSourceOnlyCandidates(client, multiCapture, [newA, newB])), new Set([oldA, oldB]));
+    for (const [oldID, expected] of [[oldA, [newA]], [oldB, [newB]], [reserved, []]] as const) {
+      const row = (await client.query("select * from place_candidates where id=$1", [oldID])).rows[0];
+      assert.deepEqual(supersededCandidateIDs(row), expected, "each venue links only its own successor and preserves an independent pending reservation");
+    }
+    const defaultCapture = await capture(), defaultOld = await insert(defaultCapture, null, original);
+    const defaultNew = await insert(defaultCapture, null, canonical);
+    assert.deepEqual(await supersedeSourceOnlyCandidates(client, defaultCapture), [defaultOld]);
+    assert.deepEqual(supersededCandidateIDs((await client.query("select * from place_candidates where id=$1", [defaultOld])).rows[0]), [defaultNew]);
+    const ambiguousCapture = await capture(), ambiguousOld = await insert(ambiguousCapture, null, original);
+    await insert(ambiguousCapture, null, canonical);
+    await insert(ambiguousCapture, null, { ...canonical, evidence: [...evidence, { google_place_id: "different-provider" }] });
+    assert.deepEqual(await supersedeSourceOnlyCandidates(client, ambiguousCapture), [], "default selection cannot choose one provider alternative");
+    assert.deepEqual(supersededCandidateIDs((await client.query("select * from place_candidates where id=$1", [ambiguousOld])).rows[0]), []);
+    for (const changed of [
+      { ...canonical, evidence: [{ semantic_source: { ...evidence[0].semantic_source, branch: "Other branch" } }] },
+      { ...canonical, evidence: [{ semantic_source: { ...evidence[0].semantic_source, address: "Other road" } }] },
+    ]) {
+      const unrelatedCapture = await capture(); await insert(unrelatedCapture, null, original);
+      assert.equal((await prepareCandidate(client, { ...changed, capture_id: unrelatedCapture })).existing, undefined);
+      const unrelated = await insert(unrelatedCapture, null, changed);
+      assert.deepEqual(await supersedeSourceOnlyCandidates(client, unrelatedCapture, [unrelated]), []);
+    }
+    assert.equal(sameCandidateIdentity({ ...original, capture_id: "one" }, { ...canonical, capture_id: "two" }), false);
+  } finally { await client.query("rollback"); client.release(); await pool.end(); }
 });

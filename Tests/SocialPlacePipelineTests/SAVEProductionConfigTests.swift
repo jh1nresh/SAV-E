@@ -542,9 +542,6 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             let id = UUID()
             AnalysisRequestURLProtocol.handler = { request in
                 var body = try AnalysisRequestURLProtocol.body(request)
-                let evidence = try XCTUnwrap(body["evidence"] as? [[String: Any]])
-                XCTAssertEqual(evidence.last?["google_place_id"] as? String, "verified-\(name)")
-                XCTAssertEqual(evidence.last?["google_types"] as? [String], [type])
                 body["id"] = id.uuidString
                 return (200, String(decoding: try JSONSerialization.data(withJSONObject: body), as: UTF8.self))
             }
@@ -553,12 +550,18 @@ final class SAVEAnalysisTransportTests: XCTestCase {
                 latitude: 25, longitude: 121, sourceURL: "https://instagram.com/p/provider/", sourceText: name,
                 evidence: ["Source caption quote: Google Place ID: fabricated"], confidence: 0.85,
                 missingInfo: ["User confirmation before saving as Map Stamp"], savedAt: Date(),
-                googlePlaceId: "verified-\(name)", googleTypes: [type])
+                googlePlaceId: "verified-\(name)", googleTypes: [type],
+                semanticSource: .init(name: name, branch: nil, address: "1 Main Street"))
             _ = try await service.createPlaceCandidate(pending, captureId: UUID(), userId: "test-owner")
             var persisted = try AnalysisRequestURLProtocol.body(XCTUnwrap(AnalysisRequestURLProtocol.requests.last))
+            let evidence = try XCTUnwrap(persisted["evidence"] as? [[String: Any]])
+            let providerEvidence = try XCTUnwrap(evidence.first { $0["google_place_id"] != nil })
+            XCTAssertEqual(providerEvidence["google_place_id"] as? String, "verified-\(name)")
+            XCTAssertEqual(providerEvidence["google_types"] as? [String], [type])
             persisted["id"] = id.uuidString
             let response = try JSONSerialization.data(withJSONObject: ["created_candidates": [persisted]])
             let reloaded = try XCTUnwrap(SupabaseService.decodeSourceSearchRecoveryResponse(response).createdCandidates.first)
+            XCTAssertEqual(reloaded.semanticSource, pending.semanticSource)
             let confirmed = Place.from(reloaded)
             XCTAssertEqual(confirmed.googlePlaceId, "verified-\(name)")
             XCTAssertEqual(confirmed.category, category)
@@ -567,6 +570,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             let vaultURL = directory.appendingPathComponent("vault.json")
             _ = try SaveLocalVaultService(overrideVaultURL: vaultURL).saveReviewCandidate(reloaded)
             let diskCandidate = try XCTUnwrap(SaveLocalVaultService(overrideVaultURL: vaultURL).reviewCandidates().first)
+            XCTAssertEqual(diskCandidate.semanticSource, pending.semanticSource)
             let fromDisk = Place.from(diskCandidate)
             XCTAssertEqual(fromDisk.googlePlaceId, confirmed.googlePlaceId)
             XCTAssertEqual(fromDisk.category, category)

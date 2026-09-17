@@ -92,6 +92,11 @@ function identityContained(container: string, identity: string): boolean {
   }
   return false;
 }
+function normalizedAddress(value: string): string {
+  const suffixes: Record<string, string> = { street: "st", avenue: "ave", boulevard: "blvd", road: "rd", drive: "dr", lane: "ln", court: "ct", parkway: "pkwy", highway: "hwy", terrace: "ter", place: "pl", circle: "cir", square: "sq", trail: "trl" };
+  return normalized(value.normalize("NFKC").replace(/\b(street|avenue|boulevard|road|drive|lane|court|parkway|highway|terrace|place|circle|square|trail)\b/gi, word => suffixes[word.toLowerCase()])
+    .replace(/([a-z])\.(?=\s|,|$)/gi, "$1").replace(/,/g, " "));
+}
 function congruent(venue: SemanticVenue, place: SemanticMapPlace): boolean {
   const identity = (value: string) => value.normalize("NFKC").toLowerCase().replace(/臺/g, "台").replace(/\s+/g, " ").trim();
   const name = identity(place.name);
@@ -104,7 +109,7 @@ function congruent(venue: SemanticVenue, place: SemanticMapPlace): boolean {
   // Accept the same complete address with a provider country/postcode prefix.
   // Do not treat a differing unit, number, road or branch as the same venue.
   if (venue.address) {
-    const expected = normalized(venue.address.value);
+    const expected = normalizedAddress(venue.address.value);
     // Google may append comma-delimited city, postcode and country components.
     // Compare only at component boundaries, never an arbitrary street substring.
     const components = place.address.normalize("NFKC").split(",");
@@ -114,7 +119,7 @@ function congruent(venue: SemanticVenue, place: SemanticMapPlace): boolean {
       // Strip only this bounded state+ZIP form, never unit or street numbers.
       const withoutZIP = prefix.replace(/\b(AL|AK|AZ|AR|CA|CO|CT|DE|DC|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\s+\d{5}(?:-\d{4})?\s*$/i, "$1");
       return [prefix, withoutZIP].some(value => {
-        const actual = normalized(value);
+        const actual = normalizedAddress(value);
         return actual.endsWith(expected)
           && !(/^\d/.test(expected) && /\d/.test(actual[actual.length - expected.length - 1] ?? ""));
       });

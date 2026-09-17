@@ -111,7 +111,8 @@ final class SaveLocalVaultService: Sendable {
                 : PlaceCategory(rawValue: candidate.category)
                     ?? PlaceCategory.inferred(from: "\(candidate.candidateName) \(candidate.address)"),
             createdAt: candidate.savedAt,
-            googlePlaceId: candidate.isSourceOnly ? nil : candidate.googlePlaceId
+            googlePlaceId: candidate.isSourceOnly ? nil : candidate.googlePlaceId,
+            semanticSource: candidate.semanticSource
         )
         guard let recordID else {
             return try upsertReviewRecord(record, matchSourceIdentity: true)
@@ -157,7 +158,8 @@ final class SaveLocalVaultService: Sendable {
             longitude: candidate.longitude,
             category: candidate.category ?? PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
             createdAt: candidate.createdAt,
-            googlePlaceId: candidate.googlePlaceId
+            googlePlaceId: candidate.googlePlaceId,
+            semanticSource: candidate.semanticSource
         )
         return try upsertReviewRecord(record, matchSourceIdentity: false)
     }
@@ -185,7 +187,7 @@ final class SaveLocalVaultService: Sendable {
                         candidateName: incoming.displayTitle, address: incoming.address ?? "", category: "other",
                         latitude: incoming.latitude, longitude: incoming.longitude,
                         sourceURL: incoming.sourceURL, sourceText: incoming.sourceText, evidence: incoming.evidence,
-                        confidence: 0, missingInfo: [], savedAt: incoming.createdAt, googlePlaceId: incoming.googlePlaceId
+                        confidence: 0, missingInfo: [], savedAt: incoming.createdAt, googlePlaceId: incoming.googlePlaceId, semanticSource: incoming.semanticSource
                     ))
                 }
                 let record: SaveMemoryRecord
@@ -520,7 +522,8 @@ private extension SaveMemoryRecord {
             accessNotes: accessNotes,
             sourceHandle: sourceHandle,
             googlePlaceId: googlePlaceId,
-            category: category
+            category: category,
+            semanticSource: semanticSource
         )
     }
 

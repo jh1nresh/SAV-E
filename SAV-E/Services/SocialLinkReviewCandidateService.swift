@@ -362,6 +362,9 @@ final class SocialLinkReviewCandidateService {
                 let source = field.source == "caption" ? caption : field.source == "ocr" ? ocrLines.joined(separator: "\n") : ""
                 return !field.quote.isEmpty && source.contains(field.quote)
             }) else { return [pendingSemanticSource(caption: caption, sourceURL: sourceURL)] }
+            let semanticSource = venue.address.map {
+                SemanticSourceIdentity(name: venue.name.value, branch: venue.branch?.value, address: $0.value)
+            }
             let evidence = ["Source URL: \(sourceURL)"] + fields.map { "Source \($0.source) quote: \($0.quote)" }
                 + ["Extracted venue: \(name)", "Map identity: \(venue.mapStatus)"]
             let matches = venue.matches.filter { match in
@@ -377,14 +380,14 @@ final class SocialLinkReviewCandidateService {
                         evidence: evidence + ["Google Place ID: \(match.id)"], confidence: venue.mapStatus == "matched" ? 0.85 : 0.6,
                         missingInfo: ["User confirmation before saving as Map Stamp"] + (venue.mapStatus == "ambiguous" ? ["Choose the correct map candidate"] : []),
                         savedAt: Date(), reviewState: "review_candidate", accessNotes: venue.transport.map { [$0.value] } ?? [],
-                        googlePlaceId: match.id, googleTypes: match.types ?? [])
+                        googlePlaceId: match.id, googleTypes: match.types ?? [], semanticSource: semanticSource)
                 }
             }
             return [PendingReviewCandidate(candidateName: name, address: venue.address?.value ?? "", category: "other",
                 sourceURL: sourceURL, sourceText: caption,
                 evidence: evidence + matches.map { "Conflicting map alternative: \($0.name) — \($0.address)" }, confidence: 0.45,
                 missingInfo: ["Map identity not verified", "Verified coordinates", "User confirmation before saving as Map Stamp"],
-                savedAt: Date(), reviewState: "unresolved_place_candidate", accessNotes: venue.transport.map { [$0.value] } ?? [])]
+                savedAt: Date(), reviewState: "unresolved_place_candidate", accessNotes: venue.transport.map { [$0.value] } ?? [], semanticSource: semanticSource)]
         }
     }
 

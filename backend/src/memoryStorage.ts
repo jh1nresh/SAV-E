@@ -24,11 +24,27 @@ function identityText(value: unknown): string {
   return typeof value === "string" ? value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase() : "";
 }
 
+function semanticSourceKey(row: Row): string | undefined {
+  const entries = Array.isArray(row.evidence) ? row.evidence : [];
+  const keys = entries.flatMap((entry: any) => {
+    const source = entry?.semantic_source;
+    if (!source || !identityText(source.name) || !identityText(source.address)
+      || (source.branch != null && typeof source.branch !== "string")) return [];
+    return [JSON.stringify([identityText(source.name), identityText(source.branch), identityText(source.address)])];
+  });
+  return new Set(keys).size === 1 ? keys[0] : undefined;
+}
+function hasCoordinates(row: Row): boolean {
+  return typeof row.latitude === "number" && typeof row.longitude === "number"
+    && Number.isFinite(row.latitude) && Number.isFinite(row.longitude)
+    && Math.abs(row.latitude) <= 90 && Math.abs(row.longitude) <= 180 && (row.latitude !== 0 || row.longitude !== 0);
+}
+function unresolvedSemantic(row: Row): boolean {
+  return pending.has(row.status) && !row.place_id && !hasCoordinates(row) && semanticSourceKey(row) !== undefined;
+}
+
 export function sameCandidateIdentity(left: Row, right: Row): boolean {
-  if ((left.status === "source_only" || right.status === "source_only")
-    && left.capture_id === right.capture_id && left.capture_id
-    && [left, right].every(row => !row.place_id && !identityText(row.address) && row.latitude == null && row.longitude == null)
-    && (left.status === right.status || (identityText(left.name) && identityText(left.name) === identityText(right.name)))) return true;
+  // A user-confirmed app identity takes precedence over earlier provider evidence.
   if (left.place_id && right.place_id) return left.place_id === right.place_id;
   // Distinct provider entities remain alternatives even at the same address.
   // Quotes are plain text; only explicit structured provider metadata counts.
@@ -36,6 +52,16 @@ export function sameCandidateIdentity(left: Row, right: Row): boolean {
     ? row.evidence.map((entry: any) => entry && typeof entry === "object" && typeof entry.google_place_id === "string" ? entry.google_place_id.trim() : "").filter(Boolean)
     : []);
   if (new Set(providerIDs).size > 1) return false;
+  if ((left.status === "source_only" || right.status === "source_only")
+    && left.capture_id === right.capture_id && left.capture_id
+    && [left, right].every(row => !row.place_id && !identityText(row.address) && row.latitude == null && row.longitude == null)
+    && (left.status === right.status || (identityText(left.name) && identityText(left.name) === identityText(right.name)))) return true;
+  // Only a pending original extraction in this capture can bridge to its
+  // canonical verified identity; this does not rewrite terminal decisions.
+  if (left.capture_id && left.capture_id === right.capture_id
+    && ((unresolvedSemantic(left) && hasCoordinates(right) && !terminal.has(right.status))
+      || (unresolvedSemantic(right) && hasCoordinates(left) && !terminal.has(left.status)))
+    && semanticSourceKey(left) === semanticSourceKey(right)) return true;
   const name = identityText(left.name), address = identityText(left.address);
   if (!name || !address || name !== identityText(right.name) || address !== identityText(right.address)) return false;
   if ([left.latitude, left.longitude, right.latitude, right.longitude].every(value => typeof value === "number" && Number.isFinite(value))) {
@@ -126,15 +152,12 @@ export async function prepareCandidate(client: PoolClient, body: Row): Promise<{
   const createdAt = earliestKnownDate([capture.rows[0]?.created_at, ...matches.map(row => row.created_at), body.created_at]);
   const existing = matches.find(row => (row.workflow_run_id ?? null) === (body.workflow_run_id ?? null));
   if (existing) {
-    const hasCoordinates = (row: Row) => typeof row.latitude === "number" && typeof row.longitude === "number"
-      && Number.isFinite(row.latitude) && Number.isFinite(row.longitude)
-      && Math.abs(row.latitude) <= 90 && Math.abs(row.longitude) <= 180 && (row.latitude !== 0 || row.longitude !== 0);
     if (pending.has(existing.status) && !existing.place_id && body.status === "review"
       && !hasCoordinates(existing) && hasCoordinates(body)) {
       // Verification may arrive on a repeat after a Maps outage. Upgrade only
       // this actionable workflow row; terminal user decisions remain untouched.
-      await client.query("update place_candidates set latitude=$2, longitude=$3, confidence=$4, missing_info=$5, status='review' where id=$1",
-        [existing.id, body.latitude, body.longitude, body.confidence ?? existing.confidence, body.missing_info ?? existing.missing_info]);
+      await client.query("update place_candidates set latitude=$2, longitude=$3, confidence=$4, missing_info=$5, name=$6, address=$7, status='review' where id=$1",
+        [existing.id, body.latitude, body.longitude, body.confidence ?? existing.confidence, body.missing_info ?? existing.missing_info, body.name, body.address]);
     }
     const updated = await client.query("update place_candidates set evidence=$2::jsonb, created_at=coalesce($3::timestamptz,created_at), updated_at=now() where id=$1 returning *", [existing.id, JSON.stringify(mergedEvidence(existing.evidence, body.evidence)), createdAt ?? null]);
     if (["saved", "confirmed"].includes(existing.status) && existing.place_id && createdAt !== undefined) {
@@ -200,22 +223,27 @@ export function isGenericSourceOnlyCandidate(row: Row): boolean {
 export async function supersedeSourceOnlyCandidates(client: PoolClient, captureId: string, successorIds?: string[]): Promise<string[]> {
   const { rows } = await client.query("select pc.*, wr.credit_settlement as run_settlement from place_candidates pc left join workflow_runs wr on wr.id=pc.workflow_run_id where pc.capture_id=$1 for update of pc", [captureId]);
   const named = rows.filter(row => row.status !== "source_only" && row.status !== "rejected");
-  let successors = named.length ? [named[0]] : [];
+  let successors = named.length ? [named.find(hasCoordinates) ?? named[0]] : [];
   if (successorIds) {
     const ids = [...new Set(successorIds)];
     successors = ids.map(id => rows.find(row => row.id === id)).filter(Boolean);
     // Accept only a fully persisted batch; existing settled successors remain
     // part of the source history even when a later retry discovers another venue.
     if (!ids.length || successors.length !== ids.length || successors.some(row => !["review", "needs_more_evidence", "saved", "confirmed"].includes(row.status))) return [];
-  } else if (!named.length || named.some(row => !sameCandidateIdentity(named[0], row))) return [];
+  } else if (!named.length || named.some(row => named.some(other => !sameCandidateIdentity(row, other)))) return [];
   const changed: string[] = [];
-  for (const source of rows.filter(isGenericSourceOnlyCandidate)) {
+  for (const source of rows.filter(row => isGenericSourceOnlyCandidate(row) || unresolvedSemantic(row))) {
+    const generic = isGenericSourceOnlyCandidate(source);
+    const applicable = generic ? successors : successors.filter(successor =>
+      successor.id !== source.id && hasCoordinates(successor) && sameCandidateIdentity(source, successor));
+    if (!applicable.length) continue;
     const previous = supersededCandidateIDs(source);
-    const replacements = [...new Set([...previous, ...successors.map(row => String(row.id))])];
+    const replacements = [...new Set([...previous, ...applicable.map(row => String(row.id))])];
     const represented = rows.filter(row => replacements.includes(row.id));
-    if (named.some(row => !represented.some(successor => sameCandidateIdentity(successor, row)))) continue;
+    const related = generic ? named : named.filter(row => sameCandidateIdentity(source, row));
+    if (related.some(row => !represented.some(successor => sameCandidateIdentity(successor, row)))) continue;
     if (!previous.length && source.workflow_run_id && source.run_settlement === "pending"
-      && !successors.some(successor => successor.workflow_run_id === source.workflow_run_id)) continue;
+      && !applicable.some(successor => successor.workflow_run_id === source.workflow_run_id)) continue;
     if (replacements.length === previous.length) continue;
     // Append a cumulative event rather than altering prior evidence/provenance.
     await client.query("update place_candidates set evidence=evidence || $2::jsonb, updated_at=now() where id=$1", [source.id, JSON.stringify([{ superseded_by_candidate_id: replacements[0], superseded_by_candidate_ids: replacements }])]);

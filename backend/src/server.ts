@@ -5098,6 +5098,7 @@ function sourceSearchCandidateBody(candidate: SourceSearchCandidate, captureId: 
     latitude: candidate.latitude ?? null,
     longitude: candidate.longitude ?? null,
     evidence: [...candidate.evidence.map((text) => ({ text })),
+      ...(candidate.semanticSource ? [{ semantic_source: candidate.semanticSource }] : []),
       ...(hasProviderIdentity ? [{ google_place_id: candidate.placeId, google_types: candidate.types ?? [] }] : [])],
     confidence: candidate.confidence,
     missing_info: candidate.missingInfo,
