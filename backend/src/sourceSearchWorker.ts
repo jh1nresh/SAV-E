@@ -64,7 +64,7 @@ export type SourceSearchCandidate = {
 };
 
 export type SourceRecoveryFailureReason =
-  | { kind: "insufficient_source"; reason: "login_required" | "expired" | "unresolved_source" | "caption_missing" | "no_place_evidence" }
+  | { kind: "insufficient_source"; reason: "login_required" | "expired" | "unresolved_source" | "caption_missing" | "no_place_evidence" | "source_out_of_bounds" }
   | { kind: "provider_failure"; stage: "source" | "media" | "public_search" };
 
 export type SourceRecoveryReceipt = {
@@ -241,6 +241,10 @@ export async function runSourceSearchRecovery(
     result = { status: "analysis_pending", venues: [] };
     errors.push("Source content unavailable; analysis remains pending");
   }
+  if (result.reason === "source_out_of_bounds") {
+    sourceFailure = { kind: "insufficient_source", reason: "source_out_of_bounds" };
+    errors.push("Source exceeds analysis length limit; source preserved");
+  }
   if (result.status === "analysis_pending" && !sourceFailure) errors.push("Semantic analysis unavailable; source preserved for retry");
   // A complete grounded result from captured text does not depend on metadata.
   // Provider usage retains the failed fetch, but it must not block successor persistence.
@@ -254,7 +258,7 @@ export async function runSourceSearchRecovery(
       found: caption ? ["source_text"] : [], tried: [...(caption.trim() || mediaEvidence.some(item => item.text?.trim()) ? ["grounded_semantic_extraction"] : []), ...(result.venues.length ? ["map_identity_verification"] : [])],
       missing: result.status === "analysis_pending" ? ["Analysis pending"] : candidates.flatMap(candidate => candidate.missingInfo),
       output: candidates.length ? "review_candidate" : "source_only_clue",
-      nextBestClue: result.status === "analysis_pending" ? "Source saved; analysis pending. Retry when analysis is available." : "Confirm the exact place before saving.",
+      nextBestClue: result.reason === "source_out_of_bounds" ? "Source saved. Provide a shorter source or screenshot for analysis." : result.status === "analysis_pending" ? "Source saved; analysis pending. Retry when analysis is available." : "Confirm the exact place before saving.",
       ...(sourceFailure ? { failureReason: sourceFailure } : result.status === "analysis_pending" ? { failureReason: { kind: "provider_failure" as const, stage: "public_search" as const } } : {}),
     },
   };

@@ -227,3 +227,11 @@ test("source transport outage stays a source provider failure while captured tex
   assert.equal(emptyAnalysis.semanticStatus, "no_place_evidence");
   assert.deepEqual(emptyAnalysis.errors, [], "completed empty analysis also clears its own pending marker");
 });
+
+test("oversized source recovery retains input failure instead of claiming provider outage", async () => {
+  const result = await runSourceSearchRecovery({ ...input, rawText: "x".repeat(20_001) }, async () => "", async () => [], { includeMediaEvidence: false });
+  assert.equal(result.semanticStatus, "analysis_pending");
+  assert.deepEqual(result.receipt.failureReason, { kind: "insufficient_source", reason: "source_out_of_bounds" });
+  assert.deepEqual(result.candidates, []);
+  assert.match(result.receipt.nextBestClue!, /shorter/);
+});

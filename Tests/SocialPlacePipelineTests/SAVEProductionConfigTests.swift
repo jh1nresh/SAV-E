@@ -472,6 +472,27 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         }
     }
 
+    func testUnscopedOversizedSemanticAnalysisFinishesAsSourceOnly() async throws {
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.url?.path == "/v0/analysis" {
+                let body = try AnalysisRequestURLProtocol.body(request)
+                return (200, String(decoding: try JSONSerialization.data(withJSONObject: ["analysis_id": body["id"]!]), as: UTF8.self))
+            }
+            if request.url?.path.hasSuffix("extract-place-clues") == true {
+                return (200, #"{"status":"analysis_pending","reason":"source_out_of_bounds","venues":[]}"#)
+            }
+            return (200, "{}")
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let result = try await service.analyzeSocialCaption(caption: String(repeating: "x", count: 20_001), ocrText: nil)
+        XCTAssertEqual(result.reason, "source_out_of_bounds")
+        let finish = try XCTUnwrap(AnalysisRequestURLProtocol.requests.first { $0.url?.path.hasSuffix("finish") == true })
+        XCTAssertEqual(try AnalysisRequestURLProtocol.body(finish)["outcome"] as? String, "source_only")
+        let reason = SourceSearchFailureReason(kind: .insufficientSource, reason: "source_out_of_bounds", stage: nil)
+        XCTAssertTrue(reason.englishMessage.contains("too long"))
+        XCTAssertTrue(reason.traditionalChineseMessage.contains("文字太長"))
+    }
+
     func testSemanticResponseFromPreviousAccountIsDiscarded() async throws {
         let auth = PrivyAuthService.shared
         let original = auth.authState

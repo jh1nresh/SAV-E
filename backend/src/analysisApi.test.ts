@@ -371,6 +371,18 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       }
     });
 
+    await t.test("oversized captured source remains pending without failed-provider accounting", async () => {
+      const capture = await api("/v0/memory/captures", { source_url: "https://www.instagram.com/reel/empty-semantic/?oversize=1", raw_text: "x".repeat(20_001) }, owner);
+      const clue = await api("/v0/memory/candidates", { capture_id: capture.body.id, name: "Source clue", status: "source_only", missing_info: ["Analysis pending"] }, owner);
+      const before = (await calls()).filter(call => call.provider === "gemini").length;
+      const result = await api(`/v0/memory/captures/${capture.body.id}/search-recovery`, { include_media_evidence: false }, owner);
+      assert.equal(result.status, 200, JSON.stringify(result.body));
+      assert.deepEqual(result.body.receipt.failureReason, { kind: "insufficient_source", reason: "source_out_of_bounds" });
+      assert.equal((await pool.query("select outcome from analysis_sessions where id=$1", [result.body.analysis_id])).rows[0].outcome, "source_only");
+      assert.deepEqual((await pool.query("select missing_info from place_candidates where id=$1", [clue.body.id])).rows[0].missing_info, ["Analysis pending"]);
+      assert.equal((await calls()).filter(call => call.provider === "gemini").length, before);
+    });
+
     await t.test("URL-only login wall preserves pending state through HTTP reload", async () => {
       const source = "https://www.instagram.com/reel/blocked-semantic/";
       const capture = await api("/v0/memory/captures", { source_url: source, raw_text: source }, owner);

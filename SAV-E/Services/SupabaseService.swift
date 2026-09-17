@@ -167,7 +167,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             let result = try await SAVEAnalysisScope.$current.withValue(context) {
                 try await analyzeSocialCaption(caption: caption, ocrText: ocrText)
             }
-            await finishAnalysis(context, outcome: result.status == "ready" ? "review_candidate" : result.status == "analysis_pending" ? "failed" : "source_only")
+            await finishAnalysis(context, outcome: result.status == "ready" ? "review_candidate" : result.status == "analysis_pending" && result.reason != "source_out_of_bounds" ? "failed" : "source_only")
             return result
         } catch {
             await finishAnalysis(context, outcome: error is CancellationError ? "cancelled" : "failed")

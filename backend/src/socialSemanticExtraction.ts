@@ -98,7 +98,7 @@ function normalizedAddress(value: string): string {
     .replace(/([a-z])\.(?=\s|,|$)/gi, "$1").replace(/,/g, " "));
 }
 function congruent(venue: SemanticVenue, place: SemanticMapPlace): boolean {
-  const identity = (value: string) => value.normalize("NFKC").toLowerCase().replace(/臺/g, "台").replace(/\s+/g, " ").trim();
+  const identity = (value: string) => value.normalize("NFKD").replace(/(\p{Script=Latin})\p{M}+/gu, "$1").normalize("NFKC").toLowerCase().replace(/臺/g, "台").replace(/\s+/g, " ").trim();
   const name = identity(place.name);
   if (!identityContained(name, identity(venue.name.value))) return false;
   const branchNamed = !venue.branch || identityContained(name, identity(venue.branch.value));

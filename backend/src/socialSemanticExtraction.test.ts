@@ -357,3 +357,14 @@ test("equivalent street suffixes and abbreviation punctuation match without chan
     }
   }
 });
+
+test("map identity folds diacritics without weakening verbatim field grounding", async () => {
+  const text = "Cafe de Flore\n1 Main Street";
+  const raw = { venues: [{ name: f("Cafe de Flore"), branch: null, address: f("1 Main Street"), transport: null }] };
+  const result = await analyzeSocialCaption({ caption: text }, deps(raw, [{ ...place(), name: "Café de Flore", address: "1 Main Street" }]));
+  assert.equal(result.venues[0].mapStatus, "matched");
+  const kana = { venues: [{ ...raw.venues[0], name: f("カフェ") }] };
+  assert.equal((await analyzeSocialCaption({ caption: "カフェ\n1 Main Street" }, deps(kana, [{ ...place(), name: "ガフェ", address: "1 Main Street" }]))).venues[0].mapStatus, "conflict", "non-Latin phonetic marks retain identity");
+  const invented = structuredClone(raw); invented.venues[0].name = f("Café de Flore", "Cafe de Flore");
+  assert.equal((await analyzeSocialCaption({ caption: text }, deps(invented))).status, "analysis_pending", "source spelling remains grounded exactly");
+});
