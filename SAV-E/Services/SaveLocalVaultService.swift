@@ -110,7 +110,8 @@ final class SaveLocalVaultService: Sendable {
                 ? nil
                 : PlaceCategory(rawValue: candidate.category)
                     ?? PlaceCategory.inferred(from: "\(candidate.candidateName) \(candidate.address)"),
-            createdAt: candidate.savedAt
+            createdAt: candidate.savedAt,
+            googlePlaceId: candidate.isSourceOnly ? nil : candidate.googlePlaceId
         )
         guard let recordID else {
             return try upsertReviewRecord(record, matchSourceIdentity: true)
@@ -516,7 +517,9 @@ private extension SaveMemoryRecord {
             recommendedItems: recommendedItems,
             vibeTags: vibeTags,
             accessNotes: accessNotes,
-            sourceHandle: sourceHandle
+            sourceHandle: sourceHandle,
+            googlePlaceId: googlePlaceId,
+            category: category
         )
     }
 

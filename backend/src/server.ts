@@ -5085,6 +5085,10 @@ function isMissingRelationError(error: unknown): boolean {
 }
 
 function sourceSearchCandidateBody(candidate: SourceSearchCandidate, captureId: string, workflowRunId?: string): JsonBody {
+  const hasProviderIdentity = typeof candidate.placeId === "string" && candidate.placeId.trim() === candidate.placeId
+    && candidate.placeId.length > 0 && candidate.placeId.length <= 300 && !/[\u0000-\u001f\u007f]/.test(candidate.placeId)
+    && typeof candidate.latitude === "number" && Number.isFinite(candidate.latitude) && Math.abs(candidate.latitude) <= 90
+    && typeof candidate.longitude === "number" && Number.isFinite(candidate.longitude) && Math.abs(candidate.longitude) <= 180;
   return {
     capture_id: captureId,
     workflow_run_id: workflowRunId,
@@ -5093,7 +5097,8 @@ function sourceSearchCandidateBody(candidate: SourceSearchCandidate, captureId: 
     city: "",
     latitude: candidate.latitude ?? null,
     longitude: candidate.longitude ?? null,
-    evidence: candidate.evidence.map((text) => ({ text })),
+    evidence: [...candidate.evidence.map((text) => ({ text })),
+      ...(hasProviderIdentity ? [{ google_place_id: candidate.placeId, google_types: candidate.types ?? [] }] : [])],
     confidence: candidate.confidence,
     missing_info: candidate.missingInfo,
     status: "review",

@@ -132,6 +132,7 @@ struct SocialSemanticMapPlace: Codable, Equatable {
     var address: String
     var latitude: Double
     var longitude: Double
+    var types: [String]? = nil
 }
 
 struct SocialSemanticVenue: Codable, Equatable {

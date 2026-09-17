@@ -51,7 +51,7 @@ globalThis.fetch = async (input, init) => {
     const venues = source.caption.includes('Fixture Cafe') ? [{ name: field('Fixture Cafe'), branch: null, address: field('台北市大安區安和路一段100號'), transport: null }] : [];
     return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ venues }) }] } }], usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 30 } });
   }
-  if (google && url.searchParams.get('query')?.includes('台北市大安區安和路一段100號')) return Response.json({ status: 'OK', results: [{ place_id: 'fixture-pikul-flow', name: 'Fixture Cafe', formatted_address: '台北市大安區安和路一段100號', geometry: { location: { lat: 25, lng: 121 } } }] });
+  if (google && url.searchParams.get('query')?.includes('台北市大安區安和路一段100號')) return Response.json({ status: 'OK', results: [{ place_id: 'fixture-pikul-flow', name: 'Fixture Cafe', types: ['cafe', 'food', 'point_of_interest'], formatted_address: '台北市大安區安和路一段100號', geometry: { location: { lat: 25, lng: 121 } } }] });
   const multiVenue = google ? /Alpha Fixture Cafe|Beta Fixture Cafe|Gamma Fixture Cafe/.exec(url.searchParams.get('query') ?? '')?.[0] : undefined;
   if (multiVenue) return Response.json({ status: 'OK', results: [{ place_id: 'fixture-' + multiVenue, name: multiVenue, formatted_address: multiVenue.startsWith('Alpha') ? '1111 Park Ave, Tustin, CA 92782' : multiVenue.startsWith('Beta') ? '2222 Park Ave, Tustin, CA 92782' : '3333 Park Ave, Tustin, CA 92782', geometry: { location: { lat: multiVenue.startsWith('Alpha') ? 25 : multiVenue.startsWith('Beta') ? 26 : 27, lng: 121 } } }] });
   return Response.json(google
@@ -382,11 +382,17 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       assert.deepEqual(retry.body.superseded_candidate_ids, [clue.body.id]);
       const recovered = retry.body.created_candidates[0];
       assert.equal(recovered.evidence[0].text, `Source URL: ${captured.body.source_url}`);
+      assert.deepEqual(recovered.evidence.filter((entry: any) => entry.google_place_id), [
+        { google_place_id: "fixture-pikul-flow", google_types: ["cafe", "food", "point_of_interest"] },
+      ]);
+      assert.equal(recovered.place_id, null, "provider identity must not replace the app place UUID");
       assert.deepEqual((await pool.query("select evidence from place_candidates where id=$1", [recovered.id])).rows[0].evidence, recovered.evidence);
       assert.equal(recovered.created_at, captured.body.created_at); assert.notEqual(recovered.workflow_run_id, run);
       assert.equal(retry.body.workflow_run_id, recovered.workflow_run_id);
       const reload = await api(`/v0/memory/candidates?capture_id=${captured.body.id}`, undefined, owner);
       const old = (reload.body as any).find((row: any) => row.id === clue.body.id);
+      const restored = (reload.body as any).find((row: any) => row.id === recovered.id);
+      assert.deepEqual(restored.evidence, recovered.evidence, "provider identity and text evidence survive HTTP reload");
       assert.equal(old.status, "source_only"); assert.equal(old.superseded_by_candidate_id, recovered.id);
       assert.deepEqual((await pool.query("select * from workflow_runs where id=$1", [run])).rows[0], before);
       const second = await api(`/v0/memory/captures/${captured.body.id}/search-recovery`, { workflow_run_id: run, explicit_retry: true, max_queries: 1, include_media_evidence: false }, owner, { "x-save-analysis-id": id });

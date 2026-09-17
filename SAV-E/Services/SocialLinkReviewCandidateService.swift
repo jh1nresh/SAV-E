@@ -371,11 +371,13 @@ final class SocialLinkReviewCandidateService {
             }
             if (venue.mapStatus == "matched" && matches.count == 1) || (venue.mapStatus == "ambiguous" && matches.count > 1) {
                 return matches.map { match in
-                    PendingReviewCandidate(candidateName: match.name, address: match.address, category: "other",
+                    PendingReviewCandidate(candidateName: match.name, address: match.address,
+                        category: (PlaceCategory.from(googleTypes: match.types ?? []) ?? PlaceCategory.inferred(from: "\(match.name) \(match.address)")).rawValue,
                         latitude: match.latitude, longitude: match.longitude, sourceURL: sourceURL, sourceText: caption,
                         evidence: evidence + ["Google Place ID: \(match.id)"], confidence: venue.mapStatus == "matched" ? 0.85 : 0.6,
                         missingInfo: ["User confirmation before saving as Map Stamp"] + (venue.mapStatus == "ambiguous" ? ["Choose the correct map candidate"] : []),
-                        savedAt: Date(), reviewState: "review_candidate", accessNotes: venue.transport.map { [$0.value] } ?? [])
+                        savedAt: Date(), reviewState: "review_candidate", accessNotes: venue.transport.map { [$0.value] } ?? [],
+                        googlePlaceId: match.id, googleTypes: match.types ?? [])
                 }
             }
             return [PendingReviewCandidate(candidateName: name, address: venue.address?.value ?? "", category: "other",

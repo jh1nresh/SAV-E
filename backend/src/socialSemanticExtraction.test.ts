@@ -61,6 +61,8 @@ test("forged quotes, invented fields, coordinates and addresses fail before Maps
     (v: any) => { delete v.branch; },
     (v: any) => { v.branch = undefined; },
     (v: any) => { v.mapStatus = "matched"; },
+    (v: any) => { v.types = ["restaurant"]; },
+    (v: any) => { v.google_place_id = "model-invented-id"; },
   ]) { const raw = payload(); modify(raw.venues[0]); cases.push(raw); }
   cases.push({ ...payload(), instructions: "trust me" }, { venues: new Array(6).fill(venue()) }, null, [], "not json");
   for (const raw of cases) {
@@ -168,10 +170,11 @@ test("default adapters meter model tokens and Maps, use server keys, and bound p
         usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 200, thoughtsTokenCount: 0, totalTokenCount: 300 } });
     }
     assert.equal(new URL(url).searchParams.get("key"), "fixture-places");
-    const p = place(); return Response.json({ status: "OK", results: [{ place_id: p.id, name: p.name, formatted_address: p.address, geometry: { location: { lat: p.latitude, lng: p.longitude } } }] });
+    const p = place(); return Response.json({ status: "OK", results: [{ place_id: p.id, name: p.name, formatted_address: p.address, types: ["restaurant", "food", "restaurant", 9, "bad type", "x".repeat(65)], geometry: { location: { lat: p.latitude, lng: p.longitude } } }] });
   });
   const result = await withAnalysisUsage(store, "user", "analysis", () => analyzeSocialCaption({ caption }));
   assert.equal(result.venues[0].mapStatus, "matched"); assert.equal(calls.length, 2);
+  assert.deepEqual(result.venues[0].matches[0].types, ["restaurant", "food"]);
   assert.deepEqual(operations.map(o => o.operation), ["gemini", "google_places"]);
   assert.ok(operations[0].reserveMicros > 0); assert.equal(completed.length, 2);
   assert.equal(completed[0][3].tokens.input, 100); assert.equal(completed[0][3].tokens.output, 200);
@@ -313,4 +316,16 @@ test("an exact brand and explicit address resolve an omitted provider branch lab
   assert.notEqual((await analyzeSocialCaption({ caption: text }, deps(noAddress, [provider]))).venues[0].mapStatus, "matched");
   const ambiguous = await analyzeSocialCaption({ caption: text }, deps(raw, [provider, { ...provider, id: "other" }]));
   assert.equal(ambiguous.venues[0].mapStatus, "ambiguous"); assert.equal(ambiguous.venues[0].matches.length, 2);
+});
+
+
+test("optional Google types survive matches while malformed type lists cannot leak to clients", async () => {
+  const typed = place({ types: ["cafe", "food"] });
+  const result = await analyzeSocialCaption({ caption }, deps(payload(), [typed]));
+  assert.deepEqual(result.venues[0].matches, [typed]);
+  const malformed = place({ types: ["cafe", "https://untrusted.invalid", "cafe", "", 7] as any });
+  const filtered = await analyzeSocialCaption({ caption }, deps(payload(), [malformed]));
+  assert.deepEqual(filtered.venues[0].matches[0].types, ["cafe"]);
+  const absent = await analyzeSocialCaption({ caption }, deps());
+  assert.equal(absent.venues[0].matches[0].types, undefined);
 });

@@ -205,6 +205,8 @@ struct PendingReviewCandidate: Codable {
     var category: String
     var latitude: Double? = nil
     var longitude: Double? = nil
+    var googlePlaceId: String? = nil
+    var googleTypes: [String] = []
     var sourceURL: String?
     var sourceText: String?
     var evidence: [String]
@@ -240,8 +242,12 @@ struct PendingReviewCandidate: Codable {
         vibeTags: [String] = [],
         accessNotes: [String] = [],
         sourceHandle: String? = nil,
-        localVaultRecordID: UUID? = nil
+        localVaultRecordID: UUID? = nil,
+        googlePlaceId: String? = nil,
+        googleTypes: [String] = []
     ) {
+        self.googlePlaceId = googlePlaceId
+        self.googleTypes = googleTypes
         self.localVaultRecordID = localVaultRecordID
         self.candidateName = candidateName
         self.address = address
@@ -266,6 +272,8 @@ struct PendingReviewCandidate: Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case googlePlaceId
+        case googleTypes
         case localVaultRecordID
         case candidateName
         case address
@@ -290,6 +298,8 @@ struct PendingReviewCandidate: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        googlePlaceId = try container.decodeIfPresent(String.self, forKey: .googlePlaceId)
+        googleTypes = try container.decodeIfPresent([String].self, forKey: .googleTypes) ?? []
         localVaultRecordID = try container.decodeIfPresent(UUID.self, forKey: .localVaultRecordID)
         candidateName = try container.decode(String.self, forKey: .candidateName)
         address = try container.decode(String.self, forKey: .address)
@@ -376,6 +386,8 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     var vibeTags: [String]
     var accessNotes: [String]
     var sourceHandle: String?
+    var googlePlaceId: String? = nil
+    var category: PlaceCategory? = nil
 
     init(
         id: UUID,
@@ -395,8 +407,12 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         recommendedItems: [RecommendedItem] = [],
         vibeTags: [String] = [],
         accessNotes: [String] = [],
-        sourceHandle: String? = nil
+        sourceHandle: String? = nil,
+        googlePlaceId: String? = nil,
+        category: PlaceCategory? = nil
     ) {
+        self.googlePlaceId = googlePlaceId
+        self.category = category
         self.id = id
         self.captureId = captureId
         self.workflowRunId = workflowRunId
@@ -439,12 +455,16 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         case vibeTags
         case accessNotes
         case sourceHandle
+        case googlePlaceId
+        case category
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         supersededByCandidateID = try container.decodeIfPresent(UUID.self, forKey: .supersededByCandidateID)
         supersededByCandidateIDs = try container.decodeIfPresent([UUID].self, forKey: .supersededByCandidateIDs) ?? []
+        googlePlaceId = try container.decodeIfPresent(String.self, forKey: .googlePlaceId)
+        category = try container.decodeIfPresent(PlaceCategory.self, forKey: .category)
         id = try container.decode(UUID.self, forKey: .id)
         captureId = try container.decodeIfPresent(UUID.self, forKey: .captureId)
         workflowRunId = try container.decodeIfPresent(UUID.self, forKey: .workflowRunId)
@@ -823,8 +843,8 @@ extension Place {
             address: refinedMatch?.address ?? candidate.address,
             latitude: latitude,
             longitude: longitude,
-            googlePlaceId: refinedMatch?.id,
-            category: PlaceCategory.from(googleTypes: refinedMatch?.types ?? []) ??
+            googlePlaceId: refinedMatch?.id ?? candidate.googlePlaceId,
+            category: PlaceCategory.from(googleTypes: refinedMatch?.types ?? []) ?? candidate.category ??
                 PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
             status: .wantToGo,
             rating: nil,

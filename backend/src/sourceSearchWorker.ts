@@ -56,6 +56,7 @@ export type SourceSearchCandidate = {
   latitude?: number;
   longitude?: number;
   placeId?: string;
+  types?: string[];
   evidence: string[];
   confidence: number;
   missingInfo: string[];
@@ -251,6 +252,7 @@ export function semanticRecoveryCandidates(result: SemanticAnalysisResult, sourc
     if (options.length) return options.map(match => ({
       name: match.name, address: match.address,
       latitude: match.latitude, longitude: match.longitude, placeId: match.id,
+      ...(match.types === undefined ? {} : { types: match.types }),
       evidence: [...quotes, `Extracted venue: ${name}`, `Map identity: ${venue.mapStatus}`, `Google Place ID: ${match.id}`],
       confidence: venue.mapStatus === "matched" ? 0.85 : 0.6,
       missingInfo: ["User confirmation before saving as Map Stamp", ...(venue.mapStatus === "ambiguous" ? ["Choose the correct map candidate"] : [])],

@@ -583,7 +583,11 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             let marker = "Source URL: \(sourceURL)"
             sourceEvidence = [marker] + sourceEvidence.filter { $0 != marker }
         }
-        let evidence = sourceEvidence.map { ["text": $0] }
+        var evidence: [[String: Any]] = sourceEvidence.map { ["text": $0] }
+        if !candidate.isSourceOnly, candidate.hasReliableCoordinates,
+           let placeID = candidate.googlePlaceId, !placeID.isEmpty {
+            evidence.append(["google_place_id": placeID, "google_types": candidate.googleTypes])
+        }
         let body = try Self.jsonBody([
             "capture_id": captureId.uuidString,
             "workflow_run_id": workflowRunId?.uuidString,
@@ -2184,6 +2188,14 @@ private struct PlaceCandidateRow: Codable {
             status: status,
             createdAt: memoryCollectionDate(created_at)
         )
+        // Provider metadata is structured evidence, never parsed from quoted captions.
+        let identities = (evidence ?? []).filter { $0.google_place_id?.isEmpty == false }
+        if candidate.hasReliableCoordinates, candidate.status != "source_only",
+           Set(identities.compactMap(\.google_place_id)).count == 1,
+           let identity = identities.first {
+            candidate.googlePlaceId = identity.google_place_id
+            candidate.category = PlaceCategory.from(googleTypes: identity.google_types ?? [])
+        }
         candidate.supersededByCandidateID = superseded_by_candidate_id
         candidate.supersededByCandidateIDs = superseded_by_candidate_ids ?? []
         return candidate
@@ -2192,6 +2204,8 @@ private struct PlaceCandidateRow: Codable {
 
 private struct PlaceCandidateEvidenceRow: Codable {
     let text: String?
+    let google_place_id: String?
+    let google_types: [String]?
 }
 
 private struct TripRow: Codable {

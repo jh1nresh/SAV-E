@@ -4487,6 +4487,34 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertTrue(candidates.allSatisfy { $0.missingInfo.contains("Choose the correct map candidate") })
     }
     @MainActor
+    func testSemanticProviderIdentityAndCategorySurviveLocalVaultReload() async throws {
+        for (name, type, category) in [("Walmart", "department_store", PlaceCategory.shopping), ("Ritz-Carlton", "lodging", .stay)] {
+            let caption = "\(name)\n1 Main Street"
+            let match = SocialSemanticMapPlace(id: "provider-\(name)", name: name, address: "1 Main Street", latitude: 25, longitude: 121, types: [type])
+            let result = SocialSemanticResult(status: "ready", venues: [.init(
+                name: .init(value: name, quote: name, source: "caption"), branch: nil,
+                address: .init(value: "1 Main Street", quote: "1 Main Street", source: "caption"), transport: nil,
+                mapStatus: "matched", matches: [match])])
+            let service = SocialLinkReviewCandidateService(socialSemanticAnalyzer: SemanticAnalyzerStub { _, _ in result })
+            let results = await service.reviewCandidates(fromEvidenceText: caption, sourceURL: "https://instagram.com/p/provider/", thumbnailText: { [] })
+            let pending = try XCTUnwrap(results.first)
+            XCTAssertEqual(pending.googlePlaceId, match.id)
+            XCTAssertEqual(pending.googleTypes, [type])
+            XCTAssertEqual(pending.category, category.rawValue)
+            let queued = try JSONDecoder().decode(PendingReviewCandidate.self, from: JSONEncoder().encode(pending))
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let url = directory.appendingPathComponent("vault.json")
+            _ = try SaveLocalVaultService(overrideVaultURL: url).saveReviewCandidate(queued)
+            let reloaded = try XCTUnwrap(SaveLocalVaultService(overrideVaultURL: url).reviewCandidates().first)
+            let codable = try JSONDecoder().decode(PlaceReviewCandidate.self, from: JSONEncoder().encode(reloaded))
+            let place = Place.from(codable)
+            XCTAssertEqual(place.googlePlaceId, match.id)
+            XCTAssertEqual(place.category, category)
+        }
+    }
+
+    @MainActor
     func testLinkAnalysisRejectsUngroundedBackendQuote() async throws {
         var result = pikulResult(); result.venues[0].name.quote = "not in source"
         let analyzer = SemanticAnalyzerStub { _, _ in result }

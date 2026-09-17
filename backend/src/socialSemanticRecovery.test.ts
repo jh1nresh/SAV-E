@@ -136,3 +136,21 @@ test("legacy merged raw text is excluded when persisted source provenance is abs
   assert.equal(result.semanticStatus, "no_place_evidence"); assert.deepEqual(result.errors, []);
   assert.deepEqual(result.candidates, []); assert.ok(!result.receipt.missing.includes("Analysis pending"));
 });
+
+
+test("Google identity and types propagate only from matched or ambiguous provider alternatives", () => {
+  for (const status of ["matched", "ambiguous", "unverified", "conflict"] as const) {
+    const result = structuredClone(extracted); result.venues[0].mapStatus = status;
+    result.venues[0].matches = [{ id: "real-google-id", name: "初泰Pikul 信義象山門市", address: "臺北市信義區信義路五段122號",
+      latitude: 25, longitude: 121, types: ["restaurant", "food"] }];
+    const candidate = semanticRecoveryCandidates(result, input.sourceUrl)[0];
+    assert.equal(candidate.evidence[0], `Source URL: ${input.sourceUrl}`);
+    if (status === "matched" || status === "ambiguous") {
+      assert.equal(candidate.placeId, "real-google-id"); assert.deepEqual(candidate.types, ["restaurant", "food"]);
+      assert.equal(candidate.latitude, 25); assert.equal(candidate.longitude, 121);
+    } else {
+      assert.equal(candidate.placeId, undefined); assert.equal(candidate.types, undefined);
+      assert.equal(candidate.latitude, undefined); assert.equal(candidate.longitude, undefined);
+    }
+  }
+});

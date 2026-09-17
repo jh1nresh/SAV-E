@@ -1,7 +1,7 @@
 import { AnalysisControlError, analysisPrices, geminiTokens, trackAnalysisOperation } from "./analysisUsage.js";
 
 export interface SemanticField { value: string; quote: string; source: "caption" | "ocr" }
-export interface SemanticMapPlace { id: string; name: string; address: string; latitude: number; longitude: number }
+export interface SemanticMapPlace { id: string; name: string; address: string; latitude: number; longitude: number; types?: string[] }
 export interface SemanticVenue {
   name: SemanticField; branch: SemanticField | null; address: SemanticField | null; transport: SemanticField | null;
   mapStatus: "matched" | "ambiguous" | "conflict" | "unverified"; matches: SemanticMapPlace[];
@@ -67,6 +67,11 @@ function extraction(raw: unknown, input: Input): SemanticVenue[] {
     seen.add(identity);
     return { name, branch, address, transport, mapStatus: "unverified", matches: [] };
   });
+}
+function providerTypes(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return [...new Set(value.slice(0, 50).filter((item): item is string =>
+    typeof item === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(item)))];
 }
 function validPlace(value: unknown): value is SemanticMapPlace {
   if (!value || typeof value !== "object") return false;
@@ -171,7 +176,7 @@ async function defaultSearch(query: string): Promise<SemanticMapPlace[]> {
       const body = await boundedJSON(response, controller.signal);
       if (!["OK", "ZERO_RESULTS"].includes(body?.status) || !Array.isArray(body.results)) throw failure();
       return body.results.slice(0, 20).map((item: any) => ({ id: item?.place_id, name: item?.name, address: item?.formatted_address,
-        latitude: item?.geometry?.location?.lat, longitude: item?.geometry?.location?.lng })).filter(validPlace);
+        latitude: item?.geometry?.location?.lat, longitude: item?.geometry?.location?.lng, types: providerTypes(item?.types) })).filter(validPlace);
     } finally { clearTimeout(timeout); }
   });
 }
@@ -196,7 +201,8 @@ export async function analyzeSocialCaption(input: Input, deps: Dependencies = {}
       if (!Array.isArray(results)) throw failure();
       const seen = new Set<string>();
       const places = results.slice(0, 20).filter(validPlace).filter(place => !seen.has(place.id) && !!seen.add(place.id))
-        .map(({ id, name, address, latitude, longitude }) => ({ id, name, address, latitude, longitude }));
+        .map(({ id, name, address, latitude, longitude, types }) => ({ id, name, address, latitude, longitude,
+          ...(types === undefined ? {} : { types: providerTypes(types) }) }));
       const matches = places.filter(place => congruent(venue, place));
       // A unique search result is not address evidence. Without an explicit
       // source address, leave the entity unresolved even when its name agrees.

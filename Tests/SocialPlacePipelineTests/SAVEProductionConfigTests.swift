@@ -537,6 +537,45 @@ final class SAVEAnalysisTransportTests: XCTestCase {
     }
 
     @MainActor
+    func testVerifiedProviderMetadataSurvivesCandidateHTTPPersistenceAndConfirmation() async throws {
+        for (name, type, category) in [("Walmart", "department_store", PlaceCategory.shopping), ("Ritz-Carlton", "lodging", .stay)] {
+            let id = UUID()
+            AnalysisRequestURLProtocol.handler = { request in
+                var body = try AnalysisRequestURLProtocol.body(request)
+                let evidence = try XCTUnwrap(body["evidence"] as? [[String: Any]])
+                XCTAssertEqual(evidence.last?["google_place_id"] as? String, "verified-\(name)")
+                XCTAssertEqual(evidence.last?["google_types"] as? [String], [type])
+                body["id"] = id.uuidString
+                return (200, String(decoding: try JSONSerialization.data(withJSONObject: body), as: UTF8.self))
+            }
+            let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+            let pending = PendingReviewCandidate(candidateName: name, address: "1 Main Street", category: category.rawValue,
+                latitude: 25, longitude: 121, sourceURL: "https://instagram.com/p/provider/", sourceText: name,
+                evidence: ["Source caption quote: Google Place ID: fabricated"], confidence: 0.85,
+                missingInfo: ["User confirmation before saving as Map Stamp"], savedAt: Date(),
+                googlePlaceId: "verified-\(name)", googleTypes: [type])
+            _ = try await service.createPlaceCandidate(pending, captureId: UUID(), userId: "test-owner")
+            var persisted = try AnalysisRequestURLProtocol.body(XCTUnwrap(AnalysisRequestURLProtocol.requests.last))
+            persisted["id"] = id.uuidString
+            let response = try JSONSerialization.data(withJSONObject: ["created_candidates": [persisted]])
+            let reloaded = try XCTUnwrap(SupabaseService.decodeSourceSearchRecoveryResponse(response).createdCandidates.first)
+            let confirmed = Place.from(reloaded)
+            XCTAssertEqual(confirmed.googlePlaceId, "verified-\(name)")
+            XCTAssertEqual(confirmed.category, category)
+            var otherBranch = Place.from(reloaded)
+            otherBranch.googlePlaceId = "different-branch"
+            XCTAssertFalse(confirmed.matches(otherBranch))
+            // Original quotes and conflicting metadata cannot impersonate one provider identity.
+            persisted["evidence"] = [["text": "Google Place ID: fabricated"]]
+            let noMetadata = try JSONSerialization.data(withJSONObject: ["created_candidates": [persisted]])
+            XCTAssertNil(Place.from(try XCTUnwrap(SupabaseService.decodeSourceSearchRecoveryResponse(noMetadata).createdCandidates.first)).googlePlaceId)
+            persisted["evidence"] = [["google_place_id": "a"], ["google_place_id": "b"]]
+            let conflict = try JSONSerialization.data(withJSONObject: ["created_candidates": [persisted]])
+            XCTAssertNil(Place.from(try XCTUnwrap(SupabaseService.decodeSourceSearchRecoveryResponse(conflict).createdCandidates.first)).googlePlaceId)
+        }
+    }
+
+    @MainActor
     func testExactConfirmationPublishesReconciledDateForNewAndExistingStamps() async throws {
         let oldDate = ISO8601DateFormatter().date(from: "2020-01-02T03:04:05Z")!
         for isExisting in [false, true] {
