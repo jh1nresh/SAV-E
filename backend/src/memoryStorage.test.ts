@@ -112,7 +112,7 @@ test("real database preserves workflow ownership chronology and ambiguous source
     assert.deepEqual((await client.query("select missing_info from place_candidates where id=$1", [independent])).rows[0].missing_info, ["Analysis pending"]);
     const clueCapture = randomUUID(), clue = randomUUID(), named = randomUUID();
     await client.query("insert into captures(id,user_id) values($1,$2)", [clueCapture, owner]);
-    await client.query("insert into place_candidates(id,capture_id,name,status) values($1,$2,'Saved link','source_only')", [clue, clueCapture]);
+    await client.query("insert into place_candidates(id,capture_id,name,status) values($1,$2,'Source clue','source_only')", [clue, clueCapture]);
     assert.deepEqual(await supersedeSourceOnlyCandidates(client, clueCapture), []);
     await client.query("insert into place_candidates(id,capture_id,name,address,status) values($1,$2,'Fixture Cafe','1 Fixture Road','review')", [named, clueCapture]);
     const branch = randomUUID();

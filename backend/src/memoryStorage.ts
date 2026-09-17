@@ -192,7 +192,7 @@ export async function reconcileSavedCandidates(client: PoolClient, userId: strin
 export function isGenericSourceOnlyCandidate(row: Row): boolean {
   return row.status === "source_only" && !identityText(row.address) && !row.place_id
     && row.latitude == null && row.longitude == null
-    && ["saved link", "saved source", "social link", "instagram reel", "instagram link", "xiaohongshu link",
+    && ["saved link", "saved source", "source clue", "social link", "instagram reel", "instagram link", "xiaohongshu link",
       "douyin link", "dianping link", "meituan link", "taobao instant commerce link", "taobao product link",
       "tiktok link", "google maps link", "apple maps link"].includes(identityText(row.name));
 }
