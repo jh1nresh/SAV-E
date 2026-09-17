@@ -146,6 +146,29 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         return started.analysis_id
     }
 
+    func analyzeSocialCaption(caption: String, ocrText: String?) async throws -> SocialSemanticResult {
+        if let context = SAVEAnalysisScope.current {
+            try await context.checkAllowed()
+            let body = try Self.jsonBody(["caption": caption, "ocrText": ocrText])
+            let data = try await request(path: "/v0/analysis/\(context.id.uuidString)/extract-place-clues", method: "POST", body: body)
+            return try JSONDecoder().decode(SocialSemanticResult.self, from: data)
+        }
+        // Intents may run outside the import scope. They still need normal
+        // authentication, owned accounting and the same backend extraction.
+        let context = SAVEAnalysisContext(id: UUID())
+        _ = try await startAnalysis(id: context.id)
+        do {
+            let result = try await SAVEAnalysisScope.$current.withValue(context) {
+                try await analyzeSocialCaption(caption: caption, ocrText: ocrText)
+            }
+            await finishAnalysis(context, outcome: result.status == "ready" ? "review_candidate" : result.status == "analysis_pending" ? "failed" : "source_only")
+            return result
+        } catch {
+            await finishAnalysis(context, outcome: "failed")
+            throw error
+        }
+    }
+
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {
         let snapshot = await context.snapshot(outcome: outcome)
         // An unstructured task can finish the receipt even when its import was cancelled.
@@ -1097,7 +1120,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         var request = URLRequest(url: url)
         if isSocialRequest { request.cachePolicy = .reloadIgnoringLocalCacheData }
         request.httpMethod = method
-        if path.hasPrefix("/v0/analysis") { request.timeoutInterval = 8 }
+        if path.hasPrefix("/v0/analysis") { request.timeoutInterval = path.hasSuffix("/extract-place-clues") ? 90 : 8 }
         // Public video recovery includes a bounded download and frame analysis.
         if path.hasPrefix("/memory/captures/"), path.hasSuffix("/search-recovery") {
             request.timeoutInterval = 180

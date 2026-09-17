@@ -1047,7 +1047,7 @@ final class MapViewModel: ObservableObject {
                             placeRecoveryResult(for: refinedCandidate, candidateId: candidateId),
                             for: createdRun.id
                         )
-                        if runSourceRecovery && refinedCandidate.isSourceOnly {
+                        if refinedCandidate.isSourceOnly && (runSourceRecovery || refinedCandidate.reviewState == "analysis_pending") {
                             await recoverImportSource(captureId: captureId, candidateId: candidateId, workflowRunId: createdRun.id)
                         }
                     } catch {
@@ -1115,7 +1115,11 @@ final class MapViewModel: ObservableObject {
 
         let candidates: [PendingReviewCandidate]
         if !usesRemotePersistence {
-            candidates = socialLinkReviewCandidateService
+            if normalizedShare.platform.includesCaptionInAnalysis {
+                candidates = [socialLinkReviewCandidateService.pendingSemanticSource(
+                    caption: normalizedShare.captionEvidence, sourceURL: sourceURL?.absoluteString ?? "")]
+            } else {
+                candidates = socialLinkReviewCandidateService
                 .reviewCandidatesOrSourceOnly(
                     fromEvidenceText: normalizedShare.captionEvidence.isEmpty
                         ? analysisInput
@@ -1127,6 +1131,7 @@ final class MapViewModel: ObservableObject {
                     if sourceURL == nil { candidate.sourceURL = nil }
                     return candidate
                 }
+            }
             let importedCandidates = try candidates.map { pendingCandidate in
                 let record = try saveLocalVaultService.saveReviewCandidate(pendingCandidate)
                 return PlaceReviewCandidate(
@@ -1200,7 +1205,7 @@ final class MapViewModel: ObservableObject {
                         placeRecoveryResult(for: candidate, candidateId: candidateId),
                         for: createdRun.id
                     )
-                    if candidate.isSourceOnly {
+                    if candidate.isSourceOnly && candidate.reviewState != "analysis_pending" {
                         let recovered = await recoverImportSource(captureId: captureId, candidateId: candidateId, workflowRunId: createdRun.id)
                         importedCandidateIDs.append(contentsOf: recovered)
                     }

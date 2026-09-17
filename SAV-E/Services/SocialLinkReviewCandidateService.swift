@@ -165,6 +165,7 @@ final class SocialLinkReviewCandidateService {
     /// rejects. `nil` when no LLM path is configured — the service then keeps its
     /// deterministic-only behavior. Injected as a fake (no network) in tests.
     private let captionVenueExtractor: SocialCaptionVenueExtractor?
+    private let socialSemanticAnalyzer: SocialSemanticAnalyzing
     private let thumbnailImageByteLimit = 6_000_000
     private let analysisDiagnosticsObserver: (AnalysisSearchDiagnostics) -> Void
     private static let analysisLogger = Logger(subsystem: "Savvy", category: "SocialAnalysisSearch")
@@ -186,11 +187,13 @@ final class SocialLinkReviewCandidateService {
         publicSourceSearchService: PublicSourceSearchServiceProtocol = PublicSourceSearchService.shared,
         placeResolverService: PlaceResolverServiceProtocol? = nil,
         captionVenueExtractor: SocialCaptionVenueExtractor? = GeminiCaptionVenueExtractor.liveFromConfig(),
+        socialSemanticAnalyzer: SocialSemanticAnalyzing = BackendSocialSemanticAnalyzer(),
         analysisDiagnosticsObserver: ((AnalysisSearchDiagnostics) -> Void)? = nil
     ) {
         self.placeResolverService = placeResolverService ?? PlaceResolverService(googlePlacesService: googlePlacesService)
         self.publicSourceSearchService = publicSourceSearchService
         self.captionVenueExtractor = captionVenueExtractor
+        self.socialSemanticAnalyzer = socialSemanticAnalyzer
         self.analysisDiagnosticsObserver = analysisDiagnosticsObserver ?? Self.logAnalysisDiagnostics
     }
 
@@ -292,7 +295,7 @@ final class SocialLinkReviewCandidateService {
     private func reviewCandidates(from url: URL, sharedCaption: String?) async -> [PendingReviewCandidate] {
         let metadata = await fetchMetadata(from: url)
         let videoEvidence = metadata.videoURL.map { "Video metadata URL: \($0.absoluteString)" }
-        let evidenceText = ([sharedCaption] + metadata.evidenceLines + [videoEvidence])
+        let evidenceText = ([sharedCaption] + (metadata.jsonCaption.map { [$0] } ?? metadata.evidenceLines) + [videoEvidence])
             .compactMap { $0 }
             .map(cleanHTMLText)
             .filter { !$0.isEmpty }
@@ -313,35 +316,73 @@ final class SocialLinkReviewCandidateService {
         sourceURL: String,
         thumbnailText: () async -> [String]
     ) async -> [PendingReviewCandidate] {
-        let initial = reviewCandidatesOrSourceOnly(fromEvidenceText: text, sourceURL: sourceURL)
-        let hasConcreteTextIdentity = !initial.isEmpty
-            && !deterministicYieldedUnreliableProseFragment(initial)
-            && initial.allSatisfy {
-                !$0.isSourceOnly && !$0.isPlaceBearingSource
-                    && !isAddressOnlyPlaceClue($0)
-                    && $0.reviewState != "unresolved_place_candidate"
-                    && ($0.hasReliableCoordinates || hasExplicitThumbnailSkipAddress($0.address))
-            }
-        let ocrLines = hasConcreteTextIdentity ? [] : await thumbnailText()
-        let evidenceText = ([text] + ocrLines).filter { !$0.isEmpty }.joined(separator: "\n")
-        // Never hard-fail a link the user pasted: if recovery search throws,
-        // fall back to the deterministic local parse / source-only path.
-        let resolved = (try? await recoverReviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL))
-            ?? reviewCandidatesOrSourceOnly(fromEvidenceText: evidenceText, sourceURL: sourceURL)
-        guard !ocrLines.isEmpty else { return resolved }
-        return resolved.map { candidate in
-            candidate.withThumbnailOCREvidence(ocrLines)
+        // Structured map/web routes retain their existing parser. Social prose
+        // always starts with the common backend semantic contract.
+        guard SocialShareTextNormalizer.platform(forURLString: sourceURL).includesCaptionInAnalysis else {
+            return (try? await recoverReviewCandidates(fromEvidenceText: text, sourceURL: sourceURL))
+                ?? reviewCandidatesOrSourceOnly(fromEvidenceText: text, sourceURL: sourceURL)
         }
+        var result = await socialSemanticAnalyzer.analyze(caption: text, ocrText: nil)
+        var ocrLines: [String] = []
+        let insufficientText = result.status == "no_place_evidence"
+            || (result.status == "ready" && result.venues.contains { $0.address == nil })
+        if insufficientText && !Task.isCancelled {
+            ocrLines = await thumbnailText()
+            if !ocrLines.isEmpty {
+                let supplemented = await socialSemanticAnalyzer.analyze(caption: text, ocrText: ocrLines.joined(separator: "\n"))
+                if supplemented.status != "analysis_pending" { result = supplemented }
+            }
+        }
+        return semanticCandidates(result, sourceURL: sourceURL, caption: text, ocrLines: ocrLines)
     }
 
-    private func hasExplicitThumbnailSkipAddress(_ address: String) -> Bool {
-        // The general address recognizer also accepts areas such as Bangkok
-        // and Los Angeles, CA. Only numbered streets can skip extra evidence.
-        // Unrecognized international address formats keep the OCR fallback.
-        looksLikeWesternStreetAddress(address) || address.range(
-            of: #"[路街道巷弄][^\n\r]{0,40}\d+[號号]"#,
-            options: .regularExpression
-        ) != nil
+    func pendingSemanticSource(caption: String, sourceURL: String) -> PendingReviewCandidate {
+        PendingReviewCandidate(candidateName: "Source clue", address: "", category: "other",
+            sourceURL: sourceURL, sourceText: caption, evidence: ["Source preserved; semantic analysis pending"],
+            confidence: 0, missingInfo: ["Analysis pending", "Exact place", "User confirmation"],
+            savedAt: Date(), isSourceOnly: true, reviewState: "analysis_pending")
+    }
+
+    private func semanticCandidates(_ result: SocialSemanticResult, sourceURL: String, caption: String, ocrLines: [String]) -> [PendingReviewCandidate] {
+        guard result.status == "ready", !result.venues.isEmpty else {
+            var pending = pendingSemanticSource(caption: caption, sourceURL: sourceURL)
+            if result.status == "no_place_evidence" {
+                pending.reviewState = "source_only"
+                pending.missingInfo = ["No place evidence in source", "Exact place", "User confirmation"]
+            }
+            return [pending]
+        }
+        return result.venues.flatMap { venue -> [PendingReviewCandidate] in
+            let name = [venue.name.value, venue.branch?.value].compactMap { $0 }.joined(separator: " ")
+            let fields = [venue.name, venue.branch, venue.address, venue.transport].compactMap { $0 }
+            // Defensive response validation keeps unsupported backend fields out
+            // of a saved clue, even if a malformed deployment responds 200.
+            guard fields.allSatisfy({ field in
+                let source = field.source == "caption" ? caption : field.source == "ocr" ? ocrLines.joined(separator: "\n") : ""
+                return !field.quote.isEmpty && source.contains(field.quote)
+            }) else { return [pendingSemanticSource(caption: caption, sourceURL: sourceURL)] }
+            let evidence = fields.map { "Source \($0.source) quote: \($0.quote)" }
+                + ["Extracted venue: \(name)", "Map identity: \(venue.mapStatus)"]
+            let matches = venue.matches.filter { match in
+                !match.id.isEmpty && !match.name.isEmpty && !match.address.isEmpty
+                    && match.latitude.isFinite && match.longitude.isFinite
+                    && abs(match.latitude) <= 90 && abs(match.longitude) <= 180
+            }
+            if (venue.mapStatus == "matched" && matches.count == 1) || (venue.mapStatus == "ambiguous" && matches.count > 1) {
+                return matches.map { match in
+                    PendingReviewCandidate(candidateName: match.name, address: match.address, category: "other",
+                        latitude: match.latitude, longitude: match.longitude, sourceURL: sourceURL, sourceText: caption,
+                        evidence: evidence + ["Google Place ID: \(match.id)"], confidence: venue.mapStatus == "matched" ? 0.85 : 0.6,
+                        missingInfo: ["User confirmation before saving as Map Stamp"] + (venue.mapStatus == "ambiguous" ? ["Choose the correct map candidate"] : []),
+                        savedAt: Date(), reviewState: "review_candidate", accessNotes: venue.transport.map { [$0.value] } ?? [])
+                }
+            }
+            return [PendingReviewCandidate(candidateName: name, address: venue.address?.value ?? "", category: "other",
+                sourceURL: sourceURL, sourceText: caption,
+                evidence: evidence + matches.map { "Conflicting map alternative: \($0.name) — \($0.address)" }, confidence: 0.45,
+                missingInfo: ["Map identity not verified", "Verified coordinates", "User confirmation before saving as Map Stamp"],
+                savedAt: Date(), reviewState: "unresolved_place_candidate", accessNotes: venue.transport.map { [$0.value] } ?? [])]
+        }
     }
 
     // Each entry point owns this state; concurrent analyses never share caches.

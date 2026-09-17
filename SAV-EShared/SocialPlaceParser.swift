@@ -192,7 +192,9 @@ enum SocialShareTextNormalizer {
             embeddedURLStrings: urls,
             primaryURLString: primary,
             platform: primary.map(platform(forURLString:)) ?? .generic,
-            captionEvidence: captionLines.joined(separator: "\n"),
+            captionEvidence: primary.map { platform(forURLString: $0).includesCaptionInAnalysis } == true
+                ? working.trimmingCharacters(in: .whitespacesAndNewlines)
+                : captionLines.joined(separator: "\n"),
             creatorName: creatorName
         )
     }

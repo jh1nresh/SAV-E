@@ -1,3 +1,4 @@
+import { analyzeSocialCaption, type SemanticAnalysisResult } from "./socialSemanticExtraction.js";
 import { recoverInstagramVideoVenues, type VideoVenueEvidence } from "./videoVenueAnalysis.js";
 import { AnalysisControlError, trackAnalysisOperation, type AnalysisOperation } from "./analysisUsage.js";
 import { createHash } from "node:crypto";
@@ -136,6 +137,7 @@ export type SourceSearchWorkerOptions = {
   sourceDocumentResolver?: SourceDocumentResolver;
   persistedSourceResolution?: unknown;
   includeMediaEvidence?: boolean;
+  semanticAnalyzer?: typeof analyzeSocialCaption;
   videoVenueRecovery?: (sourceURL: string) => Promise<VideoVenueEvidence[]>;
 };
 
@@ -170,7 +172,92 @@ const sourceResolutionCacheTTL = 24 * 60 * 60 * 1_000;
 const sourceResolutionCacheLimit = 100;
 const sourceResolutionCache = new Map<string, { expiresAt: number; document: ResolvedSourceDocument }>();
 
+// Social captions never enter the heuristic venue/public-search fallback. The
+// legacy parser remains available for non-social web and structured evidence.
 export async function runSourceSearchRecovery(
+  input: SourceSearchInput,
+  fetchText: FetchText = defaultFetchText,
+  fetchMediaEvidence: FetchMediaEvidence = defaultFetchMediaEvidence,
+  options: SourceSearchWorkerOptions = {},
+): Promise<SourceSearchOutput> {
+  const url = safeURL(input.sourceUrl ?? "");
+  if (!url || !isPlacePlatformURL(url)) {
+    return runLegacySourceSearchRecovery(input, fetchText, fetchMediaEvidence, options);
+  }
+  const errors: string[] = [];
+  const document = await fetchSourceDocument(input.sourceUrl, fetchText, errors,
+    options.sourceDocumentResolver, options.persistedSourceResolution);
+  const metadata = document?.metadata;
+  // Keep source paragraph boundaries and every available character, not a
+  // head/tail sample or a list of regex-selected venue lines.
+  const caption = unique([input.rawText, metadata?.description, input.title, metadata?.title]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)).join("\n\n");
+  const analyze = options.semanticAnalyzer ?? analyzeSocialCaption;
+  let result = await analyze({ caption });
+  let mediaEvidence: SourceMediaEvidence[] = [];
+  const needsText = result.status === "no_place_evidence"
+    || (result.status === "ready" && result.venues.some(venue => !venue.address));
+  if (needsText && options.includeMediaEvidence !== false && metadata) {
+    // OCR supplements insufficient text only; a model outage is not a reason
+    // to guess from the thumbnail or download/analyze a video.
+    mediaEvidence = await recoverSourceMediaEvidence({ ...metadata, videoURL: undefined }, fetchMediaEvidence, errors);
+    const ocrText = mediaEvidence.filter(item => item.textSource === "ocr").map(item => item.text ?? "").join("\n");
+    if (ocrText.trim()) {
+      const supplemented = await analyze({ caption, ocrText });
+      if (supplemented.status !== "analysis_pending") result = supplemented;
+    }
+  }
+  if (result.status === "no_place_evidence" && options.includeMediaEvidence !== false && input.sourceUrl) {
+    try {
+      const recoverVideo = options.videoVenueRecovery ?? (sourceURL => recoverInstagramVideoVenues(sourceURL, fetchBoundedMedia));
+      const frames = await recoverVideo(input.sourceUrl);
+      if (frames.length) {
+        const ocrText = [...mediaEvidence.map(item => item.text ?? ""), ...frames.map(frame => frame.quote)].filter(Boolean).join("\n");
+        result = await analyze({ caption, ocrText });
+        mediaEvidence.push(...frames.map(frame => ({ kind: "video_keyframe" as const, url: input.sourceUrl!, frameSecond: frame.timestampSeconds, text: frame.quote, textSource: "vision" as const })));
+      }
+    } catch (error) {
+      if (error instanceof AnalysisControlError) throw error;
+      errors.push("Video evidence unavailable; source preserved");
+    }
+  }
+  if (result.status === "analysis_pending") errors.push("Semantic analysis unavailable; source preserved for retry");
+  const candidates = semanticRecoveryCandidates(result);
+  return {
+    queries: [], searchResults: [], candidates, mediaEvidence,
+    sourceResolution: document?.resolution, errors,
+    receipt: {
+      input: "social_url", capabilityLevel: mediaEvidence.length ? "media_evidence_recovery" : "metadata_enrichment",
+      found: caption ? ["source_text"] : [], tried: ["grounded_semantic_extraction", ...(result.venues.length ? ["map_identity_verification"] : [])],
+      missing: result.status === "analysis_pending" ? ["Analysis pending"] : candidates.flatMap(candidate => candidate.missingInfo),
+      output: candidates.length ? "review_candidate" : "source_only_clue",
+      nextBestClue: result.status === "analysis_pending" ? "Source saved; analysis pending. Retry when analysis is available." : "Confirm the exact place before saving.",
+      ...(result.status === "analysis_pending" ? { failureReason: { kind: "provider_failure" as const, stage: "public_search" as const } } : {}),
+    },
+  };
+}
+
+export function semanticRecoveryCandidates(result: SemanticAnalysisResult): SourceSearchCandidate[] {
+  return result.venues.flatMap(venue => {
+    const name = [venue.name.value, venue.branch?.value].filter(Boolean).join(" ");
+    const quotes = [venue.name, venue.branch, venue.address, venue.transport]
+      .filter(field => field != null).map(field => `Source ${field.source} quote: ${field.quote}`);
+    const options = venue.mapStatus === "matched" || venue.mapStatus === "ambiguous" ? venue.matches : [];
+    if (options.length) return options.map(match => ({
+      name: match.name, address: match.address,
+      latitude: match.latitude, longitude: match.longitude, placeId: match.id,
+      evidence: [...quotes, `Extracted venue: ${name}`, `Map identity: ${venue.mapStatus}`, `Google Place ID: ${match.id}`],
+      confidence: venue.mapStatus === "matched" ? 0.85 : 0.6,
+      missingInfo: ["User confirmation before saving as Map Stamp", ...(venue.mapStatus === "ambiguous" ? ["Choose the correct map candidate"] : [])],
+    }));
+    return [{ name, address: venue.address?.value ?? "", evidence: [...quotes,
+      `Map identity: ${venue.mapStatus}`,
+      ...venue.matches.map(match => `Conflicting map alternative: ${match.name} — ${match.address}`)],
+      confidence: 0.45, missingInfo: ["Map identity not verified", "Verified coordinates", "User confirmation before saving as Map Stamp"] }];
+  });
+}
+
+export async function runLegacySourceSearchRecovery(
   input: SourceSearchInput,
   fetchText: FetchText = defaultFetchText,
   fetchMediaEvidence: FetchMediaEvidence = defaultFetchMediaEvidence,
@@ -1374,7 +1461,9 @@ export async function resolveSourceDocument(
           return { redirect };
         }
         if (!response.ok && ![401, 403, 404, 410].includes(response.status)) throw new Error(`HTTP ${response.status}`);
-        const html = await boundedHeadResponseText(response, maxBytes);
+        const html = isPlacePlatformURL(currentURL)
+          ? await boundedResponseText(response, maxBytes)
+          : await boundedHeadResponseText(response, maxBytes);
         const canonicalURL = canonicalSourceURL(html, currentURL) ?? recoveredOriginalURL(currentURL) ?? currentURL;
         const resolvedURL = canonicalURL.toString();
         const metadata = sourceMetadataFromHTML(html, resolvedURL);
@@ -1448,7 +1537,7 @@ export function parsePersistedSourceResolution(
   if (rawCanonicalContentID !== undefined && !canonicalContentID) return undefined;
 
   const title = persistedText(row.title, 300);
-  const caption = persistedText(row.caption, 2_000);
+  const caption = typeof row.caption === "string" && row.caption.length <= 20_000 ? row.caption : undefined;
   if ((row.title !== undefined && !title) || (row.caption !== undefined && !caption)) return undefined;
 
   const rawThumbnailURL = row.thumbnail_url ?? row.thumbnailURL;
@@ -1541,12 +1630,24 @@ function cacheResolvedSourceDocument(cacheKey: string, document: ResolvedSourceD
   });
 }
 
+function socialCaptionFromHTML(html: string): string | undefined {
+  for (const pattern of [
+    /"caption"\s*:\s*\{[^{}]*"text"\s*:\s*("(?:\\.|[^"\\])*")/s,
+    /"edge_media_to_caption"\s*:\s*\{.*?"text"\s*:\s*("(?:\\.|[^"\\])*")/s,
+  ]) {
+    const quoted = html.match(pattern)?.[1];
+    if (quoted) { try { const text: unknown = JSON.parse(quoted); if (typeof text === "string" && text.trim()) return text; } catch {} }
+  }
+  const description = metadataValue(html, ["og:description", "twitter:description", "description"]);
+  return description ? decodeHTML(description) : undefined;
+}
+
 export function sourceMetadataFromHTML(html: string, resolvedURL?: string): SourceMetadata {
   const baseURL = resolvedURL ? safeURL(resolvedURL) : undefined;
   return {
     resolvedURL,
     title: metadataValue(html, ["og:title", "twitter:title"]) ?? htmlTitle(html),
-    description: metadataValue(html, ["og:description", "twitter:description", "description"]),
+    description: socialCaptionFromHTML(html) ?? metadataValue(html, ["og:description", "twitter:description", "description"]),
     imageURL: safePublicMediaURL(metadataValue(html, ["og:image:secure_url", "og:image", "twitter:image"]), baseURL),
     videoURL: safePublicMediaURL(metadataValue(html, ["og:video:secure_url", "og:video", "og:video:url", "twitter:player:stream"]), baseURL),
   };
@@ -1562,7 +1663,7 @@ function buildSourceResolution(input: {
   networkURL: string;
 }): SourceResolution {
   const title = cleanOptionalText(input.metadata.title, 300);
-  const caption = cleanOptionalText(input.metadata.description, 2_000);
+  const caption = input.metadata.description;
   const thumbnailURL = persistedPublicURL(input.metadata.imageURL);
   const resolved = safeURL(input.resolvedURL);
   const canonicalContentID = canonicalContentIDFromURL(resolved);

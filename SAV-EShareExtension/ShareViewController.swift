@@ -685,6 +685,9 @@ struct ShareExtensionView: View {
     }
 
     private var savedConfirmationTitle: String {
+        if reviewCandidates.contains(where: { $0.reviewState == "analysis_pending" }) {
+            return Locale.preferredLanguages.first?.hasPrefix("zh") == true ? "來源已保存，分析待完成" : "Source saved; analysis pending"
+        }
         guard let count = savedReviewCandidateCount else {
             return "Saved to Savvy"
         }
@@ -692,6 +695,9 @@ struct ShareExtensionView: View {
     }
 
     private var savedConfirmationSubtitle: String {
+        if reviewCandidates.contains(where: { $0.reviewState == "analysis_pending" }) {
+            return Locale.preferredLanguages.first?.hasPrefix("zh") == true ? "開啟 Savvy 完成分析與地圖核對。" : "Open Savvy to finish analysis and map verification."
+        }
         guard let count = savedReviewCandidateCount else {
             return "Open the app to see it on your map."
         }
@@ -1023,14 +1029,24 @@ struct ShareExtensionView: View {
             return "Review each candidate in Savvy before saving."
         }
         if candidate.isUnresolvedPlaceCandidate { return "Review Candidate from shared source" }
+        if candidate.reviewState == "analysis_pending" { return semanticPendingLabel }
         if candidate.isSourceOnly { return "Saved for later" }
         if candidate.isPlaceBearingSource { return "Confirm the place to save it" }
         return candidate.address.isEmpty ? "Confirm the address" : candidate.address
     }
 
+    private var semanticPendingLabel: String {
+        Locale.preferredLanguages.first?.hasPrefix("zh") == true ? "分析待完成" : "Analysis pending"
+    }
+
     private func candidateIntro(_ candidates: [PendingReviewCandidate]) -> String {
         guard candidates.count == 1, let candidate = candidates.first else {
             return "Savvy found a few possible places. Pick what you want to save."
+        }
+        if candidate.reviewState == "analysis_pending" {
+            return Locale.preferredLanguages.first?.hasPrefix("zh") == true
+                ? "先保存來源，再開啟 Savvy 完成分析與地圖核對。"
+                : "Save this source, then open Savvy to finish analysis and map verification."
         }
         if candidate.isSourceOnly {
             return "Savvy saved this share. Add a caption, screenshot, or map link when you want it turned into a place."
@@ -1055,6 +1071,7 @@ struct ShareExtensionView: View {
             return "Possible places found"
         }
         if candidate.isUnresolvedPlaceCandidate { return "Review Candidate found" }
+        if candidate.reviewState == "analysis_pending" { return semanticPendingLabel }
         if candidate.isSourceOnly { return "Saved for later" }
         if candidate.isPlaceBearingSource {
             return candidate.category == "food" || candidate.category == "cafe"
@@ -1176,7 +1193,7 @@ struct ShareExtensionView: View {
             : nil
         let resolvedShareURLString = sharedURL.isEmpty ? (shareBundle?.primaryURLString ?? "") : sharedURL
         let content = resolvedShareURLString.isEmpty ? sharedText : resolvedShareURLString
-        if let imageData = extractedImageData, sharedURL.isEmpty {
+        if let imageData = extractedImageData, resolvedShareURLString.isEmpty {
             let candidates = await sharedImageReviewCandidates(
                 from: imageData,
                 sharedTitle: sharedTitle,
@@ -1260,33 +1277,15 @@ struct ShareExtensionView: View {
 
         if let sourceURL = URL(string: parseContent),
            isSocialURL(sourceURL) {
-            let candidates = await socialAnalysisReviewCandidates(
-                from: metadata,
-                sharedTitle: sharedTitle,
-                sharedText: sharedText,
-                sourceURLString: parseContent
-            )
-            if candidates.isEmpty || candidates.allSatisfy({ $0.isSourceOnly || $0.isPlaceBearingSource || $0.isUnresolvedPlaceCandidate }),
-               let captionCandidate = await socialCaptionVenueReviewCandidate(
-                from: metadata,
-                sharedTitle: sharedTitle,
-                sharedText: sharedText,
-                sourceURLString: parseContent
-            ) {
-                reviewCandidates = [captionCandidate]
-                selectedCategory = captionCandidate.category
-                isParsing = false
-                return
-            }
-            if !candidates.isEmpty {
-                reviewCandidates = candidates
-                selectedCategory = reviewCandidates.first?.category ?? "stay"
-                isParsing = false
-                return
-            }
-            let sourceOnly = sourceOnlyReviewCandidate(sourceURLString: parseContent, evidenceText: publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText))
-            reviewCandidates = [sourceOnly]
-            selectedCategory = sourceOnly.category
+            // The extension has no authenticated backend session. Queue the
+            // full source for the same server-owned analysis used by the app;
+            // never label a regex guess or a direct client model call as success.
+            let caption = publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText)
+            reviewCandidates = [PendingReviewCandidate(candidateName: "Source clue", address: "", category: "other",
+                sourceURL: parseContent, sourceText: caption, evidence: ["Source preserved; semantic analysis pending"],
+                confidence: 0, missingInfo: ["Analysis pending", "Exact place", "User confirmation"],
+                savedAt: Date(), isSourceOnly: true, reviewState: "analysis_pending")]
+            selectedCategory = "other"
             isParsing = false
             return
         }
@@ -2110,135 +2109,6 @@ struct ShareExtensionView: View {
             savedAt: Date(),
             evidenceDiagnostic: diagnostic,
             isSourceOnly: true
-        )
-    }
-
-    private func socialAnalysisReviewCandidates(
-        from metadata: ShareMetadata,
-        sharedTitle: String,
-        sharedText: String,
-        sourceURLString: String
-    ) async -> [PendingReviewCandidate] {
-        let evidenceText = publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText)
-        let parser = SocialPlaceParser()
-        let textOnlyAnalysis = parser.analyze(
-            evidence: SocialPlaceSourceEvidence(
-                sourceURL: sourceURLString,
-                resolvedURL: metadata.resolvedURL,
-                sharedTitle: sharedTitle,
-                sharedText: sharedText,
-                metadataTitle: metadata.title,
-                metadataDescription: metadata.description,
-                ocrLines: []
-            )
-        )
-        if !textOnlyAnalysis.placesFound.isEmpty {
-            let candidates = textOnlyAnalysis.placesFound.map {
-                pendingReviewCandidate(from: $0, sourceURLString: sourceURLString, sourceText: evidenceText, ocrLines: [])
-            }
-            return rankedSocialAnalysisCandidates(candidates.map(markAsSocialAnalysisCandidate))
-        }
-
-        let ocrLines: [String]
-        if let imageURL = metadata.imageURL,
-           let imageData = await metadataImageData(from: imageURL) {
-            ocrLines = await recognizedTextLines(from: imageData)
-        } else {
-            ocrLines = []
-        }
-        guard !ocrLines.isEmpty else {
-            return textOnlyAnalysis.isPlaceBearing
-                ? [placeBearingSourceReviewCandidate(from: textOnlyAnalysis, sourceURLString: sourceURLString, evidenceText: evidenceText)]
-                : []
-        }
-
-        let ocrAnalysis = parser.analyze(
-            evidence: SocialPlaceSourceEvidence(
-                sourceURL: sourceURLString,
-                resolvedURL: metadata.resolvedURL,
-                sharedTitle: sharedTitle,
-                sharedText: sharedText,
-                metadataTitle: metadata.title,
-                metadataDescription: metadata.description,
-                ocrLines: ocrLines
-            )
-        )
-        let candidates = ocrAnalysis.placesFound.map {
-            pendingReviewCandidate(from: $0, sourceURLString: sourceURLString, sourceText: evidenceText, ocrLines: ocrLines)
-        }
-        if candidates.isEmpty, ocrAnalysis.isPlaceBearing {
-            return [placeBearingSourceReviewCandidate(from: ocrAnalysis, sourceURLString: sourceURLString, evidenceText: evidenceText)]
-        }
-        return rankedSocialAnalysisCandidates(candidates.map(markAsSocialAnalysisCandidate))
-    }
-
-    private func socialCaptionVenueReviewCandidate(
-        from metadata: ShareMetadata,
-        sharedTitle: String,
-        sharedText: String,
-        sourceURLString: String
-    ) async -> PendingReviewCandidate? {
-        let caption = publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !caption.isEmpty else { return nil }
-
-        let boundedCaption = SocialCaptionVenueExtractionPolicy.boundedCaption(caption)
-        let prompt = SocialCaptionVenueExtractionPolicy.prompt(caption: boundedCaption)
-        guard let text = try? await generateGeminiText(prompt: prompt, temperature: 0, maxOutputTokens: 256),
-              let extraction = SocialCaptionVenueExtractionPolicy.parseExtraction(from: text) else {
-            return nil
-        }
-
-        let name = cleanPlaceName(extraction.name)
-        guard SocialCaptionVenueExtractionPolicy.isAcceptedVenueName(name, in: caption) else {
-            return nil
-        }
-
-        let area = extraction.area?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let category = fallbackCategory(from: [extraction.category, name, boundedCaption].compactMap { $0 }.joined(separator: " "))
-        let confidence = min(max(extraction.confidence, 0), 0.6)
-        let captionSnippet = String(boundedCaption.prefix(220))
-        let evidence = appendUniqueEvidence(
-            [],
-            [
-                "Source URL: \(sourceURLString)",
-                "Evidence tier: \(SocialPlaceEvidenceTier.weakCandidate.rawValue)",
-                "Extracted by Savvy from caption: \(name)",
-                area.map { "Caption area clue: \($0)" } ?? "",
-                captionSnippet.isEmpty ? "" : "Caption snippet: \(captionSnippet)"
-            ]
-        )
-        let diagnostic = SocialPlaceEvidenceDiagnostic(
-            found: appendUniqueEvidence(
-                [],
-                [
-                    "Source URL: \(sourceURLString)",
-                    "Extracted by Savvy from caption: \(name)",
-                    area.map { "Caption area clue: \($0)" } ?? ""
-                ]
-            ),
-            attempts: [
-                "Checked public metadata/caption/OCR text for place-bearing intent",
-                "Ran Sendblue-style caption venue extraction in the share extension",
-                "Verified the extracted name appears literally in the caption",
-                "Kept this in Review instead of saving a map pin",
-                "Did not use logged-in Instagram scraping"
-            ],
-            missingFields: ["Verified address", "Verified coordinates"],
-            nextBestClue: "Confirm this caption-extracted venue and its exact address before saving it as a Map Stamp."
-        )
-        return PendingReviewCandidate(
-            candidateName: name,
-            address: area ?? "",
-            category: category,
-            sourceURL: sourceURLString,
-            sourceText: boundedCaption,
-            evidence: evidence,
-            confidence: confidence,
-            missingInfo: ["Google Places match required", "Verified coordinates", "User confirmation required"],
-            savedAt: Date(),
-            evidenceDiagnostic: diagnostic,
-            reviewState: "source_recovered_candidate"
         )
     }
 
