@@ -200,7 +200,7 @@ export async function runSourceSearchRecovery(
   // head/tail sample or a list of regex-selected venue lines.
   const captured = input.semanticSourceText !== undefined ? input.semanticSourceText : input.rawText;
   const capturedCaption = typeof captured === "string" && safeURL(captured.trim())?.href === url.href ? undefined : captured;
-  const caption = unique([capturedCaption, metadata?.description, hasUsableSourceTitle(metadata?.title) ? metadata?.title : undefined]
+  const caption = unique([capturedCaption, metadata?.description, hasUsableSourceTitle(metadata?.title?.trim()) ? metadata?.title : undefined]
     .filter((value): value is string => typeof value === "string" && value.trim().length > 0)).join("\n\n");
   const analyze = options.semanticAnalyzer ?? analyzeSocialCaption;
   const sourceUnavailable = !caption.trim() && document?.resolution.status !== "resolved";
