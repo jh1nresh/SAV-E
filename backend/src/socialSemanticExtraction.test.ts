@@ -248,3 +248,23 @@ test("Latin brand and branch retain token boundaries during map identity compari
   const unrelated = await analyzeSocialCaption({ caption: english }, deps(raw, [place({ name: "Pikulia Branch A", address: "12 Main Street" })]));
   assert.equal(unrelated.venues[0].mapStatus, "conflict");
 });
+
+test("provider address suffixes tolerate country and postal components without weakening street identity", async () => {
+  const f = (value: string) => ({ value, quote: value, source: "caption" });
+  for (const source of ["1 Main Street", "1 Main Street, Boston", "1 Main Street, Unit 1"]) {
+    const raw = { venues: [{ name: f("Cafe"), branch: null, address: f(source), transport: null }] };
+    for (const suffix of [", USA", ", 02101, United States"]) {
+      const result = await analyzeSocialCaption({ caption: `Cafe\n${source}` }, deps(raw, [place({ name: "Cafe", address: source + suffix })]));
+      assert.equal(result.venues[0].mapStatus, "matched");
+    }
+    for (const wrong of [source.replace(/^1 /, "991 ") + ", USA", source.replace("Street", "Street East") + ", USA"]) {
+      const result = await analyzeSocialCaption({ caption: `Cafe\n${source}` }, deps(raw, [place({ name: "Cafe", address: wrong })]));
+      assert.equal(result.venues[0].mapStatus, "conflict");
+    }
+  }
+  for (const [source, actual] of [["1 Main Street, Boston", "1 Main Street, Seattle, USA"], ["1 Main Street, Unit 1", "1 Main Street, Unit 11, USA"]]) {
+    const raw = { venues: [{ name: f("Cafe"), branch: null, address: f(source), transport: null }] };
+    const result = await analyzeSocialCaption({ caption: `Cafe\n${source}` }, deps(raw, [place({ name: "Cafe", address: actual })]));
+    assert.equal(result.venues[0].mapStatus, "conflict");
+  }
+});

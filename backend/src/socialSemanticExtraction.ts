@@ -95,8 +95,16 @@ function congruent(venue: SemanticVenue, place: SemanticMapPlace): boolean {
   // Accept the same complete address with a provider country/postcode prefix.
   // Do not treat a differing unit, number, road or branch as the same venue.
   if (venue.address) {
-    const expected = normalized(venue.address.value); const actual = normalized(place.address);
-    if (!actual.endsWith(expected) || (/^\d/.test(expected) && /\d/.test(actual[actual.length - expected.length - 1] ?? ""))) return false;
+    const expected = normalized(venue.address.value);
+    // Google may append comma-delimited city, postcode and country components.
+    // Compare only at component boundaries, never an arbitrary street substring.
+    const components = place.address.normalize("NFKC").split(",");
+    const agrees = components.some((_, index) => {
+      const actual = normalized(components.slice(0, index + 1).join(","));
+      return actual.endsWith(expected)
+        && !(/^\d/.test(expected) && /\d/.test(actual[actual.length - expected.length - 1] ?? ""));
+    });
+    if (!agrees) return false;
   }
   return true;
 }
