@@ -255,9 +255,6 @@ struct ContentView: View {
         .environment(\.appLanguageSettings, languageSettings)
 #if DEBUG
         .task {
-            if DebugVaultExporter.isRequested {
-                await DebugVaultExporter.run()
-            }
             if DebugLegacyMigrator.isRequested {
                 await DebugLegacyMigrator.run()
             }
