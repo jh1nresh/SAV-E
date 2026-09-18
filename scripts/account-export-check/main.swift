@@ -143,9 +143,11 @@ enum FixtureError: Error { case failed }
             if path == "/v0/account-status" { throw SupabaseError.apiError(404, "PRIVATE ERROR BODY") }
             if path == "/profile" { throw SupabaseError.notAuthenticated }
             if path == "/v0/shared-posts" { throw SupabaseError.apiError(503, "PRIVATE ERROR BODY") }
+            if path == "/v0/lists" { throw SupabaseError.apiError(404, "PRIVATE LIST ERROR BODY") }
             return empty
         }
-        check(blockedGate.count == 5 && calls.contains("/v0/social-profile"), "failed gate and profile must not hide sharing diagnostics")
+        check(blockedGate.count == 6 && calls.contains("/v0/social-profile"), "failed gate and profile must not hide sharing diagnostics")
+        check(blockedGate.last?.path == "/v0/lists" && blockedGate.last?.httpStatus == 404, "missing list route must remain distinguishable from an empty list")
         check(blockedGate[0].httpStatus == 404 && blockedGate[1].result == "authentication_failure" && blockedGate[2].httpStatus == 503, "diagnostics distinguish missing route, auth and unavailable service")
         check(!String(decoding: try JSONEncoder().encode(blockedGate), as: UTF8.self).contains("PRIVATE ERROR BODY"), "diagnostic reports never expose response bodies")
         let invalidStatus = try await DebugVaultExporter.diagnoseServices(source: source) { _ in empty }

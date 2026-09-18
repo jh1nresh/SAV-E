@@ -60,7 +60,7 @@ enum DebugVaultExporter {
     ) async throws -> [ServiceCheck] {
         _ = try validatedSource(source)
         var checks: [ServiceCheck] = []
-        for path in ["/v0/account-status", "/profile", "/v0/shared-posts", "/v0/shared-posts/mine", "/v0/social-profile"] {
+        for path in ["/v0/account-status", "/profile", "/v0/shared-posts", "/v0/shared-posts/mine", "/v0/social-profile", "/v0/lists"] {
             do {
                 let data = try await read(path)
                 var check = ServiceCheck(path: path, result: "http_success", httpStatus: nil)
