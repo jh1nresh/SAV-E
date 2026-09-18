@@ -137,6 +137,37 @@ enum FixtureError: Error { case failed }
         check(diagnostics.serviceChecks.last?.result == "authentication_failure", "auth failure must be distinguishable")
         let manifestText = try String(contentsOf: unsupported.appendingPathComponent("manifest.json"), encoding: .utf8)
         check(!manifestText.contains("PRIVATE ERROR BODY"), "private errors never enter diagnostic metadata")
+        calls = []
+        let blockedGate = try await DebugVaultExporter.diagnoseServices(source: source) { path in
+            calls.append(path)
+            if path == "/v0/account-status" { throw SupabaseError.apiError(404, "PRIVATE ERROR BODY") }
+            if path == "/profile" { throw SupabaseError.notAuthenticated }
+            if path == "/v0/shared-posts" { throw SupabaseError.apiError(503, "PRIVATE ERROR BODY") }
+            return empty
+        }
+        check(blockedGate.count == 5 && calls.contains("/v0/social-profile"), "failed gate and profile must not hide sharing diagnostics")
+        check(blockedGate[0].httpStatus == 404 && blockedGate[1].result == "authentication_failure" && blockedGate[2].httpStatus == 503, "diagnostics distinguish missing route, auth and unavailable service")
+        check(!String(decoding: try JSONEncoder().encode(blockedGate), as: UTF8.self).contains("PRIVATE ERROR BODY"), "diagnostic reports never expose response bodies")
+        let invalidStatus = try await DebugVaultExporter.diagnoseServices(source: source) { _ in empty }
+        check(invalidStatus.first?.accountState == "invalid_payload", "HTTP success does not prove a decodable account status")
+        let missingReference = try await DebugVaultExporter.diagnoseServices(source: source) { path in
+            path == "/v0/account-status" ? Data(#"{"version":"v0","state":"ready","profile":{"exists":true}}"#.utf8) : empty
+        }
+        check(missingReference.first?.accountReferenceValid == false && missingReference.first?.accountVersionSupported == true, "diagnose unusable account reference without exposing its value")
+        for failure: Error in [CancellationError(), DebugVaultExporter.ExportError.identityChanged] {
+            calls = []
+            do {
+                _ = try await DebugVaultExporter.diagnoseServices(source: source) { path in calls.append(path); throw failure }
+                preconditionFailure("session interruption swallowed")
+            } catch { }
+            check(calls.count == 1, "session interruption stops additional requests")
+        }
+        calls = []
+        do {
+            _ = try await DebugVaultExporter.diagnoseServices(source: "https://evil.example") { path in calls.append(path); return empty }
+            preconditionFailure("unapproved diagnostic origin")
+        } catch DebugVaultExporter.ExportError.invalidSource { }
+        check(calls.isEmpty, "reject diagnostic origin before authenticated request")
         print("PASS: account export preserves raw bytes and isolated backups; failure, identity, list access and source-boundary fixtures passed. No live data accessed.")
     }
 }

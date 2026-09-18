@@ -585,6 +585,14 @@ private struct AuthenticatedRootView: View {
         }
         .task(id: taskID) {
             await verifyAccount()
+#if DEBUG
+            if DebugVaultExporter.isServiceDiagnosisRequested {
+                await DebugVaultExporter.runServiceDiagnosis()
+            }
+            if DebugVaultExporter.isRequested {
+                await DebugVaultExporter.run()
+            }
+#endif
         }
         .onChange(of: accountGate.state) { _, state in
             if case .verified(let generation) = state, generation == sessionGeneration {

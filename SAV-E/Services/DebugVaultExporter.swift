@@ -9,6 +9,10 @@ import Foundation
 /// private, unique Documents/vault-export/<UUID>/ directory on this device.
 @MainActor
 enum DebugVaultExporter {
+    static var isServiceDiagnosisRequested: Bool {
+        ProcessInfo.processInfo.arguments.contains("--debug-diagnose-sharing")
+    }
+
     static var isRequested: Bool {
         ProcessInfo.processInfo.arguments.contains("--debug-export-vault")
             || ProcessInfo.processInfo.arguments.contains("--debug-export-vault-pair")
@@ -25,6 +29,9 @@ enum DebugVaultExporter {
         let path: String
         let result: String
         let httpStatus: Int?
+        var accountState: String? = nil
+        var accountReferenceValid: Bool? = nil
+        var accountVersionSupported: Bool? = nil
     }
 
     struct Manifest: Codable {
@@ -43,6 +50,81 @@ enum DebugVaultExporter {
 
     enum ExportError: Error {
         case invalidSource, malformedResponse, identityChanged
+    }
+
+    /// Status-only diagnostics remain usable when account verification fails.
+    /// No response bodies, credentials, or account bindings are persisted.
+    static func diagnoseServices(
+        source: String,
+        read: (String) async throws -> Data
+    ) async throws -> [ServiceCheck] {
+        _ = try validatedSource(source)
+        var checks: [ServiceCheck] = []
+        for path in ["/v0/account-status", "/profile", "/v0/shared-posts", "/v0/shared-posts/mine", "/v0/social-profile"] {
+            do {
+                let data = try await read(path)
+                var check = ServiceCheck(path: path, result: "http_success", httpStatus: nil)
+                if path == "/v0/account-status" {
+                    if let status = try? JSONDecoder().decode(AccountStatusResponse.self, from: data) {
+                        check.accountState = status.state.rawValue
+                        check.accountReferenceValid = status.accountRef.map(AccountGatePolicy.isValidAccountRef) ?? false
+                        check.accountVersionSupported = status.version == "v0"
+                    } else {
+                        check.accountState = "invalid_payload"
+                    }
+                }
+                checks.append(check)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch ExportError.identityChanged {
+                throw ExportError.identityChanged
+            } catch {
+                if case SupabaseError.apiError(let code, _) = error {
+                    checks.append(ServiceCheck(path: path, result: "http_failure", httpStatus: code))
+                } else if case SupabaseError.notAuthenticated = error {
+                    checks.append(ServiceCheck(path: path, result: "authentication_failure", httpStatus: nil))
+                } else {
+                    checks.append(ServiceCheck(path: path, result: "request_failure", httpStatus: nil))
+                }
+            }
+        }
+        return checks
+    }
+
+    static func runServiceDiagnosis(service: SupabaseService = .shared) async {
+        do {
+            guard !PrivyAuthService.shared.isReviewerDemo,
+                  let subject = PrivyAuthService.shared.currentUserId else { return }
+            let generation = PrivyAuthService.shared.sessionGeneration
+            let root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("service-diagnosis", isDirectory: true)
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true,
+                                                    attributes: [.posixPermissions: 0o700])
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            for (name, source) in [("legacy", "https://wanderly-api-production.up.railway.app"),
+                                   ("managed", "https://save-backend-production.up.railway.app")] {
+                let checks = try await diagnoseServices(source: source) { path in
+                    try Task.checkCancellation()
+                    guard generation == PrivyAuthService.shared.sessionGeneration,
+                          subject == PrivyAuthService.shared.currentUserId else { throw ExportError.identityChanged }
+                    let data = try await service.debugRawGET(path: path, baseURL: source)
+                    guard generation == PrivyAuthService.shared.sessionGeneration,
+                          subject == PrivyAuthService.shared.currentUserId else { throw ExportError.identityChanged }
+                    return data
+                }
+                try Task.checkCancellation()
+                guard generation == PrivyAuthService.shared.sessionGeneration,
+                      subject == PrivyAuthService.shared.currentUserId else { throw ExportError.identityChanged }
+                let file = root.appendingPathComponent("\(name).json")
+                try encoder.encode(checks).write(to: file, options: .atomic)
+                try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+            }
+            print("[service-diagnosis] Finished; status metadata only.")
+        } catch {
+            print("[service-diagnosis] Interrupted or incomplete.")
+        }
     }
 
     private static let exports = [
