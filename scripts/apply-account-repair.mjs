@@ -42,13 +42,15 @@ export function validate(bundle) {
       || typeof fill.source !== 'string' || !fill.source.trim() || ![null, ''].includes(fill.target)) fail();
   }
   for (const merge of bundle.placeMerges ?? []) {
-    if (!uuid.test(merge.sourceID) || merge.expected.user_id !== bundle.owner || !merge.expected.google_place_id) fail();
+    if (!Array.isArray(merge.sourceIDs) || !merge.sourceIDs.length || merge.sourceIDs.some(id => !uuid.test(id))
+      || merge.expected.user_id !== bundle.owner || !merge.expected.google_place_id) fail();
     storedRow('places', merge.expected);
     if (Object.keys(merge.patch).some(key => !['note', 'business_photo_urls', 'created_at'].includes(key))) fail();
     if (typeof merge.patch.note === 'string' && merge.expected.note && !merge.patch.note.includes(merge.expected.note)) fail();
     if (merge.patch.business_photo_urls && (merge.expected.business_photo_urls ?? []).some(url => !merge.patch.business_photo_urls.includes(url))) fail();
     if (merge.patch.created_at && Date.parse(merge.patch.created_at) > Date.parse(merge.expected.created_at)) fail();
   }
+  if (new Set((bundle.placeMerges ?? []).map(merge => merge.expected.id)).size !== (bundle.placeMerges ?? []).length) fail();
 }
 
 async function matches(client, table, row) {

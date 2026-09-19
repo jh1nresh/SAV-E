@@ -59,8 +59,13 @@ class RepairTests(unittest.TestCase):
 
     def test_duplicate_venue_preserves_both_notes_photos_and_earliest_date(self):
         old = self.snapshot('old', fixtures.audit.LEGACY, {'profile': {'id': 'fixture-account'},
-            'places': [{'id': 'old-place', 'user_id': 'fixture-account', 'google_place_id': 'provider',
-                        'note': 'Old note', 'business_photo_urls': ['old-photo'], 'created_at': '2026-01-01T00:00:00Z'}],
+            'places': [
+                {'id': 'old-a', 'user_id': 'fixture-account', 'google_place_id': 'provider',
+                 'note': 'Old note', 'business_photo_urls': ['old-photo'], 'created_at': '2026-01-10T00:00:00Z'},
+                {'id': 'old-b', 'user_id': 'fixture-account', 'google_place_id': 'provider',
+                 'note': 'Second note', 'business_photo_urls': ['second-photo'], 'created_at': '2026-01-01T00:00:00Z'},
+                {'id': 'old-c', 'user_id': 'fixture-account', 'google_place_id': 'provider',
+                 'note': 'Third note', 'business_photo_urls': ['old-photo'], 'created_at': '2026-01-20T00:00:00Z'}],
             'memory-captures': [], 'memory-candidates': []})
         new = self.snapshot('new', fixtures.audit.MANAGED, {'profile': {'id': 'fixture-account'},
             'places': [{'id': 'canonical', 'user_id': 'fixture-account', 'google_place_id': 'provider',
@@ -69,7 +74,10 @@ class RepairTests(unittest.TestCase):
         self.partial(old)
         bundle = repair.prepare(old, new)
         self.assertEqual([], bundle['inserts']['places'])
-        self.assertEqual({'note': 'New note\n\nOld note', 'business_photo_urls': ['new-photo', 'old-photo'],
+        self.assertEqual(1, len(bundle['placeMerges']))
+        self.assertEqual(['old-a', 'old-b', 'old-c'], bundle['placeMerges'][0]['sourceIDs'])
+        self.assertEqual('New note', bundle['placeMerges'][0]['expected']['note'])
+        self.assertEqual({'note': 'New note\n\nOld note\n\nSecond note\n\nThird note', 'business_photo_urls': ['new-photo', 'old-photo', 'second-photo'],
                           'created_at': '2026-01-01T00:00:00Z'}, bundle['placeMerges'][0]['patch'])
 
 

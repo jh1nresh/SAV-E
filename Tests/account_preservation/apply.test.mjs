@@ -57,9 +57,12 @@ test('real transaction rollback, apply, idempotency, drift and ownership boundar
       await client.query("insert into places(id,user_id,name,latitude,longitude,google_place_id,note,business_photo_urls,created_at) values($1,'owner','Duplicate',1,2,'provider-id','Current note',array['new-photo'],'2026-02-01T00:00:00.789Z')", [id(7)]);
       await client.query('create unique index place_provider_unique on places(user_id,google_place_id) where google_place_id is not null');
       const merged = structuredClone(b);
-      merged.placeMerges = [{ sourceID: id(8), expected: { id: id(7), user_id: 'owner', google_place_id: 'provider-id',
+      merged.placeMerges = [{ sourceIDs: [id(8), id(9), id(10)], expected: { id: id(7), user_id: 'owner', google_place_id: 'provider-id',
         note: 'Current note', business_photo_urls: ['new-photo'], created_at: '2026-02-01T00:00:00Z' },
         patch: { note: 'Current note\n\nOld note', business_photo_urls: ['new-photo', 'old-photo'], created_at: date } }];
+      const duplicateTarget = structuredClone(merged);
+      duplicateTarget.placeMerges.push(structuredClone(merged.placeMerges[0]));
+      assert.throws(() => validate(duplicateTarget));
       assert.equal((await repair(client, merged)).counts.mergedPlaces, 1);
       assert.equal((await client.query('select note from places where id=$1', [id(7)])).rows[0].note, 'Current note');
       assert.equal((await repair(client, merged, true)).counts.mergedPlaces, 1);

@@ -35,13 +35,18 @@ def prepare(source, target):
             raise ValueError("Missing owned place")
     inserts = {}
     place_merges = []
+    merges_by_target = {}
     target_places = {row['google_place_id']: row for row in new['places'] if row.get('google_place_id')}
     for resource, table in TABLES.items():
         rows = []
         for item in proposal["resources"][resource]["missingRecords"]:
             row = copy.deepcopy(item["source"])
             if table == 'places' and row.get('google_place_id') in target_places:
-                current = target_places[row['google_place_id']]
+                original = target_places[row['google_place_id']]
+                current = copy.deepcopy(original)
+                previous = merges_by_target.get(current['id'])
+                if previous:
+                    current.update(previous['patch'])
                 if current.get('user_id') != owner:
                     raise ValueError('Foreign duplicate place')
                 # Do not silently strand trip or candidate references. This
@@ -56,8 +61,15 @@ def prepare(source, target):
                 photos = list(dict.fromkeys([*(current.get('business_photo_urls') or []), *(row.get('business_photo_urls') or [])]))
                 if photos != (current.get('business_photo_urls') or []): patch['business_photo_urls'] = photos
                 if row['created_at'] < current['created_at']: patch['created_at'] = row['created_at']
-                expected = {key: current.get(key) for key in ['id', 'user_id', 'google_place_id', *patch]}
-                place_merges.append({'sourceID': row['id'], 'expected': expected, 'patch': patch})
+                if previous:
+                    previous['sourceIDs'].append(row['id'])
+                    previous['patch'].update(patch)
+                    previous['expected'].update({key: original.get(key) for key in patch})
+                else:
+                    expected = {key: original.get(key) for key in ['id', 'user_id', 'google_place_id', *patch]}
+                    merge = {'sourceIDs': [row['id']], 'expected': expected, 'patch': patch}
+                    place_merges.append(merge)
+                    merges_by_target[current['id']] = merge
                 continue
             if table == "place_candidates" and row.get("workflow_run_id"):
                 if not isinstance(row.get("evidence"), list):
