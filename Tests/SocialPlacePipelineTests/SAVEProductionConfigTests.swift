@@ -103,8 +103,9 @@ final class SAVEProductionConfigTests: XCTestCase {
         let mainTemplate = try plistTemplate(at: "SAV-E/Resources/Secrets.plist.template")
         let shareTemplate = try plistTemplate(at: "SAV-EShareExtension/Secrets.plist.template")
 
-        XCTAssertEqual(mainTemplate["SAVE_API_URL"] as? String, "https://wanderly-api-production.up.railway.app")
-        XCTAssertEqual(shareTemplate["SAVE_API_URL"] as? String, "https://wanderly-api-production.up.railway.app")
+        XCTAssertEqual(mainTemplate["SAVE_API_URL"] as? String, SAVEProductionConfig.defaultAPIBaseURL)
+        XCTAssertEqual(shareTemplate["SAVE_API_URL"] as? String, SAVEProductionConfig.defaultAPIBaseURL)
+        XCTAssertEqual(SAVEProductionConfig.defaultAPIBaseURL, "https://save-backend-production.up.railway.app")
         XCTAssertEqual(mainTemplate["SAVE_PLACE_SHARE_BASE_URL"] as? String, SAVEProductionConfig.defaultPlaceShareBaseURL)
         XCTAssertEqual(shareTemplate["SAVE_PLACE_SHARE_BASE_URL"] as? String, SAVEProductionConfig.defaultPlaceShareBaseURL)
         XCTAssertEqual(mainTemplate["PRIVY_APP_ID"] as? String, "cmnttqw3q038x0cle8vnlki39")

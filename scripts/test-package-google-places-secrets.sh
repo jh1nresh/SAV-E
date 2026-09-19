@@ -15,7 +15,7 @@ run_packager() {
   local configuration="$1"
   local build_directory="$2"
   local release_plist="${3:-}"
-  local expected_url="${4-https://wanderly-api-production.up.railway.app}"
+  local expected_url="${4-https://save-backend-production.up.railway.app}"
   local product_folder="${5:-SAVE.app}"
 
   env \
@@ -82,7 +82,7 @@ plutil -replace GOOGLE_PLACES_API_KEY -integer 123 "$wrong_type_plist"
 expect_failure release_wrong_type run_packager Release "${temporary_root}/release-wrong-type-build" "$wrong_type_plist"
 
 expect_failure release_target_missing run_packager Release "${temporary_root}/no-target" "$dummy_plist" ""
-expect_failure release_stale_backend run_packager Release "${temporary_root}/stale-backend" "$dummy_plist" "https://save-backend-production.up.railway.app"
+expect_failure release_stale_backend run_packager Release "${temporary_root}/stale-backend" "$dummy_plist" "https://wanderly-api-production.up.railway.app"
 [[ ! -e "${temporary_root}/stale-backend/SAVE.app/Secrets.plist" ]] || exit 1
 managed_plist="${temporary_root}/managed.plist"
 cp "$dummy_plist" "$managed_plist"
@@ -99,11 +99,11 @@ assert_private_copy "$dummy_plist" "${release_build}/SAVE.app/Secrets.plist"
 
 clip_build="${temporary_root}/clip-release"
 run_packager Release "$clip_build" "$dummy_plist" \
-  "https://wanderly-api-production.up.railway.app" "SAVEClip.app"
+  "https://save-backend-production.up.railway.app" "SAVEClip.app"
 assert_private_copy "$dummy_plist" "${clip_build}/SAVEClip.app/Secrets.plist"
 
 expect_failure clip_stale_backend run_packager Release "${temporary_root}/clip-stale" \
-  "$dummy_plist" "https://save-backend-production.up.railway.app" "SAVEClip.app"
+  "$dummy_plist" "https://wanderly-api-production.up.railway.app" "SAVEClip.app"
 [[ ! -e "${temporary_root}/clip-stale/SAVEClip.app/Secrets.plist" ]] || exit 1
 
 python3 - "$repo_root" <<'PY'
