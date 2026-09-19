@@ -280,7 +280,7 @@ jobs:
             -string 'CI_BUILD_ONLY_NON_SECRET_VALUE' \
             "$release_plist"
           chmod 600 "$release_plist"
-          SAVE_EXPECTED_API_URL="https://wanderly-api-production.up.railway.app" \
+          SAVE_EXPECTED_API_URL="https://save-backend-production.up.railway.app" \
           SAVE_RELEASE_SECRETS_PLIST="$release_plist" scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
             -scheme SAV-E \
