@@ -285,3 +285,47 @@ test("generic platform shells are not caption evidence; real source text still w
     assert.equal(described.semanticStatus, "no_place_evidence"); assert.equal(calls, 1);
   }
 });
+
+// User report 2026-09-20: no venue for this public Reel. Only the minimum
+// public venue fields are retained; creator identity/tracking token are omitted.
+test("reported Instagram Reel preserves D.A ONE and its address across tracking URL forms", async () => {
+  const source = "🏠：D.A ONE\n📬：臺北市信義區西村里松壽路20號二樓";
+  for (const suffix of ["", "?stkn=redacted", "?igsh=redacted"]) {
+    const result = await runSourceSearchRecovery({ sourceUrl: `https://www.instagram.com/reel/DYrOEFQRyZP/${suffix}` },
+      async () => `<meta property="og:description" content="${source}">`, async () => [], {
+        includeMediaEvidence: false,
+        semanticAnalyzer: value => analyzeSocialCaption(value, {
+          extract: async () => ({ venues: [{ name: field("D.A ONE"), branch: null, address: field("臺北市信義區西村里松壽路20號二樓"), transport: null }] }),
+          search: async () => [],
+        }),
+      });
+    assert.equal(result.candidates[0]?.name, "D.A ONE");
+    assert.equal(result.candidates[0]?.address, "臺北市信義區西村里松壽路20號二樓");
+    assert.equal(result.candidates[0]?.latitude, undefined, "extraction is not map verification");
+    assert.ok(result.candidates[0]?.missingInfo.includes("User confirmation before saving as Map Stamp"));
+  }
+});
+
+test("readable non-place Reel reports no place evidence instead of telling user to confirm nothing", async () => {
+  const result = await runSourceSearchRecovery({ sourceUrl: input.sourceUrl },
+    async () => '<meta property="og:description" content="今天分享三款甜點">', async () => [], {
+      includeMediaEvidence: false, semanticAnalyzer: async () => ({ status: "no_place_evidence", venues: [] }),
+    });
+  assert.deepEqual(result.receipt.failureReason, { kind: "insufficient_source", reason: "no_place_evidence" });
+  assert.match(result.receipt.nextBestClue, /caption|screenshot|map link/i);
+});
+
+test("social link families preserve captured evidence when public pages require login", async () => {
+  const urls = ["https://www.instagram.com/p/fixture/", "https://www.instagram.com/reel/fixture/", "https://www.instagram.com/share/reel/fixture/",
+    "https://www.threads.com/@fixture/post/fixture", "https://www.tiktok.com/@fixture/video/123456789", "https://vm.tiktok.com/fixture/",
+    "https://www.xiaohongshu.com/explore/fixture", "https://xhslink.com/fixture", "https://v.douyin.com/fixture/", "https://www.dianping.com/shop/fixture"];
+  for (const sourceUrl of urls) {
+    const resolver = async () => ({ html: "", resolution: { originalURL: sourceUrl, resolvedURL: sourceUrl, redirectChain: [sourceUrl], status: "blocked_login" as const } });
+    const options = { includeMediaEvidence: false, sourceDocumentResolver: resolver, semanticAnalyzer: async () => structuredClone(extracted) };
+    const unavailable = await runSourceSearchRecovery({ sourceUrl }, async () => "", async () => [], options);
+    assert.deepEqual(unavailable.receipt.failureReason, { kind: "insufficient_source", reason: "login_required" }, sourceUrl);
+    assert.equal(unavailable.candidates.length, 0);
+    const captured = await runSourceSearchRecovery({ sourceUrl, semanticSourceText: caption }, async () => "", async () => [], options);
+    assert.equal(captured.candidates[0]?.name, "初泰Pikul 信義象山門市", sourceUrl);
+  }
+});

@@ -127,6 +127,24 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
     assert.equal(ready, true, log);
     const owner = await newGuest(); const other = await newGuest();
 
+    await t.test("deployment health rejects a missing analysis table before users attempt any link", async () => {
+      assert.equal((await api("/health/source-recovery")).status, 200);
+      await pool.query("alter table analysis_sessions rename to analysis_sessions_readiness_fixture");
+      try {
+        const health = await api("/health/source-recovery");
+        assert.equal(health.status, 503);
+        assert.equal(health.body.ready, false);
+        assert.deepEqual(health.body.analysis.failures, ["analysis_schema_unavailable"]);
+        assert.equal((await api("/v0/analysis", { id: randomUUID() }, owner)).status, 503);
+        assert.ok(!JSON.stringify(health.body).includes("readiness_fixture"));
+      } finally {
+        await pool.query("alter table analysis_sessions_readiness_fixture rename to analysis_sessions");
+      }
+      const repaired = await api("/health/source-recovery");
+      assert.equal(repaired.status, 200);
+      assert.equal(repaired.body.analysis.ready, true);
+    });
+
     await t.test("memory repeats preserve chronology evidence owners branches and terminal reviews", async () => {
       const source = `https://fixture.invalid/memory/${randomUUID()}`;
       const original = "2025-01-02T03:04:05Z";
