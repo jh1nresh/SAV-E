@@ -1,4 +1,6 @@
 import SwiftUI
+import PhotosUI
+import ImageIO
 
 struct SharedPostArtwork: View {
     let post: SharedPlacePost
@@ -15,9 +17,85 @@ struct SharedPostArtwork: View {
             }
             .foregroundStyle(SaveAtlasPalette.forest)
             .padding(12)
+            if let count = post.photo_count, count > 0 {
+                if compact || count == 1 {
+                    SharedPostPhoto(post: post, index: 0)
+                } else {
+                    TabView {
+                        ForEach(0..<min(count, SharedPostDraft.maxPhotos), id: \.self) { index in
+                            SharedPostPhoto(post: post, index: index)
+                        }
+                    }
+                    .tabViewStyle(.page)
+                }
+            }
         }
-        .accessibilityHidden(true)
+        .clipped()
     }
+}
+
+
+/// Authenticated, memory-only media. Revalidate after returning to the app;
+/// never pass follower photos to the app's public/disk image cache.
+private struct SharedPostPhoto: View {
+    let post: SharedPlacePost
+    let index: Int
+    @State private var image: UIImage?
+    @State private var failed = false
+    @State private var retry = 0
+    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.appLanguageSettings) private var language
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                SaveAtlasPalette.paper
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFill()
+                        .frame(width: geometry.size.width, height: geometry.size.height).clipped()
+                        .accessibilityLabel(language.localized(english: "Photo \(index + 1)", traditionalChinese: "照片 \(index + 1)"))
+                } else if failed {
+                    Button { retry += 1 } label: {
+                        Label(language.localized(english: "Retry photo", traditionalChinese: "重試載入照片"), systemImage: "arrow.clockwise")
+                            .font(SaveAtlasType.body(12)).frame(minHeight: 44)
+                    }
+                } else { ProgressView() }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .task(id: "\(post.id)-\(post.photo_version ?? "")-\(index)-\(retry)-\(scenePhase)") {
+            image = nil; failed = false
+            guard scenePhase == .active else { return }
+            do {
+                let data = try await SupabaseService.shared.fetchSharedPostPhoto(id: post.id, index: index)
+                try Task.checkCancellation()
+                guard let decoded = UIImage(data: data) else { throw SupabaseError.invalidResponse("Invalid photo") }
+                image = decoded
+            } catch is CancellationError { }
+            catch { if !Task.isCancelled { failed = true } }
+        }
+    }
+}
+
+/// Downsample before decoding; encode pixels only, without source EXIF/GPS.
+enum SharedPostPhotoEncoder {
+    nonisolated static func jpeg(from data: Data) throws -> Data {
+        guard data.count <= 50 * 1024 * 1024,
+              let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 1200
+              ] as CFDictionary) else { throw PhotoError.unreadable }
+        for quality in [0.8, 0.6, 0.4, 0.25] {
+            let result = NSMutableData()
+            guard let destination = CGImageDestinationCreateWithData(result as CFMutableData, "public.jpeg" as CFString, 1, nil) else { throw PhotoError.unreadable }
+            CGImageDestinationAddImage(destination, image, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
+            if CGImageDestinationFinalize(destination), result.length <= 262_144 { return result as Data }
+        }
+        throw PhotoError.tooLarge
+    }
+    enum PhotoError: Error { case unreadable, tooLarge }
 }
 
 struct SharedPostStatus: View {
@@ -220,6 +298,10 @@ struct SharedPostComposer: View {
     @ObservedObject var store: SharedPostsStore
     let onPublished: () -> Void
     @State private var draft = SharedPostDraft(status: .wantToGo, stars: nil, caption: "")
+    @State private var selectedPhotos: [PhotosPickerItem] = []
+    @State private var loadingPhotos = false
+    @State private var preparedAccount: String?
+    @State private var photoError: String?
     @State private var isReady = false
     @State private var busy = false
     @State private var error: String?
@@ -239,6 +321,7 @@ struct SharedPostComposer: View {
                 } footer: {
                     Text(language.localized(english: "This post doesn’t change the status of your private saved place.", traditionalChinese: "貼文狀態不會更改私人收藏中的紀錄。"))
                 }
+                photoSection
                 Section(language.localized(english: "Caption · optional", traditionalChinese: "想說的話 · 選填")) {
                     TextEditor(text: $draft.caption).frame(minHeight: 100).accessibilityIdentifier("posts.caption")
                     Text("\(draft.caption.unicodeScalars.count) / 500").font(.caption).foregroundStyle(draft.isValid ? SaveAtlasPalette.muted : .red)
@@ -260,6 +343,7 @@ struct SharedPostComposer: View {
                 }
                 if let error { Section { Text(error).foregroundStyle(.red) } }
             }
+            .disabled(busy || loadingPhotos || !isReady)
             .scrollContentBackground(.hidden).background(SaveAtlasPalette.canvas)
             .navigationTitle(language.localized(english: "Share a place", traditionalChinese: "分享地點"))
             .navigationBarTitleDisplayMode(.inline)
@@ -269,16 +353,82 @@ struct SharedPostComposer: View {
                     Button(language.localized(english: "Publish", traditionalChinese: "發佈")) {
                         busy = true; error = nil
                         Task {
-                            do { try await store.publish(id: id, draft: draft); dismiss(); onPublished() }
+                            do {
+                                guard preparedAccount == PrivyAuthService.shared.currentUserId else { throw CancellationError() }
+                                try await store.publish(id: id, draft: draft); dismiss(); onPublished()
+                            }
                             catch { self.error = language.localized(english: "Couldn’t publish. Your draft is still here; please try again.", traditionalChinese: "發佈失敗，草稿仍在，請重試。") }
                             busy = false
                         }
-                    }.disabled(!isReady || !draft.isValid || busy || store.isDemo).accessibilityIdentifier("posts.publish")
+                    }.disabled(!isReady || !draft.isValid || busy || loadingPhotos || !selectedPhotos.isEmpty || store.isDemo).accessibilityIdentifier("posts.publish")
                 }
             }
             .overlay { if !isReady && error == nil { ProgressView() } }
             .task { await prepare() }
+            .task(id: selectedPhotos) { await loadSelectedPhotos() }
             .interactiveDismissDisabled(busy)
+        }
+    }
+
+    private var photoSection: some View {
+        Section {
+            if !(draft.photos ?? []).isEmpty {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 12) {
+                        ForEach(Array((draft.photos ?? []).enumerated()), id: \.offset) { index, data in
+                            VStack(spacing: 4) {
+                                if let image = UIImage(data: data) {
+                                    Image(uiImage: image).resizable().scaledToFill()
+                                        .frame(width: 100, height: 100).clipped()
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        .accessibilityLabel(language.localized(english: "Selected photo \(index + 1)", traditionalChinese: "已選照片 \(index + 1)"))
+                                }
+                                Button(role: .destructive) { draft.photos?.remove(at: index) } label: {
+                                    Text(language.localized(english: "Remove", traditionalChinese: "移除"))
+                                        .font(SaveAtlasType.body(13)).frame(minWidth: 44, minHeight: 44)
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel(language.localized(english: "Remove photo \(index + 1)", traditionalChinese: "移除照片 \(index + 1)"))
+                                .accessibilityIdentifier("posts.photo.remove.\(index)")
+                            }
+                        }
+                    }
+                }
+            }
+            if (draft.photos?.count ?? 0) < SharedPostDraft.maxPhotos {
+                PhotosPicker(selection: $selectedPhotos,
+                             maxSelectionCount: SharedPostDraft.maxPhotos - (draft.photos?.count ?? 0),
+                             matching: .images) {
+                    Label(language.localized(english: "Add photos", traditionalChinese: "新增照片"), systemImage: "photo.badge.plus")
+                        .foregroundStyle(SaveAtlasPalette.forest).frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("posts.photos.add")
+            }
+            if loadingPhotos { ProgressView(language.localized(english: "Preparing photos…", traditionalChinese: "正在準備照片…")) }
+            if let photoError { Text(photoError).font(SaveAtlasType.body(13)).foregroundStyle(.red) }
+        } header: {
+            Text(language.localized(english: "Photos · up to 3", traditionalChinese: "照片 · 最多 3 張"))
+        } footer: {
+            Text(language.localized(english: "Only the photos you choose here are shared when you publish.", traditionalChinese: "只有在這裡選取的照片，會在發佈後分享給追蹤你的人。"))
+        }
+    }
+
+    private func loadSelectedPhotos() async {
+        guard !selectedPhotos.isEmpty else { return }
+        loadingPhotos = true; photoError = nil
+        defer { loadingPhotos = false; selectedPhotos = [] }
+        do {
+            var additions: [Data] = []
+            for item in selectedPhotos {
+                guard let data = try await item.loadTransferable(type: Data.self) else { throw SharedPostPhotoEncoder.PhotoError.unreadable }
+                let jpeg = try await Task.detached(priority: .userInitiated) { try SharedPostPhotoEncoder.jpeg(from: data) }.value
+                try Task.checkCancellation()
+                additions.append(jpeg)
+            }
+            draft.photos = Array(((draft.photos ?? []) + additions).prefix(SharedPostDraft.maxPhotos))
+        } catch is CancellationError { }
+        catch {
+            photoError = language.localized(english: "Couldn’t prepare these photos. Try choosing them again or use a smaller image.", traditionalChinese: "無法準備這些照片，請重新選取或改用較小的圖片。")
         }
     }
 
@@ -289,16 +439,22 @@ struct SharedPostComposer: View {
     }
 
     private func prepare() async {
-        draft = SharedPostDraft(status: status, stars: nil, caption: "")
+        guard !isReady else { return }
+        preparedAccount = PrivyAuthService.shared.currentUserId
+        draft = SharedPostDraft(status: status, stars: nil, caption: "", photos: [])
         if let existing {
-            draft = SharedPostDraft(status: existing.status, stars: existing.stars, caption: existing.caption ?? "")
+            do { try await restore(existing) }
+            catch {
+                self.error = language.localized(english: "Couldn’t load the existing photos. Close and try again.", traditionalChinese: "無法載入原有照片，請關閉後重試。")
+                return
+            }
         } else if !store.isDemo {
             // A place may already have a post outside the first loaded page.
             // Load that explicit content before editing; never overwrite it blind.
             do {
                 let post = try await SupabaseService.shared.fetchSharedPost(id: id)
                 guard !Task.isCancelled else { return }
-                draft = SharedPostDraft(status: post.status, stars: post.stars, caption: post.caption ?? "")
+                try await restore(post)
             } catch SupabaseError.apiError(404, _) {
                 // No active post is a valid new-share state.
             } catch {
@@ -306,7 +462,17 @@ struct SharedPostComposer: View {
                 return
             }
         }
+        guard !Task.isCancelled, preparedAccount == PrivyAuthService.shared.currentUserId else { return }
         isReady = true
+    }
+
+    private func restore(_ post: SharedPlacePost) async throws {
+        var photos: [Data] = []
+        for index in 0..<min(max(post.photo_count ?? 0, 0), SharedPostDraft.maxPhotos) {
+            photos.append(try await SupabaseService.shared.fetchSharedPostPhoto(id: post.id, index: index))
+        }
+        try Task.checkCancellation()
+        draft = SharedPostDraft(status: post.status, stars: post.stars, caption: post.caption ?? "", photos: photos)
     }
 }
 

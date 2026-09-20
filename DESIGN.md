@@ -744,6 +744,10 @@ A post may represent Want to go or Visited. Caption is optional; a rating is
 optional and allowed only for Visited. Post status is the author's explicit
 snapshot, independent of later private place changes. Category artwork is used
 when no safe shared image exists; do not publish private photos automatically.
+Users may explicitly attach up to three photos in the post composer, preview or
+remove them, and publish them with the post. Photos inherit the live follower
+audience and withdrawal boundary; attaching a photo does not mark a visit as
+proof-verified. Original photo metadata is excluded from shared attachments.
 
 Sharing explicitly opts into the existing one-way follower audience, labeled
 “Visible to people who follow you” / “追蹤你的人可見”. Withdrawal stops the follower

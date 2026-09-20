@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import pg from "pg";
-import { getPassport, getSharedPost, getSocialProfile, listSharedPosts, putSharedPost, savedPostAttributions, saveSharedPost, withdrawSharedPost } from "./sharedPosts.js";
-import { getFriendRating, listFriendRatings, ownFriendRatings, putFriendRating, savedFriendAttributions } from "./friendRatings.js";
+import { getPassport, getSharedPostPhoto, getSharedPost, getSocialProfile, listSharedPosts, putSharedPost, savedPostAttributions, saveSharedPost, withdrawSharedPost } from "./sharedPosts.js";
+import { getFriendRating, listFriendRatings, ownFriendRatings, putFriendRating, withdrawFriendRating, savedFriendAttributions } from "./friendRatings.js";
 import { listFollowedFriendsPage, normalizeFollowListOptions } from "./followList.js";
 
 const first = "a1111111-1111-4111-8111-111111111111", second = "a2222222-2222-4222-8222-222222222222";
@@ -54,7 +54,7 @@ test("PostgreSQL: generalized posts preserve private memory and all live audienc
   assert.equal(database.pathname, "/savvy_friends_test");
   const pool = new pg.Pool({ connectionString: databaseURL });
   try {
-    for (const path of ["../sql/schema.sql", "../../supabase/migrations/20260815010000_places_provider_coordinates.sql", "../sql/friend-ratings.sql", "../sql/shared-posts.sql"])
+    for (const path of ["../sql/schema.sql", "../../supabase/migrations/20260815010000_places_provider_coordinates.sql", "../sql/friend-ratings.sql", "../sql/shared-posts.sql", "../sql/shared-post-photos.sql"])
       await pool.query(await readFile(new URL(path, import.meta.url), "utf8"));
     await pool.query("delete from profiles where id = any($1)", [[A, B, C]]);
     for (const user of [A, B, C]) await pool.query("insert into profiles(id,display_name,handle,email) values($1,$1,$1,'PRIVATE@example.invalid')", [user]);
@@ -67,12 +67,27 @@ test("PostgreSQL: generalized posts preserve private memory and all live audienc
     const shared = await putSharedPost(pool, B, first, body);
     assert.equal(shared.status, "wantToGo"); assert.equal(shared.stars, null);
     assert.equal((await getSharedPost(pool, A, first)).author_id, B);
-    assert.doesNotMatch(JSON.stringify(shared), /PRIVATE|email|note|visited_at|photo|created_at|rating"/);
+    assert.doesNotMatch(JSON.stringify(shared), /PRIVATE|email|note|visited_at|source_image|photo_data|created_at|rating"/);
     await assert.rejects(getSharedPost(pool, C, first), { status: 404 });
     await assert.rejects(getPassport(pool, C, B, url), { status: 404 });
     await assert.rejects(saveSharedPost(pool, C, first), { status: 404 });
     await assert.rejects(withdrawSharedPost(pool, A, first), { status: 404 });
+    const photo = await readFile(new URL("../fixtures/shared-posts/photo.jpg", import.meta.url));
+    const uploaded = await putSharedPost(pool, B, first, { ...body, photos: [photo.toString("base64"), photo.toString("base64")] });
+    assert.equal(uploaded.photo_count, 2);
+    const image = await getSharedPostPhoto(pool, A, first, "0");
+    assert.ok(image.length > 0);
+    assert.doesNotMatch(JSON.stringify(await getSharedPost(pool, A, first)), /base64|photo_data/);
+    await assert.rejects(getSharedPostPhoto(pool, C, first, "0"), { status: 404 });
+    await assert.rejects(getSharedPostPhoto(pool, A, first, "2"), { status: 404 });
+    await assert.rejects(putSharedPost(pool, A, first, { ...body, photos: [] }), { status: 404 });
+    assert.equal((await getSharedPost(pool, B, first)).photo_count, 2, "unauthorized edits cannot remove photos");
     const edited = await putSharedPost(pool, B, first, { status: "visited", stars: 4, caption: "Seen it" });
+    assert.equal(edited.photo_count, 2, "legacy caption-only edits preserve media");
+    assert.deepEqual(await getSharedPostPhoto(pool, A, first, "1"), image);
+    await putSharedPost(pool, B, first, { ...body, photos: [photo.toString("base64")] });
+    await assert.rejects(getSharedPostPhoto(pool, A, first, "1"), { status: 404 });
+    await putSharedPost(pool, B, first, { status: "visited", stars: 4, caption: "Seen it" });
     assert.equal(new Date(edited.shared_at).getTime(), new Date(shared.shared_at).getTime());
     assert.equal((await pool.query("select status from places where id = $1", [first])).rows[0].status, "wantToGo");
     await putSharedPost(pool, B, second, body);
@@ -100,6 +115,8 @@ test("PostgreSQL: generalized posts preserve private memory and all live audienc
     assert.equal(retained.note, "MY MEMORY"); assert.equal(retained.rating, 1); assert.equal(retained.status, "visited");
     await pool.query("update place_visibility set visibility='private' where place_id=$1", [first]);
     assert.equal((await getSharedPost(pool, B, first)).visible_to_followers, false);
+    assert.deepEqual(await getSharedPostPhoto(pool, B, first, "0"), image);
+    await assert.rejects(getSharedPostPhoto(pool, A, first, "0"), { status: 404 });
     assert.ok((await listSharedPosts(pool, B, new URL("http://localhost?limit=50"), "mine")).items.some(x => x.id === first && !x.visible_to_followers));
     assert.equal((await getPassport(pool, B, B, url)).profile.postCount, 1);
     assert.equal((await getSocialProfile(pool, B)).postCount, 2, "owner count matches mine, including paused posts");
@@ -108,11 +125,18 @@ test("PostgreSQL: generalized posts preserve private memory and all live audienc
     assert.deepEqual(await savedPostAttributions(pool, A), []);
     await putSharedPost(pool, B, first, body);
     await withdrawSharedPost(pool, B, first);
+    await assert.rejects(getSharedPostPhoto(pool, B, first, "0"), { status: 404 });
+    await assert.rejects(getSharedPostPhoto(pool, A, first, "0"), { status: 404 });
     await assert.rejects(getSharedPost(pool, B, first), { status: 404 });
     await assert.rejects(getSharedPost(pool, A, first), { status: 404 });
     assert.deepEqual(await savedPostAttributions(pool, A), []);
     await putSharedPost(pool, B, first, body);
+    assert.equal((await getSharedPost(pool, B, first)).photo_count, 0, "withdrawal clears photo bytes");
+    await putSharedPost(pool, B, first, { ...body, photos: [photo.toString("base64")] });
     await pool.query("delete from follows where follower_id=$1", [A]);
+    await assert.rejects(getSharedPostPhoto(pool, A, first, "0"), { status: 404 });
+    await putSharedPost(pool, B, first, { ...body, photos: [] });
+    await assert.rejects(getSharedPostPhoto(pool, B, first, "0"), { status: 404 });
     assert.equal((await listSharedPosts(pool, A, url)).items.length, 0);
     await assert.rejects(getPassport(pool, A, B, url), { status: 404 });
     await assert.rejects(getSharedPost(pool, A, first), { status: 404 });
@@ -125,5 +149,22 @@ test("PostgreSQL: generalized posts preserve private memory and all live audienc
     await pool.query("insert into follows(follower_id,following_id) values($1,$2)", [A, B]);
     assert.equal((await getFriendRating(pool, A, second)).stars, 4.5);
     assert.equal((await ownFriendRatings(pool, B)).length, 1);
+    // The settings withdrawal route and older clients must not resurrect photos.
+    for (const unshare of [
+      () => withdrawFriendRating(pool, B, second),
+      () => putFriendRating(pool, B, second, { stars: 4, eaten: true, shared: false }),
+    ]) {
+      for (const reshare of [
+        () => putFriendRating(pool, B, second, { stars: 4, eaten: true, shared: true }),
+        () => putSharedPost(pool, B, second, { status: "visited", stars: 4, caption: "" }),
+      ]) {
+        await putSharedPost(pool, B, second, { status: "visited", stars: 4, caption: "", photos: [photo.toString("base64")] });
+        await unshare();
+        await assert.rejects(getSharedPostPhoto(pool, A, second, "0"), { status: 404 });
+        await reshare();
+        assert.equal((await getSharedPost(pool, B, second)).photo_count, 0, "legacy withdrawal clears media before either reshare path");
+        await assert.rejects(getSharedPostPhoto(pool, A, second, "0"), { status: 404 });
+      }
+    }
   } finally { await pool.end(); }
 });
