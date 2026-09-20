@@ -582,7 +582,12 @@ enum MapCandidateSearchResult {
 
 @MainActor
 final class MapViewModel: ObservableObject {
-    private static let pendingReviewImportBatchLimit = 4
+    /// Share "Add all" queues the full list. Imports stay in batches of this
+    /// size so one activation cannot stall on a 26–32 place Google list, but
+    /// remaining batches must drain in the same activation. Parking the tail
+    /// until the next `handleSceneDidBecomeActive` would tell the user N were
+    /// added while only this many enter Review.
+    static let pendingReviewImportBatchLimit = 4
 
     @Published var places: [Place] = []
     @Published var selectedPlace: Place?
@@ -994,80 +999,100 @@ final class MapViewModel: ObservableObject {
         pendingImportService.restorePendingPlaces(failedImports)
     }
 
+    /// One-activation drain plan for a queued Add-all list. The first slice is
+    /// the current batch; anything after `pendingReviewImportBatchLimit` stays
+    /// in `remainder` and must be pulled again before this activation ends.
+    static func pendingReviewImportBatch<T>(_ pending: [T]) -> (current: [T], remainder: [T]) {
+        (
+            Array(pending.prefix(pendingReviewImportBatchLimit)),
+            Array(pending.dropFirst(pendingReviewImportBatchLimit))
+        )
+    }
+
     private func importPendingReviewCandidates(for userId: String, runSourceRecovery: Bool) async throws {
-        let pending = pendingImportService.consumePendingReviewCandidates()
-        guard !pending.isEmpty else { return }
-
         let importGeneration = authService.sessionGeneration
-        let currentBatch = Array(pending.prefix(Self.pendingReviewImportBatchLimit))
-        var failedCandidates = Array(pending.dropFirst(Self.pendingReviewImportBatchLimit))
+        var failedCandidates: [PendingReviewCandidate] = []
 
-        for var candidate in currentBatch {
-            do {
-                guard authService.sessionGeneration == importGeneration, authService.currentUserId == userId else { throw CancellationError() }
-                let localRecord = try saveLocalVaultService.saveReviewCandidate(
-                    candidate, recordID: candidate.localVaultRecordID, preservingExisting: true
-                )
-                let localRecordID = localRecord.id
-                candidate.localVaultRecordID = localRecordID
-                candidate.savedAt = min(candidate.savedAt, localRecord.createdAt)
-                try await withImportAnalysis { checkSession in
-                    var refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
-                    try checkSession()
-                    refinedCandidate.savedAt = candidate.savedAt
-                    _ = try saveLocalVaultService.saveReviewCandidate(refinedCandidate, recordID: localRecordID)
-                    // A remote failure must retry the refined payload, not the original thin clue.
-                    candidate = refinedCandidate
+        while true {
+            let pending = pendingImportService.consumePendingReviewCandidates()
+            guard !pending.isEmpty else { break }
+
+            let (currentBatch, remainder) = Self.pendingReviewImportBatch(pending)
+            // Persist the tail before this batch runs so a crash mid-batch
+            // cannot drop places 5...N. Then keep draining that tail here —
+            // do not wait for the next scene-active callback.
+            pendingImportService.restorePendingReviewCandidates(remainder)
+
+            for var candidate in currentBatch {
+                do {
+                    guard authService.sessionGeneration == importGeneration, authService.currentUserId == userId else { throw CancellationError() }
+                    let localRecord = try saveLocalVaultService.saveReviewCandidate(
+                        candidate, recordID: candidate.localVaultRecordID, preservingExisting: true
+                    )
+                    let localRecordID = localRecord.id
                     candidate.localVaultRecordID = localRecordID
-                    var run: PlaceRecoveryWorkflowRun?
-                    var failedStep = "validate_input"
-                    do {
-                        let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
-                        await SAVEAnalysisScope.current?.addCapture(captureId)
-                        if try await reuseImportedCandidate(refinedCandidate, captureId: captureId, userId: userId, queuedForAnalysis: true) != nil {
-                            return
-                        }
-                        let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(
-                            sourceURL: refinedCandidate.sourceURL,
-                            sourceType: nil
-                        )
-                        let createdRun = try await supabaseService.createPlaceRecoveryRun(
-                            workOrderId: workOrder.id,
-                            sourceURL: refinedCandidate.sourceURL,
-                            sourceType: nil
-                        )
-                        run = createdRun
-                        failedStep = "persist_candidate"
-                        let candidateId = try await supabaseService.createPlaceCandidate(
-                            refinedCandidate,
-                            captureId: captureId,
-                            userId: userId,
-                            workflowRunId: createdRun.id
-                        )
-                        if !refinedCandidate.isSourceOnly { await SAVEAnalysisScope.current?.foundReviewCandidate() }
-                        failedStep = "write_receipt"
-                        _ = try await supabaseService.recordPlaceRecoveryResult(
-                            placeRecoveryResult(for: refinedCandidate, candidateId: candidateId),
-                            for: createdRun.id
-                        )
-                        if refinedCandidate.isSourceOnly && (runSourceRecovery || refinedCandidate.reviewState == "analysis_pending") {
-                            await recoverImportSource(captureId: captureId, candidateId: candidateId, workflowRunId: createdRun.id)
-                        }
-                    } catch {
-                        if failedStep != "write_receipt" {
-                            await recordPlaceRecoveryFailureIfNeeded(
-                                run: run,
-                                candidate: refinedCandidate,
-                                error: error,
-                                failedStep: failedStep
+                    candidate.savedAt = min(candidate.savedAt, localRecord.createdAt)
+                    try await withImportAnalysis { checkSession in
+                        var refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
+                        try checkSession()
+                        refinedCandidate.savedAt = candidate.savedAt
+                        _ = try saveLocalVaultService.saveReviewCandidate(refinedCandidate, recordID: localRecordID)
+                        // A remote failure must retry the refined payload, not the original thin clue.
+                        candidate = refinedCandidate
+                        candidate.localVaultRecordID = localRecordID
+                        var run: PlaceRecoveryWorkflowRun?
+                        var failedStep = "validate_input"
+                        do {
+                            let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
+                            await SAVEAnalysisScope.current?.addCapture(captureId)
+                            if try await reuseImportedCandidate(refinedCandidate, captureId: captureId, userId: userId, queuedForAnalysis: true) != nil {
+                                return
+                            }
+                            let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(
+                                sourceURL: refinedCandidate.sourceURL,
+                                sourceType: nil
                             )
+                            let createdRun = try await supabaseService.createPlaceRecoveryRun(
+                                workOrderId: workOrder.id,
+                                sourceURL: refinedCandidate.sourceURL,
+                                sourceType: nil
+                            )
+                            run = createdRun
+                            failedStep = "persist_candidate"
+                            let candidateId = try await supabaseService.createPlaceCandidate(
+                                refinedCandidate,
+                                captureId: captureId,
+                                userId: userId,
+                                workflowRunId: createdRun.id
+                            )
+                            if !refinedCandidate.isSourceOnly { await SAVEAnalysisScope.current?.foundReviewCandidate() }
+                            failedStep = "write_receipt"
+                            _ = try await supabaseService.recordPlaceRecoveryResult(
+                                placeRecoveryResult(for: refinedCandidate, candidateId: candidateId),
+                                for: createdRun.id
+                            )
+                            if refinedCandidate.isSourceOnly && (runSourceRecovery || refinedCandidate.reviewState == "analysis_pending") {
+                                await recoverImportSource(captureId: captureId, candidateId: candidateId, workflowRunId: createdRun.id)
+                            }
+                        } catch {
+                            if failedStep != "write_receipt" {
+                                await recordPlaceRecoveryFailureIfNeeded(
+                                    run: run,
+                                    candidate: refinedCandidate,
+                                    error: error,
+                                    failedStep: failedStep
+                                )
+                            }
+                            throw error
                         }
-                        throw error
                     }
+                } catch {
+                    failedCandidates.append(candidate)
                 }
-            } catch {
-                failedCandidates.append(candidate)
             }
+
+            if remainder.isEmpty { break }
+            await Task.yield()
         }
 
         pendingImportService.restorePendingReviewCandidates(failedCandidates)

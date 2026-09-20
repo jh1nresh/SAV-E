@@ -372,6 +372,7 @@ private struct ShareMetadata {
     var description: String?
     var imageURL: URL?
     var htmlText: String?
+    var publicListAnalysis: GoogleMapsListAnalysis?
 }
 
 private let shareMetadataHTMLByteLimit = 2_000_000
@@ -1038,6 +1039,10 @@ struct ShareExtensionView: View {
                 ? "先保存來源，再開啟 Savvy 完成分析與地圖核對。"
                 : "Save this source, then open Savvy to finish analysis and map verification."
         }
+        if candidate.reviewState == "google_maps_list_source_only",
+           let notice = candidate.evidenceDiagnostic?.nextBestClue {
+            return notice
+        }
         if candidate.isSourceOnly {
             return "Keep this source, then add a caption, screenshot, or map link in Savvy to identify the place."
         }
@@ -1249,8 +1254,11 @@ struct ShareExtensionView: View {
             return
         }
 
-        let metadata = await shareMetadata(from: resolvedShareURLString)
+        var metadata = await shareMetadata(from: resolvedShareURLString)
         let parseContent = metadata.resolvedURL.flatMap { $0.isEmpty ? nil : $0 } ?? content
+        if metadata.publicListAnalysis == nil {
+            metadata.publicListAnalysis = await GoogleMapsPublicListLoader.load(sourceURL: parseContent)
+        }
 
         if GoogleMapsListPlaceExtractor.looksLikeGoogleMapsList(
             sourceURL: parseContent,
@@ -1456,6 +1464,9 @@ struct ShareExtensionView: View {
     }
 
     private func shareMetadata(from urlString: String) async -> ShareMetadata {
+        if let list = await GoogleMapsPublicListLoader.load(sourceURL: urlString) {
+            return ShareMetadata(resolvedURL: urlString, publicListAnalysis: list)
+        }
         guard let url = URL(string: urlString), url.scheme?.hasPrefix("http") == true else {
             return ShareMetadata()
         }
@@ -1631,7 +1642,7 @@ struct ShareExtensionView: View {
         sharedTitle: String,
         sharedText: String
     ) -> [PendingReviewCandidate] {
-        let extracted = GoogleMapsListPlaceExtractor.extractCandidates(
+        let extracted = metadata.publicListAnalysis?.candidates ?? GoogleMapsListPlaceExtractor.extractCandidates(
             sourceURL: sourceURLString,
             title: sharedTitle,
             text: sharedText,
@@ -1641,13 +1652,13 @@ struct ShareExtensionView: View {
         )
         guard !extracted.isEmpty else { return [] }
 
-        let listTitle = [sharedTitle, metadata.title]
+        let listTitle = [metadata.publicListAnalysis?.title, sharedTitle, metadata.title]
             .compactMap { $0 }
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .first(where: { !$0.isEmpty }) ?? "Google Maps saved list"
         let listEvidence = "Google Maps saved list: \(listTitle)"
 
-        return extracted.prefix(30).map { place in
+        return extracted.map { place in
             let hasCoordinates = place.latitude != nil && place.longitude != nil
             let hasAddress = !place.address.isEmpty
             var evidence = [
@@ -1656,22 +1667,27 @@ struct ShareExtensionView: View {
                 "Extracted from Google Maps list share"
             ]
             evidence.append(contentsOf: place.evidence)
-            if hasCoordinates { evidence.append("Verified coordinates found in shared list HTML") }
-            if hasAddress { evidence.append("Address found near list place: \(place.address)") }
+            if hasCoordinates { evidence.append("Coordinates found in shared list entry") }
+            if hasAddress { evidence.append("List place address: \(place.address)") }
 
             return PendingReviewCandidate(
                 candidateName: place.name,
                 address: place.address,
                 category: fallbackCategory(from: [place.name, place.address, sharedText, metadata.description ?? ""].joined(separator: " ")),
+                latitude: place.latitude,
+                longitude: place.longitude,
                 sourceURL: sourceURLString,
-                sourceText: publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText),
+                sourceText: metadata.publicListAnalysis.map { "Google Maps saved list: \($0.title)" }
+                    ?? publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText),
                 evidence: evidence,
                 confidence: hasCoordinates ? 0.78 : (hasAddress ? 0.68 : 0.56),
                 missingInfo: hasCoordinates ? [] : ["Confirm exact address / coordinates before saving as a Map Stamp"],
                 savedAt: Date(),
                 evidenceDiagnostic: SocialPlaceEvidenceDiagnostic(
                     found: evidence,
-                    attempts: ["Scanned Google Maps saved-list share metadata/HTML for embedded place links"],
+                    attempts: [metadata.publicListAnalysis == nil
+                        ? "Scanned Google Maps saved-list share metadata/HTML for embedded place links"
+                        : "Read public Google Maps list entries and checked the total count"],
                     missingFields: hasCoordinates ? [] : ["coordinates", hasAddress ? "" : "address"].filter { !$0.isEmpty },
                     nextBestClue: hasCoordinates ? "Ready to confirm as a Map Stamp." : "Open the candidate or run Google Places match before saving this as a Map Stamp."
                 ),
@@ -1687,12 +1703,13 @@ struct ShareExtensionView: View {
         sharedTitle: String,
         sharedText: String
     ) -> PendingReviewCandidate {
-        let listTitle = googleMapsListTitle(sharedTitle: sharedTitle, metadataTitle: metadata.title)
-        let evidenceText = publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText)
+        let listTitle = metadata.publicListAnalysis?.title ?? googleMapsListTitle(sharedTitle: sharedTitle, metadataTitle: metadata.title)
+        let evidenceText = metadata.publicListAnalysis.map { ["Google Maps saved list: \($0.title)", $0.notice ?? ""].joined(separator: "\n") }
+            ?? publicMetadataEvidence(from: metadata, sharedTitle: sharedTitle, sharedText: sharedText)
         let evidence = [
             "Source URL: \(sourceURLString)",
             "Google Maps saved list: \(listTitle)",
-            "No public place links were exposed in the shared list metadata/HTML"
+            metadata.publicListAnalysis?.notice ?? "No public place links were exposed in the shared list metadata/HTML"
         ]
         let diagnostic = SocialPlaceEvidenceDiagnostic(
             found: evidence,
@@ -1701,7 +1718,7 @@ struct ShareExtensionView: View {
                 "Kept this as a source clue instead of inventing places from a private or short-link shell"
             ],
             missingFields: ["Public list entries", "Verified place name", "Verified address", "Verified coordinates"],
-            nextBestClue: "Make the Google Maps list public/shared-readable, share an individual place, or share a screenshot/copied list text."
+            nextBestClue: metadata.publicListAnalysis?.notice ?? "Make the Google Maps list public/shared-readable, share an individual place, or share a screenshot/copied list text."
         )
         return PendingReviewCandidate(
             candidateName: listTitle,
