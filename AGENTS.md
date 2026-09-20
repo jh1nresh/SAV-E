@@ -1,29 +1,25 @@
 # Savvy Agent Contract
 
-Savvy turns saved-place clues into user-confirmed place memory and trip
-planning. R8 may supply evidence, but it does not write Savvy user truth.
-SLL-R commerce is a later handoff and is outside this repository's default
-scope.
+Savvy turns shared links, screenshots, text, and imports into place clues,
+review candidates, and user-confirmed Map Stamps. The current product helps
+users identify, confirm, save, and revisit places. Trip planning is not a
+current product capability; legacy Plan/Trip code and tests do not establish
+product scope or authorize new planning work.
+
+External sources supply evidence. Only user confirmation establishes saved
+place memory; analysis or import must not silently confirm or publish places.
 
 ## Required Brief
 
-For feature, product-state or commercial changes, record:
+For each change, establish the observed problem or user job, scoped files and
+systems, observable acceptance criteria, relevant failure fixture, verification,
+and privacy/security boundaries. Keep this in working notes or the PR; reuse
+known context and ask only when a missing decision affects correctness,
+product meaning, privacy, payment, or authority.
 
-- paid user job or observed failure
-- acceptance criteria and failure fixture
-- feature, loop, or maintenance classification
-- demand proof, pricing/paywall hypothesis, and first distribution format
-- files and systems in scope
-- verification commands
-- security and privacy boundary
-- actions that still require human approval
-
-For bounded maintenance, record the observed problem, scope, acceptance criteria,
-relevant verifier, applicable security/privacy boundaries and actions requiring
-human approval. Commercial fields may be `N/A`; mark other boundaries `N/A`
-only when they are inapplicable. Use context already available rather than
-asking for it again. Clarify only a missing decision that
-changes correctness, product behavior, privacy, payment or authority.
+For new product or commercial scope, also state the demand evidence, pricing
+hypothesis if relevant, and initial distribution. Routine fixes do not need
+commercial fields or a separate planning artifact.
 
 ## Design Reference
 
@@ -54,41 +50,26 @@ The five-second state test from `DESIGN.md` applies to every surface: a user
 must be able to tell a clue from a review candidate from a Map Stamp. A diff
 that blurs those states fails review even if it compiles.
 
-## Engineering Loop
+## Delivery
 
-```text
-scoped brief or issue
--> isolated branch/worktree
--> smallest reviewable patch
--> local verification
--> pull request
--> CI maker/checker feedback
--> human review and merge
--> release-readiness receipt
--> human-controlled distribution
-```
+Use `founder-engineering-workflow`: scoped problem → isolated branch/worktree →
+smallest patch → focused verification → atomic PR → CI and independent review.
+Preserve unrelated work and use task-relevant files and redacted fixtures.
+Done means acceptance passes, current-head checks pass, review has no blocking
+findings, and the diff contains only the authorized scope. PR creation alone
+is not completion.
 
-- Trigger: one scoped brief or GitHub issue.
-- Durable state: issue/PR plus the CI release-readiness artifact.
-- Input boundary: only task-relevant repo files and redacted fixtures.
-- Maker: the engineering agent on an isolated branch.
-- Checker: deterministic CI plus independent human review.
-- Feedback: failed build, test, fixture, audit, or review finding.
-- Artifact: one atomic PR and, after main passes, one
-  `save-release-readiness.json`.
-- Convergence: acceptance criteria pass, CI is green, and no unrelated files
-  changed.
-- Human approval: merge, production secrets/schema changes, Railway or Vercel
-  deployment changes, signing, App Store Connect, and TestFlight release.
-- Stop: missing product boundary, auth/payment ambiguity, private-data risk,
-  unavailable credentials, failing checks after three repair attempts, or less
-  than 10 GiB free before a runtime gate.
+Stop dependent work for unresolved product/auth/payment/privacy boundaries,
+unavailable credentials, or failing checks after three repair attempts. Keep
+independent work moving and report the concrete blocker.
 
 ## PR Queue And Closeout
 
-- Keep at most two implementation tasks actively coding, repairing CI, or waiting
-  for review. A draft is not exempt if an agent is still working on it. Park the
-  rest with an owner, dependency, and next action in the PR; do not open another
+- Default to at most two implementation tasks actively coding, repairing CI, or
+  waiting for review; an explicit user priority or concurrency instruction takes
+  precedence for the named work. A draft is not exempt while an agent is working
+  on it. Park the rest with an owner, dependency, and next action in the PR;
+  do not open another
   product task just because its predecessor is waiting. A bounded CI repair may
   proceed to unblock this queue.
 - Before starting another task, inspect the open PR queue:
@@ -104,15 +85,15 @@ scoped brief or issue
   then prepare the exact remote branch and local worktree cleanup candidates.
   Confirm worktree occupancy, dirty/untracked files, and unpushed commits before
   requesting deletion approval. Never delete solely because a PR is closed;
-  squash merges need the PR merge record, not just ancestry. PR creation alone
-  is not completion, and merge does not authorize deployment or branch deletion.
+  squash merges need the PR merge record, not just ancestry. Merge does not
+  authorize deployment or branch deletion.
 
 ## CI Coverage
 
 - iOS-relevant PRs retain the generic build and all `SAVETests`. Exact-file UI
-  routing lives in `scripts/select-ios-tests.py`; currently only Map drawer,
-  Onboarding, and Plan views qualify. All UI routes retain production visual
-  parity at 0.90 and five-tab smoke. Plan also retains the isolated Trip sheet.
+  routing and maintained test profiles live in `scripts/select-ios-tests.py`.
+  Preserve production visual parity at 0.90, navigation smoke, and existing
+  legacy Plan/Trip coverage; test names do not define current product features.
 - Shared navigation/theme/data, test harness, project, workflow, and unknown
   changes run full integration coverage. Multiple known surfaces run the union;
   renames consider both paths. An unavailable or empty diff runs full coverage.
@@ -143,7 +124,9 @@ scripts/xcodebuild-clean.sh \
   build
 ```
 
-Boot one headless simulator only for focused XCTest or UI evidence. Reuse the
+Below 10 GiB free, block new Xcode/runtime work until authorized cleanup or
+explicit acceptance of that task's storage risk. Boot one headless simulator
+only for focused XCTest or UI evidence. Reuse the
 same DerivedData root and verify shutdown afterward. For a borrowed or existing
 device, shutdown is the cleanup boundary. Remove a temporary device only when
 this task created it and its removal is authorized; never delete another
@@ -151,7 +134,12 @@ workflow's device as routine cleanup.
 CI is the canonical full checker for the native app, backend, web contracts,
 and evidence rubric.
 
-## Release Boundary
+## Approval And Release Boundaries
+
+Merge requires explicit approval for the target, independent review PASS on the
+current head, required CI green, and no blocking findings. Production schema or
+secrets changes, deployment, signing, App Store Connect, TestFlight, external
+messages, and destructive cleanup require their own explicit authorization.
 
 The main-branch CI builds an unsigned generic-device Release configuration with
 a synthetic non-secret Google key and emits a release-readiness receipt only
