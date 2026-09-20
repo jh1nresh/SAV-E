@@ -225,7 +225,11 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let data = try await request(path: "/places")
 
         let rows = try JSONDecoder.supabase.decode([PlaceRow].self, from: data)
-        return rows.filter { $0.user_id == userId }.map { $0.toPlace() }
+        // `/places` is already owner-scoped by the resolved profile id. After a
+        // Privy login is linked to an existing phone/SMS profile, `userId` is
+        // the Privy subject while each row.user_id is that profile id — they
+        // are not equal, so do not compare them here.
+        return rows.map { $0.toPlace() }
     }
 
     func savePlace(_ place: Place, userId: String) async throws {

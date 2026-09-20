@@ -309,7 +309,9 @@ final class SaveCorrectionLearningHeldoutTests: XCTestCase {
             ("wrong_account", [foreign], "aurora", scope, "review", places()),
             ("nil_account", [positive], nil, scope, "review", places()),
             ("deleted_target", [positive], "aurora", scope, "review", []),
-            ("foreign_owned_row", [positive], "aurora", scope, "review", places(owner: "birch")),
+            // Server-mapped owner rows keep the resolved profile id, which can
+            // differ from the Privy subject used as `currentUserId`.
+            ("privy_linked_profile_id", [positive], "aurora", scope, "review", places(owner: "resolved-profile-id")),
             ("uncommitted", [pending], "aurora", scope, "review", places()),
             ("legacy", [legacy], "aurora", scope, "review", places()),
             ("tie", [positive, tie], "aurora", scope, "review", places()),
@@ -326,7 +328,8 @@ final class SaveCorrectionLearningHeldoutTests: XCTestCase {
             "later_correction_replaces": replacementName,
             "duplicate_idempotent": correctedName,
             "more_than_100_foreign": correctedName,
-            "malicious_reason": correctedName
+            "malicious_reason": correctedName,
+            "privy_linked_profile_id": correctedName
         ]
         for (label, events, owner, key, status, rows) in cases {
             let result = try await refresh(events: events, owner: owner, scope: key, status: status, rows: rows)

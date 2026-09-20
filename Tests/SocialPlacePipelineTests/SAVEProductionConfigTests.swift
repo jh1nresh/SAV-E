@@ -780,6 +780,21 @@ final class SAVEAnalysisTransportTests: XCTestCase {
     }
 
     @MainActor
+    func testFetchPlacesKeepsServerMappedOwnerRowsWhenPrivySubjectDiffersFromProfileId() async throws {
+        let id = UUID()
+        let privySubject = "did:privy:linked-subject"
+        let resolvedProfileId = "11111111-2222-4333-8444-555555555555"
+        AnalysisRequestURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/places")
+            return (200, "[{\"id\":\"\(id)\",\"user_id\":\"\(resolvedProfileId)\",\"name\":\"Cedar Noodles 松山店\",\"address\":\"1 Road\",\"latitude\":25,\"longitude\":121,\"category\":\"food\",\"status\":\"wantToGo\",\"source_platform\":\"other\",\"created_at\":\"2020-01-02T03:04:05Z\"}]")
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let places = try await service.fetchPlaces(for: privySubject)
+        XCTAssertEqual(places.map(\.id), [id], "Linked-account /places rows stay owned even when the Privy subject is not the profile id")
+        XCTAssertEqual(places.first?.name, "Cedar Noodles 松山店")
+    }
+
+    @MainActor
     func testRetryUsesExistingCaptureAndHidesOnlySupersededClueAfterReload() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
