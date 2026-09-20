@@ -14,7 +14,8 @@
     "validate": "npm test && npm run audit:production",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
-    "try:sendblue": "tsx scripts/try-sendblue.ts"
+    "try:sendblue": "tsx scripts/try-sendblue.ts",
+    "test:link-analysis": "npm run build && node --test dist/analysisReadiness.test.js dist/socialSemanticRecovery.test.js dist/socialSemanticExtraction.test.js dist/sourceSearchWorker.test.js dist/videoVenueAnalysis.test.js dist/sourceRecoveryConfig.test.js"
   },
   "dependencies": {
     "jose": "^5.9.6",
