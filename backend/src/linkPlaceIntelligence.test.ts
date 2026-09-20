@@ -145,6 +145,17 @@ test("real database: cache ownership, frozen corrections, source graph, deduplic
       assert.ok(!(await placePopularity(pool)).places.some(row=>row.google_place_id==="same-cafe"));
     });
 
+    await t.test("valid save plus a null-saved_at duplicate for the same account still counts toward the floor",async()=>{
+      const venue="null-dup-cafe";
+      for (const owner of owners.slice(0,5)) await place(owner,venue);
+      const duplicate=await place(owners[0],"stray-before-correction");
+      await pool.query("update places set google_place_id=$1 where id=$2",[venue,duplicate]);
+      const cleared=(await pool.query("select saved_at from place_signal_state where place_id=$1",[duplicate])).rows[0];
+      assert.equal(cleared.saved_at,null);
+      const venueRow=(await placePopularity(pool)).places.find(row=>row.google_place_id===venue);
+      assert.equal(venueRow?.save_count,5);
+    });
+
     await t.test("legacy state and identity edits do not invent recent save/visit timestamps",async()=>{
       const id=await place(owners[7],"legacy");
       await pool.query("delete from place_signal_state where place_id=$1",[id]);

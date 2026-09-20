@@ -171,7 +171,7 @@ export async function placePopularity(db: DB, now = new Date()) {
         and left(p.user_id,6)<>'guest_' and p.status in ('wantToGo','visited') and nullif(btrim(p.google_place_id),'') is not null
     ), people as (
       select google_place_id,user_id,
-        case when bool_and(saved_at is not null) then min(saved_at) end as saved_at,
+        min(saved_at) as saved_at,
         min(first_visited_at) filter(where status='visited') as visited_at
       from eligible group by google_place_id,user_id
     ), counts as (
