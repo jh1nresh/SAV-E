@@ -296,6 +296,11 @@ final class SocialLinkReviewCandidateService {
     }
 
     private func reviewCandidates(from url: URL, sharedCaption: String?) async -> [PendingReviewCandidate] {
+        // A canonical list already carries its identity. Do not let an HTML
+        // login/consent redirect replace it or run generic recovery on it.
+        if let list = await GoogleMapsPublicListLoader.load(sourceURL: url.absoluteString) {
+            return googleMapsListReviewCandidates(list, sourceURL: url.absoluteString)
+        }
         let metadata = await fetchMetadata(from: url)
         let videoEvidence = metadata.videoURL.map { "Video metadata URL: \($0.absoluteString)" }
         let evidenceText = ([sharedCaption] + (metadata.jsonCaption.map { [$0] } ?? metadata.evidenceLines) + [videoEvidence])
@@ -305,12 +310,37 @@ final class SocialLinkReviewCandidateService {
             .joined(separator: "\n")
 
         let sourceURL = metadata.resolvedURL ?? url.absoluteString
+        if let list = await GoogleMapsPublicListLoader.load(sourceURL: sourceURL) {
+            return googleMapsListReviewCandidates(list, sourceURL: sourceURL)
+        }
         let resolved = await reviewCandidates(fromEvidenceText: evidenceText, sourceURL: sourceURL,
             sourceReadFailed: metadata.fetchReturnedNothing && sharedCaption?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false) {
             await self.thumbnailOCRLines(from: metadata.imageURL)
         }
         // Fetch diagnostics remain available even when text made OCR unnecessary.
         return resolved.map { $0.withSocialFetchDiagnostic(metadata.fetchDiagnosticLines) }
+    }
+
+    /// Map data stays in the review queue until the user confirms each place.
+    /// Do not send list titles or an unreadable list through social/AI recovery.
+    func googleMapsListReviewCandidates(_ list: GoogleMapsListAnalysis, sourceURL: String) -> [PendingReviewCandidate] {
+        guard !list.candidates.isEmpty else {
+            let notice = list.notice ?? "No readable places found in this Google Maps list."
+            return [PendingReviewCandidate(candidateName: list.title, address: "", category: "other",
+                sourceURL: sourceURL, sourceText: notice,
+                evidence: ["Source URL: \(sourceURL)", notice], confidence: 0,
+                missingInfo: [notice], savedAt: Date(), isSourceOnly: true,
+                reviewState: "google_maps_list_source_only")]
+        }
+        return list.candidates.map { place in
+            PendingReviewCandidate(candidateName: place.name, address: place.address,
+                category: category(from: "\(place.name) \(place.address)"),
+                latitude: place.latitude, longitude: place.longitude,
+                sourceURL: sourceURL, sourceText: "Google Maps saved list: \(list.title)",
+                evidence: ["Source URL: \(sourceURL)", "Google Maps saved list: \(list.title)"] + place.evidence,
+                confidence: 0.78, missingInfo: ["Confirm this place before saving as a Map Stamp"],
+                savedAt: Date(), isSourceOnly: false, reviewState: "map_match_ready")
+        }
     }
 
     /// Only a concrete text identity can skip thumbnail work. An area, bare

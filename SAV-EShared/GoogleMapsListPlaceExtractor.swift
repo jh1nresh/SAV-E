@@ -1,6 +1,7 @@
 import Foundation
+import CoreFoundation
 
-struct GoogleMapsListPlaceCandidate: Equatable {
+struct GoogleMapsListPlaceCandidate: Equatable, Sendable {
     var name: String
     var address: String
     var latitude: Double?
@@ -8,10 +9,162 @@ struct GoogleMapsListPlaceCandidate: Equatable {
     var evidence: [String]
 }
 
+/// Public list data is evidence only. Both entry points map this into their
+/// existing review queue; no saved-place or account state is written here.
+struct GoogleMapsListAnalysis: Sendable {
+    var title: String
+    var candidates: [GoogleMapsListPlaceCandidate]
+    var notice: String?
+
+    static func unavailable(_ notice: String) -> Self {
+        Self(title: "Google Maps saved list", candidates: [], notice: notice)
+    }
+}
+
+/// Google's public list page loads entries separately from its HTML shell.
+/// This is an undocumented read-only format: fail closed if its shape changes.
+/// Never forward cookies, owner profiles, contributor details, or list notes.
+enum GoogleMapsPublicListLoader {
+    nonisolated static let byteLimit = 4_000_000
+    static let entryLimit = 500
+
+    static func listID(in sourceURL: String) -> String? {
+        guard let url = URL(string: sourceURL),
+              url.scheme == "https",
+              ["google.com", "www.google.com", "maps.google.com"].contains(url.host?.lowercased() ?? ""),
+              url.user == nil, url.password == nil, url.port == nil else { return nil }
+        let path = url.path
+        let patterns = [
+            #"^/maps/placelists/list/([A-Za-z0-9_-]{10,256})/?$"#,
+            #"^/maps/@/data=.*!11m1!2s([A-Za-z0-9_-]{10,256})(?:!|$)"#
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let match = regex.firstMatch(in: path, range: NSRange(path.startIndex..., in: path)),
+                  let range = Range(match.range(at: 1), in: path) else { continue }
+            return String(path[range])
+        }
+        return nil
+    }
+
+    static func requestURL(for listID: String) -> URL? {
+        guard listID.range(of: #"^[A-Za-z0-9_-]{10,256}$"#, options: .regularExpression) != nil else { return nil }
+        var url = URLComponents(string: "https://www.google.com/maps/preview/entitylist/getlist")!
+        url.queryItems = [URLQueryItem(name: "hl", value: "zh-TW"),
+                          URLQueryItem(name: "pb", value: "!1m1!1s\(listID)!2e2!3e2!4i\(entryLimit)")]
+        return url.url
+    }
+
+    static func load(sourceURL: String) async -> GoogleMapsListAnalysis? {
+        await load(sourceURL: sourceURL, fetch: fetchPublicData)
+    }
+
+    // Injection keeps network failures and private/malformed responses testable
+    // without Google credentials, a live provider, or an AI/search fallback.
+    static func load(sourceURL: String, fetch: @Sendable (URL) async throws -> Data) async -> GoogleMapsListAnalysis? {
+        guard let id = listID(in: sourceURL), let url = requestURL(for: id) else { return nil }
+        do {
+            return parse(try await fetch(url), expectedListID: id)
+        } catch {
+            return .unavailable("Could not read this Google Maps list. Check that link sharing is enabled, then try again or share individual places.")
+        }
+    }
+
+    static func parse(_ data: Data, expectedListID: String) -> GoogleMapsListAnalysis {
+        let unreadable = GoogleMapsListAnalysis.unavailable(
+            "Could not read this Google Maps list. Check that link sharing is enabled, then try again or share individual places.")
+        guard data.count <= byteLimit, var text = String(data: data, encoding: .utf8) else { return unreadable }
+        if text.hasPrefix(")]}'\n") { text.removeFirst(5) }
+        guard let json = text.data(using: .utf8),
+              let outer = (try? JSONSerialization.jsonObject(with: json)) as? [Any],
+              let list = outer.first as? [Any], list.count > 12,
+              let identity = list[0] as? [Any], identity.first as? String == expectedListID,
+              let title = list[4] as? String, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let totalNumber = list[12] as? NSNumber,
+              CFGetTypeID(totalNumber) != CFBooleanGetTypeID(),
+              totalNumber.doubleValue.isFinite, totalNumber.doubleValue >= 0,
+              totalNumber.doubleValue <= 1_000_000,
+              totalNumber.doubleValue.rounded() == totalNumber.doubleValue else { return unreadable }
+        let total = totalNumber.intValue
+        let rows = list[8] as? [Any] ?? []
+        guard rows.count <= entryLimit else { return unreadable }
+        var candidates: [GoogleMapsListPlaceCandidate] = []
+        var seen = Set<String>()
+        var invalidRows = 0
+        for row in rows {
+            guard let entry = row as? [Any], entry.count > 2,
+                  let place = entry[1] as? [Any], place.count > 6,
+                  let rawName = entry[2] as? String,
+                  !rawName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, rawName.count <= 512,
+                  let address = place[4] as? String, address.count <= 2_000,
+                  let coordinate = place[5] as? [Any], coordinate.count > 3,
+                  let lat = coordinate[2] as? NSNumber, let lng = coordinate[3] as? NSNumber,
+                  CFGetTypeID(lat) != CFBooleanGetTypeID(), CFGetTypeID(lng) != CFBooleanGetTypeID(),
+                  lat.doubleValue.isFinite, lng.doubleValue.isFinite,
+                  (-90...90).contains(lat.doubleValue), (-180...180).contains(lng.doubleValue) else {
+                invalidRows += 1
+                continue
+            }
+            let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let ids = place[6] as? [String] ?? []
+            let key = ids.count == 2 && ids.allSatisfy({ !$0.isEmpty })
+                ? ids.joined(separator: ":") : "\(name)|\(address)|\(lat)|\(lng)"
+            guard seen.insert(key).inserted else { continue }
+            candidates.append(GoogleMapsListPlaceCandidate(name: name, address: address,
+                latitude: lat.doubleValue, longitude: lng.doubleValue,
+                evidence: ["Place identity, address and coordinates from the same Google Maps list entry"]))
+        }
+        let hasMore = outer.count > 1 && (outer[1] as? String)?.isEmpty == false
+        // A partial list must never look like an exhaustive analysis. Preserve
+        // its source instead of quietly dropping entries or the old >30 tail.
+        guard total == rows.count, invalidRows == 0, !hasMore else {
+            return GoogleMapsListAnalysis(title: String(title.prefix(200)), candidates: [],
+                notice: "List not fully read: \(rows.count - invalidRows) of \(total) entries readable. Savvy can read up to \(entryLimit) entries per shared list. Share a smaller list or individual places, then try again.")
+        }
+        return GoogleMapsListAnalysis(title: String(title.prefix(200)), candidates: candidates,
+            notice: candidates.isEmpty ? "This Google Maps list has no readable places yet." : nil)
+    }
+
+    private nonisolated static func fetchPublicData(from url: URL) async throws -> Data {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.urlCredentialStorage = nil
+        configuration.urlCache = nil
+        configuration.timeoutIntervalForRequest = 8
+        configuration.timeoutIntervalForResource = 12
+        let session = URLSession(configuration: configuration, delegate: GoogleMapsListRedirectGuard(), delegateQueue: nil)
+        defer { session.invalidateAndCancel() }
+        var request = URLRequest(url: url)
+        request.setValue("Mozilla/5.0", forHTTPHeaderField: "User-Agent")
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200,
+              http.url == url, response.expectedContentLength <= Int64(byteLimit) else { throw URLError(.badServerResponse) }
+        var data = Data()
+        for try await byte in bytes {
+            guard data.count < byteLimit else { throw URLError(.dataLengthExceedsMaximum) }
+            data.append(byte)
+        }
+        return data
+    }
+}
+
+private final class GoogleMapsListRedirectGuard: NSObject, URLSessionTaskDelegate {
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+                    completionHandler: @escaping (URLRequest?) -> Void) {
+        // Login, consent, and external redirects are not public list evidence.
+        completionHandler(nil)
+    }
+}
+
 /// Share-sheet parser for public Google Maps saved-list links.
 /// Keep this path separate from Google Takeout bulk file parsing.
 enum GoogleMapsListPlaceExtractor {
     static func looksLikeGoogleMapsList(sourceURL: String, title: String?, text: String?, metadataTitle: String?, metadataDescription: String?) -> Bool {
+        if GoogleMapsPublicListLoader.listID(in: sourceURL) != nil { return true }
+        guard let url = URL(string: sourceURL),
+              ["google.com", "www.google.com", "maps.google.com", "maps.app.goo.gl"].contains(url.host?.lowercased() ?? "") else { return false }
         let combined = [sourceURL, title, text, metadataTitle, metadataDescription]
             .compactMap { $0 }
             .joined(separator: "\n")
@@ -99,9 +252,8 @@ enum GoogleMapsListPlaceExtractor {
                 let raw = nsText.substring(with: match.range(at: 1))
                 let name = decodeGooglePathComponent(raw)
                 guard !name.isEmpty else { continue }
-                let nearby = nearbyText(in: nsText, around: match.range, radius: 280)
-                let coordinate = coordinateNearGoogleLink(in: nearby)
-                let address = firstAddressLine(in: nearby) ?? ""
+                let coordinate = coordinateNearGoogleLink(in: nsText.substring(with: match.range))
+                let address = firstAddressLine(in: htmlElementSnippet(in: nsText, around: match.range)) ?? ""
                 results.append(GoogleMapsListPlaceCandidate(
                     name: name,
                     address: address,
@@ -122,12 +274,11 @@ enum GoogleMapsListPlaceExtractor {
         let nsText = text as NSString
         return regex.matches(in: text, range: NSRange(location: 0, length: nsText.length)).compactMap { match in
             let snippet = htmlElementSnippet(in: nsText, around: match.range)
-            let nearby = nearbyText(in: nsText, around: match.range, radius: 280)
             guard let name = placeNameNearGoogleQueryLink(in: snippet), !name.isEmpty else {
                 return nil
             }
-            let coordinate = coordinateNearGoogleLink(in: nearby)
-            let address = firstAddressLine(in: nearby) ?? ""
+            let coordinate = coordinateNearGoogleLink(in: nsText.substring(with: match.range))
+            let address = firstAddressLine(in: snippet) ?? ""
             return GoogleMapsListPlaceCandidate(
                 name: name,
                 address: address,
@@ -241,12 +392,6 @@ enum GoogleMapsListPlaceExtractor {
         let snippetEnd = closeRange.location == NSNotFound ? min(text.length, range.location + range.length + 180) : afterStart + closeRange.location + closeRange.length
 
         return text.substring(with: NSRange(location: snippetStart, length: max(0, snippetEnd - snippetStart)))
-    }
-
-    private static func nearbyText(in text: NSString, around range: NSRange, radius: Int) -> String {
-        let start = max(0, range.location - radius)
-        let end = min(text.length, range.location + range.length + radius)
-        return text.substring(with: NSRange(location: start, length: end - start))
     }
 
     private static func coordinateNearGoogleLink(in text: String) -> (latitude: Double, longitude: Double)? {
