@@ -604,6 +604,48 @@ extension SaveCorrectionLearningHeldoutTests {
     }
 
     @MainActor
+    func testConfirmingLearnedCandidateMergesFetchedOwnedPlaceWhenInMemoryPlacesAreStale() async throws {
+        try await withLiveLearningFixture { map, _, store, row, placeData in
+            try await map.refreshReviewCandidates()
+            let learned = try XCTUnwrap(map.reviewCandidates.first)
+            XCTAssertEqual(learned.name, self.correctedName)
+            XCTAssertEqual(learned.correctionLearningPlaceID, UUID(uuidString: self.targetB))
+            XCTAssertTrue(map.places.isEmpty, "Stale in-memory stamps must not be required to find the owned target")
+
+            CorrectionHeldoutURLProtocol.install { request in
+                if request.httpMethod == "POST", request.url?.path == "/places" {
+                    return (500, Data("{\"error\":\"duplicate insert\"}".utf8))
+                }
+                if request.httpMethod == "PATCH", request.url?.path == "/places/\(self.targetB)" {
+                    return (200, Data("{}".utf8))
+                }
+                if request.httpMethod == "PATCH", request.url?.path.hasPrefix("/memory/candidates/") == true {
+                    return (200, Data("{}".utf8))
+                }
+                if request.url?.path == "/places" { return (200, placeData) }
+                return (200, request.url?.path == "/memory/candidates" ? row : Data("[]".utf8))
+            }
+
+            let saved = try await map.saveReviewCandidateAsPlace(learned)
+            XCTAssertEqual(saved.id, UUID(uuidString: self.targetB), "Fetched owned place is the merge target")
+            XCTAssertEqual(map.places.map(\.id), [UUID(uuidString: self.targetB)!])
+            XCTAssertFalse(
+                CorrectionHeldoutURLProtocol.requests.contains { $0.httpMethod == "POST" && $0.url?.path == "/places" },
+                "Learned confirmation must not insert a duplicate Map Stamp"
+            )
+            XCTAssertTrue(
+                CorrectionHeldoutURLProtocol.requests.contains {
+                    $0.httpMethod == "PATCH" && $0.url?.path == "/places/\(self.targetB)"
+                }
+            )
+            let event = try XCTUnwrap(store.recentEvents(userId: "aurora").first)
+            XCTAssertEqual(event.eventType, .mergeExisting)
+            XCTAssertEqual(event.userFinalPlaceId, UUID(uuidString: self.targetB))
+            XCTAssertEqual(event.learningCommitted, true)
+        }
+    }
+
+    @MainActor
     func testFailedRemoteDecisionCannotBecomeCommittedLearning() async throws {
         try await withLiveLearningFixture { map, _, store, row, placeData in
             try await map.refreshReviewCandidates()

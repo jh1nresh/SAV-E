@@ -1526,14 +1526,18 @@ final class MapViewModel: ObservableObject {
         }
 
         let confirmationGeneration = authService.sessionGeneration
+        // Confirmation fetch is the live owned target. Keep it for merge —
+        // in-memory `places` can still be empty after a failed initial load.
+        var learnedOwnedPlace: Place?
         if let learnedID = candidate.correctionLearningPlaceID {
             guard candidate.correctionLearningUserID == userId else { throw SupabaseError.notAuthenticated }
             let owned = try await supabaseService.fetchPlaces(for: userId)
             guard authService.currentUserId == userId, authService.sessionGeneration == confirmationGeneration else { throw CancellationError() }
-            guard let place = owned.first(where: { $0.id == learnedID }),
-                  SaveCorrectionLearning.matches(SavePlaceCorrectionSnapshot(candidate: candidate), place: place) else {
+            guard let fetched = owned.first(where: { $0.id == learnedID }),
+                  SaveCorrectionLearning.matches(SavePlaceCorrectionSnapshot(candidate: candidate), place: fetched) else {
                 throw SupabaseError.invalidResponse("This previous correction is no longer available. Refresh the clue and review the place again.")
             }
+            learnedOwnedPlace = fetched
         }
 
         let refinedMatch: GooglePlaceMatch?
@@ -1550,7 +1554,7 @@ final class MapViewModel: ObservableObject {
         }
 
         if !usesRemotePersistence {
-            if let match = existingSavedPlace(matching: place) {
+            if let match = learnedOwnedPlace ?? existingSavedPlace(matching: place) {
                 let existing = try await mergeSavedSources(place, into: match)
                 try saveLocalVaultService.removeReviewCandidate(candidate.id)
                 reviewCandidates.removeAll { $0.id == candidate.id }
@@ -1574,7 +1578,7 @@ final class MapViewModel: ObservableObject {
             return place
         }
 
-        if let match = existingSavedPlace(matching: place) {
+        if let match = learnedOwnedPlace ?? existingSavedPlace(matching: place) {
             var existing = try await mergeSavedSources(place, into: match)
             var updatedCandidate = candidate
             updatedCandidate.name = existing.name
