@@ -254,6 +254,9 @@ export async function runSourceSearchRecovery(
     result = { status: "analysis_pending", venues: [] };
     sourceFailure = { kind: "provider_failure", stage: "media" };
   }
+  if (result.status === "no_place_evidence") {
+    sourceFailure = { kind: "insufficient_source", reason: "no_place_evidence" };
+  }
   const candidates = semanticRecoveryCandidates(result, url.href);
   return {
     queries: [], searchResults: [], candidates, mediaEvidence, semanticStatus: result.status,
@@ -263,7 +266,7 @@ export async function runSourceSearchRecovery(
       found: caption ? ["source_text"] : [], tried: [...(caption.trim() || mediaEvidence.some(item => item.text?.trim()) ? ["grounded_semantic_extraction"] : []), ...(result.venues.length ? ["map_identity_verification"] : [])],
       missing: result.status === "analysis_pending" ? ["Analysis pending"] : candidates.flatMap(candidate => candidate.missingInfo),
       output: candidates.length ? "review_candidate" : "source_only_clue",
-      nextBestClue: result.reason === "source_out_of_bounds" ? "Source saved. Provide a shorter source or screenshot for analysis." : result.status === "analysis_pending" ? "Source saved; analysis pending. Retry when analysis is available." : "Confirm the exact place before saving.",
+      nextBestClue: result.reason === "source_out_of_bounds" ? "Source saved. Provide a shorter source or screenshot for analysis." : result.status === "analysis_pending" ? "Source saved; analysis pending. Retry when analysis is available." : candidates.length ? "Confirm the exact place before saving." : "Share a caption, screenshot, or map link that shows the venue name or address.",
       ...(sourceFailure ? { failureReason: sourceFailure } : result.status === "analysis_pending" ? { failureReason: { kind: "provider_failure" as const, stage: "public_search" as const } } : {}),
     },
   };

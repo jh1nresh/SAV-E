@@ -170,6 +170,7 @@ import {
   sha256ImmutableWorkflowReceipt,
 } from "./receiptEnvelope.js";
 import { readSourceRecoveryConfigStatus } from "./sourceRecoveryConfig.js";
+import { readAnalysisReadiness } from "./analysisReadiness.js";
 import { createPrivyUserProvisioner } from "./privyUsers.js";
 import {
   MemoryContractError,
@@ -252,6 +253,13 @@ const pool = new Pool({
   connectionString: databaseUrl,
   ssl: databaseSSLConfig(databaseUrl),
 });
+// Isolate health probes from user requests; bound connection, queue and SQL waits.
+const analysisHealthPool = new Pool({
+  connectionString: databaseUrl, ssl: databaseSSLConfig(databaseUrl),
+  max: 1, connectionTimeoutMillis: 2_000, statement_timeout: 2_000, query_timeout: 3_000,
+  idleTimeoutMillis: 10_000, allowExitOnIdle: true,
+});
+analysisHealthPool.on("error", () => console.error("Analysis health database connection unavailable"));
 const relatedPlaceSourcesStore = new PgRelatedPlaceSourcesStore(
   (sql, values) => pool.query(sql, [...values] as QueryValue[]),
 );
@@ -908,8 +916,13 @@ createServer(async (request, response) => {
       return sendJson(response, { ok: true, service: "save-backend" });
     }
     if (request.method === "GET" && url.pathname === "/health/source-recovery") {
-      const status = await readSourceRecoveryConfigStatus();
-      return sendJson(response, status, status.ready ? 200 : 503);
+      const [status, analysis] = await Promise.all([
+        readSourceRecoveryConfigStatus(),
+        readAnalysisReadiness(sql => analysisHealthPool.query(sql)),
+      ]);
+      const ready = status.ready && analysis.ready;
+      response.setHeader("Cache-Control", "no-store");
+      return sendJson(response, { ...status, analysis, ready }, ready ? 200 : 503);
     }
     // Apple posts server notifications with no user session. Authentication is
     // the JWS signature itself, verified against the pinned Apple root, so this
