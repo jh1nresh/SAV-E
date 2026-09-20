@@ -128,6 +128,33 @@ export function isPendingInvestigateReplay(input: {
     && input.currentAttemptNo === input.currentAnalysisAttemptNo + 1;
 }
 
+/** Manual decisions may finish the displayed result while its next analysis is pending.
+ * This does not authorize another retry or accept a caller's stale attempt number.
+ * The caller must still validate ownership and lock the run through settlement.
+ */
+export function validateDecisionAttempt(input: {
+  action: UserDecisionAction;
+  requestedAttemptNo: number;
+  currentAttemptNo: number;
+  currentAnalysisAttemptNo: number;
+  candidateId?: string;
+  currentCandidateRefs: string[];
+}): void {
+  if (input.requestedAttemptNo !== input.currentAttemptNo) {
+    throw new WorkflowConflictError("The decision targets a stale attempt");
+  }
+  if (input.currentAnalysisAttemptNo === input.currentAttemptNo) return;
+
+  const candidateId = input.candidateId?.toLowerCase();
+  const finishesDisplayedCandidate = decisionSettlementPolicy(input.action, 1).terminal
+    && input.currentAttemptNo === input.currentAnalysisAttemptNo + 1
+    && candidateId !== undefined
+    && input.currentCandidateRefs.some(ref => ref.toLowerCase() === candidateId);
+  if (!finishesDisplayedCandidate) {
+    throw new WorkflowConflictError("A retry is already pending or the decision targets a stale attempt");
+  }
+}
+
 export function planDecisionTransition(input: DecisionTransitionInput): DecisionTransitionPlan {
   const existing = input.existingDecision;
   if (existing) {
