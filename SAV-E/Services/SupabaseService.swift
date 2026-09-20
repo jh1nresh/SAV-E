@@ -848,6 +848,10 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         try JSONDecoder().decode(SharedPlacePost.self, from: await request(path: "/v0/shared-posts/\(id)"))
     }
 
+    func fetchSharedPostPhoto(id: UUID, index: Int) async throws -> Data {
+        try await request(path: "/v0/shared-posts/\(id)/photos/\(index)")
+    }
+
     func fetchSocialProfileCounts() async throws -> SocialProfileCounts {
         try JSONDecoder().decode(SocialProfileCounts.self, from: await request(path: "/v0/social-profile"))
     }

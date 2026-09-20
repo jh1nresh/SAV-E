@@ -1,5 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import { FriendRatingError } from "./friendRatings.js";
+import { sharedPostPhotos } from "./sharedPostPhotos.js";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function requireID(id: string) {
@@ -22,6 +23,7 @@ const visible = `r.shared_at is not null and ${venue} and ${audience}
 const projection = `p.id, p.name, p.address, p.latitude, p.longitude, p.category,
   p.google_place_id, p.coordinate_system, p.location_provider, p.provider_place_id, p.provider_map_url,
   r.shared_status as status, r.stars, r.caption, r.shared_at,
+  cardinality(r.photo_data) as photo_count, r.updated_at as photo_version,
   actor.id as author_id, coalesce(actor.display_name, actor.handle, 'Savvy User') as author_name,
   actor.handle as author_handle, actor.avatar_url as author_avatar_url,
   (${audience}) as visible_to_followers`;
@@ -76,24 +78,37 @@ export async function getSharedPost(pool: Queryable, userId: string, placeID: st
   return rows[0];
 }
 
+export async function getSharedPostPhoto(pool: Queryable, userId: string, placeID: string, index: string) {
+  requireID(placeID);
+  if (!/^[0-2]$/.test(index)) throw new FriendRatingError("Photo not found", 404);
+  // Read authorization and bytes in one statement snapshot. No public URL or cache.
+  const { rows } = await pool.query(`select r.photo_data[$3::int + 1] as data ${joins}
+    where p.id = $2 and r.shared_at is not null and ${venue}
+      and (r.user_id = $1 or (${visible}))`, [userId, placeID, Number(index)]);
+  if (!rows[0]?.data) throw new FriendRatingError("Photo not found", 404);
+  return rows[0].data as Buffer;
+}
+
 export async function putSharedPost(pool: Pool, userId: string, placeID: string, body: Record<string, unknown>) {
   requireID(placeID);
-  if (Object.keys(body).some(key => !["status", "stars", "caption"].includes(key))
+  if (Object.keys(body).some(key => !["status", "stars", "caption", "photos"].includes(key))
     || typeof body.status !== "string" || !["wantToGo", "visited"].includes(body.status)
     || (body.stars !== null && (typeof body.stars !== "number" || !Number.isFinite(body.stars) || body.stars < 1 || body.stars > 5))
     || (body.status === "wantToGo" && body.stars !== null)
     || (body.caption !== null && (typeof body.caption !== "string" || [...body.caption].length > 500))) {
     throw new FriendRatingError("Choose a post status, optional caption and optional visited rating", 400);
   }
+  const photos = sharedPostPhotos(body.photos);
   return transaction(pool, async client => {
     const { rows } = await client.query(`select p.id from places p where p.id = $1 and p.user_id = $2 and ${venue} for update`, [placeID, userId]);
     if (!rows[0]) throw new FriendRatingError("Confirmed place not found", 404);
-    await client.query(`insert into friend_restaurant_ratings (place_id, user_id, stars, caption, shared_status, shared_at)
-      values ($1,$2,$3,$4,$5,date_trunc('milliseconds', now()))
+    await client.query(`insert into friend_restaurant_ratings (place_id, user_id, stars, caption, shared_status, shared_at, photo_data)
+      values ($1,$2,$3,$4,$5,date_trunc('milliseconds', now()),coalesce($6::bytea[], '{}'::bytea[]))
       on conflict (place_id) do update set stars = excluded.stars, caption = excluded.caption,
         shared_status = excluded.shared_status,
+        photo_data = coalesce($6::bytea[], friend_restaurant_ratings.photo_data),
         shared_at = coalesce(friend_restaurant_ratings.shared_at, excluded.shared_at), updated_at = now()`,
-    [placeID, userId, body.stars, body.caption, body.status]);
+    [placeID, userId, body.stars, body.caption, body.status, photos ?? null]);
     await client.query(`insert into place_visibility (place_id, user_id, visibility, allow_friend_signal, published_at)
       values ($1,$2,'friends',true,now()) on conflict (place_id) do update set
       visibility = case when place_visibility.visibility = 'private' then 'friends' else place_visibility.visibility end,
@@ -104,7 +119,7 @@ export async function putSharedPost(pool: Pool, userId: string, placeID: string,
 
 export async function withdrawSharedPost(pool: Pool, userId: string, placeID: string) {
   requireID(placeID);
-  const { rows } = await pool.query(`update friend_restaurant_ratings set shared_at = null, updated_at = now()
+  const { rows } = await pool.query(`update friend_restaurant_ratings set shared_at = null, photo_data = '{}', updated_at = now()
     where place_id = $1 and user_id = $2 returning place_id`, [placeID, userId]);
   if (!rows[0]) throw new FriendRatingError("Shared post not found", 404);
 }

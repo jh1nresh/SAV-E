@@ -230,7 +230,8 @@ import {
   FriendRatingError, listFriendRatings, getFriendRating, ownFriendRatings,
   putFriendRating, withdrawFriendRating, saveFriendRating, savedFriendAttributions,
 } from "./friendRatings.js";
-import { listSharedPosts, getSharedPost, putSharedPost, withdrawSharedPost, saveSharedPost, savedPostAttributions, getPassport, getSocialProfile } from "./sharedPosts.js";
+import { sharedPostBodyMaxBytes } from "./sharedPostPhotos.js";
+import { listSharedPosts, getSharedPostPhoto, getSharedPost, putSharedPost, withdrawSharedPost, saveSharedPost, savedPostAttributions, getPassport, getSocialProfile } from "./sharedPosts.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -1140,12 +1141,19 @@ createServer(async (request, response) => {
         }
       }
       if (resource === "shared-posts") {
+        if (request.method === "GET" && id && segments.length === 4 && segments[2] === "photos") {
+          const data = await getSharedPostPhoto(pool, userId, id, segments[3]);
+          response.setHeader("Content-Type", "image/jpeg");
+          response.setHeader("X-Content-Type-Options", "nosniff");
+          response.writeHead(200);
+          return response.end(data);
+        }
         if (request.method === "GET" && segments.length === 1) return sendJson(response, await listSharedPosts(pool, userId, url));
         if (request.method === "GET" && segments.length === 2 && id === "mine") return sendJson(response, await listSharedPosts(pool, userId, url, "mine"));
         if (request.method === "GET" && segments.length === 2 && id === "saved") return sendJson(response, await savedPostAttributions(pool, userId));
         if (id && segments.length === 2) {
           if (request.method === "GET") return sendJson(response, await getSharedPost(pool, userId, id));
-          if (request.method === "PUT") return sendJson(response, await putSharedPost(pool, userId, id, await readJson(request, 4096)));
+          if (request.method === "PUT") return sendJson(response, await putSharedPost(pool, userId, id, await readJson(request, sharedPostBodyMaxBytes)));
           if (request.method === "DELETE") {
             await withdrawSharedPost(pool, userId, id);
             return sendJson(response, null, 204);
