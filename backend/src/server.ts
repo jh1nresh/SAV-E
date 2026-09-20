@@ -156,6 +156,7 @@ import {
   WorkflowConflictError,
   isPendingInvestigateReplay,
   planDecisionTransition,
+  validateDecisionAttempt,
   planResultTransition,
   reconcileReputation,
   safeOpaqueRefs,
@@ -5700,9 +5701,14 @@ async function recordPlaceRecoveryDecision(
 
     await insertFinalPlaceForDecision(client, userId, decision);
     await validateDecisionReferences(client, runId, userId, stringValue(run.result_type), decision);
-    if (attemptNo !== currentAttemptNo || receiptAttemptNo !== currentAttemptNo) {
-      throw new WorkflowConflictError("A retry is already pending or the decision targets a stale attempt");
-    }
+    validateDecisionAttempt({
+      action: decision.action,
+      requestedAttemptNo: attemptNo,
+      currentAttemptNo,
+      currentAnalysisAttemptNo: receiptAttemptNo,
+      candidateId,
+      currentCandidateRefs: stringArray(run.result_candidate_refs) ?? [],
+    });
 
     const result = normalizePlaceRecoveryWorkerResult({
       result_type: run.result_type ?? "source_only_clue",
