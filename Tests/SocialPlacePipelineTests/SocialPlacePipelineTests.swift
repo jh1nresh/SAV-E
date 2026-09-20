@@ -250,14 +250,30 @@ final class SocialPlacePipelineTests: XCTestCase {
     }
 
     private func publicGoogleListPayload(count: Int, reportedCount: Int? = nil) throws -> Data {
-        let rows: [Any] = (0..<count).map { index in
-            [NSNull(), [NSNull(), NSNull(), "", NSNull(), "\(index + 1) Test Street",
-                        [NSNull(), NSNull(), 25.0 + Double(index) / 1_000, 121.0 + Double(index) / 1_000],
-                        ["provider", "\(index)"]], "Same name cafe", "Private note"] as [Any]
+        let null = NSNull()
+        var rows: [Any] = []
+        rows.reserveCapacity(count)
+        for index in 0..<count {
+            let latitude = 25.0 + Double(index) / 1_000
+            let longitude = 121.0 + Double(index) / 1_000
+            let coordinates: [Any] = [null, null, latitude, longitude]
+            let provider: [Any] = ["provider", "\(index)"]
+            let address = "\(index + 1) Test Street"
+            let place: [Any] = [null, null, "", null, address, coordinates, provider]
+            let row: [Any] = [null, place, "Same name cafe", "Private note"]
+            rows.append(row)
         }
-        let list: [Any] = [["fixture-list-123"], 4, NSNull(), ["Private owner"], "Test list", "",
-                           NSNull(), NSNull(), rows, NSNull(), NSNull(), NSNull(), reportedCount ?? count]
-        return Data(")]}'\n".utf8) + (try JSONSerialization.data(withJSONObject: [list, ""]))
+        let listID: [Any] = ["fixture-list-123"]
+        let owner: [Any] = ["Private owner"]
+        let total = reportedCount ?? count
+        let list: [Any] = [
+            listID, 4, null, owner, "Test list", "",
+            null, null, rows, null, null, null, total
+        ]
+        let envelope: [Any] = [list, ""]
+        var payload = Data(")]}'\n".utf8)
+        payload.append(try JSONSerialization.data(withJSONObject: envelope))
+        return payload
     }
 
     @MainActor
