@@ -1052,8 +1052,6 @@ struct AuthLoadingView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 20) {
-                SaveFirstRunBrandLockup()
-
                 Spacer(minLength: 12)
 
                 SaveOpeningLogoMark(isBreathing: isBreathing, reduceMotion: reduceMotion)
