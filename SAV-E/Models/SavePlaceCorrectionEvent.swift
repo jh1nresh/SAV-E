@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 nonisolated enum SavePlaceCorrectionEventType: String, Codable, Sendable {
     case confirmCandidate = "confirm_candidate"
@@ -80,6 +81,9 @@ nonisolated struct SavePlaceCorrectionEvent: Identifiable, Codable, Equatable, S
     var userFinalCollectionIds: [UUID]
     var userReasonText: String?
     var createdAt: Date
+    var correctionScopeKey: String?
+    var learningCommitted: Bool?
+    var learningRevoked: Bool?
 
     @MainActor
     init(
@@ -107,6 +111,9 @@ nonisolated struct SavePlaceCorrectionEvent: Identifiable, Codable, Equatable, S
         self.userFinalCollectionIds = userFinalCollectionIds
         self.userReasonText = userReasonText
         self.createdAt = createdAt
+        correctionScopeKey = candidate.correctionScopeKey
+        learningCommitted = false
+        learningRevoked = false
     }
 
     var workflowPayload: [String: Any] {
@@ -141,6 +148,7 @@ nonisolated final class SavePlaceCorrectionEventStore: Sendable {
     func append(_ event: SavePlaceCorrectionEvent) throws {
         try queue.sync {
             var events = try recentEventsUnlocked(limit: 999)
+            events.removeAll { $0.id == event.id }
             events.insert(event, at: 0)
             guard let url = storageURL else { throw SaveLocalVaultError.storageUnavailable }
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -154,6 +162,14 @@ nonisolated final class SavePlaceCorrectionEventStore: Sendable {
     func recentEvents(limit: Int = 100) throws -> [SavePlaceCorrectionEvent] {
         try queue.sync {
             try recentEventsUnlocked(limit: limit)
+        }
+    }
+
+    /// Filter before limiting; a shared device file is never an account boundary.
+    func recentEvents(userId: String, limit: Int = 1000) throws -> [SavePlaceCorrectionEvent] {
+        guard !userId.isEmpty else { return [] }
+        return try queue.sync {
+            Array(try recentEventsUnlocked(limit: 1000).filter { $0.userId == userId }.prefix(max(0, limit)))
         }
     }
 
@@ -181,5 +197,72 @@ private extension PlaceReviewCandidate {
         }
         if status == "confirmed" { return "confirmed" }
         return hasReliableCoordinates ? "likely" : "weak_candidate"
+    }
+}
+
+/// Reversible account-local projection. It proposes a review identity, never a saved place.
+@MainActor
+enum SaveCorrectionLearning {
+    static let provenance = "Suggested from your previous correction of this source. Confirm the place."
+
+    static func scopeKey(for pending: PendingReviewCandidate) -> String? {
+        guard let source = SaveSourceIdentity.url(pending.sourceURL),
+              let raw = pending.sourceText?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty, raw != pending.sourceURL, SaveSourceIdentity.url(raw) == nil else { return nil }
+        // A post can contain multiple venues. Content and original venue slot are
+        // both required; no name-only, URL-only or cross-source generalization.
+        let fields = ["correction-v1", source, raw,
+                      SaveSourceIdentity.text(pending.candidateName), SaveSourceIdentity.text(pending.address)]
+        guard let bytes = try? JSONEncoder().encode(fields) else { return nil }
+        return SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func validScope(_ key: String?) -> Bool {
+        guard let key, key.utf8.count == 64 else { return false }
+        return key.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) }
+    }
+
+    static func suggestion(for candidate: PlaceReviewCandidate, userId: String?,
+                           events: [SavePlaceCorrectionEvent], ownedPlaces: [Place],
+                           now: Date = Date()) -> PlaceReviewCandidate {
+        guard let userId, !userId.isEmpty, validScope(candidate.correctionScopeKey),
+              ["review", "needs_more_evidence"].contains(candidate.status), candidate.hasReliableCoordinates else { return candidate }
+        let relevant = events.filter { $0.userId == userId && $0.correctionScopeKey == candidate.correctionScopeKey }
+        // A failed/pending/revoked newer decision must not resurrect an older one.
+        guard let latestDate = relevant.map(\.createdAt).max(), latestDate <= now else { return candidate }
+        let latest = Array(Set(relevant.filter { $0.createdAt == latestDate }.map { $0.id }))
+        guard latest.count == 1, let event = relevant.first(where: { $0.createdAt == latestDate }),
+              events.filter({ $0.userId == userId && $0.id == event.id }).allSatisfy({ $0 == event }),
+              event.learningCommitted == true, event.learningRevoked != true,
+              [.confirmCandidate, .editPlaceIdentity, .mergeExisting].contains(event.eventType),
+              let snapshot = event.afterSnapshot, snapshot.status == "saved",
+              let placeID = event.userFinalPlaceId,
+              let place = ownedPlaces.first(where: { $0.id == placeID }),
+              matches(snapshot, place: place) else { return candidate }
+        var proposed = candidate
+        proposed.name = place.name
+        proposed.address = place.address
+        proposed.city = nil
+        proposed.latitude = place.latitude
+        proposed.longitude = place.longitude
+        proposed.googlePlaceId = place.googlePlaceId
+        proposed.category = place.category
+        proposed.status = "review"
+        proposed.confidence = nil // No invented model confidence for a user decision.
+        proposed.missingInfo = ["Confirm the place"]
+        proposed.correctionLearningPlaceID = place.id
+        proposed.correctionLearningUserID = userId
+        // Old provider identity fields cannot travel with the corrected identity.
+        proposed.evidence = candidate.evidence.filter {
+            !$0.localizedCaseInsensitiveContains("Amap POI id:") &&
+            !$0.localizedCaseInsensitiveContains("Amap reference coordinates") &&
+            !$0.localizedCaseInsensitiveContains("Provider map URL:") && $0 != provenance
+        } + [provenance]
+        return proposed
+    }
+
+    static func matches(_ snapshot: SavePlaceCorrectionSnapshot, place: Place) -> Bool {
+        place.isMapKitMappable && snapshot.name == place.name && snapshot.address == place.address &&
+        snapshot.latitude == place.latitude && snapshot.longitude == place.longitude
     }
 }

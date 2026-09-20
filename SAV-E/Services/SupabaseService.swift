@@ -225,7 +225,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let data = try await request(path: "/places")
 
         let rows = try JSONDecoder.supabase.decode([PlaceRow].self, from: data)
-        return rows.map { $0.toPlace() }
+        return rows.filter { $0.user_id == userId }.map { $0.toPlace() }
     }
 
     func savePlace(_ place: Place, userId: String) async throws {
@@ -584,6 +584,9 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             sourceEvidence = [marker] + sourceEvidence.filter { $0 != marker }
         }
         var evidence: [[String: Any]] = sourceEvidence.map { ["text": $0] }
+        if let scope = SaveCorrectionLearning.scopeKey(for: candidate) {
+            evidence.append(["correction_scope_v1": scope])
+        }
         if !candidate.isSourceOnly, candidate.hasReliableCoordinates,
            let placeID = candidate.googlePlaceId, !placeID.isEmpty {
             evidence.append(["google_place_id": placeID, "google_types": candidate.googleTypes])
@@ -2205,6 +2208,10 @@ private struct PlaceCandidateRow: Codable {
         if originals.count == 1, Set(identities.compactMap(\.google_place_id)).count <= 1 {
             candidate.semanticSource = originals.first
         }
+        let scopes = Set((evidence ?? []).compactMap(\.correction_scope_v1))
+        if scopes.count == 1, let scope = scopes.first, SaveCorrectionLearning.validScope(scope) {
+            candidate.correctionScopeKey = scope
+        }
         candidate.supersededByCandidateID = superseded_by_candidate_id
         candidate.supersededByCandidateIDs = superseded_by_candidate_ids ?? []
         return candidate
@@ -2212,6 +2219,7 @@ private struct PlaceCandidateRow: Codable {
 }
 
 private struct PlaceCandidateEvidenceRow: Codable {
+    let correction_scope_v1: String?
     let text: String?
     let google_place_id: String?
     let google_types: [String]?
