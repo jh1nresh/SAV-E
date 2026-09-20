@@ -7,6 +7,7 @@ import {
   decisionSettlementPolicy,
   isPendingInvestigateReplay,
   planDecisionTransition,
+  validateDecisionAttempt,
   planResultTransition,
   reconcileReputation,
   safeOpaqueRefs,
@@ -364,4 +365,32 @@ test("receipt refs are bounded and raw private values become opaque hashes", () 
   assert.equal(JSON.stringify(refs).includes("friend message"), false);
   assert.equal(JSON.stringify(refs).includes("super-secret-access-token"), false);
   assert.equal(JSON.stringify(refs).includes("secret-caption"), false);
+});
+
+
+test("manual decisions finish the displayed candidate without waiting for retry analysis", () => {
+  const pending = { requestedAttemptNo: 2, currentAttemptNo: 2, currentAnalysisAttemptNo: 1,
+    candidateId: "CANDIDATE-A", currentCandidateRefs: ["candidate-a"] };
+  for (const action of ["confirm", "reject", "edit", "merge_existing", "source_only"] as const) {
+    assert.doesNotThrow(() => validateDecisionAttempt({ ...pending, action }));
+    const decision = planDecisionTransition({ currentAttemptNo: 2, currentCreditSettlement: "pending",
+      action, creditReserved: 1, idempotencyKey: action, fingerprint: action });
+    assert.equal(decision.kind, "create");
+    if (decision.kind !== "create") return;
+    assert.equal(decision.terminal, true);
+    assert.equal(decision.nextAttemptNo, 2);
+    assert.throws(() => planResultTransition({ currentAttemptNo: 2,
+      currentCreditSettlement: decision.creditSettlement, requestedAttemptNo: 2,
+      resultRevision: 1, idempotencyKey: "late-result", outputHash: "late-result", explicitRetry: false,
+      currentReceipt: { id: "analysis-1", attemptNo: 1, resultRevision: 1, idempotencyKey: "analysis-1", outputHash: "first" },
+    }), WorkflowConflictError);
+  }
+  for (const override of [
+    { requestedAttemptNo: 1 }, { currentAnalysisAttemptNo: 0 }, { currentAnalysisAttemptNo: 3 },
+    { candidateId: "unrelated-candidate" }, { candidateId: undefined },
+    { action: "investigate_more" as const }, { action: "needs_more_evidence" as const },
+  ]) {
+    assert.throws(() => validateDecisionAttempt({ ...pending, action: "confirm", ...override }), WorkflowConflictError);
+  }
+  assert.doesNotThrow(() => validateDecisionAttempt({ ...pending, action: "investigate_more", currentAnalysisAttemptNo: 2 }));
 });

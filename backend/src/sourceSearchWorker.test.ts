@@ -167,6 +167,41 @@ test("source resolution caches successful short-link documents", async () => {
   assert.equal(fetchCount, 1);
 });
 
+test("Instagram retry refetches a resolved empty shell instead of retaining it for 24 hours", async () => {
+  const sourceURL = "https://www.instagram.com/reel/EmptyRetryFixture/";
+  let calls = 0;
+  const fetcher = async () => new Response(++calls === 1
+    ? '<html><head><title>Instagram</title></head></html>'
+    : '<html><head><meta property="og:description" content="Fixture Cafe at 12 Main Street"></head></html>');
+  const first = await resolveSourceDocument(sourceURL, 512_000, fetcher);
+  assert.equal(first.resolution.caption, undefined);
+  const retry = await resolveSourceDocument(sourceURL, 512_000, fetcher);
+  assert.equal(retry.resolution.caption, "Fixture Cafe at 12 Main Street");
+  assert.equal(calls, 2, "a second attempt must reach the source after an empty shell");
+  assert.deepEqual(await resolveSourceDocument(sourceURL, 512_000, fetcher), retry);
+  assert.equal(calls, 2, "the recovered caption should still use the successful cache");
+});
+
+test("Instagram title-only and thumbnail-only responses cannot suppress a later source fetch", async () => {
+  const shells = [
+    '<title>Fixture creator on Instagram</title>',
+    '<meta property="og:image" content="https://example.com/fixture.jpg">',
+    '<meta property="og:description" content="Log in to Instagram">',
+  ];
+  for (const [index, shell] of shells.entries()) {
+    const sourceURL = `https://www.instagram.com/reel/ThinRetryFixture${index}/?stkn=redacted`;
+    let calls = 0;
+    const fetcher = async () => {
+      calls++;
+      if (calls === 1) return new Response(`<html><head>${shell}</head></html>`);
+      throw new AnalysisControlError(429, "analysis_limit_exceeded", "fixture limit");
+    };
+    await resolveSourceDocument(sourceURL, 512_000, fetcher);
+    await assert.rejects(resolveSourceDocument(sourceURL, 512_000, fetcher), AnalysisControlError);
+    assert.equal(calls, 2, "retry must retain admission failures instead of reusing an empty shell");
+  }
+});
+
 test("source resolution cache keeps fragment merchant ids isolated", async () => {
   let fetchCount = 0;
   const fetcher = async (url: string | URL | Request) => {

@@ -584,6 +584,117 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testPendingReviewImportDrainsEveryBatchInTheSameActivation() {
+        XCTAssertEqual(MapViewModel.pendingReviewImportBatchLimit, 4, "Add-all still batches, but must not stop after the first 4")
+        let queued = (1...9).map { "List place \($0)" }
+        var remaining = queued
+        var batches: [[String]] = []
+        while !remaining.isEmpty {
+            let slice = MapViewModel.pendingReviewImportBatch(remaining)
+            batches.append(slice.current)
+            remaining = slice.remainder
+        }
+        XCTAssertEqual(batches.map(\.count), [4, 4, 1])
+        XCTAssertEqual(batches.flatMap { $0 }, queued)
+    }
+
+    @MainActor
+    func testAddAllQueuedReviewCandidatesDrainOnOneSceneActivation() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original }
+        auth.authState = .authenticated(userId: "review-import-drain-fixture")
+
+        AnalysisRequestURLProtocol.reset()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let queuedCount = MapViewModel.pendingReviewImportBatchLimit + 2
+        XCTAssertGreaterThan(queuedCount, MapViewModel.pendingReviewImportBatchLimit)
+
+        let workOrder = "{\"id\":\"\(UUID())\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"intent\":\"recover\",\"input_type\":\"social_url\",\"evaluator_policy_id\":\"fixture\",\"settlement_mode\":\"fixture\",\"status\":\"pending\"}"
+        func workflowJSON(id: UUID) -> String {
+            "{\"id\":\"\(id)\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"source_type\":\"social_url\",\"status\":\"pending\",\"evidence_tier\":\"weak\",\"result_evidence_refs\":[],\"result_candidate_refs\":[],\"credit_reserved\":1,\"credit_settlement\":\"pending\"}"
+        }
+        var createdRows: [String] = []
+        AnalysisRequestURLProtocol.handler = { request in
+            let path = request.url?.path ?? ""
+            if path == "/v0/analysis" {
+                let id = try XCTUnwrap(AnalysisRequestURLProtocol.body(request)["id"] as? String)
+                return (200, "{\"analysis_id\":\"\(id)\"}")
+            }
+            if path.hasSuffix("/captures") && request.httpMethod == "POST" {
+                return (200, "{\"id\":\"\(UUID())\"}")
+            }
+            if path.hasSuffix("/work-orders") { return (200, workOrder) }
+            if path.hasSuffix("/runs") {
+                let run = UUID()
+                return (200, workflowJSON(id: run))
+            }
+            if path.hasSuffix("/result") {
+                let run = UUID()
+                let receipt = "{\"id\":\"\(UUID())\",\"run_id\":\"\(run)\",\"workflow_id\":\"fixture\",\"verdict\":\"review\",\"settlement\":\"pending\",\"evaluator_summary\":\"fixture\",\"evidence_refs\":[],\"candidate_refs\":[],\"receipt_hash\":\"fixture\",\"anchor_status\":\"none\"}"
+                return (200, "{\"run\":\(workflowJSON(id: run)),\"receipt\":\(receipt)}")
+            }
+            if path.hasSuffix("/candidates") {
+                if request.httpMethod == "POST" {
+                    let body = try AnalysisRequestURLProtocol.body(request)
+                    let id = UUID()
+                    let name = body["name"] as? String ?? "Place"
+                    let address = body["address"] as? String ?? ""
+                    let lat = body["latitude"] as? Double ?? 25.03
+                    let lon = body["longitude"] as? Double ?? 121.56
+                    createdRows.append("{\"id\":\"\(id)\",\"name\":\"\(name)\",\"address\":\"\(address)\",\"latitude\":\(lat),\"longitude\":\(lon),\"status\":\"review\",\"created_at\":\"2020-01-02T03:04:05Z\"}")
+                    return (200, createdRows.last!)
+                }
+                if request.url?.query?.contains("capture_id") == true { return (200, "[]") }
+                return (200, "[\(createdRows.joined(separator: ","))]")
+            }
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        let map = MapViewModel(
+            supabaseService: service,
+            pendingImportService: queue,
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        )
+
+        await map.loadPlaces(force: true)
+        XCTAssertTrue(queue.consumePendingReviewCandidates().isEmpty)
+
+        let queued = (1...queuedCount).map { index in
+            PendingReviewCandidate(
+                candidateName: "Taipei list place \(index)",
+                address: "\(index) Zhongshan Road, Taipei",
+                category: "food",
+                latitude: 25.033 + Double(index) * 0.001,
+                longitude: 121.565 + Double(index) * 0.001,
+                sourceURL: "https://maps.app.goo.gl/drain-list",
+                sourceText: "Google Maps saved list: Drain fixture",
+                evidence: ["Extracted from Google Maps list share"],
+                confidence: 0.78,
+                missingInfo: [],
+                savedAt: Date(),
+                reviewState: "map_match_ready"
+            )
+        }
+        queue.restorePendingReviewCandidates(queued)
+
+        await map.handleSceneDidBecomeActive()
+
+        let leftover = queue.consumePendingReviewCandidates()
+        XCTAssertTrue(leftover.isEmpty, "Remainder after batch \(MapViewModel.pendingReviewImportBatchLimit) must drain in this activation, leftover=\(leftover.map(\.candidateName))")
+        let persisted = AnalysisRequestURLProtocol.requests.filter {
+            $0.httpMethod == "POST" && ($0.url?.path.hasSuffix("/candidates") == true)
+        }
+        XCTAssertEqual(persisted.count, queuedCount, "Add-all N must persist every queued place on the first scene-active, not only the first batch")
+        XCTAssertEqual(Set(map.reviewCandidates.map(\.name)).count, queuedCount)
+    }
+
     func testImportRecoveryRejectsAccountSwitchBeforeApplyingResults() async throws {
         let auth = PrivyAuthService.shared
         let original = auth.authState
@@ -777,6 +888,21 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             XCTAssertEqual(try XCTUnwrap(candidates.first).createdAt.timeIntervalSince(base), fraction, accuracy: 0.001)
             XCTAssertEqual(try XCTUnwrap(places.first).createdAt.timeIntervalSince(base), fraction, accuracy: 0.001)
         }
+    }
+
+    @MainActor
+    func testFetchPlacesKeepsServerMappedOwnerRowsWhenPrivySubjectDiffersFromProfileId() async throws {
+        let id = UUID()
+        let privySubject = "did:privy:linked-subject"
+        let resolvedProfileId = "11111111-2222-4333-8444-555555555555"
+        AnalysisRequestURLProtocol.handler = { request in
+            XCTAssertEqual(request.url?.path, "/places")
+            return (200, "[{\"id\":\"\(id)\",\"user_id\":\"\(resolvedProfileId)\",\"name\":\"Cedar Noodles 松山店\",\"address\":\"1 Road\",\"latitude\":25,\"longitude\":121,\"category\":\"food\",\"status\":\"wantToGo\",\"source_platform\":\"other\",\"created_at\":\"2020-01-02T03:04:05Z\"}]")
+        }
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let places = try await service.fetchPlaces(for: privySubject)
+        XCTAssertEqual(places.map(\.id), [id], "Linked-account /places rows stay owned even when the Privy subject is not the profile id")
+        XCTAssertEqual(places.first?.name, "Cedar Noodles 松山店")
     }
 
     @MainActor

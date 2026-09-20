@@ -379,6 +379,10 @@ struct ReviewImportSummary {
 }
 
 struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
+    var correctionScopeKey: String? = nil
+    // Transient projection metadata. Recompute from account-owned evidence after reload.
+    var correctionLearningPlaceID: UUID? = nil
+    var correctionLearningUserID: String? = nil
     var isAnalysisPending: Bool {
         status == "source_only" && missingInfo.contains { $0.caseInsensitiveCompare("Analysis pending") == .orderedSame }
     }
@@ -460,6 +464,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case correctionScopeKey
         case supersededByCandidateID
         case supersededByCandidateIDs
         case id
@@ -487,6 +492,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        correctionScopeKey = try container.decodeIfPresent(String.self, forKey: .correctionScopeKey)
         supersededByCandidateID = try container.decodeIfPresent(UUID.self, forKey: .supersededByCandidateID)
         supersededByCandidateIDs = try container.decodeIfPresent([UUID].self, forKey: .supersededByCandidateIDs) ?? []
         semanticSource = try container.decodeIfPresent(SemanticSourceIdentity.self, forKey: .semanticSource)

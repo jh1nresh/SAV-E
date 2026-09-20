@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import MapKit
 import SwiftUI
 
@@ -582,7 +583,12 @@ enum MapCandidateSearchResult {
 
 @MainActor
 final class MapViewModel: ObservableObject {
-    private static let pendingReviewImportBatchLimit = 4
+    /// Share "Add all" queues the full list. Imports stay in batches of this
+    /// size so one activation cannot stall on a 26–32 place Google list, but
+    /// remaining batches must drain in the same activation. Parking the tail
+    /// until the next `handleSceneDidBecomeActive` would tell the user N were
+    /// added while only this many enter Review.
+    static let pendingReviewImportBatchLimit = 4
 
     @Published var places: [Place] = []
     @Published var selectedPlace: Place?
@@ -654,6 +660,9 @@ final class MapViewModel: ObservableObject {
     private let googlePlacesService: GooglePlacesServiceProtocol
     private let socialLinkReviewCandidateService: SocialLinkReviewCandidateService
     private let saveLocalVaultService: SaveLocalVaultService
+    private let correctionLearningEnabled: Bool
+    private var correctionOriginalCandidates: [UUID: PlaceReviewCandidate] = [:]
+    private var correctionAuthObserver: AnyCancellable?
     private let correctionEventStore: SavePlaceCorrectionEventStore
     private let mapCandidateSearchService: MapCandidateSearchServiceProtocol
     private let saveSearchController: SaveSearchController
@@ -687,6 +696,7 @@ final class MapViewModel: ObservableObject {
         socialLinkReviewCandidateService: SocialLinkReviewCandidateService = .shared,
         saveLocalVaultService: SaveLocalVaultService = .shared,
         correctionEventStore: SavePlaceCorrectionEventStore = .shared,
+        correctionLearningEnabled: Bool = true,
         mapCandidateSearchService: MapCandidateSearchServiceProtocol = MapCandidateSearchService(),
         saveSearchController: SaveSearchController = SaveSearchController(),
         saveSearchIntentParser: SaveSearchIntentParser = SaveSearchIntentParser(),
@@ -717,12 +727,18 @@ final class MapViewModel: ObservableObject {
         self.socialLinkReviewCandidateService = socialLinkReviewCandidateService
         self.saveLocalVaultService = saveLocalVaultService
         self.correctionEventStore = correctionEventStore
+        self.correctionLearningEnabled = correctionLearningEnabled
         self.mapCandidateSearchService = mapCandidateSearchService
         self.saveSearchController = saveSearchController
         self.saveSearchIntentParser = saveSearchIntentParser
         self.collaborativeListStore = collaborativeListStore
         self.referralHandoffStore = referralHandoffStore
         self.usesRemotePersistence = usesRemotePersistence
+        correctionAuthObserver = authService.$authState.dropFirst().sink { [weak self] _ in
+            // Published emits before the new state is assigned. Remove projected
+            // private memory immediately; do not wait for a network refresh.
+            self?.invalidateCorrectionSuggestions(discard: true)
+        }
         reloadCollaborativeLists()
     }
 
@@ -994,87 +1010,144 @@ final class MapViewModel: ObservableObject {
         pendingImportService.restorePendingPlaces(failedImports)
     }
 
+    /// One-activation drain plan for a queued Add-all list. The first slice is
+    /// the current batch; anything after `pendingReviewImportBatchLimit` stays
+    /// in `remainder` and must be pulled again before this activation ends.
+    static func pendingReviewImportBatch<T>(_ pending: [T]) -> (current: [T], remainder: [T]) {
+        (
+            Array(pending.prefix(pendingReviewImportBatchLimit)),
+            Array(pending.dropFirst(pendingReviewImportBatchLimit))
+        )
+    }
+
     private func importPendingReviewCandidates(for userId: String, runSourceRecovery: Bool) async throws {
-        let pending = pendingImportService.consumePendingReviewCandidates()
-        guard !pending.isEmpty else { return }
-
         let importGeneration = authService.sessionGeneration
-        let currentBatch = Array(pending.prefix(Self.pendingReviewImportBatchLimit))
-        var failedCandidates = Array(pending.dropFirst(Self.pendingReviewImportBatchLimit))
+        var failedCandidates: [PendingReviewCandidate] = []
 
-        for var candidate in currentBatch {
-            do {
-                guard authService.sessionGeneration == importGeneration, authService.currentUserId == userId else { throw CancellationError() }
-                let localRecord = try saveLocalVaultService.saveReviewCandidate(
-                    candidate, recordID: candidate.localVaultRecordID, preservingExisting: true
-                )
-                let localRecordID = localRecord.id
-                candidate.localVaultRecordID = localRecordID
-                candidate.savedAt = min(candidate.savedAt, localRecord.createdAt)
-                try await withImportAnalysis { checkSession in
-                    var refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
-                    try checkSession()
-                    refinedCandidate.savedAt = candidate.savedAt
-                    _ = try saveLocalVaultService.saveReviewCandidate(refinedCandidate, recordID: localRecordID)
-                    // A remote failure must retry the refined payload, not the original thin clue.
-                    candidate = refinedCandidate
+        while true {
+            let pending = pendingImportService.consumePendingReviewCandidates()
+            guard !pending.isEmpty else { break }
+
+            let (currentBatch, remainder) = Self.pendingReviewImportBatch(pending)
+            // Persist the tail before this batch runs so a crash mid-batch
+            // cannot drop places 5...N. Then keep draining that tail here —
+            // do not wait for the next scene-active callback.
+            pendingImportService.restorePendingReviewCandidates(remainder)
+
+            for var candidate in currentBatch {
+                do {
+                    guard authService.sessionGeneration == importGeneration, authService.currentUserId == userId else { throw CancellationError() }
+                    let localRecord = try saveLocalVaultService.saveReviewCandidate(
+                        candidate, recordID: candidate.localVaultRecordID, preservingExisting: true
+                    )
+                    let localRecordID = localRecord.id
                     candidate.localVaultRecordID = localRecordID
-                    var run: PlaceRecoveryWorkflowRun?
-                    var failedStep = "validate_input"
-                    do {
-                        let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
-                        await SAVEAnalysisScope.current?.addCapture(captureId)
-                        if try await reuseImportedCandidate(refinedCandidate, captureId: captureId, userId: userId, queuedForAnalysis: true) != nil {
-                            return
-                        }
-                        let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(
-                            sourceURL: refinedCandidate.sourceURL,
-                            sourceType: nil
-                        )
-                        let createdRun = try await supabaseService.createPlaceRecoveryRun(
-                            workOrderId: workOrder.id,
-                            sourceURL: refinedCandidate.sourceURL,
-                            sourceType: nil
-                        )
-                        run = createdRun
-                        failedStep = "persist_candidate"
-                        let candidateId = try await supabaseService.createPlaceCandidate(
-                            refinedCandidate,
-                            captureId: captureId,
-                            userId: userId,
-                            workflowRunId: createdRun.id
-                        )
-                        if !refinedCandidate.isSourceOnly { await SAVEAnalysisScope.current?.foundReviewCandidate() }
-                        failedStep = "write_receipt"
-                        _ = try await supabaseService.recordPlaceRecoveryResult(
-                            placeRecoveryResult(for: refinedCandidate, candidateId: candidateId),
-                            for: createdRun.id
-                        )
-                        if refinedCandidate.isSourceOnly && (runSourceRecovery || refinedCandidate.reviewState == "analysis_pending") {
-                            await recoverImportSource(captureId: captureId, candidateId: candidateId, workflowRunId: createdRun.id)
-                        }
-                    } catch {
-                        if failedStep != "write_receipt" {
-                            await recordPlaceRecoveryFailureIfNeeded(
-                                run: run,
-                                candidate: refinedCandidate,
-                                error: error,
-                                failedStep: failedStep
+                    candidate.savedAt = min(candidate.savedAt, localRecord.createdAt)
+                    try await withImportAnalysis { checkSession in
+                        var refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
+                        try checkSession()
+                        refinedCandidate.savedAt = candidate.savedAt
+                        _ = try saveLocalVaultService.saveReviewCandidate(refinedCandidate, recordID: localRecordID)
+                        // A remote failure must retry the refined payload, not the original thin clue.
+                        candidate = refinedCandidate
+                        candidate.localVaultRecordID = localRecordID
+                        var run: PlaceRecoveryWorkflowRun?
+                        var failedStep = "validate_input"
+                        do {
+                            let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
+                            await SAVEAnalysisScope.current?.addCapture(captureId)
+                            if try await reuseImportedCandidate(refinedCandidate, captureId: captureId, userId: userId, queuedForAnalysis: true) != nil {
+                                return
+                            }
+                            let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(
+                                sourceURL: refinedCandidate.sourceURL,
+                                sourceType: nil
                             )
+                            let createdRun = try await supabaseService.createPlaceRecoveryRun(
+                                workOrderId: workOrder.id,
+                                sourceURL: refinedCandidate.sourceURL,
+                                sourceType: nil
+                            )
+                            run = createdRun
+                            failedStep = "persist_candidate"
+                            let candidateId = try await supabaseService.createPlaceCandidate(
+                                refinedCandidate,
+                                captureId: captureId,
+                                userId: userId,
+                                workflowRunId: createdRun.id
+                            )
+                            if !refinedCandidate.isSourceOnly { await SAVEAnalysisScope.current?.foundReviewCandidate() }
+                            failedStep = "write_receipt"
+                            _ = try await supabaseService.recordPlaceRecoveryResult(
+                                placeRecoveryResult(for: refinedCandidate, candidateId: candidateId),
+                                for: createdRun.id
+                            )
+                            if refinedCandidate.isSourceOnly && (runSourceRecovery || refinedCandidate.reviewState == "analysis_pending") {
+                                await recoverImportSource(captureId: captureId, candidateId: candidateId, workflowRunId: createdRun.id)
+                            }
+                        } catch {
+                            if failedStep != "write_receipt" {
+                                await recordPlaceRecoveryFailureIfNeeded(
+                                    run: run,
+                                    candidate: refinedCandidate,
+                                    error: error,
+                                    failedStep: failedStep
+                                )
+                            }
+                            throw error
                         }
-                        throw error
                     }
+                } catch {
+                    failedCandidates.append(candidate)
                 }
-            } catch {
-                failedCandidates.append(candidate)
             }
+
+            if remainder.isEmpty { break }
+            await Task.yield()
         }
 
         pendingImportService.restorePendingReviewCandidates(failedCandidates)
     }
 
+    private func invalidateCorrectionSuggestions(placeIDs: Set<UUID>? = nil, scopeKey: String? = nil, discard: Bool = false) {
+        let affected = Set(reviewCandidates.filter { candidate in
+            guard let placeID = candidate.correctionLearningPlaceID else { return false }
+            return (placeIDs == nil || placeIDs!.contains(placeID)) && (scopeKey == nil || candidate.correctionScopeKey == scopeKey)
+        }.map(\.id))
+        reviewCandidates = reviewCandidates.compactMap { candidate in
+            guard affected.contains(candidate.id) else { return candidate }
+            return discard ? nil : correctionOriginalCandidates[candidate.id]
+        }
+        if let selected = selectedReviewCandidate,
+           affected.contains(selected.id) || (discard && selected.correctionLearningPlaceID != nil) {
+            selectedReviewCandidate = discard ? nil : reviewCandidates.first { $0.id == selected.id }
+        }
+        if let id = focusedReviewCandidateID, affected.contains(id) { focusedReviewCandidateID = nil }
+        if let resolution = exactSearchResolution,
+           affected.contains(resolution.clue.id) || (discard && resolution.clue.correctionLearningPlaceID != nil) { exactSearchResolution = nil }
+        for id in affected { correctionOriginalCandidates.removeValue(forKey: id) }
+    }
+
     func refreshReviewCandidates() async throws {
-        let candidates = try await supabaseService.fetchReviewCandidates()
+        let userId = authService.currentUserId
+        let generation = authService.sessionGeneration
+        var candidates = try await supabaseService.fetchReviewCandidates()
+        guard authService.currentUserId == userId, authService.sessionGeneration == generation else { throw CancellationError() }
+        // No persistent in-memory learning cache: fresh ownership/deletion evidence
+        // is required on each refresh, and never sourced from the merged local vault.
+        let originals = Dictionary(candidates.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        if correctionLearningEnabled, let userId, let events = try? correctionEventStore.recentEvents(userId: userId),
+           candidates.contains(where: { candidate in
+               SaveCorrectionLearning.validScope(candidate.correctionScopeKey) &&
+               events.contains(where: { $0.correctionScopeKey == candidate.correctionScopeKey })
+           }) {
+            if let ownedPlaces = try? await supabaseService.fetchPlaces(for: userId) {
+                guard authService.currentUserId == userId, authService.sessionGeneration == generation else { throw CancellationError() }
+                candidates = candidates.map { SaveCorrectionLearning.suggestion(for: $0, userId: userId, events: events, ownedPlaces: ownedPlaces) }
+            }
+        }
+        guard authService.currentUserId == userId, authService.sessionGeneration == generation else { throw CancellationError() }
+        correctionOriginalCandidates = originals
         reviewCandidates = candidates.map { candidate in
             var candidate = candidate
             candidate.sourceFailureReason = importFailureReasons[candidate.id]
@@ -1084,6 +1157,9 @@ final class MapViewModel: ObservableObject {
                 candidate.status == "review" || candidate.status == "confirmed" ||
                 candidate.status == "needs_more_evidence" || candidate.status == "source_only"
             )
+        }
+        if let id = selectedReviewCandidate?.id {
+            selectedReviewCandidate = reviewCandidates.first { $0.id == id }
         }
         if let resolution = exactSearchResolution {
             if let refreshedClue = reviewCandidates.first(where: { $0.id == resolution.clue.id }) {
@@ -1425,6 +1501,8 @@ final class MapViewModel: ObservableObject {
 
     func investigateReviewCandidateMore(_ candidate: PlaceReviewCandidate) async throws {
         if candidate.captureId != nil {
+            try await markReviewCandidateNeedsMoreEvidence(candidate, eventType: .investigateMore,
+                reason: "User asked Savvy to investigate this clue further.")
             guard try await !reanalyzeReviewSource(candidate).isEmpty else {
                 throw ReviewCandidateError.sourceStillUnresolved
             }
@@ -1447,12 +1525,28 @@ final class MapViewModel: ObservableObject {
             throw ReviewCandidateError.needsReliableCoordinates
         }
 
+        let confirmationGeneration = authService.sessionGeneration
+        // Confirmation fetch is the live owned target. Keep it for merge —
+        // in-memory `places` can still be empty after a failed initial load.
+        var learnedOwnedPlace: Place?
+        if let learnedID = candidate.correctionLearningPlaceID {
+            guard candidate.correctionLearningUserID == userId else { throw SupabaseError.notAuthenticated }
+            let owned = try await supabaseService.fetchPlaces(for: userId)
+            guard authService.currentUserId == userId, authService.sessionGeneration == confirmationGeneration else { throw CancellationError() }
+            guard let fetched = owned.first(where: { $0.id == learnedID }),
+                  SaveCorrectionLearning.matches(SavePlaceCorrectionSnapshot(candidate: candidate), place: fetched) else {
+                throw SupabaseError.invalidResponse("This previous correction is no longer available. Refresh the clue and review the place again.")
+            }
+            learnedOwnedPlace = fetched
+        }
+
         let refinedMatch: GooglePlaceMatch?
         if usesRemotePersistence {
             refinedMatch = try await refinedMatchIfNeeded(for: candidate)
         } else {
             refinedMatch = nil
         }
+        guard authService.currentUserId == userId, authService.sessionGeneration == confirmationGeneration else { throw CancellationError() }
         let place = Place.from(candidate, refinedMatch: refinedMatch, nameOverride: nameOverride)
 
         guard place.hasValidCoordinate else {
@@ -1460,7 +1554,7 @@ final class MapViewModel: ObservableObject {
         }
 
         if !usesRemotePersistence {
-            if let match = existingSavedPlace(matching: place) {
+            if let match = learnedOwnedPlace ?? existingSavedPlace(matching: place) {
                 let existing = try await mergeSavedSources(place, into: match)
                 try saveLocalVaultService.removeReviewCandidate(candidate.id)
                 reviewCandidates.removeAll { $0.id == candidate.id }
@@ -1484,7 +1578,7 @@ final class MapViewModel: ObservableObject {
             return place
         }
 
-        if let match = existingSavedPlace(matching: place) {
+        if let match = learnedOwnedPlace ?? existingSavedPlace(matching: place) {
             var existing = try await mergeSavedSources(place, into: match)
             var updatedCandidate = candidate
             updatedCandidate.name = existing.name
@@ -2158,8 +2252,10 @@ final class MapViewModel: ObservableObject {
         finalPlace: Place? = nil,
         reason: String
     ) async throws {
-        let event = SavePlaceCorrectionEvent(
-            userId: authService.currentUserId,
+        let userId = authService.currentUserId
+        let generation = authService.sessionGeneration
+        var event = SavePlaceCorrectionEvent(
+            userId: userId,
             candidate: candidate,
             eventType: eventType,
             afterSnapshot: afterCandidate.map { SavePlaceCorrectionSnapshot(candidate: $0) },
@@ -2167,6 +2263,10 @@ final class MapViewModel: ObservableObject {
             userReasonText: reason
         )
         try correctionEventStore.append(event)
+        if ![.confirmCandidate, .editPlaceIdentity, .mergeExisting].contains(eventType),
+           let scopeKey = candidate.correctionScopeKey {
+            invalidateCorrectionSuggestions(scopeKey: scopeKey)
+        }
         guard usesRemotePersistence else { return }
         if let runId = candidate.workflowRunId {
             _ = try await supabaseService.recordPlaceRecoveryDecision(
@@ -2188,6 +2288,11 @@ final class MapViewModel: ObservableObject {
                 placeId: userFinalPlaceId
             )
         }
+        guard authService.currentUserId == userId, authService.sessionGeneration == generation else { throw CancellationError() }
+        event.learningCommitted = true
+        // A failed receipt update must not roll back an already committed user save.
+        // The original pending event remains ineligible for learning.
+        try? correctionEventStore.append(event)
     }
 
     static func legacyCandidateStatus(
@@ -3142,6 +3247,7 @@ final class MapViewModel: ObservableObject {
 
     func deletePlace(_ place: Place) async throws {
         let previousPlaces = places
+        invalidateCorrectionSuggestions(placeIDs: place.savedIDs)
         places.removeAll { $0.id == place.id }
         if selectedPlace?.id == place.id {
             selectedPlace = nil

@@ -127,6 +127,24 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
     assert.equal(ready, true, log);
     const owner = await newGuest(); const other = await newGuest();
 
+    await t.test("deployment health rejects a missing analysis table before users attempt any link", async () => {
+      assert.equal((await api("/health/source-recovery")).status, 200);
+      await pool.query("alter table analysis_sessions rename to analysis_sessions_readiness_fixture");
+      try {
+        const health = await api("/health/source-recovery");
+        assert.equal(health.status, 503);
+        assert.equal(health.body.ready, false);
+        assert.deepEqual(health.body.analysis.failures, ["analysis_schema_unavailable"]);
+        assert.equal((await api("/v0/analysis", { id: randomUUID() }, owner)).status, 503);
+        assert.ok(!JSON.stringify(health.body).includes("readiness_fixture"));
+      } finally {
+        await pool.query("alter table analysis_sessions_readiness_fixture rename to analysis_sessions");
+      }
+      const repaired = await api("/health/source-recovery");
+      assert.equal(repaired.status, 200);
+      assert.equal(repaired.body.analysis.ready, true);
+    });
+
     await t.test("memory repeats preserve chronology evidence owners branches and terminal reviews", async () => {
       const source = `https://fixture.invalid/memory/${randomUUID()}`;
       const original = "2025-01-02T03:04:05Z";
@@ -206,6 +224,49 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       assert.equal((await pool.query("select status from place_candidates where id=$1", [pendingDuplicate])).rows[0].status, "review", "date-only reuse must not reconcile pending reviews");
       await api("/v0/memory/candidates", { ...input, created_at: "invalid" }, delayedOwner);
       assert.equal((await pool.query("select created_at from places where id=$1", [place])).rows[0].created_at.toISOString(), "2024-01-01T00:00:00.000Z");
+    });
+
+    await t.test("confirm and reject remain available while a retry has no result, with no provider calls", async () => {
+      const beforeCalls = await calls();
+      for (const action of ["confirm", "reject"] as const) {
+        const guest = await newGuest();
+        const capture = await api("/v0/memory/captures", { source_type: "note" }, guest);
+        const run = await api("/v0/workflows/place-recovery/runs", { source_type: "note" }, guest);
+        const candidate = await api("/v0/memory/candidates", { capture_id: capture.body.id, workflow_run_id: run.body.id,
+          name: "Pending Cafe", address: "1 Fixture Road", latitude: 25, longitude: 121,
+          evidence: [{ text: "User-visible place evidence" }] }, guest);
+        assert.equal(candidate.status, 201);
+        const route = `/v0/workflows/place-recovery/runs/${run.body.id}`;
+        const result = { result_type: "review_candidate", evidence_tier: "weak",
+          candidate_refs: [candidate.body.id], evidence_refs: [candidate.body.id] };
+        assert.equal((await api(`${route}/result`, result, guest)).status, 201);
+        assert.equal((await api(`${route}/decision`, { action: "investigate_more", candidate_id: candidate.body.id }, guest)).status, 201);
+        const placeID = randomUUID();
+        const decision = { action, candidate_id: candidate.body.id,
+          ...(action === "confirm" ? { final_place_id: placeID, final_place: {
+            id: placeID, name: "Pending Cafe", address: "1 Fixture Road", latitude: 25, longitude: 121,
+          } } : {}) };
+        assert.equal((await api(`${route}/decision`, decision, other)).status, 404);
+        assert.equal((await api(`${route}/decision`, { ...decision, attempt_no: 1 }, guest)).status, 409);
+        assert.equal((await pool.query("select id from places where id=$1", [placeID])).rowCount, 0,
+          "a rejected stale decision must roll back its place insert");
+        const saved = await api(`${route}/decision`, decision, guest);
+        assert.equal(saved.status, 201, JSON.stringify(saved.body));
+        assert.equal(saved.body.run.status, "completed");
+        assert.equal(saved.body.run.current_attempt_no, 2);
+        const persisted = (await pool.query("select status,place_id from place_candidates where id=$1", [candidate.body.id])).rows[0];
+        assert.equal(persisted.status, action === "confirm" ? "saved" : "rejected");
+        assert.equal(persisted.place_id, action === "confirm" ? placeID : null);
+        const ledger = (await pool.query("select * from credit_ledger where run_id=$1 order by id", [run.body.id])).rows;
+        const replay = await api(`${route}/decision`, decision, guest);
+        assert.equal(replay.status, 200, JSON.stringify(replay.body));
+        assert.equal(replay.body.receipt.id, saved.body.receipt.id);
+        assert.deepEqual((await pool.query("select * from credit_ledger where run_id=$1 order by id", [run.body.id])).rows, ledger);
+        assert.equal((await api(`${route}/result`, { ...result, attempt_no: 2 }, guest)).status, 409,
+          "a delayed retry must not replace the user's terminal decision");
+        assert.deepEqual((await pool.query("select status,place_id from place_candidates where id=$1", [candidate.body.id])).rows[0], persisted);
+      }
+      assert.deepEqual(await calls(), beforeCalls, "manual decisions must not call Gemini, Places, or source providers");
     });
 
     await t.test("duplicate confirmation preserves independent pending workflow reservations and decisions", async () => {

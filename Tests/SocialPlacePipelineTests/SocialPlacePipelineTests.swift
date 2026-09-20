@@ -249,6 +249,85 @@ final class SocialPlacePipelineTests: XCTestCase {
         var expected: Expected
     }
 
+    private func publicGoogleListPayload(count: Int, reportedCount: Int? = nil) throws -> Data {
+        let null = NSNull()
+        var rows: [Any] = []
+        rows.reserveCapacity(count)
+        for index in 0..<count {
+            let latitude = 25.0 + Double(index) / 1_000
+            let longitude = 121.0 + Double(index) / 1_000
+            let coordinates: [Any] = [null, null, latitude, longitude]
+            let provider: [Any] = ["provider", "\(index)"]
+            let address = "\(index + 1) Test Street"
+            let place: [Any] = [null, null, "", null, address, coordinates, provider]
+            let row: [Any] = [null, place, "Same name cafe", "Private note"]
+            rows.append(row)
+        }
+        let listID: [Any] = ["fixture-list-123"]
+        let owner: [Any] = ["Private owner"]
+        let total = reportedCount ?? count
+        let list: [Any] = [
+            listID, 4, null, owner, "Test list", "",
+            null, null, rows, null, null, null, total
+        ]
+        let envelope: [Any] = [list, ""]
+        var payload = Data(")]}'\n".utf8)
+        payload.append(try JSONSerialization.data(withJSONObject: envelope))
+        return payload
+    }
+
+    @MainActor
+    func testPublicGoogleListLoadsMoreThanThirtyDistinctBranchesIntoReview() async throws {
+        let source = "https://www.google.com/maps/@/data=!3m1!4b1!4m2!11m1!2sfixture-list-123"
+        let responseData = try publicGoogleListPayload(count: 32)
+        let result = await GoogleMapsPublicListLoader.load(sourceURL: source) { url in
+            XCTAssertEqual(url.host, "www.google.com")
+            XCTAssertEqual(url.path, "/maps/preview/entitylist/getlist")
+            return responseData
+        }
+        let list = try XCTUnwrap(result)
+        XCTAssertNil(list.notice)
+        let reviews = SocialLinkReviewCandidateService.shared.googleMapsListReviewCandidates(list, sourceURL: source)
+        XCTAssertEqual(reviews.count, 32)
+        XCTAssertTrue(reviews.allSatisfy { !$0.isSourceOnly && $0.reviewState == "map_match_ready" })
+        XCTAssertEqual(reviews[1].address, "2 Test Street")
+        XCTAssertEqual(reviews[1].latitude, 25.001)
+        XCTAssertEqual(reviews[1].longitude, 121.001)
+        XCTAssertEqual(reviews[1].sourceURL, source)
+        XCTAssertTrue(reviews.allSatisfy { $0.missingInfo.contains("Confirm this place before saving as a Map Stamp") })
+        XCTAssertFalse(reviews.flatMap(\.evidence).joined().contains("Private"))
+    }
+
+    @MainActor
+    func testPublicGoogleListIncompleteOrPrivateResponsePreservesOnlySource() throws {
+        let partial = GoogleMapsPublicListLoader.parse(try publicGoogleListPayload(count: 32, reportedCount: 501), expectedListID: "fixture-list-123")
+        XCTAssertTrue(partial.candidates.isEmpty)
+        XCTAssertTrue(partial.notice?.contains("32 of 501") == true)
+        let privateList = GoogleMapsPublicListLoader.parse(Data("<html>Sign in</html>".utf8), expectedListID: "fixture-list-123")
+        for list in [partial, privateList] {
+            let reviews = SocialLinkReviewCandidateService.shared.googleMapsListReviewCandidates(list, sourceURL: "https://www.google.com/maps/placelists/list/fixture-list-123")
+            XCTAssertEqual(reviews.count, 1)
+            XCTAssertTrue(reviews[0].isSourceOnly)
+            XCTAssertNil(reviews[0].latitude)
+            XCTAssertEqual(reviews[0].confidence, 0)
+            XCTAssertEqual(reviews[0].sourceText, list.notice)
+        }
+    }
+
+    @MainActor
+    func testPublicGoogleListRejectsSpoofedHostAndPreservesNetworkFailure() async {
+        let unrelated = await GoogleMapsPublicListLoader.load(sourceURL: "https://www.google.com.evil.test/maps/placelists/list/fixture-list-123") { _ in
+            XCTFail("An unrelated host must not trigger list loading")
+            return Data()
+        }
+        XCTAssertNil(unrelated)
+        let failed = await GoogleMapsPublicListLoader.load(sourceURL: "https://www.google.com/maps/placelists/list/fixture-list-123") { _ in
+            throw URLError(.timedOut)
+        }
+        XCTAssertTrue(failed?.candidates.isEmpty == true)
+        XCTAssertNotNil(failed?.notice)
+    }
+
     @MainActor
     func testGoogleMapsSavedListExtractsEmbeddedPlaceLinks() {
         let html = """
@@ -268,6 +347,8 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(candidates.map(\.name), ["Quarter Sheets Pizza Club", "Courage Bagels"])
         XCTAssertEqual(candidates.first?.latitude, 34.0779)
         XCTAssertEqual(candidates.first?.longitude, -118.2543)
+        XCTAssertEqual(candidates.last?.latitude, 34.105)
+        XCTAssertEqual(candidates.last?.longitude, -118.287)
         XCTAssertFalse(candidates.contains { $0.name == "CA Foodie · Jerry Chen" })
         XCTAssertTrue(GoogleMapsListPlaceExtractor.looksLikeGoogleMapsList(
             sourceURL: "https://www.google.com/maps/placelists/list/CA-Foodie",

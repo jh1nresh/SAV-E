@@ -225,6 +225,10 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let data = try await request(path: "/places")
 
         let rows = try JSONDecoder.supabase.decode([PlaceRow].self, from: data)
+        // `/places` is already owner-scoped by the resolved profile id. After a
+        // Privy login is linked to an existing phone/SMS profile, `userId` is
+        // the Privy subject while each row.user_id is that profile id — they
+        // are not equal, so do not compare them here.
         return rows.map { $0.toPlace() }
     }
 
@@ -584,6 +588,9 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             sourceEvidence = [marker] + sourceEvidence.filter { $0 != marker }
         }
         var evidence: [[String: Any]] = sourceEvidence.map { ["text": $0] }
+        if let scope = SaveCorrectionLearning.scopeKey(for: candidate) {
+            evidence.append(["correction_scope_v1": scope])
+        }
         if !candidate.isSourceOnly, candidate.hasReliableCoordinates,
            let placeID = candidate.googlePlaceId, !placeID.isEmpty {
             evidence.append(["google_place_id": placeID, "google_types": candidate.googleTypes])
@@ -846,6 +853,10 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
 
     func fetchSharedPost(id: UUID) async throws -> SharedPlacePost {
         try JSONDecoder().decode(SharedPlacePost.self, from: await request(path: "/v0/shared-posts/\(id)"))
+    }
+
+    func fetchSharedPostPhoto(id: UUID, index: Int) async throws -> Data {
+        try await request(path: "/v0/shared-posts/\(id)/photos/\(index)")
     }
 
     func fetchSocialProfileCounts() async throws -> SocialProfileCounts {
@@ -2205,6 +2216,10 @@ private struct PlaceCandidateRow: Codable {
         if originals.count == 1, Set(identities.compactMap(\.google_place_id)).count <= 1 {
             candidate.semanticSource = originals.first
         }
+        let scopes = Set((evidence ?? []).compactMap(\.correction_scope_v1))
+        if scopes.count == 1, let scope = scopes.first, SaveCorrectionLearning.validScope(scope) {
+            candidate.correctionScopeKey = scope
+        }
         candidate.supersededByCandidateID = superseded_by_candidate_id
         candidate.supersededByCandidateIDs = superseded_by_candidate_ids ?? []
         return candidate
@@ -2212,6 +2227,7 @@ private struct PlaceCandidateRow: Codable {
 }
 
 private struct PlaceCandidateEvidenceRow: Codable {
+    let correction_scope_v1: String?
     let text: String?
     let google_place_id: String?
     let google_types: [String]?
