@@ -108,6 +108,7 @@ export type ResolvedSourceDocument = {
 };
 
 export type SourceSearchOutput = {
+  semanticInputKey?: string;
   queries: string[];
   searchResults: SourceSearchResult[];
   candidates: SourceSearchCandidate[];
@@ -259,7 +260,7 @@ export async function runSourceSearchRecovery(
   }
   const candidates = semanticRecoveryCandidates(result, url.href);
   return {
-    queries: [], searchResults: [], candidates, mediaEvidence, semanticStatus: result.status,
+    queries: [], searchResults: [], candidates, mediaEvidence, semanticStatus: result.status, semanticInputKey: result.extractionKey,
     sourceResolution: document?.resolution, errors,
     receipt: {
       input: "social_url", capabilityLevel: mediaEvidence.length ? "media_evidence_recovery" : "metadata_enrichment",
