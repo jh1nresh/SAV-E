@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AnalysisControlError, withAnalysisUsage, type AnalysisUsageStore } from "./analysisUsage.js";
-import { analyzeSocialCaption, preserveGroundedSemanticResult, type SemanticField, type SemanticMapPlace } from "./socialSemanticExtraction.js";
+import { analyzeSocialCaption, preserveGroundedSemanticResult, semanticExtractionCacheKey, semanticExtractionPrompt, type SemanticField, type SemanticMapPlace } from "./socialSemanticExtraction.js";
 
 const caption = "商業午餐\n火山排骨\n📍初泰Pikul  信義象山門市\n📍臺北市信義區信義路五段122號\n (近捷運象山站2號出口)";
 const f = (value: string, quote = value, source: SemanticField["source"] = "caption"): SemanticField => ({ value, quote, source });
@@ -137,6 +137,81 @@ test("AI unavailable returns pending; unavailable Maps preserves extraction with
   assert.equal((await analyzeSocialCaption({ caption }, { extract: async () => { throw new Error("offline"); } })).status, "analysis_pending");
   const result = await analyzeSocialCaption({ caption }, { extract: async () => payload(), search: async () => { throw new Error("offline"); } });
   assert.equal(result.status, "ready"); assert.deepEqual(result.venues[0], { ...venue(), mapStatus: "unverified", matches: [] });
+});
+
+test("a validated extraction cache reuses model output but still verifies Maps", async () => {
+  const entries = new Map<string, unknown>();
+  const usage: string[] = []; let extracts = 0; let searches = 0;
+  const cache = {
+    load: async (key: string) => entries.get(key),
+    save: async (key: string, raw: unknown) => { entries.set(key, raw); },
+  };
+  const dependencies = {
+    cache,
+    extract: async () => { extracts++; return payload(); },
+    search: async () => { searches++; return [place()]; },
+    onCacheUsage: ({ status }: { status: string }) => { usage.push(status); },
+  };
+  const first = await analyzeSocialCaption({ caption }, dependencies);
+  const second = await analyzeSocialCaption({ caption }, dependencies);
+  assert.equal(first.venues[0].mapStatus, "matched");
+  assert.equal(second.venues[0].mapStatus, "matched");
+  assert.equal(extracts, 1, "the unchanged source reuses only model extraction");
+  assert.equal(searches, 2, "each analysis rechecks live provider evidence");
+  assert.deepEqual(usage, ["miss", "saved", "hit"]);
+  assert.equal(entries.size, 1);
+  assert.match([...entries.keys()][0], /^[a-f0-9]{64}$/);
+});
+
+test("semantic extraction cache keys isolate caption, OCR, and instruction changes", async () => {
+  const keys: string[] = []; let extracts = 0;
+  const cache = {
+    load: async (key: string) => { keys.push(key); return undefined; },
+    save: async () => {},
+  };
+  const raw = { venues: [{ name: f("Cafe"), branch: null, address: f("1 Main Street"), transport: null }] };
+  const dependencies = { cache, extract: async () => { extracts++; return raw; }, search: async () => [place({ name: "Cafe", address: "1 Main Street" })] };
+  await analyzeSocialCaption({ caption: "Cafe\n1 Main Street" }, dependencies);
+  await analyzeSocialCaption({ caption: "Cafe\n1 Main Street\nopen late" }, dependencies);
+  await analyzeSocialCaption({ caption: "Cafe\n1 Main Street", ocrText: "Cafe" }, dependencies);
+  assert.equal(extracts, 3); assert.equal(new Set(keys).size, 3);
+  const prompt = semanticExtractionPrompt({ caption: "Cafe\n1 Main Street" });
+  assert.notEqual(semanticExtractionCacheKey(prompt), semanticExtractionCacheKey(`${prompt}\nEXTRACTION_INSTRUCTIONS_VERSION_2`));
+});
+
+test("malformed cached extraction misses and cannot inject an ungrounded venue", async () => {
+  let extracts = 0; let searches = 0;
+  const malformed = payload(); malformed.venues[0].name.quote = "invented venue";
+  const result = await analyzeSocialCaption({ caption }, {
+    cache: { load: async () => malformed, save: async () => {} },
+    extract: async () => { extracts++; return payload(); },
+    search: async () => { searches++; return [place()]; },
+  });
+  assert.equal(extracts, 1); assert.equal(searches, 1);
+  assert.equal(result.venues[0].name.value, "初泰Pikul");
+  assert.equal(result.venues[0].mapStatus, "matched");
+});
+
+test("failed extraction is never cached, and cache availability errors fall back to normal analysis", async () => {
+  let saved = 0;
+  const failed = await analyzeSocialCaption({ caption }, {
+    cache: { load: async () => undefined, save: async () => { saved++; } },
+    extract: async () => { throw new Error("model offline"); },
+  });
+  assert.equal(failed.status, "analysis_pending"); assert.equal(saved, 0);
+  const result = await analyzeSocialCaption({ caption }, {
+    cache: { load: async () => { throw new Error("cache offline"); }, save: async () => { throw new Error("cache offline"); } },
+    extract: async () => payload(), search: async () => [place()],
+  });
+  assert.equal(result.venues[0].mapStatus, "matched");
+});
+
+test("callers without a cache retain the existing extraction behavior", async () => {
+  let extracts = 0;
+  const dependencies = { extract: async () => { extracts++; return payload(); }, search: async () => [place()] };
+  await analyzeSocialCaption({ caption }, dependencies);
+  await analyzeSocialCaption({ caption }, dependencies);
+  assert.equal(extracts, 2);
 });
 
 test("empty and semantically no-venue inputs return no evidence, not regex guesses", async () => {

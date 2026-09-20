@@ -141,7 +141,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         app.cells.firstMatch.tap()
         XCTAssertTrue(app.textViews["posts.caption"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.buttons["posts.publish"].isEnabled, "The demo cannot publish real posts.")
+        let addPhotos = app.buttons["posts.photos.add"]
+        XCTAssertTrue(addPhotos.waitForExistence(timeout: stepTimeout), "Sharing offers explicit photo attachment.")
+        XCTAssertTrue(addPhotos.isEnabled)
         attach(app, name: "social-post-composer")
+        addPhotos.tap()
+        let cancelPicker = app.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "Cancel", "取消")).firstMatch
+        XCTAssertTrue(cancelPicker.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "social-post-photo-picker")
+        cancelPicker.tap()
+        XCTAssertTrue(app.buttons["posts.photos.add"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.buttons["posts.publish"].isEnabled, "Cancelling the picker cannot publish a demo post.")
     }
 
     @MainActor

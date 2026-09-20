@@ -1,3 +1,4 @@
+import { LinkPlaceIntelligence, placePopularity } from "./linkPlaceIntelligence.js";
 import { analyzeSocialCaption } from "./socialSemanticExtraction.js";
 import { capturedSourceTexts, recordCapturedSourceText, completeEmptySourceAnalysis, prepareCandidate, reconcileSavedCandidates, reuseCapture, supersedeSourceOnlyCandidates, duplicateCandidateGroups, supersededCandidateID, externalCandidateEvidence, sameCandidateIdentity, isGenericSourceOnlyCandidate, supersededCandidateIDs } from "./memoryStorage.js";
 import { AnalysisControlError, AnalysisUsageStore, analysisID, analysisLimits, analysisPrices, geminiTokens, trackAnalysisOperation, withAnalysisUsage } from "./analysisUsage.js";
@@ -230,7 +231,8 @@ import {
   FriendRatingError, listFriendRatings, getFriendRating, ownFriendRatings,
   putFriendRating, withdrawFriendRating, saveFriendRating, savedFriendAttributions,
 } from "./friendRatings.js";
-import { listSharedPosts, getSharedPost, putSharedPost, withdrawSharedPost, saveSharedPost, savedPostAttributions, getPassport, getSocialProfile } from "./sharedPosts.js";
+import { sharedPostBodyMaxBytes } from "./sharedPostPhotos.js";
+import { listSharedPosts, getSharedPostPhoto, getSharedPost, putSharedPost, withdrawSharedPost, saveSharedPost, savedPostAttributions, getPassport, getSocialProfile } from "./sharedPosts.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -1140,12 +1142,19 @@ createServer(async (request, response) => {
         }
       }
       if (resource === "shared-posts") {
+        if (request.method === "GET" && id && segments.length === 4 && segments[2] === "photos") {
+          const data = await getSharedPostPhoto(pool, userId, id, segments[3]);
+          response.setHeader("Content-Type", "image/jpeg");
+          response.setHeader("X-Content-Type-Options", "nosniff");
+          response.writeHead(200);
+          return response.end(data);
+        }
         if (request.method === "GET" && segments.length === 1) return sendJson(response, await listSharedPosts(pool, userId, url));
         if (request.method === "GET" && segments.length === 2 && id === "mine") return sendJson(response, await listSharedPosts(pool, userId, url, "mine"));
         if (request.method === "GET" && segments.length === 2 && id === "saved") return sendJson(response, await savedPostAttributions(pool, userId));
         if (id && segments.length === 2) {
           if (request.method === "GET") return sendJson(response, await getSharedPost(pool, userId, id));
-          if (request.method === "PUT") return sendJson(response, await putSharedPost(pool, userId, id, await readJson(request, 4096)));
+          if (request.method === "PUT") return sendJson(response, await putSharedPost(pool, userId, id, await readJson(request, sharedPostBodyMaxBytes)));
           if (request.method === "DELETE") {
             await withdrawSharedPost(pool, userId, id);
             return sendJson(response, null, 204);
@@ -1182,6 +1191,22 @@ createServer(async (request, response) => {
     }
     if (resource === "places" && id && segments[2] === "visibility") {
       return await handlePlaceVisibility(request, response, id, userId);
+    }
+    if (isV0 && resource === "place-intelligence" && id === "trending" && segments.length === 2) {
+      if (request.method !== "GET") return sendJson(response, { error: "Unsupported popularity route" }, 405);
+      response.setHeader("Cache-Control","private, no-store");
+      try { return sendJson(response, await placePopularity(pool)); }
+      catch (error) {
+        if (isMissingRelationError(error)) return sendJson(response, { error: "Place intelligence migration required" }, 503);
+        throw error;
+      }
+    }
+    if (isV0 && resource === "places" && id && segments[2] === "source-associations" && segments.length === 3) {
+      if (request.method !== "GET") return sendJson(response, { error: "Unsupported source associations route" }, 405);
+      if (!isUuid(id)) return sendJson(response, { error: "Invalid place ID" }, 400);
+      response.setHeader("Cache-Control","private, no-store");
+      const result = await new LinkPlaceIntelligence(pool).sources(userId,id);
+      return result ? sendJson(response,result) : sendJson(response,{error:"Place not found"},404);
     }
     if (resource === "places") return await handlePlaces(request, response, id, userId);
     if (resource === "trips") return await handleTrips(request, response, id, userId);
@@ -2430,7 +2455,8 @@ async function handleAnalysis(request:IncomingMessage,response:ServerResponse,se
         throw new ApiError(400,"Invalid source text");
       }
       const result = await withAnalysisUsage(analysisUsageStore,userId,aid,() =>
-        analyzeSocialCaption({ caption: body.caption as string, ocrText: body.ocrText as string | undefined }));
+        analyzeSocialCaption({ caption: body.caption as string, ocrText: body.ocrText as string | undefined },
+          { cache:new LinkPlaceIntelligence(pool).ownerCache(userId) }));
       return sendJson(response,result);
     }
     if(action === "places") {
@@ -4374,7 +4400,7 @@ async function handleCaptureSearchRecovery(
   const workflowRunId = stringValue(body.workflow_run_id);
   if (workflowRunId) await ensureWorkflowRunOwner(workflowRunId, userId);
 
-  const { rows } = await pool.query("select * from captures where id = $1 and user_id = $2", [captureId, userId]);
+  const { rows } = await pool.query("select *, md5(jsonb_build_array(source_url,raw_text,source_resolution->'captured_text_v1')::text) as intelligence_stamp from captures where id = $1 and user_id = $2", [captureId, userId]);
   const capture = asObject(rows[0]);
 
   if(body.include_media_evidence !== undefined && typeof body.include_media_evidence !== "boolean") throw new ApiError(400,"include_media_evidence must be a boolean");
@@ -4392,7 +4418,19 @@ async function handleCaptureSearchRecovery(
         const investigating=await pool.query("update captures set status='investigating' where id=$1 and user_id=$2 returning updated_at::text as version",[captureId,userId]);
         if(!investigating.rows[0]) throw new ApiError(404,"Capture not found");
         investigatingVersion=investigating.rows[0].version;
-        const recovery=await runSourceSearchRecovery(input,undefined,undefined,{persistedSourceResolution:capture.source_resolution,includeMediaEvidence:input.includeMediaEvidence});
+        const intelligence = new LinkPlaceIntelligence(pool).extractionCache(userId,captureId,input.sourceUrl,String(capture.intelligence_stamp));
+        let extractionCacheHits = 0, correctionsApplied = 0;
+        const recovery=await runSourceSearchRecovery(input,undefined,undefined,{
+          persistedSourceResolution:capture.source_resolution,includeMediaEvidence:input.includeMediaEvidence,
+          semanticAnalyzer: async source => {
+            const semantic = await analyzeSocialCaption(source, { cache:intelligence.cache,
+              onCacheUsage: event => { if (event.status === "hit") extractionCacheHits += 1; } });
+            if (semantic.status === "analysis_pending") return semantic;
+            const feedback = await intelligence.feedback(semantic).catch(() => ({result:semantic,applied:0}));
+            correctionsApplied += feedback.applied;
+            return { ...feedback.result, extractionKey:intelligence.key() };
+          },
+        });
         const client=await pool.connect();
         const createdCandidates:JsonBody[]=[];
         const persistedSuccessorIds:string[]=[];
@@ -4413,6 +4451,7 @@ async function handleCaptureSearchRecovery(
             const prepared = await prepareCandidate(client, candidateBody);
             const insert=buildInsert("place_candidates",prepared.body,placeCandidateFields);
             const row = prepared.existing ?? (await client.query(`${insert.sql} returning *`,insert.values)).rows[0];
+            if (!prepared.existing) await intelligence.bindCandidate(client,String(row.id),recovery.semanticInputKey);
             if (["review", "needs_more_evidence", "saved", "confirmed"].includes(row.status)) persistedSuccessorIds.push(String(row.id));
             if (["review", "needs_more_evidence", "source_only"].includes(row.status)) {
               if (row.workflow_run_id) assignedRuns.add(String(row.workflow_run_id));
@@ -4441,7 +4480,7 @@ async function handleCaptureSearchRecovery(
         } catch(error) { await client.query("rollback"); throw error; } finally { client.release(); }
         if(!requestedAnalysis) await analysisUsageStore.finish(userId,aid,recovery.receipt.failureReason?.kind === "provider_failure" ? "failed" : recovery.candidates.length ? "review_candidate":"source_only",[captureId]);
         completed=true;
-        return {capture_id:captureId,analysis_id:aid,workflow_run_id:effectiveWorkflowRunId ?? null,queries:recovery.queries,search_results:recovery.searchResults,created_candidates:createdCandidates,superseded_candidate_ids:supersededCandidateIds,media_evidence:recovery.mediaEvidence,source_resolution:sourceResolution,errors:recovery.errors,receipt:recovery.receipt};
+        return {source_intelligence:{extraction_cache_hits:extractionCacheHits,corrections_applied:correctionsApplied},capture_id:captureId,analysis_id:aid,workflow_run_id:effectiveWorkflowRunId ?? null,queries:recovery.queries,search_results:recovery.searchResults,created_candidates:createdCandidates,superseded_candidate_ids:supersededCandidateIds,media_evidence:recovery.mediaEvidence,source_resolution:sourceResolution,errors:recovery.errors,receipt:recovery.receipt};
       });
     } finally {
       if(!completed && investigatingVersion) {

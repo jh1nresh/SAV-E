@@ -329,3 +329,22 @@ test("social link families preserve captured evidence when public pages require 
     assert.equal(captured.candidates[0]?.name, "初泰Pikul 信義象山門市", sourceUrl);
   }
 });
+
+
+test("retained caption candidates retain their own fingerprint when OCR is discarded", async () => {
+  let calls = 0;
+  const original = structuredClone(extracted);
+  original.extractionKey = "a".repeat(64);
+  original.venues.push({ ...structuredClone(original.venues[0]), name: field("Bakery"), address: null });
+  const output = await runSourceSearchRecovery(input,
+    async () => '<meta property="og:image" content="https://example.invalid/thumb.jpg">',
+    async metadata => [{ kind: "thumbnail", url: metadata.imageURL!, text: "visible address", textSource: "ocr" }], {
+      semanticAnalyzer: async source => {
+        calls++;
+        return source.ocrText ? { status: "no_place_evidence", venues: [], extractionKey: "b".repeat(64) } : original;
+      },
+    });
+  assert.equal(calls,2);
+  assert.equal(output.candidates.length,2);
+  assert.equal(output.semanticInputKey,original.extractionKey);
+});
