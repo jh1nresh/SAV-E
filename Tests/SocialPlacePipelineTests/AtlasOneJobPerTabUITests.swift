@@ -1,4 +1,6 @@
 import CoreLocation
+import ImageIO
+import UIKit
 import SwiftUI
 import XCTest
 @testable import SAVE
@@ -16,6 +18,53 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(SharedPostDraft(status: .visited, stars: .nan, caption: "").isValid)
         XCTAssertFalse(SharedPostDraft(status: .visited, stars: nil, caption: String(repeating: "a", count: 501)).isValid)
         XCTAssertTrue(SharedPostDraft(status: .visited, stars: 4.5, caption: String(repeating: "a", count: 500)).isValid)
+    }
+
+    @MainActor
+    func testPostPhotosEncodeOnlyExplicitAttachmentsAndBoundPayloads() throws {
+        var draft = SharedPostDraft(status: .wantToGo, stars: nil, caption: "", photos: [])
+        let empty = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(draft)) as? [String: Any])
+        XCTAssertEqual(empty["photos"] as? [String], [])
+        draft.photos = [Data([1, 2, 3])]
+        let selected = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(draft)) as? [String: Any])
+        XCTAssertEqual(selected["photos"] as? [String], ["AQID"])
+        XCTAssertEqual(Set(selected.keys), ["status", "stars", "caption", "photos"])
+        draft.photos = Array(repeating: Data([1]), count: 3)
+        XCTAssertTrue(draft.isValid)
+        draft.photos?.append(Data([1]))
+        XCTAssertFalse(draft.isValid)
+        draft.photos = [Data(count: SharedPostDraft.maxPhotoBytes + 1)]
+        XCTAssertFalse(draft.isValid)
+        draft.photos = [Data()]
+        XCTAssertFalse(draft.isValid)
+    }
+
+    @MainActor
+    func testSelectedPhotoIsDownsampledWithoutGPSOrEXIF() throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 2400, height: 1800), format: format).image { context in
+            UIColor.green.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 2400, height: 1800))
+        }
+        let original = NSMutableData()
+        let destination = try XCTUnwrap(CGImageDestinationCreateWithData(original as CFMutableData, "public.jpeg" as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, try XCTUnwrap(image.cgImage), [
+            kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 25.0, kCGImagePropertyGPSLatitudeRef: "N"],
+            kCGImagePropertyExifDictionary: [kCGImagePropertyExifUserComment: "PRIVATE FIXTURE"]
+        ] as CFDictionary)
+        XCTAssertTrue(CGImageDestinationFinalize(destination))
+        let result = try SharedPostPhotoEncoder.jpeg(from: original as Data)
+        XCTAssertLessThanOrEqual(result.count, SharedPostDraft.maxPhotoBytes)
+        XCTAssertNotNil(result.range(of: Data([0xff, 0xc0])), "The server accepts baseline JPEG frames.")
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(result as CFData, nil))
+        let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        XCTAssertLessThanOrEqual(try XCTUnwrap(properties[kCGImagePropertyPixelWidth] as? Int), 1200)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(properties[kCGImagePropertyPixelHeight] as? Int), 1200)
+        XCTAssertNil(properties[kCGImagePropertyGPSDictionary])
+        let exif = properties[kCGImagePropertyExifDictionary] as? [CFString: Any]
+        XCTAssertNil(exif?[kCGImagePropertyExifUserComment])
+        XCTAssertThrowsError(try SharedPostPhotoEncoder.jpeg(from: Data("not an image".utf8)))
     }
 
     @MainActor
