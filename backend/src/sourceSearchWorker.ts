@@ -1514,7 +1514,13 @@ export async function resolveSourceDocument(
         parsed = result.redirect;
         redirectChain.push(parsed.toString());
       } else {
-        if (result.document.resolution.status === "resolved") cacheResolvedSourceDocument(cacheKey, result.document);
+        // Instagram can return a 200 shell with a post ID but no caption. It
+        // resolves the URL, not the content; caching it defeats later retries.
+        const instagramSource = hostMatchesDomain(normalizedHostname(new URL(originalURL)), "instagram.com");
+        if (result.document.resolution.status === "resolved"
+          && (!instagramSource || hasUsableSourceCaption(result.document.resolution.caption))) {
+          cacheResolvedSourceDocument(cacheKey, result.document);
+        }
         return result.document;
       }
     }

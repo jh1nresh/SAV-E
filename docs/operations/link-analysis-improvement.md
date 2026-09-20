@@ -36,9 +36,20 @@ coverage, not a claimed parser fix.
   `a6c33c94547c23f23aa8f432e89a1a719dd70025`, preceding grounded-caption changes
   in main `d677a594`. Build 127's archive receipt confirms the managed API origin.
   The user's installed build and exact failing request were not inspected.
-- Other public Reel probes: `DcTZXFrjfJG` had a thin 123-character description;
-  `DBSy1dOVOLM` returned no caption/image. These are retrieval observations at
-  one time/location, not end-to-end accuracy claims or permanent URL failures.
+- Other public Reel probe: `DcTZXFrjfJG` had a thin 123-character description.
+  Correction: the earlier `DBSy1dOVOLM` probe did not preserve the original
+  case-sensitive ID, so its empty response is excluded from failure evidence.
+  The original `Dbsy1DovolM` was rechecked and returned caption metadata with
+  its known venue. These are retrieval observations at one time/location,
+  not end-to-end accuracy claims or permanent URL failures.
+- Follow-up reproducer: an Instagram HTTP 200 shell with a post ID but no
+  caption was marked resolved and cached for 24 hours. A second recovery attempt
+  reused that empty document without fetching a newly available caption. The
+  cache now retains Instagram documents only when a usable caption is present.
+  URL resolution status is preserved; title/image evidence remains available
+  to the current attempt, and later attempts can refetch. Non-Instagram caching
+  and successful-caption caching retain their prior behavior. No extra request
+  is added to the initial attempt, and budget controls still govern retries.
 
 Do not infer that all Reels fail for one reason. The reported Reel is readable
 in this environment; other Reels can return an empty shell, require login,
