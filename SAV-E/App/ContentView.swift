@@ -639,7 +639,9 @@ struct ContentView: View {
                 }
             }
         }
-        .ignoresSafeArea(.keyboard, edges: rootPath.last == .plan ? .bottom : [])
+        // Home sizes its physical world against the keyboard frame. Keep the
+        // fixed Atlas viewport anchored so the system does not also pan it.
+        .ignoresSafeArea(.keyboard, edges: rootPath.last == .plan || (rootPath.isEmpty && selectedRootTab == .home) ? .bottom : [])
     }
 
     private var planView: some View {
