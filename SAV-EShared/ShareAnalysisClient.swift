@@ -19,7 +19,7 @@ enum ShareAnalysisKeychain {
         [kSecClass as String: kSecClassGenericPassword,
          kSecAttrService as String: "com.wanderly.share-analysis",
          kSecAttrAccount as String: "active-session",
-         kSecAttrAccessGroup as String: "group.com.wanderly.app",
+         kSecAttrAccessGroup as String: "JC6858UYM9.group.com.wanderly.app",
          kSecUseDataProtectionKeychain as String: true]
     }
 
