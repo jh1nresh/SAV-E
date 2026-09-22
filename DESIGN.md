@@ -562,6 +562,8 @@ Home presents confirmed private Map Stamps as a small physical postage pile and 
 complete readable collection below it. Search lifts up to three visible previews;
 all matching places remain in the scrollable result list. Only the simulation is
 bounded (24 resting stamps plus transitioning previews), never the search inventory.
+Resting stamps use category artwork; only lifted previews and visible list rows
+load stored photos. The idle viewport is compact while physics keeps a fixed stage.
 
 Typing previews an intersection with existing filters. Submit keeps category/city
 chips and clears the composer; each chip can be removed independently. “cafe” then
@@ -571,7 +573,8 @@ public discovery or automatic saves occur on this Home surface.
 
 Lifted stamps retain identity, turn upright and become stable tap targets; removing
 a filter returns excluded previews to the pile. Full rows show paper-backed names,
-addresses and explicit Map Stamp state. Review clues have a separate sky entry.
+addresses and explicit Map Stamp state. A separate sky entry distinguishes
+Review Candidate and Source Clue counts using the same criteria as Saves.
 The existing More menu keeps collection management and Trips accessible.
 
 Reduce Motion, VoiceOver and accessibility text sizes use the static result list.

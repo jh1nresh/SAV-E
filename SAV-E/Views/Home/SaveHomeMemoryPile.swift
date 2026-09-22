@@ -27,7 +27,7 @@ struct SaveHomeMemoryPile: View {
                 ForEach(scene.visiblePlaces) { place in
                     if let pose = scene.poses[place.id] {
                         Button { onOpenPlace(place) } label: {
-                            postage(place)
+                            postage(place, loadsPhoto: pose.lifted)
                         }
                         .buttonStyle(.plain)
                         .frame(width: 76, height: 92)
@@ -53,9 +53,9 @@ struct SaveHomeMemoryPile: View {
         }
     }
 
-    private func postage(_ place: Place) -> some View {
+    private func postage(_ place: Place, loadsPhoto: Bool) -> some View {
         VStack(spacing: 4) {
-            SaveHomeMemoryPhoto(place: place)
+            SaveHomeMemoryPhoto(place: place, loadsPhoto: loadsPhoto)
                 .frame(height: 49)
                 .clipShape(RoundedRectangle(cornerRadius: 3))
             Text(place.name)
