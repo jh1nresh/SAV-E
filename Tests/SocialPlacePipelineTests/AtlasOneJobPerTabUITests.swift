@@ -620,9 +620,18 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(brandHeader.contains("Image(\"SavvyLogo\")"))
         XCTAssertFalse(brandHeader.contains("MemoMascotMark"))
         XCTAssertTrue(rootHeader.contains("Image(\"SavvyLogo\")"))
+        XCTAssertTrue(rootHeader.contains("accessibilityIdentifier(\"root.passport\")"))
+        XCTAssertTrue(rootHeader.contains("Open Savvy Passport"))
         XCTAssertFalse(rootHeader.contains("MemoMascotMark"))
         XCTAssertTrue(passportTopBar.contains("Image(\"SavvyLogo\")"))
         XCTAssertTrue(passportTopBar.contains("profile.brandLogo"))
+
+        let memory = try source(at: "SAV-E/Views/Home/SaveHomeMemoryView.swift")
+        let memoryHome = try typeBody("SaveHomeMemoryView", in: memory)
+        let saveHome = try typeBody("SaveHomeView", in: root)
+        XCTAssertTrue(memoryHome.contains("SaveAtlasBrandHeader(onOpenPassport: onOpenPassport)"))
+        XCTAssertTrue(memoryHome.contains("home.more"))
+        XCTAssertTrue(saveHome.contains("onOpenPassport: onOpenPassport"))
     }
 
     func testOriginCommunityCardCanReshareWithoutPublishingPrivateClues() throws {

@@ -28,7 +28,8 @@ struct SaveHomeView: View {
                     onCapture: onCapture,
                     onOpenPlace: onOpenSavedPlace,
                     onOpenSaves: onOpenSaves,
-                    onOpenTrips: onOpenTrips
+                    onOpenTrips: onOpenTrips,
+                    onOpenPassport: onOpenPassport
                 )
             }
         }
@@ -583,7 +584,7 @@ private enum SaveLibraryMode {
     case mapStamps
 }
 
-private struct SaveAtlasBrandHeader<Trailing: View>: View {
+struct SaveAtlasBrandHeader<Trailing: View>: View {
     let onOpenPassport: () -> Void
     @ViewBuilder let trailing: () -> Trailing
 

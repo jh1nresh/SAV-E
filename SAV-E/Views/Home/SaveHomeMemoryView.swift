@@ -9,6 +9,7 @@ struct SaveHomeMemoryView: View {
     let onOpenPlace: (Place) -> Void
     let onOpenSaves: () -> Void
     let onOpenTrips: () -> Void
+    let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var language
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
@@ -89,30 +90,26 @@ struct SaveHomeMemoryView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(localized("Your collection", "你的收藏"))
-                    .font(SaveAtlasType.strong(25, relativeTo: .title2))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                Text(localized("\(places.count) confirmed places", "\(places.count) 個已確認地點"))
-                    .font(SaveAtlasType.body(12))
-                    .foregroundStyle(SaveAtlasPalette.muted)
+        VStack(alignment: .leading, spacing: 6) {
+            SaveAtlasBrandHeader(onOpenPassport: onOpenPassport) {
+                Menu {
+                    Button(action: onOpenSaves) { Label(localized("Manage saved places", "管理已存地點"), systemImage: "tray.full") }
+                        .accessibilityIdentifier("home.saves")
+                    Button(action: onOpenTrips) { Label(localized("Trips", "行程"), systemImage: "point.3.connected.trianglepath.dotted") }
+                        .accessibilityIdentifier("home.trips")
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .frame(width: 44, height: 44)
+                        .background(SaveAtlasPalette.paper, in: Circle())
+                }
+                .accessibilityLabel(localized("More Home actions", "更多首頁操作"))
+                .accessibilityIdentifier("home.more")
             }
-            Spacer(minLength: 4)
-            Menu {
-                Button(action: onOpenSaves) { Label(localized("Manage saved places", "管理已存地點"), systemImage: "tray.full") }
-                    .accessibilityIdentifier("home.saves")
-                Button(action: onOpenTrips) { Label(localized("Trips", "行程"), systemImage: "point.3.connected.trianglepath.dotted") }
-                    .accessibilityIdentifier("home.trips")
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                    .frame(width: 44, height: 44)
-                    .background(SaveAtlasPalette.paper, in: Circle())
-            }
-            .accessibilityLabel(localized("More Home actions", "更多首頁操作"))
-            .accessibilityIdentifier("home.more")
+            Text(localized("\(places.count) confirmed places", "\(places.count) 個已確認地點"))
+                .font(SaveAtlasType.body(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
         }
     }
 
