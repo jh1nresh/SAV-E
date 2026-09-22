@@ -490,6 +490,7 @@ struct ShareExtensionView: View {
     @State private var analysisAttempt = 0
     @State private var analysisID = UUID()
     @State private var analysisInputKey: String?
+    @State private var rotateAnalysisIDOnRetry = false
     @State private var isSocialAnalysis = false
 
     private let categories = ["food", "cafe", "bar", "attraction", "stay", "shopping"]
@@ -517,7 +518,13 @@ struct ShareExtensionView: View {
                             .multilineTextAlignment(.center)
                             .lineSpacing(3)
                         if isSocialAnalysis {
-                            Button(shareText("重新分析", "Retry analysis")) { analysisAttempt += 1 }
+                            Button(shareText("重新分析", "Retry analysis")) {
+                                if rotateAnalysisIDOnRetry {
+                                    analysisID = UUID()
+                                    rotateAnalysisIDOnRetry = false
+                                }
+                                analysisAttempt += 1
+                            }
                                 .buttonStyle(.borderedProminent)
                                 .tint(SaveTheme.coral)
                                 .accessibilityIdentifier("share.capture.retryAnalysis")
@@ -1394,6 +1401,10 @@ struct ShareExtensionView: View {
             if analysisInputKey != inputKey || analysisCredential != credential {
                 analysisID = UUID()
                 analysisInputKey = inputKey
+                rotateAnalysisIDOnRetry = false
+            } else if rotateAnalysisIDOnRetry {
+                analysisID = UUID()
+                rotateAnalysisIDOnRetry = false
             }
             analysisCredential = credential
             let result: ShareAnalysisResponse
@@ -1411,7 +1422,13 @@ struct ShareExtensionView: View {
             }
             try Task.checkCancellation()
             guard ShareAnalysisKeychain.read() == credential else { throw ShareAnalysisError.sessionChanged }
-            guard result.semanticStatus != "analysis_pending" else { throw ShareAnalysisError.serviceUnavailable }
+            guard result.semanticStatus != "analysis_pending" else {
+                // Completed pending results are stored against this ID; reuse
+                // would replay forever. Rotate so Retry starts a new claim.
+                rotateAnalysisIDOnRetry = true
+                analysisID = UUID()
+                throw ShareAnalysisError.serviceUnavailable
+            }
             let verified = result.candidates.filter(\.isVerified)
             if verified.count == 1, let candidate = verified.first {
                 chooseVerifiedPlace(candidate)
