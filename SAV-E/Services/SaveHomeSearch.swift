@@ -31,6 +31,40 @@ struct SaveHomeSearch {
         draft = ""
     }
 
+    static func cityLabel(for value: String, traditionalChinese: Bool) -> String? {
+        guard let city = City(rawValue: value) else { return nil }
+        let labels: (String, String)
+        switch city {
+        case .taipei: labels = ("Taipei", "台北")
+        case .newTaipei: labels = ("New Taipei", "新北")
+        case .taoyuan: labels = ("Taoyuan", "桃園")
+        case .taichung: labels = ("Taichung", "台中")
+        case .tainan: labels = ("Tainan", "台南")
+        case .kaohsiung: labels = ("Kaohsiung", "高雄")
+        case .keelung: labels = ("Keelung", "基隆")
+        case .hsinchu: labels = ("Hsinchu", "新竹")
+        case .chiayi: labels = ("Chiayi", "嘉義")
+        case .tokyo: labels = ("Tokyo", "東京")
+        case .losAngeles: labels = ("Los Angeles", "洛杉磯")
+        case .bangkok: labels = ("Bangkok", "曼谷")
+        case .kyoto: labels = ("Kyoto", "京都")
+        case .osaka: labels = ("Osaka", "大阪")
+        case .newYork: labels = ("New York", "紐約")
+        case .sanFrancisco: labels = ("San Francisco", "舊金山")
+        case .seoul: labels = ("Seoul", "首爾")
+        case .singapore: labels = ("Singapore", "新加坡")
+        case .hongKong: labels = ("Hong Kong", "香港")
+        case .paris: labels = ("Paris", "巴黎")
+        case .london: labels = ("London", "倫敦")
+        case .shanghai: labels = ("Shanghai", "上海")
+        case .beijing: labels = ("Beijing", "北京")
+        case .guangzhou: labels = ("Guangzhou", "廣州")
+        case .shenzhen: labels = ("Shenzhen", "深圳")
+        case .chengdu: labels = ("Chengdu", "成都")
+        }
+        return traditionalChinese ? labels.1 : labels.0
+    }
+
     func matchingPlaces(in places: [Place]) -> [Place] {
         let activeQueries = filters + [draft]
         let constraints = activeQueries.flatMap(Self.constraints(from:))
@@ -85,12 +119,47 @@ private extension SaveHomeSearch {
         case keelung
         case hsinchu
         case chiayi
+        case tokyo
+        case losAngeles
+        case bangkok
+        case kyoto
+        case osaka
+        case newYork
+        case sanFrancisco
+        case seoul
+        case singapore
+        case hongKong
+        case paris
+        case london
+        case shanghai
+        case beijing
+        case guangzhou
+        case shenzhen
+        case chengdu
 
-        static let ordered = allCases.sorted { $0.aliases.joined().count > $1.aliases.joined().count }
+        static let ordered = allCases.sorted {
+            if $0.longestAliasLength != $1.longestAliasLength {
+                return $0.longestAliasLength > $1.longestAliasLength
+            }
+            return $0.rawValue < $1.rawValue
+        }
+
+        private var longestAliasLength: Int {
+            aliases.map { SaveHomeSearch.normalize($0).count }.max() ?? 0
+        }
+
+        var aliasesByLength: [String] {
+            aliases.sorted {
+                let lhsLength = SaveHomeSearch.normalize($0).count
+                let rhsLength = SaveHomeSearch.normalize($1).count
+                if lhsLength != rhsLength { return lhsLength > rhsLength }
+                return $0 < $1
+            }
+        }
 
         var aliases: [String] {
             switch self {
-            case .taipei: return ["taipei", "台北", "臺北"]
+            case .taipei: return ["taipei city", "taipeicity", "taipei", "台北市", "臺北市", "台北", "臺北"]
             case .newTaipei: return ["new taipei city", "new taipei", "newtaipei", "新北市", "新北"]
             case .taoyuan: return ["taoyuan", "桃園", "桃园"]
             case .taichung: return ["taichung", "台中", "臺中"]
@@ -99,6 +168,23 @@ private extension SaveHomeSearch {
             case .keelung: return ["keelung", "基隆"]
             case .hsinchu: return ["hsinchu", "新竹"]
             case .chiayi: return ["chiayi", "嘉義", "嘉义"]
+            case .tokyo: return ["tokyo", "東京", "东京"]
+            case .losAngeles: return ["los angeles", "losangeles", "洛杉磯", "洛杉矶"]
+            case .bangkok: return ["bangkok", "曼谷"]
+            case .kyoto: return ["kyoto", "京都"]
+            case .osaka: return ["osaka", "大阪"]
+            case .newYork: return ["new york city", "new york", "newyork", "紐約市", "纽约市", "紐約", "纽约"]
+            case .sanFrancisco: return ["san francisco", "sanfrancisco", "舊金山", "旧金山"]
+            case .seoul: return ["seoul", "首爾", "首尔"]
+            case .singapore: return ["singapore", "新加坡"]
+            case .hongKong: return ["hong kong", "hongkong", "香港"]
+            case .paris: return ["paris", "巴黎"]
+            case .london: return ["london", "倫敦", "伦敦"]
+            case .shanghai: return ["shanghai", "上海"]
+            case .beijing: return ["beijing", "北京"]
+            case .guangzhou: return ["guangzhou", "廣州", "广州"]
+            case .shenzhen: return ["shenzhen", "深圳"]
+            case .chengdu: return ["chengdu", "成都"]
             }
         }
 
@@ -141,9 +227,7 @@ private extension SaveHomeSearch {
         var result: [Constraint] = []
         for city in City.ordered where city.aliases.contains(where: { contains(alias: $0, in: remaining) }) {
             result.append(.city(city))
-            city.aliases
-                .sorted { normalize($0).count > normalize($1).count }
-                .forEach { remaining = removing(alias: $0, from: remaining) }
+            city.aliasesByLength.forEach { remaining = removing(alias: $0, from: remaining) }
         }
 
         for category in PlaceCategory.allCases {
