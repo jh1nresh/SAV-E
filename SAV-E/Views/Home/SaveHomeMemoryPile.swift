@@ -6,6 +6,7 @@ import SwiftUI
 struct SaveHomeMemoryPile: View {
     let places: [Place]
     let liftedIDs: [UUID]
+    let onBrowseResults: (Int) -> Void
     let isSearching: Bool
     let onOpenPlace: (Place) -> Void
     @StateObject private var scene = SaveHomeMemoryScene()
@@ -28,6 +29,7 @@ struct SaveHomeMemoryPile: View {
                     if let pose = scene.poses[place.id] {
                         postage(place, loadsPhoto: pose.lifted)
                             .frame(width: 96, height: 122)
+                            .opacity(!pose.lifted && isSearching && geometry.size.height < 300 ? 0 : 1)
                             .scaleEffect(pose.scale)
                             .rotationEffect(.radians(-pose.rotation))
                             .position(x: pose.x, y: geometry.size.height - pose.y)
@@ -79,6 +81,7 @@ struct SaveHomeMemoryPile: View {
 
     private func synchronize(size: CGSize) {
         guard scenePhase == .active else { scene.pause(); return }
+        scene.onBrowseResults = onBrowseResults
         scene.onOpenPlace = { id in
             guard let place = places.first(where: { $0.id == id }) else { return }
             onOpenPlace(place)
@@ -102,6 +105,10 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
     @Published private(set) var poses: [UUID: Pose] = [:]
     @Published private(set) var visiblePlaces: [Place] = []
     var onOpenPlace: ((UUID) -> Void)?
+    var onBrowseResults: ((Int) -> Void)?
+    private var resultSwipeStart: CGPoint?
+
+    static func resultCapacity(for size: CGSize) -> Int { size.height >= 300 ? 6 : 3 }
 
     private var stamps: [UUID: SKNode] = [:]
     private var lifted: [UUID] = []
@@ -136,10 +143,10 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
         let searchChanged = wasSearching != searching
         self.size = size
         wasSearching = searching
-        if draggingID != nil || tappedLiftedID != nil { cancelInteraction() }
+        if draggingID != nil || tappedLiftedID != nil || resultSwipeStart != nil { cancelInteraction() }
 
         let inventory = Set(places.map(\.id))
-        lifted = Array(liftedIDs.filter { inventory.contains($0) }.prefix(3))
+        lifted = Array(liftedIDs.filter { inventory.contains($0) }.prefix(Self.resultCapacity(for: size)))
         if let draggingID, lifted.contains(draggingID) { cancelDrag() }
 
         // Only the animated world is capped. Search and the accessible list use all places.
@@ -218,9 +225,12 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
 
     /// Shared by SpriteKit touch handling and deterministic scene tests.
     func beginDrag(at point: CGPoint) {
+        resultSwipeStart = wasSearching && point.y > size.height * 0.45 ? point : nil
+        if resultSwipeStart != nil { wake() }
         guard let (id, node) = stamp(at: point) else { return }
         // Returning off-budget previews must finish their removal transition.
         guard restingIDs.contains(id) || lifted.contains(id) else { return }
+        guard !wasSearching || Self.resultCapacity(for: size) == 6 || lifted.contains(id) else { return }
         if lifted.contains(id) {
             tappedLiftedID = id
             dragStart = point
@@ -242,6 +252,12 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
 
     /// Shared by SpriteKit touch handling and deterministic scene tests.
     func moveDrag(to point: CGPoint) {
+        if let start = resultSwipeStart,
+           abs(point.x - start.x) > 40, abs(point.x - start.x) > abs(point.y - start.y) {
+            cancelInteraction()
+            onBrowseResults?(point.x < start.x ? 1 : -1)
+            return
+        }
         if tappedLiftedID != nil, let dragStart {
             if hypot(point.x - dragStart.x, point.y - dragStart.y) > 5 {
                 tappedLiftedID = nil
@@ -260,6 +276,7 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
 
     /// Shared by SpriteKit touch handling and deterministic scene tests.
     func endDrag() {
+        resultSwipeStart = nil
         guard let id = draggingID, let node = stamps[id] else {
             if let tappedLiftedID { onOpenPlace?(tappedLiftedID) }
             tappedLiftedID = nil
@@ -286,7 +303,7 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
         confineRestingNodesToCollectionRegion()
         publishPoses()
         // Bound dense-pile solver work, but never cancel a held stamp or a lift.
-        if draggingID == nil, tappedLiftedID == nil,
+        if draggingID == nil, tappedLiftedID == nil, resultSwipeStart == nil,
            currentTime - lastInteraction > 4.5,
            stamps.values.allSatisfy({ !$0.hasActions() }) { pause() }
     }
@@ -384,6 +401,7 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
 
     /// Cancelling is a state cleanup boundary, never a navigation event.
     func cancelInteraction() {
+        resultSwipeStart = nil
         cancelDrag()
         tappedLiftedID = nil
         dragStart = nil
@@ -444,7 +462,7 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
 
     private func lowerCollectionCeiling(for scale: CGFloat) -> CGFloat {
         let cardCenterFloor = worldBounds.minY + stampSize.height * scale / 2
-        let belowComposer = size.height * 0.52 - stampSize.height * scale / 2 - 6
+        let belowComposer = size.height * (wasSearching ? 0.28 : 0.52) - stampSize.height * scale / 2 - 6
         return max(cardCenterFloor, min(worldBounds.maxY, size.height * 0.42, belowComposer))
     }
 
@@ -460,22 +478,33 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
     }
 
     private func liftedPosition(slot: Int) -> CGPoint {
-        let displayY = min(74, size.height * 0.22)
-        return CGPoint(x: size.width * CGFloat(slot * 2 + 1) / 6, y: size.height - displayY)
+        let displayY: CGFloat
+        if lifted.count > 3 {
+            let rowHeight = min(140, size.height * 0.65 / 2)
+            displayY = 8 + rowHeight * (CGFloat(slot / 3) + 0.5)
+        } else {
+            displayY = min(74, size.height * 0.22)
+        }
+        return CGPoint(x: size.width * CGFloat((slot % 3) * 2 + 1) / 6, y: size.height - displayY)
     }
 
     private var liftedScale: CGFloat {
         let normal = min(1.08, max(0.92, (size.width / 3 - 14) / stampSize.width))
+        if lifted.count > 3 {
+            return min(normal, min(140, size.height * 0.65 / 2) / (stampSize.height + 12))
+        }
         guard size.height < 360 else { return normal }
         return min(normal, max(0.7, size.height * 0.32 / stampSize.height))
     }
 
     private func restingScale(for count: Int) -> CGFloat {
-        switch count {
-        case ...6: return 0.95
-        case ...20: return 0.74
-        default: return 0.58
-        }
+        let base: CGFloat = count <= 6 ? 0.95 : (count <= 20 ? 0.74 : 0.58)
+        guard wasSearching else { return base }
+        // Keep resting postcard corners below the retrieval rows.
+        // The compact keyboard presentation hides the
+        // resting layer; retrieved stamps and paging remain available.
+        let available = size.height * 0.28 - worldBounds.minY * 2
+        return min(base, max(0.28, available / 156))
     }
 
     private func restingRotation(index: Int) -> CGFloat {

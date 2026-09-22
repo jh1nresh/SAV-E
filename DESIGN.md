@@ -559,8 +559,13 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 ### Home collection search
 
 Home is a full-screen physical collection of confirmed private Map Stamps. The
-search composer floats between the open retrieval area above and the resting pile
-below. Search lifts up to three matching stamps; View all opens the complete
+search composer stays at the top, above all collection objects. Matches rise
+into the retrieval area below the composer; resting stamps remain at the bottom.
+Search lifts six matching stamps at a time (three while the keyboard compresses
+the world, with resting stamps temporarily hidden). Swipe the retrieval area or
+use its previous/next controls
+to browse every match, with a visible range and total. Changed filters reset the
+page; no result is truncated. View all opens the complete
 readable result list and Collection returns to the world without losing filters.
 Only the simulation is bounded (48 resting stamps plus transitioning previews),
 never the search inventory. Resting stamps use category artwork; only lifted
@@ -583,8 +588,8 @@ Review Candidate and Source Clue counts using the same criteria as Saves.
 The existing More menu keeps collection management and Trips accessible.
 
 Reduce Motion, VoiceOver and accessibility text sizes use the static result list.
-The keyboard resizes the collection world, keeping lifted stamps above the
-composer; the secondary list remains scrollable. Physics
+The keyboard resizes the collection world beneath the search controls;
+the secondary list remains scrollable. Physics
 pauses after settling, when Home disappears, or when the app becomes inactive.
 Existing distance/newest ordering remains the ordering within matching results.
 

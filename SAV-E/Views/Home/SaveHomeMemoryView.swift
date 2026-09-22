@@ -17,6 +17,8 @@ struct SaveHomeMemoryView: View {
     @State private var search = SaveHomeSearch()
     @State private var keyboardTop: CGFloat?
     @State private var showsAllResults = false
+    @State private var resultPage = 0
+    @State private var resultCapacity = 6
     @FocusState private var isEditing: Bool
 
     private var usesStaticPresentation: Bool {
@@ -43,7 +45,8 @@ struct SaveHomeMemoryView: View {
                 if usesListPresentation {
                     listPresentation.padding(.horizontal, 22)
                 } else {
-                    if reviewCounts.total > 0 {
+                    collectionControls.padding(.horizontal, 22).padding(.bottom, 8)
+                    if reviewCounts.total > 0 && keyboardTop == nil {
                         reviewButton.padding(.horizontal, 22).padding(.bottom, 8)
                     }
                     collectionWorld
@@ -60,16 +63,52 @@ struct SaveHomeMemoryView: View {
             keyboardTop = frame.minY
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardTop = nil }
+        .onChange(of: matches.map(\.id)) { _, _ in resultPage = 0 }
+        .onChange(of: search.filters + [search.draft]) { _, _ in resultPage = 0 }
     }
 
-    /// The screen itself is the physical collection: retrieved stamps above the
-    /// composer, resting stamps below. There is no decorative stage inside a list.
+    private var pageCount: Int { max(1, (matches.count + resultCapacity - 1) / resultCapacity) }
+    private var currentPage: Int { min(resultPage, pageCount - 1) }
+
+    private var collectionControls: some View {
+        VStack(spacing: 8) {
+            searchField
+            if !search.filters.isEmpty { filterChips }
+            if search.isActive && pageCount > 1 {
+                HStack(spacing: 12) {
+                    Button { resultPage = max(0, currentPage - 1) } label: {
+                        Image(systemName: "chevron.left").frame(width: 44, height: 44)
+                    }
+                    .disabled(currentPage == 0)
+                    .accessibilityLabel(localized("Previous results", "上一頁結果"))
+                    .accessibilityIdentifier("home.results.previous")
+                    Text("\(currentPage * resultCapacity + 1)–\(min((currentPage + 1) * resultCapacity, matches.count)) / \(matches.count)")
+                        .font(SaveAtlasType.body(12))
+                        .monospacedDigit()
+                        .accessibilityIdentifier("home.results.range")
+                    Button { resultPage = min(pageCount - 1, currentPage + 1) } label: {
+                        Image(systemName: "chevron.right").frame(width: 44, height: 44)
+                    }
+                    .disabled(currentPage == pageCount - 1)
+                    .accessibilityLabel(localized("Next results", "下一頁結果"))
+                    .accessibilityIdentifier("home.results.next")
+                }
+                .foregroundStyle(SaveAtlasPalette.forest)
+            }
+        }
+    }
+
+    /// The search controls stay above the world. Retrieved stamps rise within
+    /// this field, while the unsearched collection settles at its bottom.
     private var collectionWorld: some View {
         GeometryReader { geometry in
             ZStack(alignment: .top) {
                 SaveHomeMemoryPile(
                     places: places,
-                    liftedIDs: search.isActive ? Array(matches.prefix(3).map(\.id)) : [],
+                    liftedIDs: search.isActive ? Array(matches.dropFirst(currentPage * resultCapacity).prefix(resultCapacity).map(\.id)) : [],
+                    onBrowseResults: { offset in
+                        resultPage = min(max(0, currentPage + offset), pageCount - 1)
+                    },
                     isSearching: search.isActive,
                     onOpenPlace: { place in
                         isEditing = false
@@ -83,15 +122,13 @@ struct SaveHomeMemoryView: View {
                         .padding(.top, 16)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                VStack(spacing: 8) {
-                    searchField
-                        .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 14, y: 6)
-                    if !search.filters.isEmpty { filterChips }
-                }
-                .accessibilityElement(children: .contain)
-                .padding(.horizontal, 22)
-                .frame(width: geometry.size.width)
-                .position(x: geometry.size.width / 2, y: geometry.size.height * 0.48)
+            }
+            .onAppear { resultCapacity = SaveHomeMemoryScene.resultCapacity(for: geometry.size) }
+            .onChange(of: geometry.size) { _, size in
+                let capacity = SaveHomeMemoryScene.resultCapacity(for: size)
+                let first = currentPage * resultCapacity
+                resultCapacity = capacity
+                resultPage = first / capacity
             }
         }
         .accessibilityElement(children: .contain)

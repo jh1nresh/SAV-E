@@ -12,6 +12,51 @@ import UIKit
 final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
+    func testHomeMemoryBrowsesEveryMatchingStamp() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed", "--uitest-home-paging-fixture",
+            "-save.appLanguage", "en"
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        let field = app.textFields["home.search"]
+        XCTAssertTrue(field.waitForExistence(timeout: stepTimeout))
+        field.tap()
+        field.typeText("cafe")
+        app.buttons["home.search.commit"].tap()
+        let range = app.staticTexts["home.results.range"]
+        XCTAssertTrue(range.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(range.label, "1–6 / 13")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+        attach(app, name: "home-memory-six-results")
+        app.buttons["home.results.next"].tap()
+        XCTAssertEqual(range.label, "7–12 / 13")
+        let world = app.descendants(matching: .any)["home.savedPlaces"]
+        XCTAssertLessThanOrEqual(field.frame.maxY, world.frame.minY, "Search stays above every collection object.")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+        world.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.15))
+            .press(forDuration: 0.05, thenDragTo: world.coordinate(withNormalizedOffset: CGVector(dx: 0.2, dy: 0.15)))
+        XCTAssertEqual(range.label, "13–13 / 13")
+        XCTAssertFalse(app.buttons["home.results.next"].isEnabled)
+        attach(app, name: "home-memory-last-result")
+        app.buttons["home.viewAll"].tap()
+        field.tap()
+        field.typeText("Taipei")
+        app.buttons["home.search.commit"].tap()
+        app.buttons["home.collection"].tap()
+        XCTAssertEqual(range.label, "1–6 / 8")
+        app.buttons["home.results.next"].tap()
+        XCTAssertEqual(range.label, "7–8 / 8")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+        world.coordinate(withNormalizedOffset: CGVector(dx: 1.0 / 6, dy: 0))
+            .withOffset(CGVector(dx: 0, dy: min(74, world.frame.height * 0.22))).tap()
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Memory Cafe 7"].firstMatch.exists)
+    }
+
+    @MainActor
     func testHomeMemoryProgressiveSearch() throws {
         for staticMode in [false, true] {
             let app = makeApp(launchArguments: [

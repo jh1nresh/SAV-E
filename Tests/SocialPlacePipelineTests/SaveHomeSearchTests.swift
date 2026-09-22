@@ -530,8 +530,58 @@ final class SaveHomeMemorySceneTests: XCTestCase {
         let reflowed = try XCTUnwrap(scene.poses[nonmatchingID])
         XCTAssertLessThanOrEqual(reflowed.y, keyboardSize.height * 0.42)
         XCTAssertTrue(try XCTUnwrap(scene.childNode(withName: nonmatchingID.uuidString)).physicsBody?.isDynamic == true)
-        XCTAssertEqual(try XCTUnwrap(scene.childNode(withName: nonmatchingID.uuidString)).physicsBody?.velocity.dx, 0, accuracy: 0.001)
-        XCTAssertEqual(try XCTUnwrap(scene.childNode(withName: nonmatchingID.uuidString)).physicsBody?.velocity.dy, 0, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(staleNode.physicsBody).velocity.dx, 0, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(staleNode.physicsBody).velocity.dy, 0, accuracy: 0.001)
+        scene.pause()
+    }
+
+    func testSixLiftedResultsAndHorizontalSwipePreserveTapIdentity() throws {
+        let renderer = SKRenderer(device: try XCTUnwrap(MTLCreateSystemDefaultDevice()))
+        let scene = SaveHomeMemoryScene()
+        renderer.scene = scene
+        defer { scene.pause(); renderer.scene = nil }
+        let places = (0..<13).map { index in
+            Place(id: UUID(), name: "Memory \(index)", address: "Taipei", latitude: 25, longitude: 121,
+                  category: .cafe, status: .wantToGo, sourcePlatform: .other, createdAt: Date())
+        }
+        let size = CGSize(width: 402, height: 540)
+        scene.configure(places: places, liftedIDs: Array(places.prefix(6).map(\.id)), size: size, searching: true)
+        for step in 0...60 { renderer.update(atTime: 100 + Double(step) / 60) }
+        XCTAssertEqual(scene.poses.values.filter(\.lifted).count, 6)
+        XCTAssertEqual(Set(scene.poses.values.filter(\.lifted).map(\.y)).count, 2)
+        var pageOffset: Int?
+        var opened: UUID?
+        scene.onBrowseResults = { pageOffset = $0 }
+        scene.onOpenPlace = { opened = $0 }
+        let pose = try XCTUnwrap(scene.poses[places[0].id])
+        scene.beginDrag(at: CGPoint(x: pose.x, y: pose.y))
+        scene.moveDrag(to: CGPoint(x: pose.x - 60, y: pose.y))
+        scene.endDrag()
+        XCTAssertEqual(pageOffset, 1)
+        XCTAssertNil(opened)
+        scene.configure(places: places, liftedIDs: Array(places.dropFirst(6).prefix(6).map(\.id)), size: size, searching: true)
+        for step in 61...120 { renderer.update(atTime: 100 + Double(step) / 60) }
+        let seventh = try XCTUnwrap(scene.poses[places[6].id])
+        scene.beginDrag(at: CGPoint(x: seventh.x, y: seventh.y))
+        scene.endDrag()
+        XCTAssertEqual(opened, places[6].id)
+        XCTAssertEqual(SaveHomeMemoryScene.resultCapacity(for: CGSize(width: 402, height: 250)), 3)
+    }
+
+    func testEmptyRetrievalSwipeSurvivesIdlePauseBoundary() {
+        let scene = SaveHomeMemoryScene()
+        scene.configure(places: [], liftedIDs: [], size: CGSize(width: 402, height: 540), searching: true)
+        scene.update(100)
+        scene.update(104.4)
+        scene.beginDrag(at: CGPoint(x: 300, y: 450))
+        scene.update(110)
+        scene.didSimulatePhysics()
+        XCTAssertTrue(scene.isAnimating, "Holding empty retrieval space must retain the paging gesture.")
+        var direction: Int?
+        scene.onBrowseResults = { direction = $0 }
+        scene.moveDrag(to: CGPoint(x: 220, y: 450))
+        scene.endDrag()
+        XCTAssertEqual(direction, 1)
         scene.pause()
     }
 
