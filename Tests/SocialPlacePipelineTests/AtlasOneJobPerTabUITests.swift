@@ -369,12 +369,10 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(workflow.contains("run-visual-parity.sh"))
         XCTAssertTrue(workflow.contains("$RUNNER_TEMP/SAVE-UI.xcresult"))
         XCTAssertTrue(rail.contains("waitForHomeCoverImagery(app)"))
-        XCTAssertTrue(rail.contains("home.photoHero"))
-        XCTAssertTrue(rail.contains("pngRepresentation.count"))
-        XCTAssertTrue(
-            rail.contains("1_200_000"),
-            "Parity attach must wait for painted Home covers, not the pin fallback."
-        )
+        XCTAssertTrue(rail.contains("home.search"))
+        XCTAssertTrue(rail.contains("home.featuredName"))
+        XCTAssertTrue(rail.contains("testHomeMemoryProgressiveSearch"))
+        XCTAssertTrue(selector.contains("testHomeMemoryProgressiveSearch"))
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {
@@ -622,9 +620,18 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(brandHeader.contains("Image(\"SavvyLogo\")"))
         XCTAssertFalse(brandHeader.contains("MemoMascotMark"))
         XCTAssertTrue(rootHeader.contains("Image(\"SavvyLogo\")"))
+        XCTAssertTrue(rootHeader.contains("accessibilityIdentifier(\"root.passport\")"))
+        XCTAssertTrue(rootHeader.contains("Open Savvy Passport"))
         XCTAssertFalse(rootHeader.contains("MemoMascotMark"))
         XCTAssertTrue(passportTopBar.contains("Image(\"SavvyLogo\")"))
         XCTAssertTrue(passportTopBar.contains("profile.brandLogo"))
+
+        let memory = try source(at: "SAV-E/Views/Home/SaveHomeMemoryView.swift")
+        let memoryHome = try typeBody("SaveHomeMemoryView", in: memory)
+        let saveHome = try typeBody("SaveHomeView", in: root)
+        XCTAssertTrue(memoryHome.contains("SaveAtlasBrandHeader(onOpenPassport: onOpenPassport)"))
+        XCTAssertTrue(memoryHome.contains("home.more"))
+        XCTAssertTrue(saveHome.contains("onOpenPassport: onOpenPassport"))
     }
 
     func testOriginCommunityCardCanReshareWithoutPublishingPrivateClues() throws {

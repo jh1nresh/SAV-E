@@ -556,6 +556,32 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 - Planning and trip child pages have a back path to their parent. Plan has no
   root tab bar; the conversation remains owned by the app shell across visits.
 
+### Home collection search
+
+Home presents confirmed private Map Stamps as a small physical postage pile and a
+complete readable collection below it. Search lifts up to three visible previews;
+all matching places remain in the scrollable result list. Only the simulation is
+bounded (24 resting stamps plus transitioning previews), never the search inventory.
+Resting stamps use category artwork; only lifted previews and visible list rows
+load stored photos. The idle viewport is compact while physics keeps a fixed stage.
+
+Typing previews an intersection with existing filters. Submit keeps category/city
+chips and clears the composer; each chip can be removed independently. “cafe” then
+“Taipei” and “台北咖啡店” have the same meaning. Recognized city aliases use saved
+addresses, not incidental mentions in notes. Other terms search stored place metadata. No provider search or analysis calls, inference of missing facts,
+public discovery or automatic saves occur on this Home surface.
+
+Lifted stamps retain identity, turn upright and become stable tap targets; removing
+a filter returns excluded previews to the pile. Full rows show paper-backed names,
+addresses and explicit Map Stamp state. A separate sky entry distinguishes
+Review Candidate and Source Clue counts using the same criteria as Saves.
+The existing More menu keeps collection management and Trips accessible.
+
+Reduce Motion, VoiceOver and accessibility text sizes use the static result list.
+The keyboard leaves the composer accessible and the collection scrollable. Physics
+pauses after settling, when Home disappears, or when the app becomes inactive.
+Existing distance/newest ordering remains the ordering within matching results.
+
 ### Sign-In
 
 First impression:

@@ -14,7 +14,25 @@ struct SaveHomeView: View {
     @ObservedObject private var locationService = LocationService.shared
 
     var body: some View {
-        HomeAtlasScreen()
+        Group {
+            if SaveAtlasRuntime.usesParityFixture {
+                HomeAtlasScreen()
+            } else {
+                SaveHomeMemoryView(
+                    places: SaveAtlasPresentationFactory.orderedHomePlaces(
+                        mapViewModel.places,
+                        location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation
+                    ),
+                    reviewCounts: SaveHomeReviewCounts(mapViewModel.reviewCandidates),
+                    hasLocation: !locationService.isAuthorizationDenied && locationService.currentLocation != nil,
+                    onCapture: onCapture,
+                    onOpenPlace: onOpenSavedPlace,
+                    onOpenSaves: onOpenSaves,
+                    onOpenTrips: onOpenTrips,
+                    onOpenPassport: onOpenPassport
+                )
+            }
+        }
         .environment(\.atlasPresentation, atlasPresentation)
         .task(id: locationService.authorizationStatus) {
             guard !ReviewDemo.isOfflineUITestMode,
@@ -566,7 +584,8 @@ private enum SaveLibraryMode {
     case mapStamps
 }
 
-private struct SaveAtlasBrandHeader<Trailing: View>: View {
+struct SaveAtlasBrandHeader<Trailing: View>: View {
+    @Environment(\.appLanguageSettings) private var language
     let onOpenPassport: () -> Void
     @ViewBuilder let trailing: () -> Trailing
 
@@ -588,7 +607,7 @@ private struct SaveAtlasBrandHeader<Trailing: View>: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open Savvy Passport")
+            .accessibilityLabel(language.localized(english: "Open Savvy Passport", traditionalChinese: "開啟 Savvy 護照"))
             .accessibilityIdentifier("root.passport")
 
             Spacer(minLength: 8)
