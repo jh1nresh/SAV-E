@@ -250,7 +250,7 @@ private extension SaveHomeSearch {
     static let categoryAliases: [PlaceCategory: [String]] = [
         .food: ["food", "restaurant", "restaurants", "美食", "餐廳", "餐厅"],
         .cafe: ["coffee shops", "coffee shop", "coffee", "cafes", "café", "cafe", "咖啡店", "咖啡"],
-        .bar: ["bar", "酒吧"],
+        .bar: ["bars", "bar", "酒吧"],
         .attraction: ["attraction", "attractions", "景點", "景点"],
         .stay: ["stay", "hotel", "hotels", "住宿", "飯店", "饭店"],
         .shopping: ["shopping", "shop", "shops", "購物", "购物"],

@@ -3,7 +3,7 @@ import SwiftUI
 /// Home searches only this account's confirmed collection. Review stays a separate action.
 struct SaveHomeMemoryView: View {
     let places: [Place]
-    let reviewCount: Int
+    let reviewCounts: SaveHomeReviewCounts
     let hasLocation: Bool
     let onCapture: () -> Void
     let onOpenPlace: (Place) -> Void
@@ -41,7 +41,7 @@ struct SaveHomeMemoryView: View {
                 if !search.filters.isEmpty { filterChips }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        if reviewCount > 0 { reviewButton }
+                        if reviewCounts.total > 0 { reviewButton }
                         if places.isEmpty {
                             emptyCollection
                         } else {
@@ -280,7 +280,22 @@ struct SaveHomeMemoryView: View {
         Button(action: onOpenSaves) {
             HStack {
                 Image(systemName: "questionmark.circle")
-                Text(localized(reviewCount == 1 ? "Review 1 clue" : "Review \(reviewCount) clues", "\(reviewCount) 個線索待確認"))
+                VStack(alignment: .leading, spacing: 4) {
+                    if reviewCounts.candidates > 0 {
+                        Text(localized(
+                            reviewCounts.candidates == 1 ? "1 Review Candidate" : "\(reviewCounts.candidates) Review Candidates",
+                            "\(reviewCounts.candidates) 個待確認地點"
+                        ))
+                        .accessibilityIdentifier("home.review.candidates")
+                    }
+                    if reviewCounts.sources > 0 {
+                        Text(localized(
+                            reviewCounts.sources == 1 ? "1 Source Clue" : "\(reviewCounts.sources) Source Clues",
+                            "\(reviewCounts.sources) 個來源線索"
+                        ))
+                        .accessibilityIdentifier("home.review.sources")
+                    }
+                }
                 Spacer()
                 Image(systemName: "chevron.right")
             }
@@ -315,12 +330,25 @@ struct SaveHomeMemoryView: View {
     }
 }
 
+/// Same distinction shown by the existing Saves queue.
+struct SaveHomeReviewCounts: Equatable {
+    let candidates: Int
+    let sources: Int
+    var total: Int { candidates + sources }
+
+    init(_ items: [PlaceReviewCandidate]) {
+        sources = items.filter { $0.status == "source_only" || !$0.hasReliableCoordinates }.count
+        candidates = items.count - sources
+    }
+}
+
 struct SaveHomeMemoryPhoto: View {
     let place: Place
+    var loadsPhoto = true
 
     var body: some View {
         GeometryReader { geometry in
-            CachedAsyncImage(url: place.businessPhotoURLStrings.first.flatMap(URL.init(string:))) { phase in
+            CachedAsyncImage(url: loadsPhoto ? place.businessPhotoURLStrings.first.flatMap(URL.init(string:)) : nil) { phase in
                 if case let .success(image) = phase {
                     image.resizable().scaledToFill()
                 } else {

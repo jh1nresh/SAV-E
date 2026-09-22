@@ -23,7 +23,7 @@ struct SaveHomeView: View {
                         mapViewModel.places,
                         location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation
                     ),
-                    reviewCount: mapViewModel.reviewCandidates.count,
+                    reviewCounts: SaveHomeReviewCounts(mapViewModel.reviewCandidates),
                     hasLocation: !locationService.isAuthorizationDenied && locationService.currentLocation != nil,
                     onCapture: onCapture,
                     onOpenPlace: onOpenSavedPlace,

@@ -5,6 +5,33 @@ import Metal
 
 @MainActor
 final class SaveHomeSearchTests: XCTestCase {
+    func testPluralBarsUsesCategoryInsteadOfLiteralName() {
+        let bar = place(name: "Nightjar", address: "London", category: .bar)
+        let cafe = place(name: "Window", address: "London", category: .cafe)
+        var search = SaveHomeSearch(draft: "bars")
+        XCTAssertEqual(search.matchingPlaces(in: [bar, cafe]).map(\.id), [bar.id])
+        search.commitDraft()
+        XCTAssertEqual(search.filters, ["bar"])
+        XCTAssertEqual(search.matchingPlaces(in: [bar, cafe]).map(\.id), [bar.id])
+    }
+
+    func testHomeKeepsReviewCandidatesSeparateFromSourceClues() {
+        func item(status: String, latitude: Double?) -> PlaceReviewCandidate {
+            PlaceReviewCandidate(id: UUID(), captureId: nil, name: "Saved clue", address: "Taipei",
+                city: "Taipei", latitude: latitude, longitude: latitude == nil ? nil : 121.5,
+                evidence: [], confidence: nil, missingInfo: [], status: status, createdAt: Date())
+        }
+        let counts = SaveHomeReviewCounts([
+            item(status: "review", latitude: 25),
+            item(status: "source_only", latitude: 25),
+            item(status: "review", latitude: nil),
+        ])
+        XCTAssertEqual(counts.candidates, 1)
+        XCTAssertEqual(counts.sources, 2)
+        XCTAssertEqual(counts.total, 3)
+        XCTAssertEqual(SaveHomeReviewCounts([]).total, 0)
+    }
+
     func testFullTaipeiCityNamesDoNotLeaveResidualTextFilters() {
         for query in ["台北市咖啡店", "臺北市咖啡店", "Taipei City cafes"] {
             var search = SaveHomeSearch(draft: query)
