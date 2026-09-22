@@ -168,7 +168,7 @@ private extension SaveHomeSearch {
             case .keelung: return ["keelung", "基隆"]
             case .hsinchu: return ["hsinchu", "新竹"]
             case .chiayi: return ["chiayi", "嘉義", "嘉义"]
-            case .tokyo: return ["tokyo", "東京", "东京"]
+            case .tokyo: return ["tokyo", "東京都", "东京都", "東京", "东京"]
             case .losAngeles: return ["los angeles", "losangeles", "洛杉磯", "洛杉矶"]
             case .bangkok: return ["bangkok", "曼谷"]
             case .kyoto: return ["kyoto", "京都"]
@@ -197,6 +197,10 @@ private extension SaveHomeSearch {
                         !SaveHomeSearch.contains(alias: "new taipei", in: normalizedAddress) &&
                         !normalizedAddress.contains("新北")
                 }
+            case .kyoto:
+                // 東京都 contains 京都 as a substring, but is a Tokyo address.
+                guard !normalizedAddress.contains("東京都"), !normalizedAddress.contains("东京都") else { return false }
+                return aliases.contains { SaveHomeSearch.contains(alias: $0, in: normalizedAddress) }
             default:
                 return aliases.contains { SaveHomeSearch.contains(alias: $0, in: normalizedAddress) }
             }
@@ -225,7 +229,7 @@ private extension SaveHomeSearch {
         guard !remaining.isEmpty else { return [] }
 
         var result: [Constraint] = []
-        for city in City.ordered where city.aliases.contains(where: { contains(alias: $0, in: remaining) }) {
+        for city in City.ordered where city.matches(address: remaining) {
             result.append(.city(city))
             city.aliasesByLength.forEach { remaining = removing(alias: $0, from: remaining) }
         }
@@ -242,7 +246,7 @@ private extension SaveHomeSearch {
         let residual = remaining
             .split(separator: " ")
             .map(String.init)
-            .filter { !$0.isEmpty }
+            .filter { !$0.isEmpty && (result.isEmpty || !["in", "at"].contains($0)) }
         result.append(contentsOf: residual.map(Constraint.text))
         return result
     }

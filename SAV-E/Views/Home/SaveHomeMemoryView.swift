@@ -98,7 +98,7 @@ struct SaveHomeMemoryView: View {
         VStack(alignment: .leading, spacing: 6) {
             SaveAtlasBrandHeader(onOpenPassport: onOpenPassport) {
                 Menu {
-                    Button(action: onOpenSaves) { Label(localized("Manage saved places", "管理已存地點"), systemImage: "tray.full") }
+                    Button(action: onOpenSaves) { Label(localized("Open Saves", "開啟收藏庫"), systemImage: "tray.full") }
                         .accessibilityIdentifier("home.saves")
                     Button(action: onOpenTrips) { Label(localized("Trips", "行程"), systemImage: "point.3.connected.trianglepath.dotted") }
                         .accessibilityIdentifier("home.trips")

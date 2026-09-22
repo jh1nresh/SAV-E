@@ -5,6 +5,38 @@ import Metal
 
 @MainActor
 final class SaveHomeSearchTests: XCTestCase {
+    func testConnectorsDoNotConstrainStructuredQueriesButStandaloneTextStillDoes() {
+        let quiet = place(name: "Mori", address: "Taipei", category: .cafe, note: "quiet")
+        let loud = place(name: "Beat", address: "Taipei", category: .cafe)
+        let elsewhere = place(name: "River", address: "Tainan", category: .cafe, note: "quiet")
+        let places = [quiet, loud, elsewhere]
+        for query in ["quiet cafes in Taipei", "quiet cafes at Taipei"] {
+            var search = SaveHomeSearch(draft: query)
+            XCTAssertEqual(search.matchingPlaces(in: places).map(\.id), [quiet.id])
+            search.commitDraft()
+            XCTAssertEqual(Set(search.filters), Set(["cafe", "taipei", "quiet"]))
+            XCTAssertEqual(search.matchingPlaces(in: places).map(\.id), [quiet.id])
+        }
+        let namedIn = place(name: "IN", address: "Paris", category: .shopping)
+        XCTAssertEqual(SaveHomeSearch(draft: "in").matchingPlaces(in: [quiet, namedIn]).map(\.id), [namedIn.id])
+    }
+
+    func testKyotoDoesNotMatchTheSubstringInsideTokyoMetropolis() {
+        let kyoto = place(name: "Window", address: "京都市下京区", category: .cafe)
+        let tokyo = place(name: "Kissa", address: "東京都渋谷区", category: .cafe)
+        var search = SaveHomeSearch(draft: "京都咖啡店")
+        XCTAssertEqual(search.matchingPlaces(in: [tokyo, kyoto]).map(\.id), [kyoto.id])
+        search.commitDraft()
+        XCTAssertEqual(search.matchingPlaces(in: [tokyo, kyoto]).map(\.id), [kyoto.id])
+        for query in ["東京都咖啡店", "东京都咖啡店"] {
+            var tokyoSearch = SaveHomeSearch(draft: query)
+            XCTAssertEqual(tokyoSearch.matchingPlaces(in: [tokyo, kyoto]).map(\.id), [tokyo.id])
+            tokyoSearch.commitDraft()
+            XCTAssertEqual(Set(tokyoSearch.filters), Set(["tokyo", "cafe"]))
+            XCTAssertEqual(tokyoSearch.matchingPlaces(in: [tokyo, kyoto]).map(\.id), [tokyo.id])
+        }
+    }
+
     func testPluralBarsUsesCategoryInsteadOfLiteralName() {
         let bar = place(name: "Nightjar", address: "London", category: .bar)
         let cafe = place(name: "Window", address: "London", category: .cafe)
