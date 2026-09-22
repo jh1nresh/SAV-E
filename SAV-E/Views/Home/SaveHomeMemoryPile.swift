@@ -76,6 +76,7 @@ struct SaveHomeMemoryPile: View {
     }
 
     private func synchronize(size: CGSize) {
+        guard scenePhase == .active else { scene.pause(); return }
         scene.configure(places: places, liftedIDs: liftedIDs, size: size, searching: isSearching)
     }
 }
@@ -101,7 +102,7 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
     private var searching = false
     private let restingScale: CGFloat = 0.62
 
-    init() {
+    override init() {
         super.init(size: CGSize(width: 358, height: 168))
         scaleMode = .resizeFill
         backgroundColor = .clear
