@@ -9,6 +9,7 @@ struct SaveHomeMemoryView: View {
     let onOpenPlace: (Place) -> Void
     let onOpenSaves: () -> Void
     let onOpenTrips: () -> Void
+    let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var language
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
@@ -54,7 +55,12 @@ struct SaveHomeMemoryView: View {
                                         onOpenPlace(place)
                                     }
                                 )
+                                // Keep the physics coordinate space fixed while revealing
+                                // room above the pile for search previews.
                                 .frame(height: 250)
+                                .frame(height: search.isActive ? 250 : 140, alignment: .bottom)
+                                .clipped()
+                                .animation(.easeInOut(duration: 0.48), value: search.isActive)
                                 .accessibilityIdentifier("home.memoryPile")
                             }
                             resultHeading
@@ -89,12 +95,23 @@ struct SaveHomeMemoryView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center) {
+        HStack(alignment: .center, spacing: 9) {
+            Button(action: onOpenPassport) {
+                Image("SavvyLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 40, height: 40)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(localized("Open Savvy Passport", "開啟 Savvy 護照"))
+            .accessibilityIdentifier("root.passport")
             VStack(alignment: .leading, spacing: 3) {
                 Text(localized("Your collection", "你的收藏"))
                     .font(SaveAtlasType.strong(25, relativeTo: .title2))
                     .foregroundStyle(SaveAtlasPalette.forest)
-                Text(localized("\(places.count) confirmed places", "\(places.count) 個已確認地點"))
+                Text(localized(places.count == 1 ? "1 confirmed place" : "\(places.count) confirmed places", "\(places.count) 個已確認地點"))
                     .font(SaveAtlasType.body(12))
                     .foregroundStyle(SaveAtlasPalette.muted)
             }
@@ -263,7 +280,7 @@ struct SaveHomeMemoryView: View {
         Button(action: onOpenSaves) {
             HStack {
                 Image(systemName: "questionmark.circle")
-                Text(localized("Review \(reviewCount) clues", "\(reviewCount) 個線索待確認"))
+                Text(localized(reviewCount == 1 ? "Review 1 clue" : "Review \(reviewCount) clues", "\(reviewCount) 個線索待確認"))
                 Spacer()
                 Image(systemName: "chevron.right")
             }

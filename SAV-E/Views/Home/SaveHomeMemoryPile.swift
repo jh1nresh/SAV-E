@@ -147,8 +147,11 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
                 body.linearDamping = 0.9
                 body.angularDamping = 1.8
                 node.physicsBody = body
-                let column = CGFloat(index % 7)
-                node.position = CGPoint(x: 30 + column * (size.width - 60) / 6, y: 28 + CGFloat(index / 7) * 22)
+                let column = CGFloat(index % 5)
+                node.position = CGPoint(
+                    x: size.width / 2 + (column - 2) * min(32, (size.width - 60) / 4),
+                    y: min(pileHeight - 28, 28 + CGFloat(index / 5) * 18)
+                )
                 node.zRotation = CGFloat((index * 7) % 11 - 5) * 0.06
                 stamps[place.id] = node
                 addChild(node)
