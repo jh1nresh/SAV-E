@@ -18,11 +18,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
                 "--uitest-repair-review-demo-seed", "--uitest-home-memory-fixture",
-                "-save.appLanguage", "en"
-            ] + (staticMode ? ["--uitest-home-reduce-motion"] : []),
+                "-save.appLanguage", staticMode ? "zh-Hant" : "en"
+            ] + (staticMode ? ["--uitest-home-reduce-motion", "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM"] : []),
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
             launch(app)
             try signInViaReviewDemoRequired(app: app)
+            XCTAssertEqual(app.buttons["root.passport"].label, staticMode ? "開啟 Savvy 護照" : "Open Savvy Passport")
             let field = app.textFields["home.search"]
             XCTAssertTrue(field.waitForExistence(timeout: stepTimeout))
             attach(app, name: "home-memory-collection-\(staticMode)")
@@ -33,38 +34,38 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.buttons["home.search.commit"].tap()
             let count = app.staticTexts["home.search.count"]
             XCTAssertTrue(count.waitForExistence(timeout: stepTimeout))
-            XCTAssertEqual(count.label, "3 places found")
+            XCTAssertEqual(count.label, staticMode ? "找到 3 個地點" : "3 places found")
             XCTAssertTrue(app.buttons["home.filter.cafe"].exists)
             attach(app, name: "home-memory-cafes-\(staticMode)")
             field.tap()
             field.typeText("Taipei")
             app.buttons["home.search.commit"].tap()
-            XCTAssertEqual(count.label, "1 place found")
+            XCTAssertEqual(count.label, staticMode ? "找到 1 個地點" : "1 place found")
             XCTAssertTrue(app.buttons["home.filter.taipei"].exists)
             let taipei = app.buttons["home.place.10000000-0000-0000-0000-000000000001"]
             XCTAssertTrue(taipei.waitForExistence(timeout: stepTimeout))
             attach(app, name: "home-memory-taipei-\(staticMode)")
             app.buttons["home.filter.taipei"].tap()
-            XCTAssertEqual(count.label, "3 places found")
+            XCTAssertEqual(count.label, staticMode ? "找到 3 個地點" : "3 places found")
             app.buttons["home.filter.cafe"].tap()
-            XCTAssertEqual(count.label, "Recently saved")
+            XCTAssertEqual(count.label, staticMode ? "最近收藏" : "Recently saved")
             field.tap()
             field.typeText("台北咖啡店")
             app.buttons["home.search.commit"].tap()
-            XCTAssertEqual(count.label, "1 place found")
+            XCTAssertEqual(count.label, staticMode ? "找到 1 個地點" : "1 place found")
             // Repeated query replacement must never leave a stale result lifted or tappable.
             app.buttons["home.search.clear"].tap()
             field.tap()
             field.typeText("no-such-place-xyz")
             app.buttons["home.search.commit"].tap()
-            XCTAssertEqual(count.label, "0 places found")
+            XCTAssertEqual(count.label, staticMode ? "找到 0 個地點" : "0 places found")
             XCTAssertTrue(app.descendants(matching: .any)["home.search.empty"].exists)
             attach(app, name: "home-memory-no-match-\(staticMode)")
             app.buttons["home.search.clear"].tap()
             field.tap()
             field.typeText("Taipei cafe")
             app.buttons["home.search.commit"].tap()
-            XCTAssertEqual(count.label, "1 place found")
+            XCTAssertEqual(count.label, staticMode ? "找到 1 個地點" : "1 place found")
             XCTAssertTrue(scrollUntilHittable(taipei, in: app.scrollViews["home.savedPlaces"], maxSwipes: 3))
             taipei.tap()
             XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))

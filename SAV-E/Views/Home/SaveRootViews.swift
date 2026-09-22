@@ -585,6 +585,7 @@ private enum SaveLibraryMode {
 }
 
 private struct SaveAtlasBrandHeader<Trailing: View>: View {
+    @Environment(\.appLanguageSettings) private var language
     let onOpenPassport: () -> Void
     @ViewBuilder let trailing: () -> Trailing
 
@@ -606,7 +607,7 @@ private struct SaveAtlasBrandHeader<Trailing: View>: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Open Savvy Passport")
+            .accessibilityLabel(language.localized(english: "Open Savvy Passport", traditionalChinese: "開啟 Savvy 護照"))
             .accessibilityIdentifier("root.passport")
 
             Spacer(minLength: 8)
