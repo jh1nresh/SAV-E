@@ -49,9 +49,12 @@ struct SaveHomeMemoryView: View {
                                     places: places,
                                     liftedIDs: search.isActive ? Array(matches.prefix(3).map(\.id)) : [],
                                     isSearching: search.isActive,
-                                    onOpenPlace: onOpenPlace
+                                    onOpenPlace: { place in
+                                        isEditing = false
+                                        onOpenPlace(place)
+                                    }
                                 )
-                                .frame(height: search.isActive ? 250 : 140)
+                                .frame(height: 250)
                                 .accessibilityIdentifier("home.memoryPile")
                             }
                             resultHeading
@@ -277,11 +280,10 @@ struct SaveHomeMemoryView: View {
         if let category = PlaceCategory(rawValue: value) {
             return category == .cafe ? localized("Cafes", "咖啡店") : category.displayName(language: language.language)
         }
-        let cities = ["taipei": ("Taipei", "台北"), "newTaipei": ("New Taipei", "新北"),
-                      "taoyuan": ("Taoyuan", "桃園"), "taichung": ("Taichung", "台中"),
-                      "tainan": ("Tainan", "台南"), "kaohsiung": ("Kaohsiung", "高雄"),
-                      "keelung": ("Keelung", "基隆"), "hsinchu": ("Hsinchu", "新竹"), "chiayi": ("Chiayi", "嘉義")]
-        if let city = cities[value] { return localized(city.0, city.1) }
+        if let english = SaveHomeSearch.cityLabel(for: value, traditionalChinese: false),
+           let chinese = SaveHomeSearch.cityLabel(for: value, traditionalChinese: true) {
+            return localized(english, chinese)
+        }
         return value
     }
 

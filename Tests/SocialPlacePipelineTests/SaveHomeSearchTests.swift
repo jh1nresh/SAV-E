@@ -1,7 +1,17 @@
 import XCTest
+import SpriteKit
 @testable import SAVE
 
+@MainActor
 final class SaveHomeSearchTests: XCTestCase {
+    func testCityChipsDisplayReadableLocalizedNames() {
+        XCTAssertEqual(SaveHomeSearch.cityLabel(for: "losAngeles", traditionalChinese: false), "Los Angeles")
+        XCTAssertEqual(SaveHomeSearch.cityLabel(for: "newYork", traditionalChinese: true), "紐約")
+        XCTAssertEqual(SaveHomeSearch.cityLabel(for: "sanFrancisco", traditionalChinese: false), "San Francisco")
+        XCTAssertEqual(SaveHomeSearch.cityLabel(for: "tokyo", traditionalChinese: true), "東京")
+        XCTAssertNil(SaveHomeSearch.cityLabel(for: "quiet", traditionalChinese: false))
+    }
+
     func testEmptySearchReturnsAllPlacesInInputOrderIncludingVisited() {
         let first = place(name: "First", address: "Taipei", category: .cafe, status: .wantToGo)
         let second = place(name: "Second", address: "New Taipei", category: .food, status: .visited)
@@ -108,6 +118,71 @@ final class SaveHomeSearchTests: XCTestCase {
         XCTAssertEqual(englishCommitted.matchingPlaces(in: places).map(\.id), [taipeiCafe.id, newTaipeiCafe.id])
     }
 
+    func testTokyoCityQueryUsesAddressOnlyBeforeAndAfterEnglishAndChineseCommit() {
+        let savedTokyo = place(name: "Kissa", address: "Tokyo, Shibuya", category: .cafe)
+        let bangkokWithTokyoNote = place(
+            name: "Bangkok Cafe",
+            address: "Bangkok, Pathum Wan",
+            category: .cafe,
+            note: "A Tokyo favorite"
+        )
+        let places = [savedTokyo, bangkokWithTokyoNote]
+
+        let englishDraft = SaveHomeSearch(draft: "Tokyo cafes")
+        XCTAssertEqual(englishDraft.matchingPlaces(in: places).map(\.id), [savedTokyo.id])
+
+        var englishCommitted = englishDraft
+        englishCommitted.commitDraft()
+        XCTAssertEqual(englishCommitted.filters, ["tokyo", "cafe"])
+        XCTAssertEqual(englishCommitted.matchingPlaces(in: places).map(\.id), [savedTokyo.id])
+
+        let chineseDraft = SaveHomeSearch(draft: "東京咖啡店")
+        XCTAssertEqual(chineseDraft.matchingPlaces(in: places).map(\.id), [savedTokyo.id])
+
+        var chineseCommitted = chineseDraft
+        chineseCommitted.commitDraft()
+        XCTAssertEqual(chineseCommitted.filters, ["tokyo", "cafe"])
+        XCTAssertEqual(chineseCommitted.matchingPlaces(in: places).map(\.id), [savedTokyo.id])
+
+        XCTAssertTrue(SaveHomeSearch(draft: "Tokyo").matchingPlaces(in: [bangkokWithTokyoNote]).isEmpty)
+    }
+
+    func testRecognizedGlobalCityCanonicalChipsRoundTrip() {
+        let fixtures: [(query: String, canonical: String, address: String)] = [
+            ("Tokyo", "tokyo", "Tokyo, Shibuya"),
+            ("Los Angeles", "losAngeles", "Los Angeles, California"),
+            ("Bangkok", "bangkok", "Bangkok, Pathum Wan"),
+            ("Kyoto", "kyoto", "Kyoto, Sakyo"),
+            ("Osaka", "osaka", "Osaka, Naniwa"),
+            ("New York", "newYork", "New York, Manhattan"),
+            ("San Francisco", "sanFrancisco", "San Francisco, California"),
+            ("Seoul", "seoul", "Seoul, Jongno"),
+            ("Singapore", "singapore", "Singapore"),
+            ("Hong Kong", "hongKong", "Hong Kong, Central"),
+            ("Paris", "paris", "Paris, France"),
+            ("London", "london", "London, England"),
+            ("Shanghai", "shanghai", "Shanghai, China"),
+            ("Beijing", "beijing", "Beijing, China"),
+            ("Guangzhou", "guangzhou", "Guangzhou, China"),
+            ("Shenzhen", "shenzhen", "Shenzhen, China"),
+            ("Chengdu", "chengdu", "Chengdu, China"),
+        ]
+
+        for fixture in fixtures {
+            let savedPlace = place(name: fixture.query, address: fixture.address, category: .cafe)
+            var committed = SaveHomeSearch(draft: fixture.query)
+            committed.commitDraft()
+
+            XCTAssertEqual(committed.filters, [fixture.canonical], fixture.query)
+            XCTAssertEqual(committed.matchingPlaces(in: [savedPlace]).map(\.id), [savedPlace.id], fixture.query)
+            XCTAssertEqual(
+                SaveHomeSearch(draft: fixture.canonical).matchingPlaces(in: [savedPlace]).map(\.id),
+                [savedPlace.id],
+                fixture.canonical
+            )
+        }
+    }
+
     func testUnknownTermsUseExistingSearchableMetadataAndUnknownTermsCanReturnNothing() {
         let cozy = place(
             name: "Mori",
@@ -178,5 +253,52 @@ final class SaveHomeSearchTests: XCTestCase {
             createdAt: Date(),
             vibeTags: vibeTags
         )
+    }
+}
+
+@MainActor
+final class SaveHomeMemorySceneTests: XCTestCase {
+    func testOffscreenMatchEntersBoundedSimulationAndRepeatedQueriesKeepNodeIdentity() throws {
+        let places = (0..<80).map { index in
+            Place(id: UUID(), name: "Memory \(index)", address: "Taipei", latitude: 25, longitude: 121,
+                  category: .cafe, status: .wantToGo, sourcePlatform: .other, createdAt: Date())
+        }
+        let scene = SaveHomeMemoryScene()
+        let target = places[79]
+        let size = CGSize(width: 358, height: 250)
+        scene.configure(places: places, liftedIDs: [], size: size, searching: false)
+        XCTAssertEqual(scene.visiblePlaces.count, 24)
+        XCTAssertNil(scene.childNode(withName: target.id.uuidString))
+
+        scene.configure(places: places, liftedIDs: [target.id], size: size, searching: true)
+        let original = try XCTUnwrap(scene.childNode(withName: target.id.uuidString))
+        XCTAssertEqual(scene.visiblePlaces.count, 25)
+        XCTAssertFalse(try XCTUnwrap(original.physicsBody).isDynamic)
+        XCTAssertNotNil(original.action(forKey: "lift"))
+
+        scene.configure(places: places, liftedIDs: [], size: size, searching: true)
+        XCTAssertTrue(original === scene.childNode(withName: target.id.uuidString))
+        XCTAssertNotNil(original.action(forKey: "lift"), "Returning a preview schedules its drop.")
+        scene.configure(places: places, liftedIDs: [target.id], size: size, searching: true)
+        XCTAssertTrue(original === scene.childNode(withName: target.id.uuidString))
+        XCTAssertFalse(try XCTUnwrap(original.physicsBody).isDynamic)
+        XCTAssertEqual(original.physicsBody?.collisionBitMask, 0)
+        XCTAssertTrue(scene.poses[target.id]?.lifted == true)
+        scene.pause()
+        XCTAssertFalse(scene.isAnimating)
+    }
+
+    func testDeletedPlaceCannotRemainInPileAndConfigurationWakesAPausedScene() {
+        let place = Place(id: UUID(), name: "Memory", address: "Taipei", latitude: 25, longitude: 121,
+                          category: .cafe, status: .visited, sourcePlatform: .other, createdAt: Date())
+        let scene = SaveHomeMemoryScene()
+        scene.configure(places: [place], liftedIDs: [place.id], size: CGSize(width: 358, height: 250), searching: true)
+        scene.pause()
+        scene.configure(places: [], liftedIDs: [place.id], size: CGSize(width: 358, height: 250), searching: true)
+        XCTAssertTrue(scene.isAnimating)
+        XCTAssertTrue(scene.visiblePlaces.isEmpty)
+        XCTAssertTrue(scene.poses.isEmpty)
+        XCTAssertNil(scene.childNode(withName: place.id.uuidString))
+        scene.pause()
     }
 }

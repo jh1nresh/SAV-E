@@ -96,6 +96,7 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
     @Published private(set) var visiblePlaces: [Place] = []
     private var stamps: [UUID: SKNode] = [:]
     private var lifted: [UUID] = []
+    private var restingIDs: Set<UUID> = []
     private let walls = SKNode()
     private var lastInteraction: TimeInterval = 0
     private var currentTime: TimeInterval = 0
@@ -110,7 +111,7 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
         addChild(walls)
     }
 
-    required init?(coder aDecoder: NSCoder) { nil }
+    required init?(coder aDecoder: NSCoder) { return nil }
 
     func configure(places: [Place], liftedIDs: [UUID], size: CGSize, searching: Bool) {
         guard size.width > 0, size.height > 0 else { return }
@@ -121,7 +122,8 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
         let inventory = Set(places.map(\.id))
         lifted = Array(liftedIDs.filter { inventory.contains($0) }.prefix(3))
         // Only the visual simulation is capped. Search and the accessible list use all places.
-        let visibleIDs = Set(places.prefix(24).map(\.id)).union(lifted).union(oldLifted)
+        restingIDs = Set(places.prefix(24).map(\.id))
+        let visibleIDs = restingIDs.union(lifted).union(oldLifted)
         visiblePlaces = places.filter { visibleIDs.contains($0.id) }
         let retained = Set(visiblePlaces.map(\.id))
         for id in Array(stamps.keys) where !retained.contains(id) {
@@ -178,9 +180,18 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
                         .rotate(toAngle: CGFloat((index * 7) % 11 - 5) * 0.06, duration: 0.28),
                     ])
                     drop.timingMode = .easeIn
-                    node.run(.sequence([drop, .run { [weak node] in
-                        node?.physicsBody?.isDynamic = true
-                        node?.physicsBody?.collisionBitMask = UInt32.max
+                    node.run(.sequence([drop, .run { [weak self, weak node] in
+                        guard let self, let node, self.stamps[place.id] === node,
+                              !self.lifted.contains(place.id) else { return }
+                        if self.restingIDs.contains(place.id) {
+                            node.physicsBody?.isDynamic = true
+                            node.physicsBody?.collisionBitMask = UInt32.max
+                        } else {
+                            node.removeFromParent()
+                            self.stamps.removeValue(forKey: place.id)
+                            self.visiblePlaces.removeAll { $0.id == place.id }
+                            self.poses.removeValue(forKey: place.id)
+                        }
                     }]), withKey: "lift")
                 } else if resized {
                     node.position.x = min(max(node.position.x, 24), size.width - 24)
@@ -194,7 +205,7 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
         publishPoses()
     }
 
-    private var pileHeight: CGFloat { min(searching ? 112 : 148, size.height - 12) }
+    private var pileHeight: CGFloat { min(112, size.height - 12) }
 
     override func update(_ currentTime: TimeInterval) {
         self.currentTime = currentTime
