@@ -1,5 +1,10 @@
 import Foundation
 
+/// Pins queued imports across token-provider suspension and every nested request.
+enum SAVEPendingImportSessionScope {
+    @TaskLocal static var current: (generation: Int, owner: String)?
+}
+
 // MARK: - Protocol
 
 protocol SupabaseServiceProtocol {
@@ -1141,8 +1146,13 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     ) async throws -> (Data, HTTPURLResponse) {
         let isSocialRequest = ["/v0/friend-ratings", "/v0/shared-posts", "/v0/passports", "/v0/social-profile", "/v0/follows", "/v0/followers"].contains { path.hasPrefix($0) }
         let sessionBound = isSocialRequest || path.hasPrefix("/v0/analysis")
-        let friendSession: (Int, String?)? = sessionBound
-            ? await MainActor.run { (PrivyAuthService.shared.sessionGeneration, PrivyAuthService.shared.currentUserId) } : nil
+        let friendSession: (Int, String?)?
+        if let importing = SAVEPendingImportSessionScope.current {
+            friendSession = (importing.generation, importing.owner)
+        } else {
+            friendSession = sessionBound
+                ? await MainActor.run { (PrivyAuthService.shared.sessionGeneration, PrivyAuthService.shared.currentUserId) } : nil
+        }
         guard let base = baseURLOverride ?? apiBaseURL else { throw SupabaseError.notConfigured }
 
         guard let url = URL(string: "\(base)\(path)") else {

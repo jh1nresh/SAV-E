@@ -201,6 +201,8 @@
 		A10100000000000000000011 /* SharedPlacePost.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000001 /* SharedPlacePost.swift */; };
 		A10100000000000000000012 /* SharedPostsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000002 /* SharedPostsStore.swift */; };
 		A10100000000000000000013 /* SharedPostViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10100000000000000000003 /* SharedPostViews.swift */; };
+		AA5100000000000000000001 /* ShareAnalysisClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5100000000000000000003 /* ShareAnalysisClient.swift */; };
+		AA5100000000000000000002 /* ShareAnalysisClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5100000000000000000003 /* ShareAnalysisClient.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -492,6 +494,7 @@
 		A10100000000000000000001 /* SharedPlacePost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPlacePost.swift; sourceTree = "<group>"; };
 		A10100000000000000000002 /* SharedPostsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPostsStore.swift; sourceTree = "<group>"; };
 		A10100000000000000000003 /* SharedPostViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedPostViews.swift; sourceTree = "<group>"; };
+		AA5100000000000000000003 /* ShareAnalysisClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareAnalysisClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -858,6 +861,7 @@
 				6D964548192D231A0809D275 /* SaveMemoryVaultAppender.swift */,
 				B1CF74D6B822E4FE488B22EA /* SAVEProAccessPolicy.swift */,
 				82EECB77D78AB65A9D806D73 /* SAVEProductionConfig.swift */,
+				AA5100000000000000000003 /* ShareAnalysisClient.swift */,
 				14A521AFF2E80927A76DDB7A /* SocialOCRCandidateHeuristics.swift */,
 				5CFDE2C027003FA30CBA2F75 /* SocialPlaceEvidence.swift */,
 				3B1CB9442676082D76FDEC15 /* SocialPlaceParser.swift */,
@@ -1475,6 +1479,7 @@
 				4082CE633C9619E79F2C0AD3 /* GoogleMapsListPlaceExtractor.swift in Sources */,
 				70578CBC1911C1C35349AF47 /* SAVEProAccessPolicy.swift in Sources */,
 				45A0F5062F81897FF13DC0A3 /* SAVEProductionConfig.swift in Sources */,
+				AA5100000000000000000001 /* ShareAnalysisClient.swift in Sources */,
 				EB237A031AC343356B5BDAEE /* SaveMemoryVaultAppender.swift in Sources */,
 				A5269FE0607830F038B6AD35 /* ShareViewController.swift in Sources */,
 				9F3813BB934F44CF302ACC48 /* SocialOCRCandidateHeuristics.swift in Sources */,
@@ -1562,6 +1567,7 @@
 				A2F1E48BF387C064B3B4F4E6 /* SAVEAppShortcuts.swift in Sources */,
 				5391C822BB6EB26048D13148 /* SAVEProAccessPolicy.swift in Sources */,
 				A3A281B054D6E430627F8352 /* SAVEProductionConfig.swift in Sources */,
+				AA5100000000000000000002 /* ShareAnalysisClient.swift in Sources */,
 				38738CB48DF73890E63D1B2B /* SaveAIService.swift in Sources */,
 				3E9B1B6E38A02AACF2C022D0 /* SaveApp.swift in Sources */,
 				8C1A0B0D0E0F1A2B3C4D5E61 /* SaveChromePresentation.swift in Sources */,

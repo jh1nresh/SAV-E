@@ -12,6 +12,8 @@ hygiene or docs PR.
    - `friend-ratings.sql` — creates `idx_places_id_user_id` if missing, then
      the Friends rating tables. Safe on a database that has `places` but lacks
      that composite unique index.
+   - `share-extension-sessions.sql` — after `analysis-usage.sql`; stores only
+     hashed Share Extension tokens and their bounded analysis replay records.
 3. Verify (read-only), then Railway-deploy the backend, then iOS.
 
 `friend-ratings.sql` is self-contained for the composite FK: it creates
