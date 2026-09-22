@@ -37,6 +37,7 @@ struct ParsedPlace {
     var longitude: Double?
     var dishes: [String]
     var priceRange: String?
+    var googlePlaceId: String? = nil
 }
 
 private enum SaveTheme {
@@ -327,7 +328,7 @@ private struct ShareFlatSticker: View {
 }
 
 private struct ShareCaptureFooter: View {
-    var text: String = "Savvy Review · Open the app to finish"
+    var text: String = Locale.preferredLanguages.first?.hasPrefix("zh") == true ? "確認後保存至 Savvy" : "Confirm to save to Savvy"
 
     var body: some View {
         HStack(spacing: 9) {
@@ -338,8 +339,7 @@ private struct ShareCaptureFooter: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
             Spacer(minLength: 8)
-            Image(systemName: "arrow.up.right")
-                .font(.caption.weight(.black))
+
         }
         .foregroundColor(SaveTheme.ink)
         .padding(.vertical, 11)
@@ -354,6 +354,8 @@ private struct ShareCaptureFooter: View {
 }
 
 private struct PendingSharedPlace: Codable {
+    var ownerSubject: String? = nil
+    var googlePlaceId: String? = nil
     var name: String
     var address: String
     var category: String
@@ -428,6 +430,7 @@ private struct SocialPlaceEvidenceDiagnostic: Codable {
 }
 
 private struct PendingReviewCandidate: Codable {
+    var ownerSubject: String? = nil
     // Preserve app-assigned retry identity when the extension rewrites the shared queue.
     var localVaultRecordID: UUID? = nil
     var candidateName: String
@@ -482,6 +485,13 @@ struct ShareExtensionView: View {
     @State private var savedReviewCandidateCount: Int?
     @State private var parseError: String?
     @State private var selectedCategory: String = "food"
+    @State private var analysisCredential: ShareAnalysisCredential?
+    @State private var verifiedChoices: [ShareAnalysisCandidate] = []
+    @State private var analysisAttempt = 0
+    @State private var analysisID = UUID()
+    @State private var analysisInputKey: String?
+    @State private var rotateAnalysisIDOnRetry = false
+    @State private var isSocialAnalysis = false
 
     private let categories = ["food", "cafe", "bar", "attraction", "stay", "shopping"]
 
@@ -499,7 +509,7 @@ struct ShareExtensionView: View {
                             .foregroundStyle(SaveTheme.coral)
                             .frame(width: 64, height: 64)
                             .background(SaveTheme.coral.opacity(0.14), in: Circle())
-                        Text("Savvy needs one more clue")
+                        Text(isSocialAnalysis ? shareText("分析未完成", "Analysis incomplete") : "Savvy needs one more clue")
                             .font(ShareAtlasType.display(25, relativeTo: .title2))
                             .foregroundColor(SaveTheme.ink)
                         Text(error)
@@ -507,7 +517,22 @@ struct ShareExtensionView: View {
                             .foregroundColor(SaveTheme.muted)
                             .multilineTextAlignment(.center)
                             .lineSpacing(3)
-                        Text("Try sharing a map link, a clearer caption, or a frame with the place name.")
+                        if isSocialAnalysis {
+                            Button(shareText("重新分析", "Retry analysis")) {
+                                if rotateAnalysisIDOnRetry {
+                                    analysisID = UUID()
+                                    rotateAnalysisIDOnRetry = false
+                                }
+                                analysisAttempt += 1
+                            }
+                                .buttonStyle(.borderedProminent)
+                                .tint(SaveTheme.coral)
+                                .accessibilityIdentifier("share.capture.retryAnalysis")
+                            Button(shareText("先保存來源", "Keep source")) { keepSocialSource() }
+                                .buttonStyle(.bordered)
+                                .accessibilityIdentifier("share.capture.keepSource")
+                        }
+                        Text(isSocialAnalysis ? shareText("來源尚未加入地圖。", "No place has been added to your map.") : "Try sharing a map link, a clearer caption, or a frame with the place name.")
                             .font(ShareAtlasType.body(12))
                             .foregroundColor(SaveTheme.muted)
                             .multilineTextAlignment(.center)
@@ -523,6 +548,8 @@ struct ShareExtensionView: View {
                     .frame(maxHeight: .infinity)
                     .padding(.horizontal, 20)
                     .accessibilityIdentifier("share.capture.error")
+                } else if !verifiedChoices.isEmpty {
+                    verifiedPlacesPreview
                 } else if !reviewCandidates.isEmpty {
                     reviewCandidatesPreview(reviewCandidates)
                 } else if let candidate = reviewCandidate {
@@ -545,7 +572,12 @@ struct ShareExtensionView: View {
         }
         .background(ShareScrapbookBackground().ignoresSafeArea())
         .toolbarBackground(.hidden, for: .navigationBar)
-        .task {
+        .task(id: analysisAttempt) {
+            isParsing = true
+            parseError = nil
+            parsedPlace = nil
+            verifiedChoices = []
+            reviewCandidates = []
             await extractAndParse()
         }
     }
@@ -1006,6 +1038,7 @@ struct ShareExtensionView: View {
         let cityHint = candidate.evidence
             .compactMap { evidenceCityHint(from: $0) }
             .first
+        if candidate.reviewState == "analysis_pending" { return semanticPendingLabel }
         return cityHint ?? "Needs exact address"
     }
 
@@ -1241,15 +1274,9 @@ struct ShareExtensionView: View {
 
         if let sourceURL = URL(string: resolvedShareURLString),
            isSocialURL(sourceURL) {
-            // The extension has no authenticated backend session. Queue the
-            // full source for the same server-owned analysis used by the app;
-            // never label a regex guess or a direct client model call as success.
-            let caption = SocialShareTextNormalizer.normalize([sharedTitle, sharedText, resolvedShareURLString].filter { !$0.isEmpty }.joined(separator: "\n")).captionEvidence
-            reviewCandidates = [PendingReviewCandidate(candidateName: "Source clue", address: "", category: "other",
-                sourceURL: resolvedShareURLString, sourceText: caption, evidence: ["Source preserved; semantic analysis pending"],
-                confidence: 0, missingInfo: ["Analysis pending", "Exact place", "User confirmation"],
-                savedAt: Date(), isSourceOnly: true, reviewState: "analysis_pending")]
-            selectedCategory = "other"
+            sharedURL = resolvedShareURLString
+            isSocialAnalysis = true
+            await analyzeSharedSocialURL(resolvedShareURLString)
             isParsing = false
             return
         }
@@ -1354,6 +1381,136 @@ struct ShareExtensionView: View {
             }
         }
         isParsing = false
+    }
+
+    private func shareText(_ chinese: String, _ english: String) -> String {
+        Locale.preferredLanguages.first?.hasPrefix("zh") == true ? chinese : english
+    }
+
+    private var socialCaption: String {
+        SocialShareTextNormalizer.normalize([sharedTitle, sharedText, sharedURL]
+            .filter { !$0.isEmpty }.joined(separator: "\n")).captionEvidence
+    }
+
+    private func analyzeSharedSocialURL(_ sourceURL: String) async {
+        do {
+            guard let credential = ShareAnalysisKeychain.read(), credential.isUsable() else {
+                throw ShareAnalysisError.sessionUnavailable
+            }
+            let inputKey = sourceURL + "\n" + socialCaption
+            if analysisInputKey != inputKey || analysisCredential != credential {
+                analysisID = UUID()
+                analysisInputKey = inputKey
+                rotateAnalysisIDOnRetry = false
+            } else if rotateAnalysisIDOnRetry {
+                analysisID = UUID()
+                rotateAnalysisIDOnRetry = false
+            }
+            analysisCredential = credential
+            let result: ShareAnalysisResponse
+            do {
+                result = try await ShareAnalysisClient().analyze(sourceURL: sourceURL, caption: socialCaption,
+                    credential: credential, analysisID: analysisID)
+            } catch ShareAnalysisError.analysisFailed {
+                // Only a server-confirmed terminal failure starts a fresh run.
+                // Lost responses reuse the ID and replay without another charge.
+                try Task.checkCancellation()
+                guard ShareAnalysisKeychain.read() == credential else { throw ShareAnalysisError.sessionChanged }
+                analysisID = UUID()
+                result = try await ShareAnalysisClient().analyze(sourceURL: sourceURL, caption: socialCaption,
+                    credential: credential, analysisID: analysisID)
+            }
+            try Task.checkCancellation()
+            guard ShareAnalysisKeychain.read() == credential else { throw ShareAnalysisError.sessionChanged }
+            guard result.semanticStatus != "analysis_pending" else {
+                // Completed pending results are stored against this ID; reuse
+                // would replay forever. Rotate so Retry starts a new claim.
+                rotateAnalysisIDOnRetry = true
+                analysisID = UUID()
+                throw ShareAnalysisError.serviceUnavailable
+            }
+            let verified = result.candidates.filter(\.isVerified)
+            if verified.count == 1, let candidate = verified.first {
+                chooseVerifiedPlace(candidate)
+            } else if !verified.isEmpty {
+                verifiedChoices = verified
+            } else if !result.candidates.isEmpty {
+                reviewCandidates = result.candidates.map { candidate in
+                    PendingReviewCandidate(ownerSubject: credential.ownerSubject,
+                        candidateName: candidate.name, address: candidate.address, category: candidate.category,
+                        sourceURL: sourceURL, sourceText: socialCaption, evidence: candidate.evidence,
+                        confidence: candidate.confidence, missingInfo: candidate.missingInfo,
+                        savedAt: Date(), reviewState: "unresolved_place_candidate")
+                }
+            } else {
+                throw ShareAnalysisError.noPlaceEvidence
+            }
+        } catch is CancellationError {
+            return
+        } catch {
+            guard !Task.isCancelled else { return }
+            parseError = (error as? ShareAnalysisError)?.errorDescription ?? ShareAnalysisError.serviceUnavailable.errorDescription
+        }
+    }
+
+    private func chooseVerifiedPlace(_ candidate: ShareAnalysisCandidate) {
+        guard candidate.isVerified else { return }
+        verifiedChoices = []
+        selectedCategory = candidate.category
+        parsedPlace = ParsedPlace(name: candidate.name, address: candidate.address,
+            category: candidate.category, iconName: iconForCategory(candidate.category),
+            latitude: candidate.latitude, longitude: candidate.longitude, dishes: [], priceRange: nil,
+            googlePlaceId: candidate.placeId)
+    }
+
+    private var verifiedPlacesPreview: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(shareText("選擇要保存的地點", "Choose a place to save"))
+                    .font(ShareAtlasType.display(25, relativeTo: .title2))
+                Text(shareText("已核對地圖位置；選擇後確認保存。", "Map locations verified. Choose a place, then confirm to save."))
+                    .foregroundStyle(SaveTheme.muted)
+                ForEach(Array(verifiedChoices.enumerated()), id: \.offset) { _, candidate in
+                    Button { chooseVerifiedPlace(candidate) } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(candidate.name).font(ShareAtlasType.strong(18))
+                            Text(candidate.address).font(ShareAtlasType.body(14))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(18)
+                        .background(SaveTheme.paper, in: RoundedRectangle(cornerRadius: 18))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(18)
+        }
+    }
+
+    private func shareAccountStillMatches() -> Bool {
+        guard isSocialAnalysis, let credential = analysisCredential else { return !isSocialAnalysis }
+        guard ShareAnalysisKeychain.read() == credential, credential.isUsable() else {
+            parseError = ShareAnalysisError.sessionChanged.errorDescription
+            return false
+        }
+        return true
+    }
+
+    private func keepSocialSource() {
+        // Failed analysis never creates a map pin; this button is an explicit
+        // local source save. Preserve the originating account when available.
+        let current = ShareAnalysisKeychain.read()
+        if let analysisCredential, current != analysisCredential {
+            parseError = ShareAnalysisError.sessionChanged.errorDescription
+            return
+        }
+        let candidate = PendingReviewCandidate(ownerSubject: current?.ownerSubject,
+            candidateName: "Source clue", address: "", category: "other", sourceURL: sharedURL,
+            sourceText: socialCaption, evidence: ["Source preserved; semantic analysis pending"],
+            confidence: 0, missingInfo: ["Analysis pending", "User confirmation"], savedAt: Date(),
+            isSourceOnly: true, reviewState: "analysis_pending")
+        reviewCandidates = [candidate]
+        saveReviewCandidates([candidate], sourceFallback: true)
     }
 
     // MARK: - Gemini Parsing
@@ -3410,6 +3567,8 @@ struct ShareExtensionView: View {
     // MARK: - Save
 
     private func savePlace() {
+        guard !isSaved else { return }
+        if isSocialAnalysis && !shareAccountStillMatches() { return }
         guard let place = parsedPlace else { return }
         guard let latitude = place.latitude,
               let longitude = place.longitude,
@@ -3428,6 +3587,8 @@ struct ShareExtensionView: View {
         }
 
         let pendingPlace = PendingSharedPlace(
+            ownerSubject: analysisCredential?.ownerSubject,
+            googlePlaceId: place.googlePlaceId,
             name: place.name,
             address: place.address,
             category: selectedCategory,
@@ -3458,7 +3619,9 @@ struct ShareExtensionView: View {
         saveReviewCandidates(candidates)
     }
 
-    private func saveReviewCandidates(_ candidates: [PendingReviewCandidate]) {
+    private func saveReviewCandidates(_ candidates: [PendingReviewCandidate], sourceFallback: Bool = false) {
+        guard !isSaved else { return }
+        if isSocialAnalysis && !sourceFallback && !shareAccountStillMatches() { return }
         guard !candidates.isEmpty else { return }
         guard let fileURL = appGroupFileURL(named: SAVEProductionConfig.pendingReviewCandidatesFileName) else {
             parseError = "Shared app storage is unavailable"

@@ -1342,3 +1342,166 @@ private final class AnalysisRequestURLProtocol: URLProtocol {
     }
     override func stopLoading() {}
 }
+
+@MainActor
+final class ShareInlineAnalysisTests: XCTestCase {
+    private func credential(owner: String = "did:privy:owner") -> ShareAnalysisCredential {
+        ShareAnalysisCredential(token: "analysis-only-test-token", ownerSubject: owner,
+            expiresAt: Date().addingTimeInterval(3600), apiBaseURL: "https://api.example.test")
+    }
+
+    private func client(status: Int = 200, body: String) -> ShareAnalysisClient {
+        TransportFailureURLProtocol.responses = [(status, body)]
+        TransportFailureURLProtocol.requestCount = 0
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [TransportFailureURLProtocol.self]
+        return ShareAnalysisClient(session: URLSession(configuration: configuration))
+    }
+
+    func testReportedInstagramCaptionCanReturnVerifiedPlaceWithoutMainAppHandoff() async throws {
+        let body = #"{"owner_subject":"did:privy:owner","semanticStatus":"ready","candidates":[{"name":"smith+hsu 中山旗艦店","address":"台北市中山區中山北路二段50巷31號","latitude":25.057,"longitude":121.52,"placeId":"fixture-place-id","types":["cafe"],"evidence":["Source name and address","Google Places match"],"confidence":0.95,"missingInfo":[]}]}"#
+        let result = try await client(body: body).analyze(sourceURL: "https://www.instagram.com/p/DdfnwpUDgBj/",
+            caption: "地點：smith+hsu 中山旗艦店\n台北市中山區中山北路二段50巷31號", credential: credential())
+        let candidate = try XCTUnwrap(result.candidates.first)
+        XCTAssertTrue(candidate.isVerified)
+        XCTAssertEqual(candidate.category, "cafe")
+        XCTAssertEqual(candidate.name, "smith+hsu 中山旗艦店")
+        XCTAssertEqual(TransportFailureURLProtocol.requestCount, 1)
+    }
+
+    func testCaptionOnlyCandidateNeverBecomesConfirmedPlaceWithoutProviderIdentity() throws {
+        var candidate = ShareAnalysisCandidate(name: "smith+hsu", address: "台北市中山區中山北路二段50巷31號",
+            latitude: 25.057, longitude: 121.52, evidence: [], confidence: 1, missingInfo: [])
+        XCTAssertFalse(candidate.isVerified)
+        candidate.placeId = "fixture-id"
+        candidate.latitude = .nan
+        XCTAssertFalse(candidate.isVerified)
+        candidate.latitude = 91
+        XCTAssertFalse(candidate.isVerified)
+        candidate.latitude = 25
+        candidate.address = ""
+        XCTAssertFalse(candidate.isVerified)
+    }
+
+    func testExpiredCredentialNeverMakesNetworkRequest() async {
+        var expired = credential()
+        expired.expiresAt = .distantPast
+        let client = client(body: "{}")
+        do {
+            _ = try await client.analyze(sourceURL: "https://www.instagram.com/p/DdfnwpUDgBj/", caption: "", credential: expired)
+            XCTFail("Expired session must not analyze")
+        } catch {}
+        XCTAssertEqual(TransportFailureURLProtocol.requestCount, 0)
+    }
+
+    func testOtherOwnerResponseIsRejected() async {
+        do {
+            _ = try await client(body: #"{"owner_subject":"did:privy:other","candidates":[]}"#)
+                .analyze(sourceURL: "https://www.instagram.com/p/DdfnwpUDgBj/", caption: "", credential: credential())
+            XCTFail("Account mismatch must not be accepted")
+        } catch ShareAnalysisError.sessionChanged {} catch { XCTFail("Unexpected error \(error)") }
+    }
+
+    func testRevokedCredentialSurfacesSignInInsteadOfMissingAddress() async {
+        do {
+            _ = try await client(status: 401, body: "{}").analyze(
+                sourceURL: "https://www.instagram.com/p/DdfnwpUDgBj/", caption: "", credential: credential())
+            XCTFail("Revoked session must fail")
+        } catch ShareAnalysisError.sessionUnavailable {} catch { XCTFail("Unexpected error \(error)") }
+    }
+
+    func testIssueRejectsAccountMismatchAndParsesFractionalExpiry() async throws {
+        let issued = try await client(body: #"{"token":"scoped-token","owner_subject":"did:privy:owner","expires_at":"2099-01-01T00:00:00.000Z"}"#)
+            .issue(bearer: "test-bearer", ownerSubject: "did:privy:owner", installationID: UUID().uuidString, apiBaseURL: "https://api.example.test")
+        XCTAssertTrue(issued.isUsable())
+        do {
+            _ = try await client(body: #"{"token":"scoped-token","owner_subject":"did:privy:other","expires_at":"2099-01-01T00:00:00Z"}"#)
+                .issue(bearer: "test-bearer", ownerSubject: "did:privy:owner", installationID: UUID().uuidString, apiBaseURL: "https://api.example.test")
+            XCTFail("Other owner's token must not be stored")
+        } catch ShareAnalysisError.sessionChanged {} catch { XCTFail("Unexpected error \(error)") }
+    }
+
+    func testConfirmedShareStaysQueuedUntilItsOwnerReturns() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let service = PendingPlaceImportService(overrideContainerURL: directory)
+        let place = PendingSharedPlace(ownerSubject: "did:privy:owner", googlePlaceId: "verified-provider-id",
+            name: "smith+hsu", address: "台北市中山區中山北路二段50巷31號", category: "cafe",
+            latitude: 25.057, longitude: 121.52, dishes: [], savedAt: Date())
+        service.restorePendingPlaces([place])
+        XCTAssertTrue(service.consumePendingPlaces().isEmpty, "Signed-out local import cannot display owned places")
+        XCTAssertTrue(service.consumePendingPlaces(ownerSubject: "did:privy:other").isEmpty)
+        let returned = service.consumePendingPlaces(ownerSubject: "did:privy:owner")
+        XCTAssertEqual(returned.count, 1)
+        XCTAssertEqual(Place.from(try XCTUnwrap(returned.first)).googlePlaceId, "verified-provider-id")
+        XCTAssertTrue(service.consumePendingPlaces(ownerSubject: "did:privy:owner").isEmpty)
+    }
+
+    func testRetryReusesAnalysisIdentifierAfterLostResponse() async throws {
+        AnalysisRequestURLProtocol.reset()
+        let id = UUID()
+        var first = true
+        AnalysisRequestURLProtocol.handler = { request in
+            XCTAssertEqual(try AnalysisRequestURLProtocol.body(request)["analysis_id"] as? String, id.uuidString)
+            if first { first = false; throw URLError(.networkConnectionLost) }
+            return (200, #"{"owner_subject":"did:privy:owner","candidates":[]}"#)
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let client = ShareAnalysisClient(session: URLSession(configuration: configuration))
+        do {
+            _ = try await client.analyze(sourceURL: "https://www.instagram.com/p/DdfnwpUDgBj/", caption: "",
+                credential: credential(), analysisID: id)
+            XCTFail("Transport fixture should fail once")
+        } catch {}
+        _ = try await client.analyze(sourceURL: "https://www.instagram.com/p/DdfnwpUDgBj/", caption: "",
+            credential: credential(), analysisID: id)
+        XCTAssertEqual(AnalysisRequestURLProtocol.requests.count, 2)
+    }
+
+    func testPendingImportCannotSendWithAnotherAccountsToken() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original }
+        let owner = "did:privy:import-owner"
+        let place = Place.from(PendingSharedPlace(ownerSubject: owner, googlePlaceId: "fixture-id",
+            name: "smith+hsu", address: "Taipei", category: "cafe", latitude: 25, longitude: 121,
+            dishes: [], savedAt: Date()))
+        for shouldSwitch in [false, true] {
+            auth.authState = .authenticated(userId: owner)
+            let generation = auth.sessionGeneration
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { _ in (200, "{}") }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+            let service = SupabaseService(apiBaseURL: "https://analysis.test",
+                session: URLSession(configuration: configuration), accessTokenProvider: {
+                    await MainActor.run {
+                        if shouldSwitch { auth.authState = .authenticated(userId: "did:privy:other") }
+                    }
+                    return shouldSwitch ? "other-token" : "owner-token"
+                })
+            do {
+                try await SAVEPendingImportSessionScope.$current.withValue((generation, owner)) {
+                    try await service.savePlace(place, userId: owner)
+                    try await service.updatePlace(place)
+                }
+                XCTAssertFalse(shouldSwitch, "A switched account must cancel the import")
+            } catch is CancellationError {
+                XCTAssertTrue(shouldSwitch)
+            }
+            XCTAssertEqual(AnalysisRequestURLProtocol.requests.count, shouldSwitch ? 0 : 2)
+        }
+    }
+
+    func testReviewSourceIsAlsoBoundToOriginatingAccount() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let service = PendingPlaceImportService(overrideContainerURL: directory)
+        service.restorePendingReviewCandidates([PendingReviewCandidate(ownerSubject: "owner", candidateName: "Source clue",
+            address: "", category: "other", sourceURL: "https://www.instagram.com/p/DdfnwpUDgBj/", sourceText: nil, evidence: [],
+            confidence: 0, missingInfo: ["Analysis pending"], savedAt: Date(), isSourceOnly: true, reviewState: "analysis_pending")])
+        XCTAssertTrue(service.consumePendingReviewCandidates(ownerSubject: "other").isEmpty)
+        XCTAssertEqual(service.consumePendingReviewCandidates(ownerSubject: "owner").count, 1)
+    }
+}

@@ -233,6 +233,14 @@ import {
 } from "./friendRatings.js";
 import { sharedPostBodyMaxBytes } from "./sharedPostPhotos.js";
 import { listSharedPosts, getSharedPostPhoto, getSharedPost, putSharedPost, withdrawSharedPost, saveSharedPost, savedPostAttributions, getPassport, getSocialProfile } from "./sharedPosts.js";
+import {
+  normalizeShareAnalyzeInput,
+  normalizeShareInstallationId,
+  shareAnalysisInputHash,
+  shareExtensionAnalysisResponse,
+  ShareExtensionSessionError,
+  ShareExtensionSessionStore,
+} from "./shareExtensionSessions.js";
 
 type JsonBody = Record<string, unknown>;
 type QueryValue = string | number | boolean | Date | string[] | JsonBody | JsonBody[] | null;
@@ -907,6 +915,7 @@ const jsonbFields = new Set([
 ]);
 
 const analysisUsageStore = new AnalysisUsageStore(pool);
+const shareExtensionSessionStore = new ShareExtensionSessionStore(pool);
 
 createServer(async (request, response) => {
   if (request.method === "OPTIONS") {
@@ -1041,6 +1050,13 @@ createServer(async (request, response) => {
         query: (sql, values) => pool.query(sql, [...values] as QueryValue[]),
       });
       return sendJson(response, result.body, result.statusCode);
+    }
+
+    // Share Extension credentials are deliberately route-scoped. Session
+    // creation accepts a real Privy bearer; later calls accept only the
+    // revocable restricted token and never pass through resolveUserId().
+    if (isV0 && resource === "share-extension") {
+      return await handleShareExtension(request, response, segments.slice(1));
     }
 
     const userId = await resolveUserId(request);
@@ -2421,6 +2437,109 @@ async function handleRecommendationOutcomes(
 }
 
 class AnalysisProviderError extends Error { constructor(readonly upstreamStatus:number) { super("Upstream provider failed"); } }
+
+async function handleShareExtension(
+  request: IncomingMessage,
+  response: ServerResponse,
+  segments: string[],
+): Promise<void> {
+  response.setHeader("Cache-Control", "private, no-store");
+  response.setHeader("Referrer-Policy", "no-referrer");
+  const [action] = segments;
+  if (segments.length !== 1 || !["sessions", "analyze"].includes(action)) {
+    return sendJson(response, { error: "Not found" }, 404);
+  }
+  try {
+    if (action === "sessions" && request.method === "POST") {
+      const bearer = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (!bearer) throw new ShareExtensionSessionError(401, "A Privy bearer token is required");
+      let ownerSubject: string;
+      try { ownerSubject = await verifiedPrivySubject(bearer); }
+      catch { throw new ShareExtensionSessionError(401, "Invalid Privy bearer token"); }
+      const body = await readJson(request, 2_048);
+      if (Object.keys(body).some(key => key !== "installation_id")) {
+        throw new ShareExtensionSessionError(400, "Unsupported share session field");
+      }
+      const installationId = normalizeShareInstallationId(body.installation_id);
+      const ownerId = await profileIdForPrivySubject(ownerSubject);
+      const issued = await shareExtensionSessionStore.issue(ownerId, ownerSubject, installationId);
+      return sendJson(response, {
+        token: issued.token,
+        owner_subject: issued.session.ownerSubject,
+        expires_at: issued.session.expiresAt.toISOString(),
+      }, 201);
+    }
+    if (action === "sessions" && request.method === "DELETE") {
+      const token = requiredShareExtensionToken(request);
+      await shareExtensionSessionStore.revoke(token);
+      return sendJson(response, null, 204);
+    }
+    if (action === "analyze" && request.method === "POST") {
+      const token = requiredShareExtensionToken(request);
+      const session = await shareExtensionSessionStore.authorize(token);
+      const input = normalizeShareAnalyzeInput(await readJson(request, 65_536));
+      const inputHash = shareAnalysisInputHash(input);
+      const claim = await shareExtensionSessionStore.claimAnalysis(session.id, input.analysisId, inputHash).catch(async error => {
+        if (error instanceof ShareExtensionSessionError && error.code === "analysis_failed") {
+          await analysisUsageStore.finish(session.ownerId, input.analysisId, "failed", []).catch(() => {});
+        }
+        throw error;
+      });
+      if (claim.kind === "replay") return sendJson(response, claim.response);
+
+      let usageStarted = false;
+      let usageFinished = false;
+      let claimFinished = false;
+      try {
+        await analysisUsageStore.start(session.ownerId, input.analysisId, false, true);
+        usageStarted = true;
+        const ownerCache = new LinkPlaceIntelligence(pool).ownerCache(session.ownerId);
+        const recovery = await withAnalysisUsage(analysisUsageStore, session.ownerId, input.analysisId, () =>
+          runSourceSearchRecovery({
+            sourceUrl: input.sourceUrl,
+            semanticSourceText: input.caption,
+          }, undefined, undefined, {
+            includeMediaEvidence: false,
+            semanticAnalyzer: source => analyzeSocialCaption(source, { cache: ownerCache }),
+          }));
+        const providerFailed = recovery.receipt.failureReason?.kind === "provider_failure";
+        await analysisUsageStore.finish(
+          session.ownerId,
+          input.analysisId,
+          providerFailed ? "failed" : recovery.candidates.length ? "review_candidate" : "source_only",
+          [],
+        );
+        usageFinished = true;
+        const result = shareExtensionAnalysisResponse(session.ownerSubject, recovery);
+        await shareExtensionSessionStore.completeAnalysis(session.id, input.analysisId, inputHash, result);
+        claimFinished = true;
+        return sendJson(response, result);
+      } catch (error) {
+        if (!claimFinished) {
+          await shareExtensionSessionStore.failAnalysis(session.id, input.analysisId, inputHash).catch(() => {});
+        }
+        if (usageStarted && !usageFinished) {
+          await analysisUsageStore.finish(session.ownerId, input.analysisId, "failed", []).catch(() => {});
+        }
+        throw error;
+      }
+    }
+    return sendJson(response, { error: "Method not allowed" }, 405);
+  } catch (error) {
+    if (error instanceof ShareExtensionSessionError) return sendJson(response, { error: error.message, ...(error.code ? { code: error.code } : {}) }, error.status);
+    if (isMissingRelationError(error)) return sendJson(response, { error: "Share Extension sessions are unavailable" }, 503);
+    throw error;
+  }
+}
+
+function requiredShareExtensionToken(request: IncomingMessage): string {
+  const header = request.headers["x-save-share-token"];
+  if (typeof header !== "string" || !header || header.length > 256) {
+    throw new ShareExtensionSessionError(401, "A share session token is required");
+  }
+  return header;
+}
+
 function requestAnalysisId(request: IncomingMessage, body?: JsonBody): string | undefined {
   const header=request.headers["x-save-analysis-id"];
   if (Array.isArray(header)) throw new AnalysisControlError(400,"analysis_invalid_id","Invalid analysis identifier");
