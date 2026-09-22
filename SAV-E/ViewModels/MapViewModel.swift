@@ -971,8 +971,15 @@ final class MapViewModel: ObservableObject {
     }
 
     private func importPendingPlaces(for userId: String) async throws {
+        guard authService.currentUserId == userId else { throw CancellationError() }
+        try await SAVEPendingImportSessionScope.$current.withValue((authService.sessionGeneration, userId)) {
+            try await importPendingPlacesForSession(for: userId)
+        }
+    }
+
+    private func importPendingPlacesForSession(for userId: String) async throws {
         let importGeneration = authService.sessionGeneration
-        let pending = pendingImportService.consumePendingPlaces(ownerSubject: authService.currentUserId)
+        let pending = pendingImportService.consumePendingPlaces(ownerSubject: userId)
         guard !pending.isEmpty else { return }
 
         var importedPlaces: [Place] = []
@@ -996,9 +1003,9 @@ final class MapViewModel: ObservableObject {
                     try await supabaseService.updatePlace(merged)
                 } else {
                     try await supabaseService.savePlace(merged, userId: userId)
-                    recordPassportFieldActionAfterSavingPlace()
                 }
                 guard authService.sessionGeneration == importGeneration, authService.currentUserId == userId else { throw CancellationError() }
+                if remote == nil { recordPassportFieldActionAfterSavingPlace() }
                 persistedPlaces.removeAll { $0.id == merged.id }
                 persistedPlaces.append(merged)
                 mirrorToLocalVault(merged)
@@ -1006,10 +1013,13 @@ final class MapViewModel: ObservableObject {
                 if existing == nil { importedPlaces.append(merged) }
             } catch {
                 failedImports.append(pendingPlace)
-                syncFailedPlaceName = pendingPlace.name
+                if authService.sessionGeneration == importGeneration, authService.currentUserId == userId {
+                    syncFailedPlaceName = pendingPlace.name
+                }
             }
         }
-        if !importedPlaces.isEmpty { revealImportedPlaces(importedPlaces) }
+        if authService.sessionGeneration == importGeneration, authService.currentUserId == userId,
+           !importedPlaces.isEmpty { revealImportedPlaces(importedPlaces) }
         pendingImportService.restorePendingPlaces(failedImports)
     }
 
@@ -1024,11 +1034,18 @@ final class MapViewModel: ObservableObject {
     }
 
     private func importPendingReviewCandidates(for userId: String, runSourceRecovery: Bool) async throws {
+        guard authService.currentUserId == userId else { throw CancellationError() }
+        try await SAVEPendingImportSessionScope.$current.withValue((authService.sessionGeneration, userId)) {
+            try await importPendingReviewCandidatesForSession(for: userId, runSourceRecovery: runSourceRecovery)
+        }
+    }
+
+    private func importPendingReviewCandidatesForSession(for userId: String, runSourceRecovery: Bool) async throws {
         let importGeneration = authService.sessionGeneration
         var failedCandidates: [PendingReviewCandidate] = []
 
-        while true {
-            let pending = pendingImportService.consumePendingReviewCandidates(ownerSubject: authService.currentUserId)
+        while authService.sessionGeneration == importGeneration, authService.currentUserId == userId {
+            let pending = pendingImportService.consumePendingReviewCandidates(ownerSubject: userId)
             guard !pending.isEmpty else { break }
 
             let (currentBatch, remainder) = Self.pendingReviewImportBatch(pending)

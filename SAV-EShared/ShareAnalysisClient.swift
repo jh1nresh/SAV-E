@@ -48,7 +48,7 @@ enum ShareAnalysisKeychain {
 }
 
 enum ShareAnalysisError: LocalizedError {
-    case sessionUnavailable, sessionChanged, serviceUnavailable, noPlaceEvidence
+    case sessionUnavailable, sessionChanged, serviceUnavailable, noPlaceEvidence, analysisFailed
 
     var errorDescription: String? {
         let zh = Locale.preferredLanguages.first?.hasPrefix("zh") == true
@@ -57,7 +57,7 @@ enum ShareAnalysisError: LocalizedError {
             return zh ? "請先開啟 Savvy 登入，再回來分享。也可以先保存這個連結。" : "Open Savvy and sign in, then share again. You can also keep this link for later."
         case .sessionChanged:
             return zh ? "帳號已變更，請重新分享以保存在目前帳號。" : "Your account changed. Share again to save to the current account."
-        case .serviceUnavailable:
+        case .serviceUnavailable, .analysisFailed:
             return zh ? "分析暫時無法完成。請重試，或先保存來源。" : "Analysis is temporarily unavailable. Retry or keep the source."
         case .noPlaceEvidence:
             return zh ? "這次未能核對到確切地點。可重試，或先保存來源。" : "No exact place could be verified this time. Retry or keep the source."
@@ -158,6 +158,9 @@ struct ShareAnalysisClient: Sendable {
         let (data, response) = try await session.data(for: request, delegate: ShareAnalysisNoRedirect())
         guard let http = response as? HTTPURLResponse else { throw ShareAnalysisError.serviceUnavailable }
         if http.statusCode == 401 { throw ShareAnalysisError.sessionUnavailable }
+        if http.statusCode == 409,
+           let error = try? JSONSerialization.jsonObject(with: data) as? [String: String],
+           error["code"] == "analysis_failed" { throw ShareAnalysisError.analysisFailed }
         guard (200..<300).contains(http.statusCode), data.count <= 1_000_000 else { throw ShareAnalysisError.serviceUnavailable }
         return data
     }

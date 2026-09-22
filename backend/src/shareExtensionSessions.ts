@@ -15,7 +15,7 @@ const socialDomains = [
 ];
 
 export class ShareExtensionSessionError extends Error {
-  constructor(readonly status: number, message: string) { super(message); }
+  constructor(readonly status: number, message: string, readonly code?: string) { super(message); }
 }
 
 export type ShareExtensionSession = {
@@ -170,8 +170,8 @@ export class ShareExtensionSessionStore {
       throw new ShareExtensionSessionError(409, "analysis_id was already used for different input");
     }
     if (row.status === "completed") return { kind: "replay", response: row.response };
-    if (row.status === "failed") throw new ShareExtensionSessionError(409, "Analysis already failed; use a new analysis_id");
-    throw new ShareExtensionSessionError(409, "Analysis is already in progress");
+    if (row.status === "failed") throw new ShareExtensionSessionError(409, "Analysis already failed; use a new analysis_id", "analysis_failed");
+    throw new ShareExtensionSessionError(409, "Analysis is already in progress", "analysis_in_progress");
   }
 
   async completeAnalysis(sessionId: string, analysisId: string, requestHash: string, response: unknown): Promise<void> {

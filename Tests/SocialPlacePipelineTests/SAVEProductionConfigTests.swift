@@ -1437,6 +1437,63 @@ final class ShareInlineAnalysisTests: XCTestCase {
         XCTAssertTrue(service.consumePendingPlaces(ownerSubject: "did:privy:owner").isEmpty)
     }
 
+    func testRetryReusesAnalysisIdentifierAfterLostResponse() async throws {
+        AnalysisRequestURLProtocol.reset()
+        let id = UUID()
+        var first = true
+        AnalysisRequestURLProtocol.handler = { request in
+            XCTAssertEqual(try AnalysisRequestURLProtocol.body(request)["analysis_id"] as? String, id.uuidString)
+            if first { first = false; throw URLError(.networkConnectionLost) }
+            return (200, #"{"owner_subject":"did:privy:owner","candidates":[]}"#)
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let client = ShareAnalysisClient(session: URLSession(configuration: configuration))
+        do {
+            _ = try await client.analyze(sourceURL: "https://www.instagram.com/p/DdfnwpUDgBj/", caption: "",
+                credential: credential(), analysisID: id)
+            XCTFail("Transport fixture should fail once")
+        } catch {}
+        _ = try await client.analyze(sourceURL: "https://www.instagram.com/p/DdfnwpUDgBj/", caption: "",
+            credential: credential(), analysisID: id)
+        XCTAssertEqual(AnalysisRequestURLProtocol.requests.count, 2)
+    }
+
+    func testPendingImportCannotSendWithAnotherAccountsToken() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original }
+        let owner = "did:privy:import-owner"
+        let place = Place.from(PendingSharedPlace(ownerSubject: owner, googlePlaceId: "fixture-id",
+            name: "smith+hsu", address: "Taipei", category: "cafe", latitude: 25, longitude: 121,
+            dishes: [], savedAt: Date()))
+        for shouldSwitch in [false, true] {
+            auth.authState = .authenticated(userId: owner)
+            let generation = auth.sessionGeneration
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { _ in (200, "{}") }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+            let service = SupabaseService(apiBaseURL: "https://analysis.test",
+                session: URLSession(configuration: configuration), accessTokenProvider: {
+                    await MainActor.run {
+                        if shouldSwitch { auth.authState = .authenticated(userId: "did:privy:other") }
+                    }
+                    return shouldSwitch ? "other-token" : "owner-token"
+                })
+            do {
+                try await SAVEPendingImportSessionScope.$current.withValue((generation, owner)) {
+                    try await service.savePlace(place, userId: owner)
+                    try await service.updatePlace(place)
+                }
+                XCTAssertFalse(shouldSwitch, "A switched account must cancel the import")
+            } catch is CancellationError {
+                XCTAssertTrue(shouldSwitch)
+            }
+            XCTAssertEqual(AnalysisRequestURLProtocol.requests.count, shouldSwitch ? 0 : 2)
+        }
+    }
+
     func testReviewSourceIsAlsoBoundToOriginatingAccount() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

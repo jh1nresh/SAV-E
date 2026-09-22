@@ -2521,7 +2521,7 @@ async function handleShareExtension(
     }
     return sendJson(response, { error: "Method not allowed" }, 405);
   } catch (error) {
-    if (error instanceof ShareExtensionSessionError) return sendJson(response, { error: error.message }, error.status);
+    if (error instanceof ShareExtensionSessionError) return sendJson(response, { error: error.message, ...(error.code ? { code: error.code } : {}) }, error.status);
     if (isMissingRelationError(error)) return sendJson(response, { error: "Share Extension sessions are unavailable" }, 503);
     throw error;
   }

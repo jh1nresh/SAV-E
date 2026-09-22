@@ -488,6 +488,8 @@ struct ShareExtensionView: View {
     @State private var analysisCredential: ShareAnalysisCredential?
     @State private var verifiedChoices: [ShareAnalysisCandidate] = []
     @State private var analysisAttempt = 0
+    @State private var analysisID = UUID()
+    @State private var analysisInputKey: String?
     @State private var isSocialAnalysis = false
 
     private let categories = ["food", "cafe", "bar", "attraction", "stay", "shopping"]
@@ -1388,8 +1390,25 @@ struct ShareExtensionView: View {
             guard let credential = ShareAnalysisKeychain.read(), credential.isUsable() else {
                 throw ShareAnalysisError.sessionUnavailable
             }
+            let inputKey = sourceURL + "\n" + socialCaption
+            if analysisInputKey != inputKey || analysisCredential != credential {
+                analysisID = UUID()
+                analysisInputKey = inputKey
+            }
             analysisCredential = credential
-            let result = try await ShareAnalysisClient().analyze(sourceURL: sourceURL, caption: socialCaption, credential: credential)
+            let result: ShareAnalysisResponse
+            do {
+                result = try await ShareAnalysisClient().analyze(sourceURL: sourceURL, caption: socialCaption,
+                    credential: credential, analysisID: analysisID)
+            } catch ShareAnalysisError.analysisFailed {
+                // Only a server-confirmed terminal failure starts a fresh run.
+                // Lost responses reuse the ID and replay without another charge.
+                try Task.checkCancellation()
+                guard ShareAnalysisKeychain.read() == credential else { throw ShareAnalysisError.sessionChanged }
+                analysisID = UUID()
+                result = try await ShareAnalysisClient().analyze(sourceURL: sourceURL, caption: socialCaption,
+                    credential: credential, analysisID: analysisID)
+            }
             try Task.checkCancellation()
             guard ShareAnalysisKeychain.read() == credential else { throw ShareAnalysisError.sessionChanged }
             guard result.semanticStatus != "analysis_pending" else { throw ShareAnalysisError.serviceUnavailable }
