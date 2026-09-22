@@ -350,6 +350,12 @@ final class SaveHomeMemorySceneTests: XCTestCase {
         XCTAssertEqual(lifted.rotation, 0, accuracy: 0.01)
         scene.configure(places: places, liftedIDs: [], size: size, searching: false)
         XCTAssertNotNil(scene.poses[id], "Keep the same preview while it drops.")
+        let dropping = try XCTUnwrap(scene.poses[id])
+        scene.beginDrag(at: CGPoint(x: dropping.x, y: dropping.y))
+        scene.moveDrag(to: CGPoint(x: dropping.x + 30, y: dropping.y - 30))
+        scene.endDrag()
+        XCTAssertNotNil(scene.childNode(withName: id.uuidString)?.action(forKey: "transition"),
+                        "Touching an off-budget returning preview must not cancel its eviction.")
         for step in 61...120 { renderer.update(atTime: 100 + Double(step) / 60) }
         XCTAssertNil(scene.poses[id])
         XCTAssertNil(scene.childNode(withName: id.uuidString))

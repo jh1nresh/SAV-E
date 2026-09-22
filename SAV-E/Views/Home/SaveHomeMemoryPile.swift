@@ -219,6 +219,8 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
     /// Shared by SpriteKit touch handling and deterministic scene tests.
     func beginDrag(at point: CGPoint) {
         guard let (id, node) = stamp(at: point) else { return }
+        // Returning off-budget previews must finish their removal transition.
+        guard restingIDs.contains(id) || lifted.contains(id) else { return }
         if lifted.contains(id) {
             tappedLiftedID = id
             dragStart = point
