@@ -331,28 +331,29 @@ final class SaveHomeMemorySceneTests: XCTestCase {
         let scene = SaveHomeMemoryScene()
         renderer.scene = scene
         defer { scene.pause(); renderer.scene = nil }
-        let places = (0..<25).map { index in
+        let places = (0..<49).map { index in
             Place(id: UUID(), name: "Memory \(index)", address: "Taipei", latitude: 25, longitude: 121,
                   category: .cafe, status: .wantToGo, sourcePlatform: .other, createdAt: Date())
         }
-        let id = places[24].id
+        let id = places[48].id
         let size = CGSize(width: 358, height: 250)
+        let liftedY = size.height - min(74, size.height * 0.22)
         scene.configure(places: places, liftedIDs: [id], size: size, searching: true)
         let start = try XCTUnwrap(scene.poses[id])
         for step in 0...12 { renderer.update(atTime: 100 + Double(step) / 60) }
         let middle = try XCTUnwrap(scene.poses[id])
         XCTAssertGreaterThan(middle.y, start.y)
-        XCTAssertLessThan(middle.y, 183)
+        XCTAssertLessThan(middle.y, liftedY)
         for step in 13...60 { renderer.update(atTime: 100 + Double(step) / 60) }
         let lifted = try XCTUnwrap(scene.poses[id])
-        XCTAssertEqual(lifted.y, 183, accuracy: 0.1)
+        XCTAssertEqual(lifted.y, liftedY, accuracy: 0.1)
         XCTAssertEqual(lifted.rotation, 0, accuracy: 0.01)
         scene.configure(places: places, liftedIDs: [], size: size, searching: false)
         XCTAssertNotNil(scene.poses[id], "Keep the same preview while it drops.")
         for step in 61...120 { renderer.update(atTime: 100 + Double(step) / 60) }
         XCTAssertNil(scene.poses[id])
         XCTAssertNil(scene.childNode(withName: id.uuidString))
-        XCTAssertEqual(scene.visiblePlaces.count, 24)
+        XCTAssertEqual(scene.visiblePlaces.count, 48)
     }
 
     func testOffscreenMatchEntersBoundedSimulationAndRepeatedQueriesKeepNodeIdentity() throws {
@@ -364,18 +365,18 @@ final class SaveHomeMemorySceneTests: XCTestCase {
         let target = places[79]
         let size = CGSize(width: 358, height: 250)
         scene.configure(places: places, liftedIDs: [], size: size, searching: false)
-        XCTAssertEqual(scene.visiblePlaces.count, 24)
+        XCTAssertEqual(scene.visiblePlaces.count, 48)
         XCTAssertNil(scene.childNode(withName: target.id.uuidString))
 
         scene.configure(places: places, liftedIDs: [target.id], size: size, searching: true)
         let original = try XCTUnwrap(scene.childNode(withName: target.id.uuidString))
-        XCTAssertEqual(scene.visiblePlaces.count, 25)
+        XCTAssertEqual(scene.visiblePlaces.count, 49)
         XCTAssertFalse(try XCTUnwrap(original.physicsBody).isDynamic)
-        XCTAssertNotNil(original.action(forKey: "lift"))
+        XCTAssertNotNil(original.action(forKey: "transition"))
 
         scene.configure(places: places, liftedIDs: [], size: size, searching: true)
         XCTAssertTrue(original === scene.childNode(withName: target.id.uuidString))
-        XCTAssertNotNil(original.action(forKey: "lift"), "Returning a preview schedules its drop.")
+        XCTAssertNotNil(original.action(forKey: "transition"), "Returning a preview schedules its drop.")
         scene.configure(places: places, liftedIDs: [target.id], size: size, searching: true)
         XCTAssertTrue(original === scene.childNode(withName: target.id.uuidString))
         XCTAssertFalse(try XCTUnwrap(original.physicsBody).isDynamic)
@@ -398,4 +399,153 @@ final class SaveHomeMemorySceneTests: XCTestCase {
         XCTAssertNil(scene.childNode(withName: place.id.uuidString))
         scene.pause()
     }
+
+    func testDragReleaseRemainsInWorldAndTapOpensTheExactStamp() throws {
+        let places = (0..<6).map { index in
+            Place(id: UUID(), name: "Memory \(index)", address: "Taipei", latitude: 25, longitude: 121,
+                  category: .cafe, status: .wantToGo, sourcePlatform: .other, createdAt: Date())
+        }
+        let scene = SaveHomeMemoryScene()
+        let size = CGSize(width: 402, height: 550)
+        scene.configure(places: places, liftedIDs: [], size: size, searching: false)
+        let id = places[0].id
+        let start = try XCTUnwrap(scene.poses[id])
+        XCTAssertEqual(start.scale, 0.95, accuracy: 0.01)
+
+        scene.beginDrag(at: CGPoint(x: start.x, y: start.y))
+        scene.moveDrag(to: CGPoint(x: -200, y: 900))
+        let moved = try XCTUnwrap(scene.poses[id])
+        XCTAssertGreaterThan(moved.x, 0)
+        XCTAssertLessThan(moved.x, size.width)
+        XCTAssertGreaterThan(moved.y, 0)
+        XCTAssertLessThan(moved.y, size.height)
+        scene.endDrag()
+        XCTAssertTrue(try XCTUnwrap(scene.childNode(withName: id.uuidString)).physicsBody?.isDynamic == true)
+
+        var openedID: UUID?
+        var wasRestoredBeforeOpen = false
+        let restingNode = try XCTUnwrap(scene.childNode(withName: id.uuidString))
+        scene.onOpenPlace = { opened in
+            openedID = opened
+            wasRestoredBeforeOpen = restingNode.physicsBody?.isDynamic == true && restingNode.zPosition == 0
+        }
+        let released = try XCTUnwrap(scene.poses[id])
+        scene.beginDrag(at: CGPoint(x: released.x, y: released.y))
+        scene.endDrag()
+        XCTAssertEqual(openedID, id)
+        XCTAssertTrue(wasRestoredBeforeOpen, "A resting tap restores its body and pile depth before navigation.")
+
+        openedID = nil
+        scene.configure(places: places, liftedIDs: [id], size: size, searching: true)
+        let liftedStart = try XCTUnwrap(scene.poses[id])
+        scene.beginDrag(at: CGPoint(x: liftedStart.x, y: liftedStart.y))
+        scene.endDrag()
+        XCTAssertEqual(openedID, id, "A lifted stamp still opens its exact saved place.")
+        scene.pause()
+    }
+
+    func testCancelledAndLiftedSwipeInteractionsNeverOpenOrFreezeStamps() throws {
+        let places = (0..<3).map { index in
+            Place(id: UUID(), name: "Memory \(index)", address: "Taipei", latitude: 25, longitude: 121,
+                  category: .cafe, status: .wantToGo, sourcePlatform: .other, createdAt: Date())
+        }
+        let scene = SaveHomeMemoryScene()
+        let size = CGSize(width: 402, height: 550)
+        var openedID: UUID?
+        scene.onOpenPlace = { openedID = $0 }
+        scene.configure(places: places, liftedIDs: [], size: size, searching: false)
+
+        let restingID = places[0].id
+        let restingPose = try XCTUnwrap(scene.poses[restingID])
+        scene.beginDrag(at: CGPoint(x: restingPose.x, y: restingPose.y))
+        XCTAssertFalse(try XCTUnwrap(scene.childNode(withName: restingID.uuidString)).physicsBody?.isDynamic == true)
+        scene.cancelInteraction()
+        XCTAssertTrue(try XCTUnwrap(scene.childNode(withName: restingID.uuidString)).physicsBody?.isDynamic == true)
+        scene.endDrag()
+        XCTAssertNil(openedID)
+
+        let liftedID = places[1].id
+        scene.configure(places: places, liftedIDs: [liftedID], size: size, searching: true)
+        let liftedPose = try XCTUnwrap(scene.poses[liftedID])
+        scene.beginDrag(at: CGPoint(x: liftedPose.x, y: liftedPose.y))
+        scene.moveDrag(to: CGPoint(x: liftedPose.x + 18, y: liftedPose.y))
+        scene.endDrag()
+        XCTAssertNil(openedID, "A lifted swipe is not a detail tap.")
+
+        let pausePose = try XCTUnwrap(scene.poses[restingID])
+        scene.beginDrag(at: CGPoint(x: pausePose.x, y: pausePose.y))
+        scene.pause()
+        XCTAssertTrue(try XCTUnwrap(scene.childNode(withName: restingID.uuidString)).physicsBody?.isDynamic == true)
+        scene.endDrag()
+        XCTAssertNil(openedID, "Inactive/offscreen cleanup cannot navigate.")
+    }
+
+    func testRotatedOverlappingStampHitUsesHighestVisibleExactID() throws {
+        let places = (0..<2).map { index in
+            Place(id: UUID(), name: "Memory \(index)", address: "Taipei", latitude: 25, longitude: 121,
+                  category: .cafe, status: .wantToGo, sourcePlatform: .other, createdAt: Date())
+        }
+        let scene = SaveHomeMemoryScene()
+        scene.configure(places: places, liftedIDs: [], size: CGSize(width: 402, height: 550), searching: false)
+        let lower = try XCTUnwrap(scene.childNode(withName: places[0].id.uuidString))
+        let upper = try XCTUnwrap(scene.childNode(withName: places[1].id.uuidString))
+        lower.position = CGPoint(x: 201, y: 220)
+        lower.zRotation = .pi / 4
+        lower.zPosition = 1
+        upper.position = CGPoint(x: 201, y: 220)
+        upper.zRotation = -.pi / 5
+        upper.zPosition = 2
+
+        var openedID: UUID?
+        scene.onOpenPlace = { openedID = $0 }
+        let transformedPoint = upper.convert(CGPoint(x: 38, y: 0), to: scene)
+        scene.beginDrag(at: transformedPoint)
+        scene.endDrag()
+        XCTAssertEqual(openedID, places[1].id)
+        scene.pause()
+    }
+
+    func testResizeAndQueryReseatNonmatchingRestingStampBelowComposer() throws {
+        let places = (0..<4).map { index in
+            Place(id: UUID(), name: "Memory \(index)", address: "Taipei", latitude: 25, longitude: 121,
+                  category: .cafe, status: .wantToGo, sourcePlatform: .other, createdAt: Date())
+        }
+        let scene = SaveHomeMemoryScene()
+        let fullSize = CGSize(width: 402, height: 550)
+        let keyboardSize = CGSize(width: 402, height: 250)
+        scene.configure(places: places, liftedIDs: [], size: fullSize, searching: false)
+
+        let nonmatchingID = places[3].id
+        let staleNode = try XCTUnwrap(scene.childNode(withName: nonmatchingID.uuidString))
+        staleNode.position = CGPoint(x: 201, y: fullSize.height - 36)
+        staleNode.physicsBody?.velocity = CGVector(dx: 40, dy: 80)
+
+        scene.configure(places: places, liftedIDs: Array(places.prefix(3).map(\.id)), size: keyboardSize, searching: true)
+        let reflowed = try XCTUnwrap(scene.poses[nonmatchingID])
+        XCTAssertLessThanOrEqual(reflowed.y, keyboardSize.height * 0.42)
+        XCTAssertTrue(try XCTUnwrap(scene.childNode(withName: nonmatchingID.uuidString)).physicsBody?.isDynamic == true)
+        XCTAssertEqual(try XCTUnwrap(scene.childNode(withName: nonmatchingID.uuidString)).physicsBody?.velocity.dx, 0, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(scene.childNode(withName: nonmatchingID.uuidString)).physicsBody?.velocity.dy, 0, accuracy: 0.001)
+        scene.pause()
+    }
+
+    func testLargeCollectionSettlesBelowTheSearchArea() throws {
+        let renderer = SKRenderer(device: try XCTUnwrap(MTLCreateSystemDefaultDevice()))
+        let scene = SaveHomeMemoryScene()
+        renderer.scene = scene
+        defer { scene.pause(); renderer.scene = nil }
+        let places = (0..<85).map { index in
+            Place(id: UUID(), name: "Memory \(index)", address: "Taipei", latitude: 25, longitude: 121,
+                  category: .cafe, status: .wantToGo, sourcePlatform: .other, createdAt: Date())
+        }
+        let size = CGSize(width: 402, height: 540)
+        scene.configure(places: places, liftedIDs: [], size: size, searching: false)
+        for step in 0...600 { renderer.update(atTime: 100 + Double(step) / 60) }
+        XCTAssertEqual(scene.visiblePlaces.count, 48)
+        XCTAssertEqual(Set(scene.visiblePlaces.map(\.id)).count, 48)
+        XCTAssertTrue(scene.poses.values.allSatisfy { $0.y < size.height / 2 },
+                      "A large resting collection must not occupy the retrieval area above search.")
+        XCTAssertFalse(scene.isAnimating, "The dense resting pile must still settle and pause.")
+    }
+
 }

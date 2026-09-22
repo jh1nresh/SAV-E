@@ -16,6 +16,7 @@ struct SaveHomeMemoryView: View {
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var search = SaveHomeSearch()
     @State private var keyboardTop: CGFloat?
+    @State private var showsAllResults = false
     @FocusState private var isEditing: Bool
 
     private var usesStaticPresentation: Bool {
@@ -28,6 +29,8 @@ struct SaveHomeMemoryView: View {
 
     private var matches: [Place] { search.matchingPlaces(in: places) }
 
+    private var usesListPresentation: Bool { usesStaticPresentation || showsAllResults || places.isEmpty }
+
     var body: some View {
         GeometryReader { geometry in
             let global = geometry.frame(in: .global)
@@ -35,52 +38,17 @@ struct SaveHomeMemoryView: View {
             let visibleHeight = keyboardTop.map {
                 min(geometry.size.height, max(280, ($0 - global.minY) / scale))
             } ?? geometry.size.height
-            VStack(alignment: .leading, spacing: 12) {
-                header
-                if !places.isEmpty { searchField }
-                if !search.filters.isEmpty { filterChips }
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        if reviewCounts.total > 0 { reviewButton }
-                        if places.isEmpty {
-                            emptyCollection
-                        } else {
-                            if !usesStaticPresentation {
-                                SaveHomeMemoryPile(
-                                    places: places,
-                                    liftedIDs: search.isActive ? Array(matches.prefix(3).map(\.id)) : [],
-                                    isSearching: search.isActive,
-                                    onOpenPlace: { place in
-                                        isEditing = false
-                                        onOpenPlace(place)
-                                    }
-                                )
-                                // Keep the physics coordinate space fixed while revealing
-                                // room above the pile for search previews.
-                                .frame(height: 250)
-                                .frame(height: search.isActive ? 250 : 140, alignment: .bottom)
-                                .clipped()
-                                .animation(.easeInOut(duration: 0.48), value: search.isActive)
-                                .accessibilityIdentifier("home.memoryPile")
-                            }
-                            resultHeading
-                            if matches.isEmpty {
-                                emptyResults
-                            } else {
-                                LazyVStack(spacing: 12) {
-                                    ForEach(matches) { place in
-                                        resultCard(place, isFirst: place.id == matches.first?.id)
-                                    }
-                                }
-                            }
-                        }
+            VStack(spacing: 0) {
+                header.padding(.horizontal, 22)
+                if usesListPresentation {
+                    listPresentation.padding(.horizontal, 22)
+                } else {
+                    if reviewCounts.total > 0 {
+                        reviewButton.padding(.horizontal, 22).padding(.bottom, 8)
                     }
-                    .padding(.bottom, 16)
+                    collectionWorld
                 }
-                .scrollDismissesKeyboard(.interactively)
-                .accessibilityIdentifier("home.savedPlaces")
             }
-            .padding(.horizontal, 22)
             .padding(.top, 58)
             .padding(.bottom, keyboardTop == nil ? 100 : 12)
             .frame(width: geometry.size.width, height: visibleHeight, alignment: .top)
@@ -92,6 +60,72 @@ struct SaveHomeMemoryView: View {
             keyboardTop = frame.minY
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardTop = nil }
+    }
+
+    /// The screen itself is the physical collection: retrieved stamps above the
+    /// composer, resting stamps below. There is no decorative stage inside a list.
+    private var collectionWorld: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .top) {
+                SaveHomeMemoryPile(
+                    places: places,
+                    liftedIDs: search.isActive ? Array(matches.prefix(3).map(\.id)) : [],
+                    isSearching: search.isActive,
+                    onOpenPlace: { place in
+                        isEditing = false
+                        onOpenPlace(place)
+                    }
+                )
+                .accessibilityIdentifier("home.memoryPile")
+                if search.isActive && matches.isEmpty {
+                    emptyResults
+                        .padding(.horizontal, 28)
+                        .padding(.top, 16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                VStack(spacing: 8) {
+                    searchField
+                        .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 14, y: 6)
+                    if !search.filters.isEmpty { filterChips }
+                }
+                .accessibilityElement(children: .contain)
+                .padding(.horizontal, 22)
+                .frame(width: geometry.size.width)
+                .position(x: geometry.size.width / 2, y: geometry.size.height * 0.48)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home.savedPlaces")
+    }
+
+    /// Full results are an explicit secondary view; accessibility modes use it
+    /// directly so no place ever depends on motion or a small pile target.
+    private var listPresentation: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !places.isEmpty { searchField }
+            if !search.filters.isEmpty { filterChips }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if reviewCounts.total > 0 { reviewButton }
+                    if places.isEmpty {
+                        emptyCollection
+                    } else {
+                        resultHeading
+                        if matches.isEmpty { emptyResults }
+                        else {
+                            LazyVStack(spacing: 12) {
+                                ForEach(matches) { place in
+                                    resultCard(place, isFirst: place.id == matches.first?.id)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.bottom, 16)
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .accessibilityIdentifier("home.savedPlaces")
+        }
     }
 
     private var header: some View {
@@ -112,9 +146,28 @@ struct SaveHomeMemoryView: View {
                 .accessibilityLabel(localized("More Home actions", "更多首頁操作"))
                 .accessibilityIdentifier("home.more")
             }
-            Text(localized(places.count == 1 ? "1 confirmed place" : "\(places.count) confirmed places", "\(places.count) 個已確認地點"))
-                .font(SaveAtlasType.body(12))
-                .foregroundStyle(SaveAtlasPalette.muted)
+            HStack(spacing: 8) {
+                Text(search.isActive
+                     ? localized(matches.count == 1 ? "1 place found" : "\(matches.count) places found", "找到 \(matches.count) 個地點")
+                     : localized(places.count == 1 ? "1 confirmed place" : "\(places.count) confirmed places", "\(places.count) 個已確認地點"))
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .accessibilityIdentifier("home.search.count")
+                Spacer(minLength: 4)
+                if !usesStaticPresentation && !places.isEmpty {
+                    Button {
+                        isEditing = false
+                        showsAllResults.toggle()
+                    } label: {
+                        Label(showsAllResults ? localized("Collection", "收藏堆") : localized("View all", "查看全部"),
+                              systemImage: showsAllResults ? "arrow.left" : "list.bullet")
+                            .font(SaveAtlasType.body(12))
+                            .frame(minHeight: 44)
+                    }
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .accessibilityIdentifier(showsAllResults ? "home.collection" : "home.viewAll")
+                }
+            }
         }
     }
 
@@ -187,7 +240,6 @@ struct SaveHomeMemoryView: View {
                  : localized(hasLocation ? "Saved nearby" : "Recently saved", hasLocation ? "附近的收藏" : "最近收藏"))
                 .font(SaveAtlasType.strong(18))
                 .foregroundStyle(SaveAtlasPalette.forest)
-                .accessibilityIdentifier("home.search.count")
             Text(search.isActive
                  ? localized("Add a city to narrow it down. Remove a filter to explore again.", "再加上城市縮小範圍，移除條件就能重新探索。")
                  : localized("Try “cafe”, then add a city. Watch your memories rise.", "試試「咖啡店」，再加上城市，讓收藏浮上來。"))
@@ -284,10 +336,11 @@ struct SaveHomeMemoryView: View {
                 Spacer()
                 Image(systemName: "chevron.right")
             }
-            .font(SaveAtlasType.body(14))
-            .padding(14)
-            .frame(minHeight: 48)
-            .background(SaveAtlasPalette.sky.opacity(0.35), in: RoundedRectangle(cornerRadius: 16))
+            .font(SaveAtlasType.body(12))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .frame(minHeight: 44)
+            .background(SaveAtlasPalette.sky.opacity(0.35), in: RoundedRectangle(cornerRadius: 14))
         }
         .foregroundStyle(SaveAtlasPalette.ink)
         .accessibilityIdentifier("home.review")

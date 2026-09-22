@@ -29,7 +29,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             attach(app, name: "home-memory-collection-\(staticMode)")
             field.tap()
             field.typeText("cafe")
-            // Capture the exact keyboard/lifting state, before committing the first chip.
+            // Capture the settled keyboard/lift layout before committing the first chip.
+            RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+            XCTAssertTrue(app.buttons["root.passport"].isHittable)
             attach(app, name: "home-memory-keyboard-\(staticMode)")
             app.buttons["home.search.commit"].tap()
             let count = app.staticTexts["home.search.count"]
@@ -37,18 +39,24 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertEqual(count.label, staticMode ? "找到 3 個地點" : "3 places found")
             XCTAssertTrue(app.buttons["home.filter.cafe"].exists)
             attach(app, name: "home-memory-cafes-\(staticMode)")
+            if !staticMode {
+                app.buttons["home.viewAll"].tap()
+                XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'")).count, 3)
+                app.buttons["home.collection"].tap()
+                XCTAssertEqual(count.label, "3 places found")
+            }
             field.tap()
             field.typeText("Taipei")
             app.buttons["home.search.commit"].tap()
             XCTAssertEqual(count.label, staticMode ? "找到 1 個地點" : "1 place found")
             XCTAssertTrue(app.buttons["home.filter.taipei"].exists)
             let taipei = app.buttons["home.place.10000000-0000-0000-0000-000000000001"]
-            XCTAssertTrue(taipei.waitForExistence(timeout: stepTimeout))
+            if staticMode { XCTAssertTrue(taipei.waitForExistence(timeout: stepTimeout)) }
             attach(app, name: "home-memory-taipei-\(staticMode)")
             app.buttons["home.filter.taipei"].tap()
             XCTAssertEqual(count.label, staticMode ? "找到 3 個地點" : "3 places found")
             app.buttons["home.filter.cafe"].tap()
-            XCTAssertEqual(count.label, staticMode ? "最近收藏" : "Recently saved")
+            XCTAssertEqual(count.label, staticMode ? "4 個已確認地點" : "4 confirmed places")
             field.tap()
             field.typeText("台北咖啡店")
             app.buttons["home.search.commit"].tap()
@@ -66,9 +74,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             field.typeText("Taipei cafe")
             app.buttons["home.search.commit"].tap()
             XCTAssertEqual(count.label, staticMode ? "找到 1 個地點" : "1 place found")
-            XCTAssertTrue(scrollUntilHittable(taipei, in: app.scrollViews["home.savedPlaces"], maxSwipes: 3))
-            taipei.tap()
+            if staticMode {
+                XCTAssertTrue(scrollUntilHittable(taipei, in: app.scrollViews["home.savedPlaces"], maxSwipes: 3))
+                taipei.tap()
+            } else {
+                // Exercise the actual SpriteView touch path, not the secondary list.
+                RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+                let world = app.descendants(matching: .any)["home.savedPlaces"]
+                let liftY = min(74, world.frame.height * 0.22)
+                world.coordinate(withNormalizedOffset: CGVector(dx: 1.0 / 6, dy: 0))
+                    .withOffset(CGVector(dx: 0, dy: liftY)).tap()
+            }
             XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(app.staticTexts["Taipei Window Cafe"].firstMatch.exists)
             attach(app, name: "home-memory-open-detail-\(staticMode)")
             app.terminate()
         }
@@ -228,6 +246,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let savedCount = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'confirmed places'")).firstMatch
         XCTAssertTrue(savedCount.waitForExistence(timeout: stepTimeout))
         let count = savedCount.label
+        app.buttons["home.viewAll"].tap()
         let firstPlace = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'")).firstMatch
         XCTAssertTrue(firstPlace.waitForExistence(timeout: stepTimeout))
         let featuredName = app.staticTexts["home.featuredName"]
@@ -416,6 +435,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
             "Production Home should render confirmed saved places immediately."
         )
+        waitForHomeCoverImagery(app)
+        XCTAssertTrue(app.textFields["home.search"].isHittable)
+        XCTAssertTrue(app.buttons["home.viewAll"].isHittable)
+        XCTAssertFalse(app.staticTexts["Saved nearby"].exists)
+        XCTAssertFalse(app.staticTexts["Recently saved"].exists)
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'")).firstMatch.exists,
+                       "Home keeps the collection at the bottom; full rows belong behind View all.")
+        attach(app, name: "home-saved-places-world")
+        app.buttons["home.viewAll"].tap()
         let firstPlace = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
         ).firstMatch
@@ -438,6 +466,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
         XCTAssertTrue(rootTabButton("Home", app: app).isSelected)
         attach(app, name: "home-saved-places-library")
+        app.buttons["home.collection"].tap()
+        XCTAssertTrue(app.buttons["home.viewAll"].isHittable)
     }
 
     @MainActor
@@ -814,10 +844,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(rootTabButton("Save", app: app).exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.review"].exists)
-        XCTAssertTrue(
-            app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'"))
-                .firstMatch.exists
-        )
+        XCTAssertTrue(app.buttons["home.viewAll"].isHittable)
+        app.buttons["home.viewAll"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'")).firstMatch.exists)
+        app.buttons["home.collection"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.trips"].exists)
 
@@ -2767,7 +2797,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Live Home should show the saved-place library before the parity raster."
         )
         XCTAssertTrue(app.textFields["home.search"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.staticTexts["home.featuredName"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["home.search.count"].waitForExistence(timeout: stepTimeout))
         // The physical pile settles before capturing the production baseline.
         // A fixed deadline belongs only to this motion capture, not app startup.
         RunLoop.current.run(until: Date().addingTimeInterval(5.5))

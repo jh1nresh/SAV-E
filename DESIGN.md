@@ -558,12 +558,15 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 
 ### Home collection search
 
-Home presents confirmed private Map Stamps as a small physical postage pile and a
-complete readable collection below it. Search lifts up to three visible previews;
-all matching places remain in the scrollable result list. Only the simulation is
-bounded (24 resting stamps plus transitioning previews), never the search inventory.
-Resting stamps use category artwork; only lifted previews and visible list rows
-load stored photos. The idle viewport is compact while physics keeps a fixed stage.
+Home is a full-screen physical collection of confirmed private Map Stamps. The
+search composer floats between the open retrieval area above and the resting pile
+below. Search lifts up to three matching stamps; View all opens the complete
+readable result list and Collection returns to the world without losing filters.
+Only the simulation is bounded (48 resting stamps plus transitioning previews),
+never the search inventory. Resting stamps use category artwork; only lifted
+previews and visible list rows load stored photos. No headline, decorative claw
+or persistent result list competes with the collection field. Sparse collections
+remain honest: never duplicate stamps to simulate abundance.
 
 Typing previews an intersection with existing filters. Submit keeps category/city
 chips and clears the composer; each chip can be removed independently. “cafe” then
@@ -572,13 +575,16 @@ addresses, not incidental mentions in notes. Other terms search stored place met
 public discovery or automatic saves occur on this Home surface.
 
 Lifted stamps retain identity, turn upright and become stable tap targets; removing
-a filter returns excluded previews to the pile. Full rows show paper-backed names,
+a filter returns excluded previews to the pile. Dragging picks up a real stamp;
+release restores its physical movement, and tapping opens that exact saved place.
+Full rows show paper-backed names,
 addresses and explicit Map Stamp state. A separate sky entry distinguishes
 Review Candidate and Source Clue counts using the same criteria as Saves.
 The existing More menu keeps collection management and Trips accessible.
 
 Reduce Motion, VoiceOver and accessibility text sizes use the static result list.
-The keyboard leaves the composer accessible and the collection scrollable. Physics
+The keyboard resizes the collection world, keeping lifted stamps above the
+composer; the secondary list remains scrollable. Physics
 pauses after settling, when Home disappears, or when the app becomes inactive.
 Existing distance/newest ordering remains the ordering within matching results.
 
