@@ -60,8 +60,14 @@ class FakeSharePool {
     }
     if (sql.includes("share-extension:analysis-claim")) {
       if (this.analyses.has(String(values[1]))) return { rows: [], rowCount: 0 };
-      const row = { session_id: values[0], analysis_id: values[1], request_hash: values[2], status: "pending", response: null };
+      const row = { session_id: values[0], analysis_id: values[1], request_hash: values[2], status: "pending", response: null, created_at: new Date() };
       this.analyses.set(String(values[1]), row); return { rows: [row], rowCount: 1 };
+    }
+    if (sql.includes("share-extension:analysis-expire")) {
+      const row = this.analyses.get(String(values[1]));
+      if (row && row.session_id === values[0] && row.request_hash === values[2] && row.status === "pending"
+          && row.created_at.getTime() < Date.now() - 10 * 60_000) row.status = "failed";
+      return { rows: [], rowCount: 0 };
     }
     if (sql.includes("share-extension:analysis-existing")) {
       const row = this.analyses.get(String(values[0])); return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
@@ -130,6 +136,26 @@ test("share analysis claims prevent concurrent billing, replay cached output, an
   const response = { owner_subject: "did:privy:a", candidates: [], receipt: { output: "source_only_clue" } };
   await store.completeAnalysis(firstSession, id, hash, response);
   assert.deepEqual(await store.claimAnalysis(firstSession, id, hash), { kind: "replay", response });
+});
+
+test("abandoned pending claims become terminal without expiring fresh or completed results", async () => {
+  const pool = new FakeSharePool();
+  const store = new ShareExtensionSessionStore(pool as any);
+  const session = randomUUID(), id = randomUUID(), hash = "a".repeat(64);
+  await store.claimAnalysis(session, id, hash);
+  await assert.rejects(store.claimAnalysis(session, id, hash),
+    error => error instanceof ShareExtensionSessionError && error.code === "analysis_in_progress");
+  pool.analyses.get(id)!.created_at = new Date(Date.now() - 11 * 60_000);
+  await assert.rejects(store.claimAnalysis(randomUUID(), id, hash), /different input/);
+  assert.equal(pool.analyses.get(id)!.status, "pending", "another session cannot expire the claim");
+  await assert.rejects(store.claimAnalysis(session, id, hash),
+    error => error instanceof ShareExtensionSessionError && error.code === "analysis_failed");
+  await assert.rejects(store.completeAnalysis(session, id, hash, {}), /no longer active/);
+  const completed = randomUUID();
+  await store.claimAnalysis(session, completed, hash);
+  await store.completeAnalysis(session, completed, hash, { candidates: [] });
+  pool.analyses.get(completed)!.created_at = new Date(Date.now() - 11 * 60_000);
+  assert.deepEqual(await store.claimAnalysis(session, completed, hash), { kind: "replay", response: { candidates: [] } });
 });
 
 test("inline share analysis accepts the provided smith&hsu caption and returns a map-verifiable review candidate", async () => {

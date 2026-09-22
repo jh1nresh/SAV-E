@@ -160,6 +160,15 @@ export class ShareExtensionSessionStore {
       [sessionId, analysisId, requestHash],
     );
     if (inserted.rows[0]) return { kind: "new" };
+    // A crashed process cannot leave the extension retrying forever. The
+    // atomic transition preserves any response that completed before expiry.
+    await this.pool.query(
+      `/* share-extension:analysis-expire */
+       update share_extension_analyses set status='failed',finished_at=now()
+       where session_id=$1 and analysis_id=$2 and request_hash=$3 and status='pending'
+         and created_at < now() - interval '10 minutes'`,
+      [sessionId, analysisId, requestHash],
+    );
     const existing = await this.pool.query(
       `/* share-extension:analysis-existing */
        select session_id,request_hash,status,response from share_extension_analyses where analysis_id=$1`,

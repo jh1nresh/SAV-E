@@ -2479,7 +2479,12 @@ async function handleShareExtension(
       const session = await shareExtensionSessionStore.authorize(token);
       const input = normalizeShareAnalyzeInput(await readJson(request, 65_536));
       const inputHash = shareAnalysisInputHash(input);
-      const claim = await shareExtensionSessionStore.claimAnalysis(session.id, input.analysisId, inputHash);
+      const claim = await shareExtensionSessionStore.claimAnalysis(session.id, input.analysisId, inputHash).catch(async error => {
+        if (error instanceof ShareExtensionSessionError && error.code === "analysis_failed") {
+          await analysisUsageStore.finish(session.ownerId, input.analysisId, "failed", []).catch(() => {});
+        }
+        throw error;
+      });
       if (claim.kind === "replay") return sendJson(response, claim.response);
 
       let usageStarted = false;
