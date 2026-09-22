@@ -50,6 +50,9 @@ final class PrivyAuthService: ObservableObject {
     private let appId: String
     private let clientId: String
     private var authStateTask: Task<Void, Never>?
+    private var shareSessionTask: Task<Void, Never>?
+    private var shareSessionOwner: String?
+    private var shareSessionAttempt: UUID?
     private var interactiveAuthAttempts: Set<UUID> = []
 
     // MARK: App Review Demo
@@ -99,6 +102,7 @@ final class PrivyAuthService: ObservableObject {
 
     deinit {
         authStateTask?.cancel()
+        shareSessionTask?.cancel()
     }
 
     // MARK: - Session Restore
@@ -189,6 +193,7 @@ final class PrivyAuthService: ObservableObject {
     /// Never throws — if the network call fails we still enter local-only demo so
     /// the reviewer is never blocked at the door.
     func enterReviewerDemo() async {
+        invalidateShareAnalysisSession()
         let guestToken: String?
         if ReviewDemo.isOfflineUITestMode {
             guestToken = nil
@@ -267,6 +272,7 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Sign Out
 
     func signOut() async {
+        invalidateShareAnalysisSession()
         if isReviewerDemo {
             clearReviewerDemoState()
             sessionOrigin = .restored
@@ -346,9 +352,61 @@ final class PrivyAuthService: ObservableObject {
             sessionGeneration &+= 1
         }
         authState = .authenticated(userId: userId)
+        synchronizeShareAnalysisSession(userId: userId)
+    }
+
+    private func synchronizeShareAnalysisSession(userId: String) {
+        guard !isReviewerDemo else { invalidateShareAnalysisSession(); return }
+        let base = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]) ?? SAVEProductionConfig.defaultAPIBaseURL
+        if let credential = ShareAnalysisKeychain.read(), credential.ownerSubject == userId,
+           credential.apiBaseURL == base, credential.isUsable(at: Date().addingTimeInterval(7 * 86400)) { return }
+        if shareSessionOwner == userId { return }
+        invalidateShareAnalysisSession()
+        shareSessionOwner = userId
+        let attempt = UUID()
+        shareSessionAttempt = attempt
+        let generation = sessionGeneration
+        let installationKey = "save.share-analysis.installation-id"
+        let installationID = UserDefaults.standard.string(forKey: installationKey) ?? UUID().uuidString
+        UserDefaults.standard.set(installationID, forKey: installationKey)
+        shareSessionTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if self.shareSessionAttempt == attempt {
+                    self.shareSessionTask = nil
+                    self.shareSessionOwner = nil
+                    self.shareSessionAttempt = nil
+                }
+            }
+            do {
+                let bearer = try await self.accessToken()
+                guard !Task.isCancelled, self.sessionGeneration == generation, self.currentUserId == userId else { return }
+                let credential = try await ShareAnalysisClient().issue(bearer: bearer, ownerSubject: userId,
+                    installationID: installationID, apiBaseURL: base)
+                guard !Task.isCancelled, self.sessionGeneration == generation, self.currentUserId == userId else {
+                    await ShareAnalysisClient().revoke(credential)
+                    return
+                }
+                try ShareAnalysisKeychain.write(credential)
+            } catch {
+                // Sign-in remains available if the analysis service is offline.
+                // The extension gives a retry/sign-in message, never a false result.
+            }
+        }
+    }
+
+    private func invalidateShareAnalysisSession() {
+        shareSessionTask?.cancel()
+        shareSessionTask = nil
+        shareSessionOwner = nil
+        shareSessionAttempt = nil
+        let previous = ShareAnalysisKeychain.read()
+        ShareAnalysisKeychain.clear()
+        if let previous { Task { await ShareAnalysisClient().revoke(previous) } }
     }
 
     private func transitionToUnauthenticated() {
+        invalidateShareAnalysisSession()
         if authState != .unauthenticated {
             sessionGeneration &+= 1
         }

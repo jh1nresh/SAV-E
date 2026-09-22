@@ -912,7 +912,7 @@ final class MapViewModel: ObservableObject {
     }
 
     func importPendingPlacesForLocalUse() {
-        let pending = pendingImportService.consumePendingPlaces()
+        let pending = pendingImportService.consumePendingPlaces(ownerSubject: authService.currentUserId)
         guard !pending.isEmpty else { return }
 
         let previousIDs = Set(places.map(\.id))
@@ -971,7 +971,8 @@ final class MapViewModel: ObservableObject {
     }
 
     private func importPendingPlaces(for userId: String) async throws {
-        let pending = pendingImportService.consumePendingPlaces()
+        let importGeneration = authService.sessionGeneration
+        let pending = pendingImportService.consumePendingPlaces(ownerSubject: authService.currentUserId)
         guard !pending.isEmpty else { return }
 
         var importedPlaces: [Place] = []
@@ -987,6 +988,7 @@ final class MapViewModel: ObservableObject {
         for pendingPlace in pending {
             let place = Place.from(pendingPlace)
             do {
+                guard authService.sessionGeneration == importGeneration, authService.currentUserId == userId else { throw CancellationError() }
                 let remote = persistedPlaces.first { $0.matches(place) }
                 let existing = remote ?? existingSavedPlace(matching: place)
                 let merged = existing?.mergingSources(from: place) ?? place
@@ -996,6 +998,7 @@ final class MapViewModel: ObservableObject {
                     try await supabaseService.savePlace(merged, userId: userId)
                     recordPassportFieldActionAfterSavingPlace()
                 }
+                guard authService.sessionGeneration == importGeneration, authService.currentUserId == userId else { throw CancellationError() }
                 persistedPlaces.removeAll { $0.id == merged.id }
                 persistedPlaces.append(merged)
                 mirrorToLocalVault(merged)
@@ -1025,7 +1028,7 @@ final class MapViewModel: ObservableObject {
         var failedCandidates: [PendingReviewCandidate] = []
 
         while true {
-            let pending = pendingImportService.consumePendingReviewCandidates()
+            let pending = pendingImportService.consumePendingReviewCandidates(ownerSubject: authService.currentUserId)
             guard !pending.isEmpty else { break }
 
             let (currentBatch, remainder) = Self.pendingReviewImportBatch(pending)
@@ -1046,6 +1049,7 @@ final class MapViewModel: ObservableObject {
                     try await withImportAnalysis { checkSession in
                         var refinedCandidate = await socialLinkReviewCandidateService.refineCandidate(candidate)
                         try checkSession()
+                        refinedCandidate.ownerSubject = candidate.ownerSubject
                         refinedCandidate.savedAt = candidate.savedAt
                         _ = try saveLocalVaultService.saveReviewCandidate(refinedCandidate, recordID: localRecordID)
                         // A remote failure must retry the refined payload, not the original thin clue.

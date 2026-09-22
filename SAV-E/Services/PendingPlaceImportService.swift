@@ -2,6 +2,8 @@ import Foundation
 import MapKit
 
 struct PendingSharedPlace: Codable {
+    var ownerSubject: String? = nil
+    var googlePlaceId: String? = nil
     var name: String
     var address: String
     var category: String
@@ -211,6 +213,7 @@ nonisolated struct SemanticSourceIdentity: Codable, Hashable, Sendable {
 }
 
 struct PendingReviewCandidate: Codable {
+    var ownerSubject: String? = nil
     // Local queue identity survives remote failures; never part of place evidence.
     var localVaultRecordID: UUID? = nil
     var candidateName: String
@@ -237,6 +240,7 @@ struct PendingReviewCandidate: Codable {
     var sourceHandle: String? = nil
 
     init(
+        ownerSubject: String? = nil,
         candidateName: String,
         address: String,
         category: String,
@@ -261,6 +265,7 @@ struct PendingReviewCandidate: Codable {
         googleTypes: [String] = [],
         semanticSource: SemanticSourceIdentity? = nil
     ) {
+        self.ownerSubject = ownerSubject
         self.semanticSource = semanticSource
         self.googlePlaceId = googlePlaceId
         self.googleTypes = googleTypes
@@ -288,6 +293,7 @@ struct PendingReviewCandidate: Codable {
     }
 
     private enum CodingKeys: String, CodingKey {
+        case ownerSubject
         case semanticSource
         case googlePlaceId
         case googleTypes
@@ -315,6 +321,7 @@ struct PendingReviewCandidate: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        ownerSubject = try container.decodeIfPresent(String.self, forKey: .ownerSubject)
         semanticSource = try container.decodeIfPresent(SemanticSourceIdentity.self, forKey: .semanticSource)
         googlePlaceId = try container.decodeIfPresent(String.self, forKey: .googlePlaceId)
         googleTypes = try container.decodeIfPresent([String].self, forKey: .googleTypes) ?? []
@@ -756,30 +763,40 @@ final class PendingPlaceImportService {
         self.overrideContainerURL = overrideContainerURL
     }
 
-    func consumePendingPlaces() -> [PendingSharedPlace] {
-        consumePendingArray(named: SAVEProductionConfig.pendingPlacesFileName, as: PendingSharedPlace.self)
+    func consumePendingPlaces(ownerSubject: String? = nil) -> [PendingSharedPlace] {
+        consumePendingArray(named: SAVEProductionConfig.pendingPlacesFileName, as: PendingSharedPlace.self) {
+            $0.ownerSubject == nil || $0.ownerSubject == ownerSubject
+        }
     }
 
     func restorePendingPlaces(_ places: [PendingSharedPlace]) {
         appendPendingArray(places, named: SAVEProductionConfig.pendingPlacesFileName)
     }
 
-    func consumePendingReviewCandidates() -> [PendingReviewCandidate] {
-        consumePendingArray(named: SAVEProductionConfig.pendingReviewCandidatesFileName, as: PendingReviewCandidate.self)
+    func consumePendingReviewCandidates(ownerSubject: String? = nil) -> [PendingReviewCandidate] {
+        consumePendingArray(named: SAVEProductionConfig.pendingReviewCandidatesFileName, as: PendingReviewCandidate.self) {
+            $0.ownerSubject == nil || $0.ownerSubject == ownerSubject
+        }
     }
 
     func restorePendingReviewCandidates(_ candidates: [PendingReviewCandidate]) {
         appendPendingArray(candidates, named: SAVEProductionConfig.pendingReviewCandidatesFileName)
     }
 
-    private func consumePendingArray<Element: Decodable>(named fileName: String, as elementType: Element.Type) -> [Element] {
+    private func consumePendingArray<Element: Codable>(named fileName: String, as elementType: Element.Type, accepts: (Element) -> Bool) -> [Element] {
         guard let url = pendingFileURL(named: fileName) else { return [] }
         var result: [Element] = []
         coordinate(url: url, purpose: "consume \(fileName)") {
             guard fileManager.fileExists(atPath: url.path) else { return }
             do {
-                result = try loadArray([Element].self, from: url)
-                try fileManager.removeItem(at: url)
+                let items = try loadArray([Element].self, from: url)
+                let retained = items.filter { !accepts($0) }
+                if retained.isEmpty {
+                    try fileManager.removeItem(at: url)
+                } else {
+                    try JSONEncoder().encode(retained).write(to: url, options: [.atomic])
+                }
+                result = items.filter(accepts)
             } catch {
                 print("PendingPlaceImportService: preserving unreadable \(fileName): \(error)")
                 result = []
@@ -838,7 +855,7 @@ extension Place {
             address: pendingPlace.address,
             latitude: pendingPlace.latitude,
             longitude: pendingPlace.longitude,
-            googlePlaceId: nil,
+            googlePlaceId: pendingPlace.googlePlaceId,
             category: PlaceCategory(rawValue: pendingPlace.category) ?? .food,
             status: .wantToGo,
             rating: nil,
@@ -1099,9 +1116,9 @@ extension PlaceCategory {
 extension PendingSharedPlace {
     var deduplicationKey: String {
         if let normalizedSourceURL = sourceURL?.normalizedDeduplicationURLString() {
-            return "\(normalizedSourceURL)|\(name.normalizedVenueIdentity)|\(address.normalizedVenueIdentity)"
+            return "\(ownerSubject ?? "")|\(normalizedSourceURL)|\(name.normalizedVenueIdentity)|\(address.normalizedVenueIdentity)"
         }
-        return "\(name)|\(address)|\(savedAt.timeIntervalSince1970)"
+        return "\(ownerSubject ?? "")|\(name)|\(address)|\(savedAt.timeIntervalSince1970)"
     }
 }
 
