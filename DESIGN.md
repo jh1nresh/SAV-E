@@ -823,3 +823,5 @@ Rules:
 - Do not introduce web mockups as implementation artifacts for the native app.
 - Do not add speculative states, badges, or metaphors.
 - If a screen needs a new state, update the State Model first.
+
+<!-- ci: pull_request required-check tip 20260922T184802Z -->
