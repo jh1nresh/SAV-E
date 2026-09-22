@@ -12,6 +12,68 @@ import UIKit
 final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
+    func testHomeMemoryProgressiveSearch() throws {
+        for staticMode in [false, true] {
+            let app = makeApp(launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed", "--uitest-home-memory-fixture",
+                "-save.appLanguage", "en"
+            ] + (staticMode ? ["--uitest-home-reduce-motion"] : []),
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+            launch(app)
+            try signInViaReviewDemoRequired(app: app)
+            let field = app.textFields["home.search"]
+            XCTAssertTrue(field.waitForExistence(timeout: stepTimeout))
+            attach(app, name: "home-memory-collection-\(staticMode)")
+            field.tap()
+            field.typeText("cafe")
+            // Capture the exact keyboard/lifting state, before committing the first chip.
+            attach(app, name: "home-memory-keyboard-\(staticMode)")
+            app.buttons["home.search.commit"].tap()
+            let count = app.staticTexts["home.search.count"]
+            XCTAssertTrue(count.waitForExistence(timeout: stepTimeout))
+            XCTAssertEqual(count.label, "3 places found")
+            XCTAssertTrue(app.buttons["home.filter.cafe"].exists)
+            attach(app, name: "home-memory-cafes-\(staticMode)")
+            field.tap()
+            field.typeText("Taipei")
+            app.buttons["home.search.commit"].tap()
+            XCTAssertEqual(count.label, "1 place found")
+            XCTAssertTrue(app.buttons["home.filter.taipei"].exists)
+            let taipei = app.buttons["home.place.10000000-0000-0000-0000-000000000001"]
+            XCTAssertTrue(taipei.waitForExistence(timeout: stepTimeout))
+            attach(app, name: "home-memory-taipei-\(staticMode)")
+            app.buttons["home.filter.taipei"].tap()
+            XCTAssertEqual(count.label, "3 places found")
+            app.buttons["home.filter.cafe"].tap()
+            XCTAssertEqual(count.label, "Recently saved")
+            field.tap()
+            field.typeText("台北咖啡店")
+            app.buttons["home.search.commit"].tap()
+            XCTAssertEqual(count.label, "1 place found")
+            // Repeated query replacement must never leave a stale result lifted or tappable.
+            app.buttons["home.search.clear"].tap()
+            field.tap()
+            field.typeText("no-such-place-xyz")
+            app.buttons["home.search.commit"].tap()
+            XCTAssertEqual(count.label, "0 places found")
+            XCTAssertTrue(app.descendants(matching: .any)["home.search.empty"].exists)
+            attach(app, name: "home-memory-no-match-\(staticMode)")
+            app.buttons["home.search.clear"].tap()
+            field.tap()
+            field.typeText("Taipei cafe")
+            app.buttons["home.search.commit"].tap()
+            XCTAssertEqual(count.label, "1 place found")
+            XCTAssertTrue(scrollUntilHittable(taipei, in: app.scrollViews["home.savedPlaces"], maxSwipes: 3))
+            taipei.tap()
+            XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+            attach(app, name: "home-memory-open-detail-\(staticMode)")
+            app.terminate()
+        }
+    }
+
+    @MainActor
     func testFriendsComingSoon() throws {
         try assertFriendsComingSoonLanguages()
     }
@@ -165,13 +227,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let savedCount = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'confirmed places'")).firstMatch
         XCTAssertTrue(savedCount.waitForExistence(timeout: stepTimeout))
         let count = savedCount.label
-        let hero = app.descendants(matching: .any)["home.photoHero"].firstMatch
-        XCTAssertTrue(hero.waitForExistence(timeout: stepTimeout))
+        let firstPlace = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'")).firstMatch
+        XCTAssertTrue(firstPlace.waitForExistence(timeout: stepTimeout))
         let featuredName = app.staticTexts["home.featuredName"]
         XCTAssertTrue(featuredName.waitForExistence(timeout: stepTimeout))
-        XCTAssertGreaterThanOrEqual(featuredName.frame.minY - hero.frame.minY, 144, "The paper caption must sit below the fixed photo region, including without a photo.")
-        XCTAssertLessThan(featuredName.frame.maxY, hero.frame.maxY, "The name must stay inside its card.")
-        XCTAssertLessThan(hero.frame.height, app.frame.height * 0.4, "The unified hero must leave room for the place shelves.")
+        XCTAssertTrue(firstPlace.frame.contains(featuredName.frame), "The readable paper caption must remain within the saved-place row.")
+        XCTAssertTrue(app.textFields["home.search"].isHittable)
         attach(app, name: "review-flow-home-no-photo")
         rootTabButton("Save", app: app).tap()
         typeText("""
@@ -2704,21 +2765,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
             "Live Home should show the saved-place library before the parity raster."
         )
-        XCTAssertTrue(
-            app.descendants(matching: .any)["home.photoHero"].waitForExistence(timeout: stepTimeout),
-            "Live Home should show the featured cover before the parity raster."
-        )
-
-        // Pin-fallback Home on the 402pt 3x CI viewport is ~0.7MB. Hybrid /
-        // Look Around covers from the same viewport land at ~2–3MB.
-        let minimumPaintedBytes = 1_200_000
-        let deadline = Date().addingTimeInterval(timeout(6))
-        while Date() < deadline {
-            if app.screenshot().pngRepresentation.count >= minimumPaintedBytes {
-                return
-            }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.35))
-        }
+        XCTAssertTrue(app.textFields["home.search"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["home.featuredName"].waitForExistence(timeout: stepTimeout))
+        // The physical pile settles before capturing the production baseline.
+        // A fixed deadline belongs only to this motion capture, not app startup.
+        RunLoop.current.run(until: Date().addingTimeInterval(5.5))
     }
 
     @MainActor

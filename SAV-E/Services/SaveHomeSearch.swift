@@ -1,0 +1,231 @@
+import Foundation
+
+/// Local, deterministic matching for confirmed saved places shown on Home.
+///
+/// This intentionally works only with the `Place` values already in memory. It
+/// does not ask a provider to complete a query or turn a clue into a place.
+struct SaveHomeSearch {
+    var filters: [String] = []
+    var draft: String = ""
+
+    var isActive: Bool {
+        !filters.isEmpty || !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    mutating func commitDraft() {
+        let chunks = Self.chips(from: draft)
+        defer { draft = "" }
+
+        for chunk in chunks where !filters.contains(where: { Self.equivalent($0, chunk) }) {
+            filters.append(chunk)
+        }
+    }
+
+    mutating func removeFilter(_ filter: String) {
+        guard let index = filters.firstIndex(where: { Self.equivalent($0, filter) }) else { return }
+        filters.remove(at: index)
+    }
+
+    mutating func clear() {
+        filters = []
+        draft = ""
+    }
+
+    func matchingPlaces(in places: [Place]) -> [Place] {
+        let activeQueries = filters + [draft]
+        let constraints = activeQueries.flatMap(Self.constraints(from:))
+        guard !constraints.isEmpty else { return places }
+
+        return places.filter { place in
+            constraints.allSatisfy { $0.matches(place) }
+        }
+    }
+}
+
+private extension SaveHomeSearch {
+    enum Constraint: Hashable {
+        case category(PlaceCategory)
+        case city(City)
+        case text(String)
+
+        func matches(_ place: Place) -> Bool {
+            switch self {
+            case let .category(category):
+                return place.category == category
+            case let .city(city):
+                return city.matches(address: place.address)
+            case let .text(term):
+                return Self.searchableMetadata(for: place).contains(term)
+            }
+        }
+
+        private static func searchableMetadata(for place: Place) -> String {
+            let values = [
+                place.name,
+                place.address,
+                place.note ?? "",
+                place.category.displayName,
+            ] +
+                (place.vibeTags ?? []) +
+                (place.placeHighlights ?? []) +
+                (place.accessNotes ?? []) +
+                place.savedRecommendedItems.map(\.name)
+
+            return SaveHomeSearch.normalize(values.joined(separator: " "))
+        }
+    }
+
+    enum City: String, CaseIterable, Hashable {
+        case taipei
+        case newTaipei
+        case taoyuan
+        case taichung
+        case tainan
+        case kaohsiung
+        case keelung
+        case hsinchu
+        case chiayi
+
+        static let ordered = allCases.sorted { $0.aliases.joined().count > $1.aliases.joined().count }
+
+        var aliases: [String] {
+            switch self {
+            case .taipei: return ["taipei", "台北", "臺北"]
+            case .newTaipei: return ["new taipei city", "new taipei", "newtaipei", "新北市", "新北"]
+            case .taoyuan: return ["taoyuan", "桃園", "桃园"]
+            case .taichung: return ["taichung", "台中", "臺中"]
+            case .tainan: return ["tainan", "台南", "臺南"]
+            case .kaohsiung: return ["kaohsiung", "高雄"]
+            case .keelung: return ["keelung", "基隆"]
+            case .hsinchu: return ["hsinchu", "新竹"]
+            case .chiayi: return ["chiayi", "嘉義", "嘉义"]
+            }
+        }
+
+        func matches(address: String) -> Bool {
+            let normalizedAddress = SaveHomeSearch.normalize(address)
+            switch self {
+            case .taipei:
+                return aliases.contains { alias in
+                    SaveHomeSearch.contains(alias: alias, in: normalizedAddress) &&
+                        !SaveHomeSearch.contains(alias: "new taipei", in: normalizedAddress) &&
+                        !normalizedAddress.contains("新北")
+                }
+            default:
+                return aliases.contains { SaveHomeSearch.contains(alias: $0, in: normalizedAddress) }
+            }
+        }
+    }
+
+    static func chips(from value: String) -> [String] {
+        let constraints = constraints(from: value)
+        guard !constraints.isEmpty else { return [] }
+
+        return constraints.map { constraint in
+            switch constraint {
+            case let .category(category): return category.rawValue
+            case let .city(city): return city.rawValue
+            case let .text(term): return term
+            }
+        }
+    }
+
+    static func equivalent(_ lhs: String, _ rhs: String) -> Bool {
+        constraints(from: lhs) == constraints(from: rhs)
+    }
+
+    static func constraints(from rawValue: String) -> [Constraint] {
+        var remaining = normalize(rawValue)
+        guard !remaining.isEmpty else { return [] }
+
+        var result: [Constraint] = []
+        for city in City.ordered where city.aliases.contains(where: { contains(alias: $0, in: remaining) }) {
+            result.append(.city(city))
+            city.aliases
+                .sorted { normalize($0).count > normalize($1).count }
+                .forEach { remaining = removing(alias: $0, from: remaining) }
+        }
+
+        for category in PlaceCategory.allCases {
+            let aliases = categoryAliases[category] ?? []
+            guard aliases.contains(where: { contains(alias: $0, in: remaining) }) else { continue }
+            result.append(.category(category))
+            aliases
+                .sorted { normalize($0).count > normalize($1).count }
+                .forEach { remaining = removing(alias: $0, from: remaining) }
+        }
+
+        let residual = remaining
+            .split(separator: " ")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+        result.append(contentsOf: residual.map(Constraint.text))
+        return result
+    }
+
+    static let categoryAliases: [PlaceCategory: [String]] = [
+        .food: ["food", "restaurant", "restaurants", "美食", "餐廳", "餐厅"],
+        .cafe: ["coffee shops", "coffee shop", "coffee", "cafes", "café", "cafe", "咖啡店", "咖啡"],
+        .bar: ["bar", "酒吧"],
+        .attraction: ["attraction", "attractions", "景點", "景点"],
+        .stay: ["stay", "hotel", "hotels", "住宿", "飯店", "饭店"],
+        .shopping: ["shopping", "shop", "shops", "購物", "购物"],
+    ]
+
+    static func normalize(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive], locale: .current)
+            .replacingOccurrences(of: "臺", with: "台")
+            .lowercased()
+            .replacingOccurrences(of: #"[^\p{L}\p{N}]+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func contains(alias: String, in value: String) -> Bool {
+        let normalizedAlias = normalize(alias)
+        guard !normalizedAlias.isEmpty else { return false }
+        if isASCIIPhrase(normalizedAlias) {
+            return firstWordSequence(of: normalizedAlias, in: value) != nil
+        }
+        return value.contains(normalizedAlias)
+    }
+
+    static func removing(alias: String, from value: String) -> String {
+        let normalizedAlias = normalize(alias)
+        guard !normalizedAlias.isEmpty else { return value }
+        if isASCIIPhrase(normalizedAlias) {
+            var words = value.split(separator: " ").map(String.init)
+            let needle = normalizedAlias.split(separator: " ").map(String.init)
+            while let start = firstWordSequence(of: needle, in: words) {
+                words.removeSubrange(start..<(start + needle.count))
+            }
+            return words.joined(separator: " ")
+        }
+        return value.replacingOccurrences(of: normalizedAlias, with: " ")
+    }
+
+    static func isASCIIPhrase(_ value: String) -> Bool {
+        let words = value.split(separator: " ")
+        return !words.isEmpty && words.allSatisfy { word in
+            word.unicodeScalars.allSatisfy { scalar in
+            (48...57).contains(scalar.value) ||
+                (65...90).contains(scalar.value) ||
+                (97...122).contains(scalar.value)
+            }
+        }
+    }
+
+    static func firstWordSequence(of alias: String, in value: String) -> Int? {
+        firstWordSequence(
+            of: alias.split(separator: " ").map(String.init),
+            in: value.split(separator: " ").map(String.init)
+        )
+    }
+
+    static func firstWordSequence(of needle: [String], in haystack: [String]) -> Int? {
+        guard !needle.isEmpty, needle.count <= haystack.count else { return nil }
+        return (0...(haystack.count - needle.count)).first { start in
+            Array(haystack[start..<(start + needle.count)]) == needle
+        }
+    }
+}

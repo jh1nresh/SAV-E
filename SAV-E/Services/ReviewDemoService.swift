@@ -161,7 +161,24 @@ enum ReviewDemoSeed {
     /// short note, and a source platform are all set so map pins + place detail
     /// render fully.
     static func places(now: Date = Date()) -> [Place] {
-        [
+#if DEBUG
+        if ReviewDemo.isOfflineUITestMode,
+           ReviewDemo.uiTestStorageIdentifier != nil,
+           ProcessInfo.processInfo.arguments.contains("--uitest-home-memory-fixture") {
+            return [
+                ("Taipei Window Cafe", "台北市大安區", PlaceCategory.cafe),
+                ("Tainan Garden Cafe", "台南市中西區", PlaceCategory.cafe),
+                ("New Taipei Corner Cafe", "新北市板橋區", PlaceCategory.cafe),
+                ("Taipei Lunch", "台北市信義區", PlaceCategory.food),
+            ].enumerated().map { index, value in
+                Place(id: UUID(uuidString: String(format: "10000000-0000-0000-0000-%012d", index + 1))!,
+                      name: value.0, address: value.1, latitude: 25.04, longitude: 121.54,
+                      category: value.2, status: index == 0 ? .visited : .wantToGo,
+                      sourcePlatform: .other, createdAt: now.addingTimeInterval(Double(-index)))
+            }
+        }
+#endif
+        return [
             Place(
                 id: UUID(),
                 name: "Ichiran Shibuya",

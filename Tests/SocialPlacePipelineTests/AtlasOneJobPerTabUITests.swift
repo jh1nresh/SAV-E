@@ -369,12 +369,10 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(workflow.contains("run-visual-parity.sh"))
         XCTAssertTrue(workflow.contains("$RUNNER_TEMP/SAVE-UI.xcresult"))
         XCTAssertTrue(rail.contains("waitForHomeCoverImagery(app)"))
-        XCTAssertTrue(rail.contains("home.photoHero"))
-        XCTAssertTrue(rail.contains("pngRepresentation.count"))
-        XCTAssertTrue(
-            rail.contains("1_200_000"),
-            "Parity attach must wait for painted Home covers, not the pin fallback."
-        )
+        XCTAssertTrue(rail.contains("home.search"))
+        XCTAssertTrue(rail.contains("home.featuredName"))
+        XCTAssertTrue(rail.contains("testHomeMemoryProgressiveSearch"))
+        XCTAssertTrue(selector.contains("testHomeMemoryProgressiveSearch"))
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {
