@@ -283,7 +283,10 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
     override func didSimulatePhysics() {
         confineRestingNodesToCollectionRegion()
         publishPoses()
-        if currentTime - lastInteraction > 4.5, stamps.values.allSatisfy({ !$0.hasActions() }) { pause() }
+        // Bound dense-pile solver work, but never cancel a held stamp or a lift.
+        if draggingID == nil, tappedLiftedID == nil,
+           currentTime - lastInteraction > 4.5,
+           stamps.values.allSatisfy({ !$0.hasActions() }) { pause() }
     }
 
     func pause() {
@@ -424,12 +427,11 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
         let columns = restingOrder.count <= 6 ? 3 : max(3, min(7, Int(size.width / 64)))
         let column = index % columns
         let row = index / columns
-        let rowSpacing: CGFloat = restingOrder.count <= 6 ? 17 : 24
         let span = max(1, worldBounds.width - stampSize.width * 0.2)
         let x = worldBounds.minX + stampSize.width * 0.1 + span * CGFloat(column) / CGFloat(max(1, columns - 1))
         let y = min(
             lowerCollectionCeiling(for: scale),
-            worldBounds.minY + stampSize.height * scale / 2 + 6 + CGFloat(row) * 17
+            worldBounds.minY + stampSize.height * scale / 2 + 6 + CGFloat(row % 5) * 17
         )
         return bounded(CGPoint(x: x, y: y))
     }
