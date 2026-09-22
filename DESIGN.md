@@ -561,9 +561,10 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 Home is a full-screen physical collection of confirmed private Map Stamps. The
 search composer stays at the top, above all collection objects. Matches rise
 into the retrieval area below the composer; resting stamps remain at the bottom.
-Search lifts six matching stamps at a time (three while the keyboard compresses
-the world, with resting stamps temporarily hidden). Swipe the retrieval area or
-use its previous/next controls
+Search lifts six matching stamps at a time when space permits. Worlds shorter
+than 300 points use three results and temporarily hide resting stamps; keyboard
+presence alone does not reduce capacity when all six still fit. Swipe the
+retrieval area or use its previous/next controls
 to browse every match, with a visible range and total. Changed filters reset the
 page; no result is truncated. View all opens the complete
 readable result list and Collection returns to the world without losing filters.
