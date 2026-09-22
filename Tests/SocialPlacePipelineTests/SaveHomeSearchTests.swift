@@ -1,9 +1,18 @@
 import XCTest
 import SpriteKit
+import Metal
 @testable import SAVE
 
 @MainActor
 final class SaveHomeSearchTests: XCTestCase {
+    func testFullTaipeiCityNamesDoNotLeaveResidualTextFilters() {
+        for query in ["台北市咖啡店", "臺北市咖啡店", "Taipei City cafes"] {
+            var search = SaveHomeSearch(draft: query)
+            search.commitDraft()
+            XCTAssertEqual(Set(search.filters), Set(["taipei", "cafe"]), query)
+        }
+    }
+
     func testCityChipsDisplayReadableLocalizedNames() {
         XCTAssertEqual(SaveHomeSearch.cityLabel(for: "losAngeles", traditionalChinese: false), "Los Angeles")
         XCTAssertEqual(SaveHomeSearch.cityLabel(for: "newYork", traditionalChinese: true), "紐約")
@@ -258,6 +267,35 @@ final class SaveHomeSearchTests: XCTestCase {
 
 @MainActor
 final class SaveHomeMemorySceneTests: XCTestCase {
+    func testLiftMovesThroughIntermediatePoseAndDropEvictsOffBudgetPreview() throws {
+        let renderer = SKRenderer(device: try XCTUnwrap(MTLCreateSystemDefaultDevice()))
+        let scene = SaveHomeMemoryScene()
+        renderer.scene = scene
+        defer { scene.pause(); renderer.scene = nil }
+        let places = (0..<25).map { index in
+            Place(id: UUID(), name: "Memory \(index)", address: "Taipei", latitude: 25, longitude: 121,
+                  category: .cafe, status: .wantToGo, sourcePlatform: .other, createdAt: Date())
+        }
+        let id = places[24].id
+        let size = CGSize(width: 358, height: 250)
+        scene.configure(places: places, liftedIDs: [id], size: size, searching: true)
+        let start = try XCTUnwrap(scene.poses[id])
+        for step in 0...12 { renderer.update(atTime: 100 + Double(step) / 60) }
+        let middle = try XCTUnwrap(scene.poses[id])
+        XCTAssertGreaterThan(middle.y, start.y)
+        XCTAssertLessThan(middle.y, 183)
+        for step in 13...60 { renderer.update(atTime: 100 + Double(step) / 60) }
+        let lifted = try XCTUnwrap(scene.poses[id])
+        XCTAssertEqual(lifted.y, 183, accuracy: 0.1)
+        XCTAssertEqual(lifted.rotation, 0, accuracy: 0.01)
+        scene.configure(places: places, liftedIDs: [], size: size, searching: false)
+        XCTAssertNotNil(scene.poses[id], "Keep the same preview while it drops.")
+        for step in 61...120 { renderer.update(atTime: 100 + Double(step) / 60) }
+        XCTAssertNil(scene.poses[id])
+        XCTAssertNil(scene.childNode(withName: id.uuidString))
+        XCTAssertEqual(scene.visiblePlaces.count, 24)
+    }
+
     func testOffscreenMatchEntersBoundedSimulationAndRepeatedQueriesKeepNodeIdentity() throws {
         let places = (0..<80).map { index in
             Place(id: UUID(), name: "Memory \(index)", address: "Taipei", latitude: 25, longitude: 121,

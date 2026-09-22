@@ -566,7 +566,7 @@ bounded (24 resting stamps plus transitioning previews), never the search invent
 Typing previews an intersection with existing filters. Submit keeps category/city
 chips and clears the composer; each chip can be removed independently. “cafe” then
 “Taipei” and “台北咖啡店” have the same meaning. Recognized city aliases use saved
-addresses, not incidental mentions in notes. Other terms search stored place metadata. No provider calls, inference of missing facts,
+addresses, not incidental mentions in notes. Other terms search stored place metadata. No provider search or analysis calls, inference of missing facts,
 public discovery or automatic saves occur on this Home surface.
 
 Lifted stamps retain identity, turn upright and become stable tap targets; removing

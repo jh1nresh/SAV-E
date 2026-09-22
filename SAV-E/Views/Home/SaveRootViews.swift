@@ -28,7 +28,8 @@ struct SaveHomeView: View {
                     onCapture: onCapture,
                     onOpenPlace: onOpenSavedPlace,
                     onOpenSaves: onOpenSaves,
-                    onOpenTrips: onOpenTrips
+                    onOpenTrips: onOpenTrips,
+                    onOpenPassport: onOpenPassport
                 )
             }
         }
