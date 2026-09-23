@@ -583,6 +583,9 @@ public discovery or automatic saves occur on this Home surface.
 Lifted stamps retain identity, turn upright and become stable tap targets; removing
 a filter returns excluded previews to the pile. Dragging picks up a real stamp;
 release restores its physical movement, and tapping opens that exact saved place.
+Taps and metadata refreshes do not restart the resting collection. Search and
+paging animate retrieved stamps while nonmatching stamps stay still after any
+necessary keyboard/layout reflow.
 Full rows show paper-backed names,
 addresses and explicit Map Stamp state. A separate sky entry distinguishes
 Review Candidate and Source Clue counts using the same criteria as Saves.
