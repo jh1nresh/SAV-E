@@ -122,6 +122,8 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
     private var lastInteraction: TimeInterval = 0
     private var currentTime: TimeInterval = 0
     private var wasSearching = false
+    private var configuredPlaceIDs: [UUID]?
+    private var restingPhysicsEnabled = true
 
     private let stampSize = CGSize(width: 96, height: 122)
     private let simulationCap = 48
@@ -141,12 +143,25 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
         let oldLifted = lifted
         let resized = self.size != size
         let searchChanged = wasSearching != searching
+        let placeIDs = places.map(\.id)
+        let inventory = Set(placeIDs)
+        let nextLifted = Array(liftedIDs.filter { inventory.contains($0) }.prefix(Self.resultCapacity(for: size)))
+        let layoutChanged = resized || searchChanged || configuredPlaceIDs != placeIDs || nextLifted != lifted
+        let placesByID = Dictionary(places.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        // Refresh labels/photos without restarting transitions, cancelling a gesture,
+        // or waking a settled collection for metadata-only changes.
+        guard layoutChanged else {
+            visiblePlaces = visiblePlaces.compactMap { placesByID[$0.id] }
+            if !isAnimating && stamps.values.contains(where: { $0.hasActions() }) { wake() }
+            return
+        }
+        configuredPlaceIDs = placeIDs
+        if searching || searchChanged { freezeRestingPhysics() }
         self.size = size
         wasSearching = searching
         if draggingID != nil || tappedLiftedID != nil || resultSwipeStart != nil { cancelInteraction() }
 
-        let inventory = Set(places.map(\.id))
-        lifted = Array(liftedIDs.filter { inventory.contains($0) }.prefix(Self.resultCapacity(for: size)))
+        lifted = nextLifted
         if let draggingID, lifted.contains(draggingID) { cancelDrag() }
 
         // Only the animated world is capped. Search and the accessible list use all places.
@@ -184,7 +199,7 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
 
             if let slot = lifted.firstIndex(of: id) {
                 let movedToSlot = oldLifted.firstIndex(of: id) != slot
-                if isNew || resized || movedToSlot || node.action(forKey: "transition") == nil {
+                if isNew || resized || movedToSlot || oldLifted.count != lifted.count {
                     lift(node, to: liftedPosition(slot: slot), slot: slot, animated: true)
                 }
             } else if oldLifted.contains(id) {
@@ -226,8 +241,7 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
     /// Shared by SpriteKit touch handling and deterministic scene tests.
     func beginDrag(at point: CGPoint) {
         resultSwipeStart = wasSearching && point.y > size.height * 0.45 ? point : nil
-        if resultSwipeStart != nil { wake() }
-        guard let (id, node) = stamp(at: point) else { return }
+        guard let (id, _) = stamp(at: point) else { return }
         // Returning off-budget previews must finish their removal transition.
         guard restingIDs.contains(id) || lifted.contains(id) else { return }
         guard !wasSearching || Self.resultCapacity(for: size) == 6 || lifted.contains(id) else { return }
@@ -235,19 +249,12 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
             tappedLiftedID = id
             dragStart = point
             didDrag = false
-            wake()
             return
         }
         draggingID = id
         dragStart = point
         didDrag = false
-        node.removeAction(forKey: "transition")
-        node.physicsBody?.isDynamic = false
-        node.physicsBody?.velocity = .zero
-        node.physicsBody?.angularVelocity = 0
-        node.zPosition = 90
-        wake()
-        publishPoses()
+        // A touch is a potential tap until it crosses the drag threshold.
     }
 
     /// Shared by SpriteKit touch handling and deterministic scene tests.
@@ -263,12 +270,19 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
                 tappedLiftedID = nil
                 self.dragStart = nil
             }
-            wake()
             return
         }
         guard let id = draggingID, let node = stamps[id], let dragStart else { return }
-        if hypot(point.x - dragStart.x, point.y - dragStart.y) > 5 { didDrag = true }
+        guard didDrag || hypot(point.x - dragStart.x, point.y - dragStart.y) > 5 else { return }
+        if !didDrag {
+            didDrag = true
+            node.removeAction(forKey: "transition")
+            node.physicsBody?.isDynamic = false
+            node.physicsBody?.velocity = .zero
+            node.physicsBody?.angularVelocity = 0
+        }
         node.position = bounded(point)
+        node.zPosition = 90
         node.zRotation *= 0.82
         wake()
         publishPoses()
@@ -288,10 +302,13 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
         draggingID = nil
         dragStart = nil
         didDrag = false
-        restoreRestingPhysics(for: node, index: restingOrder.firstIndex(of: id) ?? 0)
-        if opened { onOpenPlace?(id) }
-        wake()
-        publishPoses()
+        if opened {
+            onOpenPlace?(id)
+        } else {
+            restoreRestingPhysics(for: node, index: restingOrder.firstIndex(of: id) ?? 0, allowsMovement: true)
+            wake()
+            publishPoses()
+        }
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -310,6 +327,7 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
 
     func pause() {
         cancelInteraction()
+        freezeRestingPhysics()
         isPaused = true
         isAnimating = false
     }
@@ -328,6 +346,7 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
         body.friction = 0.72
         body.linearDamping = 1.1
         body.angularDamping = 2.2
+        body.isDynamic = restingPhysicsEnabled
         node.physicsBody = body
         return node
     }
@@ -376,8 +395,17 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
         }]), withKey: "transition")
     }
 
-    private func restoreRestingPhysics(for node: SKNode, index: Int) {
-        node.physicsBody?.isDynamic = true
+    private func freezeRestingPhysics() {
+        restingPhysicsEnabled = false
+        for node in stamps.values {
+            node.physicsBody?.isDynamic = false
+            node.physicsBody?.velocity = .zero
+            node.physicsBody?.angularVelocity = 0
+        }
+    }
+
+    private func restoreRestingPhysics(for node: SKNode, index: Int, allowsMovement: Bool? = nil) {
+        node.physicsBody?.isDynamic = allowsMovement ?? restingPhysicsEnabled
         node.physicsBody?.collisionBitMask = UInt32.max
         node.physicsBody?.velocity = .zero
         node.physicsBody?.angularVelocity = 0
@@ -392,7 +420,7 @@ final class SaveHomeMemoryScene: SKScene, ObservableObject {
             didDrag = false
             return
         }
-        restoreRestingPhysics(for: node, index: restingOrder.firstIndex(of: id) ?? 0)
+        if didDrag { restoreRestingPhysics(for: node, index: restingOrder.firstIndex(of: id) ?? 0) }
         draggingID = nil
         tappedLiftedID = nil
         dragStart = nil

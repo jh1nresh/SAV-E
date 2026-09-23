@@ -464,6 +464,7 @@ final class SaveHomeMemorySceneTests: XCTestCase {
         let restingID = places[0].id
         let restingPose = try XCTUnwrap(scene.poses[restingID])
         scene.beginDrag(at: CGPoint(x: restingPose.x, y: restingPose.y))
+        scene.moveDrag(to: CGPoint(x: restingPose.x + 10, y: restingPose.y))
         XCTAssertFalse(try XCTUnwrap(scene.childNode(withName: restingID.uuidString)).physicsBody?.isDynamic == true)
         scene.cancelInteraction()
         XCTAssertTrue(try XCTUnwrap(scene.childNode(withName: restingID.uuidString)).physicsBody?.isDynamic == true)
@@ -481,7 +482,7 @@ final class SaveHomeMemorySceneTests: XCTestCase {
         let pausePose = try XCTUnwrap(scene.poses[restingID])
         scene.beginDrag(at: CGPoint(x: pausePose.x, y: pausePose.y))
         scene.pause()
-        XCTAssertTrue(try XCTUnwrap(scene.childNode(withName: restingID.uuidString)).physicsBody?.isDynamic == true)
+        XCTAssertFalse(try XCTUnwrap(scene.childNode(withName: restingID.uuidString)).physicsBody?.isDynamic == true)
         scene.endDrag()
         XCTAssertNil(openedID, "Inactive/offscreen cleanup cannot navigate.")
     }
@@ -529,7 +530,7 @@ final class SaveHomeMemorySceneTests: XCTestCase {
         scene.configure(places: places, liftedIDs: Array(places.prefix(3).map(\.id)), size: keyboardSize, searching: true)
         let reflowed = try XCTUnwrap(scene.poses[nonmatchingID])
         XCTAssertLessThanOrEqual(reflowed.y, keyboardSize.height * 0.42)
-        XCTAssertTrue(try XCTUnwrap(scene.childNode(withName: nonmatchingID.uuidString)).physicsBody?.isDynamic == true)
+        XCTAssertFalse(try XCTUnwrap(scene.childNode(withName: nonmatchingID.uuidString)).physicsBody?.isDynamic == true)
         XCTAssertEqual(try XCTUnwrap(staleNode.physicsBody).velocity.dx, 0, accuracy: 0.001)
         XCTAssertEqual(try XCTUnwrap(staleNode.physicsBody).velocity.dy, 0, accuracy: 0.001)
         scene.pause()
@@ -604,4 +605,135 @@ final class SaveHomeMemorySceneTests: XCTestCase {
         XCTAssertFalse(scene.isAnimating, "The dense resting pile must still settle and pause.")
     }
 
+
+    func testTapsAndTouchJitterDoNotWakeSettledCollection() throws {
+        let renderer = SKRenderer(device: try XCTUnwrap(MTLCreateSystemDefaultDevice()))
+        let scene = SaveHomeMemoryScene()
+        // SKRenderer has no view/viewport; resizeFill would resize the world to zero.
+        scene.scaleMode = .aspectFit
+        renderer.scene = scene
+        defer { scene.pause(); renderer.scene = nil }
+        let places = motionPlaces()
+        let size = CGSize(width: 402, height: 540)
+        scene.configure(places: places, liftedIDs: [places[0].id], size: size, searching: true)
+        for step in 0...360 { renderer.update(atTime: 100 + Double(step) / 60) }
+        XCTAssertFalse(scene.isAnimating)
+        let before = scene.poses
+        var opened: [UUID] = []
+        scene.onOpenPlace = { opened.append($0) }
+        // Pick the frontmost lower stamp as well as the lifted result.
+        for id in [places.last!.id, places[0].id] {
+            let pose = try XCTUnwrap(scene.poses[id])
+            scene.beginDrag(at: CGPoint(x: pose.x, y: pose.y))
+            scene.moveDrag(to: CGPoint(x: pose.x + 2, y: pose.y + 1))
+            scene.endDrag()
+            XCTAssertFalse(scene.isAnimating)
+            XCTAssertEqual(opened.last, id)
+        }
+        for step in 361...720 { renderer.update(atTime: 100 + Double(step) / 60) }
+        assertSamePoses(before, scene.poses)
+    }
+
+    func testMetadataRefreshDoesNotRestartSearchOrCancelDrag() throws {
+        let renderer = SKRenderer(device: try XCTUnwrap(MTLCreateSystemDefaultDevice()))
+        let scene = SaveHomeMemoryScene()
+        // SKRenderer has no view/viewport; resizeFill would resize the world to zero.
+        scene.scaleMode = .aspectFit
+        renderer.scene = scene
+        defer { scene.pause(); renderer.scene = nil }
+        var places = motionPlaces()
+        let size = CGSize(width: 402, height: 540)
+        let lifted = [places[0].id]
+        scene.configure(places: places, liftedIDs: lifted, size: size, searching: true)
+        for step in 0...360 { renderer.update(atTime: 100 + Double(step) / 60) }
+        let before = scene.poses
+        for step in 361...1080 {
+            if step % 30 == 0 {
+                places[1].note = "Updated \(step)"
+                scene.configure(places: places, liftedIDs: lifted, size: size, searching: true)
+                XCTAssertFalse(scene.isAnimating)
+                XCTAssertNil(scene.childNode(withName: lifted[0].uuidString)?.action(forKey: "transition"))
+            }
+            renderer.update(atTime: 100 + Double(step) / 60)
+        }
+        XCTAssertEqual(scene.visiblePlaces.first { $0.id == places[1].id }?.note, places[1].note)
+        assertSamePoses(before, scene.poses)
+        let id = places.last!.id
+        let pose = try XCTUnwrap(scene.poses[id])
+        scene.beginDrag(at: CGPoint(x: pose.x, y: pose.y))
+        scene.moveDrag(to: CGPoint(x: pose.x + 12, y: pose.y + 10))
+        places[1].note = "During drag"
+        scene.configure(places: places, liftedIDs: lifted, size: size, searching: true)
+        scene.moveDrag(to: CGPoint(x: pose.x + 24, y: pose.y + 20))
+        XCTAssertEqual(try XCTUnwrap(scene.poses[id]).y, pose.y + 20, accuracy: 0.01)
+        scene.endDrag()
+        XCTAssertTrue(try XCTUnwrap(scene.childNode(withName: id.uuidString)?.physicsBody).isDynamic)
+        XCTAssertTrue(scene.isAnimating)
+    }
+
+    func testSearchPagingAndClearingKeepUnmatchedStampsStill() throws {
+        let renderer = SKRenderer(device: try XCTUnwrap(MTLCreateSystemDefaultDevice()))
+        let scene = SaveHomeMemoryScene()
+        // SKRenderer has no view/viewport; resizeFill would resize the world to zero.
+        scene.scaleMode = .aspectFit
+        renderer.scene = scene
+        defer { scene.pause(); renderer.scene = nil }
+        let places = motionPlaces()
+        let size = CGSize(width: 402, height: 540)
+        scene.configure(places: places, liftedIDs: [], size: size, searching: false)
+        for step in 0...360 { renderer.update(atTime: 100 + Double(step) / 60) }
+        var time = 106.0
+        for ids in [[places[0].id], Array(places.prefix(6).map(\.id)), [places[1].id], []] {
+            scene.configure(places: places, liftedIDs: ids, size: size, searching: !ids.isEmpty)
+            // A search/keyboard layout change may re-seat the lower collection once.
+            let lowerIDs = Set(places.dropFirst(6).map(\.id))
+            let before = scene.poses.filter { lowerIDs.contains($0.key) }
+            for step in 1...360 { renderer.update(atTime: time + Double(step) / 60) }
+            time += 6
+            if ids.count == 6 {
+                XCTAssertEqual(Set(scene.poses.values.filter(\.lifted).map(\.y)).count, 2)
+            }
+            assertSamePoses(before, scene.poses.filter { lowerIDs.contains($0.key) })
+            XCTAssertFalse(scene.isAnimating)
+        }
+    }
+
+    func testInterruptedLiftResumesWithoutMovingRestingStamps() throws {
+        let renderer = SKRenderer(device: try XCTUnwrap(MTLCreateSystemDefaultDevice()))
+        let scene = SaveHomeMemoryScene()
+        // SKRenderer has no view/viewport; resizeFill would resize the world to zero.
+        scene.scaleMode = .aspectFit
+        renderer.scene = scene
+        defer { scene.pause(); renderer.scene = nil }
+        let places = motionPlaces()
+        let size = CGSize(width: 402, height: 540)
+        let ids = [places[0].id]
+        scene.configure(places: places, liftedIDs: ids, size: size, searching: true)
+        for step in 0...6 { renderer.update(atTime: 100 + Double(step) / 60) }
+        scene.pause()
+        scene.configure(places: places, liftedIDs: ids, size: size, searching: true)
+        XCTAssertTrue(scene.isAnimating)
+        for step in 7...360 { renderer.update(atTime: 100 + Double(step) / 60) }
+        XCTAssertNil(scene.childNode(withName: ids[0].uuidString)?.action(forKey: "transition"))
+        XCTAssertFalse(scene.isAnimating)
+        XCTAssertEqual(try XCTUnwrap(scene.poses[ids[0]]).rotation, 0, accuracy: 0.001)
+    }
+
+    private func motionPlaces() -> [Place] {
+        (0..<12).map { index in
+            Place(id: UUID(), name: "Memory \(index)", address: "Taipei", latitude: 25, longitude: 121,
+                  category: .cafe, status: .wantToGo, sourcePlatform: .other, createdAt: Date())
+        }
+    }
+
+    private func assertSamePoses(_ before: [UUID: SaveHomeMemoryScene.Pose], _ after: [UUID: SaveHomeMemoryScene.Pose],
+                                 file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(Set(before.keys), Set(after.keys), file: file, line: line)
+        for (id, pose) in before {
+            guard let current = after[id] else { continue }
+            XCTAssertEqual(current.x, pose.x, accuracy: 0.001, file: file, line: line)
+            XCTAssertEqual(current.y, pose.y, accuracy: 0.001, file: file, line: line)
+            XCTAssertEqual(current.rotation, pose.rotation, accuracy: 0.001, file: file, line: line)
+        }
+    }
 }
