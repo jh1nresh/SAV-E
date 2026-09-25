@@ -14,25 +14,7 @@ struct SaveHomeView: View {
     @ObservedObject private var locationService = LocationService.shared
 
     var body: some View {
-        Group {
-            if SaveAtlasRuntime.usesParityFixture {
-                HomeAtlasScreen()
-            } else {
-                SaveHomeMemoryView(
-                    places: SaveAtlasPresentationFactory.orderedHomePlaces(
-                        mapViewModel.places,
-                        location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation
-                    ),
-                    reviewCounts: SaveHomeReviewCounts(mapViewModel.reviewCandidates),
-                    hasLocation: !locationService.isAuthorizationDenied && locationService.currentLocation != nil,
-                    onCapture: onCapture,
-                    onOpenPlace: onOpenSavedPlace,
-                    onOpenSaves: onOpenSaves,
-                    onOpenTrips: onOpenTrips,
-                    onOpenPassport: onOpenPassport
-                )
-            }
-        }
+        HomeAtlasScreen()
         .environment(\.atlasPresentation, atlasPresentation)
         .task(id: locationService.authorizationStatus) {
             guard !ReviewDemo.isOfflineUITestMode,

@@ -164,16 +164,6 @@ enum ReviewDemoSeed {
 #if DEBUG
         if ReviewDemo.isOfflineUITestMode,
            ReviewDemo.uiTestStorageIdentifier != nil,
-           ProcessInfo.processInfo.arguments.contains("--uitest-home-paging-fixture") {
-            return (0..<13).map { index in
-                Place(id: UUID(uuidString: String(format: "20000000-0000-0000-0000-%012d", index + 1))!,
-                      name: "Memory Cafe \(index + 1)", address: index < 8 ? "台北市大安區" : "台南市中西區",
-                      latitude: 25.04, longitude: 121.54, category: .cafe, status: .wantToGo,
-                      sourcePlatform: .other, createdAt: now.addingTimeInterval(Double(-index)))
-            }
-        }
-        if ReviewDemo.isOfflineUITestMode,
-           ReviewDemo.uiTestStorageIdentifier != nil,
            ProcessInfo.processInfo.arguments.contains("--uitest-home-memory-fixture") {
             return [
                 ("Taipei Window Cafe", "台北市大安區", PlaceCategory.cafe),

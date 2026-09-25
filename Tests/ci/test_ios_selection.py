@@ -18,7 +18,7 @@ class CoverageTests(unittest.TestCase):
         full = selection.select([], full=True)
         actual = set(full["tests"] + [selection.TRIP_SHEET])
         baseline = set(json.loads((ROOT / "Tests/ci/full-ui-baseline.json").read_text()))
-        self.assertEqual(actual, baseline | {selection.RAIL + "testHomeMemoryProgressiveSearch"})
+        self.assertEqual(actual, baseline | {selection.RAIL + "testHomeListProgressiveSearch"})
         self.assertTrue(full["trip"])
         plan_only = (
             selection.RAIL + "testPlanChatDraftAndConversationSurviveTabChange",

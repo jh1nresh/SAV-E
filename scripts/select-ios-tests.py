@@ -57,7 +57,7 @@ TESTS = {
 # Plan route only. Folding them into FULL made this CI-scoping PR require
 # testPlanTabDraftsFromSavedMapStamps, which is not on current main and
 # failed 3/3 on run 34019378064 after compose never produced plan.draft.
-FULL = list(BASELINE) + [RAIL + "testHomeMemoryProgressiveSearch"]
+FULL = list(BASELINE) + [RAIL + "testHomeListProgressiveSearch"]
 
 
 def select(paths, *, full=False):
