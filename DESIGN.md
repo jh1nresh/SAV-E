@@ -558,43 +558,25 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 
 ### Home collection search
 
-Home is a full-screen physical collection of confirmed private Map Stamps. The
-search composer stays at the top, above all collection objects. Matches rise
-into the retrieval area below the composer; resting stamps remain at the bottom.
-Search lifts six matching stamps at a time when space permits. Worlds shorter
-than 300 points use three results and temporarily hide resting stamps; keyboard
-presence alone does not reduce capacity when all six still fit. Swipe the
-retrieval area or use its previous/next controls
-to browse every match, with a visible range and total. Changed filters reset the
-page; no result is truncated. View all opens the complete
-readable result list and Collection returns to the world without losing filters.
-Only the simulation is bounded (48 resting stamps plus transitioning previews),
-never the search inventory. Resting stamps use category artwork; only lifted
-previews and visible list rows load stored photos. No headline, decorative claw
-or persistent result list competes with the collection field. Sparse collections
-remain honest: never duplicate stamps to simulate abundance.
+Home is a scannable library of confirmed private Map Stamps. Search stays at
+the top. Nearby-by-distance when location is authorized, otherwise recency;
+city shelves group the remaining stamps under one featured place. Clearing
+search returns to that browse list. The memory-stamp pile is not the resting
+Home UI.
 
-Typing previews an intersection with existing filters. Submit keeps category/city
-chips and clears the composer; each chip can be removed independently. “cafe” then
-“Taipei” and “台北咖啡店” have the same meaning. Recognized city aliases use saved
-addresses, not incidental mentions in notes. Other terms search stored place metadata. No provider search or analysis calls, inference of missing facts,
-public discovery or automatic saves occur on this Home surface.
+Typing filters the confirmed collection locally. Category and city terms
+intersect: “cafe” then “Taipei” and “台北咖啡店” have the same meaning.
+Recognized city aliases use saved addresses, not incidental mentions in notes.
+Other terms search stored place metadata. No provider search or analysis calls,
+inference of missing facts, public discovery or automatic saves occur on this
+Home surface.
 
-Lifted stamps retain identity, turn upright and become stable tap targets; removing
-a filter returns excluded previews to the pile. Dragging picks up a real stamp;
-release restores its physical movement, and tapping opens that exact saved place.
-Taps and metadata refreshes do not restart the resting collection. Search and
-paging animate retrieved stamps while nonmatching stamps stay still after any
-necessary keyboard/layout reflow.
-Full rows show paper-backed names,
-addresses and explicit Map Stamp state. A separate sky entry distinguishes
-Review Candidate and Source Clue counts using the same criteria as Saves.
-The existing More menu keeps collection management and Trips accessible.
+Featured and shelf cards show paper-backed names, photos or fixed crop
+placeholders, and explicit saved-place state. Waiting for review keeps Review
+Candidate and Source Clue tickets distinct; View all opens the full queue. The
+existing More menu keeps collection management and Trips accessible.
 
-Reduce Motion, VoiceOver and accessibility text sizes use the static result list.
-The keyboard resizes the collection world beneath the search controls;
-the secondary list remains scrollable. Physics
-pauses after settling, when Home disappears, or when the app becomes inactive.
+Reduce Motion, VoiceOver and accessibility text sizes use the same static list.
 Existing distance/newest ordering remains the ordering within matching results.
 
 ### Sign-In

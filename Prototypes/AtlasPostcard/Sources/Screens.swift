@@ -442,7 +442,7 @@ private struct HomeSavedPlacesLibrary: View {
     @Environment(\.atlasPresentation) private var presentation
     @Environment(\.appLanguageSettings) private var languageSettings
 
-    @State private var searchText = ""
+    @State private var search = SaveHomeSearch()
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
@@ -450,9 +450,14 @@ private struct HomeSavedPlacesLibrary: View {
             searchField
                 .padding(.horizontal, AtlasSpacing.content)
                 .padding(.top, 8)
-            if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if search.isActive {
                 ScrollView {
                     LazyVStack(spacing: 8) {
+                        Text(searchCountText)
+                            .font(AtlasType.body(12))
+                            .foregroundStyle(AtlasPalette.muted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("home.search.count")
                         if matchingPlaces.isEmpty {
                             Text(localized("No saved places match", "沒有符合的已存地點"))
                                 .font(AtlasType.body(16))
@@ -550,28 +555,33 @@ private struct HomeSavedPlacesLibrary: View {
     }
 
     private var matchingPlaces: [AtlasPlacePresentation] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return presentation.savedPlaces.filter {
-            [$0.name, $0.area, $0.region ?? ""].contains { $0.localizedStandardContains(query) }
+        guard search.isActive else { return presentation.savedPlaces }
+        return presentation.savedPlaces.filter { place in
+            search.matchesLibraryPlace(
+                name: place.name,
+                address: [place.area, place.region].compactMap { $0 }.joined(separator: " "),
+                note: place.note
+            )
         }
     }
 
     private var searchField: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass").foregroundStyle(AtlasPalette.muted)
-            TextField(localized("Search saved places", "搜尋已存地點"), text: $searchText)
+            TextField(localized("Search saved places", "搜尋已存地點"), text: $search.draft)
                 .font(AtlasType.body(17))
                 .foregroundStyle(AtlasPalette.ink)
                 .focused($isSearchFocused)
                 .submitLabel(.search)
                 .onSubmit { isSearchFocused = false }
                 .accessibilityIdentifier("home.search")
-            if !searchText.isEmpty {
-                Button { searchText = "" } label: {
+            if search.isActive {
+                Button { search.clear(); isSearchFocused = false } label: {
                     Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44)
                 }
                 .foregroundStyle(AtlasPalette.muted)
                 .accessibilityLabel(localized("Clear search", "清除搜尋"))
+                .accessibilityIdentifier("home.search.clear")
             }
         }
         .padding(.leading, 14)
@@ -590,6 +600,7 @@ private struct HomeSavedPlacesLibrary: View {
                 Text(savedCountText)
                     .font(AtlasType.body(12))
                     .foregroundStyle(AtlasPalette.muted)
+                    .accessibilityIdentifier("home.search.count")
             }
 
             Spacer()
@@ -674,12 +685,35 @@ private struct HomeSavedPlacesLibrary: View {
     }
 
     private var reviewText: String {
-        let count = presentation.reviewCount
+        let counts = SaveHomeReviewCounts(from: presentation.reviewItems)
         switch languageSettings.language {
         case .english:
+            if counts.candidates > 0 && counts.sources > 0 {
+                return "\(counts.candidates == 1 ? "1 Review Candidate" : "\(counts.candidates) Review Candidates") · \(counts.sources == 1 ? "1 Source Clue" : "\(counts.sources) Source Clues")"
+            }
+            if counts.sources > 0 {
+                return counts.sources == 1 ? "1 Source Clue" : "\(counts.sources) Source Clues"
+            }
+            let count = max(counts.candidates, presentation.reviewCount)
             return count == 1 ? "Review 1 clue" : "Review \(count) clues"
         case .traditionalChinese:
-            return "確認 \(count) 個地點線索"
+            if counts.candidates > 0 && counts.sources > 0 {
+                return "\(counts.candidates) 個待確認地點 · \(counts.sources) 個來源線索"
+            }
+            if counts.sources > 0 {
+                return "\(counts.sources) 個來源線索"
+            }
+            return "確認 \(max(counts.candidates, presentation.reviewCount)) 個地點線索"
+        }
+    }
+
+    private var searchCountText: String {
+        let count = matchingPlaces.count
+        switch languageSettings.language {
+        case .english:
+            return count == 1 ? "1 place found" : "\(count) places found"
+        case .traditionalChinese:
+            return "找到 \(count) 個地點"
         }
     }
 

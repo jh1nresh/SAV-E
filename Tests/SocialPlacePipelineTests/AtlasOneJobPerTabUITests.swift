@@ -132,8 +132,14 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             "A tall saved-place list must top-align or it covers BrandHeader."
         )
         XCTAssertTrue(library.contains(".clipped()"))
+        XCTAssertTrue(library.contains("SaveHomeSearch()"))
+        XCTAssertTrue(library.contains("matchesLibraryPlace"))
+        XCTAssertFalse(library.contains("SpriteKit"))
         XCTAssertFalse(home.contains("home.capture"))
         XCTAssertFalse(home.contains("Paste a link"))
+        let saveHome = try typeBody("SaveHomeView", in: try source(at: "SAV-E/Views/Home/SaveRootViews.swift"))
+        XCTAssertTrue(saveHome.contains("HomeAtlasScreen()"))
+        XCTAssertFalse(saveHome.contains("SaveHomeMemoryPile"))
     }
 
     func testHomeSavedPlaceUsesStoredPhotoWithFallback() throws {
@@ -371,8 +377,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(rail.contains("waitForHomeCoverImagery(app)"))
         XCTAssertTrue(rail.contains("home.search"))
         XCTAssertTrue(rail.contains("home.featuredName"))
-        XCTAssertTrue(rail.contains("testHomeMemoryProgressiveSearch"))
-        XCTAssertTrue(selector.contains("testHomeMemoryProgressiveSearch"))
+        XCTAssertTrue(rail.contains("testHomeListProgressiveSearch"))
+        XCTAssertTrue(selector.contains("testHomeListProgressiveSearch"))
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {
@@ -626,12 +632,14 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passportTopBar.contains("Image(\"SavvyLogo\")"))
         XCTAssertTrue(passportTopBar.contains("profile.brandLogo"))
 
-        let memory = try source(at: "SAV-E/Views/Home/SaveHomeMemoryView.swift")
-        let memoryHome = try typeBody("SaveHomeMemoryView", in: memory)
         let saveHome = try typeBody("SaveHomeView", in: root)
-        XCTAssertTrue(memoryHome.contains("SaveAtlasBrandHeader(onOpenPassport: onOpenPassport)"))
-        XCTAssertTrue(memoryHome.contains("home.more"))
+        let screens = try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift")
+        let home = try typeBody("HomeAtlasScreen", in: screens)
+        XCTAssertTrue(saveHome.contains("HomeAtlasScreen()"))
+        XCTAssertFalse(saveHome.contains("SaveHomeMemoryView"))
+        XCTAssertFalse(saveHome.contains("SaveHomeMemoryPile"))
         XCTAssertTrue(saveHome.contains("onOpenPassport: onOpenPassport"))
+        XCTAssertTrue(home.contains("home.more"))
     }
 
     func testOriginCommunityCardCanReshareWithoutPublishingPrivateClues() throws {

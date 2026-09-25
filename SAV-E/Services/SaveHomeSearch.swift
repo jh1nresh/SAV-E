@@ -74,6 +74,43 @@ struct SaveHomeSearch {
             constraints.allSatisfy { $0.matches(place) }
         }
     }
+
+    /// Home library rows expose name/area/note, not a live `Place` category.
+    /// Category chips still match visible text so “cafe” and “咖啡店” work.
+    func matchesLibraryPlace(name: String, address: String, note: String = "") -> Bool {
+        let constraints = (filters + [draft]).flatMap(Self.constraints(from:))
+        guard !constraints.isEmpty else { return true }
+        let haystack = Self.normalize([name, address, note].joined(separator: " "))
+        return constraints.allSatisfy { constraint in
+            switch constraint {
+            case let .category(category):
+                return (Self.categoryAliases[category] ?? []).contains {
+                    Self.contains(alias: $0, in: haystack)
+                }
+            case let .city(city):
+                return city.matches(address: address) || city.matches(address: haystack)
+            case let .text(term):
+                return haystack.contains(term)
+            }
+        }
+    }
+}
+
+/// Same distinction shown by the existing Saves queue.
+struct SaveHomeReviewCounts: Equatable {
+    let candidates: Int
+    let sources: Int
+    var total: Int { candidates + sources }
+
+    init(_ items: [PlaceReviewCandidate]) {
+        sources = items.filter { $0.status == "source_only" || !$0.hasReliableCoordinates }.count
+        candidates = items.count - sources
+    }
+
+    init(from items: [AtlasReviewPresentation]) {
+        sources = items.filter { $0.kind == .sourceOnly }.count
+        candidates = items.count - sources
+    }
 }
 
 private extension SaveHomeSearch {
