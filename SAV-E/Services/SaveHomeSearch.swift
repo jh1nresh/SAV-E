@@ -74,6 +74,82 @@ struct SaveHomeSearch {
             constraints.allSatisfy { $0.matches(place) }
         }
     }
+
+    /// Parity fixtures have no live `Place`. Prefer `matchingPlaces(in:)` when
+    /// the row still carries the confirmed place.
+    func matchesLibraryPlace(name: String, address: String, note: String = "") -> Bool {
+        let constraints = (filters + [draft]).flatMap(Self.constraints(from:))
+        guard !constraints.isEmpty else { return true }
+        let haystack = Self.normalize([name, address, note].joined(separator: " "))
+        return constraints.allSatisfy { constraint in
+            switch constraint {
+            case let .category(category):
+                return (Self.categoryAliases[category] ?? []).contains {
+                    Self.contains(alias: $0, in: haystack)
+                }
+            case let .city(city):
+                return city.matches(address: address) || city.matches(address: haystack)
+            case let .text(term):
+                return haystack.contains(term)
+            }
+        }
+    }
+
+    func matches(_ place: AtlasPlacePresentation) -> Bool {
+        if let searchPlace = place.searchPlace {
+            return !matchingPlaces(in: [searchPlace]).isEmpty
+        }
+        return matchesLibraryPlace(
+            name: place.name,
+            address: [place.area, place.region].compactMap { $0 }.joined(separator: " "),
+            note: place.note
+        )
+    }
+}
+
+enum SaveHomeReviewQueue {
+    static func isSourceClue(_ candidate: PlaceReviewCandidate) -> Bool {
+        candidate.status.lowercased() == "source_only" || !candidate.hasReliableCoordinates
+    }
+
+    static func isHomePreview(_ candidate: PlaceReviewCandidate) -> Bool {
+        let status = candidate.status.lowercased()
+        if ["failed", "rejected"].contains(status) { return false }
+        if isSourceClue(candidate) { return true }
+        return candidate.hasSavableLocation
+            && ["review", "confirmed", "needs_more_evidence"].contains(status)
+    }
+
+    /// Review Candidates stay first so a Source Clue never hides an actionable match.
+    static func previewIDs(in candidates: [PlaceReviewCandidate]) -> [String] {
+        candidates
+            .filter(isHomePreview)
+            .sorted { lhs, rhs in
+                let lhsSource = isSourceClue(lhs)
+                let rhsSource = isSourceClue(rhs)
+                if lhsSource != rhsSource { return !lhsSource }
+                if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+            .map(\.id.uuidString)
+    }
+}
+
+/// Same distinction shown by the existing Saves queue.
+struct SaveHomeReviewCounts: Equatable {
+    let candidates: Int
+    let sources: Int
+    var total: Int { candidates + sources }
+
+    init(_ items: [PlaceReviewCandidate]) {
+        sources = items.filter { $0.status == "source_only" || !$0.hasReliableCoordinates }.count
+        candidates = items.count - sources
+    }
+
+    init(from items: [AtlasReviewPresentation]) {
+        sources = items.filter { $0.kind == .sourceOnly }.count
+        candidates = items.count - sources
+    }
 }
 
 private extension SaveHomeSearch {

@@ -14,25 +14,7 @@ struct SaveHomeView: View {
     @ObservedObject private var locationService = LocationService.shared
 
     var body: some View {
-        Group {
-            if SaveAtlasRuntime.usesParityFixture {
-                HomeAtlasScreen()
-            } else {
-                SaveHomeMemoryView(
-                    places: SaveAtlasPresentationFactory.orderedHomePlaces(
-                        mapViewModel.places,
-                        location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation
-                    ),
-                    reviewCounts: SaveHomeReviewCounts(mapViewModel.reviewCandidates),
-                    hasLocation: !locationService.isAuthorizationDenied && locationService.currentLocation != nil,
-                    onCapture: onCapture,
-                    onOpenPlace: onOpenSavedPlace,
-                    onOpenSaves: onOpenSaves,
-                    onOpenTrips: onOpenTrips,
-                    onOpenPassport: onOpenPassport
-                )
-            }
-        }
+        HomeAtlasScreen()
         .environment(\.atlasPresentation, atlasPresentation)
         .task(id: locationService.authorizationStatus) {
             guard !ReviewDemo.isOfflineUITestMode,
@@ -58,12 +40,12 @@ struct SaveHomeView: View {
             homeLocation: locationService.isAuthorizationDenied ? nil : locationService.currentLocation
         )
         if !SaveAtlasRuntime.usesParityFixture {
-            // Home previews actionable place matches. Source-only clues remain
-            // available in the full queue, without displacing real candidates.
-            let pendingIDs = Set(mapViewModel.reviewCandidates.filter {
-                $0.hasSavableLocation && ["review", "confirmed", "needs_more_evidence"].contains($0.status)
-            }.map { $0.id.uuidString })
-            presentation.reviewItems = presentation.reviewItems.filter { pendingIDs.contains($0.id) }
+            // Keep both review kinds on Home. Candidates stay first so a
+            // Source Clue never displaces an actionable Review Candidate.
+            let previewIDs = SaveHomeReviewQueue.previewIDs(in: mapViewModel.reviewCandidates)
+            presentation.reviewItems = previewIDs.compactMap { id in
+                presentation.reviewItems.first { $0.id == id }
+            }
             presentation.tripsBetaLabel = languageSettings.localized(
                 english: "BETA",
                 traditionalChinese: "測試版"

@@ -319,6 +319,7 @@ struct AtlasPlacePresentation: Identifiable, Equatable {
     let longitude: Double?
     let relativeDay: String
     let note: String
+    let searchPlace: Place?
 
     init(
         id: String,
@@ -330,7 +331,8 @@ struct AtlasPlacePresentation: Identifiable, Equatable {
         latitude: Double? = nil,
         longitude: Double? = nil,
         relativeDay: String,
-        note: String
+        note: String,
+        searchPlace: Place? = nil
     ) {
         self.id = id
         self.name = name
@@ -343,6 +345,7 @@ struct AtlasPlacePresentation: Identifiable, Equatable {
         self.longitude = longitude
         self.relativeDay = relativeDay
         self.note = note
+        self.searchPlace = searchPlace
     }
 
     static func groupedByRegion(
