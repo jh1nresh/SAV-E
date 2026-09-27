@@ -287,39 +287,6 @@ final class SaveHomeSearchTests: XCTestCase {
         XCTAssertEqual(search.draft, "")
         XCTAssertFalse(search.isActive)
     }
-
-    private func place(
-        name: String,
-        address: String,
-        category: PlaceCategory,
-        status: PlaceStatus = .wantToGo,
-        note: String? = nil,
-        vibeTags: [String]? = nil
-    ) -> Place {
-        Place(
-            id: UUID(),
-            name: name,
-            address: address,
-            latitude: 25.033,
-            longitude: 121.5654,
-            googlePlaceId: nil,
-            category: category,
-            status: status,
-            rating: nil,
-            note: note,
-            sourceUrl: nil,
-            sourcePlatform: .other,
-            sourceImageUrl: nil,
-            extractedDishes: nil,
-            priceRange: nil,
-            recommender: nil,
-            googleRating: nil,
-            googlePriceLevel: nil,
-            openingHours: nil,
-            createdAt: Date(),
-            vibeTags: vibeTags
-        )
-    }
 }
 
 @MainActor
@@ -425,4 +392,37 @@ final class SaveHomeLibrarySearchTests: XCTestCase {
             [source.id.uuidString]
         )
     }
+}
+
+private func place(
+    name: String,
+    address: String,
+    category: PlaceCategory,
+    status: PlaceStatus = .wantToGo,
+    note: String? = nil,
+    vibeTags: [String]? = nil
+) -> Place {
+    Place(
+        id: UUID(),
+        name: name,
+        address: address,
+        latitude: 25.033,
+        longitude: 121.5654,
+        googlePlaceId: nil,
+        category: category,
+        status: status,
+        rating: nil,
+        note: note,
+        sourceUrl: nil,
+        sourcePlatform: .other,
+        sourceImageUrl: nil,
+        extractedDishes: nil,
+        priceRange: nil,
+        recommender: nil,
+        googleRating: nil,
+        googlePriceLevel: nil,
+        openingHours: nil,
+        createdAt: Date(),
+        vibeTags: vibeTags
+    )
 }
