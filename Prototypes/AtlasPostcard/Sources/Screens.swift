@@ -556,13 +556,7 @@ private struct HomeSavedPlacesLibrary: View {
 
     private var matchingPlaces: [AtlasPlacePresentation] {
         guard search.isActive else { return presentation.savedPlaces }
-        return presentation.savedPlaces.filter { place in
-            search.matchesLibraryPlace(
-                name: place.name,
-                address: [place.area, place.region].compactMap { $0 }.joined(separator: " "),
-                note: place.note
-            )
-        }
+        return presentation.savedPlaces.filter(search.matches)
     }
 
     private var searchField: some View {

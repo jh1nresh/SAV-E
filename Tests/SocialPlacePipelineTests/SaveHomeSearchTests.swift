@@ -354,4 +354,75 @@ final class SaveHomeLibrarySearchTests: XCTestCase {
         XCTAssertEqual(counts.sources, 2)
         XCTAssertEqual(counts.total, 3)
     }
+
+    func testConfirmedPlaceSearchUsesCategoryAndStoredMetadata() {
+        let unnamedCafe = place(name: "Blue Bottle", address: "San Francisco", category: .cafe)
+        let quietStay = place(name: "Hill House", address: "Kyoto", category: .stay, vibeTags: ["quiet"])
+        let loudStay = place(name: "Night Market Inn", address: "Tainan", category: .stay)
+        let cafeRow = AtlasPlacePresentation(
+            id: unnamedCafe.id.uuidString,
+            name: unnamedCafe.name,
+            area: "San Francisco",
+            region: "San Francisco",
+            photoURL: nil,
+            relativeDay: "Today",
+            note: unnamedCafe.address,
+            searchPlace: unnamedCafe
+        )
+        let quietRow = AtlasPlacePresentation(
+            id: quietStay.id.uuidString,
+            name: quietStay.name,
+            area: "Kyoto",
+            region: "Kyoto",
+            photoURL: nil,
+            relativeDay: "Today",
+            note: quietStay.address,
+            searchPlace: quietStay
+        )
+        let loudRow = AtlasPlacePresentation(
+            id: loudStay.id.uuidString,
+            name: loudStay.name,
+            area: "Tainan",
+            region: "Tainan",
+            photoURL: nil,
+            relativeDay: "Today",
+            note: loudStay.address,
+            searchPlace: loudStay
+        )
+
+        XCTAssertEqual(SaveHomeSearch(draft: "cafe").matchingPlaces(in: [unnamedCafe, quietStay]).map(\.id), [unnamedCafe.id])
+        XCTAssertTrue(SaveHomeSearch(draft: "cafe").matches(cafeRow))
+        XCTAssertFalse(SaveHomeSearch(draft: "cafe").matches(quietRow))
+        XCTAssertEqual(SaveHomeSearch(draft: "quiet").matchingPlaces(in: [unnamedCafe, quietStay, loudStay]).map(\.id), [quietStay.id])
+        XCTAssertTrue(SaveHomeSearch(draft: "quiet").matches(quietRow))
+        XCTAssertFalse(SaveHomeSearch(draft: "quiet").matches(loudRow))
+    }
+
+    func testHomeReviewQueueKeepsSourceCluesBehindCandidates() {
+        func item(name: String, status: String, latitude: Double?, createdAt: Date) -> PlaceReviewCandidate {
+            PlaceReviewCandidate(
+                id: UUID(), captureId: nil, name: name, address: "Taipei",
+                city: "Taipei", latitude: latitude, longitude: latitude == nil ? nil : 121.5,
+                evidence: [], confidence: nil, missingInfo: [], status: status, createdAt: createdAt
+            )
+        }
+        let now = Date()
+        let source = item(name: "Source", status: "source_only", latitude: 25, createdAt: now)
+        let olderCandidate = item(name: "Older", status: "review", latitude: 25, createdAt: now.addingTimeInterval(-60))
+        let newestCandidate = item(name: "Newest", status: "review", latitude: 25, createdAt: now)
+        let rejected = item(name: "Rejected", status: "rejected", latitude: 25, createdAt: now)
+        let missingCoords = item(name: "No pin", status: "review", latitude: nil, createdAt: now)
+
+        XCTAssertTrue(SaveHomeReviewQueue.isSourceClue(source))
+        XCTAssertTrue(SaveHomeReviewQueue.isSourceClue(missingCoords))
+        XCTAssertFalse(SaveHomeReviewQueue.isSourceClue(newestCandidate))
+        XCTAssertEqual(
+            SaveHomeReviewQueue.previewIDs(in: [source, rejected, olderCandidate, newestCandidate, missingCoords]),
+            [newestCandidate.id.uuidString, olderCandidate.id.uuidString, source.id.uuidString, missingCoords.id.uuidString]
+        )
+        XCTAssertEqual(
+            SaveHomeReviewQueue.previewIDs(in: [source, rejected]),
+            [source.id.uuidString]
+        )
+    }
 }

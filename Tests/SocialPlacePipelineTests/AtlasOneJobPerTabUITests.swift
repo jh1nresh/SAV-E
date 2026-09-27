@@ -133,13 +133,17 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         )
         XCTAssertTrue(library.contains(".clipped()"))
         XCTAssertTrue(library.contains("SaveHomeSearch()"))
-        XCTAssertTrue(library.contains("matchesLibraryPlace"))
+        XCTAssertTrue(library.contains("filter(search.matches)"))
         XCTAssertFalse(library.contains("SpriteKit"))
         XCTAssertFalse(home.contains("home.capture"))
         XCTAssertFalse(home.contains("Paste a link"))
         let saveHome = try typeBody("SaveHomeView", in: try source(at: "SAV-E/Views/Home/SaveRootViews.swift"))
         XCTAssertTrue(saveHome.contains("HomeAtlasScreen()"))
+        XCTAssertTrue(saveHome.contains("SaveHomeReviewQueue.previewIDs"))
         XCTAssertFalse(saveHome.contains("SaveHomeMemoryPile"))
+        let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        XCTAssertTrue(bridge.contains("searchPlace: place"))
+        XCTAssertTrue(bridge.contains("SaveHomeReviewQueue.isSourceClue"))
     }
 
     func testHomeSavedPlaceUsesStoredPhotoWithFallback() throws {

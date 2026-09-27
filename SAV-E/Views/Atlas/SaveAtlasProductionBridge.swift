@@ -443,14 +443,15 @@ enum SaveAtlasPresentationFactory {
             longitude: place.longitude,
             relativeDay: relativeDay(for: place.createdAt),
             note: place.note?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
-                ?? place.address
+                ?? place.address,
+            searchPlace: place
         )
     }
 
     private static func reviewPresentation(
         _ candidate: PlaceReviewCandidate
     ) -> AtlasReviewPresentation {
-        let isSourceOnly = candidate.status.lowercased() == "source_only"
+        let isSourceOnly = SaveHomeReviewQueue.isSourceClue(candidate)
         return AtlasReviewPresentation(
             id: candidate.id.uuidString,
             kind: isSourceOnly ? .sourceOnly : .candidate,
@@ -460,7 +461,7 @@ enum SaveAtlasPresentationFactory {
     }
 
     private static func reviewDetail(_ candidate: PlaceReviewCandidate) -> String {
-        if candidate.status.lowercased() == "source_only" {
+        if SaveHomeReviewQueue.isSourceClue(candidate) {
             return "Missing exact place"
         }
         if let handle = candidate.sourceHandle?.nonEmpty {

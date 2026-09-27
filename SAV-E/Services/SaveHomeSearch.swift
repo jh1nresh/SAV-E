@@ -75,8 +75,8 @@ struct SaveHomeSearch {
         }
     }
 
-    /// Home library rows expose name/area/note, not a live `Place` category.
-    /// Category chips still match visible text so “cafe” and “咖啡店” work.
+    /// Parity fixtures have no live `Place`. Prefer `matchingPlaces(in:)` when
+    /// the row still carries the confirmed place.
     func matchesLibraryPlace(name: String, address: String, note: String = "") -> Bool {
         let constraints = (filters + [draft]).flatMap(Self.constraints(from:))
         guard !constraints.isEmpty else { return true }
@@ -93,6 +93,45 @@ struct SaveHomeSearch {
                 return haystack.contains(term)
             }
         }
+    }
+
+    func matches(_ place: AtlasPlacePresentation) -> Bool {
+        if let searchPlace = place.searchPlace {
+            return !matchingPlaces(in: [searchPlace]).isEmpty
+        }
+        return matchesLibraryPlace(
+            name: place.name,
+            address: [place.area, place.region].compactMap { $0 }.joined(separator: " "),
+            note: place.note
+        )
+    }
+}
+
+enum SaveHomeReviewQueue {
+    static func isSourceClue(_ candidate: PlaceReviewCandidate) -> Bool {
+        candidate.status.lowercased() == "source_only" || !candidate.hasReliableCoordinates
+    }
+
+    static func isHomePreview(_ candidate: PlaceReviewCandidate) -> Bool {
+        let status = candidate.status.lowercased()
+        if ["failed", "rejected"].contains(status) { return false }
+        if isSourceClue(candidate) { return true }
+        return candidate.hasSavableLocation
+            && ["review", "confirmed", "needs_more_evidence"].contains(status)
+    }
+
+    /// Review Candidates stay first so a Source Clue never hides an actionable match.
+    static func previewIDs(in candidates: [PlaceReviewCandidate]) -> [String] {
+        candidates
+            .filter(isHomePreview)
+            .sorted { lhs, rhs in
+                let lhsSource = isSourceClue(lhs)
+                let rhsSource = isSourceClue(rhs)
+                if lhsSource != rhsSource { return !lhsSource }
+                if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
+            .map(\.id.uuidString)
     }
 }
 
