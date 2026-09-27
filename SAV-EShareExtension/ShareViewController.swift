@@ -1427,7 +1427,7 @@ struct ShareExtensionView: View {
                 // would replay forever. Rotate so Retry starts a new claim.
                 rotateAnalysisIDOnRetry = true
                 analysisID = UUID()
-                throw ShareAnalysisError.serviceUnavailable
+                throw ShareAnalysisError.insufficientSourceEvidence
             }
             let verified = result.candidates.filter(\.isVerified)
             if verified.count == 1, let candidate = verified.first {

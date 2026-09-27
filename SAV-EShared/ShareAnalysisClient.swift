@@ -49,6 +49,8 @@ enum ShareAnalysisKeychain {
 
 enum ShareAnalysisError: LocalizedError {
     case sessionUnavailable, sessionChanged, serviceUnavailable, noPlaceEvidence, analysisFailed
+    /// HTTP 200 + `semanticStatus == analysis_pending`: source evidence is thin, not a provider outage.
+    case insufficientSourceEvidence
 
     var errorDescription: String? {
         let zh = Locale.preferredLanguages.first?.hasPrefix("zh") == true
@@ -59,6 +61,8 @@ enum ShareAnalysisError: LocalizedError {
             return zh ? "帳號已變更，請重新分享以保存在目前帳號。" : "Your account changed. Share again to save to the current account."
         case .serviceUnavailable, .analysisFailed:
             return zh ? "分析暫時無法完成。請重試，或先保存來源。" : "Analysis is temporarily unavailable. Retry or keep the source."
+        case .insufficientSourceEvidence:
+            return zh ? "這次來源暫時找不到足夠地點證據。請重試，或先保存來源。" : "This source didn't have enough place evidence yet. Retry or keep the source."
         case .noPlaceEvidence:
             return zh ? "這次未能核對到確切地點。可重試，或先保存來源。" : "No exact place could be verified this time. Retry or keep the source."
         }

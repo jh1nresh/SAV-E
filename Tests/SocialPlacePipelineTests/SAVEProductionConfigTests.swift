@@ -1410,6 +1410,69 @@ final class ShareInlineAnalysisTests: XCTestCase {
         } catch ShareAnalysisError.sessionUnavailable {} catch { XCTFail("Unexpected error \(error)") }
     }
 
+    func testShareAnalysisCopySplitsProviderFailureFromPendingEvidence() async {
+        do {
+            _ = try await client(status: 502, body: "{}").analyze(
+                sourceURL: "https://www.instagram.com/p/DdfnwpUDgBj/", caption: "", credential: credential())
+            XCTFail("HTTP 502 must be a service failure")
+        } catch ShareAnalysisError.serviceUnavailable {} catch { XCTFail("Unexpected error \(error)") }
+
+        do {
+            _ = try await client(status: 409, body: #"{"code":"analysis_failed"}"#).analyze(
+                sourceURL: "https://www.instagram.com/p/DdfnwpUDgBj/", caption: "", credential: credential())
+            XCTFail("409 analysis_failed must retry as analysisFailed")
+        } catch ShareAnalysisError.analysisFailed {} catch { XCTFail("Unexpected error \(error)") }
+
+        do {
+            _ = try await client(status: 401, body: "{}").analyze(
+                sourceURL: "https://www.instagram.com/p/DdfnwpUDgBj/", caption: "", credential: credential())
+            XCTFail("HTTP 401 must stay sessionUnavailable")
+        } catch ShareAnalysisError.sessionUnavailable {} catch { XCTFail("Unexpected error \(error)") }
+
+        do {
+            let pending = try await client(
+                body: #"{"owner_subject":"did:privy:owner","semanticStatus":"analysis_pending","candidates":[]}"#
+            ).analyze(sourceURL: "https://www.instagram.com/p/DdfnwpUDgBj/", caption: "", credential: credential())
+            XCTAssertEqual(pending.semanticStatus, "analysis_pending")
+        } catch {
+            XCTFail("HTTP 200 analysis_pending must return to the Share Extension, not throw \(error)")
+        }
+
+        let zh = Locale.preferredLanguages.first?.hasPrefix("zh") == true
+        XCTAssertEqual(
+            ShareAnalysisError.serviceUnavailable.errorDescription,
+            ShareAnalysisError.analysisFailed.errorDescription
+        )
+        XCTAssertEqual(
+            ShareAnalysisError.serviceUnavailable.errorDescription,
+            zh ? "分析暫時無法完成。請重試，或先保存來源。" : "Analysis is temporarily unavailable. Retry or keep the source."
+        )
+        XCTAssertEqual(
+            ShareAnalysisError.insufficientSourceEvidence.errorDescription,
+            zh ? "這次來源暫時找不到足夠地點證據。請重試，或先保存來源。" : "This source didn't have enough place evidence yet. Retry or keep the source."
+        )
+        XCTAssertEqual(
+            ShareAnalysisError.noPlaceEvidence.errorDescription,
+            zh ? "這次未能核對到確切地點。可重試，或先保存來源。" : "No exact place could be verified this time. Retry or keep the source."
+        )
+        XCTAssertEqual(
+            ShareAnalysisError.sessionUnavailable.errorDescription,
+            zh ? "請先開啟 Savvy 登入，再回來分享。也可以先保存這個連結。" : "Open Savvy and sign in, then share again. You can also keep this link for later."
+        )
+        XCTAssertEqual(
+            ShareAnalysisError.sessionChanged.errorDescription,
+            zh ? "帳號已變更，請重新分享以保存在目前帳號。" : "Your account changed. Share again to save to the current account."
+        )
+        XCTAssertNotEqual(
+            ShareAnalysisError.insufficientSourceEvidence.errorDescription,
+            ShareAnalysisError.serviceUnavailable.errorDescription
+        )
+        XCTAssertNotEqual(
+            ShareAnalysisError.insufficientSourceEvidence.errorDescription,
+            ShareAnalysisError.noPlaceEvidence.errorDescription
+        )
+    }
+
     func testIssueRejectsAccountMismatchAndParsesFractionalExpiry() async throws {
         let issued = try await client(body: #"{"token":"scoped-token","owner_subject":"did:privy:owner","expires_at":"2099-01-01T00:00:00.000Z"}"#)
             .issue(bearer: "test-bearer", ownerSubject: "did:privy:owner", installationID: UUID().uuidString, apiBaseURL: "https://api.example.test")
