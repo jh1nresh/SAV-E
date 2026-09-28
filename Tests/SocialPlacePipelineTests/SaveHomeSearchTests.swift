@@ -366,25 +366,25 @@ final class SaveHomeLibrarySearchTests: XCTestCase {
     }
 
     func testHomeReviewQueueKeepsSourceCluesBehindCandidates() {
-        func item(name: String, status: String, latitude: Double?, createdAt: Date) -> PlaceReviewCandidate {
+        func item(id: UUID = UUID(), name: String, status: String, latitude: Double?, createdAt: Date) -> PlaceReviewCandidate {
             PlaceReviewCandidate(
-                id: UUID(), captureId: nil, name: name, address: "Taipei",
+                id: id, captureId: nil, name: name, address: "Taipei",
                 city: "Taipei", latitude: latitude, longitude: latitude == nil ? nil : 121.5,
                 evidence: [], confidence: nil, missingInfo: [], status: status, createdAt: createdAt
             )
         }
         let now = Date()
-        let source = item(name: "Source", status: "source_only", latitude: 25, createdAt: now)
+        let source = item(id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, name: "Source", status: "source_only", latitude: 25, createdAt: now)
         let olderCandidate = item(name: "Older", status: "review", latitude: 25, createdAt: now.addingTimeInterval(-60))
         let newestCandidate = item(name: "Newest", status: "review", latitude: 25, createdAt: now)
         let rejected = item(name: "Rejected", status: "rejected", latitude: 25, createdAt: now)
-        let missingCoords = item(name: "No pin", status: "review", latitude: nil, createdAt: now)
+        let missingCoords = item(id: UUID(uuidString: "00000000-0000-0000-0000-000000000002")!, name: "No pin", status: "review", latitude: nil, createdAt: now)
 
         XCTAssertTrue(SaveHomeReviewQueue.isSourceClue(source))
         XCTAssertTrue(SaveHomeReviewQueue.isSourceClue(missingCoords))
         XCTAssertFalse(SaveHomeReviewQueue.isSourceClue(newestCandidate))
         XCTAssertEqual(
-            SaveHomeReviewQueue.previewIDs(in: [source, rejected, olderCandidate, newestCandidate, missingCoords]),
+            SaveHomeReviewQueue.previewIDs(in: [missingCoords, rejected, olderCandidate, newestCandidate, source]),
             [newestCandidate.id.uuidString, olderCandidate.id.uuidString, source.id.uuidString, missingCoords.id.uuidString]
         )
         XCTAssertEqual(
