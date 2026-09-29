@@ -49,6 +49,8 @@ enum ShareAnalysisKeychain {
 
 enum ShareAnalysisError: LocalizedError {
     case sessionUnavailable, sessionChanged, serviceUnavailable, noPlaceEvidence, analysisFailed
+    case usageLimit, analysisInProgress, timedOut, networkUnavailable
+    case sourceUnavailable(reason: String?)
 
     var errorDescription: String? {
         let zh = Locale.preferredLanguages.first?.hasPrefix("zh") == true
@@ -61,6 +63,25 @@ enum ShareAnalysisError: LocalizedError {
             return zh ? "分析暫時無法完成。請重試，或先保存來源。" : "Analysis is temporarily unavailable. Retry or keep the source."
         case .noPlaceEvidence:
             return zh ? "這次未能核對到確切地點。可重試，或先保存來源。" : "No exact place could be verified this time. Retry or keep the source."
+        case .usageLimit:
+            return zh ? "目前已達分析用量上限。請先保存來源，稍後再試。" : "The analysis usage limit has been reached. Keep the source and try again later."
+        case .analysisInProgress:
+            return zh ? "這次分析仍在處理中。請稍後重試，或先保存來源。" : "This analysis is still in progress. Retry shortly or keep the source."
+        case .timedOut:
+            return zh ? "分析等待逾時。請重試以取得結果，或先保存來源。" : "The analysis request timed out. Retry to retrieve the result or keep the source."
+        case .networkUnavailable:
+            return zh ? "連線中斷。請檢查網路後重試，或先保存來源。" : "The connection was interrupted. Check your network and retry, or keep the source."
+        case .sourceUnavailable(let reason):
+            switch reason {
+            case "login_required":
+                return zh ? "Instagram 等來源平台要求登入，暫時讀不到貼文內容。請先保存來源，再於 Savvy 補上貼文文字或地址。" : "The source platform requires a login, so the post could not be read. Keep the source, then add its caption or address in Savvy."
+            case "expired":
+                return zh ? "來源連結已失效或內容已移除。請先保存來源，再於 Savvy 補上貼文文字或地址。" : "The source link has expired or its content was removed. Keep the source, then add its caption or address in Savvy."
+            case "source_out_of_bounds":
+                return zh ? "貼文文字超過分析長度上限。請先保存來源，再於 Savvy 補上較短的原文或地址。" : "The post exceeds the analysis text limit. Keep the source, then add a shorter original caption or address in Savvy."
+            default:
+                return zh ? "暫時讀不到足夠的貼文內容。請先保存來源，再於 Savvy 補上貼文文字或地址。" : "There is not enough readable post content. Keep the source, then add its caption or address in Savvy."
+            }
         }
     }
 }
@@ -95,10 +116,24 @@ struct ShareAnalysisCandidate: Decodable, Sendable {
 }
 
 struct ShareAnalysisResponse: Decodable, Sendable {
+    struct Receipt: Decodable, Sendable {
+        struct FailureReason: Decodable, Sendable {
+            var kind: String
+            var reason: String?
+        }
+        var failureReason: FailureReason?
+    }
     var ownerSubject: String
     var candidates: [ShareAnalysisCandidate]
     var semanticStatus: String?
-    enum CodingKeys: String, CodingKey { case ownerSubject = "owner_subject", candidates, semanticStatus }
+    var receipt: Receipt?
+    var pendingError: ShareAnalysisError {
+        guard let failure = receipt?.failureReason, failure.kind == "insufficient_source" else {
+            return .serviceUnavailable
+        }
+        return .sourceUnavailable(reason: failure.reason)
+    }
+    enum CodingKeys: String, CodingKey { case ownerSubject = "owner_subject", candidates, semanticStatus, receipt }
 }
 
 struct ShareAnalysisClient: Sendable {
@@ -155,12 +190,27 @@ struct ShareAnalysisClient: Sendable {
     }
 
     private func send(_ request: URLRequest) async throws -> Data {
-        let (data, response) = try await session.data(for: request, delegate: ShareAnalysisNoRedirect())
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request, delegate: ShareAnalysisNoRedirect())
+        } catch let error as URLError {
+            switch error.code {
+            case .timedOut: throw ShareAnalysisError.timedOut
+            case .notConnectedToInternet, .networkConnectionLost, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed:
+                throw ShareAnalysisError.networkUnavailable
+            default: throw error
+            }
+        }
         guard let http = response as? HTTPURLResponse else { throw ShareAnalysisError.serviceUnavailable }
         if http.statusCode == 401 { throw ShareAnalysisError.sessionUnavailable }
-        if http.statusCode == 409,
-           let error = try? JSONSerialization.jsonObject(with: data) as? [String: String],
-           error["code"] == "analysis_failed" { throw ShareAnalysisError.analysisFailed }
+        guard data.count <= 1_000_000 else { throw ShareAnalysisError.serviceUnavailable }
+        let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["code"] as? String
+        if http.statusCode == 429, code == "analysis_limit_exceeded" { throw ShareAnalysisError.usageLimit }
+        if http.statusCode == 409 {
+            if code == "analysis_failed" { throw ShareAnalysisError.analysisFailed }
+            if code == "analysis_in_progress" { throw ShareAnalysisError.analysisInProgress }
+        }
         guard (200..<300).contains(http.statusCode), data.count <= 1_000_000 else { throw ShareAnalysisError.serviceUnavailable }
         return data
     }

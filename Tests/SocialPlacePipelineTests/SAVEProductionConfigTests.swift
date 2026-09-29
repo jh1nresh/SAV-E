@@ -1505,3 +1505,106 @@ final class ShareInlineAnalysisTests: XCTestCase {
         XCTAssertEqual(service.consumePendingReviewCandidates(ownerSubject: "owner").count, 1)
     }
 }
+
+@MainActor
+final class ShareAnalysisFailureTests: XCTestCase {
+    private func analyze(_ fixture: String) async throws -> ShareAnalysisResponse {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [ShareFailureURLProtocol.self]
+        let client = ShareAnalysisClient(session: URLSession(configuration: config))
+        let credential = ShareAnalysisCredential(token: "fixture", ownerSubject: "fixture-owner",
+            expiresAt: Date().addingTimeInterval(3600), apiBaseURL: "https://share.example.test/" + fixture)
+        return try await client.analyze(sourceURL: "https://www.instagram.com/reel/reported/", caption: "",
+            credential: credential, analysisID: UUID(uuidString: "00000000-0000-4000-8000-000000000001")!)
+    }
+
+    func testUsageLimitIsActionableInsteadOfGenericServiceFailure() async throws {
+        do {
+            _ = try await analyze("limit")
+            XCTFail("A usage limit must not succeed")
+        } catch ShareAnalysisError.usageLimit {} catch { XCTFail("Unexpected error: \(error)") }
+    }
+
+    func testRetryDistinguishesRunningFromTerminalFailure() async throws {
+        do {
+            _ = try await analyze("running")
+            XCTFail("Running claim must not start another analysis")
+        } catch ShareAnalysisError.analysisInProgress {} catch { XCTFail("Unexpected error: \(error)") }
+        do {
+            _ = try await analyze("failed")
+            XCTFail("Terminal failure must allow a fresh claim")
+        } catch ShareAnalysisError.analysisFailed {} catch { XCTFail("Unexpected error: \(error)") }
+    }
+
+    func testPendingSourceReceiptSurvivesDecodingWithoutCreatingPlace() async throws {
+        for reason in ["login_required", "expired", "caption_missing", "unresolved_source", "source_out_of_bounds"] {
+            let result = try await analyze(reason)
+            XCTAssertEqual(result.semanticStatus, "analysis_pending")
+            XCTAssertTrue(result.candidates.isEmpty)
+            guard case .sourceUnavailable(let actual) = result.pendingError else {
+                return XCTFail("Source failure was hidden")
+            }
+            XCTAssertEqual(actual, reason)
+            XCTAssertFalse(result.pendingError.localizedDescription.contains("來源已"), "Unsaved source must not claim persistence")
+        }
+    }
+
+    func testProviderAndLegacyPendingResponsesRemainServiceFailures() async throws {
+        for fixture in ["provider", "legacy"] {
+            let result = try await analyze(fixture)
+            guard case .serviceUnavailable = result.pendingError else { return XCTFail("Provider must not be blamed on source content") }
+        }
+        do {
+            _ = try await analyze("server-error")
+            XCTFail("Unknown error must fail safely")
+        } catch ShareAnalysisError.serviceUnavailable {} catch { XCTFail("Unexpected error: \(error)") }
+    }
+
+    func testTransportErrorsKeepActionableMeaning() async throws {
+        do {
+            _ = try await analyze("timeout")
+            XCTFail("Timeout must not succeed")
+        } catch ShareAnalysisError.timedOut {} catch { XCTFail("Unexpected error: \(error)") }
+        do {
+            _ = try await analyze("offline")
+            XCTFail("Offline must not succeed")
+        } catch ShareAnalysisError.networkUnavailable {} catch { XCTFail("Unexpected error: \(error)") }
+    }
+}
+
+private final class ShareFailureURLProtocol: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let fixture = request.url!.pathComponents[1]
+        if fixture == "timeout" || fixture == "offline" {
+            client?.urlProtocol(self, didFailWithError: URLError(fixture == "timeout" ? .timedOut : .notConnectedToInternet))
+            return
+        }
+        let status: Int
+        let body: String
+        switch fixture {
+        case "limit":
+            status = 429; body = #"{"code":"analysis_limit_exceeded","error":"Daily analysis limit reached"}"#
+        case "running":
+            status = 409; body = #"{"code":"analysis_in_progress"}"#
+        case "failed":
+            status = 409; body = #"{"code":"analysis_failed"}"#
+        case "server-error":
+            status = 500; body = #"{"error":"internal details must not reach UI"}"#
+        case "provider":
+            status = 200; body = #"{"owner_subject":"fixture-owner","candidates":[],"semanticStatus":"analysis_pending","receipt":{"failureReason":{"kind":"provider_failure","stage":"public_search"}}}"#
+        case "legacy":
+            status = 200; body = #"{"owner_subject":"fixture-owner","candidates":[],"semanticStatus":"analysis_pending"}"#
+        default:
+            status = 200; body = """
+            {"owner_subject":"fixture-owner","candidates":[],"semanticStatus":"analysis_pending","receipt":{"failureReason":{"kind":"insufficient_source","reason":"\(fixture)"}}}
+            """
+        }
+        let response = HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}
