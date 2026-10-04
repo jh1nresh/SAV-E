@@ -195,6 +195,17 @@ no real provider credentials or traffic are used. Without that variable these
 database tests explicitly skip; ordinary `npm run validate` still runs the
 pure accounting, recovery, parser and transport boundary tests.
 
+Analysis summaries include an `efficiency` object: paid-provider attempts,
+failed attempts, known estimated micro-USD, unknown-cost event count and estimated
+micro-USD per confirmed candidate. The last value is `null` until accounting is
+complete and at least one candidate is confirmed. These are retail estimates,
+not invoices or unique Map Stamp counts. No production budget policy is changed.
+
+Within one analysis request, identical Places queries on the same resolver path
+share one in-flight request and reservation. Results are copied for each caller;
+failures may be retried. The bounded cache expires with the request and never
+shares queries across accounts or separate analysis runs.
+
 ## Routes
 
 Persistence routes accept either `Authorization: Bearer <Privy access token>` or `x-save-guest-token: <server-issued guest token>`.
@@ -296,14 +307,3 @@ curl -X POST "$SAVE_API_URL/v0/exports/trek-kml" \
 Import `save-map-stamps.kml` from TREK's planner file-import surface. Savvy remains the place-memory source of truth; TREK owns downstream itinerary editing and route planning.
 
 Public collections, OpenAPI, `llms.txt`, paid/API-key access, broad reputation graph exports, external checkout, per-run on-chain receipts, and marketplace UI are intentionally out of scope for the first verified-claims/workflow-ledger slices.
-
-Analysis summaries include an `efficiency` object: paid-provider attempts,
-failed attempts, known estimated micro-USD, unknown-cost event count and estimated
-micro-USD per confirmed candidate. The last value is `null` until accounting is
-complete and at least one candidate is confirmed. These are retail estimates,
-not invoices or unique Map Stamp counts. No production budget policy is changed.
-
-Within one analysis request, identical Places queries on the same resolver path
-share one in-flight request and reservation. Results are copied for each caller;
-failures may be retried. The bounded cache expires with the request and never
-shares queries across accounts or separate analysis runs.
