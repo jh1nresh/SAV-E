@@ -782,6 +782,7 @@ struct ContentView: View {
                 onRecommendOrder: openFoodAnalysis,
                 onPlanAroundPlace: openPlanAround,
                 onFindExactPlaceCandidate: openExactSearch,
+                onAddReviewClue: addClueToReviewCandidate,
                 onFocusReviewCandidateOnMap: focusReviewCandidateOnMap,
                 onSaveCandidate: saveFullScreenCandidate,
                 onRejectCandidate: rejectFullScreenCandidate,
@@ -962,6 +963,7 @@ struct ContentView: View {
                 mapVM.clearSelectedMapObject()
             },
             onShowMapCandidatesOnMap: showMapCandidatesOnMap,
+            onAddReviewClue: addClueToReviewCandidate,
             onFocusReviewCandidateOnMap: focusReviewCandidateOnMap
         )
         .environment(\.appLanguageSettings, languageSettings)
@@ -1287,6 +1289,16 @@ struct ContentView: View {
             return
         }
         openExactSearch(candidate)
+    }
+
+    private func addClueToReviewCandidate(_ candidate: PlaceReviewCandidate) {
+        guard incomingPlaceReceipt == nil else { return }
+        exactSearchRequestID = nil
+        rootPath.removeAll()
+        selectedRootTab = .map
+        isExactSearchSessionActive = true
+        mapVM.beginExactSearchResolution(for: candidate)
+        openExactSearchRefine(query: candidate.refinementQuery)
     }
 
     private func openExactSearch(_ candidate: PlaceReviewCandidate) {
