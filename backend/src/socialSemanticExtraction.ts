@@ -1,5 +1,6 @@
 import { AnalysisControlError, analysisPrices, geminiTokens, trackAnalysisOperation } from "./analysisUsage.js";
 import { createHash } from "node:crypto";
+import { reuseAnalysisResult } from "./analysisUsage.js";
 
 export interface SemanticField { value: string; quote: string; source: "caption" | "ocr" }
 export interface SemanticMapPlace { id: string; name: string; address: string; latitude: number; longitude: number; types?: string[] }
@@ -216,7 +217,7 @@ async function defaultExtract(prompt: string): Promise<unknown> {
 async function defaultSearch(query: string): Promise<SemanticMapPlace[]> {
   const key = process.env.GOOGLE_PLACES_API_KEY?.trim();
   if (!key) throw failure();
-  return trackAnalysisOperation({ operation: "google_places" }, async () => {
+  return reuseAnalysisResult("semantic-places:" + query, () => trackAnalysisOperation({ operation: "google_places" }, async () => {
     const url = new URL("https://maps.googleapis.com/maps/api/place/textsearch/json");
     url.searchParams.set("query", query); url.searchParams.set("key", key);
     const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 10_000);
@@ -227,7 +228,7 @@ async function defaultSearch(query: string): Promise<SemanticMapPlace[]> {
       return body.results.slice(0, 20).map((item: any) => ({ id: item?.place_id, name: item?.name, address: item?.formatted_address,
         latitude: item?.geometry?.location?.lat, longitude: item?.geometry?.location?.lng, types: providerTypes(item?.types) })).filter(validPlace);
     } finally { clearTimeout(timeout); }
-  });
+  }));
 }
 
 export async function analyzeSocialCaption(input: Input, deps: Dependencies = {}): Promise<SemanticAnalysisResult> {
