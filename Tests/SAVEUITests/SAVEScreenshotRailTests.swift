@@ -264,7 +264,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     func testEmptyHomeStartsCaptureAndKeepsSourceOnlyUnconfirmed() throws {
         let app = makeApp(launchArguments: [
-            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline", "--uitest-location-denied",
             "--uitest-reset-review-demo-storage", "--uitest-empty-home", "-save.appLanguage", "en"
         ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
         launch(app)
@@ -284,12 +284,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertNotEqual(app.buttons["drawer.review.primaryAction"].label, "Confirm and save")
         attach(app, name: "review-flow-source-only")
         tapReachable(app.buttons["drawer.review.addClue"])
-        dismissLocationAlertIfPresent()
         let refinement = app.textFields["map.search.input"]
         XCTAssertTrue(refinement.waitForExistence(timeout: stepTimeout))
         refinement.tap()
         refinement.typeText(" Taipei")
         XCTAssertTrue((refinement.value as? String)?.contains("Taipei") == true)
+        XCTAssertTrue(refinement.isHittable)
+        XCTAssertGreaterThan(refinement.frame.height, 20)
+        XCTAssertLessThan(refinement.frame.maxY, app.keyboards.firstMatch.frame.minY)
         XCTAssertFalse(app.buttons["drawer.review.primaryAction"].exists)
         attach(app, name: "review-next-step-add-clue")
     }

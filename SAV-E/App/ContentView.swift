@@ -233,7 +233,11 @@ struct ContentView: View {
     private var rootScaffold: some View {
         ZStack(alignment: .bottom) {
             rootTabs
-            if selectedRootTab == .map || isMapPanelExpanded { mapDrawerPanel }
+            if selectedRootTab == .map || isMapPanelExpanded {
+                // Keep the editor above the native navigation/map layer when
+                // returning from a full-screen Review candidate with a keyboard.
+                mapDrawerPanel.zIndex(1)
+            }
         }
         .onChange(of: selectedRootTab) { _, tab in
             if tab != .map {
