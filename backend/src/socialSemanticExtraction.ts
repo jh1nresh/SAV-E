@@ -1,3 +1,4 @@
+import { geminiAvailability } from "./geminiAvailability.js";
 import { AnalysisControlError, analysisPrices, geminiTokens, trackAnalysisOperation } from "./analysisUsage.js";
 import { createHash } from "node:crypto";
 
@@ -196,13 +197,13 @@ async function defaultExtract(prompt: string): Promise<unknown> {
   const result = await trackAnalysisOperation<any>({ operation: "gemini", model, reserveMicros }, async () => {
     const controller = new AbortController(); const timeout = setTimeout(() => controller.abort(), 20_000);
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      const response = await geminiAvailability.observe(model, () => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: "POST", redirect: "manual", signal: controller.signal,
         headers: { "Content-Type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: {
           temperature: 0, maxOutputTokens, thinkingConfig: { thinkingBudget: 0 }, responseMimeType: "application/json",
         } }),
-      });
+      }));
       const body = await boundedJSON(response, controller.signal);
       return body;
     } finally { clearTimeout(timeout); }

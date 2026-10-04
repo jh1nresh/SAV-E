@@ -1,3 +1,4 @@
+import { geminiAvailability } from "./geminiAvailability.js";
 // Sendblue iMessage bot (SPIKE).
 //
 // Flow: a user texts Savvy's Sendblue number a message. If it contains a social
@@ -476,7 +477,7 @@ export async function defaultGeminiText(prompt: string): Promise<string> {
   if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
   const model = process.env.SAVE_MAAT_GEMINI_MODEL ?? defaultGeminiModel;
   const url = `${geminiEndpointBase}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const response = await fetch(url, {
+  const response = await geminiAvailability.observe(model, () => fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -491,7 +492,7 @@ export async function defaultGeminiText(prompt: string): Promise<string> {
         maxOutputTokens: 1024,
       },
     }),
-  });
+  }));
   if (!response.ok) throw new Error(`Gemini request failed: ${response.status}`);
   const body = (await response.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
