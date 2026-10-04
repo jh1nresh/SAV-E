@@ -573,6 +573,8 @@ struct ShareExtensionView: View {
         .background(ShareScrapbookBackground().ignoresSafeArea())
         .toolbarBackground(.hidden, for: .navigationBar)
         .task(id: analysisAttempt) {
+            // Saving during analysis cancels this task; its replacement must not restart work.
+            guard !isSaved else { return }
             isParsing = true
             parseError = nil
             parsedPlace = nil
@@ -618,7 +620,7 @@ struct ShareExtensionView: View {
                     ShareCheckingStepRow(
                         systemImage: "link",
                         title: "Source received",
-                        subtitle: "The shared link is saved as evidence.",
+                        subtitle: shareText("已收到連結；保存後才能稍後處理。", "Link received. Keep it to continue later."),
                         fill: SaveTheme.sky
                     )
                     ShareCheckingStepRow(
@@ -643,6 +645,19 @@ struct ShareExtensionView: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(SaveTheme.sky, style: StrokeStyle(lineWidth: 1.2, dash: [3, 3]))
             )
+
+            if isSocialAnalysis {
+                Button(shareText("先保存，稍後在 Savvy 處理", "Keep source for later in Savvy")) {
+                    keepSocialSource()
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(SaveTheme.coral)
+                .accessibilityIdentifier("share.capture.keepWhileAnalyzing")
+                Text(shareText("只保留來源線索，尚未加入地圖。", "Keeps the source clue without adding a place to your map."))
+                    .font(ShareAtlasType.body(12))
+                    .foregroundColor(SaveTheme.muted)
+                    .multilineTextAlignment(.center)
+            }
 
             Spacer(minLength: 8)
 
@@ -1415,12 +1430,14 @@ struct ShareExtensionView: View {
                 // Only a server-confirmed terminal failure starts a fresh run.
                 // Lost responses reuse the ID and replay without another charge.
                 try Task.checkCancellation()
+                guard !isSaved else { return }
                 guard ShareAnalysisKeychain.read() == credential else { throw ShareAnalysisError.sessionChanged }
                 analysisID = UUID()
                 result = try await ShareAnalysisClient().analyze(sourceURL: sourceURL, caption: socialCaption,
                     credential: credential, analysisID: analysisID)
             }
             try Task.checkCancellation()
+            guard !isSaved else { return }
             guard ShareAnalysisKeychain.read() == credential else { throw ShareAnalysisError.sessionChanged }
             guard result.semanticStatus != "analysis_pending" else {
                 // Completed pending results are stored against this ID; reuse
@@ -1448,7 +1465,7 @@ struct ShareExtensionView: View {
         } catch is CancellationError {
             return
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, !isSaved else { return }
             parseError = (error as? ShareAnalysisError)?.errorDescription ?? ShareAnalysisError.serviceUnavailable.errorDescription
         }
     }
@@ -1497,6 +1514,7 @@ struct ShareExtensionView: View {
     }
 
     private func keepSocialSource() {
+        guard !isSaved else { return }
         // Failed analysis never creates a map pin; this button is an explicit
         // local source save. Preserve the originating account when available.
         let current = ShareAnalysisKeychain.read()
@@ -1511,6 +1529,15 @@ struct ShareExtensionView: View {
             isSourceOnly: true, reviewState: "analysis_pending")
         reviewCandidates = [candidate]
         saveReviewCandidates([candidate], sourceFallback: true)
+        if isSaved {
+            isParsing = false
+            // Persist first, then cancel the waiting client task. Server-side work may
+            // already have started; this does not promise a refund or background execution.
+            analysisAttempt += 1
+        } else {
+            // Surface a disk-write failure instead of leaving it behind the loading panel.
+            isParsing = false
+        }
     }
 
     // MARK: - Gemini Parsing
