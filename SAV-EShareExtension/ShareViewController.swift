@@ -1465,7 +1465,7 @@ struct ShareExtensionView: View {
         } catch is CancellationError {
             return
         } catch {
-            guard !Task.isCancelled, !isSaved else { return }
+            guard !Task.isCancelled else { return }
             parseError = (error as? ShareAnalysisError)?.errorDescription ?? ShareAnalysisError.serviceUnavailable.errorDescription
         }
     }
