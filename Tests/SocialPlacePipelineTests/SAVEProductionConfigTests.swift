@@ -1508,6 +1508,17 @@ final class ShareInlineAnalysisTests: XCTestCase {
 
 @MainActor
 final class ShareAnalysisFailureTests: XCTestCase {
+    func testRecoveryActionsDoNotInviteUnproductiveRetries() {
+        for error in [ShareAnalysisError.sourceUnavailable(reason: "login_required"), .noPlaceEvidence,
+                      .usageLimit, .sessionUnavailable, .sessionChanged] {
+            XCTAssertFalse(error.offersImmediateRetry)
+        }
+        for error in [ShareAnalysisError.timedOut, .networkUnavailable, .analysisInProgress,
+                      .serviceUnavailable, .analysisFailed] {
+            XCTAssertTrue(error.offersImmediateRetry)
+        }
+    }
+
     private func analyze(_ fixture: String) async throws -> ShareAnalysisResponse {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [ShareFailureURLProtocol.self]

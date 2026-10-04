@@ -52,6 +52,16 @@ enum ShareAnalysisError: LocalizedError {
     case usageLimit, analysisInProgress, timedOut, networkUnavailable
     case sourceUnavailable(reason: String?)
 
+    /// Retrying cannot repair missing evidence, an exhausted allowance, or a stale session.
+    var offersImmediateRetry: Bool {
+        switch self {
+        case .sourceUnavailable, .noPlaceEvidence, .usageLimit, .sessionUnavailable, .sessionChanged:
+            return false
+        case .serviceUnavailable, .analysisFailed, .analysisInProgress, .timedOut, .networkUnavailable:
+            return true
+        }
+    }
+
     var errorDescription: String? {
         let zh = Locale.preferredLanguages.first?.hasPrefix("zh") == true
         switch self {
