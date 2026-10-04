@@ -135,6 +135,7 @@ struct AIDrawerView: View {
     /// "Find exact place" promises the map: when the search lands candidate
     /// pins, the host closes this drawer surface so the user sees them.
     var onShowMapCandidatesOnMap: () -> Void = {}
+    var onAddReviewClue: ((PlaceReviewCandidate) -> Void)? = nil
     /// Reliable Review map tap focuses that candidate without a new search.
     var onFocusReviewCandidateOnMap: (PlaceReviewCandidate) -> Void = { _ in }
     @FocusState private var searchFocused: Bool
@@ -248,6 +249,7 @@ struct AIDrawerView: View {
             onFindExactPlaceCandidate: { candidate in
                 findExactPlace(for: candidate)
             },
+            onAddReviewClue: { candidate in addMoreClue(for: candidate) },
             onFocusReviewCandidateOnMap: { candidate in
                 focusKnownReviewCandidateOnMap(candidate)
             },
@@ -1492,6 +1494,10 @@ struct AIDrawerView: View {
     }
 
     private func addMoreClue(for candidate: PlaceReviewCandidate) {
+        if let onAddReviewClue {
+            onAddReviewClue(candidate)
+            return
+        }
         mapDetailDrawerItem = nil
         viewModel.returnToCommands()
         viewModel.query = languageSettings.localized(
@@ -1567,6 +1573,7 @@ struct MapDetailDrawerView: View {
     let onRecommendOrder: (Place) -> Void
     let onPlanAroundPlace: (Place) -> Void
     let onFindExactPlaceCandidate: (PlaceReviewCandidate) -> Void
+    var onAddReviewClue: ((PlaceReviewCandidate) -> Void)? = nil
     var onFocusReviewCandidateOnMap: (PlaceReviewCandidate) -> Void = { _ in }
     let onSaveCandidate: (PlaceReviewCandidate, String?) -> Void
     let onRejectCandidate: (PlaceReviewCandidate) -> Void
@@ -1923,6 +1930,7 @@ struct MapDetailDrawerView: View {
                         isWorking: isWorkingReviewCandidateID == candidate.id,
                         onFindExactPlace: { onFindExactPlaceCandidate(candidate) },
                         onFocusOnMap: { onFocusReviewCandidateOnMap(candidate) },
+                        onAddClue: onAddReviewClue.map { action in { action(candidate) } },
                         onSave: { nameOverride in onSaveCandidate(candidate, nameOverride) },
                         onReject: { onRejectCandidate(candidate) },
                         onSaveSourceOnly: { onSaveCandidateAsSourceOnly(candidate) },
@@ -3280,6 +3288,7 @@ private struct ReviewCandidateDetailCard: View {
     var isWorking: Bool
     var onFindExactPlace: () -> Void
     var onFocusOnMap: (() -> Void)? = nil
+    var onAddClue: (() -> Void)? = nil
     var onSave: (String?) -> Void
     var onReject: () -> Void
     var onSaveSourceOnly: () -> Void
@@ -3292,6 +3301,7 @@ private struct ReviewCandidateDetailCard: View {
         isWorking: Bool,
         onFindExactPlace: @escaping () -> Void,
         onFocusOnMap: (() -> Void)? = nil,
+        onAddClue: (() -> Void)? = nil,
         onSave: @escaping (String?) -> Void,
         onReject: @escaping () -> Void,
         onSaveSourceOnly: @escaping () -> Void,
@@ -3302,6 +3312,7 @@ private struct ReviewCandidateDetailCard: View {
         self.isWorking = isWorking
         self.onFindExactPlace = onFindExactPlace
         self.onFocusOnMap = onFocusOnMap
+        self.onAddClue = onAddClue
         self.onSave = onSave
         self.onReject = onReject
         self.onSaveSourceOnly = onSaveSourceOnly
@@ -3332,6 +3343,13 @@ private struct ReviewCandidateDetailCard: View {
                     }
                 )
 
+                Text(languageSettings.localized(english: candidate.reviewNextStep.english,
+                    traditionalChinese: candidate.reviewNextStep.traditionalChinese))
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("drawer.review.missingClue")
+
                 VStack(alignment: .leading, spacing: 10) {
                     CandidateActionButton(
                         title: primaryActionTitle,
@@ -3342,6 +3360,20 @@ private struct ReviewCandidateDetailCard: View {
                         action: performPrimaryAction
                     )
                     .accessibilityIdentifier("drawer.review.primaryAction")
+
+                    if primaryAction.confirmsMapStamp {
+                        CandidateActionButton(
+                            title: languageSettings.localized(english: "Choose another place", traditionalChinese: "改選其他地點"),
+                            systemImage: "location.magnifyingglass", fill: SaveAtlasPalette.paper,
+                            disabled: isWorking, action: onFindExactPlace)
+                            .accessibilityIdentifier("drawer.review.changePlace")
+                    } else if let onAddClue {
+                        CandidateActionButton(
+                            title: languageSettings.localized(english: "Add a clue", traditionalChinese: "補上線索"),
+                            systemImage: "text.badge.plus", fill: SaveAtlasPalette.paper,
+                            disabled: isWorking, action: onAddClue)
+                            .accessibilityIdentifier("drawer.review.addClue")
+                    }
 
                     Button(role: .destructive, action: onReject) {
                         Label(languageSettings.localized(english: "Not this place", traditionalChinese: "不是這間"), systemImage: "xmark")
@@ -3394,14 +3426,6 @@ private struct ReviewCandidateDetailCard: View {
                     .accessibilityIdentifier("drawer.review.reanalyze")
 
                     Menu {
-                        // When the primary action is Confirm (candidate already
-                        // has coordinates), re-running the exact-place search had
-                        // no entry point — a wrong match left the user stuck.
-                        if primaryAction.confirmsMapStamp {
-                            Button(action: onFindExactPlace) {
-                                Label(languageSettings.localized(english: "Find exact place", traditionalChinese: "找出精確地點"), systemImage: "location.magnifyingglass")
-                            }
-                        }
                         Button(action: onSaveSourceOnly) {
                             Label(languageSettings.localized(english: "Keep source only", traditionalChinese: "只留來源"), systemImage: "tray.and.arrow.down")
                         }

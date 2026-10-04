@@ -233,7 +233,11 @@ struct ContentView: View {
     private var rootScaffold: some View {
         ZStack(alignment: .bottom) {
             rootTabs
-            if selectedRootTab == .map || isMapPanelExpanded { mapDrawerPanel }
+            if selectedRootTab == .map || isMapPanelExpanded {
+                // Keep the editor above the native navigation/map layer when
+                // returning from a full-screen Review candidate with a keyboard.
+                mapDrawerPanel.zIndex(1)
+            }
         }
         .onChange(of: selectedRootTab) { _, tab in
             if tab != .map {
@@ -782,6 +786,7 @@ struct ContentView: View {
                 onRecommendOrder: openFoodAnalysis,
                 onPlanAroundPlace: openPlanAround,
                 onFindExactPlaceCandidate: openExactSearch,
+                onAddReviewClue: addClueToReviewCandidate,
                 onFocusReviewCandidateOnMap: focusReviewCandidateOnMap,
                 onSaveCandidate: saveFullScreenCandidate,
                 onRejectCandidate: rejectFullScreenCandidate,
@@ -962,6 +967,7 @@ struct ContentView: View {
                 mapVM.clearSelectedMapObject()
             },
             onShowMapCandidatesOnMap: showMapCandidatesOnMap,
+            onAddReviewClue: addClueToReviewCandidate,
             onFocusReviewCandidateOnMap: focusReviewCandidateOnMap
         )
         .environment(\.appLanguageSettings, languageSettings)
@@ -1287,6 +1293,16 @@ struct ContentView: View {
             return
         }
         openExactSearch(candidate)
+    }
+
+    private func addClueToReviewCandidate(_ candidate: PlaceReviewCandidate) {
+        guard incomingPlaceReceipt == nil else { return }
+        exactSearchRequestID = nil
+        rootPath.removeAll()
+        selectedRootTab = .map
+        isExactSearchSessionActive = true
+        mapVM.beginExactSearchResolution(for: candidate)
+        openExactSearchRefine(query: candidate.refinementQuery)
     }
 
     private func openExactSearch(_ candidate: PlaceReviewCandidate) {

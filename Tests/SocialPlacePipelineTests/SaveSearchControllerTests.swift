@@ -5,6 +5,17 @@ import CoreLocation
 
 final class SaveSearchControllerTests: XCTestCase {
     @MainActor
+    func testReviewNextStepUsesEvidenceWithoutPromotingClues() {
+        XCTAssertEqual(SaveReviewNextStep(pending: true, savable: false, address: "", city: nil, missingInfo: []), .pendingAnalysis)
+        XCTAssertEqual(SaveReviewNextStep(pending: false, savable: false, address: " ", city: " ", missingInfo: []), .addCity)
+        XCTAssertEqual(SaveReviewNextStep(pending: false, savable: false, address: "", city: "Taipei", missingInfo: []), .addAddress)
+        XCTAssertEqual(SaveReviewNextStep(pending: false, savable: false, address: "1 Fixture Road", city: nil, missingInfo: []), .locatePlace)
+        XCTAssertEqual(SaveReviewNextStep(pending: false, savable: true, address: "1 Fixture Road", city: nil, missingInfo: []), .confirm)
+        XCTAssertEqual(SaveReviewNextStep(pending: false, savable: true, address: "1 Fixture Road", city: nil,
+            missingInfo: ["Choose the correct map candidate"]), .chooseMatch)
+    }
+
+    @MainActor
     func testReviewSourceReceiptPresentationKeepsXiaohongshuProvenance() throws {
         let candidate = PlaceReviewCandidate(
             id: UUID(),

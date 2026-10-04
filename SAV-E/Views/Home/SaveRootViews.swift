@@ -454,35 +454,7 @@ struct SaveLibraryView: View {
     }
 
     private func candidateDetail(_ candidate: PlaceReviewCandidate) -> String {
-        if candidate.isAnalysisPending {
-            return localized("Source saved; analysis pending", "來源已保存，分析待完成")
-        }
-        if candidateKind(candidate) == .sourceClue {
-            return localized("Missing exact place", "缺少精確地點")
-        }
-
-        let source = ReviewSourceReceiptPresentation(candidate: candidate)
-        if let handle = candidate.sourceHandle?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !handle.isEmpty {
-            return localized("From \(handle)", "來自 \(handle)")
-        }
-        if let handle = source.handle {
-            return localized("From \(handle)", "來自 \(handle)")
-        }
-        if source.sourcePlatform != .other {
-            return localized(
-                "From \(source.sourcePlatform.displayName)",
-                "來自 \(source.sourcePlatform.displayName)"
-            )
-        }
-        if let city = candidate.city?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !city.isEmpty {
-            return city
-        }
-        let address = candidate.address.trimmingCharacters(in: .whitespacesAndNewlines)
-        return address.isEmpty
-            ? localized("Shared link", "分享連結")
-            : address
+        localized(candidate.reviewNextStep.english, candidate.reviewNextStep.traditionalChinese)
     }
 
     private func collectionDate(_ date: Date) -> String {
