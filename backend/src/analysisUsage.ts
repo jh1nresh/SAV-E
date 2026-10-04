@@ -163,11 +163,41 @@ export class AnalysisUsageStore {
     const {rows} = await this.pool.query(`select operation,model,origin,count(*)::int as attempts,count(*) filter(where outcome='success')::int as successes,count(*) filter(where outcome='failure')::int as failures,count(*) filter(where outcome='pending')::int as pending,sum(input_tokens)::bigint as input_tokens,sum(output_tokens)::bigint as output_tokens,sum(thinking_tokens)::bigint as thinking_tokens,sum(estimated_micros)::bigint as known_estimated_micros,count(*) filter(where estimated_micros is null)::int as unknown_cost_events from analysis_usage_events where analysis_id=$1 and user_id=$2 group by operation,model,origin order by operation,model,origin`,[id,userId]);
     const confirmed = await this.pool.query(`select count(distinct c.id)::int as n from analysis_captures a join place_candidates c on c.capture_id=a.capture_id where a.analysis_id=$1 and a.user_id=$2 and c.status in ('confirmed','saved')`,[id,userId]);
     const session=await this.pool.query("select events_truncated,client_events_expected,client_events_received,finished_at from analysis_sessions where id=$1 and user_id=$2",[id,userId]);
-    return { analysis_id:id,events_truncated:session.rows[0].events_truncated,client_events_are_unverified:true,price_version:analysisPriceVersion,currency:"USD",cost_basis:"gross_provider_estimate_excludes_free_allowances_tax_infrastructure",operations:rows,confirmed_candidates:confirmed.rows[0].n,client_events_received:session.rows[0].client_events_received,cost_complete:Boolean(session.rows[0].finished_at) && (!session.rows[0].client_events_expected || session.rows[0].client_events_received) && !session.rows[0].events_truncated && rows.every(row=>row.unknown_cost_events===0),enforced:this.limits().enabled };
+    const costComplete = Boolean(session.rows[0].finished_at) && (!session.rows[0].client_events_expected || session.rows[0].client_events_received) && !session.rows[0].events_truncated && rows.every(row=>row.unknown_cost_events===0);
+    return { efficiency: analysisEfficiency(rows, confirmed.rows[0].n, costComplete), analysis_id:id,events_truncated:session.rows[0].events_truncated,client_events_are_unverified:true,price_version:analysisPriceVersion,currency:"USD",cost_basis:"gross_provider_estimate_excludes_free_allowances_tax_infrastructure",operations:rows,confirmed_candidates:confirmed.rows[0].n,client_events_received:session.rows[0].client_events_received,cost_complete:costComplete,enforced:this.limits().enabled };
   }
 }
-const context = new AsyncLocalStorage<{store:AnalysisUsageStore;userId:string;id:string}>();
-export function withAnalysisUsage<T>(store:AnalysisUsageStore,userId:string,id:string,work:()=>Promise<T>):Promise<T> { return context.run({store,userId,id},work); }
+export function analysisEfficiency(rows: Array<{origin: string; operation: string; attempts: number; failures: number; unknown_cost_events: number; known_estimated_micros: string | number | null}>, confirmed: number, complete: boolean) {
+  const providers = rows.filter(row => row.origin === "server" && ["google_places", "gemini", "china_places"].includes(row.operation));
+  const known = providers.reduce((sum, row) => sum + BigInt(row.known_estimated_micros ?? 0), 0n);
+  const safeKnown = known <= BigInt(Number.MAX_SAFE_INTEGER) && known >= 0n ? Number(known) : null;
+  const unknown = providers.reduce((sum, row) => sum + row.unknown_cost_events, 0);
+  return { provider_attempts: providers.reduce((sum, row) => sum + row.attempts, 0),
+    failed_provider_attempts: providers.reduce((sum, row) => sum + row.failures, 0),
+    known_provider_estimated_micros: safeKnown, unknown_provider_cost_events: unknown,
+    estimated_micros_per_confirmed_candidate: complete && unknown === 0 && confirmed > 0 && safeKnown !== null
+      ? Math.ceil(safeKnown / confirmed) : null };
+}
+
+const context = new AsyncLocalStorage<{store:AnalysisUsageStore;userId:string;id:string;results:Map<string,Promise<unknown>>}>();
+export function withAnalysisUsage<T>(store:AnalysisUsageStore,userId:string,id:string,work:()=>Promise<T>):Promise<T> {
+  return context.run({store,userId,id,results:new Map()},work);
+}
+
+/** Request-scoped reuse only: never shares private queries across users or analysis runs. */
+export async function reuseAnalysisResult<T>(key: string, work: () => Promise<T>): Promise<T> {
+  const current = context.getStore();
+  if (!current || key.length > 4096) return work();
+  let pending = current.results.get(key);
+  if (!pending) {
+    if (current.results.size >= 64) return work();
+    pending = Promise.resolve().then(work).then(value => structuredClone(value));
+    current.results.set(key, pending);
+    pending.catch(() => { if (current.results.get(key) === pending) current.results.delete(key); });
+  }
+  // A consumer cannot mutate the evidence that a later consumer receives.
+  return structuredClone(await pending) as T;
+}
 export async function trackAnalysisOperation<T>(input:OperationInput,work:()=>Promise<T>,tokens?:(value:T)=>TokenUsage):Promise<T> {
   const current = context.getStore();
   if (!current) return work();

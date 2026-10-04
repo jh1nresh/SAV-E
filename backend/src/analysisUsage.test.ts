@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { AnalysisUsageStore, AnalysisControlError, analysisLimits, analysisID, analysisPrices, estimatedMicros, geminiTokens, withAnalysisUsage, trackAnalysisOperation, type AnalysisLimits } from "./analysisUsage.js";
+import { analysisEfficiency, reuseAnalysisResult, AnalysisUsageStore, AnalysisControlError, analysisLimits, analysisID, analysisPrices, estimatedMicros, geminiTokens, withAnalysisUsage, trackAnalysisOperation, type AnalysisLimits } from "./analysisUsage.js";
 import { defaultPlacesCorroborator } from "./sourceSearchWorker.js";
 import { runAnalysisRecovery } from "./analysisRecovery.js";
 
@@ -60,6 +60,14 @@ test("real PostgreSQL admission, reservations, retries, ownership and ledger com
     const capture=randomUUID();await pool.query("insert into captures(id,user_id,source_type,status) values($1,$2,'note','review')",[capture,owner]);
     await pool.query("insert into place_candidates(capture_id,name,status) values($1,'Confirmed fixture','confirmed'),($1,'Saved fixture','saved'),($1,'Review fixture','review')",[capture]);
     await store.finish(owner,id,"review_candidate",[capture]);
+    const efficiencyID = randomUUID(); await store.start(owner,efficiencyID,false);
+    const eventID = await store.reserve(owner,efficiencyID,{operation:"google_places"});
+    await store.settle(owner,efficiencyID,eventID,{operation:"google_places"},"success",10);
+    await store.finish(owner,efficiencyID,"review_candidate",[capture]);
+    const efficiency = (await store.summary(owner,efficiencyID)).efficiency as Record<string,unknown>;
+    assert.equal(efficiency.provider_attempts,1);
+    assert.equal(efficiency.known_provider_estimated_micros,32000);
+    assert.equal(efficiency.estimated_micros_per_confirmed_candidate,16000);
     assert.equal((await store.summary(owner,id)).confirmed_candidates,2);await store.finish(owner,id,"failed",[capture]);
     assert.equal((await pool.query("select outcome from analysis_sessions where id=$1",[id])).rows[0].outcome,"review_candidate");
     await assert.rejects(store.reserve(owner,id,{operation:"google_places"}),error=>error instanceof AnalysisControlError && error.code==="analysis_closed");
@@ -127,4 +135,47 @@ test("Google recovery records semantic and parse failures after reservation", as
     globalThis.fetch=originalFetch;
     if(originalKey===undefined) delete process.env.GOOGLE_PLACES_API_KEY;else process.env.GOOGLE_PLACES_API_KEY=originalKey;
   }
+});
+
+
+test("analysis efficiency distinguishes known cost from incomplete receipts and zero confirmations", () => {
+  const rows = [{origin:"server",operation:"google_places",attempts:2,failures:0,unknown_cost_events:0,known_estimated_micros:"64000"}];
+  assert.equal(analysisEfficiency(rows,2,true).estimated_micros_per_confirmed_candidate,32000);
+  assert.equal(analysisEfficiency(rows,0,true).estimated_micros_per_confirmed_candidate,null);
+  assert.equal(analysisEfficiency(rows,2,false).estimated_micros_per_confirmed_candidate,null);
+  const failed = [...rows,{origin:"server",operation:"gemini",attempts:1,failures:1,unknown_cost_events:1,known_estimated_micros:null}];
+  assert.equal(analysisEfficiency(failed,2,true).estimated_micros_per_confirmed_candidate,null);
+  assert.equal(analysisEfficiency(failed,2,true).failed_provider_attempts,1);
+  assert.equal(analysisEfficiency([{...rows[0],known_estimated_micros:"9007199254740993"}],1,true).known_provider_estimated_micros,null);
+});
+
+test("scoped Places reuse coalesces actual requests without sharing mutable results or owners", async () => {
+  const previous = globalThis.fetch; const previousKey = process.env.GOOGLE_PLACES_API_KEY;
+  let requests = 0; let reservations = 0;
+  const store = {reserve:async()=>{reservations++;return "fixture";},settle:async()=>{}} as unknown as AnalysisUsageStore;
+  process.env.GOOGLE_PLACES_API_KEY = "synthetic-key";
+  globalThis.fetch = async () => {
+    requests++;
+    return Response.json({status:"OK",results:[{place_id:"fixture",name:"Fixture Cafe",formatted_address:"1 Fixture Road",geometry:{location:{lat:25,lng:121}}}]});
+  };
+  const candidate = {name:"Fixture Cafe",address:"1 Fixture Road"} as Parameters<typeof defaultPlacesCorroborator>[0];
+  try {
+    await withAnalysisUsage(store,"owner-a","analysis-a",async()=>{
+      const [first,second] = await Promise.all([defaultPlacesCorroborator(candidate),defaultPlacesCorroborator(candidate)]);
+      assert.equal(requests,1);assert.equal(reservations,1);
+      first!.name = "Mutated by a consumer";
+      assert.equal(second!.name,"Fixture Cafe");
+      assert.equal((await defaultPlacesCorroborator(candidate))!.name,"Fixture Cafe");
+    });
+    await withAnalysisUsage(store,"owner-b","analysis-a",()=>defaultPlacesCorroborator(candidate));
+    await withAnalysisUsage(store,"owner-a","analysis-b",()=>defaultPlacesCorroborator(candidate));
+    assert.equal(requests,3);assert.equal(reservations,3);
+    await withAnalysisUsage(store,"owner-a","retry",async()=>{
+      let calls = 0;
+      const work = async()=>{if(++calls===1) throw new Error("transient");return 42;};
+      await assert.rejects(reuseAnalysisResult("same",work));
+      assert.equal(await reuseAnalysisResult("same",work),42);
+      assert.equal(calls,2);
+    });
+  } finally { globalThis.fetch=previous; if(previousKey===undefined)delete process.env.GOOGLE_PLACES_API_KEY;else process.env.GOOGLE_PLACES_API_KEY=previousKey; }
 });
