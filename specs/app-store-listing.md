@@ -2,7 +2,7 @@
 
 Ready-to-paste App Store Connect metadata. Voice: warm, practical, not hypey
 (see `app-store-screenshots/SAVE-App-Store-Screenshot-Design-Spec.md` §10).
-Bundle `com.wanderly.app` · version `1.0.0` · build `80`.
+Bundle `com.wanderly.app` · version `1.0.0` · build `110`.
 
 > Char limits: App Name 30 · Subtitle 30 · Promotional Text 170 · Keywords 100 · Description 4000.
 
@@ -131,10 +131,29 @@ Savvy 為了那些你真的想記住、也真的想再找到的地方而生。
 \* Confirm exact behavior against code before answering the ASC privacy form; do not over-declare.
 
 ### Screenshots to upload
-From `specs/app-store-screenshots/v3/` for iPhone portrait screenshots
-(1242×2688), and `specs/app-store-screenshots/v3-ipad-13/` for 13-inch
-iPad portrait screenshots (2048×2732):
-`01-stop-losing-friend-places` · `02-paste-link-save-place` ·
-`03-confirm-before-counts` · `04-ask-your-private-map` ·
-`05-private-place-passport`.
-App icon: `SAV-E/Resources/Assets.xcassets/AppIcon.appiconset/SaveAppIcon.png`.
+Use the v5 sets (not the older v3 filenames):
+
+- iPhone 6.5" (1242×2688): `specs/app-store-screenshots/v5/`
+- iPhone 6.9" (1260×2736): `specs/app-store-screenshots/v5-iphone-69/`
+- 13-inch iPad (2048×2732): `specs/app-store-screenshots/v5-ipad-13/`
+
+Slots: `01-stop-losing-places` · `02-paste-a-link` ·
+`03-confirm-before-map` · `04-private-map-stamps` · `05-place-passport`.
+Check each contact sheet before upload. App icon:
+`SAV-E/Resources/Assets.xcassets/AppIcon.appiconset/SaveAppIcon.png`.
+
+### Subscription terms (paste only if IAP is attached to this version)
+
+Founder lock: monthly **$6.99** (`com.wanderly.app.pro.monthly`), annual
+**$39.99** with a 3-day free trial (`com.wanderly.app.pro.annual`).
+`SAVEPro.storekit` is local sandbox config and does **not** update App Store
+Connect. If this version does not attach IAP, leave the public listing as a
+free download and do not imply Pro is on sale.
+
+```
+Savvy Pro is an optional auto-renewing subscription for a higher monthly AI-assist allowance. Saved places, Map Stamps, and the private map stay free.
+
+• Monthly: $6.99
+• Annual: $39.99 (3-day free trial)
+Payment is charged to your Apple Account. Subscriptions renew automatically unless cancelled at least 24 hours before the period ends. Manage or cancel in Settings. Privacy: https://sav-e-app.vercel.app/privacy  Terms: https://sav-e-app.vercel.app/terms
+```

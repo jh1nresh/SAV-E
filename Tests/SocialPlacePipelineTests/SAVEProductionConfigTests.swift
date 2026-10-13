@@ -165,6 +165,12 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(brandHeader.contains("Text(\"Savvy\")"))
         XCTAssertTrue(storeKit.contains("Savvy Pro Annual"))
         XCTAssertTrue(storeKit.contains("Savvy Pro Monthly"))
+        // Founder lock 2026-10-13: local StoreKit config only. ASC IAP
+        // prices are a separate founder Apple action; this file is not
+        // the App Store price of record.
+        XCTAssertTrue(storeKit.contains("\"displayPrice\" : \"39.99\""))
+        XCTAssertTrue(storeKit.contains("\"displayPrice\" : \"6.99\""))
+        XCTAssertFalse(storeKit.contains("\"displayPrice\" : \"4.99\""))
 
         let urlTypes = try XCTUnwrap(mainInfo["CFBundleURLTypes"] as? [[String: Any]])
         let schemes = try XCTUnwrap(urlTypes.first?["CFBundleURLSchemes"] as? [String])

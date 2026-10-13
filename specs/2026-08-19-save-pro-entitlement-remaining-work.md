@@ -167,12 +167,15 @@ Update `proEntitlementPolicy.freeMonthlyLimitUnits` and
 
 - create the subscription group and both products with the IDs already reserved
   in `SAVEProAccessPolicy.ProductID`
-- set price and the 3-day trial on annual
+- set founder-locked prices in ASC (this is not implied by the local
+  `SAVEPro.storekit` file): monthly `com.wanderly.app.pro.monthly` **$6.99**,
+  annual `com.wanderly.app.pro.annual` **$39.99**, with the 3-day free trial on
+  annual only
 - fill localized display names and descriptions
 - attach products to the submitted build, state `Ready to Submit`
 - confirm `SAVEProAccessPolicy.Legal.termsURL` and `privacyURL` resolve to real
-  published pages — they are currently unverified placeholders and are a
-  guaranteed rejection if dead
+  published pages — live HTTP 200 verified 2026-10-13 on
+  `https://sav-e-app.vercel.app/privacy`, `/support`, and `/terms`
 
 ### C4. Flip enforcement
 

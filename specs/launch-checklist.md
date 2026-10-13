@@ -1,6 +1,6 @@
-# Savvy — App Store Launch Checklist (1.0.0 / build 103)
+# Savvy — App Store Launch Checklist (1.0.0 / build 110)
 
-Reviewed 2026-08-22. What's done in-repo vs. what only **you** can do (anything
+Reviewed 2026-10-13. What's done in-repo vs. what only **you** can do (anything
 needing your Apple ID, passwords, or App Store Connect — Claude can't sign in on
 your behalf).
 
@@ -10,10 +10,13 @@ Anything about archives, uploads, or App Store Connect state cannot be verified
 from the repo. `build/` is untracked, so treat the Apple-side items below as
 "confirm again" rather than as recorded state.
 
+The current upload-blocker table (owners: **Tim PR** vs **founder Apple**) lives
+in `docs/app-store-upload-blockers.md`.
+
 ---
 
 ## 1. Build & signing
-- ✅ Version `1.0.0`, build `103`, bundle `com.wanderly.app`, team `JC6858UYM9`.
+- ✅ Version `1.0.0`, build `110`, bundle `com.wanderly.app`, team `JC6858UYM9`.
 - ✅ App icon present (`Assets.xcassets/AppIcon`).
 - ✅ Release configuration compiles (CI builds an unsigned release candidate on every push to `main`).
 - 🟡 **Xcode account** → Settings → Accounts must hold the Apple ID that owns team `JC6858UYM9`. This was the original upload blocker; re-confirm before archiving.
@@ -23,7 +26,11 @@ from the repo. `build/` is untracked, so treat the Apple-side items below as
 2. Product → **Archive** (Release).
 3. In the **Organizer**, select the archive → **Distribute App** → **App Store Connect** → **Upload**.
 4. Wait for the build to finish **processing** in App Store Connect (a few min–1 hr).
-   - If you re-archive, bump `CURRENT_PROJECT_VERSION` in `project.yml` (>103) and re-run `xcodegen generate` first. Editing only the generated `SAV-E.xcodeproj` is undone by the next generate.
+   - If you re-archive, bump `CURRENT_PROJECT_VERSION` in `project.yml` (>110) and re-run `xcodegen generate` first. Editing only the generated `SAV-E.xcodeproj` is undone by the next generate.
+
+The last App Store Connect TestFlight read-back (2026-08-24) showed build
+**104**. That is stale versus in-repo **110**. Confirm 110 is the processed
+build before attaching it to the version.
 
 ## 3. App Store Connect — existing app record
 - ✅ Keep the existing iOS record and bundle ID `com.wanderly.app`. English (U.S.) App Store name is **Savvy: Save Places** because the exact name **Savvy** is unavailable.
@@ -31,7 +38,7 @@ from the repo. `build/` is untracked, so treat the Apple-side items below as
 ## 4. Listing metadata — paste from `app-store-listing.md`
 - 🟡 Name, Subtitle, Promotional Text, Description, Keywords (en-US **and** zh-Hant).
 - 🟡 Categories: Primary **Travel**, Secondary **Lifestyle**.
-- 🟡 Verify `https://sav-e-app.vercel.app/support` and `/privacy` after the release web deploy.
+- ✅ `https://sav-e-app.vercel.app/support` and `/privacy` returned HTTP 200 on 2026-10-13. Re-check after any web deploy. `/terms` also 200.
 
 ## 5. Screenshots & icon
 - ✅ v5 sets rendered from current app captures (#128): `specs/app-store-screenshots/v5/` (1242×2688), `v5-iphone-69/` (1260×2736), `v5-ipad-13/` (2048×2732), plus the raw simulator captures in `real-ui-v5/`. See `specs/app-store-screenshot-brief-v5.md`.
@@ -54,11 +61,17 @@ from the repo. `build/` is untracked, so treat the Apple-side items below as
   - No automatic launch / onboarding paywall; no paywall before the first confirmed Map Stamp.
   - Reactive wall only after AI-assist refusal (once enforcement is on); passive wall from Passport → Savvy Pro.
   - StoreKit + server grant are wired; `purchasingIsAvailable` and `enforcementEnabled` stay `false` until humans create ASC products and (later) restore a model-quota refusal surface.
-  - 🟡 ASC: create subscription products with the reserved IDs, attach to the build, then flip `purchasingIsAvailable` only — do not flip enforcement in the same step.
+  - 🟡 ASC: create subscription products with the reserved IDs, set monthly
+    **$6.99** and annual **$39.99** (3-day trial on annual), attach to the
+    build, then flip `purchasingIsAvailable` only — do not flip enforcement in
+    the same step.
+  - ⛔ Local `SAVEPro.storekit` monthly `displayPrice` is **6.99** for sandbox
+    simulation only. **Founder must set the same $6.99 on the ASC IAP
+    product.** Editing the StoreKit config does not change App Store Connect.
 - 🟡 Release: **Manually release** for v1 (so you control the moment), or phased automatic.
 
 ## 9. Submit
-- 🟡 Attach processed build `103` → **Add for Review** → **Submit for Review**.
+- 🟡 Attach processed build `110` → **Add for Review** → **Submit for Review**.
 
 ---
 
@@ -69,6 +82,7 @@ from the repo. `build/` is untracked, so treat the Apple-side items below as
 
 ## Top things that block or hurt approval (do these)
 1. **Xcode signing account** (step 1) — nothing ships until the team's Apple ID is present.
-2. **Live Privacy + Support URLs** (step 4) — frequent auto-rejection.
+2. **Live Privacy + Support URLs** (step 4) — frequent auto-rejection. Currently HTTP 200; re-check after deploys.
 3. **A way for review to see the app** past sign-in (step 7).
 4. Make sure no screenshot shows a feature not in the build — the v5 set is captured from the real UI and leaves Trips Beta out.
+5. **ASC IAP monthly $6.99** if this version attaches subscriptions — local StoreKit is not the store price.
