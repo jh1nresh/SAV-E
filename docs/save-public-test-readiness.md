@@ -1,6 +1,6 @@
 # Savvy Public Test Readiness
 
-Generated: 2026-06-23 · Reviewed: 2026-08-22 (build 103)
+Generated: 2026-06-23 · Reviewed: 2026-10-13 (build 110)
 
 This checklist tracks the seven readiness gaps that must stay separate from
 "the app builds locally." Local code can prove client behavior; Apple,
@@ -12,8 +12,10 @@ proof.
 Current in-repo proof:
 
 - App Store name `Savvy: Save Places`; installed display name `Savvy`.
-- Bundle `com.wanderly.app`, version `1.0.0`, build `104`, team `JC6858UYM9`,
+- Bundle `com.wanderly.app`, version `1.0.0`, build `110`, team `JC6858UYM9`,
   App Store id `6769216556`. Build numbers come from `project.yml`.
+  The 2026-08-24 ASC TestFlight read-back still showed **104**; that is stale
+  versus this tree. Upload of 110 is a founder Apple action.
 - `Tests/SAVEUITests/SAVEUISmokeHarnessTests.swift` covers the five required
   smoke paths: auth, location, nearby restaurants/cafes, share IG/Maps link,
   review candidate confirm/save.

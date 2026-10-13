@@ -11,6 +11,7 @@
 | [Verification](verification.md) | Native, backend, web, and fixture checks |
 | [Sharing](sharing.md) | Share routes, Universal Links, and App Clip configuration |
 | [Release and TestFlight](releasing.md) | Signing, archives, upload, and release prerequisites |
+| [App Store upload blockers](app-store-upload-blockers.md) | What blocks archive → TestFlight → ASC submit now |
 
 ## Contracts and runbooks
 
