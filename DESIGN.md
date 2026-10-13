@@ -1,9 +1,10 @@
 # Savvy Design System
 
-> Last updated: 2026-09-14
+> Last updated: 2026-10-13
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** governs Home, Saves, Plan, Trips, Map, and the ask
-> drawer. **Cream-notebook** tokens are legacy-surface-only. See "Atlas Postcard
+> drawer. **Soft Pixel** is accents-only on Atlas (pins / seals / Memo) — see Core
+> Metaphors. **Cream-notebook** tokens are legacy-surface-only. See "Atlas Postcard
 > Tokens" and "Legacy Cream-Notebook Tokens" below.
 
 ## Product Frame
@@ -95,6 +96,44 @@ Rules:
   `PlaceMapPin`, honey or category stamp color, dark ink outline.
 - Map Stamp actions can include Navigate, Plan around this, View source, Edit,
   and Delete with explicit confirmation.
+
+### Soft Pixel accents (on Atlas)
+
+Soft Pixel is the art direction for Savvy accents on Atlas Postcard surfaces.
+It does not replace Atlas tokens, MapKit geography, or the cream notebook canvas.
+
+**Lock (2026-10-13 founder):** Soft Pixel accents-only on Atlas. Live MapKit (or
+Atlas paper geography) is the map base. Soft Pixel appears only as small accents:
+pins, Map Stamp seals, and Memo. Not a full Soft Pixel / 16-bit UI, and not a
+pixel-art city map as the Home or Map hero.
+
+Rules:
+
+- Map base: live MapKit fills the map viewport. Owned Soft Pixel pins, seals,
+  Memo peeks, and route accents may sit above it without obscuring geographic
+  truth. Aligns with `Prototypes/AtlasPostcard/design.md` Root Map.
+- Allowed Soft Pixel surfaces: `PlaceMapPin` / Review Candidate pins (`ReviewCandidateMapPin`), Map Stamp seals
+  (`SaveMemoryBadge` stamp family), Memo (`MemoMascotMark`), small stamp chips
+  on tickets.
+- Forbidden as Soft Pixel: full-screen Soft Pixel city maps; Soft Pixel chrome
+  on every inactive root tab; Soft Pixel replacing Atlas paper cards, type, or
+  kraft chips wholesale.
+- Root tabs stay production Home / Map / + / Friends / Passport
+  (`Primary Navigation`). Tab shell stays quiet (line or Atlas icons). Soft
+  Pixel on tabs, if used at all, is selected-tab only.
+- Seals never show raw hex, debug IDs, or pipeline tokens in primary UI
+  (see Evidence Receipt).
+- Home heroes that need a map preview use Atlas/MapKit crop + Soft Pixel pins,
+  or the owned illustrated city atlas for named cities in
+  `Prototypes/AtlasPostcard/design.md` — not a Soft Pixel full city render.
+- Selection language: Soft Pixel pin at rest; selected place may elevate to a
+  photo peek or drawer postcard. Document one rule per surface; do not mix
+  unexplained photo callouts with Soft Pixel pins without a clear selected state.
+
+MVP must ship the accents-only lock and quiet tabs. Later (not App Store MVP):
+full Soft Pixel inactive-tab sets, category-pin lexicons, expanded seal libraries,
+and Soft Pixel ticket ornament polish. Full Soft Pixel city maps stay out under
+this lock.
 
 ### Review Clue
 
