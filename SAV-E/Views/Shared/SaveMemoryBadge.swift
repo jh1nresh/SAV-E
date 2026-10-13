@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// Map Stamp seal. Soft Pixel accent on Atlas paper — category glyph only.
+/// M1: never render raw hex, debug IDs, or pipeline tokens on this seal.
 struct SaveMemoryBadge: View {
     enum State {
         case clue

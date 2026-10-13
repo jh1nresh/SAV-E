@@ -7,6 +7,84 @@ enum SaveAtlasRuntime {
     }
 }
 
+/// Soft Pixel accents-only lock (DESIGN.md, 2026-10-13).
+///
+/// H1: Home and Map heroes are Atlas paper, live MapKit, or the owned
+/// illustrated city atlas for named cities. A Soft Pixel / 16-bit full-city
+/// render is never a Home or Map hero.
+///
+/// M1: Map Stamp seals and Soft Pixel stamp UI never show raw hex, debug IDs,
+/// or pipeline tokens in primary UI.
+enum SaveSoftPixelAccentsLock {
+    /// Live Home leads with the saved-place library on Atlas paper.
+    /// Only the One-Face / parity fixture opts into an illustrated city atlas.
+    static let productionLocksOneFaceHomeComposition = false
+
+    static let illustratedCityAtlasAssets: Set<String> = [
+        "HomeAtlasScene",
+        "HomeAtlasSceneTaipei",
+        "HomeAtlasSceneNewYork",
+        "HomeAtlasSceneShanghai",
+        "HomeAtlasSceneBeijing",
+        "HomeAtlasSceneGuangzhou",
+        "HomeAtlasSceneShenzhen",
+        "HomeAtlasSceneChengdu",
+        "HomeAtlasSceneChongqing",
+        "HomeAtlasSceneTianjin",
+        "HomeAtlasSceneHangzhou",
+        "HomeAtlasSceneNanjing",
+        "HomeAtlasSceneWuhan",
+        "HomeAtlasSceneXian",
+        "HomeAtlasSceneSuzhou",
+        "HomeAtlasSceneQingdao",
+        "HomeAtlasSceneXiamen",
+        "HomeAtlasSceneChangsha",
+        "HomeAtlasSceneSeoul",
+        "HomeAtlasSceneSouthernCalifornia",
+    ]
+
+    static func allowsIllustratedCityAtlasAsset(_ name: String) -> Bool {
+        illustratedCityAtlasAssets.contains(name) && !containsForbiddenHeroToken(name)
+    }
+
+    static func containsForbiddenHeroToken(_ name: String) -> Bool {
+        let folded = name.lowercased()
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: "_", with: "")
+        return forbiddenHeroTokens.contains { folded.contains($0) }
+    }
+
+    /// Stamp / seal / chip copy that is safe to show. Returns nil for empty
+    /// strings and for raw hex, UUIDs, or pipeline tokens.
+    static func visibleStampText(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !isDebugStampToken(trimmed) else { return nil }
+        return trimmed
+    }
+
+    static func isDebugStampToken(_ raw: String) -> Bool {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return false }
+        if UUID(uuidString: value) != nil { return true }
+        if value.range(of: #"^#?[0-9A-Fa-f]{6,8}$"#, options: .regularExpression) != nil {
+            return true
+        }
+        let lower = value.lowercased()
+        if lower.contains("analysis pipeline") || lower.contains("evidence tier") {
+            return true
+        }
+        if lower.hasPrefix("pipeline:") || lower.hasPrefix("debug:") {
+            return true
+        }
+        return false
+    }
+
+    private static let forbiddenHeroTokens = [
+        "softpixel", "16bit", "pixelart", "pixelcity",
+    ]
+}
+
 /// Home card art for one saved place. The URL is taken only from that place;
 /// a missing photo is a deliberate placeholder, never another row's image.
 enum HomePlaceCardArt {
@@ -254,7 +332,9 @@ enum SaveAtlasPresentationFactory {
         selectedPlace: Place?
     ) -> AtlasPresentation {
         var presentation = AtlasPresentation.reference
-        presentation.locksOneFaceHomeComposition = false
+        // H1: live Home stays Atlas-paper library. Soft Pixel city heroes stay
+        // out; the One-Face illustrated atlas is fixture-only.
+        presentation.locksOneFaceHomeComposition = SaveSoftPixelAccentsLock.productionLocksOneFaceHomeComposition
         presentation.reviewCount = candidates.count
         presentation.mapStampCount = places.count
         presentation.failedCount = candidates.filter {

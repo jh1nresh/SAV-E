@@ -242,14 +242,26 @@ struct RoundStamp: View {
                     .frame(width: 35, height: 35)
                     .background(AtlasPalette.mint, in: Circle())
             case .tripStop:
-                Text(text)
-                    .font(AtlasType.strong(17))
-                    .foregroundStyle(AtlasPalette.ink)
-                    .frame(width: 38, height: 38)
-                    .background(AtlasPalette.coral.opacity(0.90), in: Circle())
-                    .overlay {
-                        Circle().stroke(AtlasPalette.coral, lineWidth: 1)
-                    }
+                // M1: seals never show raw hex, debug IDs, or pipeline tokens.
+                if let text = SaveSoftPixelAccentsLock.visibleStampText(text) {
+                    Text(text)
+                        .font(AtlasType.strong(17))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .frame(width: 38, height: 38)
+                        .background(AtlasPalette.coral.opacity(0.90), in: Circle())
+                        .overlay {
+                            Circle().stroke(AtlasPalette.coral, lineWidth: 1)
+                        }
+                } else {
+                    Image(systemName: "mappin")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(AtlasPalette.ink)
+                        .frame(width: 38, height: 38)
+                        .background(AtlasPalette.coral.opacity(0.90), in: Circle())
+                        .overlay {
+                            Circle().stroke(AtlasPalette.coral, lineWidth: 1)
+                        }
+                }
             }
         }
     }

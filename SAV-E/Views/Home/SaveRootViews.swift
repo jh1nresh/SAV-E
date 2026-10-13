@@ -508,6 +508,8 @@ struct SaveMapRootView: View {
     var body: some View {
         Group {
             if SaveAtlasRuntime.usesParityFixture {
+                // Fixture-only illustrated atlas. Production Map is MapKit
+                // (H1: no Soft Pixel full-city Map hero).
                 RootAtlasMapScreen()
                     .environment(\.atlasPresentation, atlasPresentation)
             } else {
