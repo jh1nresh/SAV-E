@@ -15,7 +15,7 @@ enum SaveAtlasRuntime {
 ///
 /// M1: Map Stamp seals and Soft Pixel stamp UI never show raw hex, debug IDs,
 /// or pipeline tokens in primary UI.
-enum SaveSoftPixelAccentsLock {
+nonisolated enum SaveSoftPixelAccentsLock: Sendable {
     /// Live Home leads with the saved-place library on Atlas paper.
     /// Only the One-Face / parity fixture opts into an illustrated city atlas.
     static let productionLocksOneFaceHomeComposition = false
