@@ -828,7 +828,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         dismissLocationAlertIfPresent()
-        XCTAssertTrue(app.buttons["Center map on current location"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.liveSurface"].waitForExistence(timeout: stepTimeout)
+                || app.buttons["Center map on current location"].exists,
+            "Product Map is tile-town; Trip MapKit keeps the location control."
+        )
 
         openTripsFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))

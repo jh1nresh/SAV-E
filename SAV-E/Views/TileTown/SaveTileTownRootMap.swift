@@ -57,8 +57,6 @@ struct SaveTileTownRootMap: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("map.root")
         .onChange(of: lens) { _, newLens in
             if newLens == .friends {
                 mapViewModel.selectSocialLens(.forYou)

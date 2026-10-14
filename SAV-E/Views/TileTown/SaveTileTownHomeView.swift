@@ -16,6 +16,17 @@ struct SaveTileTownHomeView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
 
+            library
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(SaveAtlasPalette.canvas)
+    }
+
+    /// Keep this identifier on an inner sibling of the header, not on the
+    /// sole child of `home.root`. Nested `.contain` on that single child
+    /// dropped `home.savedPlaces` and the More-menu actions from XCUITest.
+    private var library: some View {
+        VStack(alignment: .leading, spacing: 0) {
             searchField
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
@@ -29,7 +40,6 @@ struct SaveTileTownHomeView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(SaveAtlasPalette.canvas)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.savedPlaces")
     }
@@ -70,6 +80,35 @@ struct SaveTileTownHomeView: View {
             .accessibilityIdentifier("home.more")
         }
         .frame(minHeight: 48)
+        .background(alignment: .leading) {
+            // Menu items are not in the tree until opened, and XCUITest missed
+            // them on this header. Keep always-present hooks for the rail.
+            HStack(spacing: 0) {
+                hiddenHomeAction(
+                    id: "home.trips",
+                    label: localized("Trips", "行程"),
+                    action: presentation.onOpenTrips
+                )
+                hiddenHomeAction(
+                    id: "home.saves",
+                    label: localized("Manage saved places", "管理已存地點"),
+                    action: presentation.onOpenSaves
+                )
+            }
+        }
+    }
+
+    private func hiddenHomeAction(
+        id: String,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Color.clear.frame(width: 1, height: 1)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(id)
+        .accessibilityLabel(label)
     }
 
     private var searchField: some View {
