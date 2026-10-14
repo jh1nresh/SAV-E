@@ -98,6 +98,11 @@ struct ProfileView: View {
                             : SaveTheme.Spacing.lg
                     )
 
+                    if isRootTab {
+                        PassportTileTownCollection(places: passportPlaces)
+                            .padding(.horizontal, 16)
+                    }
+
                     passportIdentity
                         .padding(.horizontal, 16)
                         .accessibilityElement(children: .contain)
@@ -2288,6 +2293,72 @@ private struct PassportBadge: View {
             .padding(.vertical, SaveTheme.Spacing.xs)
             .background(color.opacity(0.38))
             .clipShape(Capsule())
+    }
+}
+
+private struct PassportTileTownCollection: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    let places: [Place]
+
+    private var goal: Int {
+        SaveTileTownProductLock.passportGoal(for: places.count)
+    }
+
+    private var lockedCount: Int {
+        max(places.count < goal ? 1 : 0, min(6, goal - places.count))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(languageSettings.localized(english: "Passport", traditionalChinese: "護照"))
+                .font(SaveAtlasType.strong(26, relativeTo: .title2))
+                .foregroundStyle(SaveAtlasPalette.forest)
+            HStack {
+                Text("\(places.count)/\(goal)")
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(SaveAtlasPalette.kraft.opacity(0.45))
+                        Capsule()
+                            .fill(SaveAtlasPalette.coral)
+                            .frame(width: geo.size.width * progress)
+                    }
+                }
+                .frame(height: 8)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("profile.stampProgress")
+            .accessibilityValue("\(places.count) of \(goal)")
+
+            LazyVGrid(
+                columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
+                spacing: 16
+            ) {
+                ForEach(places.prefix(12)) { place in
+                    SaveKraftStamp(
+                        title: place.name,
+                        face: .photo(HomePlaceCardArt.photoURL(for: place)),
+                        size: .grid,
+                        accessibilityIdentifier: "profile.stamp.\(place.id.uuidString)"
+                    )
+                }
+                ForEach(0..<lockedCount, id: \.self) { index in
+                    SaveKraftStamp(
+                        title: "???",
+                        face: .locked,
+                        size: .grid,
+                        accessibilityIdentifier: "profile.stamp.locked.\(index)"
+                    )
+                }
+            }
+        }
+        .accessibilityIdentifier("profile.stampGrid")
+    }
+
+    private var progress: CGFloat {
+        guard goal > 0 else { return 0 }
+        return min(1, CGFloat(places.count) / CGFloat(goal))
     }
 }
 
