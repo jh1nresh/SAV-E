@@ -8,6 +8,7 @@ struct SaveTileTownHomeView: View {
     @Environment(\.atlasPresentation) private var presentation
     @Environment(\.appLanguageSettings) private var languageSettings
     @State private var search = SaveHomeSearch()
+    @State private var showsMoreActions = false
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
@@ -57,16 +58,7 @@ struct SaveTileTownHomeView: View {
 
             Spacer(minLength: 8)
 
-            Menu {
-                Button(action: presentation.onOpenTrips) {
-                    Label(localized("Trips", "行程"), systemImage: "point.3.connected.trianglepath.dotted")
-                }
-                .accessibilityIdentifier("home.trips")
-                Button(action: presentation.onOpenSaves) {
-                    Label(localized("Manage saved places", "管理已存地點"), systemImage: "slider.horizontal.3")
-                }
-                .accessibilityIdentifier("home.saves")
-            } label: {
+            Button { showsMoreActions = true } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(SaveAtlasPalette.ink)
@@ -76,39 +68,25 @@ struct SaveTileTownHomeView: View {
                         Capsule().stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
                     }
             }
+            .buttonStyle(.plain)
             .accessibilityLabel(localized("More Home actions", "更多首頁操作"))
             .accessibilityIdentifier("home.more")
-        }
-        .frame(minHeight: 48)
-        .background(alignment: .leading) {
-            // Menu items are not in the tree until opened, and XCUITest missed
-            // them on this header. Keep always-present hooks for the rail.
-            HStack(spacing: 0) {
-                hiddenHomeAction(
-                    id: "home.trips",
-                    label: localized("Trips", "行程"),
-                    action: presentation.onOpenTrips
-                )
-                hiddenHomeAction(
-                    id: "home.saves",
-                    label: localized("Manage saved places", "管理已存地點"),
-                    action: presentation.onOpenSaves
-                )
+            .confirmationDialog(
+                localized("More Home actions", "更多首頁操作"),
+                isPresented: $showsMoreActions,
+                titleVisibility: .hidden
+            ) {
+                Button(localized("Trips", "行程")) {
+                    presentation.onOpenTrips()
+                }
+                .accessibilityIdentifier("home.trips")
+                Button(localized("Manage saved places", "管理已存地點")) {
+                    presentation.onOpenSaves()
+                }
+                .accessibilityIdentifier("home.saves")
             }
         }
-    }
-
-    private func hiddenHomeAction(
-        id: String,
-        label: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Color.clear.frame(width: 1, height: 1)
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(id)
-        .accessibilityLabel(label)
+        .frame(minHeight: 48)
     }
 
     private var searchField: some View {
@@ -163,7 +141,9 @@ struct SaveTileTownHomeView: View {
                             .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .buttonStyle(.plain)
+                    .padding(.top, 8)
                     .accessibilityIdentifier("home.empty.capture")
+                    .accessibilityAddTraits(.isButton)
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 24)
@@ -214,6 +194,7 @@ struct SaveTileTownHomeView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityElement(children: .contain)
+                .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("home.place.\(featured.id)")
                 .padding(12)
             }
@@ -318,7 +299,7 @@ struct SaveTileTownHomeView: View {
                                 title: place.name,
                                 face: .photo(place.photoURL ?? place.photoURLs.first),
                                 size: .recent,
-                                accessibilityIdentifier: "home.place.\(place.id)"
+                                accessibilityIdentifier: "home.recent.\(place.id)"
                             )
                         }
                         .buttonStyle(.plain)

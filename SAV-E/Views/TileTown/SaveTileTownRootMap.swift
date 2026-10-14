@@ -47,6 +47,29 @@ struct SaveTileTownRootMap: View {
                         .padding(14)
                     }
                 }
+                .overlay(alignment: .bottomTrailing) {
+                    Button {
+                        lens = .nearby
+                        Task { _ = await locationService.requestCurrentLocation() }
+                    } label: {
+                        Image(systemName: "location.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(SaveAtlasPalette.forest)
+                            .frame(width: 48, height: 48)
+                            .background(SaveAtlasPalette.paper, in: Circle())
+                            .overlay {
+                                Circle().stroke(SaveAtlasPalette.line.opacity(0.22), lineWidth: 1)
+                            }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(languageSettings.localized(
+                        english: "Center map on current location",
+                        traditionalChinese: "將地圖移到目前位置"
+                    ))
+                    .accessibilityIdentifier("map.currentLocation")
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 16)
+                }
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
