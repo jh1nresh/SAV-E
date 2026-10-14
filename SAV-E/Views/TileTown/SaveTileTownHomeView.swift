@@ -21,6 +21,13 @@ struct SaveTileTownHomeView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SaveAtlasPalette.canvas)
+        .overlay(alignment: .topTrailing) {
+            if showsMoreActions {
+                moreActionsSheet
+                    .padding(.top, 60)
+                    .padding(.trailing, 16)
+            }
+        }
     }
 
     /// Keep this identifier on an inner sibling of the header, not on the
@@ -34,7 +41,7 @@ struct SaveTileTownHomeView: View {
 
             if search.isActive {
                 searchResults
-            } else if presentation.savedPlaces.isEmpty {
+            } else if showsEmptyHome {
                 emptyHome
             } else {
                 restingHome
@@ -58,7 +65,7 @@ struct SaveTileTownHomeView: View {
 
             Spacer(minLength: 8)
 
-            Button { showsMoreActions = true } label: {
+            Button { showsMoreActions.toggle() } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(SaveAtlasPalette.ink)
@@ -71,22 +78,68 @@ struct SaveTileTownHomeView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(localized("More Home actions", "更多首頁操作"))
             .accessibilityIdentifier("home.more")
-            .confirmationDialog(
-                localized("More Home actions", "更多首頁操作"),
-                isPresented: $showsMoreActions,
-                titleVisibility: .hidden
-            ) {
-                Button(localized("Trips", "行程")) {
-                    presentation.onOpenTrips()
-                }
-                .accessibilityIdentifier("home.trips")
-                Button(localized("Manage saved places", "管理已存地點")) {
-                    presentation.onOpenSaves()
-                }
-                .accessibilityIdentifier("home.saves")
-            }
         }
         .frame(minHeight: 48)
+    }
+
+    /// In-window sheet so XCUITest can tap real 44pt buttons. SwiftUI Menu
+    /// and confirmationDialog never put `home.trips` in the production tree.
+    private var moreActionsSheet: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            moreActionRow(
+                title: localized("Trips", "行程"),
+                systemImage: "point.3.connected.trianglepath.dotted",
+                identifier: "home.trips"
+            ) {
+                showsMoreActions = false
+                presentation.onOpenTrips()
+            }
+            moreActionRow(
+                title: localized("Manage saved places", "管理已存地點"),
+                systemImage: "slider.horizontal.3",
+                identifier: "home.saves"
+            ) {
+                showsMoreActions = false
+                presentation.onOpenSaves()
+            }
+        }
+        .frame(width: 248)
+        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
+        }
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.12), radius: 12, y: 6)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("home.more.sheet")
+    }
+
+    private func moreActionRow(
+        title: String,
+        systemImage: String,
+        identifier: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(SaveAtlasType.strong(16))
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                .padding(.horizontal, 14)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityIdentifier(identifier)
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var showsEmptyHome: Bool {
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-empty-home") {
+            return true
+        }
+#endif
+        return presentation.savedPlaces.isEmpty
     }
 
     private var searchField: some View {

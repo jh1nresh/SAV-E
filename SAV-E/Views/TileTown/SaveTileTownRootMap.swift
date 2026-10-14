@@ -35,19 +35,18 @@ struct SaveTileTownRootMap: View {
                     .accessibilityIdentifier("map.liveSurface")
 
                     if let place = mapViewModel.selectedPlace {
-                        Button { presentation.onOpenPlace(place.id.uuidString) } label: {
-                            SaveTileTownPeekCard(
-                                title: place.name,
-                                subtitle: peekSubtitle(for: place),
-                                photoURL: HomePlaceCardArt.photoURL(for: place)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("map.selectedStamp")
-                        .padding(14)
+                        SaveAtlasLivePlaceCard(
+                            place: place,
+                            onClose: onClearSelection,
+                            onOpen: { presentation.onOpenPlace(place.id.uuidString) },
+                            onOpenAssistant: presentation.onOpenAssistant,
+                            onPlanAround: { onPlanAroundPlace(place) }
+                        )
+                        .frame(height: 168)
+                        .padding(12)
                     }
                 }
-                .overlay(alignment: .bottomTrailing) {
+                .overlay(alignment: .topTrailing) {
                     Button {
                         lens = .nearby
                         Task { _ = await locationService.requestCurrentLocation() }
@@ -67,8 +66,8 @@ struct SaveTileTownRootMap: View {
                         traditionalChinese: "將地圖移到目前位置"
                     ))
                     .accessibilityIdentifier("map.currentLocation")
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 16)
+                    .padding(.trailing, 14)
+                    .padding(.top, 14)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay {
@@ -159,9 +158,4 @@ struct SaveTileTownRootMap: View {
         }
     }
 
-    private func peekSubtitle(for place: Place) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM d"
-        return "\(place.shareAreaLabel), \(formatter.string(from: place.createdAt))"
-    }
 }

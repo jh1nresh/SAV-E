@@ -758,7 +758,7 @@ struct SaveAtlasMapCommandShelf: View {
     }
 }
 
-private struct SaveAtlasLivePlaceCard: View {
+struct SaveAtlasLivePlaceCard: View {
     let place: Place
     let onClose: () -> Void
     let onOpen: () -> Void
