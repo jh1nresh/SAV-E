@@ -69,6 +69,7 @@ final class AtlasOneFaceUITests: XCTestCase {
         XCTAssertFalse(mapRoot.contains("Image(\"SoftPixel"))
     }
 
+    @MainActor
     func testSoftPixelH1RejectsPixelCityHeroAssets() {
         XCTAssertTrue(SaveSoftPixelAccentsLock.allowsIllustratedCityAtlasAsset("HomeAtlasSceneTaipei"))
         XCTAssertTrue(SaveSoftPixelAccentsLock.allowsIllustratedCityAtlasAsset("HomeAtlasScene"))

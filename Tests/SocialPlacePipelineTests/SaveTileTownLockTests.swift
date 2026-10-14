@@ -1,6 +1,7 @@
 import XCTest
 @testable import SAVE
 
+@MainActor
 final class SaveTileTownLockTests: XCTestCase {
     func testFounderLockSupersedesMapKitSoftPixelBase() {
         XCTAssertTrue(SaveTileTownProductLock.productMapBaseIsTileTown)

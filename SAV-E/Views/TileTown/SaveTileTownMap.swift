@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Founder lock 2026-10-14: product Map base is full-pixel tile-town.
 /// MapKit remains for Trip navigation maps and Apple Maps handoff only.
-enum SaveTileTownProductLock {
+nonisolated enum SaveTileTownProductLock: Sendable {
     static let productMapBaseIsTileTown = true
     static let homeShowsMapFilterChips = false
     static let mapShowsNearbySavedFriendsChips = true
@@ -45,7 +45,7 @@ enum SaveTileTownMapLens: String, CaseIterable, Identifiable {
     }
 }
 
-enum SaveTileTownLayout {
+nonisolated enum SaveTileTownLayout: Sendable {
     /// Normalized lots along the village roads. Pins hash here so the town
     /// stays a memory map, not a silent GPS re-projection.
     static let lots: [CGPoint] = [
