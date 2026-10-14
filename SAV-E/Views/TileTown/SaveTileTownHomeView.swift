@@ -48,7 +48,6 @@ struct SaveTileTownHomeView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.savedPlaces")
     }
 
@@ -65,6 +64,18 @@ struct SaveTileTownHomeView: View {
 
             Spacer(minLength: 8)
 
+            headerIconButton(
+                systemImage: "point.3.connected.trianglepath.dotted",
+                label: localized("Trips", "行程"),
+                identifier: "home.trips",
+                action: presentation.onOpenTrips
+            )
+            headerIconButton(
+                systemImage: "slider.horizontal.3",
+                label: localized("Manage saved places", "管理已存地點"),
+                identifier: "home.saves",
+                action: presentation.onOpenSaves
+            )
             Button { showsMoreActions.toggle() } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 18, weight: .semibold))
@@ -82,6 +93,28 @@ struct SaveTileTownHomeView: View {
         .frame(minHeight: 48)
     }
 
+    private func headerIconButton(
+        systemImage: String,
+        label: String,
+        identifier: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .frame(width: 44, height: 44)
+                .background(SaveAtlasPalette.paper, in: Capsule())
+                .overlay {
+                    Capsule().stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(identifier)
+        .accessibilityAddTraits(.isButton)
+    }
+
     /// In-window sheet so XCUITest can tap real 44pt buttons. SwiftUI Menu
     /// and confirmationDialog never put `home.trips` in the production tree.
     private var moreActionsSheet: some View {
@@ -89,7 +122,7 @@ struct SaveTileTownHomeView: View {
             moreActionRow(
                 title: localized("Trips", "行程"),
                 systemImage: "point.3.connected.trianglepath.dotted",
-                identifier: "home.trips"
+                identifier: "home.more.trips"
             ) {
                 showsMoreActions = false
                 presentation.onOpenTrips()
@@ -97,7 +130,7 @@ struct SaveTileTownHomeView: View {
             moreActionRow(
                 title: localized("Manage saved places", "管理已存地點"),
                 systemImage: "slider.horizontal.3",
-                identifier: "home.saves"
+                identifier: "home.more.saves"
             ) {
                 showsMoreActions = false
                 presentation.onOpenSaves()
@@ -110,7 +143,6 @@ struct SaveTileTownHomeView: View {
                 .stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
         }
         .shadow(color: SaveAtlasPalette.ink.opacity(0.12), radius: 12, y: 6)
-        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.more.sheet")
     }
 
@@ -173,6 +205,7 @@ struct SaveTileTownHomeView: View {
     private var emptyHome: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
+                emptyCaptureButton
                 cluesBar
                 reviewQueuePreview
                 VStack(spacing: 10) {
@@ -186,17 +219,6 @@ struct SaveTileTownHomeView: View {
                     .font(SaveAtlasType.body(13))
                     .foregroundStyle(SaveAtlasPalette.muted)
                     .multilineTextAlignment(.center)
-                    Button(action: presentation.onCapture) {
-                        Label(localized("Paste your first link", "貼上第一個連結"), systemImage: "link")
-                            .font(SaveAtlasType.strong(16))
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity, minHeight: 48)
-                            .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 8)
-                    .accessibilityIdentifier("home.empty.capture")
-                    .accessibilityAddTraits(.isButton)
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 24)
@@ -207,6 +229,20 @@ struct SaveTileTownHomeView: View {
             .padding(.top, 14)
             .padding(.bottom, 96)
         }
+    }
+
+    private var emptyCaptureButton: some View {
+        Button(action: presentation.onCapture) {
+            Text(localized("Paste your first link", "貼上第一個連結"))
+                .font(SaveAtlasType.strong(16))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(localized("Paste your first link", "貼上第一個連結"))
+        .accessibilityIdentifier("home.empty.capture")
+        .accessibilityAddTraits(.isButton)
     }
 
     private var restingHome: some View {
