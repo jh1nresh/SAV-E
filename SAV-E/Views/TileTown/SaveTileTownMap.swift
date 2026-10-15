@@ -257,7 +257,7 @@ private struct SaveTileTownHouse: View {
     }
 }
 
-private struct Triangle: Shape {
+nonisolated private struct Triangle: Shape {
     func path(in rect: CGRect) -> Path {
         Path { path in
             path.move(to: CGPoint(x: rect.midX, y: rect.minY))
