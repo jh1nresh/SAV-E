@@ -129,10 +129,10 @@ enum ReviewDemoStorage {
         }
 #endif
         return MapViewModel(
-            mapCandidateSearchService: searchService,
             pendingImportService: pendingImportService,
             saveLocalVaultService: localVaultService,
             correctionEventStore: correctionEventStore,
+            mapCandidateSearchService: searchService,
             collaborativeListStore: collaborativeListStore,
             referralHandoffStore: referralHandoffStore,
             usesRemotePersistence: !ReviewDemo.isOfflineUITestMode
