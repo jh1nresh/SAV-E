@@ -16,13 +16,16 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(SAVEProAccessPolicy.coreMemoryLoopIsFree)
         // Slice 1 must not be able to refuse anyone.
         XCTAssertFalse(SAVEProAccessPolicy.enforcementEnabled)
-        XCTAssertFalse(SAVEProAccessPolicy.purchasingIsAvailable)
+        XCTAssertTrue(SAVEProAccessPolicy.purchasingIsAvailable)
 
         // App Store review requirements must live on the paywall itself.
-        for required in ["paywall.restore", "paywall.terms", "paywall.privacy", "paywall.close"] {
+        // Continue is live because purchasing is on; the empty-state identifier
+        // remains only as the off-switch branch.
+        for required in ["paywall.restore", "paywall.terms", "paywall.privacy", "paywall.close", "paywall.continue"] {
             XCTAssertTrue(paywall.contains(required), "Paywall must expose \(required)")
         }
-        XCTAssertTrue(policy.contains("enforcementEnabled"))
+        XCTAssertTrue(policy.contains("purchasingIsAvailable = true"))
+        XCTAssertTrue(policy.contains("enforcementEnabled = false"))
 
         // Backend metering stays intact and untouched by this slice.
         XCTAssertTrue(backend.contains("recordAIUsageEvent"))
@@ -71,6 +74,61 @@ final class SAVEProductionConfigTests: XCTestCase {
             ),
             .refusedAllowanceExhausted
         )
+
+        // Live policy default: purchasing on, enforcement off, so exhaustion
+        // still serves rather than blocking the core loop.
+        XCTAssertEqual(
+            SaveAIAssistGate.decide(tier: .free, usedUnits: 20, limitUnits: 20, warningThresholdUnits: 15),
+            .allowedEnforcementDisabled
+        )
+    }
+
+    /// Pins the purchase-path flip: StoreKit offers are live, enforcement is
+    /// not. Failure fixture is a dead "not for sale" paywall, a missing
+    /// Passport Pro row after the first Map Stamp, or a refused AI assist.
+    func testPurchasingExposesProEntryPointsWithoutEnforcement() throws {
+        let policy = try source(at: "SAV-EShared/SAVEProAccessPolicy.swift")
+        XCTAssertTrue(SAVEProAccessPolicy.purchasingIsAvailable)
+        XCTAssertFalse(SAVEProAccessPolicy.enforcementEnabled)
+        XCTAssertTrue(policy.contains("purchasingIsAvailable = true"))
+        XCTAssertTrue(policy.contains("enforcementEnabled = false"))
+        XCTAssertFalse(policy.contains("enforcementEnabled = true"))
+        XCTAssertFalse(SAVEProAccessPolicy.showsAutomaticLaunchPaywall)
+        XCTAssertFalse(SAVEProAccessPolicy.firstMapStampRequiresPurchase)
+        XCTAssertTrue(SAVEProAccessPolicy.coreMemoryLoopIsFree)
+
+        XCTAssertFalse(SAVEProAccessPolicy.shouldOfferProFromPassport(hasConfirmedMapStamp: false))
+        XCTAssertTrue(SAVEProAccessPolicy.shouldOfferProFromPassport(hasConfirmedMapStamp: true))
+
+        XCTAssertEqual(SAVEProAccessPolicy.ProductID.annual, "com.wanderly.app.pro.annual")
+        XCTAssertEqual(SAVEProAccessPolicy.ProductID.monthly, "com.wanderly.app.pro.monthly")
+        XCTAssertEqual(
+            SAVEProAccessPolicy.ProductID.all,
+            ["com.wanderly.app.pro.annual", "com.wanderly.app.pro.monthly"]
+        )
+
+        let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
+        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let storeKit = try source(at: "SAV-E/Services/SaveStoreKitService.swift")
+        let storeKitConfig = try source(at: "SAV-E/Resources/SAVEPro.storekit")
+
+        XCTAssertTrue(paywall.contains("if !SAVEProAccessPolicy.purchasingIsAvailable"))
+        XCTAssertTrue(paywall.contains("paywall.notForSale"))
+        XCTAssertTrue(paywall.contains("paywall.continue"))
+        XCTAssertTrue(paywall.contains("paywall.offer.\\(product.id)"))
+        XCTAssertTrue(paywall.contains("Pro isn't on sale yet"))
+
+        XCTAssertTrue(profile.contains("shouldOfferProFromPassport"))
+        XCTAssertTrue(profile.contains("accessibilityIdentifier: \"profile.pro\""))
+        XCTAssertTrue(profile.contains("english: \"Savvy Pro\""))
+        XCTAssertTrue(profile.contains("english: \"Core place memory stays free\""))
+
+        XCTAssertTrue(storeKit.contains("guard SAVEProAccessPolicy.purchasingIsAvailable else"))
+        XCTAssertTrue(storeKit.contains("Product.products(for: SAVEProAccessPolicy.ProductID.all)"))
+
+        XCTAssertTrue(storeKitConfig.contains("\"productID\" : \"com.wanderly.app.pro.annual\""))
+        XCTAssertTrue(storeKitConfig.contains("\"productID\" : \"com.wanderly.app.pro.monthly\""))
+        XCTAssertFalse(storeKitConfig.contains("com.wanderly.app.pro.lifetime"))
     }
 
     /// A missing `tier` field must resolve to free, so this build stays
