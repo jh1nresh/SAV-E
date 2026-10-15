@@ -99,7 +99,7 @@ struct SaveFriendsView: View {
                         .frame(minHeight: 44)
                     }
                     .buttonStyle(.plain)
-                    .disabled(store.isDemo)
+                    .accessibilityIdentifier("friends.author.\(row.authorID)")
 
                     Button { selected = row.lastPost } label: {
                         SharedPostArtwork(post: row.lastPost, compact: true)

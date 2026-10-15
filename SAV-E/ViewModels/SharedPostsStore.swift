@@ -40,9 +40,7 @@ final class SharedPostsStore: ObservableObject {
             if ProcessInfo.processInfo.arguments.contains("--uitest-social-posts")
                 || ProcessInfo.processInfo.arguments.contains("--uitest-friends-town")
             {
-                let items = Self.fixturePosts
-                posts = items.filter { (route == .mine || $0.visible_to_followers) && (filter == .all || $0.status.rawValue == filter.rawValue) }
-                counts = SocialProfileCounts(postCount: items.count, followingCount: 2, followerCount: 3)
+                applyDemoFixture()
             } else {
                 posts = []
                 counts = SocialProfileCounts(postCount: 0, followingCount: 0, followerCount: 0)
@@ -76,6 +74,31 @@ final class SharedPostsStore: ObservableObject {
             // Don't retain stale social projections after a failed revalidation.
             if !append { posts = []; profile = nil }
             self.error = error.localizedDescription
+        }
+    }
+
+    private func applyDemoFixture() {
+        let items = Self.fixturePosts
+        let matchesFilter: (SharedPlacePost) -> Bool = { post in
+            filter == .all || post.status.rawValue == filter.rawValue
+        }
+        switch route {
+        case .mine, .feed:
+            posts = items.filter { (route == .mine || $0.visible_to_followers) && matchesFilter($0) }
+            counts = SocialProfileCounts(postCount: items.count, followingCount: 2, followerCount: 3)
+        case .author(let id):
+            let authored = items.filter { $0.author_id == id && $0.visible_to_followers && matchesFilter($0) }
+            posts = authored
+            if let first = items.first(where: { $0.author_id == id }) {
+                profile = SharedPassportPage.Profile(
+                    id: id,
+                    displayName: first.author_name,
+                    handle: first.author_handle,
+                    avatarUrl: first.author_avatar_url,
+                    postCount: authored.count
+                )
+            }
+            counts = SocialProfileCounts(postCount: authored.count, followingCount: 0, followerCount: 0)
         }
     }
 
