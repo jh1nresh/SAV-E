@@ -1,3 +1,4 @@
+import { geminiAvailability } from "./geminiAvailability.js";
 import { LinkPlaceIntelligence, placePopularity } from "./linkPlaceIntelligence.js";
 import { analyzeSocialCaption } from "./socialSemanticExtraction.js";
 import { capturedSourceTexts, recordCapturedSourceText, completeEmptySourceAnalysis, prepareCandidate, reconcileSavedCandidates, reuseCapture, supersedeSourceOnlyCandidates, duplicateCandidateGroups, supersededCandidateID, externalCandidateEvidence, sameCandidateIdentity, isGenericSourceOnlyCandidate, supersededCandidateIDs } from "./memoryStorage.js";
@@ -926,6 +927,11 @@ createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     if (request.method === "GET" && url.pathname === "/") {
       return sendJson(response, { ok: true, service: "save-backend" });
+    }
+    if (request.method === "GET" && url.pathname === "/health/ai-provider") {
+      const status = geminiAvailability.snapshot();
+      response.setHeader("Cache-Control", "no-store");
+      return sendJson(response, status, status.state === "available" ? 200 : 503);
     }
     if (request.method === "GET" && url.pathname === "/health/source-recovery") {
       const [status, analysis] = await Promise.all([
@@ -2661,7 +2667,7 @@ async function handleLLMProxyUnmetered(
   const startedAt = Date.now();
   let upstream: Response;
   try {
-    upstream = await fetch(
+    upstream = await geminiAvailability.observe(model, () => fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
       {
         method: "POST",
@@ -2673,7 +2679,7 @@ async function handleLLMProxyUnmetered(
         redirect: "manual",
         signal: AbortSignal.timeout(20_000),
       },
-    );
+    ));
   } catch (error) {
     await recordAIUsageEvent(userId, buildGeminiUsageEvent({
       model,

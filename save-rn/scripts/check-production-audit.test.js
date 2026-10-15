@@ -69,3 +69,82 @@ test("fails closed on an unapproved high advisory", () => {
   assert.equal(blocking.length, 1);
   assert.equal(blocking[0][0], "leftpad");
 });
+
+test("allows listed transitive build-tool advisories and still blocks unknowns", () => {
+  const report = {
+    vulnerabilities: {
+      braces: {
+        name: "braces",
+        severity: "high",
+        isDirect: false,
+        via: [{
+          name: "braces",
+          url: "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+        }],
+      },
+      metro: {
+        name: "metro",
+        severity: "high",
+        isDirect: false,
+        via: ["braces"],
+      },
+      leftpad: {
+        name: "leftpad",
+        severity: "critical",
+        isDirect: false,
+        via: [{ name: "leftpad", url: "https://github.com/advisories/GHSA-fake" }],
+      },
+    },
+  };
+  const blocking = blockingAdvisories(report);
+  assert.deepEqual(blocking.map(([name]) => name), ["leftpad"]);
+});
+
+test("moderate vias do not fail a high package whose high roots are allowed", () => {
+  const blocking = blockingAdvisories({
+    vulnerabilities: {
+      porto: {
+        name: "porto",
+        severity: "high",
+        isDirect: false,
+        via: [
+          {
+            name: "hono",
+            url: "https://github.com/advisories/GHSA-moderate",
+            severity: "moderate",
+          },
+          "braces",
+        ],
+      },
+      braces: {
+        name: "braces",
+        severity: "high",
+        isDirect: false,
+        via: [{
+          name: "braces",
+          url: "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm",
+          severity: "high",
+        }],
+      },
+    },
+  });
+  assert.equal(blocking.length, 0);
+});
+
+test("direct image-size stays blocked even when its advisory is listed", () => {
+  const blocking = blockingAdvisories({
+    vulnerabilities: {
+      "image-size": {
+        name: "image-size",
+        severity: "high",
+        isDirect: true,
+        via: [{
+          name: "image-size",
+          url: "https://github.com/advisories/GHSA-w3rx-r6r6-pgpr",
+        }],
+      },
+    },
+  });
+  assert.equal(blocking.length, 1);
+  assert.equal(blocking[0][0], "image-size");
+});

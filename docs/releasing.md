@@ -4,6 +4,12 @@
 
 These are release instructions, not evidence of a current release. Signing, upload, and distribution require explicit approval under [AGENTS.md](../AGENTS.md). Run commands from the repository root.
 
+Current in-repo identity (2026-10-13): marketing **1.0.0**, build **110**,
+bundle `com.wanderly.app`, team `JC6858UYM9`. What still blocks
+archive → TestFlight → ASC submit is listed in
+[app-store-upload-blockers.md](app-store-upload-blockers.md). Do not archive or
+upload from an agent session.
+
 ## TestFlight archive
 
 Set `APPLE_TEAM_ID` to the 10-character Apple Developer Team ID for the account that owns the App IDs. XcodeGen passes it into all iOS targets as `DEVELOPMENT_TEAM`.

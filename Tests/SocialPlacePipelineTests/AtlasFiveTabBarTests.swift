@@ -168,6 +168,7 @@ final class AtlasFiveTabBarTests: XCTestCase {
         // city-scale map.
         XCTAssertFalse(icons.contains("briefcase"))
         XCTAssertFalse(icons.contains("globe"))
+        XCTAssertEqual(icons, ["house", "map", "plus", "person.2", "book.closed"])
     }
 
     @MainActor

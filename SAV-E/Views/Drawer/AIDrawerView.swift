@@ -4201,16 +4201,19 @@ private struct StampChip: View {
     var color: Color
 
     var body: some View {
-        Text(text.uppercased())
-            .font(.caption2.weight(.bold))
-            .foregroundColor(.saveInk)
-            .lineLimit(1)
-            .minimumScaleFactor(0.72)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(color.opacity(0.24))
-            .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
-            .clipShape(Capsule())
+        // M1: stamp chips never show raw hex, debug IDs, or pipeline tokens.
+        if let text = SaveSoftPixelAccentsLock.visibleStampText(text) {
+            Text(text.uppercased())
+                .font(.caption2.weight(.bold))
+                .foregroundColor(.saveInk)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(color.opacity(0.24))
+                .overlay(Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1))
+                .clipShape(Capsule())
+        }
     }
 }
 

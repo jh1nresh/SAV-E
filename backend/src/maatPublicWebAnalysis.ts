@@ -1,3 +1,4 @@
+import { geminiAvailability } from "./geminiAvailability.js";
 import type { JsonObject } from "./placeClaims.js";
 
 type Fetcher = (url: string, init: {
@@ -510,7 +511,7 @@ function readablePlaceType(value: unknown): string | undefined {
 async function callGemini(input: MaatPublicWebInput, config: MaatPublicWebConfig): Promise<GeminiResponse> {
   const fetcher = config.fetcher ?? fetch;
   const url = `${geminiEndpointBase}/${encodeURIComponent(config.model)}:generateContent?key=${encodeURIComponent(config.apiKey ?? "")}`;
-  const response = await fetcher(url, {
+  const response = await geminiAvailability.observe(config.model, () => fetcher(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
@@ -521,7 +522,7 @@ async function callGemini(input: MaatPublicWebInput, config: MaatPublicWebConfig
         responseMimeType: "application/json",
       },
     }),
-  });
+  }));
   if (!response.ok) throw new Error(`Gemini request failed: ${response.status}`);
   return response.json() as Promise<GeminiResponse>;
 }
