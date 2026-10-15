@@ -232,7 +232,7 @@ struct SaveTileTownHomeView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
-            .padding(.bottom, 96)
+            .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
         }
     }
 
@@ -263,7 +263,7 @@ struct SaveTileTownHomeView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
-            .padding(.bottom, 96)
+            .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
         }
     }
 
@@ -441,7 +441,7 @@ struct SaveTileTownHomeView: View {
                 }
             }
             .padding(16)
-            .padding(.bottom, 96)
+            .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
         }
         .scrollDismissesKeyboard(.interactively)
     }

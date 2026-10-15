@@ -47,6 +47,7 @@ struct ProfileView: View {
     var onUnfollowFriend: (SaveFollowedFriend) async throws -> Void = { _ in }
     var onReviewAll: () -> Void = {}
     var onUpdatePlace: (Place) async throws -> Void = { _ in }
+    var onOpenPlace: (Place) -> Void = { _ in }
     var isRootTab = false
     @Binding var requestsConnections: Bool
     @State private var opensConnections = false
@@ -99,7 +100,7 @@ struct ProfileView: View {
                     )
 
                     if isRootTab {
-                        PassportTileTownCollection(places: passportPlaces)
+                        PassportTileTownCollection(places: passportPlaces, onOpenPlace: onOpenPlace)
                             .padding(.horizontal, 16)
                     }
 
@@ -142,7 +143,7 @@ struct ProfileView: View {
                 .padding(
                     .bottom,
                     isRootTab
-                        ? AtlasTabBarMetrics.height + 48
+                        ? SaveTileTownProductLock.rootTabScrollClearance
                         : SaveTheme.Spacing.xl
                 )
                 .padding(.top, 2)
@@ -2290,6 +2291,7 @@ private struct PassportBadge: View {
 private struct PassportTileTownCollection: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let places: [Place]
+    var onOpenPlace: (Place) -> Void = { _ in }
 
     private var goal: Int {
         SaveTileTownProductLock.passportGoal(for: places.count)
@@ -2329,12 +2331,16 @@ private struct PassportTileTownCollection: View {
                 spacing: 16
             ) {
                 ForEach(places.prefix(12)) { place in
-                    SaveKraftStamp(
-                        title: place.name,
-                        face: .photo(HomePlaceCardArt.photoURL(for: place)),
-                        size: .grid,
-                        accessibilityIdentifier: "profile.stamp.\(place.id.uuidString)"
-                    )
+                    Button { onOpenPlace(place) } label: {
+                        SaveKraftStamp(
+                            title: place.name,
+                            face: .photo(HomePlaceCardArt.photoURL(for: place)),
+                            size: .grid,
+                            accessibilityIdentifier: "profile.stamp.\(place.id.uuidString)"
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(.isButton)
                 }
                 ForEach(0..<lockedCount, id: \.self) { index in
                     SaveKraftStamp(
