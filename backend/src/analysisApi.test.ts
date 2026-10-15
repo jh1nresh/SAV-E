@@ -44,6 +44,7 @@ globalThis.fetch = async (input, init) => {
   }
   const failed = google ? url.searchParams.get('query') === 'fixture-provider-failure' : String(init?.body).includes('fixture-provider-failure');
   appendFileSync(process.env.ANALYSIS_FIXTURE_CALLS, JSON.stringify({ provider: google ? 'google' : 'gemini', failed })+'\\n');
+  if (gemini && String(init?.body).includes('fixture-billing-blocked')) return Response.json({ error: { message: 'private fixture billing detail' } }, { status: 402 });
   if (failed) return Response.json({ error: { message: 'synthetic provider failure' } }, { status: 503 });
   const prompt = gemini ? JSON.parse(init.body).contents?.[0]?.parts?.[0]?.text ?? '' : '';
   if (gemini && prompt.includes('SOURCE_JSON')) {
@@ -125,6 +126,10 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       await new Promise(resolve => setTimeout(resolve, 50));
     }
     assert.equal(ready, true, log);
+    const unknownProvider = await api("/health/ai-provider");
+    assert.equal(unknownProvider.status, 503);
+    assert.equal(unknownProvider.body.state, "unknown");
+    assert.equal(unknownProvider.body.credit_balance, null);
     const owner = await newGuest(); const other = await newGuest();
 
     await t.test("deployment health rejects a missing analysis table before users attempt any link", async () => {
@@ -758,11 +763,27 @@ test("real HTTP analysis ownership metering and quota enforcement", { skip: !dat
       const id = await start(owner);
       assert.equal((await api(`/v0/analysis/${id}/places`, { query: "fixture-provider-failure" }, owner)).status, 502);
       assert.equal((await api("/v0/llm/gemini-generate-content", geminiBody("fixture-provider-failure"), owner, { "x-save-analysis-id": id })).status, 502);
+      const provider = await api("/health/ai-provider");
+      assert.equal(provider.status, 503);
+      assert.equal(provider.body.state, "unavailable");
+      assert.equal(provider.body.active_probe, false);
       const rows = (await pool.query("select * from analysis_usage_events where analysis_id=$1", [id])).rows;
       assert.equal(rows.length, 2); assert.ok(rows.every(row => row.outcome === "failure" && row.estimated_micros === null && Number(row.reserved_micros) > 0));
       assert.equal((await api(`/v0/analysis/${id}/finish`, { outcome: "failed" }, owner)).status, 200);
       assert.equal((await api(`/v0/analysis/${id}/client-events`, { events: [] }, owner)).status, 200);
       const summary = await api(`/v0/analysis/${id}`, undefined, owner); assert.equal(summary.body.cost_complete, false);
+    });
+
+    await t.test("billing failure is passively visible without exposing provider details", async () => {
+      const id = await start(owner);
+      assert.equal((await api("/v0/llm/gemini-generate-content", geminiBody("fixture-billing-blocked"), owner, { "x-save-analysis-id": id })).status, 502);
+      const before = (await calls()).length;
+      const status = await api("/health/ai-provider");
+      assert.equal(status.status, 503);
+      assert.equal(status.body.state, "billing_blocked");
+      assert.equal(status.body.credit_balance, null);
+      assert.ok(!JSON.stringify(status.body).includes("private fixture"));
+      assert.equal((await calls()).length, before, "Status must not probe a paid provider");
     });
 
     await t.test("recovery cache relinks the requested analysis and separates workflow runs", async () => {
