@@ -55,14 +55,13 @@ Production parity uses `Reference/ProductionTargets`. The original
 `Reference/Targets` remain the immutable inputs for deterministic illustration
 extraction, so approving a UI refresh cannot silently alter generated assets.
 
-The Home production target was refreshed for the four-control navigation in
-PR #240 from CI run `34811738599`, head
-`5b5ceeb9811922517b46e8f40fe6f3590510aa90` (`five-tab-home` attachment).
+The Home production target was refreshed for the 2026-10-14 tile-town lock
+from CI run `38672287517`, head
+`bc89b9a33e1676dc6c98ceb7cfa3455f6dcea296` (`five-tab-home` attachment).
 The capture is uniformly downsampled from 3× to the 402 × 874 target size,
-with no content edits. Comparison with predecessor
-run `34768505868` confirmed the saved-place card content was already present;
-the navigation change removes Plan and labels the last control Passport.
-The comparator, other targets, and `0.90` threshold remain unchanged.
+with no content edits. Soft Pixel H1 paper-library Home is superseded for
+the product map base. The comparator, other targets, and `0.90` threshold
+remain unchanged.
 
 ## Boundaries
 
