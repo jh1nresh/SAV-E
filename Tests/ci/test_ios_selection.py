@@ -20,6 +20,7 @@ class CoverageTests(unittest.TestCase):
         baseline = set(json.loads((ROOT / "Tests/ci/full-ui-baseline.json").read_text()))
         self.assertEqual(actual, baseline | {selection.RAIL + "testHomeListProgressiveSearch"})
         self.assertTrue(full["trip"])
+        self.assertTrue(full["units"])
         plan_only = (
             selection.RAIL + "testPlanChatDraftAndConversationSurviveTabChange",
             selection.RAIL + "testPlanTabDraftsFromSavedMapStamps",
@@ -125,6 +126,7 @@ class CoverageTests(unittest.TestCase):
             git("commit", "-qm", "move")
             env = dict(os.environ, GITHUB_EVENT_NAME="pull_request", PR_BASE_SHA=base,
                        GITHUB_OUTPUT=str(root / "outputs"), GITHUB_STEP_SUMMARY=str(root / "summary"))
+            env.pop("SAVE_UI_TEST_FOCUS", None)
             subprocess.run(["python3", str(ROOT / "scripts/select-ios-tests.py"),
                             "--output-dir", str(root)], cwd=root, env=env,
                            check=True, capture_output=True)
@@ -139,10 +141,80 @@ class CoverageTests(unittest.TestCase):
             for event in ("push", "workflow_dispatch", "pull_request"):
                 env = dict(os.environ, GITHUB_EVENT_NAME=event, PR_BASE_SHA="bad",
                            GITHUB_OUTPUT=str(root / "outputs"), GITHUB_STEP_SUMMARY=str(root / "summary"))
+                env.pop("SAVE_UI_TEST_FOCUS", None)
                 subprocess.run(["python3", str(ROOT / "scripts/select-ios-tests.py"),
                                 "--output-dir", str(root)], cwd=ROOT, env=env,
                                check=True, capture_output=True)
                 self.assertEqual(json.loads((root / "ios-test-selection.json").read_text())["profile"], "full")
+
+    def test_tile_town_home_focus_is_a_subset_of_full_without_trip_or_units(self):
+        spec = selection.FOCUS_PROFILES["tile-town-home"]
+        self.assertTrue(set(spec["tests"]) <= set(selection.FULL))
+        self.assertFalse(spec["trip"])
+        self.assertFalse(spec["units"])
+        for name in (
+            "testCaptureAtlasProductionParity",
+            "testCaptureFiveTabLanding",
+            "testAtlasHomeAndSavesRenderPersistedPlaceData",
+            "testCaptureMultipleResultsExcludeOlderClues",
+            "testCaptureAtlasTripsAndLiveMaps",
+            "testFriendsComingSoon",
+            "testHomeListProgressiveSearch",
+        ):
+            self.assertIn(selection.RAIL + name, spec["tests"])
+        self.assertNotIn(selection.TRIP_SHEET, spec["tests"])
+        self.assertNotIn(selection.RAIL + "testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch", spec["tests"])
+
+    def test_cli_honors_save_ui_test_focus_off_main(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            env = dict(os.environ, GITHUB_EVENT_NAME="pull_request", PR_BASE_SHA="bad",
+                       GITHUB_REF="refs/pull/279/merge",
+                       SAVE_UI_TEST_FOCUS="tile-town-home",
+                       GITHUB_OUTPUT=str(root / "outputs"), GITHUB_STEP_SUMMARY=str(root / "summary"))
+            subprocess.run(["python3", str(ROOT / "scripts/select-ios-tests.py"),
+                            "--output-dir", str(root)], cwd=ROOT, env=env,
+                           check=True, capture_output=True)
+            plan = json.loads((root / "ios-test-selection.json").read_text())
+            self.assertEqual(plan["profile"], "focus:tile-town-home")
+            self.assertEqual(plan["tests"], selection.FOCUS_PROFILES["tile-town-home"]["tests"])
+            self.assertTrue(plan["run"])
+            self.assertTrue(plan["ui"])
+            self.assertFalse(plan["trip"])
+            self.assertFalse(plan["units"])
+            self.assertIn("units=false", (root / "outputs").read_text())
+            args = (root / "ios-ui-args.txt").read_text()
+            self.assertIn("-only-testing:SAVEUITests/SAVEScreenshotRailTests/testHomeListProgressiveSearch", args)
+            self.assertNotIn("testTripStopEditorSurfaceIsReachable", args)
+
+    def test_cli_ignores_focus_on_main_push(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            env = dict(os.environ, GITHUB_EVENT_NAME="push",
+                       GITHUB_REF="refs/heads/main",
+                       SAVE_UI_TEST_FOCUS="tile-town-home",
+                       GITHUB_OUTPUT=str(root / "outputs"), GITHUB_STEP_SUMMARY=str(root / "summary"))
+            subprocess.run(["python3", str(ROOT / "scripts/select-ios-tests.py"),
+                            "--output-dir", str(root)], cwd=ROOT, env=env,
+                           check=True, capture_output=True)
+            plan = json.loads((root / "ios-test-selection.json").read_text())
+            self.assertEqual(plan["profile"], "full")
+            self.assertTrue(plan["units"])
+            self.assertTrue(plan["trip"])
+            self.assertEqual(plan["tests"], selection.FULL)
+
+    def test_unknown_focus_fails_loudly(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            env = dict(os.environ, GITHUB_EVENT_NAME="pull_request", PR_BASE_SHA="bad",
+                       GITHUB_REF="refs/pull/279/merge",
+                       SAVE_UI_TEST_FOCUS="does-not-exist",
+                       GITHUB_OUTPUT=str(root / "outputs"), GITHUB_STEP_SUMMARY=str(root / "summary"))
+            completed = subprocess.run(["python3", str(ROOT / "scripts/select-ios-tests.py"),
+                                        "--output-dir", str(root)], cwd=ROOT, env=env,
+                                       capture_output=True, text=True)
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("unknown SAVE_UI_TEST_FOCUS", completed.stderr + completed.stdout)
 
 
 if __name__ == "__main__":

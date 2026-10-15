@@ -6,6 +6,15 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      ui_test_focus:
+        description: >
+          Optional SAVE_UI_TEST_FOCUS profile. Empty keeps default/full
+          coverage with 3 retries. tile-town-home is the #279 iteration set
+          (Home/Saves/Trips rail tests, one attempt). Ignored on main.
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -21,6 +30,11 @@ jobs:
     # The UI suite is ~10 minutes on a healthy runner but has been observed at
     # 3-4x that on a contended one, and failing tests are now retried.
     timeout-minutes: 75
+    env:
+      # Easy-to-revert #279 iteration switch. Main stays empty (full suite +
+      # 3 retries). Delete this env and the SAVE_UI_TEST_FOCUS reader in
+      # scripts/select-ios-tests.py to restore default everywhere.
+      SAVE_UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus || (github.head_ref == 'cursor/tile-town-product-lock-4894' && 'tile-town-home') || '' }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -100,7 +114,7 @@ jobs:
           xcrun simctl bootstatus "$udid" -b
 
       - name: Run unit tests
-        if: steps.scope.outputs.run == 'true'
+        if: steps.scope.outputs.run == 'true' && steps.scope.outputs.units == 'true'
         run: |
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
@@ -146,6 +160,13 @@ jobs:
             echo 'UI coverage was selected but no test arguments were produced.' >&2
             exit 1
           fi
+          ui_iterations=3
+          retry_args=(-retry-tests-on-failure)
+          if [[ -n "${SAVE_UI_TEST_FOCUS:-}" ]]; then
+            echo "SAVE_UI_TEST_FOCUS=${SAVE_UI_TEST_FOCUS}: focused UI set, one attempt, no retry."
+            ui_iterations=1
+            retry_args=()
+          fi
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
             -scheme SAV-E \
@@ -154,8 +175,8 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
             -resultBundlePath "$RUNNER_TEMP/SAVE-UI.xcresult" \
             "${ui_args[@]}" \
-            -test-iterations 3 \
-            -retry-tests-on-failure \
+            -test-iterations "$ui_iterations" \
+            "${retry_args[@]}" \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
 
