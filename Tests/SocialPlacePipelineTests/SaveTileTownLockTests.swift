@@ -41,14 +41,26 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(home.contains("home.trips"))
         XCTAssertTrue(home.contains("home.saves"))
         XCTAssertTrue(home.contains("headerIconButton("))
+        XCTAssertTrue(home.contains("SavePixelChromeIcon"))
         XCTAssertTrue(home.contains("AtlasMetrics.statusBarHeight"))
         XCTAssertTrue(home.contains("allowsHitTesting(false)"))
         XCTAssertFalse(home.contains(".overlay(alignment: .topTrailing)"))
+        XCTAssertFalse(home.contains(".opacity(0.02)"))
         XCTAssertTrue(home.contains(".accessibilityHidden(true)"))
+        let moreSheet = memberBody("moreActionsSheet", in: home)
+        let resting = memberBody("restingHome", in: home)
+        let empty = memberBody("emptyHome", in: home)
+        XCTAssertTrue(moreSheet.contains("reviewQueuePreview"))
+        XCTAssertFalse(resting.contains("reviewQueuePreview"))
+        XCTAssertFalse(empty.contains("reviewQueuePreview"))
+        XCTAssertTrue(home.contains("Waiting for review"))
         XCTAssertFalse(home.contains("map.lens.nearby"))
         XCTAssertFalse(home.contains("map.lens.saved"))
         XCTAssertFalse(home.contains("map.lens.friends"))
         XCTAssertFalse(home.contains("SaveTileTownMapLens"))
+        let design = try source(at: "DESIGN.md")
+        XCTAssertTrue(design.contains("SavePixelChromeIcon"))
+        XCTAssertTrue(design.contains("lives under More"))
     }
 
     func testMapOwnsNearbySavedFriendsChipsOnTileTown() throws {
@@ -78,6 +90,8 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(stamp.contains("case scene"))
         XCTAssertTrue(stamp.contains("SaveKraftStampPixelArt"))
         XCTAssertTrue(stamp.contains("SavePixelDisplayText"))
+        XCTAssertTrue(stamp.contains("enum SavePixelChromeIconKind"))
+        XCTAssertTrue(stamp.contains("struct SavePixelChromeIcon"))
         XCTAssertTrue(stamp.contains("case locked"))
         XCTAssertTrue(stamp.contains("SaveSoftPixelAccentsLock.visibleStampText"))
         XCTAssertTrue(home.contains("SaveKraftStamp("))
@@ -154,6 +168,13 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(theme.contains("7EC8E3"))
         XCTAssertTrue(theme.contains("F4E6C8"))
         XCTAssertFalse(theme.contains("FFF8EE"))
+    }
+
+    private func memberBody(_ name: String, in source: String) -> String {
+        guard let start = source.range(of: "private var \(name)") else { return "" }
+        let after = source[start.upperBound...]
+        let limit = after.range(of: "\n    private var ") ?? after.range(of: "\n    private func ")
+        return String(source[start.lowerBound..<(limit?.lowerBound ?? after.endIndex)])
     }
 
     private func source(at relativePath: String) throws -> String {

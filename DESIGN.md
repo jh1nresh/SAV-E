@@ -303,6 +303,7 @@ accept `relativeTo:`, and editorial scales relative to headline.
 | Role | Token | Face | Use |
 | --- | --- | --- | --- |
 | Pixel display | `SavePixelDisplayText` | 5×7 nearest-neighbor | Savvy wordmark, Passport header |
+| Pixel chrome | `SavePixelChromeIcon` | 8×8 nearest-neighbor | Quiet Home header Trips / Saves / More |
 | Display | `SaveAtlasType.display(_:)` | System Rounded Semibold | Hero numerals, action labels, display moments |
 | Strong | `SaveAtlasType.strong(_:)` | System Rounded Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
 | Body | `SaveAtlasType.body(_:)` | System Rounded Medium | Body and detail copy |
@@ -650,9 +651,12 @@ facts, public discovery or automatic saves occur on this Home surface.
 Clearing search returns to the peek + clues + recent-stamps rest state.
 
 The peek card and recent stamps use `SaveKraftStamp` (photo face + name).
-Waiting for review keeps Review Candidate and Source Clue tickets distinct;
-Review clues / View all opens the full queue. The More menu keeps collection
-management and Trips accessible.
+The clues bar keeps Review clues. Waiting for review (Review Candidate and
+Source Clue tickets, distinct) lives under More, not on the resting Home
+canvas. Header Trips / Saves / More are visible quiet 44pt pixel-icon
+buttons (`SavePixelChromeIcon`). Do not hide hittable entries with
+near-zero opacity. The More menu keeps collection management, Trips, and
+the review queue.
 
 Reduce Motion, VoiceOver and accessibility text sizes use the same static
 list. Existing distance/newest ordering remains the ordering within matching

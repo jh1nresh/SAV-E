@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Production Home for the 2026-10-14 tile-town lock.
-/// Resting chrome: Savvy + map peek + clues bar + recent stamps.
+/// Resting chrome: Savvy + visible quiet pixel Trips/Saves/More + map peek +
+/// clues bar + recent stamps. Waiting for review lives under More.
 /// Nearby / Saved / Friends chips stay off this surface (Map-only).
 /// Quiet collection search remains so the private library is still findable.
 struct SaveTileTownHomeView: View {
@@ -71,45 +72,42 @@ struct SaveTileTownHomeView: View {
             Spacer(minLength: 8)
 
             headerIconButton(
-                systemImage: "point.3.connected.trianglepath.dotted",
+                kind: .trips,
                 label: localized("Trips", "行程"),
                 identifier: "home.trips",
                 action: presentation.onOpenTrips
             )
             headerIconButton(
-                systemImage: "slider.horizontal.3",
+                kind: .saves,
                 label: localized("Manage saved places", "管理已存地點"),
                 identifier: "home.saves",
                 action: presentation.onOpenSaves
             )
-            Button { showsMoreActions.toggle() } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(SaveAtlasPalette.forest.opacity(0.35))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(localized("More Home actions", "更多首頁操作"))
-            .accessibilityIdentifier("home.more")
-            .accessibilityAddTraits(.isButton)
+            headerIconButton(
+                kind: .more,
+                label: localized("More Home actions", "更多首頁操作"),
+                identifier: "home.more",
+                action: { showsMoreActions.toggle() }
+            )
         }
         .frame(minHeight: 48)
     }
 
     private func headerIconButton(
-        systemImage: String,
+        kind: SavePixelChromeIconKind,
         label: String,
         identifier: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(SaveAtlasPalette.ink)
+            SavePixelChromeIcon(kind: kind, pointSize: 16)
                 .frame(width: 44, height: 44)
+                .background(SaveAtlasPalette.paper)
+                .overlay {
+                    Rectangle()
+                        .stroke(SaveAtlasPalette.forest.opacity(0.28), lineWidth: 1)
+                }
                 .contentShape(Rectangle())
-                .opacity(0.02)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -137,6 +135,9 @@ struct SaveTileTownHomeView: View {
                 showsMoreActions = false
                 presentation.onOpenSaves()
             }
+            reviewQueuePreview
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
         }
         .frame(width: 248)
         .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -212,7 +213,6 @@ struct SaveTileTownHomeView: View {
             VStack(alignment: .leading, spacing: 16) {
                 emptyCaptureButton
                 cluesBar
-                reviewQueuePreview
                 VStack(spacing: 10) {
                     Text(localized("No saved places yet", "還沒有已存地點"))
                         .font(SaveAtlasType.strong(18))
@@ -257,16 +257,8 @@ struct SaveTileTownHomeView: View {
                     .font(SaveAtlasType.body(12))
                     .foregroundStyle(SaveAtlasPalette.muted)
                     .accessibilityIdentifier("home.search.count")
-                    .opacity(0.02)
-                    .frame(height: 1)
                 peek
-                ZStack(alignment: .topLeading) {
-                    cluesBar
-                    reviewQueuePreview
-                        .opacity(0.02)
-                        .frame(maxHeight: 44)
-                        .clipped()
-                }
+                cluesBar
                 recentStamps
             }
             .padding(.horizontal, 16)

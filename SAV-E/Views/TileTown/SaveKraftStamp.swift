@@ -258,6 +258,83 @@ struct SavePostageSealAvatar: View {
     }
 }
 
+/// Quiet 8×8 nearest-neighbor header glyphs. Visible 44pt buttons, not SF Symbols.
+enum SavePixelChromeIconKind {
+    case trips
+    case saves
+    case more
+}
+
+struct SavePixelChromeIcon: View {
+    let kind: SavePixelChromeIconKind
+    var pointSize: CGFloat = 16
+
+    var body: some View {
+        Image(uiImage: Self.image(for: kind, pointSize: pointSize))
+            .interpolation(.none)
+            .frame(width: pointSize, height: pointSize)
+            .accessibilityHidden(true)
+    }
+
+    private static func bits(for kind: SavePixelChromeIconKind) -> [String] {
+        switch kind {
+        case .trips:
+            return [
+                "00100100",
+                "01011010",
+                "10000001",
+                "01011010",
+                "00100100",
+                "00100100",
+                "01111110",
+                "00100100",
+            ]
+        case .saves:
+            return [
+                "01111110",
+                "01000010",
+                "01011010",
+                "01011010",
+                "01000010",
+                "01011010",
+                "01100110",
+                "01111110",
+            ]
+        case .more:
+            return [
+                "00000000",
+                "00000000",
+                "00000000",
+                "01010100",
+                "01010100",
+                "00000000",
+                "00000000",
+                "00000000",
+            ]
+        }
+    }
+
+    private static func image(for kind: SavePixelChromeIconKind, pointSize: CGFloat) -> UIImage {
+        let rows = bits(for: kind)
+        let unit = max(1, Int(pointSize / 8))
+        let edge = 8 * unit
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: edge, height: edge), format: format)
+        return renderer.image { context in
+            let cg = context.cgContext
+            cg.interpolationQuality = .none
+            cg.setFillColor(UIColor(red: 0.18, green: 0.29, blue: 0.20, alpha: 1).cgColor)
+            for (row, line) in rows.enumerated() {
+                for (column, bit) in line.enumerated() where bit == "1" {
+                    cg.fill(CGRect(x: column * unit, y: row * unit, width: unit, height: unit))
+                }
+            }
+        }
+    }
+}
+
 /// Integer-scaled 5×7 display face for Savvy / Passport titles. Body copy stays `SaveAtlasType`.
 struct SavePixelDisplayText: View {
     let text: String
