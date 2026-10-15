@@ -446,6 +446,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--skip-map-tour",
                 "--uitest-repair-review-demo-seed",
                 "--uitest-atlas-parity-fixture",
+                "--uitest-friends-town",
                 "-save.appLanguage", "en",
             ]
         )
@@ -476,6 +477,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-map")
+
+        openRootTab("Friends", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["friends.mapStrip"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-friends-town")
     }
 
     /// Root navigation includes Friends and keeps Plan as a child route.

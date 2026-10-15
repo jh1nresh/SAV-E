@@ -1,6 +1,6 @@
 # Savvy Design System
 
-> Last updated: 2026-10-14
+> Last updated: 2026-10-15
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** still governs paper, type, kraft, and coral
 > chrome. **Tile-town** is the product Map / Home peek / Friends strip base
@@ -120,10 +120,14 @@ Rules:
   still hand off to MapKit or Apple Maps.
 - Nearby / Saved / Friends filter chips live on **Map only**. Home must not
   reuse that chrome.
-- Coral pins only. Selected stamp elevates to a kraft peek card (photo + name).
+- Coral pins only. Selected stamp elevates to a kraft peek card (name + date/area).
   Source-only clues still have no pin.
-- App Store frames and product UI share this town. Marketing pixel headlines
-  outside the device are store-only; in-app type stays `SaveAtlasType`.
+- Tile-town is nearest-neighbor integer tiles (`SaveTileTownRaster`): buildings,
+  roofs, trees, water, and roads are crisp cells. No anti-aliased vector houses
+  or curved roads.
+- App Store frames and product UI share this town. In-app **titles** (Savvy
+  wordmark, Passport header) use `SavePixelDisplayText`. Body copy stays
+  `SaveAtlasType`.
 
 ### Soft Pixel accents (on tile-town)
 
@@ -146,13 +150,14 @@ Rules:
   replacing Atlas paper cards, type, or kraft chips wholesale; a one-off
   16-bit city asset as a silent MapKit substitute.
 - Root tabs stay production Home / Map / + / Friends / Passport
-  (`Primary Navigation`). Tab shell is quiet line icons. Coral marks the
+  (`Primary Navigation`). Tab shell is a flat full-width pixel bar with quiet
+  line icons — not a floating rounded glass capsule. Coral marks the
   selected tab only. The center `+` is a coral circle on every screen.
 - Seals never show raw hex, debug IDs, or pipeline tokens in primary UI
   (see Evidence Receipt).
-- Stamp language is one system: photo face on Home recent stamps, glyph or
-  photo plus name on the Passport grid, kraft perforated seal for both.
-  Locked Passport slots show `???`.
+- Stamp language is one system: illustrated pixel stamp art (`SaveKraftStamp`
+  / `SaveKraftStampPixelArt`) on Home recent stamps and the Passport grid,
+  kraft perforated seal for both. Locked Passport slots show `???`.
 
 ### Review Clue
 
@@ -297,6 +302,7 @@ accept `relativeTo:`, and editorial scales relative to headline.
 
 | Role | Token | Face | Use |
 | --- | --- | --- | --- |
+| Pixel display | `SavePixelDisplayText` | 5×7 nearest-neighbor | Savvy wordmark, Passport header |
 | Display | `SaveAtlasType.display(_:)` | System Rounded Semibold | Hero numerals, action labels, display moments |
 | Strong | `SaveAtlasType.strong(_:)` | System Rounded Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
 | Body | `SaveAtlasType.body(_:)` | System Rounded Medium | Body and detail copy |
@@ -615,9 +621,10 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 ### Primary Navigation
 
 - Root controls are Home / Map / + / Friends / Passport, in that order.
-- Tab bible: quiet line icons (`house`, `map`, `plus`, `person.2`,
-  `book.closed`); coral on the active destination only; the center `+` is a
-  coral circle on every screen. Do not use a mint selection pill.
+- Tab bible: flat full-width pixel bar; quiet line icons (`house`, `map`,
+  `plus`, `person.2`, `book.closed`); coral on the active destination only;
+  the center `+` is a coral circle on every screen. Do not use a mint
+  selection pill or a floating rounded capsule.
 - Home owns waiting clues and recent Map Stamps, with a tile-town peek. The
   full private library stays reachable from More → Manage saved places and
   from quiet Home search. Do not add a duplicate Saves tab.

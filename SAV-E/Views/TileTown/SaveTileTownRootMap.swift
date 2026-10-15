@@ -17,11 +17,9 @@ struct SaveTileTownRootMap: View {
             SaveAtlasPalette.canvas.ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Savvy")
-                    .font(SaveAtlasType.strong(32, relativeTo: .title))
-                    .foregroundStyle(SaveAtlasPalette.forest)
+                SavePixelDisplayText(text: "Savvy", pointSize: 28)
                     .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.top, AtlasMetrics.statusBarHeight)
                     .accessibilityIdentifier("map.wordmark")
 
                 lensRail
@@ -30,20 +28,23 @@ struct SaveTileTownRootMap: View {
                 ZStack(alignment: .bottomLeading) {
                     SaveTileTownCanvas(
                         pins: visiblePins,
+                        clipsToPaper: false,
                         onSelect: selectPin
                     )
                     .accessibilityIdentifier("map.liveSurface")
 
                     if let place = mapViewModel.selectedPlace {
-                        SaveAtlasLivePlaceCard(
-                            place: place,
-                            onClose: onClearSelection,
-                            onOpen: { presentation.onOpenPlace(place.id.uuidString) },
-                            onOpenAssistant: presentation.onOpenAssistant,
-                            onPlanAround: { onPlanAroundPlace(place) }
-                        )
-                        .frame(height: 168)
+                        Button {
+                            presentation.onOpenPlace(place.id.uuidString)
+                        } label: {
+                            SaveTileTownPeekCard(
+                                title: place.name,
+                                subtitle: place.createdAt.formatted(date: .abbreviated, time: .omitted)
+                            )
+                        }
+                        .buttonStyle(.plain)
                         .padding(12)
+                        .accessibilityIdentifier("map.peek.card")
                     }
                 }
                 .overlay(alignment: .topTrailing) {

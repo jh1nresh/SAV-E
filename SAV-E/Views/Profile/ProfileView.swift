@@ -142,7 +142,7 @@ struct ProfileView: View {
                 .padding(
                     .bottom,
                     isRootTab
-                        ? AtlasMetrics.height - 786 + 14
+                        ? AtlasTabBarMetrics.height + 48
                         : SaveTheme.Spacing.xl
                 )
                 .padding(.top, 2)
@@ -2133,19 +2133,10 @@ private struct PassportTopBar: View {
                     .accessibilityIdentifier("profile.close")
             }
 
-            Image("SavvyLogo")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 40, height: 40)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .accessibilityLabel("Savvy")
-                .accessibilityIdentifier("profile.brandLogo")
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(languageSettings.text(.profileTitle))
-                    .font(SaveAtlasType.strong(20))
-                    .tracking(0)
-                    .foregroundStyle(SaveAtlasPalette.forest)
+            VStack(alignment: .leading, spacing: 6) {
+                SavePixelDisplayText(text: "Savvy", pointSize: 22)
+                    .accessibilityLabel("Savvy")
+                    .accessibilityIdentifier("profile.brandLogo")
                 Text(languageSettings.localized(english: "Your personal atlas", traditionalChinese: "你的私人地點圖鑑"))
                     .font(SaveAtlasType.body(12))
                     .foregroundStyle(SaveAtlasPalette.muted)
@@ -2310,9 +2301,11 @@ private struct PassportTileTownCollection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(languageSettings.localized(english: "Passport", traditionalChinese: "護照"))
-                .font(SaveAtlasType.strong(26, relativeTo: .title2))
-                .foregroundStyle(SaveAtlasPalette.forest)
+            SavePixelDisplayText(
+                text: languageSettings.localized(english: "Passport", traditionalChinese: "PASSPORT"),
+                pointSize: 24
+            )
+            .accessibilityLabel(languageSettings.localized(english: "Passport", traditionalChinese: "護照"))
             HStack {
                 Text("\(places.count)/\(goal)")
                     .font(SaveAtlasType.strong(13))

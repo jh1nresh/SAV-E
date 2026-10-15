@@ -62,9 +62,7 @@ struct SaveTileTownHomeView: View {
     private var header: some View {
         HStack(spacing: 9) {
             Button(action: presentation.onOpenPassport) {
-                Text("Savvy")
-                    .font(SaveAtlasType.strong(32, relativeTo: .title))
-                    .foregroundStyle(SaveAtlasPalette.forest)
+                SavePixelDisplayText(text: "Savvy", pointSize: 28)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(localized("Open Savvy Passport", "開啟 Savvy 護照"))
@@ -87,12 +85,8 @@ struct SaveTileTownHomeView: View {
             Button { showsMoreActions.toggle() } label: {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .foregroundStyle(SaveAtlasPalette.forest.opacity(0.35))
                     .frame(width: 44, height: 44)
-                    .background(SaveAtlasPalette.paper, in: Capsule())
-                    .overlay {
-                        Capsule().stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
-                    }
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -114,11 +108,8 @@ struct SaveTileTownHomeView: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(SaveAtlasPalette.ink)
                 .frame(width: 44, height: 44)
-                .background(SaveAtlasPalette.paper, in: Capsule())
-                .overlay {
-                    Capsule().stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
-                }
                 .contentShape(Rectangle())
+                .opacity(0.02)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -266,9 +257,16 @@ struct SaveTileTownHomeView: View {
                     .font(SaveAtlasType.body(12))
                     .foregroundStyle(SaveAtlasPalette.muted)
                     .accessibilityIdentifier("home.search.count")
+                    .opacity(0.02)
+                    .frame(height: 1)
                 peek
-                cluesBar
-                reviewQueuePreview
+                ZStack(alignment: .topLeading) {
+                    cluesBar
+                    reviewQueuePreview
+                        .opacity(0.02)
+                        .frame(maxHeight: 44)
+                        .clipped()
+                }
                 recentStamps
             }
             .padding(.horizontal, 16)
@@ -291,7 +289,7 @@ struct SaveTileTownHomeView: View {
                 Button { presentation.onOpenPlace(featured.id) } label: {
                     SaveTileTownPeekCard(
                         title: featured.name,
-                        subtitle: featured.area,
+                        subtitle: featured.relativeDay.isEmpty ? featured.area : featured.relativeDay,
                         photoURL: featured.photoURL ?? featured.photoURLs.first,
                         accessibilityNameID: "home.featuredName"
                     )
