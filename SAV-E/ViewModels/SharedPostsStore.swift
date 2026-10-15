@@ -79,15 +79,20 @@ final class SharedPostsStore: ObservableObject {
 
     private func applyDemoFixture() {
         let items = Self.fixturePosts
-        let matchesFilter: (SharedPlacePost) -> Bool = { post in
-            filter == .all || post.status.rawValue == filter.rawValue
-        }
+        let currentFilter = filter
         switch route {
         case .mine, .feed:
-            posts = items.filter { (route == .mine || $0.visible_to_followers) && matchesFilter($0) }
+            posts = items.filter {
+                (route == .mine || $0.visible_to_followers)
+                    && (currentFilter == .all || $0.status.rawValue == currentFilter.rawValue)
+            }
             counts = SocialProfileCounts(postCount: items.count, followingCount: 2, followerCount: 3)
         case .author(let id):
-            let authored = items.filter { $0.author_id == id && $0.visible_to_followers && matchesFilter($0) }
+            let authored = items.filter {
+                $0.author_id == id
+                    && $0.visible_to_followers
+                    && (currentFilter == .all || $0.status.rawValue == currentFilter.rawValue)
+            }
             posts = authored
             if let first = items.first(where: { $0.author_id == id }) {
                 profile = SharedPassportPage.Profile(
