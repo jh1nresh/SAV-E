@@ -23,9 +23,10 @@ enum SAVEProAccessPolicy {
     /// saved places, deterministic parsing, and cache hits are never metered.
     nonisolated static let coreMemoryLoopIsFree = true
 
-    /// Purchases are wired but products are not yet live in App Store Connect.
-    /// Flip alone after ASC products attach — not with `enforcementEnabled`.
-    nonisolated static let purchasingIsAvailable = false
+    /// Purchasing is on so Passport and the paywall can load StoreKit offers.
+    /// Flip alone — never with `enforcementEnabled`. Hold merge until ASC
+    /// subscriptions are Ready to Submit.
+    nonisolated static let purchasingIsAvailable = true
 
     /// When `false`, an exhausted allowance may inform the UI but must never
     /// refuse an AI assist. Stay off until a real model-quota refusal surface

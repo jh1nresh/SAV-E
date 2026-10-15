@@ -108,9 +108,12 @@ final class SaveEntitlementWiringTests: XCTestCase {
         )
         XCTAssertTrue(store.shouldPresentPaywallFromPassport(hasConfirmedMapStamp: true))
 
-        // Launch posture: purchasing is off, so even a stamped account sees no Pro row.
+        // Purchasing is live: Passport offers Pro after the first Map Stamp,
+        // never before. Enforcement stays off, so this is opt-in only.
+        XCTAssertTrue(SAVEProAccessPolicy.purchasingIsAvailable)
+        XCTAssertFalse(SAVEProAccessPolicy.enforcementEnabled)
         XCTAssertFalse(SAVEProAccessPolicy.shouldOfferProFromPassport(hasConfirmedMapStamp: false))
-        XCTAssertFalse(SAVEProAccessPolicy.shouldOfferProFromPassport(hasConfirmedMapStamp: true))
+        XCTAssertTrue(SAVEProAccessPolicy.shouldOfferProFromPassport(hasConfirmedMapStamp: true))
     }
 
     /// Only a refusal opens the reactive paywall. Warnings and allowances must not.
