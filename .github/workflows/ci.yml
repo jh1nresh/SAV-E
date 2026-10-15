@@ -4,7 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # Keep required checks on the existing PR stack rooted in the #279 UI.
+    branches:
+      - main
+      - cursor/tile-town-product-lock-4894
+      - codex/share-analysis-recovery
+      - codex/p0-provider-status
+      - codex/p1-share-keep-working
+      - codex/p1-analysis-cost-efficiency
   workflow_dispatch:
     inputs:
       ui_test_focus:
