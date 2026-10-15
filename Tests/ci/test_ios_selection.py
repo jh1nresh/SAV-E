@@ -203,6 +203,14 @@ class CoverageTests(unittest.TestCase):
             self.assertTrue(plan["trip"])
             self.assertEqual(plan["tests"], selection.FULL)
 
+    def test_workflow_focus_omits_single_test_iteration_flag(self):
+        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertIn("SAVE_UI_TEST_FOCUS", workflow)
+        self.assertIn("Must specify -test-iterations with more than 1 iteration", workflow)
+        self.assertIn("iteration_args=(-test-iterations 3 -retry-tests-on-failure)", workflow)
+        self.assertIn("iteration_args=()", workflow)
+        self.assertNotRegex(workflow, r"(?m)^\s+-test-iterations 1\s")
+
     def test_unknown_focus_fails_loudly(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

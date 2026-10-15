@@ -160,12 +160,13 @@ jobs:
             echo 'UI coverage was selected but no test arguments were produced.' >&2
             exit 1
           fi
-          ui_iterations=3
-          retry_args=(-retry-tests-on-failure)
+          # Default keeps the 3-attempt retry backstop. Focus mode must omit
+          # -test-iterations entirely: xcodebuild rejects `-test-iterations 1`
+          # ("Must specify -test-iterations with more than 1 iteration").
+          iteration_args=(-test-iterations 3 -retry-tests-on-failure)
           if [[ -n "${SAVE_UI_TEST_FOCUS:-}" ]]; then
             echo "SAVE_UI_TEST_FOCUS=${SAVE_UI_TEST_FOCUS}: focused UI set, one attempt, no retry."
-            ui_iterations=1
-            retry_args=()
+            iteration_args=()
           fi
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
@@ -175,8 +176,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
             -resultBundlePath "$RUNNER_TEMP/SAVE-UI.xcresult" \
             "${ui_args[@]}" \
-            -test-iterations "$ui_iterations" \
-            "${retry_args[@]}" \
+            "${iteration_args[@]}" \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
 
