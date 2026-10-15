@@ -186,6 +186,9 @@ Rules:
   not count as proof.
 - Keep Passport as the navigation name; its behavior is a personal profile.
 - Passport uses a compact profile header, quests above a shared-post grid, and a separate settings entry.
+- Root Passport keeps a bottom inset (`rootTabScrollClearance`) so the bio
+  and stamp labels clear the tab bar on landing. Tapping a stamp opens that
+  place. Friend author rows open that friend's Passport, including review-demo.
 - Passport identity uses the chosen photo saved for the current account on this
   device when available; otherwise it uses `SavvyLogo`. This photo has no cloud
   avatar representation and does not sync between devices.
@@ -651,6 +654,7 @@ facts, public discovery or automatic saves occur on this Home surface.
 Clearing search returns to the peek + clues + recent-stamps rest state.
 
 The peek card and recent stamps use `SaveKraftStamp` (photo face + name).
+Recent-stamp labels scroll above the tab bar (`rootTabScrollClearance`).
 The clues bar keeps Review clues. Waiting for review (Review Candidate and
 Source Clue tickets, distinct) lives under More, not on the resting Home
 canvas. Header Trips / Saves / More are visible quiet 44pt pixel-icon
@@ -704,7 +708,11 @@ live MapKit.
 Rules:
 
 - Map chrome: Savvy wordmark + Nearby / Saved / Friends kraft chips. Those
-  three chips are Map-only.
+  three chips are Map-only, 44pt buttons (`map.lens.*`), and stay below the
+  48pt status band. The search drawer never covers them: large stop ends
+  below `SaveTileTownProductLock.mapChromeHeight`, and only the visible
+  paper hits so pins stay tappable through medium.
+- The town canvas pans with a drag. Pin tap selects the kraft peek card.
 - Drawer search (collapsed capsule) still opens the parked search panel.
   Category, Want to try, Visited, and Nearby-distance chips may remain in
   the drawer as Map Stamp lenses; they are not Home chrome.

@@ -29,6 +29,7 @@ struct SaveTileTownRootMap: View {
                     SaveTileTownCanvas(
                         pins: visiblePins,
                         clipsToPaper: false,
+                        allowsPan: true,
                         onSelect: selectPin
                     )
                     .accessibilityIdentifier("map.liveSurface")
@@ -103,7 +104,8 @@ struct SaveTileTownRootMap: View {
                     .font(SaveAtlasType.strong(13))
                     .foregroundStyle(lens == item ? SaveAtlasPalette.coral : SaveAtlasPalette.forest)
                     .padding(.horizontal, 12)
-                    .frame(minHeight: 40)
+                    .frame(minHeight: 44)
+                    .contentShape(Capsule())
                     .background(
                         SaveAtlasPalette.paper,
                         in: Capsule()

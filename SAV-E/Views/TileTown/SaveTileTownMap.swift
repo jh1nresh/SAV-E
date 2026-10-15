@@ -8,6 +8,10 @@ nonisolated enum SaveTileTownProductLock: Sendable {
     static let productMapBaseIsTileTown = true
     static let homeShowsMapFilterChips = false
     static let mapShowsNearbySavedFriendsChips = true
+    /// Wordmark + Nearby/Saved/Friends rail below the 48pt status band.
+    static let mapChromeHeight: CGFloat = 136
+    /// Lets root-tab lists scroll stamp labels and bios above the tab bar.
+    static let rootTabScrollClearance: CGFloat = 150
 
     /// Collection page size used by Passport progress (4/12 in the lock frames).
     static func passportGoal(for savedCount: Int) -> Int {
@@ -102,7 +106,10 @@ struct SaveTileTownCanvas: View {
     var pins: [SaveTileTownPin] = []
     var showsPins = true
     var clipsToPaper = true
+    var allowsPan = false
     var onSelect: (UUID) -> Void = { _ in }
+    @State private var pan = CGSize.zero
+    @State private var panAnchor = CGSize.zero
 
     var body: some View {
         GeometryReader { geo in
@@ -117,12 +124,20 @@ struct SaveTileTownCanvas: View {
                     .clipped()
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
+                if allowsPan {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .gesture(panGesture(in: size))
+                        .accessibilityIdentifier("map.tileTown.pan")
+                }
                 if showsPins {
                     pinsLayer(in: size)
                 }
             }
+            .offset(pan)
             .clipShape(RoundedRectangle(cornerRadius: clipsToPaper ? 18 : 0, style: .continuous))
         }
+        .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.tileTown")
         .accessibilityLabel("Tile-town map")
@@ -137,12 +152,40 @@ struct SaveTileTownCanvas: View {
                 onSelect(pin.id)
             } label: {
                 SaveTileTownPinMark(isSelected: pin.isSelected)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(pin.isSelected ? "Selected Map Stamp, \(pin.name)" : "Map Stamp, \(pin.name)")
             .accessibilityIdentifier("map.tilePin.\(pin.id.uuidString)")
             .position(x: lot.x * size.width, y: lot.y * size.height)
         }
+    }
+
+    private func panGesture(in size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                pan = clamped(CGSize(
+                    width: panAnchor.width + value.translation.width,
+                    height: panAnchor.height + value.translation.height
+                ), in: size)
+            }
+            .onEnded { value in
+                pan = clamped(CGSize(
+                    width: panAnchor.width + value.translation.width,
+                    height: panAnchor.height + value.translation.height
+                ), in: size)
+                panAnchor = pan
+            }
+    }
+
+    private func clamped(_ proposed: CGSize, in size: CGSize) -> CGSize {
+        let limitX = max(24, size.width * 0.35)
+        let limitY = max(24, size.height * 0.35)
+        return CGSize(
+            width: min(limitX, max(-limitX, proposed.width)),
+            height: min(limitY, max(-limitY, proposed.height))
+        )
     }
 }
 
