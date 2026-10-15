@@ -2677,26 +2677,33 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        let moreActions = app.descendants(matching: .any)["home.more"]
-        if moreActions.waitForExistence(timeout: timeout(2)) {
-            tapReachable(moreActions)
+        // Live Home keeps 44pt `home.saves` in the header. Opening More first
+        // drops a sheet over the next tap and the rail never reaches Saves.
+        let headerSaves = app.descendants(matching: .any)["home.saves"]
+        if headerSaves.waitForExistence(timeout: timeout(2)), headerSaves.isHittable {
+            tapReachable(headerSaves)
+        } else {
+            let moreActions = app.descendants(matching: .any)["home.more"]
+            if moreActions.waitForExistence(timeout: timeout(2)) {
+                tapReachable(moreActions)
+            }
+            // Parity-fixture Home still uses Review clues (`home.review`).
+            let candidates: [XCUIElement] = [
+                app.descendants(matching: .any)["home.saves"],
+                app.descendants(matching: .any)["home.more.saves"],
+                app.buttons["Manage saved places"],
+                app.buttons["管理已存地點"],
+                app.buttons["Manage"],
+                app.descendants(matching: .any)["home.review"],
+                app.buttons["Review clues"],
+            ]
+            let entry = firstExisting(candidates, timeout: stepTimeout)
+            XCTAssertTrue(entry.exists, "Missing Home Saves entry")
+            tapReachable(entry)
         }
-        // Live Home: Manage (`home.saves`). Parity-fixture Home still uses the
-        // locked One-Face stack, whose Saves entry is Review clues (`home.review`).
-        let candidates: [XCUIElement] = [
-            app.descendants(matching: .any)["home.saves"],
-            app.buttons["Manage saved places"],
-            app.buttons["管理已存地點"],
-            app.buttons["Manage"],
-            app.descendants(matching: .any)["home.review"],
-            app.buttons["Review clues"],
-        ]
-        let entry = firstExisting(candidates, timeout: stepTimeout)
-        XCTAssertTrue(entry.exists, "Missing Home Saves entry")
-        tapReachable(entry)
         let saves = app.descendants(matching: .any)["saves.root"]
         if !saves.waitForExistence(timeout: timeout(5)) {
-            tapReachable(entry)
+            tapReachable(app.descendants(matching: .any)["home.saves"])
         }
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to
         // burn 120s per attempt; four flakes × 3 retries blew the 35-minute
@@ -2710,25 +2717,31 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openTripsFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        let moreActions = app.descendants(matching: .any)["home.more"]
-        if moreActions.waitForExistence(timeout: timeout(2)) {
-            tapReachable(moreActions)
+        let headerTrips = app.descendants(matching: .any)["home.trips"]
+        if headerTrips.waitForExistence(timeout: timeout(2)), headerTrips.isHittable {
+            tapReachable(headerTrips)
+        } else {
+            let moreActions = app.descendants(matching: .any)["home.more"]
+            if moreActions.waitForExistence(timeout: timeout(2)) {
+                tapReachable(moreActions)
+            }
+            let candidates: [XCUIElement] = [
+                app.descendants(matching: .any)["home.trips"],
+                app.descendants(matching: .any)["home.more.trips"],
+                app.buttons["Trips"],
+                app.buttons["行程"],
+            ]
+            let entry = firstExisting(candidates, timeout: stepTimeout)
+            XCTAssertTrue(entry.exists, "Missing Home Trips entry")
+            tapReachable(entry)
         }
-        let candidates: [XCUIElement] = [
-            app.descendants(matching: .any)["home.trips"],
-            app.buttons["Trips"],
-            app.buttons["行程"],
-        ]
-        let entry = firstExisting(candidates, timeout: stepTimeout)
-        XCTAssertTrue(entry.exists, "Missing Home Trips entry")
-        tapReachable(entry)
         let trips = app.descendants(matching: .any)["trips.home"]
         if !trips.waitForExistence(timeout: timeout(5)) {
             if app.descendants(matching: .any)["profile.root"].exists
                 || app.descendants(matching: .any)["plan.root"].exists {
                 openRootTab("Home", app: app)
             }
-            tapReachable(firstExisting(candidates, timeout: timeout(2)))
+            tapReachable(app.descendants(matching: .any)["home.trips"])
         }
         XCTAssertTrue(
             trips.waitForExistence(timeout: stepTimeout),

@@ -152,7 +152,6 @@ struct SaveTileTownHomeView: View {
         }
         .shadow(color: SaveAtlasPalette.ink.opacity(0.12), radius: 12, y: 6)
         .fixedSize(horizontal: false, vertical: true)
-        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.more.sheet")
     }
 
