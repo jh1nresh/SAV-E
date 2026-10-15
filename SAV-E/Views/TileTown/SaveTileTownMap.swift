@@ -296,27 +296,32 @@ struct SaveTileTownPeekCard: View {
         HStack(spacing: 10) {
             SaveKraftStampFaceView(face: .photo(photoURL), glyph: "photo")
                 .frame(width: 44, height: 44)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(SaveAtlasType.strong(16))
                     .foregroundStyle(SaveAtlasPalette.forest)
                     .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier(accessibilityNameID ?? "map.peek.name")
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(SaveAtlasType.regular(12))
                         .foregroundStyle(SaveAtlasPalette.muted)
                         .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(SaveAtlasPalette.kraft.opacity(0.72), lineWidth: 1)
         }
+        .clipped()
     }
 }

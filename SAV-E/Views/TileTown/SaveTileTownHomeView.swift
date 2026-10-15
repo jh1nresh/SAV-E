@@ -16,23 +16,27 @@ struct SaveTileTownHomeView: View {
             header
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
+                .zIndex(2)
+
+            // Keep More in document flow. A full-view overlay fills the
+            // ReferenceViewport and swallows header `home.saves` / `home.trips`
+            // taps after XCUITest opens `home.more`.
+            if showsMoreActions {
+                moreActionsSheet
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .zIndex(2)
+            }
 
             library
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SaveAtlasPalette.canvas)
-        .overlay(alignment: .topTrailing) {
-            if showsMoreActions {
-                moreActionsSheet
-                    .padding(.top, 60)
-                    .padding(.trailing, 16)
-            }
-        }
     }
 
-    /// Keep this identifier on an inner sibling of the header, not on the
-    /// sole child of `home.root`. Nested `.contain` on that single child
-    /// dropped `home.savedPlaces` and the More-menu actions from XCUITest.
+    /// Identifier lives on a sibling of the header, not the sole child of
+    /// `home.root`. `.contain` is required so `home.search` stays a text field
+    /// instead of combining into this container.
     private var library: some View {
         VStack(alignment: .leading, spacing: 0) {
             searchField
@@ -48,6 +52,7 @@ struct SaveTileTownHomeView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.savedPlaces")
     }
 
@@ -85,10 +90,12 @@ struct SaveTileTownHomeView: View {
                     .overlay {
                         Capsule().stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
                     }
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(localized("More Home actions", "更多首頁操作"))
             .accessibilityIdentifier("home.more")
+            .accessibilityAddTraits(.isButton)
         }
         .frame(minHeight: 48)
     }
@@ -108,6 +115,7 @@ struct SaveTileTownHomeView: View {
                 .overlay {
                     Capsule().stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
                 }
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -143,6 +151,8 @@ struct SaveTileTownHomeView: View {
                 .stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
         }
         .shadow(color: SaveAtlasPalette.ink.opacity(0.12), radius: 12, y: 6)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.more.sheet")
     }
 
@@ -176,7 +186,9 @@ struct SaveTileTownHomeView: View {
 
     private var searchField: some View {
         HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass").foregroundStyle(SaveAtlasPalette.muted)
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .accessibilityHidden(true)
             TextField(localized("Search saved places", "搜尋已存地點"), text: $search.draft)
                 .font(SaveAtlasType.body(17))
                 .foregroundStyle(SaveAtlasPalette.ink)
@@ -264,12 +276,13 @@ struct SaveTileTownHomeView: View {
     }
 
     private var peek: some View {
-        ZStack(alignment: .bottomLeading) {
+        VStack(alignment: .leading, spacing: 0) {
             SaveTileTownCanvas(
                 pins: peekPins,
                 onSelect: { id in presentation.onOpenPlace(id.uuidString) }
             )
-            .frame(height: 220)
+            .frame(height: 168)
+            .allowsHitTesting(false)
             .accessibilityIdentifier("home.tileTown")
 
             if let featured {
@@ -280,18 +293,21 @@ struct SaveTileTownHomeView: View {
                         photoURL: featured.photoURL ?? featured.photoURLs.first,
                         accessibilityNameID: "home.featuredName"
                     )
+                    .padding(12)
                 }
                 .buttonStyle(.plain)
+                .contentShape(Rectangle())
                 .accessibilityElement(children: .contain)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("home.place.\(featured.id)")
-                .padding(12)
             }
         }
+        .background(SaveAtlasPalette.paper)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .stroke(SaveAtlasPalette.line.opacity(0.22), lineWidth: 1)
+                .allowsHitTesting(false)
         }
     }
 
