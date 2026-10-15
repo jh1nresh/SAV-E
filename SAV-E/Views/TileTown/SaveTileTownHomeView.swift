@@ -15,7 +15,10 @@ struct SaveTileTownHomeView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
                 .padding(.horizontal, 16)
-                .padding(.top, 8)
+                // ReferenceViewport ignores the safe area. Friends/Passport
+                // already sit on this 48pt band; 8pt left Saves/Trips under
+                // the status bar so XCUITest saw them and coordinate taps missed.
+                .padding(.top, AtlasMetrics.statusBarHeight)
                 .zIndex(2)
 
             // Keep More in document flow. A full-view overlay fills the

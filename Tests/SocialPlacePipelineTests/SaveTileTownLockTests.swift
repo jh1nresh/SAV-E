@@ -41,6 +41,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(home.contains("home.trips"))
         XCTAssertTrue(home.contains("home.saves"))
         XCTAssertTrue(home.contains("headerIconButton("))
+        XCTAssertTrue(home.contains("AtlasMetrics.statusBarHeight"))
         XCTAssertTrue(home.contains("allowsHitTesting(false)"))
         XCTAssertFalse(home.contains(".overlay(alignment: .topTrailing)"))
         XCTAssertTrue(home.contains(".accessibilityHidden(true)"))
