@@ -8,6 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		F815A0000000000000000001 /* SaveFriendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F815A0000000000000000002 /* SaveFriendsView.swift */; };
+		T7A100000000000000000001 /* SaveTileTownMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000002 /* SaveTileTownMap.swift */; };
+		T7A100000000000000000003 /* SaveKraftStamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000004 /* SaveKraftStamp.swift */; };
+		T7A100000000000000000005 /* SaveTileTownHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000006 /* SaveTileTownHomeView.swift */; };
+		T7A100000000000000000007 /* SaveTileTownRootMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000008 /* SaveTileTownRootMap.swift */; };
+		T7A100000000000000000009 /* SaveTileTownLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A10000000000000000000A /* SaveTileTownLockTests.swift */; };
 		A117DCD202609100000000003 /* SavePlanAgentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A117DCD202609100000000004 /* SavePlanAgentTests.swift */; };
 		A117DCD202609100000000001 /* SavePlanAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A117DCD202609100000000002 /* SavePlanAgent.swift */; };
 		07EDB4CB3FDA6430623D2E69 /* Place.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76EE79719B259620EE6212C7 /* Place.swift */; };
@@ -300,6 +305,11 @@
 
 /* Begin PBXFileReference section */
 		F815A0000000000000000002 /* SaveFriendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveFriendsView.swift; sourceTree = "<group>"; };
+		T7A100000000000000000002 /* SaveTileTownMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownMap.swift; sourceTree = "<group>"; };
+		T7A100000000000000000004 /* SaveKraftStamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveKraftStamp.swift; sourceTree = "<group>"; };
+		T7A100000000000000000006 /* SaveTileTownHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownHomeView.swift; sourceTree = "<group>"; };
+		T7A100000000000000000008 /* SaveTileTownRootMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownRootMap.swift; sourceTree = "<group>"; };
+		T7A10000000000000000000A /* SaveTileTownLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownLockTests.swift; sourceTree = "<group>"; };
 		A117DCD202609100000000004 /* SavePlanAgentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanAgentTests.swift; sourceTree = "<group>"; };
 		A117DCD202609100000000002 /* SavePlanAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanAgent.swift; sourceTree = "<group>"; };
 		059853D65770FEA0F3E4A6FD /* Screens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens.swift; sourceTree = "<group>"; };
@@ -784,6 +794,7 @@
 				7DA644A8D1177F8E30A9F0E3 /* Components */,
 				9139D454B1CF7369056FEAD9 /* Drawer */,
 				1C3D7D3EC0790BB3B200433A /* Home */,
+				T7A10000000000000000000B /* TileTown */,
 				0DEF737A97EB8D779D03246B /* Import */,
 				BE956518D9B2C4F8D91A4B28 /* Map */,
 				4320D2B25C0E7653731FFABF /* Onboarding */,
@@ -904,6 +915,7 @@
 				C82C14E54DC79D7FD0402D51 /* AtlasFiveTabBarTests.swift */,
 				5CD5DE6A80F7B22D67182A2C /* AtlasHomeHeroPresentationTests.swift */,
 				6F3BF7069E799A11086D07F7 /* AtlasOneFaceUITests.swift */,
+				T7A10000000000000000000A /* SaveTileTownLockTests.swift */,
 				A5629446727F6C92D09FD7BE /* AtlasOneJobPerTabUITests.swift */,
 				396D972F2C07BCC409ADBEC7 /* DebugLegacyMigratorTests.swift */,
 				8B41297E1503EE02BE975D45 /* DeterministicTripPlannerTests.swift */,
@@ -944,6 +956,17 @@
 			);
 			name = SocialPlacePipelineTests;
 			path = Tests/SocialPlacePipelineTests;
+			sourceTree = "<group>";
+		};
+		T7A10000000000000000000B /* TileTown */ = {
+			isa = PBXGroup;
+			children = (
+				T7A100000000000000000004 /* SaveKraftStamp.swift */,
+				T7A100000000000000000006 /* SaveTileTownHomeView.swift */,
+				T7A100000000000000000002 /* SaveTileTownMap.swift */,
+				T7A100000000000000000008 /* SaveTileTownRootMap.swift */,
+			);
+			path = TileTown;
 			sourceTree = "<group>";
 		};
 		BE956518D9B2C4F8D91A4B28 /* Map */ = {
@@ -1439,6 +1462,7 @@
 				3D477A002A189FE30CCD528C /* AtlasFiveTabBarTests.swift in Sources */,
 				1C753DEBFAB2D59B79856E1C /* AtlasHomeHeroPresentationTests.swift in Sources */,
 				3A214817A2A61AB5299EEC7E /* AtlasOneFaceUITests.swift in Sources */,
+				T7A100000000000000000009 /* SaveTileTownLockTests.swift in Sources */,
 				44FE5138EF536EBF57B0EA3A /* AtlasOneJobPerTabUITests.swift in Sources */,
 				94AF43877A54FD0C34CD7217 /* DebugLegacyMigratorTests.swift in Sources */,
 				793EB5D582636871FD6FA8CE /* DeterministicTripPlannerTests.swift in Sources */,
@@ -1594,6 +1618,10 @@
 				B5B0D5A5DFDD5AE0909E3F1B /* SaveMemoryVaultAppender.swift in Sources */,
 				6755C99242C0B500485AFAC9 /* SaveOriginView.swift in Sources */,
 				F815A0000000000000000001 /* SaveFriendsView.swift in Sources */,
+				T7A100000000000000000001 /* SaveTileTownMap.swift in Sources */,
+				T7A100000000000000000003 /* SaveKraftStamp.swift in Sources */,
+				T7A100000000000000000005 /* SaveTileTownHomeView.swift in Sources */,
+				T7A100000000000000000007 /* SaveTileTownRootMap.swift in Sources */,
 				A10100000000000000000013 /* SharedPostViews.swift in Sources */,
 				3F8A1B2C4D5E6F708192A3B4 /* SavePlanView.swift in Sources */,
 				6B7C8D9E0F1A2B3C4D5E6F70 /* SaveDayRhythmScheduler.swift in Sources */,

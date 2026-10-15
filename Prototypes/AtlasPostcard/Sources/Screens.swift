@@ -44,127 +44,104 @@ struct HomeAtlasScreen: View {
                 Group {
                     switch presentation.homeHero.scene {
                 case .tokyo:
-                    Image("HomeAtlasScene")
-                        .resizable()
-                        .scaledToFill()
-                        .clipped()
-                        .accessibilityLabel("Illustrated Tokyo atlas")
-                        .accessibilityIdentifier(
-                            presentation.homeHero.source == .referenceTokyo
-                                ? "prototype.home.atlas"
-                                : "home.cityAtlas.tokyo"
-                        )
+                    homeCityHero(
+                        assetName: "HomeAtlasScene",
+                        accessibilityIdentifier: presentation.homeHero.source == .referenceTokyo
+                            ? "prototype.home.atlas"
+                            : "home.cityAtlas.tokyo"
+                    )
                 case .taipei:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneTaipei",
                         accessibilityIdentifier: "home.cityAtlas.taipei"
                     )
                 case .newYork:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneNewYork",
                         accessibilityIdentifier: "home.cityAtlas.newYork"
                     )
                 case .shanghai:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneShanghai",
                         accessibilityIdentifier: "home.cityAtlas.shanghai"
                     )
                 case .beijing:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneBeijing",
                         accessibilityIdentifier: "home.cityAtlas.beijing"
                     )
                 case .guangzhou:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneGuangzhou",
                         accessibilityIdentifier: "home.cityAtlas.guangzhou"
                     )
                 case .shenzhen:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneShenzhen",
                         accessibilityIdentifier: "home.cityAtlas.shenzhen"
                     )
                 case .chengdu:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneChengdu",
                         accessibilityIdentifier: "home.cityAtlas.chengdu"
                     )
                 case .chongqing:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneChongqing",
                         accessibilityIdentifier: "home.cityAtlas.chongqing"
                     )
                 case .tianjin:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneTianjin",
                         accessibilityIdentifier: "home.cityAtlas.tianjin"
                     )
                 case .hangzhou:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneHangzhou",
                         accessibilityIdentifier: "home.cityAtlas.hangzhou"
                     )
                 case .nanjing:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneNanjing",
                         accessibilityIdentifier: "home.cityAtlas.nanjing"
                     )
                 case .wuhan:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneWuhan",
                         accessibilityIdentifier: "home.cityAtlas.wuhan"
                     )
                 case .xian:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneXian",
                         accessibilityIdentifier: "home.cityAtlas.xian"
                     )
                 case .suzhou:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneSuzhou",
                         accessibilityIdentifier: "home.cityAtlas.suzhou"
                     )
                 case .qingdao:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneQingdao",
                         accessibilityIdentifier: "home.cityAtlas.qingdao"
                     )
                 case .xiamen:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneXiamen",
                         accessibilityIdentifier: "home.cityAtlas.xiamen"
                     )
                 case .changsha:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneChangsha",
                         accessibilityIdentifier: "home.cityAtlas.changsha"
                     )
                 case .seoul:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneSeoul",
                         accessibilityIdentifier: "home.cityAtlas.seoul"
                     )
                 case .southernCalifornia:
-                    AtlasIllustratedCityHero(
-                        hero: presentation.homeHero,
+                    homeCityHero(
                         assetName: "HomeAtlasSceneSouthernCalifornia",
                         accessibilityIdentifier: "home.cityAtlas.southernCalifornia"
                     )
@@ -190,6 +167,8 @@ struct HomeAtlasScreen: View {
                 HomeRecentStamps()
                     .placed(x: 10, y: 650, width: 382, height: 133)
             } else {
+                // H1 production Home: Atlas-paper saved-place library. Soft
+                // Pixel / 16-bit city maps are never the hero here.
                 // Top-align inside the placed frame. A tall VStack otherwise
                 // centers and overflows upward, covering BrandHeader (Trips)
                 // and pushing Manage out of the hit/a11y region.
@@ -206,6 +185,33 @@ struct HomeAtlasScreen: View {
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
         languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
     }
+
+    /// H1: named-city heroes stay the owned illustrated atlas. A Soft Pixel /
+    /// 16-bit city name falls back to the MapKit regional crop.
+    @ViewBuilder
+    private func homeCityHero(
+        assetName: String,
+        accessibilityIdentifier: String
+    ) -> some View {
+        if SaveSoftPixelAccentsLock.allowsIllustratedCityAtlasAsset(assetName) {
+            if assetName == "HomeAtlasScene" {
+                Image(assetName)
+                    .resizable()
+                    .scaledToFill()
+                    .clipped()
+                    .accessibilityLabel("Illustrated Tokyo atlas")
+                    .accessibilityIdentifier(accessibilityIdentifier)
+            } else {
+                AtlasIllustratedCityHero(
+                    hero: presentation.homeHero,
+                    assetName: assetName,
+                    accessibilityIdentifier: accessibilityIdentifier
+                )
+            }
+        } else {
+            AtlasRegionalHomeHero(hero: presentation.homeHero)
+        }
+    }
 }
 
 private struct AtlasIllustratedCityHero: View {
@@ -216,6 +222,14 @@ private struct AtlasIllustratedCityHero: View {
     @State private var isFloating = false
 
     var body: some View {
+        if SaveSoftPixelAccentsLock.allowsIllustratedCityAtlasAsset(assetName) {
+            illustratedAtlas
+        } else {
+            AtlasRegionalHomeHero(hero: hero)
+        }
+    }
+
+    private var illustratedAtlas: some View {
         ZStack {
             Image(assetName)
                 .resizable()

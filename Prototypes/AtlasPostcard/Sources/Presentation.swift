@@ -501,8 +501,9 @@ struct AtlasPresentation: @unchecked Sendable {
     var tripDateLabel: String
     var tripStops: [AtlasStopPresentation]
     var homePriority: AtlasHomePriorityPresentation
-    /// Locked One-Face Home raster keeps the old hero and three-card stack.
-    /// Live Home instead leads with the user's saved-place library.
+    /// Locked One-Face Home raster keeps the owned illustrated city atlas.
+    /// Live Home instead leads with the user's saved-place library on Atlas
+    /// paper (Soft Pixel H1: no full Soft Pixel / 16-bit city hero).
     var locksOneFaceHomeComposition: Bool
     var savedPlaces: [AtlasPlacePresentation]
     var reviewItems: [AtlasReviewPresentation]
