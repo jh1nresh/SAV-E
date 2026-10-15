@@ -119,10 +119,6 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
     var isRaisedControl: (Item) -> Bool = { _ in false }
     let onSelect: (Item) -> Void
 
-    private var pillWidth: CGFloat {
-        AtlasTabBarMetrics.pillWidth(itemCount: items.count)
-    }
-
     private var tabItems: some View {
         HStack(spacing: 0) {
             ForEach(items) { item in
@@ -145,23 +141,12 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                                         )
                                 }
                                 .offset(y: AtlasTabBarMetrics.raisedControlOffsetY)
-                        } else if selection == item {
-                            Capsule()
-                                .fill(AtlasPalette.mint.opacity(0.62))
-                                .frame(
-                                    width: pillWidth,
-                                    height: AtlasTabBarMetrics.selectionHeight
-                                )
-                                .overlay {
-                                    Capsule()
-                                        .stroke(.white.opacity(0.36), lineWidth: 0.8)
-                                }
                         }
 
                         VStack(spacing: isRaisedControl(item) ? 1 : 2) {
                             Image(systemName: item[keyPath: icon])
                                 .font(.system(
-                                    size: isRaisedControl(item) ? 20 : 21,
+                                    size: isRaisedControl(item) ? 20 : 18,
                                     weight: isRaisedControl(item) ? .semibold : .regular
                                 ))
                                 .frame(height: 24)
@@ -171,7 +156,13 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.85)
                         }
-                        .foregroundStyle(isRaisedControl(item) ? .white : AtlasPalette.ink)
+                        .foregroundStyle(
+                            isRaisedControl(item)
+                                ? Color.white
+                                : selection == item
+                                    ? AtlasPalette.coral
+                                    : AtlasPalette.ink.opacity(0.52)
+                        )
                         .offset(
                             y: isRaisedControl(item)
                                 ? AtlasTabBarMetrics.raisedControlOffsetY

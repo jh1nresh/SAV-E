@@ -59,6 +59,43 @@ TESTS = {
 # failed 3/3 on run 34019378064 after compose never produced plan.draft.
 FULL = list(BASELINE) + [RAIL + "testHomeListProgressiveSearch"]
 
+# Temporary #279 iteration profiles. Empty SAVE_UI_TEST_FOCUS keeps default
+# selection. Never applied on main. Delete FOCUS_PROFILES + requested_focus()
+# to revert. tile-town-home tests stay a subset of FULL. founder-walkthrough-279
+# is a dedicated QA test and is not part of the merge-gate suite.
+FOCUS_PROFILES = {
+    "tile-town-home": {
+        "tests": [RAIL + name for name in (
+            "testCaptureAtlasProductionParity",
+            "testCaptureFiveTabLanding",
+            "testAtlasHomeAndSavesRenderPersistedPlaceData",
+            "testCaptureMultipleResultsExcludeOlderClues",
+            "testCaptureAtlasTripsAndLiveMaps",
+            "testFriendsComingSoon",
+            "testHomeListProgressiveSearch",
+        )],
+        "trip": False,
+        "units": False,
+    },
+    "founder-walkthrough-279": {
+        "tests": [RAIL + "testFounderWalkthrough279"],
+        "trip": False,
+        "units": False,
+        "parity": False,
+    },
+}
+
+
+def requested_focus():
+    """Return a named focus profile, or empty for default/full coverage.
+
+    Main pushes never focus, even if the env is set, so the merge gate stays
+    the full suite. Unknown names fail loudly instead of silently widening.
+    """
+    if os.environ.get("GITHUB_REF") == "refs/heads/main":
+        return ""
+    return os.environ.get("SAVE_UI_TEST_FOCUS", "").strip()
+
 
 def select(paths, *, full=False):
     if full or not paths:
@@ -86,9 +123,13 @@ def select(paths, *, full=False):
     return result("unit" if unit else "non-ios", [], run=unit)
 
 
-def result(profile, tests, *, trip=False, run=True):
+def result(profile, tests, *, trip=False, run=True, units=None, parity=None):
+    if units is None:
+        units = run
+    if parity is None:
+        parity = bool(tests)
     return {"profile": profile, "run": run, "ui": bool(tests),
-            "trip": trip, "tests": tests}
+            "trip": trip, "units": units, "parity": parity, "tests": tests}
 
 
 def changed_paths(base):
@@ -108,7 +149,32 @@ def main():
     args = parser.parse_args()
     paths = []
     reason = "non-PR runs always use full integration coverage"
-    if os.environ.get("GITHUB_EVENT_NAME") == "pull_request":
+    focus = requested_focus()
+    if focus:
+        if focus not in FOCUS_PROFILES:
+            known = ", ".join(sorted(FOCUS_PROFILES))
+            raise SystemExit(
+                f"unknown SAVE_UI_TEST_FOCUS={focus!r}; known profiles: {known}"
+            )
+        spec = FOCUS_PROFILES[focus]
+        plan = result(
+            f"focus:{focus}",
+            spec["tests"],
+            trip=spec["trip"],
+            run=True,
+            units=spec.get("units", False),
+            parity=spec.get("parity", True),
+        )
+        reason = (
+            f"SAVE_UI_TEST_FOCUS={focus}; iteration set only "
+            "(unset the env to restore default/full coverage)"
+        )
+        if os.environ.get("GITHUB_EVENT_NAME") == "pull_request":
+            try:
+                paths = changed_paths(os.environ.get("PR_BASE_SHA", ""))
+            except (ValueError, UnicodeError, subprocess.CalledProcessError):
+                paths = []
+    elif os.environ.get("GITHUB_EVENT_NAME") == "pull_request":
         try:
             paths = changed_paths(os.environ.get("PR_BASE_SHA", ""))
             plan = select(paths)
@@ -124,13 +190,16 @@ def main():
     (args.output_dir / "ios-ui-args.txt").write_text(
         "".join(f"-only-testing:{test}\n" for test in plan["tests"]))
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-        for key in ("profile", "run", "ui", "trip"):
+        for key in ("profile", "run", "ui", "trip", "units", "parity"):
             value = str(plan[key]).lower() if isinstance(plan[key], bool) else plan[key]
             output.write(f"{key}={value}\n")
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
         summary.write(f"### iOS coverage: {plan['profile']}\n\n{reason}.\n\n")
-        summary.write(f"Build + unit: {plan['run']}; UI selectors: {len(plan['tests'])}; "
-                      f"isolated Trip sheet: {plan['trip']}.\n\n")
+        summary.write(
+            f"Build: {plan['run']}; units: {plan['units']}; "
+            f"UI selectors: {len(plan['tests'])}; "
+            f"isolated Trip sheet: {plan['trip']}.\n\n"
+        )
         for test in plan["tests"] + ([TRIP_SHEET] if plan["trip"] else []):
             summary.write(f"- `{test}`\n")
     print(json.dumps(plan, indent=2))
