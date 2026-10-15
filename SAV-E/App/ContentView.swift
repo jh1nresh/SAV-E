@@ -34,17 +34,16 @@ enum SaveRootTab: Hashable, CaseIterable, Identifiable {
     /// property was dead code (nothing read it) and was deleted rather than
     /// left to drift.
     ///
-    /// Chosen against the Atlas/Postcard language rather than accepting
-    /// defaults: Home is the notebook cover, Map is a folded paper map (not a
-    /// globe — Savvy is a city-scale tool), Save is the capture control,
-    /// Passport is the personal memory ledger.
+    /// Quiet line icons (2026-10-14 tab-bar bible): Home house, Map folded
+    /// map, coral + capture, Friends people, Passport booklet. Coral is the
+    /// selected-tab color, not a filled-glyph swap.
     var atlasIcon: String {
         switch self {
-        case .home: "book.closed"
+        case .home: "house"
         case .map: "map"
         case .capture: "plus"
         case .friends: "person.2"
-        case .profile: "person.crop.circle"
+        case .profile: "book.closed"
         }
     }
 

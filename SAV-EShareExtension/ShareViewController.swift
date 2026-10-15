@@ -484,6 +484,7 @@ struct ShareExtensionView: View {
     @State private var isSaved = false
     @State private var savedReviewCandidateCount: Int?
     @State private var parseError: String?
+    @State private var offersAnalysisRetry = true
     @State private var selectedCategory: String = "food"
     @State private var analysisCredential: ShareAnalysisCredential?
     @State private var verifiedChoices: [ShareAnalysisCandidate] = []
@@ -518,6 +519,7 @@ struct ShareExtensionView: View {
                             .multilineTextAlignment(.center)
                             .lineSpacing(3)
                         if isSocialAnalysis {
+                            if offersAnalysisRetry {
                             Button(shareText("重新分析", "Retry analysis")) {
                                 if rotateAnalysisIDOnRetry {
                                     analysisID = UUID()
@@ -528,6 +530,7 @@ struct ShareExtensionView: View {
                                 .buttonStyle(.borderedProminent)
                                 .tint(SaveTheme.coral)
                                 .accessibilityIdentifier("share.capture.retryAnalysis")
+                            }
                             Button(shareText("先保存來源", "Keep source")) { keepSocialSource() }
                                 .buttonStyle(.bordered)
                                 .accessibilityIdentifier("share.capture.keepSource")
@@ -1427,7 +1430,7 @@ struct ShareExtensionView: View {
                 // would replay forever. Rotate so Retry starts a new claim.
                 rotateAnalysisIDOnRetry = true
                 analysisID = UUID()
-                throw ShareAnalysisError.serviceUnavailable
+                throw result.pendingError
             }
             let verified = result.candidates.filter(\.isVerified)
             if verified.count == 1, let candidate = verified.first {
@@ -1449,7 +1452,9 @@ struct ShareExtensionView: View {
             return
         } catch {
             guard !Task.isCancelled else { return }
-            parseError = (error as? ShareAnalysisError)?.errorDescription ?? ShareAnalysisError.serviceUnavailable.errorDescription
+            let failure = (error as? ShareAnalysisError) ?? .serviceUnavailable
+            offersAnalysisRetry = failure.offersImmediateRetry
+            parseError = failure.errorDescription
         }
     }
 
