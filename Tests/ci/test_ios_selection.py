@@ -34,6 +34,7 @@ class CoverageTests(unittest.TestCase):
     def test_selected_tests_exist_in_real_xctest_sources(self):
         catalog = list(dict.fromkeys(
             selection.FULL + sum(selection.TESTS.values(), []) + [selection.TRIP_SHEET]
+            + [test for spec in selection.FOCUS_PROFILES.values() for test in spec["tests"]]
         ))
         for test in catalog:
             _, test_class, *method = test.split("/")
@@ -182,7 +183,10 @@ class CoverageTests(unittest.TestCase):
             self.assertTrue(plan["ui"])
             self.assertFalse(plan["trip"])
             self.assertFalse(plan["units"])
-            self.assertIn("units=false", (root / "outputs").read_text())
+            self.assertTrue(plan["parity"])
+            outputs = (root / "outputs").read_text()
+            self.assertIn("units=false", outputs)
+            self.assertIn("parity=true", outputs)
             args = (root / "ios-ui-args.txt").read_text()
             self.assertIn("-only-testing:SAVEUITests/SAVEScreenshotRailTests/testHomeListProgressiveSearch", args)
             self.assertNotIn("testTripStopEditorSurfaceIsReachable", args)
@@ -203,6 +207,45 @@ class CoverageTests(unittest.TestCase):
             self.assertTrue(plan["trip"])
             self.assertEqual(plan["tests"], selection.FULL)
 
+    def test_founder_walkthrough_focus_is_only_the_named_test(self):
+        spec = selection.FOCUS_PROFILES["founder-walkthrough-279"]
+        self.assertEqual(
+            spec["tests"],
+            [selection.RAIL + "testFounderWalkthrough279"],
+        )
+        self.assertFalse(spec["trip"])
+        self.assertFalse(spec["units"])
+        self.assertFalse(spec["parity"])
+        self.assertNotIn(selection.RAIL + "testFounderWalkthrough279", selection.FULL)
+
+    def test_cli_honors_founder_walkthrough_focus_off_main(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            env = dict(os.environ, GITHUB_EVENT_NAME="pull_request", PR_BASE_SHA="bad",
+                       GITHUB_REF="refs/pull/999/merge",
+                       SAVE_UI_TEST_FOCUS="founder-walkthrough-279",
+                       GITHUB_OUTPUT=str(root / "outputs"), GITHUB_STEP_SUMMARY=str(root / "summary"))
+            subprocess.run(["python3", str(ROOT / "scripts/select-ios-tests.py"),
+                            "--output-dir", str(root)], cwd=root, env=env,
+                           check=True, capture_output=True)
+            plan = json.loads((root / "ios-test-selection.json").read_text())
+            self.assertEqual(plan["profile"], "focus:founder-walkthrough-279")
+            self.assertEqual(plan["tests"], [selection.RAIL + "testFounderWalkthrough279"])
+            self.assertTrue(plan["run"])
+            self.assertTrue(plan["ui"])
+            self.assertFalse(plan["trip"])
+            self.assertFalse(plan["units"])
+            self.assertFalse(plan["parity"])
+            outputs = (root / "outputs").read_text()
+            self.assertIn("units=false", outputs)
+            self.assertIn("parity=false", outputs)
+            args = (root / "ios-ui-args.txt").read_text()
+            self.assertEqual(
+                args.strip(),
+                "-only-testing:SAVEUITests/SAVEScreenshotRailTests/testFounderWalkthrough279",
+            )
+            self.assertNotIn("testCaptureAtlasProductionParity", args)
+
     def test_workflow_focus_omits_single_test_iteration_flag(self):
         workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         self.assertIn("SAVE_UI_TEST_FOCUS", workflow)
@@ -210,6 +253,10 @@ class CoverageTests(unittest.TestCase):
         self.assertIn("iteration_args=(-test-iterations 3 -retry-tests-on-failure)", workflow)
         self.assertIn("iteration_args=()", workflow)
         self.assertNotRegex(workflow, r"(?m)^\s+-test-iterations 1\s")
+        self.assertIn("founder-walkthrough-279", workflow)
+        self.assertIn("qa/279-walkthrough", workflow)
+        self.assertIn("SAVE-Walkthrough-279", workflow)
+        self.assertIn("steps.scope.outputs.parity != 'false'", workflow)
 
     def test_unknown_focus_fails_loudly(self):
         with tempfile.TemporaryDirectory() as temp:

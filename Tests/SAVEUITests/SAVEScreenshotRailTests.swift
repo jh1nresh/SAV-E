@@ -11,6 +11,300 @@ import UIKit
 /// partial rail still yields whatever screenshots were captured before it.
 final class SAVEScreenshotRailTests: SAVEUITestCase {
 
+    /// Hands-on founder walkthrough of PR #279 (tile-town lock) for the CI
+    /// macOS simulator. Soft-asserts so every named screenshot is produced
+    /// even when a tap is dead or a surface overlaps chrome.
+    @MainActor
+    func testFounderWalkthrough279() throws {
+        continueAfterFailure = true
+        var issues: [String] = []
+        func note(_ step: String, _ detail: String) {
+            issues.append("\(step): \(detail)")
+        }
+
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-home-memory-fixture",
+                "--uitest-social-posts",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        do {
+            try signInViaReviewDemoRequired(app: app)
+        } catch {
+            note("launch", "sign-in threw \(error)")
+        }
+        expectAlive(app, step: "launch", issues: &issues)
+
+        // 1. Home
+        if !app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout) {
+            note("home", "home.root never appeared")
+        }
+        waitForHomeCoverImageryIfPresent(app)
+        recordChromeIssues(app, step: "home", issues: &issues)
+        attach(app, name: "walkthrough-279-01-home")
+
+        // 2. Saves, back
+        tapIdentified(app, "home.saves", step: "saves", issues: &issues)
+        if !app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout) {
+            note("saves", "dead tap — Saves did not open")
+        }
+        recordChromeIssues(app, step: "saves", issues: &issues)
+        attach(app, name: "walkthrough-279-02-saves")
+        popChildOrNote(app, expecting: "home.root", step: "saves-back", issues: &issues)
+        attach(app, name: "walkthrough-279-03-home-after-saves")
+
+        // 3. Trips, back
+        tapIdentified(app, "home.trips", step: "trips", issues: &issues)
+        if !app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout) {
+            note("trips", "dead tap — Trips did not open")
+        }
+        recordChromeIssues(app, step: "trips", issues: &issues)
+        attach(app, name: "walkthrough-279-04-trips")
+        popChildOrNote(app, expecting: "home.root", step: "trips-back", issues: &issues)
+        attach(app, name: "walkthrough-279-05-home-after-trips")
+
+        // 4. Type in search
+        let search = app.textFields["home.search"]
+        if search.waitForExistence(timeout: stepTimeout) {
+            typeText("cafe", into: search)
+            if !app.staticTexts["home.search.count"].waitForExistence(timeout: stepTimeout) {
+                note("search", "typed cafe but no home.search.count")
+            }
+        } else {
+            note("search", "home.search never appeared")
+        }
+        recordChromeIssues(app, step: "search", issues: &issues)
+        attach(app, name: "walkthrough-279-06-search")
+        if app.buttons["home.search.clear"].exists {
+            tapReachable(app.buttons["home.search.clear"])
+        }
+
+        // 5. More → Map
+        tapIdentified(app, "home.more", step: "more", issues: &issues)
+        if !app.descendants(matching: .any)["home.more.sheet"].waitForExistence(timeout: timeout(3)) {
+            note("more", "More sheet did not open")
+        }
+        let moreMap = app.descendants(matching: .any)["home.more.map"]
+        attach(app, name: "walkthrough-279-07-more")
+        if moreMap.waitForExistence(timeout: timeout(2)) {
+            tapReachable(moreMap)
+        } else {
+            // Product Map is a root tab. More only lists Saves/Trips; still
+            // photograph the sheet, then open Map from the bar.
+            if app.descendants(matching: .any)["home.more"].exists {
+                tapReachable(app.descendants(matching: .any)["home.more"])
+            }
+            openRootTab("Map", app: app)
+        }
+        if !app.descendants(matching: .any)["map.root"].waitForExistence(timeout: launchTimeout) {
+            note("map", "Map did not open")
+        }
+        dismissLocationAlertIfPresent()
+        if app.buttons["map.locationNotice.dismiss"].waitForExistence(timeout: timeout(2)) {
+            tapReachable(app.buttons["map.locationNotice.dismiss"])
+        }
+        recordMapTitleOverlap(app, issues: &issues)
+        recordChromeIssues(app, step: "map", issues: &issues)
+        attach(app, name: "walkthrough-279-08-map")
+
+        // 6. Toggle Nearby / Saved / Friends
+        for (lens, shot) in [
+            ("nearby", "walkthrough-279-09-map-nearby"),
+            ("saved", "walkthrough-279-10-map-saved"),
+            ("friends", "walkthrough-279-11-map-friends"),
+        ] {
+            let chip = app.buttons["map.lens.\(lens)"]
+            if chip.waitForExistence(timeout: timeout(3)) {
+                tapReachable(chip)
+                if !chip.isSelected {
+                    note("map-\(lens)", "tapped map.lens.\(lens) but it is not selected")
+                }
+            } else {
+                note("map-\(lens)", "map.lens.\(lens) missing")
+            }
+            attach(app, name: shot)
+        }
+
+        // 7. Drag search drawer through 3 stages
+        let collapsed = app.descendants(matching: .any)["map.drawerPanel.collapsed"]
+        let medium = app.descendants(matching: .any)["map.drawerPanel.medium"]
+        let large = app.descendants(matching: .any)["map.drawerPanel.large"]
+        if collapsed.waitForExistence(timeout: stepTimeout) {
+            waitForStableFrame(collapsed)
+            attach(app, name: "walkthrough-279-12-drawer-collapsed")
+            if app.buttons["map.command.search"].exists {
+                app.buttons["map.command.search"].swipeUp()
+            } else {
+                note("drawer-medium", "map.command.search missing; cannot swipe to medium")
+            }
+            if !medium.waitForExistence(timeout: stepTimeout) {
+                note("drawer-medium", "drawer did not reach medium")
+            }
+            attach(app, name: "walkthrough-279-13-drawer-medium")
+            let handle = app.descendants(matching: .any)["map.drawerPanel.handle"]
+            if handle.exists {
+                handle.tap()
+            } else {
+                note("drawer-large", "map.drawerPanel.handle missing")
+            }
+            if !large.waitForExistence(timeout: stepTimeout) {
+                note("drawer-large", "drawer did not reach large")
+            }
+            attach(app, name: "walkthrough-279-14-drawer-large")
+            if handle.exists {
+                let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: 160)))
+            }
+        } else {
+            note("drawer", "collapsed search drawer never appeared")
+            attach(app, name: "walkthrough-279-12-drawer-collapsed")
+            attach(app, name: "walkthrough-279-13-drawer-medium")
+            attach(app, name: "walkthrough-279-14-drawer-large")
+        }
+
+        // 8. Pan the town
+        let town = firstExisting([
+            app.descendants(matching: .any)["map.liveSurface"],
+            app.descendants(matching: .any)["map.tileTown"],
+        ], timeout: timeout(3))
+        if town.exists {
+            let origin = town.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.45))
+            origin.press(forDuration: 0.05, thenDragTo: origin.withOffset(CGVector(dx: -80, dy: 40)))
+        } else {
+            note("pan", "tile-town surface missing; cannot pan")
+        }
+        attach(app, name: "walkthrough-279-15-town-panned")
+
+        // 9. Tap a place
+        if !collapsed.waitForExistence(timeout: timeout(3)), app.buttons["map.lens.saved"].exists {
+            tapReachable(app.buttons["map.lens.saved"])
+        }
+        let pin = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.'")).firstMatch
+        if pin.waitForExistence(timeout: timeout(3)) {
+            tapReachable(pin)
+        } else {
+            let featured = firstExisting([
+                app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'")).firstMatch,
+                app.staticTexts["Ichiran Shibuya"],
+                app.staticTexts["Taipei Window Cafe"],
+            ], timeout: timeout(2))
+            if featured.exists {
+                tapReachable(featured)
+            } else {
+                note("place", "no map.tilePin or seeded place name was tappable")
+            }
+        }
+        attach(app, name: "walkthrough-279-16-place-selected")
+
+        // 10. + capture open / cancel
+        let captureTab = rootTabButton("Save", app: app)
+        if captureTab.waitForExistence(timeout: stepTimeout) {
+            tapReachable(captureTab)
+        } else {
+            note("capture", "root.tab.save missing")
+        }
+        if !app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout) {
+            note("capture", "dead tap — capture.flow did not open")
+        }
+        attach(app, name: "walkthrough-279-17-capture-open")
+        let closeCapture = firstExisting([
+            app.buttons["Close capture"],
+            app.buttons["關閉新增線索"],
+        ], timeout: timeout(3))
+        if closeCapture.exists {
+            tapReachable(closeCapture)
+            if !app.descendants(matching: .any)["capture.flow"].waitForNonExistence(timeout: stepTimeout) {
+                note("capture-cancel", "Close capture did not dismiss capture.flow")
+            }
+        } else {
+            note("capture-cancel", "Close capture control missing")
+        }
+        expectAlive(app, step: "capture-cancel", issues: &issues)
+        attach(app, name: "walkthrough-279-18-capture-cancel")
+
+        // 11. Friends populated, tap a row → Passport
+        openRootTab("Friends", app: app)
+        if !app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout) {
+            note("friends", "friends.root never appeared")
+        }
+        let friendPost = app.buttons["friends.post.11111111-1111-4111-8111-111111111111"]
+        let friendName = app.staticTexts["Alex · 範例"]
+        let populated = friendPost.waitForExistence(timeout: stepTimeout) || friendName.exists
+        if app.staticTexts["friends.empty"].exists {
+            note("friends", "Friends is empty despite --uitest-social-posts")
+        } else if !populated {
+            note("friends", "seeded friend row never appeared")
+        }
+        recordChromeIssues(app, step: "friends", issues: &issues)
+        attach(app, name: "walkthrough-279-19-friends")
+
+        if friendName.exists {
+            tapReachable(friendName)
+        } else if friendPost.exists {
+            tapReachable(friendPost)
+        }
+        let openedAuthorPassport = app.navigationBars["Passport"].waitForExistence(timeout: timeout(3))
+            || app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: timeout(2))
+        if !openedAuthorPassport {
+            note("friends-row", "friend row tap did not open Passport (author button is disabled in demo)")
+            let done = firstExisting([app.buttons["Done"], app.buttons["完成"]], timeout: timeout(2))
+            if done.exists { tapReachable(done) }
+            openRootTab("Passport", app: app)
+        }
+        if !app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout)
+            && !app.navigationBars["Passport"].exists {
+            note("passport", "Passport did not open")
+        }
+        recordPassportBioOverlap(app, issues: &issues)
+        recordChromeIssues(app, step: "passport", issues: &issues)
+        attach(app, name: "walkthrough-279-20-passport")
+
+        // 12. Tap a stamp
+        let stamp = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'profile.stamp.'")
+        ).firstMatch
+        if stamp.waitForExistence(timeout: timeout(3)) {
+            tapReachable(stamp)
+        } else {
+            note("stamp", "no profile.stamp.* on Passport")
+        }
+        attach(app, name: "walkthrough-279-21-stamp")
+
+        // 13. Scroll to bottom
+        let passportScroll = app.scrollViews.firstMatch
+        if passportScroll.exists {
+            for _ in 0..<4 { passportScroll.swipeUp() }
+        } else {
+            app.swipeUp()
+            app.swipeUp()
+        }
+        recordPassportBioOverlap(app, issues: &issues)
+        attach(app, name: "walkthrough-279-22-passport-bottom")
+        expectAlive(app, step: "passport-bottom", issues: &issues)
+
+        let report = issues.isEmpty
+            ? "PASS all walkthrough-279 steps"
+            : "ISSUES (\(issues.count))\n" + issues.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
+        let summary = XCTAttachment(string: report)
+        summary.name = "walkthrough-279-report"
+        summary.lifetime = .keepAlways
+        add(summary)
+        print(report)
+        if !issues.isEmpty {
+            // Soft path already captured every shot; fail so the log names them.
+            XCTFail(report)
+        }
+    }
+
     @MainActor
     func testHomeListProgressiveSearch() throws {
         for staticMode in [false, true] {
@@ -2989,5 +3283,90 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             }
         }
         return false
+    }
+
+    @MainActor
+    private func expectAlive(_ app: XCUIApplication, step: String, issues: inout [String]) {
+        if app.state != .runningForeground {
+            issues.append("\(step): app state is \(app.state.rawValue), expected runningForeground (crash or background)")
+        }
+    }
+
+    @MainActor
+    private func tapIdentified(
+        _ app: XCUIApplication,
+        _ identifier: String,
+        step: String,
+        issues: inout [String]
+    ) {
+        let element = app.descendants(matching: .any)[identifier]
+        if !element.waitForExistence(timeout: stepTimeout) {
+            issues.append("\(step): \(identifier) never appeared")
+            return
+        }
+        tapReachable(element)
+    }
+
+    @MainActor
+    private func popChildOrNote(
+        _ app: XCUIApplication,
+        expecting identifier: String,
+        step: String,
+        issues: inout [String]
+    ) {
+        let navBack = app.navigationBars.buttons.element(boundBy: 0)
+        if navBack.waitForExistence(timeout: timeout(3)), navBack.isHittable {
+            navBack.tap()
+        } else {
+            returnToRootBar(app: app)
+        }
+        if !app.descendants(matching: .any)[identifier].waitForExistence(timeout: stepTimeout) {
+            issues.append("\(step): did not return to \(identifier)")
+        }
+    }
+
+    @MainActor
+    private func waitForHomeCoverImageryIfPresent(_ app: XCUIApplication) {
+        _ = app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout)
+        _ = app.textFields["home.search"].waitForExistence(timeout: timeout(3))
+        if app.staticTexts["home.featuredName"].waitForExistence(timeout: timeout(3)) {
+            waitForStableFrame(app.staticTexts["home.featuredName"])
+        }
+    }
+
+    @MainActor
+    private func recordChromeIssues(_ app: XCUIApplication, step: String, issues: inout [String]) {
+        let tab = rootTabButton("Home", app: app)
+        guard tab.exists else { return }
+        for identifier in ["home.featuredName", "map.wordmark", "friends.empty"] {
+            let label = app.descendants(matching: .any)[identifier].firstMatch
+            guard label.exists, label.frame.height > 0 else { continue }
+            if label.frame.maxY > tab.frame.minY + 2 {
+                issues.append("\(step): \(identifier) overlaps tab bar (maxY=\(label.frame.maxY) tab=\(tab.frame.minY))")
+            }
+            if label.frame.minY < 2 {
+                issues.append("\(step): \(identifier) is clipped at the top edge")
+            }
+        }
+    }
+
+    @MainActor
+    private func recordMapTitleOverlap(_ app: XCUIApplication, issues: inout [String]) {
+        let wordmark = app.staticTexts["map.wordmark"]
+        let title = wordmark.exists ? wordmark : app.staticTexts["Savvy"].firstMatch
+        guard title.exists else { return }
+        if title.frame.minY < 48 {
+            issues.append("map: Savvy title overlaps status bar (minY=\(NSString(format: "%.1f", title.frame.minY)))")
+        }
+    }
+
+    @MainActor
+    private func recordPassportBioOverlap(_ app: XCUIApplication, issues: inout [String]) {
+        let bio = app.staticTexts["Places I dream of. Places I remember."]
+        let tab = rootTabButton("Passport", app: app)
+        guard bio.exists, tab.exists else { return }
+        if bio.frame.maxY > tab.frame.minY {
+            issues.append("passport: bio sits under the tab bar (bio.maxY=\(NSString(format: "%.1f", bio.frame.maxY)) tab.minY=\(NSString(format: "%.1f", tab.frame.minY)))")
+        }
     }
 }

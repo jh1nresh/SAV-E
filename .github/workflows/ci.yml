@@ -11,7 +11,9 @@ on:
         description: >
           Optional SAVE_UI_TEST_FOCUS profile. Empty keeps default/full
           coverage with 3 retries. tile-town-home is the #279 iteration set
-          (Home/Saves/Trips rail tests, one attempt). Ignored on main.
+          (Home/Saves/Trips rail tests, one attempt). founder-walkthrough-279
+          runs only testFounderWalkthrough279 and skips Atlas parity.
+          Ignored on main.
         required: false
         default: ""
         type: string
@@ -31,11 +33,10 @@ jobs:
     # 3-4x that on a contended one, and failing tests are now retried.
     timeout-minutes: 75
     env:
-      # #279 focused set went green on d798f9a. Branch auto-enable is off so
-      # this PR is the full-suite merge gate. Restore
-      # `(github.head_ref == 'cursor/tile-town-product-lock-4894' && 'tile-town-home')`
-      # to re-enable the iteration loop. Empty / main keep default + 3 retries.
-      SAVE_UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus || '' }}
+      # tile-town-home auto-enable stays off so #279 remains the full-suite
+      # merge gate. qa/279-walkthrough is a QA-only branch that runs just
+      # testFounderWalkthrough279. Empty / main keep default + 3 retries.
+      SAVE_UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus || (github.head_ref == 'qa/279-walkthrough' && 'founder-walkthrough-279') || '' }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -182,7 +183,7 @@ jobs:
             test
 
       - name: Enforce Atlas production visual parity
-        if: steps.scope.outputs.ui == 'true'
+        if: steps.scope.outputs.ui == 'true' && steps.scope.outputs.parity != 'false'
         run: |
           Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh \
             --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
@@ -195,6 +196,46 @@ jobs:
           xcrun xcresulttool export attachments \
             --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
             --output-path "$RUNNER_TEMP/SAVE-First-Run"
+
+      - name: Organize founder walkthrough screenshots
+        if: always() && env.SAVE_UI_TEST_FOCUS == 'founder-walkthrough-279' && (steps.ui_tests.outcome == 'success' || steps.ui_tests.outcome == 'failure')
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import shutil
+
+          src = pathlib.Path(os.environ["RUNNER_TEMP"]) / "SAVE-First-Run"
+          dest = pathlib.Path(os.environ["RUNNER_TEMP"]) / "SAVE-Walkthrough-279"
+          dest.mkdir(parents=True, exist_ok=True)
+          copied = []
+          manifest = src / "manifest.json"
+          if manifest.exists():
+              for test in json.loads(manifest.read_text()):
+                  for att in test.get("attachments", []):
+                      human = att.get("suggestedHumanReadableName") or att["exportedFileName"]
+                      if "walkthrough-279" not in human:
+                          continue
+                      exported = src / att["exportedFileName"]
+                      if not exported.exists():
+                          continue
+                      suffix = exported.suffix or ".png"
+                      stable = human.split("_0_", 1)[0]
+                      name = stable if "." in pathlib.Path(stable).name else stable + suffix
+                      shutil.copyfile(exported, dest / name)
+                      copied.append(name)
+          else:
+              for path in src.glob("*"):
+                  if "walkthrough-279" in path.name:
+                      shutil.copyfile(path, dest / path.name)
+                      copied.append(path.name)
+          print(f"exported {len(copied)} walkthrough-279 attachment(s)")
+          for name in copied:
+              print(name)
+          if not copied:
+              raise SystemExit("error: no walkthrough-279 attachments found")
+          PY
 
       - name: Reset focused simulator before Trip sheet UI test
         if: steps.scope.outputs.trip == 'true'
@@ -287,6 +328,7 @@ jobs:
           path: |
             ${{ runner.temp }}/SAVE-Atlas-Parity
             ${{ runner.temp }}/SAVE-First-Run
+            ${{ runner.temp }}/SAVE-Walkthrough-279
             ${{ runner.temp }}/SAVE-Trip-Sheets
             ${{ runner.temp }}/SAVE-*-tests.log
           if-no-files-found: warn

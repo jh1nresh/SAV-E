@@ -61,7 +61,8 @@ FULL = list(BASELINE) + [RAIL + "testHomeListProgressiveSearch"]
 
 # Temporary #279 iteration profiles. Empty SAVE_UI_TEST_FOCUS keeps default
 # selection. Never applied on main. Delete FOCUS_PROFILES + requested_focus()
-# to revert. Tests are a subset of FULL; nothing is skipped or rewritten.
+# to revert. tile-town-home tests stay a subset of FULL. founder-walkthrough-279
+# is a dedicated QA test and is not part of the merge-gate suite.
 FOCUS_PROFILES = {
     "tile-town-home": {
         "tests": [RAIL + name for name in (
@@ -75,6 +76,12 @@ FOCUS_PROFILES = {
         )],
         "trip": False,
         "units": False,
+    },
+    "founder-walkthrough-279": {
+        "tests": [RAIL + "testFounderWalkthrough279"],
+        "trip": False,
+        "units": False,
+        "parity": False,
     },
 }
 
@@ -116,11 +123,13 @@ def select(paths, *, full=False):
     return result("unit" if unit else "non-ios", [], run=unit)
 
 
-def result(profile, tests, *, trip=False, run=True, units=None):
+def result(profile, tests, *, trip=False, run=True, units=None, parity=None):
     if units is None:
         units = run
+    if parity is None:
+        parity = bool(tests)
     return {"profile": profile, "run": run, "ui": bool(tests),
-            "trip": trip, "units": units, "tests": tests}
+            "trip": trip, "units": units, "parity": parity, "tests": tests}
 
 
 def changed_paths(base):
@@ -154,6 +163,7 @@ def main():
             trip=spec["trip"],
             run=True,
             units=spec.get("units", False),
+            parity=spec.get("parity", True),
         )
         reason = (
             f"SAVE_UI_TEST_FOCUS={focus}; iteration set only "
@@ -180,7 +190,7 @@ def main():
     (args.output_dir / "ios-ui-args.txt").write_text(
         "".join(f"-only-testing:{test}\n" for test in plan["tests"]))
     with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-        for key in ("profile", "run", "ui", "trip", "units"):
+        for key in ("profile", "run", "ui", "trip", "units", "parity"):
             value = str(plan[key]).lower() if isinstance(plan[key], bool) else plan[key]
             output.write(f"{key}={value}\n")
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
