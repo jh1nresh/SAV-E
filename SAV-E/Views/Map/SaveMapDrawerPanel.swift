@@ -341,6 +341,7 @@ struct SaveMapSearchContent: View {
                                 } label: {
                                     resultRow(candidate.title, detail: candidate.subtitle, state: localized("Not saved", "未儲存"), tint: SaveAtlasPalette.sky)
                                 }
+                                .accessibilityIdentifier("map.search.candidate.\(candidate.id)")
                             }
                         }
                     }

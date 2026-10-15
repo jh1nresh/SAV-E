@@ -967,6 +967,7 @@ struct ContentView: View {
             },
             onShowMapCandidatesOnMap: showMapCandidatesOnMap,
             onAddReviewClue: addClueToReviewCandidate,
+            onFindReviewPlace: openExactSearch,
             onFocusReviewCandidateOnMap: focusReviewCandidateOnMap
         )
         .environment(\.appLanguageSettings, languageSettings)
@@ -1318,33 +1319,13 @@ struct ContentView: View {
         selectedRootTab = .map
         isExactSearchSessionActive = true
         mapVM.beginExactSearchResolution(for: candidate)
-        let requestID = UUID()
-        exactSearchRequestID = requestID
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 180_000_000)
-            guard exactSearchRequestID == requestID else { return }
-            let result = await mapVM.prepareMapCandidatesForDrawerQuery(
-                query,
-                preservesExactSearchClue: true
-            )
-            guard exactSearchRequestID == requestID else { return }
-            guard case .current(let candidates) = result else { return }
-            mapVM.attachExactSearchResults(candidates)
-            guard exactSearchRequestID == requestID else { return }
-            if candidates.isEmpty {
-                // Keep the clue link so a typed refine can still retire it.
-                openExactSearchRefine(query: query)
-            } else {
-                drawerVM.mapCandidates = candidates
-                exactSearchRequestID = nil
-                isExactSearchSessionActive = true
-                showMapCandidatesOnMap()
-            }
-        }
+        // The tile-town canvas shows saved stamps, not unconfirmed search pins.
+        // Let the existing search panel perform one query and keep its results
+        // actionable while retaining the original clue-resolution session.
+        openExactSearchRefine(query: query)
     }
 
-    /// Empty exact search opens the existing map search panel without ending
-    /// the clue-resolution session or starting a second search that clears it.
+    /// Open the map search panel without ending the clue-resolution session.
     private func openExactSearchRefine(query: String) {
         guard incomingPlaceReceipt == nil else { return }
         mapDetailDrawerItem = nil

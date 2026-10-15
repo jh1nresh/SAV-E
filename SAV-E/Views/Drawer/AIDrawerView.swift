@@ -136,6 +136,7 @@ struct AIDrawerView: View {
     /// pins, the host closes this drawer surface so the user sees them.
     var onShowMapCandidatesOnMap: () -> Void = {}
     var onAddReviewClue: ((PlaceReviewCandidate) -> Void)? = nil
+    var onFindReviewPlace: ((PlaceReviewCandidate) -> Void)? = nil
     /// Reliable Review map tap focuses that candidate without a new search.
     var onFocusReviewCandidateOnMap: (PlaceReviewCandidate) -> Void = { _ in }
     @FocusState private var searchFocused: Bool
@@ -1303,6 +1304,10 @@ struct AIDrawerView: View {
     }
 
     private func findExactPlace(for candidate: PlaceReviewCandidate) {
+        if let onFindReviewPlace {
+            onFindReviewPlace(candidate)
+            return
+        }
         let query = candidate.refinementQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
             addMoreClue(for: candidate)

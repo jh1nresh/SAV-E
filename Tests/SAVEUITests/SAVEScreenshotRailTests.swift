@@ -709,6 +709,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-complete-onboarding",
                 "--skip-map-tour",
                 "--uitest-review-demo-offline",
+                "--uitest-review-map-results",
                 "--uitest-reset-review-demo-storage",
                 "-save.appLanguage", "en",
             ],
@@ -745,6 +746,18 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertLessThan(context.frame.minY, confirm.frame.minY)
         XCTAssertTrue(app.buttons["drawer.review.reject"].exists)
         attach(app, name: "review-flow-single-result")
+
+        // A populated search must remain actionable on the tile-town Map.
+        // The former pin-only route closed the panel and stranded this result.
+        tapReachable(app.buttons["drawer.review.changePlace"])
+        let corrected = app.buttons["map.search.candidate.review-map-result-fixture"]
+        XCTAssertTrue(corrected.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["map.liveSurface"].exists)
+        XCTAssertTrue(app.staticTexts["Map results · Not saved"].exists)
+        tapReachable(corrected)
+        XCTAssertTrue(app.buttons["drawer.unsaved.primaryAction"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "review-change-place-tile-town")
 
         terminate(app)
         app.launchArguments.removeAll { $0 == "--uitest-reset-review-demo-storage" }
