@@ -31,10 +31,11 @@ jobs:
     # 3-4x that on a contended one, and failing tests are now retried.
     timeout-minutes: 75
     env:
-      # Easy-to-revert #279 iteration switch. Main stays empty (full suite +
-      # 3 retries). Delete this env and the SAVE_UI_TEST_FOCUS reader in
-      # scripts/select-ios-tests.py to restore default everywhere.
-      SAVE_UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus || (github.head_ref == 'cursor/tile-town-product-lock-4894' && 'tile-town-home') || '' }}
+      # #279 focused set went green on d798f9a. Branch auto-enable is off so
+      # this PR is the full-suite merge gate. Restore
+      # `(github.head_ref == 'cursor/tile-town-product-lock-4894' && 'tile-town-home')`
+      # to re-enable the iteration loop. Empty / main keep default + 3 retries.
+      SAVE_UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus || '' }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
