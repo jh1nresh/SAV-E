@@ -11,6 +11,11 @@ Read back on 2026-08-24 from App Store Connect app `6769216556`.
 - Version state at read-back: `1.0`, Prepare for Submission.
 - Latest TestFlight build visible at read-back: `1.0.0 (104)`.
 
+**2026-10-13 in-repo alignment:** `project.yml` is `MARKETING_VERSION` `1.0.0` /
+`CURRENT_PROJECT_VERSION` **110**. The August TestFlight **104** read-back is
+stale. No archive or upload of 110 is recorded in git. See
+[app-store-upload-blockers.md](app-store-upload-blockers.md).
+
 The App Store Connect name save does not submit a version, select a build, upload a binary, change signing, or release the app. A future renamed build and refreshed screenshots must pass the normal review and release gates before users receive the binary rename.
 
 Compatibility identities remain unchanged: bundle IDs, App Group, App Clip association, StoreKit product IDs, associated-domain hosts, and legacy `wanderly://` routes. New branded custom links use `savvy://`, while the app continues accepting the legacy scheme.

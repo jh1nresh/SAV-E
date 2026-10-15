@@ -828,7 +828,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         dismissLocationAlertIfPresent()
-        XCTAssertTrue(app.buttons["Center map on current location"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.liveSurface"].waitForExistence(timeout: stepTimeout)
+                || app.buttons["Center map on current location"].exists,
+            "Product Map is tile-town; Trip MapKit keeps the location control."
+        )
 
         openTripsFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
@@ -1001,7 +1005,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         dismissLocationAlertIfPresent()
-        XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.liveSurface"].waitForExistence(timeout: stepTimeout)
+                || app.maps.firstMatch.exists,
+            "Product Map is tile-town; Trip MapKit still uses MapKit."
+        )
         XCTAssertTrue(app.buttons["map.command.search"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.buttons["map.place.openDetails"].exists)
         XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
@@ -1281,7 +1289,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: launchTimeout))
         dismissLocationAlertIfPresent()
-        XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.liveSurface"].waitForExistence(timeout: stepTimeout)
+                || app.maps.firstMatch.exists,
+            "Product Map is tile-town; Trip MapKit still uses MapKit."
+        )
 
         let collapsed = app.descendants(matching: .any)["map.drawerPanel.collapsed"]
         XCTAssertTrue(collapsed.waitForExistence(timeout: stepTimeout))
@@ -1311,7 +1323,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertLessThanOrEqual(mediumTop / app.frame.height, 0.60)
         XCTAssertLessThan(mediumTop, collapsedTop - 120)
         XCTAssertFalse(app.keyboards.firstMatch.exists)
-        XCTAssertTrue(app.maps.firstMatch.isHittable)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.liveSurface"].isHittable
+                || app.maps.firstMatch.isHittable
+        )
         attach(app, name: "map-search-drawer-medium")
 
         // Drag a finger-length distance; swipeUp/Down scales travel to the
@@ -1337,7 +1352,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         dragHandle(by: 160)
         XCTAssertTrue(collapsed.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].waitForNonExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.maps.firstMatch.exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.liveSurface"].exists
+                || app.maps.firstMatch.exists
+        )
         // Repeat from rest to catch a drag leaving taps blocked or focus stuck.
         app.buttons["map.command.search"].swipeUp()
         XCTAssertTrue(medium.waitForExistence(timeout: stepTimeout))

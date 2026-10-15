@@ -1,11 +1,17 @@
 # Savvy Little Atlas + Postcard Pocket
 
-Status: locked production direction
+Status: Atlas parity-fixture / One-Face reference
 Reference: [`Reference/approved-ab-hybrid.png`](Reference/approved-ab-hybrid.png)
 
-This file is the canonical Savvy visual specification for Home, Saves, Trips,
-Trip Plan, and Root Map. Where an older production spec conflicts with the fixed
-composition, assets, type scale, or one-viewport rule below, this file wins.
+**2026-10-14 founder lock:** production Home peek and Map base are full-pixel
+tile-town (`DESIGN.md`, `SaveTileTownCanvas`). This file remains the
+`--uitest-atlas-parity-fixture` and illustrated-atlas reference. It does not
+win over `DESIGN.md` for the shipped product Map base.
+
+This file is the canonical Atlas fixture specification for Home, Saves, Trips,
+Trip Plan, and the illustrated Root Map. Where an older production spec
+conflicts with the fixed fixture composition, assets, type scale, or
+one-viewport rule below, this file wins for the fixture.
 Product behavior, persistence, authentication, and confirmation remain
 governed by their existing contracts. Place detail uses one canonical
 Postcard renderer: focused full-screen detail outside Map and a drawer on Map.
@@ -136,8 +142,12 @@ Opening    = Postcard Pocket transition
 
 ### Root Map
 
-- Live MapKit fills the viewport below the Savvy header. Owned landmark, Memo,
-  pin, and route accents may sit above it without obscuring geographic truth.
+- Fixture Map may keep the illustrated atlas / MapKit crop. Production product
+  Map is tile-town (`DESIGN.md` 2026-10-14); do not treat this fixture MapKit
+  sentence as the shipped map base.
+- Live MapKit fills the fixture viewport below the Savvy header. Owned
+  landmark, Memo, pin, and route accents may sit above it without obscuring
+  geographic truth.
 - One cream Map command shelf sits above the fixed Root tabs. Its default state
   contains a grabber, `Search places or ask Savvy`, and the confirmed Map Stamp
   count.
