@@ -14,7 +14,13 @@ struct SaveHomeView: View {
     @ObservedObject private var locationService = LocationService.shared
 
     var body: some View {
-        HomeAtlasScreen()
+        Group {
+            if SaveAtlasRuntime.usesParityFixture {
+                HomeAtlasScreen()
+            } else {
+                SaveTileTownHomeView()
+            }
+        }
         .environment(\.atlasPresentation, atlasPresentation)
         .task(id: locationService.authorizationStatus) {
             guard !ReviewDemo.isOfflineUITestMode,
@@ -508,15 +514,13 @@ struct SaveMapRootView: View {
     var body: some View {
         Group {
             if SaveAtlasRuntime.usesParityFixture {
-                // Fixture-only illustrated atlas. Production Map is MapKit
-                // (H1: no Soft Pixel full-city Map hero).
+                // Fixture-only illustrated atlas. Production Map is tile-town
+                // (2026-10-14 founder lock; H1/M1 MapKit-only base superseded).
                 RootAtlasMapScreen()
                     .environment(\.atlasPresentation, atlasPresentation)
             } else {
-                SaveAtlasInteractiveRootMap(
+                SaveTileTownRootMap(
                     mapViewModel: mapViewModel,
-                    shouldFocusOnUserLocation: shouldFocusOnUserLocation,
-                    hidesCommandShelf: hidesCommandShelf,
                     presentation: atlasPresentation,
                     onClearSelection: mapViewModel.clearSelectedMapObject,
                     onPlanAroundPlace: onPlanAroundPlace

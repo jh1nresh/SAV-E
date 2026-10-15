@@ -52,12 +52,9 @@ final class AtlasFiveTabBarTests: XCTestCase {
 
     @MainActor
     func testBarFloatsInsideCanvasWithAccessibleTargets() {
-        XCTAssertLessThan(AtlasTabBarMetrics.width, AtlasMetrics.width)
-        XCTAssertGreaterThanOrEqual(AtlasTabBarMetrics.leadingInset, 16)
-        XCTAssertEqual(
-            AtlasTabBarMetrics.leadingInset,
-            (AtlasMetrics.width - AtlasTabBarMetrics.width) / 2
-        )
+        XCTAssertEqual(AtlasTabBarMetrics.width, AtlasMetrics.width)
+        XCTAssertEqual(AtlasTabBarMetrics.leadingInset, 0)
+        XCTAssertGreaterThanOrEqual(AtlasTabBarMetrics.horizontalPadding, 16)
         XCTAssertLessThan(AtlasTabBarMetrics.height, 76)
         XCTAssertGreaterThanOrEqual(AtlasTabBarMetrics.itemHeight, 44)
     }
@@ -168,6 +165,7 @@ final class AtlasFiveTabBarTests: XCTestCase {
         // city-scale map.
         XCTAssertFalse(icons.contains("briefcase"))
         XCTAssertFalse(icons.contains("globe"))
+        XCTAssertEqual(icons, ["house", "map", "plus", "person.2", "book.closed"])
     }
 
     @MainActor

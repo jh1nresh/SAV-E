@@ -186,6 +186,23 @@ enum SaveAtlasPalette {
     static let line = Color(light: "A68F78", dark: "807365")
 }
 
+/// Full-pixel tile-town materials (founder lock 2026-10-14).
+/// These paint the product Map base and Home/Friends peeks. Soft Pixel remains
+/// the pin / seal / Memo accent language on top of this town, not the map itself.
+enum SaveTileTownPalette {
+    static let grass = Color(light: "8FBF6A", dark: "3D5A32")
+    static let grassDeep = Color(light: "6FA04E", dark: "2E4526")
+    static let water = Color(light: "7EC8E3", dark: "2F5A6E")
+    static let waterDeep = Color(light: "4FA8C8", dark: "24485A")
+    static let road = Color(light: "F4E6C8", dark: "4A3F32")
+    static let roofCoral = Color(light: "E07A5F", dark: "8A4A3A")
+    static let roofHoney = Color(light: "E8B86D", dark: "7A5A28")
+    static let roofSky = Color(light: "7EB6D4", dark: "3A5A6A")
+    static let housePaper = Color(light: "FFF8E8", dark: "2A2620")
+    static let tree = Color(light: "4F8A3A", dark: "2E5A28")
+    static let treeDeep = Color(light: "3A6B2C", dark: "24451C")
+}
+
 enum SaveAtlasType {
     static func display(
         _ size: CGFloat,
