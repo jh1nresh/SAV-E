@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, cursor/tile-town-product-lock-4894]
   workflow_dispatch:
     inputs:
       ui_test_focus:
@@ -33,7 +33,7 @@ jobs:
     env:
       # Re-enabled for the 2026-10-15 pixel-art pass. Disable again after the
       # focused set is green, then run one full suite as the merge gate.
-      SAVE_UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus || (github.head_ref == 'cursor/tile-town-product-lock-4894' && 'tile-town-home') || '' }}
+      SAVE_UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus || ((github.head_ref == 'cursor/tile-town-product-lock-4894' || github.head_ref == 'codex/stamp-tabs-reference') && 'tile-town-home') || '' }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
