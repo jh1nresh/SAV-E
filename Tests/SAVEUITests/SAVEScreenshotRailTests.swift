@@ -318,7 +318,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             let context = try XCTUnwrap(CGContext(data: bytes.baseAddress,
                 width: image.width, height: image.height, bitsPerComponent: 8,
                 bytesPerRow: image.width * 4, space: CGColorSpaceCreateDeviceRGB(),
-                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+                bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue))
             context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
         }
         let samples = stride(from: 0, to: pixels.count, by: 4)
