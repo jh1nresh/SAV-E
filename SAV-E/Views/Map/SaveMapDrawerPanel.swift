@@ -61,7 +61,9 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
                                 .fill(SaveAtlasPalette.paper)
                         }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                    // The shaped paper owns rounding. Avoid masking the live
+                    // editor subtree while keyboard safe-area layout changes.
+                    .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 32, style: .continuous)
                             .stroke(SaveAtlasPalette.line.opacity(0.3), lineWidth: 1)

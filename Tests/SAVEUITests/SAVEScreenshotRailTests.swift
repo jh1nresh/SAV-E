@@ -305,6 +305,28 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertLessThan(refinement.frame.maxY, app.keyboards.firstMatch.frame.minY)
         XCTAssertFalse(app.buttons["drawer.review.primaryAction"].exists)
         attach(app, name: "review-next-step-add-clue")
+        try assertSearchEditorIsPainted(refinement)
+    }
+
+    /// A field can remain accessible and accept typing while a parent mask
+    /// hides all its pixels. Inspect the light-mode fixture's actual editor.
+    @MainActor
+    private func assertSearchEditorIsPainted(_ field: XCUIElement) throws {
+        let image = try XCTUnwrap(field.screenshot().image.cgImage)
+        var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        try pixels.withUnsafeMutableBytes { bytes in
+            let context = try XCTUnwrap(CGContext(data: bytes.baseAddress,
+                width: image.width, height: image.height, bitsPerComponent: 8,
+                bytesPerRow: image.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        }
+        let samples = stride(from: 0, to: pixels.count, by: 4)
+        let paper = samples.filter { pixels[$0] > 225 && pixels[$0 + 1] > 220 && pixels[$0 + 2] > 210 }.count
+        let ink = samples.filter { pixels[$0] < 140 && pixels[$0 + 1] < 140 && pixels[$0 + 2] < 140 }.count
+        let count = Double(image.width * image.height)
+        XCTAssertGreaterThan(Double(paper) / count, 0.65, "Search must render on paper, not the town behind its hidden mask.")
+        XCTAssertGreaterThan(Double(ink) / count, 0.01, "The typed clue must be visibly painted, not only accessible.")
     }
 
     @MainActor
