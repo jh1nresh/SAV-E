@@ -34,6 +34,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(home.contains("home.cluesBar"))
         XCTAssertTrue(home.contains("Recent stamps") || home.contains("home.recentSaves"))
         XCTAssertTrue(home.contains("SaveKraftStamp"))
+        XCTAssertTrue(home.contains("rootTabScrollClearance"))
         XCTAssertTrue(home.contains("home.search"))
         XCTAssertTrue(home.contains("home.featuredName"))
         XCTAssertTrue(home.contains("home.empty.capture"))
@@ -41,23 +42,53 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(home.contains("home.trips"))
         XCTAssertTrue(home.contains("home.saves"))
         XCTAssertTrue(home.contains("headerIconButton("))
+        XCTAssertTrue(home.contains("SavePixelChromeIcon"))
         XCTAssertTrue(home.contains("AtlasMetrics.statusBarHeight"))
         XCTAssertTrue(home.contains("allowsHitTesting(false)"))
         XCTAssertFalse(home.contains(".overlay(alignment: .topTrailing)"))
+        XCTAssertFalse(home.contains(".opacity(0.02)"))
         XCTAssertTrue(home.contains(".accessibilityHidden(true)"))
+        let moreSheet = memberBody("moreActionsSheet", in: home)
+        let resting = memberBody("restingHome", in: home)
+        let empty = memberBody("emptyHome", in: home)
+        XCTAssertTrue(moreSheet.contains("reviewQueuePreview"))
+        XCTAssertFalse(resting.contains("reviewQueuePreview"))
+        XCTAssertFalse(empty.contains("reviewQueuePreview"))
+        XCTAssertTrue(home.contains("Waiting for review"))
         XCTAssertFalse(home.contains("map.lens.nearby"))
         XCTAssertFalse(home.contains("map.lens.saved"))
         XCTAssertFalse(home.contains("map.lens.friends"))
         XCTAssertFalse(home.contains("SaveTileTownMapLens"))
+        let design = try source(at: "DESIGN.md")
+        XCTAssertTrue(design.contains("SavePixelChromeIcon"))
+        XCTAssertTrue(design.contains("lives under More"))
     }
 
     func testMapOwnsNearbySavedFriendsChipsOnTileTown() throws {
         let map = try source(at: "SAV-E/Views/TileTown/SaveTileTownRootMap.swift")
         let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(map.contains("SaveTileTownCanvas"))
+        XCTAssertTrue(map.contains("AtlasMetrics.statusBarHeight"))
+        XCTAssertFalse(map.contains(".padding(.top, 8)"))
+        XCTAssertTrue(map.contains("SaveTileTownPeekCard"))
+        XCTAssertTrue(map.contains("allowsPan: true"))
+        XCTAssertTrue(map.contains(".frame(minHeight: 44)"))
+        let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
+        XCTAssertTrue(town.contains("interpolationQuality = .none"))
+        XCTAssertTrue(town.contains("interpolation(.none)"))
+        XCTAssertTrue(town.contains("enum SaveTileTownRaster"))
+        XCTAssertTrue(town.contains("var allowsPan = false"))
+        XCTAssertTrue(town.contains("map.tileTown.pan"))
+        XCTAssertTrue(town.contains("mapChromeHeight"))
+        XCTAssertFalse(town.contains("addQuadCurve"))
+        XCTAssertFalse(town.contains("struct Triangle"))
         XCTAssertTrue(map.contains("map.lens.nearby") || map.contains("map.lensRail"))
         XCTAssertTrue(map.contains("SaveTileTownMapLens"))
         XCTAssertTrue(map.contains("map.liveSurface"))
+        let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
+        XCTAssertTrue(panel.contains("Spacer(minLength: 0)"))
+        XCTAssertTrue(panel.contains("alignment: .bottom"))
+        XCTAssertTrue(panel.contains("SaveTileTownProductLock.mapChromeHeight"))
         XCTAssertTrue(root.contains("SaveTileTownRootMap("))
         XCTAssertFalse(root.contains("SaveAtlasInteractiveRootMap("))
     }
@@ -67,12 +98,19 @@ final class SaveTileTownLockTests: XCTestCase {
         let home = try source(at: "SAV-E/Views/TileTown/SaveTileTownHomeView.swift")
         let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         XCTAssertTrue(stamp.contains("enum SaveKraftStampFace"))
+        XCTAssertTrue(stamp.contains("case scene"))
+        XCTAssertTrue(stamp.contains("SaveKraftStampPixelArt"))
+        XCTAssertTrue(stamp.contains("SavePixelDisplayText"))
+        XCTAssertTrue(stamp.contains("enum SavePixelChromeIconKind"))
+        XCTAssertTrue(stamp.contains("struct SavePixelChromeIcon"))
         XCTAssertTrue(stamp.contains("case locked"))
         XCTAssertTrue(stamp.contains("SaveSoftPixelAccentsLock.visibleStampText"))
         XCTAssertTrue(home.contains("SaveKraftStamp("))
         XCTAssertTrue(passport.contains("SaveKraftStamp("))
         XCTAssertTrue(passport.contains("face: .locked"))
         XCTAssertTrue(passport.contains("profile.stampGrid"))
+        XCTAssertTrue(passport.contains("onOpenPlace(place)"))
+        XCTAssertTrue(passport.contains("rootTabScrollClearance"))
         XCTAssertTrue(passport.contains("???"))
     }
 
@@ -83,6 +121,12 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(friends.contains("friends.mapStrip"))
         XCTAssertTrue(friends.contains("friends.empty"))
         XCTAssertTrue(friends.contains("friends.findFriends"))
+        XCTAssertTrue(friends.contains("friends.author."))
+        XCTAssertTrue(friends.contains("SharedAuthorPassport"))
+        XCTAssertFalse(friends.contains(".disabled(store.isDemo)"))
+        let store = try source(at: "SAV-E/ViewModels/SharedPostsStore.swift")
+        XCTAssertTrue(store.contains("applyDemoFixture()"))
+        XCTAssertTrue(store.contains("case .author(let id):"))
         XCTAssertFalse(friends.contains("friends.invite"))
         let posts = try JSONDecoder().decode([SharedPlacePost].self, from: Data(
             """
@@ -143,6 +187,13 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(theme.contains("7EC8E3"))
         XCTAssertTrue(theme.contains("F4E6C8"))
         XCTAssertFalse(theme.contains("FFF8EE"))
+    }
+
+    private func memberBody(_ name: String, in source: String) -> String {
+        guard let start = source.range(of: "private var \(name)") else { return "" }
+        let after = source[start.upperBound...]
+        let limit = after.range(of: "\n    private var ") ?? after.range(of: "\n    private func ")
+        return String(source[start.lowerBound..<(limit?.lowerBound ?? after.endIndex)])
     }
 
     private func source(at relativePath: String) throws -> String {
