@@ -13,9 +13,7 @@ struct SaveFriendsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("Savvy")
-                    .font(SaveAtlasType.strong(32, relativeTo: .title))
-                    .foregroundStyle(SaveAtlasPalette.forest)
+                SavePixelDisplayText(text: "Savvy", pointSize: 28)
 
                 HStack {
                     Text(language.localized(english: "Friends", traditionalChinese: "朋友"))
@@ -45,7 +43,7 @@ struct SaveFriendsView: View {
                         .disabled(store.isLoading).frame(maxWidth: .infinity, minHeight: 44)
                 }
                 if !store.posts.isEmpty {
-                    SaveTileTownCanvas(pins: friendPins, showsPins: true)
+                    SaveTileTownCanvas(pins: friendPins, showsPins: true, clipsToPaper: true)
                         .frame(height: 88)
                         .accessibilityIdentifier("friends.mapStrip")
                 }
@@ -101,7 +99,7 @@ struct SaveFriendsView: View {
                         .frame(minHeight: 44)
                     }
                     .buttonStyle(.plain)
-                    .disabled(store.isDemo)
+                    .accessibilityIdentifier("friends.author.\(row.authorID)")
 
                     Button { selected = row.lastPost } label: {
                         SharedPostArtwork(post: row.lastPost, compact: true)

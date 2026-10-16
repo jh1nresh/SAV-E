@@ -37,10 +37,10 @@ final class SharedPostsStore: ObservableObject {
         if isDemo {
             // Offline demo stays empty unless the dedicated screenshot fixture
             // is requested. It never reads or publishes real social records.
-            if ReviewDemo.isOfflineUITestMode && ProcessInfo.processInfo.arguments.contains("--uitest-social-posts") {
-                let items = Self.fixturePosts
-                posts = items.filter { (route == .mine || $0.visible_to_followers) && (filter == .all || $0.status.rawValue == filter.rawValue) }
-                counts = SocialProfileCounts(postCount: items.count, followingCount: 2, followerCount: 3)
+            if ProcessInfo.processInfo.arguments.contains("--uitest-social-posts")
+                || ProcessInfo.processInfo.arguments.contains("--uitest-friends-town")
+            {
+                applyDemoFixture()
             } else {
                 posts = []
                 counts = SocialProfileCounts(postCount: 0, followingCount: 0, followerCount: 0)
@@ -77,6 +77,36 @@ final class SharedPostsStore: ObservableObject {
         }
     }
 
+    private func applyDemoFixture() {
+        let items = Self.fixturePosts
+        let currentFilter = filter
+        switch route {
+        case .mine, .feed:
+            posts = items.filter {
+                (route == .mine || $0.visible_to_followers)
+                    && (currentFilter == .all || $0.status.rawValue == currentFilter.rawValue)
+            }
+            counts = SocialProfileCounts(postCount: items.count, followingCount: 2, followerCount: 3)
+        case .author(let id):
+            let authored = items.filter {
+                $0.author_id == id
+                    && $0.visible_to_followers
+                    && (currentFilter == .all || $0.status.rawValue == currentFilter.rawValue)
+            }
+            posts = authored
+            if let first = items.first(where: { $0.author_id == id }) {
+                profile = SharedPassportPage.Profile(
+                    id: id,
+                    displayName: first.author_name,
+                    handle: first.author_handle,
+                    avatarUrl: first.author_avatar_url,
+                    postCount: authored.count
+                )
+            }
+            counts = SocialProfileCounts(postCount: authored.count, followingCount: 0, followerCount: 0)
+        }
+    }
+
     func detail(_ post: SharedPlacePost) async throws -> SharedPlacePost {
         if isDemo { return post }
         let account = PrivyAuthService.shared.currentUserId
@@ -110,14 +140,26 @@ final class SharedPostsStore: ObservableObject {
 
     private static var fixturePosts: [SharedPlacePost] {
         [
-            ("11111111-1111-4111-8111-111111111111", "週末的咖啡口袋", "台北 · 大安", "cafe", PlaceStatus.wantToGo),
-            ("22222222-2222-4222-8222-222222222222", "一起看海", "新北 · 淡水", "attraction", .visited),
-            ("33333333-3333-4333-8333-333333333333", "午後散步", "台北 · 中山", "shopping", .wantToGo)
-        ].map { id, name, address, category, status in
-            SharedPlacePost(id: UUID(uuidString: id)!, name: name, address: address, category: category, status: status,
-                stars: nil, caption: status == .visited ? "留一點時間，慢慢走。" : nil,
-                shared_at: "2026-09-16T00:00:00Z", author_id: "sample", author_name: "Alex · 範例",
-                author_handle: "sample", author_avatar_url: nil, visible_to_followers: status != .visited)
+            ("11111111-1111-4111-8111-111111111111", "Harbor Town", "Water", "attraction", PlaceStatus.wantToGo, "alex", "Alex Last", true),
+            ("22222222-2222-4222-8222-222222222222", "Pine View", "Forest", "attraction", .visited, "sample", "Alex · 範例", false),
+            ("33333333-3333-4333-8333-333333333333", "Old Maple Cafe", "Town", "cafe", .wantToGo, "taylor", "Taylor Last", true),
+            ("55555555-5555-4555-8555-555555555555", "Pine View", "Forest", "attraction", .wantToGo, "jordan", "Jordan Last", true),
+        ].map { id, name, address, category, status, authorID, authorName, visible in
+            SharedPlacePost(
+                id: UUID(uuidString: id)!,
+                name: name,
+                address: address,
+                category: category,
+                status: status,
+                stars: nil,
+                caption: nil,
+                shared_at: "2026-10-12T10:00:00Z",
+                author_id: authorID,
+                author_name: authorName,
+                author_handle: authorID,
+                author_avatar_url: nil,
+                visible_to_followers: visible
+            )
         }
     }
 }
