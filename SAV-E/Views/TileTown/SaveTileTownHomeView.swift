@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Production Home for the 2026-10-14 tile-town lock.
-/// Resting chrome: Savvy + map peek + clues bar + recent stamps.
+/// Resting chrome: Savvy + visible quiet pixel Trips/Saves/More + map peek +
+/// clues bar + recent stamps. Waiting for review lives under More.
 /// Nearby / Saved / Friends chips stay off this surface (Map-only).
 /// Quiet collection search remains so the private library is still findable.
 struct SaveTileTownHomeView: View {
@@ -62,9 +63,7 @@ struct SaveTileTownHomeView: View {
     private var header: some View {
         HStack(spacing: 9) {
             Button(action: presentation.onOpenPassport) {
-                Text("Savvy")
-                    .font(SaveAtlasType.strong(32, relativeTo: .title))
-                    .foregroundStyle(SaveAtlasPalette.forest)
+                SavePixelDisplayText(text: "Savvy", pointSize: 28)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(localized("Open Savvy Passport", "開啟 Savvy 護照"))
@@ -73,50 +72,40 @@ struct SaveTileTownHomeView: View {
             Spacer(minLength: 8)
 
             headerIconButton(
-                systemImage: "point.3.connected.trianglepath.dotted",
+                kind: .trips,
                 label: localized("Trips", "行程"),
                 identifier: "home.trips",
                 action: presentation.onOpenTrips
             )
             headerIconButton(
-                systemImage: "slider.horizontal.3",
+                kind: .saves,
                 label: localized("Manage saved places", "管理已存地點"),
                 identifier: "home.saves",
                 action: presentation.onOpenSaves
             )
-            Button { showsMoreActions.toggle() } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                    .frame(width: 44, height: 44)
-                    .background(SaveAtlasPalette.paper, in: Capsule())
-                    .overlay {
-                        Capsule().stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
-                    }
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(localized("More Home actions", "更多首頁操作"))
-            .accessibilityIdentifier("home.more")
-            .accessibilityAddTraits(.isButton)
+            headerIconButton(
+                kind: .more,
+                label: localized("More Home actions", "更多首頁操作"),
+                identifier: "home.more",
+                action: { showsMoreActions.toggle() }
+            )
         }
         .frame(minHeight: 48)
     }
 
     private func headerIconButton(
-        systemImage: String,
+        kind: SavePixelChromeIconKind,
         label: String,
         identifier: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(SaveAtlasPalette.ink)
+            SavePixelChromeIcon(kind: kind, pointSize: 16)
                 .frame(width: 44, height: 44)
-                .background(SaveAtlasPalette.paper, in: Capsule())
+                .background(SaveAtlasPalette.paper)
                 .overlay {
-                    Capsule().stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
+                    Rectangle()
+                        .stroke(SaveAtlasPalette.forest.opacity(0.28), lineWidth: 1)
                 }
                 .contentShape(Rectangle())
         }
@@ -146,6 +135,9 @@ struct SaveTileTownHomeView: View {
                 showsMoreActions = false
                 presentation.onOpenSaves()
             }
+            reviewQueuePreview
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
         }
         .frame(width: 248)
         .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -221,7 +213,6 @@ struct SaveTileTownHomeView: View {
             VStack(alignment: .leading, spacing: 16) {
                 emptyCaptureButton
                 cluesBar
-                reviewQueuePreview
                 VStack(spacing: 10) {
                     Text(localized("No saved places yet", "還沒有已存地點"))
                         .font(SaveAtlasType.strong(18))
@@ -241,7 +232,7 @@ struct SaveTileTownHomeView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
-            .padding(.bottom, 96)
+            .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
         }
     }
 
@@ -268,12 +259,11 @@ struct SaveTileTownHomeView: View {
                     .accessibilityIdentifier("home.search.count")
                 peek
                 cluesBar
-                reviewQueuePreview
                 recentStamps
             }
             .padding(.horizontal, 16)
             .padding(.top, 14)
-            .padding(.bottom, 96)
+            .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
         }
     }
 
@@ -291,7 +281,7 @@ struct SaveTileTownHomeView: View {
                 Button { presentation.onOpenPlace(featured.id) } label: {
                     SaveTileTownPeekCard(
                         title: featured.name,
-                        subtitle: featured.area,
+                        subtitle: featured.relativeDay.isEmpty ? featured.area : featured.relativeDay,
                         photoURL: featured.photoURL ?? featured.photoURLs.first,
                         accessibilityNameID: "home.featuredName"
                     )
@@ -451,7 +441,7 @@ struct SaveTileTownHomeView: View {
                 }
             }
             .padding(16)
-            .padding(.bottom, 96)
+            .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
         }
         .scrollDismissesKeyboard(.interactively)
     }
