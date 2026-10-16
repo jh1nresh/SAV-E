@@ -55,13 +55,15 @@ Production parity uses `Reference/ProductionTargets`. The original
 `Reference/Targets` remain the immutable inputs for deterministic illustration
 extraction, so approving a UI refresh cannot silently alter generated assets.
 
-The Home production target was refreshed for the 2026-10-14 tile-town lock
-from CI run `38672287517`, head
-`bc89b9a33e1676dc6c98ceb7cfa3455f6dcea296` (`five-tab-home` attachment).
+The Home production target was refreshed for the 2026-10-14 v5 tile-town lock
+from CI run `38694512939`, head
+`b98b3ef63d275ecce199c8516dbe29a9149f1287` (`five-tab-home` attachment).
 The capture is uniformly downsampled from 3× to the 402 × 874 target size,
-with no content edits. Soft Pixel H1 paper-library Home is superseded for
-the product map base. The comparator, other targets, and `0.90` threshold
-remain unchanged.
+with no content edits. The locked face is SAVVY, quiet header controls, the
+nearest-neighbor tile-town peek, clues, recent kraft stamps, and the five-tab
+rail. Predecessor run `38672287517` / `bc89b9a` remains the earlier tile-town
+Home before the v5 mock pass. The comparator, other targets, and `0.90`
+threshold remain unchanged.
 
 ## Boundaries
 

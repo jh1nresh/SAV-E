@@ -456,6 +456,7 @@ struct ContentView: View {
             onUpdatePlace: { place in
                 try await mapVM.updatePlace(place)
             },
+            onOpenPlace: { openMapDetail(.savedPlace($0)) },
             isRootTab: isRootTab,
             requestsConnections: $requestsSocialConnections
         )

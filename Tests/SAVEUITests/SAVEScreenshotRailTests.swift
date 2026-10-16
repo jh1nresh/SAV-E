@@ -461,6 +461,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--skip-map-tour",
                 "--uitest-repair-review-demo-seed",
                 "--uitest-atlas-parity-fixture",
+                "--uitest-friends-town",
                 "-save.appLanguage", "en",
             ]
         )
@@ -491,6 +492,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-map")
+
+        openRootTab("Friends", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["friends.mapStrip"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-friends-town")
     }
 
     /// Root navigation includes Friends and keeps Plan as a child route.
@@ -842,11 +847,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(rootTabButton("Save", app: app).exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["home.reviewQueue"].exists)
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'")).firstMatch.exists)
-        tapReachable(app.buttons["home.more"])
         XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.trips"].exists)
+        tapReachable(app.buttons["home.more"])
+        XCTAssertTrue(app.descendants(matching: .any)["home.more.sheet"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["home.reviewQueue"].exists)
 
         for tab in ["Home", "Map", "Save", "Passport"] {
             XCTAssertTrue(rootTabButton(tab, app: app).waitForExistence(timeout: stepTimeout), "Missing \(tab) root tab")
@@ -1149,6 +1155,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         app.buttons["drawer.place.close"].firstMatch.tap()
         XCTAssertTrue(search.waitForExistence(timeout: stepTimeout))
         app.buttons["Clear search"].tap()
+        tapReachable(app.buttons["home.more"])
+        XCTAssertTrue(app.descendants(matching: .any)["home.more.sheet"].waitForExistence(timeout: stepTimeout))
         let review = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.reviewCandidate.'")).firstMatch
         XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
         review.tap()
@@ -1156,6 +1164,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.descendants(matching: .any)["saves.root"].exists)
         attach(app, name: "home-real-candidate-detail")
         app.buttons["drawer.place.close"].firstMatch.tap()
+        tapReachable(app.buttons["home.more"])
+        XCTAssertTrue(app.buttons["home.reviewAll"].waitForExistence(timeout: stepTimeout))
         app.buttons["home.reviewAll"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         let firstCandidate = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch

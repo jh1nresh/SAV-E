@@ -547,10 +547,12 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             map.contains("alignment: .topTrailing"),
             "Locate must not return to the pre-#184 top-trailing burial workaround."
         )
-        XCTAssertTrue(
+        XCTAssertFalse(
             tabBar.contains(".glassEffect("),
-            "Tab-bar glass stays parked on AtlasTabBar; this ticket must not move it."
+            "Founder lock 2026-10-15: the root bar is a flat pixel slab, not floating glass."
         )
+        XCTAssertTrue(tabBar.contains("AtlasPalette.paper"))
+        XCTAssertFalse(tabBar.contains(".clipShape(Capsule())"))
     }
 
     func testMapSearchShelfTapFocusesAndDragDoesNot() throws {
