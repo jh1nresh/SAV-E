@@ -2311,27 +2311,7 @@ private struct PassportTileTownCollection: View {
                 pointSize: 32
             )
             .accessibilityLabel(languageSettings.localized(english: "Passport", traditionalChinese: "護照"))
-            Text(languageSettings.localized(english: "\(places.count) / \(goal) stamps", traditionalChinese: "\(places.count) / \(goal) 個地圖章"))
-                .font(SaveAtlasType.strong(17))
-                .foregroundStyle(SaveAtlasPalette.ink)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 3))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background {
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            SaveAtlasPalette.kraft.opacity(0.40)
-                            SaveAtlasPalette.coral.frame(width: geo.size.width * progress)
-                        }
-                    }
-                }
-                .clipShape(SaveKraftTicketShape())
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("profile.stampProgress")
-            .accessibilityValue("\(places.count) of \(goal)")
+            stampProgressBar
 
             LazyVGrid(
                 columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: dynamicTypeSize.isAccessibilitySize ? 2 : 3),
@@ -2375,6 +2355,31 @@ private struct PassportTileTownCollection: View {
             }
         }
         .accessibilityIdentifier("profile.stampGrid")
+    }
+
+    private var stampProgressBar: some View {
+        Text(languageSettings.localized(english: "\(places.count) / \(goal) stamps", traditionalChinese: "\(places.count) / \(goal) 個地圖章"))
+            .font(SaveAtlasType.strong(17))
+            .foregroundStyle(SaveAtlasPalette.ink)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 3))
+            .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        SaveAtlasPalette.kraft.opacity(0.40)
+                        SaveAtlasPalette.coral.frame(width: geo.size.width * progress)
+                    }
+                }
+            }
+            .clipShape(SaveKraftTicketShape())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(languageSettings.localized(english: "\(places.count) / \(goal) stamps", traditionalChinese: "\(places.count) / \(goal) 個地圖章"))
+            .accessibilityIdentifier("profile.stampProgress")
+            .accessibilityValue("\(places.count) of \(goal)")
     }
 
     private var progress: CGFloat {

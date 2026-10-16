@@ -45,7 +45,14 @@ struct SaveTileTownRootMap: View {
                         }
                         .buttonStyle(.plain)
                         .padding(12)
+                        .contentShape(Rectangle())
+                        .accessibilityElement(children: .contain)
+                        .accessibilityAddTraits(.isButton)
                         .accessibilityIdentifier("map.peek.card")
+                        .accessibilityLabel(languageSettings.localized(
+                            english: "Open \(place.name)",
+                            traditionalChinese: "開啟 \(place.name)"
+                        ))
                     }
                 }
                 .overlay(alignment: .topTrailing) {

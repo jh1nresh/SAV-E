@@ -253,6 +253,10 @@ struct SaveTileTownHomeView: View {
     private var restingHome: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
+                Text(savedCountText)
+                    .font(SaveAtlasType.body(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .accessibilityIdentifier("home.search.count")
                 peek
                 cluesBar
                 recentStamps
@@ -377,16 +381,9 @@ struct SaveTileTownHomeView: View {
 
     private var recentStamps: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(localized("Recent stamps", "最近的地圖章"))
-                    .font(SaveAtlasType.strong(18))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                Spacer(minLength: 8)
-                Text(savedCountText)
-                    .font(SaveAtlasType.regular(12))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                    .accessibilityIdentifier("home.search.count")
-            }
+            Text(localized("Recent stamps", "最近的地圖章"))
+                .font(SaveAtlasType.strong(18))
+                .foregroundStyle(SaveAtlasPalette.forest)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 10) {
                     ForEach(presentation.savedPlaces.filter { $0.id != featured?.id }.prefix(6)) { place in
