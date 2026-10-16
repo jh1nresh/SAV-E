@@ -192,7 +192,18 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         app.buttons["完成"].firstMatch.tap()
         openRootTab("Passport", app: app)
         let newPost = app.buttons["posts.new"]
-        XCTAssertTrue(scrollUntilHittable(newPost, in: app.scrollViews.firstMatch, maxSwipes: 4))
+        let passportScroll = app.scrollViews.firstMatch
+        XCTAssertTrue(scrollUntilHittable(newPost, in: passportScroll, maxSwipes: 4))
+        // XCTest can report an element behind the fixed root bar as hittable.
+        // Clear the capture button before tapping the Passport action.
+        let captureTop = rootTabButton("Save", app: app).frame.minY
+        for _ in 0..<4 {
+            if newPost.frame.maxY <= captureTop - 8 { break }
+            passportScroll.swipeUp()
+        }
+        XCTAssertTrue(newPost.isHittable)
+        XCTAssertLessThanOrEqual(newPost.frame.maxY, captureTop - 8)
+        attach(app, name: "social-new-post-above-tabs")
         newPost.tap()
         XCTAssertTrue(app.cells.firstMatch.waitForExistence(timeout: stepTimeout))
         app.cells.firstMatch.tap()
@@ -1887,22 +1898,22 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "The selected place must replace, not stack above, the Map search shelf."
         )
 
-        XCTAssertTrue(
-            app.descendants(matching: .any)["map.place.name"].waitForExistence(timeout: stepTimeout),
-            "The root map selection should expose its real name."
-        )
-        XCTAssertTrue(
-            app.descendants(matching: .any)["map.place.location"].exists,
-            "Selecting a root-map place should expose its location."
-        )
-        XCTAssertTrue(
-            app.descendants(matching: .any)["map.place.card"].exists,
-            "Selecting a root-map place should expose the atlas place card."
-        )
-        XCTAssertTrue(app.buttons["map.place.close"].exists)
+        let selectedName = app.staticTexts["map.peek.name"]
+        XCTAssertTrue(selectedName.waitForExistence(timeout: stepTimeout),
+            "The tile-town selection should expose its real place name.")
+        XCTAssertFalse(selectedName.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        XCTAssertTrue(app.staticTexts["map.peek.subtitle"].exists,
+            "The selected Map Stamp should show its saved-date context.")
+        let selectedPin = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.' AND label BEGINSWITH 'Selected Map Stamp, '")
+        ).firstMatch
+        XCTAssertTrue(selectedPin.exists)
+        XCTAssertEqual(selectedPin.label, "Selected Map Stamp, \(selectedName.label)")
 
-        let openMapDetails = app.buttons["map.place.openDetails"]
+        let openMapDetails = app.buttons["map.peek.card"]
         XCTAssertTrue(openMapDetails.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(openMapDetails.label.contains(selectedName.label))
+        attach(app, name: "tile-town-selected-stamp")
         openMapDetails.tap()
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.scroll"].waitForExistence(timeout: stepTimeout))
 
