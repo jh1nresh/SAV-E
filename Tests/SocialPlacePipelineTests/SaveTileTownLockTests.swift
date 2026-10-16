@@ -115,6 +115,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(passport.contains("SaveKraftStamp("))
         XCTAssertTrue(passport.contains("face: .locked"))
         XCTAssertTrue(passport.contains("profile.stampGrid"))
+        XCTAssertTrue(passport.contains("accessibilityElement(children: .contain)"))
         XCTAssertTrue(passport.contains("profile.stampProgress"))
         XCTAssertTrue(passport.contains("accessibilityIdentifier(\"profile.stampProgress\")"))
         XCTAssertTrue(passport.contains("onOpenPlace(place)"))

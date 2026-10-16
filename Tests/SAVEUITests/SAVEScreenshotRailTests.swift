@@ -502,6 +502,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
         let progress = app.descendants(matching: .any)["profile.stampProgress"].firstMatch
+        XCTAssertTrue(progress.waitForExistence(timeout: stepTimeout), "Passport must expose collection progress.")
         XCTAssertGreaterThan(progress.frame.height, 24, "Collection progress must not collapse.")
         let firstStamp = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'profile.stamp.'")).firstMatch
         XCTAssertTrue(firstStamp.waitForExistence(timeout: stepTimeout))

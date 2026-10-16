@@ -2354,6 +2354,7 @@ private struct PassportTileTownCollection: View {
                 .accessibilityIdentifier("profile.stamps.expand")
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.stampGrid")
     }
 
