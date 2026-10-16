@@ -9,7 +9,7 @@ nonisolated enum SaveTileTownProductLock: Sendable {
     static let homeShowsMapFilterChips = false
     static let mapShowsNearbySavedFriendsChips = true
     /// Wordmark + Nearby/Saved/Friends rail below the 48pt status band.
-    static let mapChromeHeight: CGFloat = 136
+    static let mapChromeHeight: CGFloat = 148
     /// Lets root-tab lists scroll stamp labels and bios above the tab bar.
     static let rootTabScrollClearance: CGFloat = 150
 
@@ -207,7 +207,10 @@ enum SaveTileTownRaster {
         return max(1, min(x, y))
     }
 
+    private static let approvedArtwork = UIImage(named: "SavvyTownArtwork")
+
     static func image(scale: Int) -> UIImage {
+        if let approvedArtwork { return approvedArtwork }
         let scale = max(1, scale)
         let width = columns * scale
         let height = rows * scale
@@ -342,24 +345,23 @@ struct SaveTileTownPinMark: View {
 
     var body: some View {
         Canvas { context, size in
-            let unit = max(1, floor(size.width / 5))
-            let coral = Color(red: 0.949, green: 0.420, blue: 0.290)
-            let paper = Color(red: 1, green: 0.973, blue: 0.925)
-            let pin: [(Int, Int)] = isSelected
-                ? [(2, 0), (1, 1), (2, 1), (3, 1), (1, 2), (2, 2), (3, 2), (2, 3), (2, 4)]
-                : [(2, 0), (1, 1), (2, 1), (3, 1), (2, 2), (2, 3)]
-            for (x, y) in pin {
-                context.fill(
-                    Path(CGRect(x: CGFloat(x) * unit, y: CGFloat(y) * unit, width: unit, height: unit)),
-                    with: .color(coral)
-                )
+            let rows = [
+                "00011111000", "00122222100", "01222222210", "12221112221",
+                "12213331221", "12213331221", "12213331221", "12221112221",
+                "01222222210", "00122222100", "00012221000", "00001210000", "00000100000"
+            ]
+            let unit = size.width / 11
+            for (y, row) in rows.enumerated() {
+                for (x, cell) in row.enumerated() where cell != "0" {
+                    let color = cell == "1" ? SaveAtlasPalette.paper :
+                        cell == "3" ? SaveAtlasPalette.paper : SaveAtlasPalette.coral
+                    context.fill(Path(CGRect(x: CGFloat(x) * unit, y: CGFloat(y) * unit,
+                                             width: unit, height: unit)), with: .color(color))
+                }
             }
-            context.fill(
-                Path(CGRect(x: 2 * unit, y: unit, width: unit, height: unit)),
-                with: .color(paper)
-            )
         }
-        .frame(width: isSelected ? 15 : 12, height: isSelected ? 18 : 15)
+        .frame(width: isSelected ? 33 : 27, height: isSelected ? 39 : 32)
+        .shadow(color: SaveAtlasPalette.ink.opacity(0.12), radius: 1, y: 1)
         .accessibilityHidden(true)
     }
 }
@@ -379,7 +381,7 @@ struct SaveTileTownPeekCard: View {
                 Text(title)
                     .font(SaveAtlasType.strong(16))
                     .foregroundStyle(SaveAtlasPalette.forest)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .accessibilityIdentifier(accessibilityNameID ?? "map.peek.name")
                 if let subtitle, !subtitle.isEmpty {
@@ -396,10 +398,11 @@ struct SaveTileTownPeekCard: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(SaveAtlasPalette.paper, in: SaveKraftTicketShape())
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(SaveAtlasPalette.kraft.opacity(0.72), lineWidth: 1)
+            SaveKraftTicketShape()
+                .stroke(SaveAtlasPalette.line.opacity(0.72), lineWidth: 1)
+                .allowsHitTesting(false)
         }
         .clipped()
     }

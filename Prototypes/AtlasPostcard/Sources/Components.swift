@@ -145,22 +145,24 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                         VStack(spacing: isRaisedControl(item) ? 1 : 2) {
                             Image(systemName: item[keyPath: icon])
                                 .font(.system(
-                                    size: isRaisedControl(item) ? 20 : 18,
+                                    size: isRaisedControl(item) ? 26 : 20,
                                     weight: isRaisedControl(item) ? .semibold : .regular
                                 ))
                                 .frame(height: 24)
 
-                            Text(displayTitle?(item) ?? item[keyPath: title])
-                                .font(AtlasType.display(isRaisedControl(item) ? 9 : 11))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
+                            if !isRaisedControl(item) {
+                                Text(displayTitle?(item) ?? item[keyPath: title])
+                                    .font(AtlasType.display(11))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.85)
+                            }
                         }
                         .foregroundStyle(
                             isRaisedControl(item)
                                 ? Color.white
                                 : selection == item
                                     ? AtlasPalette.coral
-                                    : AtlasPalette.ink.opacity(0.52)
+                                    : AtlasPalette.ink.opacity(0.85)
                         )
                         .offset(
                             y: isRaisedControl(item)

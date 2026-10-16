@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import SAVE
 
 @MainActor
@@ -51,6 +52,7 @@ final class SaveTileTownLockTests: XCTestCase {
         let moreSheet = memberBody("moreActionsSheet", in: home)
         let resting = memberBody("restingHome", in: home)
         let empty = memberBody("emptyHome", in: home)
+        XCTAssertTrue(resting.contains("home.search.count"))
         XCTAssertTrue(moreSheet.contains("reviewQueuePreview"))
         XCTAssertFalse(resting.contains("reviewQueuePreview"))
         XCTAssertFalse(empty.contains("reviewQueuePreview"))
@@ -71,6 +73,8 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(map.contains("AtlasMetrics.statusBarHeight"))
         XCTAssertFalse(map.contains(".padding(.top, 8)"))
         XCTAssertTrue(map.contains("SaveTileTownPeekCard"))
+        XCTAssertTrue(map.contains("map.peek.card"))
+        XCTAssertTrue(map.contains("accessibilityElement(children: .contain)"))
         XCTAssertTrue(map.contains("allowsPan: true"))
         XCTAssertTrue(map.contains(".frame(minHeight: 44)"))
         let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
@@ -79,6 +83,8 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(town.contains("enum SaveTileTownRaster"))
         XCTAssertTrue(town.contains("var allowsPan = false"))
         XCTAssertTrue(town.contains("map.tileTown.pan"))
+        XCTAssertTrue(town.contains("map.peek.name"))
+        XCTAssertTrue(town.contains("map.peek.subtitle"))
         XCTAssertTrue(town.contains("mapChromeHeight"))
         XCTAssertFalse(town.contains("addQuadCurve"))
         XCTAssertFalse(town.contains("struct Triangle"))
@@ -109,15 +115,20 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(passport.contains("SaveKraftStamp("))
         XCTAssertTrue(passport.contains("face: .locked"))
         XCTAssertTrue(passport.contains("profile.stampGrid"))
+        XCTAssertTrue(passport.contains("accessibilityElement(children: .contain)"))
+        XCTAssertTrue(passport.contains("profile.stampProgress"))
+        XCTAssertTrue(passport.contains("accessibilityIdentifier(\"profile.stampProgress\")"))
         XCTAssertTrue(passport.contains("onOpenPlace(place)"))
         XCTAssertTrue(passport.contains("rootTabScrollClearance"))
         XCTAssertTrue(passport.contains("???"))
     }
 
-    func testFriendsIsPeopleFirstWithLastAt() throws {
+    func testFriendsIsPeopleFirstWithExplicitShareStatus() throws {
         let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
         XCTAssertTrue(friends.contains("SavePostageSealAvatar"))
-        XCTAssertTrue(friends.contains("Last at"))
+        XCTAssertTrue(friends.contains("Shared ·"))
+        XCTAssertTrue(friends.contains("Wants to go ·"))
+        XCTAssertFalse(friends.contains("Last at"))
         XCTAssertTrue(friends.contains("friends.mapStrip"))
         XCTAssertTrue(friends.contains("friends.empty"))
         XCTAssertTrue(friends.contains("friends.findFriends"))
@@ -187,6 +198,21 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(theme.contains("7EC8E3"))
         XCTAssertTrue(theme.contains("F4E6C8"))
         XCTAssertFalse(theme.contains("FFF8EE"))
+    }
+
+    func testApprovedArtworkIsBundledAndStampFacesStaySeparate() throws {
+        let town = try XCTUnwrap(UIImage(named: "SavvyTownArtwork"))
+        XCTAssertGreaterThan(town.size.width, 500)
+        XCTAssertGreaterThan(town.size.height, 500)
+        let atlas = try XCTUnwrap(UIImage(named: "SavvyStampArtwork")?.cgImage)
+        XCTAssertEqual(atlas.width * 2, atlas.height * 3)
+        let scenes: [SaveKraftStampScene] = [.harbor, .pine, .maple, .mountain, .lake, .cafe]
+        let faces = scenes.map(SaveKraftStampPixelArt.image(for:))
+        for face in faces {
+            XCTAssertEqual(face.cgImage?.width, atlas.width / 3)
+            XCTAssertEqual(face.cgImage?.height, atlas.height / 2)
+        }
+        XCTAssertEqual(Set(faces.compactMap { $0.pngData() }).count, 6)
     }
 
     private func memberBody(_ name: String, in source: String) -> String {

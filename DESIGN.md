@@ -122,11 +122,13 @@ Rules:
   reuse that chrome.
 - Coral pins only. Selected stamp elevates to a kraft peek card (name + date/area).
   Source-only clues still have no pin.
-- Tile-town is nearest-neighbor integer tiles (`SaveTileTownRaster`): buildings,
-  roofs, trees, water, and roads are crisp cells. No anti-aliased vector houses
-  or curved roads.
+- Tile-town uses the approved 2026-10-16 detailed pixel scenery asset through
+  `SaveTileTownRaster`, with nearest-neighbor display. The procedural integer
+  tiles remain a missing-asset fallback. Native SwiftUI owns every pin, tap,
+  selection and gesture; no UI controls or geographic claims are baked into art.
+  See `design-assets/tab-redesign-2026-10-16/README.md` for provenance.
 - App Store frames and product UI share this town. In-app **titles** (Savvy
-  wordmark, Passport header) use `SavePixelDisplayText`. Body copy stays
+  wordmark, Passport header) use case-preserving `SavePixelDisplayText` in adaptive forest ink. Body copy stays
   `SaveAtlasType`.
 
 ### Soft Pixel accents (on tile-town)
@@ -155,9 +157,11 @@ Rules:
   selected tab only. The center `+` is a coral circle on every screen.
 - Seals never show raw hex, debug IDs, or pipeline tokens in primary UI
   (see Evidence Receipt).
-- Stamp language is one system: illustrated pixel stamp art (`SaveKraftStamp`
-  / `SaveKraftStampPixelArt`) on Home recent stamps and the Passport grid,
-  kraft perforated seal for both. Locked Passport slots show `???`.
+- Stamp language is one system: `SaveKraftStamp` encloses art and its name
+  inside one perforated kraft frame. Home uses horizontal tickets; Passport
+  uses portrait stamps. `SaveKraftStampPixelArt` crops the approved six-scene
+  atlas for illustrative fallbacks; real available place photos take precedence.
+  Empty Passport slots show `???` once, with an accessible empty-slot label.
 
 ### Review Clue
 
@@ -592,7 +596,8 @@ Required root content, in order:
 
 1. Account identity, real post/following/follower counts and edit/settings actions.
 2. Owner stamp collection: coral progress and kraft `SaveKraftStamp` grid,
-   including at least one locked `???` slot while the page is incomplete.
+   initially six slots with `???` for empty slots, and an explicit expand/collapse
+   control when more than six stamps exist. Expanded collection includes every stamp.
 3. Owner-only Your quests, at most three existing live next steps. Hide if empty.
 4. Shared places: explicit new-post action, All / Want to go / Visited filters,
    three-column post grid (adapt at accessibility text sizes).
@@ -653,7 +658,8 @@ place metadata. No provider search or analysis calls, inference of missing
 facts, public discovery or automatic saves occur on this Home surface.
 Clearing search returns to the peek + clues + recent-stamps rest state.
 
-The peek card and recent stamps use `SaveKraftStamp` (photo face + name).
+The peek card places a confirmed Map Stamp label inside the town; recent stamps
+use `SaveKraftStamp` (photo face + name inside the same perforated ticket).
 Recent-stamp labels scroll above the tab bar (`rootTabScrollClearance`).
 The clues bar keeps Review clues. Waiting for review (Review Candidate and
 Source Clue tickets, distinct) lives under More, not on the resting Home
@@ -854,8 +860,8 @@ source clues or visit timestamps appear in post projections.
 ### Friends
 
 Home / Map / + / Friends / Passport remains the root bar. Friends is
-people-first: postage-seal avatars, author name, and “Last at …” for the
-latest explicit post. A small tile-town strip may sit under the list; it
+people-first: postage-framed initials, author name, and “Shared …” / “Wants to go …” for the
+latest explicit post. Never infer current location or a visit from a shared post. A small tile-town strip may sit under the list; it
 must not duplicate the full Map tab. An author opens a read-only passport
 under the same live follower audience gate.
 Loading, retry, empty and withdrawn states are explicit; sample activity exists

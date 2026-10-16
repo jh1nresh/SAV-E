@@ -2135,12 +2135,9 @@ private struct PassportTopBar: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                SavePixelDisplayText(text: "Savvy", pointSize: 22)
+                SavePixelDisplayText(text: "Savvy", pointSize: 34)
                     .accessibilityLabel("Savvy")
                     .accessibilityIdentifier("profile.brandLogo")
-                Text(languageSettings.localized(english: "Your personal atlas", traditionalChinese: "你的私人地點圖鑑"))
-                    .font(SaveAtlasType.body(12))
-                    .foregroundStyle(SaveAtlasPalette.muted)
             }
 
             Spacer()
@@ -2290,6 +2287,8 @@ private struct PassportBadge: View {
 
 private struct PassportTileTownCollection: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var showsAllStamps = false
     let places: [Place]
     var onOpenPlace: (Place) -> Void = { _ in }
 
@@ -2297,40 +2296,29 @@ private struct PassportTileTownCollection: View {
         SaveTileTownProductLock.passportGoal(for: places.count)
     }
 
+    private var visiblePlaces: [Place] {
+        showsAllStamps ? places : Array(places.prefix(6))
+    }
+
     private var lockedCount: Int {
-        max(places.count < goal ? 1 : 0, min(6, goal - places.count))
+        max(0, 6 - visiblePlaces.count)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SavePixelDisplayText(
                 text: languageSettings.localized(english: "Passport", traditionalChinese: "PASSPORT"),
-                pointSize: 24
+                pointSize: 32
             )
             .accessibilityLabel(languageSettings.localized(english: "Passport", traditionalChinese: "護照"))
-            HStack {
-                Text("\(places.count)/\(goal)")
-                    .font(SaveAtlasType.strong(13))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(SaveAtlasPalette.kraft.opacity(0.45))
-                        Capsule()
-                            .fill(SaveAtlasPalette.coral)
-                            .frame(width: geo.size.width * progress)
-                    }
-                }
-                .frame(height: 8)
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("profile.stampProgress")
-            .accessibilityValue("\(places.count) of \(goal)")
+            stampProgressBar
 
             LazyVGrid(
-                columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
+                columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: dynamicTypeSize.isAccessibilitySize ? 2 : 3),
+                alignment: .leading,
                 spacing: 16
             ) {
-                ForEach(places.prefix(12)) { place in
+                ForEach(visiblePlaces) { place in
                     Button { onOpenPlace(place) } label: {
                         SaveKraftStamp(
                             title: place.name,
@@ -2351,8 +2339,48 @@ private struct PassportTileTownCollection: View {
                     )
                 }
             }
+            if places.count > 6 {
+                Button {
+                    showsAllStamps.toggle()
+                } label: {
+                    Text(showsAllStamps
+                         ? languageSettings.localized(english: "Show fewer stamps", traditionalChinese: "收起地圖章")
+                         : languageSettings.localized(english: "View all \(places.count) stamps", traditionalChinese: "查看全部 \(places.count) 個地圖章"))
+                        .font(SaveAtlasType.body(14))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("profile.stamps.expand")
+            }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.stampGrid")
+    }
+
+    private var stampProgressBar: some View {
+        Text(languageSettings.localized(english: "\(places.count) / \(goal) stamps", traditionalChinese: "\(places.count) / \(goal) 個地圖章"))
+            .font(SaveAtlasType.strong(17))
+            .foregroundStyle(SaveAtlasPalette.ink)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 3))
+            .frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        SaveAtlasPalette.kraft.opacity(0.40)
+                        SaveAtlasPalette.coral.frame(width: geo.size.width * progress)
+                    }
+                }
+            }
+            .clipShape(SaveKraftTicketShape())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(languageSettings.localized(english: "\(places.count) / \(goal) stamps", traditionalChinese: "\(places.count) / \(goal) 個地圖章"))
+            .accessibilityIdentifier("profile.stampProgress")
+            .accessibilityValue("\(places.count) of \(goal)")
     }
 
     private var progress: CGFloat {
