@@ -1,6 +1,6 @@
 import { analyzeSocialCaption, preserveGroundedSemanticResult, type SemanticAnalysisResult } from "./socialSemanticExtraction.js";
 import { recoverInstagramVideoVenues, type VideoVenueEvidence } from "./videoVenueAnalysis.js";
-import { AnalysisControlError, trackAnalysisOperation, type AnalysisOperation } from "./analysisUsage.js";
+import { reuseAnalysisResult, AnalysisControlError, trackAnalysisOperation, type AnalysisOperation } from "./analysisUsage.js";
 import { createHash } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
@@ -1018,7 +1018,7 @@ export async function defaultPlacesCorroborator(candidate: SourceSearchCandidate
     fields: "place_id,name,formatted_address,geometry",
   });
   const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?${params.toString()}`;
-  return trackAnalysisOperation({operation:"google_places"}, async () => {
+  return reuseAnalysisResult("source-places:" + query, () => trackAnalysisOperation({operation:"google_places"}, async () => {
   const response = await fetch(url, {
     headers: {
       "User-Agent": "Savvy Places corroborator/1.0",
@@ -1054,7 +1054,7 @@ export async function defaultPlacesCorroborator(candidate: SourceSearchCandidate
     confidenceBoost: 0.22,
     evidence: ["Places resolver matched the candidate by name/address query"],
   };
-  });
+  }));
 }
 
 function mediaEvidencePlaceName(text: string, address?: string): string | undefined {
