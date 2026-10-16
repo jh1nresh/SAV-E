@@ -29,51 +29,53 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
             // Keep one view and coordinate space alive at every stage.
             // The root geometry already excludes the home indicator.
             let bottomClearance = max(0, tabBarClearance - proxy.safeAreaInsets.bottom)
-            if isExpanded || showsCollapsedShelf {
-                VStack(spacing: 0) {
-                    resizeHandle
-                    if isExpanded {
-                        expandedContent()
-                    } else {
-                        SaveAtlasMapCommandShelf(
-                            mapStampCount: mapStampCount,
-                            onOpenAssistant: {
-                                guard !collapsedDragConsumedTap else { return }
-                                onExpand(true)
-                            },
-                            onOpenPassport: onOpenPassport
-                        )
-                        .padding(.horizontal, 12)
-                        .simultaneousGesture(resizeGesture(stage: .collapsed))
-                        Spacer(minLength: 8)
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                if isExpanded || showsCollapsedShelf {
+                    VStack(spacing: 0) {
+                        resizeHandle
+                        if isExpanded {
+                            expandedContent()
+                        } else {
+                            SaveAtlasMapCommandShelf(
+                                mapStampCount: mapStampCount,
+                                onOpenAssistant: {
+                                    guard !collapsedDragConsumedTap else { return }
+                                    onExpand(true)
+                                },
+                                onOpenPassport: onOpenPassport
+                            )
+                            .padding(.horizontal, 12)
+                            .simultaneousGesture(resizeGesture(stage: .collapsed))
+                            Spacer(minLength: 8)
+                        }
                     }
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: panelHeight(totalHeight: proxy.size.height - bottomClearance), alignment: .top)
-                .background {
-                    if stage == .collapsed {
-                        RoundedRectangle(cornerRadius: 32, style: .continuous)
-                            .fill(.regularMaterial)
-                    } else {
-                        RoundedRectangle(cornerRadius: 32, style: .continuous)
-                            .fill(SaveAtlasPalette.paper)
+                    .frame(maxWidth: .infinity, alignment: .bottom)
+                    .frame(height: panelHeight(totalHeight: proxy.size.height - bottomClearance), alignment: .top)
+                    .background {
+                        if stage == .collapsed {
+                            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                                .fill(.regularMaterial)
+                        } else {
+                            RoundedRectangle(cornerRadius: 32, style: .continuous)
+                                .fill(SaveAtlasPalette.paper)
+                        }
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 32, style: .continuous)
+                            .stroke(SaveAtlasPalette.line.opacity(0.3), lineWidth: 1)
+                            .allowsHitTesting(false)
+                    }
+                    .shadow(color: SaveAtlasPalette.ink.opacity(0.10), radius: 12, y: 4)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityLabel("Map search drawer")
+                    .accessibilityValue(stage.accessibilityValue)
+                    .accessibilityIdentifier(stage.accessibilityIdentifier)
+                    .padding(.horizontal, stage == .collapsed ? proxy.size.width * 0.07 : 8)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 32, style: .continuous)
-                        .stroke(SaveAtlasPalette.line.opacity(0.3), lineWidth: 1)
-                        .allowsHitTesting(false)
-                }
-                .shadow(color: SaveAtlasPalette.ink.opacity(0.10), radius: 12, y: 4)
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel("Map search drawer")
-                .accessibilityValue(stage.accessibilityValue)
-                .accessibilityIdentifier(stage.accessibilityIdentifier)
-                .padding(.horizontal, stage == .collapsed ? proxy.size.width * 0.07 : 8)
-                .padding(.bottom, bottomClearance)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
+            .padding(.bottom, bottomClearance)
         }
         .animation(reduceMotion ? nil : SaveTheme.Motion.standardSpring, value: isExpanded)
         .animation(reduceMotion ? nil : SaveTheme.Motion.standardSpring, value: detent)
@@ -109,7 +111,10 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
     /// One surface tracks the finger at every stop, including collapsed.
     /// The available height already excludes the keyboard and tab controls.
     private func panelHeight(totalHeight: CGFloat) -> CGFloat {
-        let largeHeight = max(collapsedHeight, totalHeight - 12)
+        let largeHeight = max(
+            collapsedHeight,
+            totalHeight - SaveTileTownProductLock.mapChromeHeight
+        )
         let baseHeight: CGFloat
         switch stage {
         case .collapsed: baseHeight = collapsedHeight

@@ -49,19 +49,18 @@ struct BrandHeader<Trailing: View>: View {
 /// rendering.
 ///
 /// The bar lives on the fixed 402x874 Atlas canvas (`ReferenceViewport` scales
-/// that canvas to whatever device it lands on). It deliberately floats inside
-/// the canvas instead of rendering as a full-width slab. The selection pill is
-/// derived from the compact slot width so adding destinations cannot make it
-/// collide with its neighbours.
+/// that canvas to whatever device it lands on). Founder lock 2026-10-15: a
+/// flat full-width pixel bar, not a floating glass capsule. Slot math still
+/// keeps the coral + inside its destination.
 ///
 /// The pill is therefore derived from the slot, never fixed.
 enum AtlasTabBarMetrics {
-    static let width: CGFloat = 338
+    static let width: CGFloat = AtlasMetrics.width
     static let height: CGFloat = 62
-    static let leadingInset: CGFloat = (AtlasMetrics.width - width) / 2
-    static let standardY: CGFloat = AtlasMetrics.height - height - 12
-    static let mapY: CGFloat = standardY + 2
-    static let horizontalPadding: CGFloat = 4
+    static let leadingInset: CGFloat = 0
+    static let standardY: CGFloat = AtlasMetrics.height - height
+    static let mapY: CGFloat = standardY
+    static let horizontalPadding: CGFloat = 16
     static let itemHeight: CGFloat = 54
     static let minimumHitTarget: CGFloat = 44
     static let selectionHeight: CGFloat = 46
@@ -183,34 +182,17 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
         }
         .padding(.horizontal, AtlasTabBarMetrics.horizontalPadding)
         .frame(width: AtlasTabBarMetrics.width, height: AtlasTabBarMetrics.height)
-        .clipShape(Capsule())
     }
 
-    @ViewBuilder
     var body: some View {
-        if #available(iOS 26.0, *) {
-            tabItems
-                .glassEffect(
-                    .regular.tint(AtlasPalette.paper.opacity(0.14)),
-                    in: Capsule()
-                )
-                .overlay {
-                    Capsule()
-                        .stroke(.white.opacity(0.30), lineWidth: 0.8)
-                        .allowsHitTesting(false)
-                }
-                .shadow(color: AtlasPalette.ink.opacity(0.10), radius: 12, y: 5)
-        } else {
-            tabItems
-                .background(.ultraThinMaterial, in: Capsule())
-                .background(AtlasPalette.paper.opacity(0.22), in: Capsule())
-                .overlay {
-                    Capsule()
-                        .stroke(AtlasPalette.line.opacity(0.32), lineWidth: 0.8)
-                        .allowsHitTesting(false)
-                }
-                .shadow(color: AtlasPalette.ink.opacity(0.08), radius: 10, y: 4)
-        }
+        tabItems
+            .background(AtlasPalette.paper)
+            .overlay(alignment: .top) {
+                Rectangle()
+                    .fill(AtlasPalette.line.opacity(0.35))
+                    .frame(height: 1)
+                    .allowsHitTesting(false)
+            }
     }
 }
 
