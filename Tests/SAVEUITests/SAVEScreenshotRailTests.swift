@@ -481,6 +481,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Friends", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["friends.mapStrip"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-friends-town")
+        for post in app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'friends.post.'")).allElementsBoundByIndex {
+            XCTAssertTrue(post.label.hasPrefix("Open shared place, "), "Every illustrated post needs its own accessible action name.")
+        }
         let invite = app.buttons["friends.connections"]
         XCTAssertGreaterThanOrEqual(invite.frame.height, 44)
         XCTAssertTrue(invite.isHittable)

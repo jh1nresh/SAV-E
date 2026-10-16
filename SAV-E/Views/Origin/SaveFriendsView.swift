@@ -113,6 +113,10 @@ struct SaveFriendsView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel(language.localized(
+                        english: "Open shared place, \(row.lastPost.name)",
+                        traditionalChinese: "開啟分享地點，\(row.lastPost.name)"
+                    ))
                     .accessibilityIdentifier("friends.post.\(row.lastPost.id.uuidString)")
                 }
                 .padding(12)

@@ -2314,9 +2314,12 @@ private struct PassportTileTownCollection: View {
             Text(languageSettings.localized(english: "\(places.count) / \(goal) stamps", traditionalChinese: "\(places.count) / \(goal) 個地圖章"))
                 .font(SaveAtlasType.strong(17))
                 .foregroundStyle(SaveAtlasPalette.ink)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 3))
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
                 .background {
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
