@@ -296,3 +296,15 @@ curl -X POST "$SAVE_API_URL/v0/exports/trek-kml" \
 Import `save-map-stamps.kml` from TREK's planner file-import surface. Savvy remains the place-memory source of truth; TREK owns downstream itinerary editing and route planning.
 
 Public collections, OpenAPI, `llms.txt`, paid/API-key access, broad reputation graph exports, external checkout, per-run on-chain receipts, and marketplace UI are intentionally out of scope for the first verified-claims/workflow-ledger slices.
+
+### Passive Gemini availability
+
+`GET /health/ai-provider` reports recent HTTP observations from caption analysis,
+Gemini proxy, restaurant enrichment and Sendblue calls. It makes no provider
+request. `available` returns 200; `billing_blocked` (HTTP 402), `access_denied`,
+`rate_limited`, `unavailable`, and `unknown` return 503. This is a separate
+operational signal, not the deployment readiness/liveness gate. Observations
+expire after ten minutes and restart at `unknown` for each process. This cannot
+read a credit balance or predict depletion. It also does not prove valid model
+output. Structured `gemini_availability_changed` logs contain only state labels;
+connecting them to external alerts requires a separate operations decision.
