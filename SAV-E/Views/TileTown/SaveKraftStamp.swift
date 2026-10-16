@@ -43,10 +43,8 @@ enum SaveKraftStampScene: String, CaseIterable {
         if haystack.contains("cafe") || haystack.contains("coffee") || haystack.contains("咖啡") { return .cafe }
         if haystack.contains("peak") || haystack.contains("mountain") || haystack.contains("山") { return .mountain }
         if haystack.contains("lake") || haystack.contains("mist") || haystack.contains("湖") { return .lake }
-        var hasher = Hasher()
-        hasher.combine(name)
-        let index = abs(hasher.finalize()) % (allCases.count - 1)
-        return allCases[index]
+        // Category fallback must stay identical across launches and screenshots.
+        return .house
     }
 }
 
@@ -55,35 +53,72 @@ struct SaveKraftStamp: View {
     let face: SaveKraftStampFace
     var size: SaveKraftStampSize = .grid
     var accessibilityIdentifier: String = "stamp.kraft"
+    @Environment(\.appLanguageSettings) private var language
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(spacing: 6) {
-            ZStack {
-                SavePostcardScallopedRectangle(depth: 3, pitch: 8)
-                    .fill(SaveAtlasPalette.paper)
-                    .overlay {
-                        SavePostcardScallopedRectangle(depth: 3, pitch: 8)
-                            .stroke(SaveAtlasPalette.kraft.opacity(0.86), lineWidth: 1.2)
-                    }
-                    .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 2, y: 1)
-
-                SaveKraftStampFaceView(face: illustratedFace, glyph: fallbackGlyph)
-                    .padding(5)
+        Group {
+            if face == .locked {
+                VStack(spacing: 8) {
+                    Color.clear.aspectRatio(0.82, contentMode: .fit)
+                    Color.clear.frame(height: 34)
+                }
+                .padding(9)
+                .overlay {
+                    Text("???")
+                        .font(SaveAtlasType.strong(30))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                }
+            } else if size == .recent {
+                HStack(spacing: 6) {
+                    artwork
+                        .frame(width: 34, height: 44)
+                    stampTitle
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(10)
+                .frame(width: dynamicTypeSize.isAccessibilitySize ? 220 : 118, alignment: .leading)
+            } else {
+                VStack(spacing: 8) {
+                    artwork
+                        .aspectRatio(0.82, contentMode: .fit)
+                    stampTitle
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, minHeight: 34, alignment: .top)
+                }
+                .padding(9)
+                .frame(maxWidth: .infinity)
             }
-            .frame(width: size.face, height: size.face)
-            .accessibilityHidden(true)
-
-            Text(visibleTitle)
-                .font(SaveAtlasType.strong(size.title))
-                .foregroundStyle(face == .locked ? SaveAtlasPalette.muted : SaveAtlasPalette.forest)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .minimumScaleFactor(0.75)
-                .frame(maxWidth: size.face + 12)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(face == .locked ? "Locked stamp" : "Map Stamp, \(visibleTitle)")
+        .background {
+            SavePostcardScallopedRectangle(depth: 3, pitch: 9)
+                .fill(SaveAtlasPalette.kraft.opacity(0.42))
+                .overlay {
+                    SavePostcardScallopedRectangle(depth: 3, pitch: 9)
+                        .stroke(SaveAtlasPalette.line.opacity(0.8), lineWidth: 1)
+                }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(face == .locked
+            ? language.localized(english: "Empty stamp slot", traditionalChinese: "空白地圖章欄位")
+            : language.localized(english: "Map Stamp, \(visibleTitle)", traditionalChinese: "地圖章，\(visibleTitle)"))
         .accessibilityIdentifier(accessibilityIdentifier)
+    }
+
+    private var artwork: some View {
+        SaveKraftStampFaceView(face: illustratedFace, glyph: fallbackGlyph)
+            .clipped()
+            .overlay {
+                Rectangle().stroke(SaveAtlasPalette.line.opacity(0.38), lineWidth: 1)
+            }
+            .accessibilityHidden(true)
+    }
+
+    private var stampTitle: some View {
+        Text(visibleTitle)
+            .font(SaveAtlasType.strong(size == .recent ? 12 : 14))
+            .foregroundStyle(face == .locked ? SaveAtlasPalette.muted : SaveAtlasPalette.ink)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var visibleTitle: String {
@@ -153,14 +188,35 @@ struct SaveKraftStampPixelArt: View {
     let scene: SaveKraftStampScene
 
     var body: some View {
-        Image(uiImage: Self.image(for: scene))
-            .interpolation(.none)
-            .resizable()
-            .scaledToFit()
-            .accessibilityHidden(true)
+        GeometryReader { geometry in
+            Image(uiImage: Self.image(for: scene))
+                .interpolation(.none)
+                .resizable()
+                .scaledToFill()
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .clipped()
+        }
+        .accessibilityHidden(true)
     }
 
-    private static func image(for scene: SaveKraftStampScene) -> UIImage {
+    private static let atlas = UIImage(named: "SavvyStampArtwork")?.cgImage
+    private static let illustratedFaces: [SaveKraftStampScene: UIImage] = {
+        guard let atlas else { return [:] }
+        let order: [SaveKraftStampScene] = [.harbor, .pine, .maple, .mountain, .lake, .cafe]
+        let width = atlas.width / 3
+        let height = atlas.height / 2
+        var faces: [SaveKraftStampScene: UIImage] = [:]
+        for (index, scene) in order.enumerated() {
+            let rect = CGRect(x: (index % 3) * width, y: (index / 3) * height,
+                              width: width, height: height)
+            if let cropped = atlas.cropping(to: rect) { faces[scene] = UIImage(cgImage: cropped) }
+        }
+        faces[.house] = faces[.cafe]
+        return faces
+    }()
+
+    static func image(for scene: SaveKraftStampScene) -> UIImage {
+        if let illustration = illustratedFaces[scene] { return illustration }
         let cells = pixels(for: scene)
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
@@ -242,14 +298,14 @@ struct SavePostageSealAvatar: View {
 
     var body: some View {
         ZStack {
-            SavePostcardSealShape()
-                .fill(SaveAtlasPalette.paper)
+            SavePostcardScallopedRectangle(depth: 3, pitch: 8)
+                .fill(SaveAtlasPalette.kraft.opacity(0.35))
                 .overlay {
-                    SavePostcardSealShape()
-                        .stroke(SaveAtlasPalette.kraft, lineWidth: 1.4)
+                    SavePostcardScallopedRectangle(depth: 3, pitch: 8)
+                        .stroke(SaveAtlasPalette.line.opacity(0.75), lineWidth: 1)
                 }
-            Image(systemName: systemImage)
-                .font(.system(size: size * 0.36, weight: .semibold))
+            Text(String(name.prefix(1)).uppercased())
+                .font(SaveAtlasType.strong(size * 0.42))
                 .foregroundStyle(SaveAtlasPalette.forest)
         }
         .frame(width: size, height: size)
@@ -271,7 +327,9 @@ struct SavePixelChromeIcon: View {
 
     var body: some View {
         Image(uiImage: Self.image(for: kind, pointSize: pointSize))
+            .renderingMode(.template)
             .interpolation(.none)
+            .foregroundStyle(SaveAtlasPalette.forest)
             .frame(width: pointSize, height: pointSize)
             .accessibilityHidden(true)
     }
@@ -342,14 +400,24 @@ struct SavePixelDisplayText: View {
 
     var body: some View {
         Image(uiImage: Self.image(for: text, pointSize: pointSize))
+            .renderingMode(.template)
             .interpolation(.none)
             .resizable()
             .scaledToFit()
-            .frame(height: pointSize)
+            .frame(width: CGFloat(text.count * 6) / 7 * pointSize, height: pointSize)
+            .foregroundStyle(SaveAtlasPalette.forest)
             .accessibilityLabel(text)
     }
 
     private static let glyphs: [Character: [String]] = [
+        "a": ["00000", "00000", "01110", "00001", "01111", "10001", "01111"],
+        "v": ["00000", "00000", "10001", "10001", "10001", "01010", "00100"],
+        "y": ["00000", "10001", "10001", "01111", "00001", "10001", "01110"],
+        "s": ["00000", "00000", "01111", "10000", "01110", "00001", "11110"],
+        "p": ["00000", "11110", "10001", "11110", "10000", "10000", "10000"],
+        "o": ["00000", "00000", "01110", "10001", "10001", "10001", "01110"],
+        "r": ["00000", "00000", "10110", "11001", "10000", "10000", "10000"],
+        "t": ["00100", "00100", "11111", "00100", "00100", "00101", "00010"],
         "A": ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
         "C": ["01110", "10001", "10000", "10000", "10000", "10001", "01110"],
         "E": ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
@@ -363,7 +431,7 @@ struct SavePixelDisplayText: View {
     ]
 
     private static func image(for text: String, pointSize: CGFloat) -> UIImage {
-        let letters = Array(text.uppercased())
+        let letters = Array(text)
         let unit = max(1, Int(pointSize / 7))
         let width = max(1, letters.count * 6 * unit)
         let height = 7 * unit
@@ -419,5 +487,23 @@ enum SaveFriendLastAt {
             .map { post in
                 Row(authorID: post.author_id, authorName: post.author_name, lastPost: post)
             }
+    }
+}
+
+/// Quiet paper ticket for controls; perforations are reserved for Map Stamps.
+struct SaveKraftTicketShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let cut = min(6, min(rect.width, rect.height) / 4)
+        return Path { path in
+            path.move(to: CGPoint(x: rect.minX + cut, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX - cut, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + cut))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - cut))
+            path.addLine(to: CGPoint(x: rect.maxX - cut, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX + cut, y: rect.maxY))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - cut))
+            path.addLine(to: CGPoint(x: rect.minX, y: rect.minY + cut))
+            path.closeSubpath()
+        }
     }
 }

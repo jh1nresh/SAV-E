@@ -13,7 +13,7 @@ struct SaveFriendsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                SavePixelDisplayText(text: "Savvy", pointSize: 28)
+                SavePixelDisplayText(text: "Savvy", pointSize: 34)
 
                 HStack {
                     Text(language.localized(english: "Friends", traditionalChinese: "朋友"))
@@ -25,8 +25,8 @@ struct SaveFriendsView: View {
                             .font(SaveAtlasType.strong(13))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 14)
-                            .frame(minHeight: 36)
-                            .background(SaveAtlasPalette.coral, in: Capsule())
+                            .frame(minHeight: 44)
+                            .background(SaveAtlasPalette.coral, in: SaveKraftTicketShape())
                     }
                     .accessibilityLabel(language.localized(english: "Manage following", traditionalChinese: "管理追蹤"))
                     .accessibilityIdentifier("friends.connections")
@@ -50,7 +50,7 @@ struct SaveFriendsView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, AtlasMetrics.statusBarHeight + 12)
-            .padding(.bottom, AtlasMetrics.height - 786 + 24)
+            .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
         }
         .background(SaveAtlasPalette.canvas).foregroundStyle(SaveAtlasPalette.forest)
         .accessibilityIdentifier("friends.root")
@@ -84,7 +84,7 @@ struct SaveFriendsView: View {
                 HStack(spacing: 12) {
                     Button { author = row.lastPost } label: {
                         HStack(spacing: 12) {
-                            SavePostageSealAvatar(name: row.authorName)
+                            SavePostageSealAvatar(name: row.authorName, size: 64)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(row.authorName)
                                     .font(SaveAtlasType.strong(16))
@@ -92,7 +92,7 @@ struct SaveFriendsView: View {
                                 Text(lastAtText(row.lastPost))
                                     .font(SaveAtlasType.body(13))
                                     .foregroundStyle(SaveAtlasPalette.muted)
-                                    .lineLimit(1)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: 4)
                         }
@@ -102,18 +102,25 @@ struct SaveFriendsView: View {
                     .accessibilityIdentifier("friends.author.\(row.authorID)")
 
                     Button { selected = row.lastPost } label: {
-                        SharedPostArtwork(post: row.lastPost, compact: true)
-                            .frame(width: 72, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        Group {
+                            if (row.lastPost.photo_count ?? 0) > 0 {
+                                SharedPostArtwork(post: row.lastPost, compact: true)
+                            } else {
+                                SaveKraftStampPixelArt(scene: .from(name: row.lastPost.name, category: row.lastPost.category))
+                            }
+                        }
+                            .frame(width: 76, height: 76)
+                            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("friends.post.\(row.lastPost.id.uuidString)")
                 }
                 .padding(12)
-                .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .background(SaveAtlasPalette.paper, in: SaveKraftTicketShape())
                 .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
+                    SaveKraftTicketShape()
+                        .stroke(SaveAtlasPalette.line.opacity(0.65), lineWidth: 1)
+                        .allowsHitTesting(false)
                 }
             }
         }
@@ -126,9 +133,8 @@ struct SaveFriendsView: View {
     }
 
     private func lastAtText(_ post: SharedPlacePost) -> String {
-        language.localized(
-            english: "Last at \(post.name)",
-            traditionalChinese: "最近在 \(post.name)"
-        )
+        post.status == .wantToGo
+            ? language.localized(english: "Wants to go · \(post.name)", traditionalChinese: "想去・\(post.name)")
+            : language.localized(english: "Shared · \(post.name)", traditionalChinese: "分享了・\(post.name)")
     }
 }

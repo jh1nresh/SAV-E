@@ -481,6 +481,22 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Friends", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["friends.mapStrip"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-friends-town")
+        let invite = app.buttons["friends.connections"]
+        XCTAssertGreaterThanOrEqual(invite.frame.height, 44)
+        XCTAssertTrue(invite.isHittable)
+
+        openRootTab("Passport", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
+        let progress = app.descendants(matching: .any)["profile.stampProgress"].firstMatch
+        XCTAssertGreaterThan(progress.frame.height, 24, "Collection progress must not collapse.")
+        let firstStamp = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'profile.stamp.'")).firstMatch
+        XCTAssertTrue(firstStamp.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(firstStamp.isHittable)
+        XCTAssertLessThan(firstStamp.frame.maxY, rootTabButton("Passport", app: app).frame.minY)
+        attach(app, name: "atlas-passport-stamps")
+        firstStamp.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-passport-stamp-detail")
     }
 
     /// Root navigation includes Friends and keeps Plan as a child route.

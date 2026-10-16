@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import SAVE
 
 @MainActor
@@ -114,10 +115,12 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(passport.contains("???"))
     }
 
-    func testFriendsIsPeopleFirstWithLastAt() throws {
+    func testFriendsIsPeopleFirstWithExplicitShareStatus() throws {
         let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
         XCTAssertTrue(friends.contains("SavePostageSealAvatar"))
-        XCTAssertTrue(friends.contains("Last at"))
+        XCTAssertTrue(friends.contains("Shared ·"))
+        XCTAssertTrue(friends.contains("Wants to go ·"))
+        XCTAssertFalse(friends.contains("Last at"))
         XCTAssertTrue(friends.contains("friends.mapStrip"))
         XCTAssertTrue(friends.contains("friends.empty"))
         XCTAssertTrue(friends.contains("friends.findFriends"))
@@ -187,6 +190,21 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(theme.contains("7EC8E3"))
         XCTAssertTrue(theme.contains("F4E6C8"))
         XCTAssertFalse(theme.contains("FFF8EE"))
+    }
+
+    func testApprovedArtworkIsBundledAndStampFacesStaySeparate() throws {
+        let town = try XCTUnwrap(UIImage(named: "SavvyTownArtwork"))
+        XCTAssertGreaterThan(town.size.width, 500)
+        XCTAssertGreaterThan(town.size.height, 500)
+        let atlas = try XCTUnwrap(UIImage(named: "SavvyStampArtwork")?.cgImage)
+        XCTAssertEqual(atlas.width * 2, atlas.height * 3)
+        let scenes: [SaveKraftStampScene] = [.harbor, .pine, .maple, .mountain, .lake, .cafe]
+        let faces = scenes.map(SaveKraftStampPixelArt.image(for:))
+        for face in faces {
+            XCTAssertEqual(face.cgImage?.width, atlas.width / 3)
+            XCTAssertEqual(face.cgImage?.height, atlas.height / 2)
+        }
+        XCTAssertEqual(Set(faces.compactMap { $0.pngData() }).count, 6)
     }
 
     private func memberBody(_ name: String, in source: String) -> String {

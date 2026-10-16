@@ -17,7 +17,7 @@ struct SaveTileTownRootMap: View {
             SaveAtlasPalette.canvas.ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 10) {
-                SavePixelDisplayText(text: "Savvy", pointSize: 28)
+                SavePixelDisplayText(text: "Savvy", pointSize: 34)
                     .padding(.horizontal, 16)
                     .padding(.top, AtlasMetrics.statusBarHeight)
                     .accessibilityIdentifier("map.wordmark")
@@ -102,19 +102,20 @@ struct SaveTileTownRootMap: View {
                         Text(item.title(language: languageSettings.language))
                     }
                     .font(SaveAtlasType.strong(13))
-                    .foregroundStyle(lens == item ? SaveAtlasPalette.coral : SaveAtlasPalette.forest)
-                    .padding(.horizontal, 12)
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                    .padding(.horizontal, 10)
                     .frame(minHeight: 44)
-                    .contentShape(Capsule())
+                    .frame(maxWidth: .infinity)
+                    .contentShape(SaveKraftTicketShape())
                     .background(
-                        SaveAtlasPalette.paper,
-                        in: Capsule()
+                        SaveAtlasPalette.kraft.opacity(lens == item ? 0.72 : 0.30),
+                        in: SaveKraftTicketShape()
                     )
                     .overlay {
-                        Capsule()
+                        SaveKraftTicketShape()
                             .stroke(
-                                lens == item ? SaveAtlasPalette.coral.opacity(0.55) : SaveAtlasPalette.kraft.opacity(0.7),
-                                lineWidth: 1
+                                lens == item ? SaveAtlasPalette.forest : SaveAtlasPalette.line.opacity(0.65),
+                                style: StrokeStyle(lineWidth: 1, dash: lens == item ? [] : [3, 2])
                             )
                     }
                 }
@@ -122,7 +123,6 @@ struct SaveTileTownRootMap: View {
                 .accessibilityIdentifier(item.accessibilityIdentifier)
                 .accessibilityAddTraits(lens == item ? .isSelected : [])
             }
-            Spacer(minLength: 0)
         }
         .accessibilityIdentifier("map.lensRail")
     }

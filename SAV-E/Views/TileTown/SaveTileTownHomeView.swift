@@ -63,7 +63,7 @@ struct SaveTileTownHomeView: View {
     private var header: some View {
         HStack(spacing: 9) {
             Button(action: presentation.onOpenPassport) {
-                SavePixelDisplayText(text: "Savvy", pointSize: 28)
+                SavePixelDisplayText(text: "Savvy", pointSize: 34)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(localized("Open Savvy Passport", "開啟 Savvy 護照"))
@@ -253,10 +253,6 @@ struct SaveTileTownHomeView: View {
     private var restingHome: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 16) {
-                Text(savedCountText)
-                    .font(SaveAtlasType.body(12))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                    .accessibilityIdentifier("home.search.count")
                 peek
                 cluesBar
                 recentStamps
@@ -268,12 +264,12 @@ struct SaveTileTownHomeView: View {
     }
 
     private var peek: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        ZStack(alignment: .bottomLeading) {
             SaveTileTownCanvas(
                 pins: peekPins,
                 onSelect: { id in presentation.onOpenPlace(id.uuidString) }
             )
-            .frame(height: 168)
+            .frame(height: 350)
             .allowsHitTesting(false)
             .accessibilityIdentifier("home.tileTown")
 
@@ -281,26 +277,21 @@ struct SaveTileTownHomeView: View {
                 Button { presentation.onOpenPlace(featured.id) } label: {
                     SaveTileTownPeekCard(
                         title: featured.name,
-                        subtitle: featured.relativeDay.isEmpty ? featured.area : featured.relativeDay,
+                        subtitle: localized("Map Stamp", "地圖章"),
                         photoURL: featured.photoURL ?? featured.photoURLs.first,
                         accessibilityNameID: "home.featuredName"
                     )
-                    .padding(12)
                 }
                 .buttonStyle(.plain)
+                .frame(maxWidth: 290, alignment: .leading)
+                .padding(12)
                 .contentShape(Rectangle())
                 .accessibilityElement(children: .contain)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("home.place.\(featured.id)")
             }
         }
-        .background(SaveAtlasPalette.paper)
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .stroke(SaveAtlasPalette.line.opacity(0.22), lineWidth: 1)
-                .allowsHitTesting(false)
-        }
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var cluesBar: some View {
@@ -315,17 +306,18 @@ struct SaveTileTownHomeView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .frame(minHeight: 44)
-                    .background(SaveAtlasPalette.coral, in: Capsule())
+                    .background(SaveAtlasPalette.coral, in: SaveKraftTicketShape())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("home.review")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(SaveAtlasPalette.kraft.opacity(0.38), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(SaveAtlasPalette.kraft.opacity(0.38), in: SaveKraftTicketShape())
         .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(SaveAtlasPalette.kraft.opacity(0.7), lineWidth: 1)
+            SaveKraftTicketShape()
+                .stroke(SaveAtlasPalette.line.opacity(0.65), lineWidth: 1)
+                .allowsHitTesting(false)
         }
         .accessibilityIdentifier("home.cluesBar")
     }
@@ -385,11 +377,18 @@ struct SaveTileTownHomeView: View {
 
     private var recentStamps: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(localized("Recent stamps", "最近的地圖章"))
-                .font(SaveAtlasType.strong(16))
-                .foregroundStyle(SaveAtlasPalette.forest)
+            HStack(alignment: .firstTextBaseline) {
+                Text(localized("Recent stamps", "最近的地圖章"))
+                    .font(SaveAtlasType.strong(18))
+                    .foregroundStyle(SaveAtlasPalette.forest)
+                Spacer(minLength: 8)
+                Text(savedCountText)
+                    .font(SaveAtlasType.regular(12))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .accessibilityIdentifier("home.search.count")
+            }
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 16) {
+                HStack(alignment: .top, spacing: 10) {
                     ForEach(presentation.savedPlaces.filter { $0.id != featured?.id }.prefix(6)) { place in
                         Button { presentation.onOpenPlace(place.id) } label: {
                             SaveKraftStamp(
