@@ -621,7 +621,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(passport.contains("serverVerifiedTier"))
     }
 
-    func testPrimaryHeadersUseTheCurrentSavvyLogo() throws {
+    func testPrimaryHeadersUseTheCurrentSavvyBrandTreatment() throws {
         let components = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
         let brandHeader = try typeBody("BrandHeader", in: components)
         let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
@@ -635,7 +635,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(rootHeader.contains("accessibilityIdentifier(\"root.passport\")"))
         XCTAssertTrue(rootHeader.contains("Open Savvy Passport"))
         XCTAssertFalse(rootHeader.contains("MemoMascotMark"))
-        XCTAssertTrue(passportTopBar.contains("Image(\"SavvyLogo\")"))
+        XCTAssertTrue(passportTopBar.contains("SavePixelDisplayText(text: \"Savvy\""))
+        XCTAssertTrue(passportTopBar.contains("accessibilityLabel(\"Savvy\")"))
         XCTAssertTrue(passportTopBar.contains("profile.brandLogo"))
 
         let saveHome = try typeBody("SaveHomeView", in: root)
