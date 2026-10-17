@@ -232,7 +232,11 @@ struct ContentView: View {
     private var rootScaffold: some View {
         ZStack(alignment: .bottom) {
             rootTabs
-            if selectedRootTab == .map || isMapPanelExpanded { mapDrawerPanel }
+            if selectedRootTab == .map || isMapPanelExpanded {
+                // Keep the editor above the native navigation/map layer when
+                // returning from a full-screen Review candidate with a keyboard.
+                mapDrawerPanel.zIndex(1)
+            }
         }
         .onChange(of: selectedRootTab) { _, tab in
             if tab != .map {
@@ -691,6 +695,11 @@ struct ContentView: View {
             ) {
                 if mapDetailDrawerItem != nil {
                     drawerView
+                        .clipShape(UnevenRoundedRectangle(
+                            bottomLeadingRadius: 32,
+                            bottomTrailingRadius: 32,
+                            style: .continuous
+                        ))
                 } else {
                     SaveMapSearchContent(
                         mapViewModel: mapVM,
@@ -782,6 +791,7 @@ struct ContentView: View {
                 onRecommendOrder: openFoodAnalysis,
                 onPlanAroundPlace: openPlanAround,
                 onFindExactPlaceCandidate: openExactSearch,
+                onAddReviewClue: addClueToReviewCandidate,
                 onFocusReviewCandidateOnMap: focusReviewCandidateOnMap,
                 onSaveCandidate: saveFullScreenCandidate,
                 onRejectCandidate: rejectFullScreenCandidate,
@@ -962,6 +972,8 @@ struct ContentView: View {
                 mapVM.clearSelectedMapObject()
             },
             onShowMapCandidatesOnMap: showMapCandidatesOnMap,
+            onAddReviewClue: addClueToReviewCandidate,
+            onFindReviewPlace: openExactSearch,
             onFocusReviewCandidateOnMap: focusReviewCandidateOnMap
         )
         .environment(\.appLanguageSettings, languageSettings)
@@ -1289,6 +1301,16 @@ struct ContentView: View {
         openExactSearch(candidate)
     }
 
+    private func addClueToReviewCandidate(_ candidate: PlaceReviewCandidate) {
+        guard incomingPlaceReceipt == nil else { return }
+        exactSearchRequestID = nil
+        rootPath.removeAll()
+        selectedRootTab = .map
+        isExactSearchSessionActive = true
+        mapVM.beginExactSearchResolution(for: candidate)
+        openExactSearchRefine(query: candidate.refinementQuery)
+    }
+
     private func openExactSearch(_ candidate: PlaceReviewCandidate) {
         let query = candidate.refinementQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
@@ -1303,33 +1325,13 @@ struct ContentView: View {
         selectedRootTab = .map
         isExactSearchSessionActive = true
         mapVM.beginExactSearchResolution(for: candidate)
-        let requestID = UUID()
-        exactSearchRequestID = requestID
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 180_000_000)
-            guard exactSearchRequestID == requestID else { return }
-            let result = await mapVM.prepareMapCandidatesForDrawerQuery(
-                query,
-                preservesExactSearchClue: true
-            )
-            guard exactSearchRequestID == requestID else { return }
-            guard case .current(let candidates) = result else { return }
-            mapVM.attachExactSearchResults(candidates)
-            guard exactSearchRequestID == requestID else { return }
-            if candidates.isEmpty {
-                // Keep the clue link so a typed refine can still retire it.
-                openExactSearchRefine(query: query)
-            } else {
-                drawerVM.mapCandidates = candidates
-                exactSearchRequestID = nil
-                isExactSearchSessionActive = true
-                showMapCandidatesOnMap()
-            }
-        }
+        // The tile-town canvas shows saved stamps, not unconfirmed search pins.
+        // Let the existing search panel perform one query and keep its results
+        // actionable while retaining the original clue-resolution session.
+        openExactSearchRefine(query: query)
     }
 
-    /// Empty exact search opens the existing map search panel without ending
-    /// the clue-resolution session or starting a second search that clears it.
+    /// Open the map search panel without ending the clue-resolution session.
     private func openExactSearchRefine(query: String) {
         guard incomingPlaceReceipt == nil else { return }
         mapDetailDrawerItem = nil

@@ -247,6 +247,48 @@ struct SaveAgentActionDrawerModel: Hashable {
     }
 }
 
+/// Presentation only: these hints never promote a clue or change confirmation eligibility.
+enum SaveReviewNextStep: Equatable {
+    case pendingAnalysis, chooseMatch, confirm, addCity, addAddress, locatePlace
+
+    init(pending: Bool, savable: Bool, address: String, city: String?, missingInfo: [String]) {
+        if pending { self = .pendingAnalysis }
+        else if missingInfo.contains(where: { $0.caseInsensitiveCompare("Choose the correct map candidate") == .orderedSame }) { self = .chooseMatch }
+        else if savable { self = .confirm }
+        else if address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            self = (city ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .addCity : .addAddress
+        } else { self = .locatePlace }
+    }
+
+    var english: String {
+        switch self {
+        case .pendingAnalysis: return "Source saved; analysis still needs to finish."
+        case .chooseMatch: return "More than one map match. Check the branch and address."
+        case .confirm: return "Check the name and address before confirming."
+        case .addCity: return "Add a city, address, or map link to narrow the search."
+        case .addAddress: return "Add an address, caption, or map link to identify this place."
+        case .locatePlace: return "An address is available; find and check its map match."
+        }
+    }
+    var traditionalChinese: String {
+        switch self {
+        case .pendingAnalysis: return "來源已保存，分析尚待完成。"
+        case .chooseMatch: return "有多個地圖結果，請核對分店和地址。"
+        case .confirm: return "確認前，請核對名稱和地址。"
+        case .addCity: return "補上城市、地址或地圖連結，縮小搜尋範圍。"
+        case .addAddress: return "補上地址、貼文文字或地圖連結，找出這個地點。"
+        case .locatePlace: return "已有地址，請找出並核對地圖結果。"
+        }
+    }
+}
+
+extension PlaceReviewCandidate {
+    var reviewNextStep: SaveReviewNextStep {
+        SaveReviewNextStep(pending: isAnalysisPending, savable: hasSavableLocation,
+                          address: address, city: city, missingInfo: missingInfo)
+    }
+}
+
 struct SavePlaceActionResolution: Hashable {
     var kind: SaveSearchPrimaryAction
     var title: String
