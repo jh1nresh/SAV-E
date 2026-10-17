@@ -358,8 +358,14 @@ struct SaveMapSearchContent: View {
                 .padding(16)
             }
             .scrollDismissesKeyboard(.interactively)
+            // Clip only the scrolling rows, leaving the live editor outside
+            // the mask. The enclosing panel supplies the rounded paper.
+            .clipShape(UnevenRoundedRectangle(
+                bottomLeadingRadius: 32,
+                bottomTrailingRadius: 32,
+                style: .continuous
+            ))
         }
-        .background(SaveAtlasPalette.paper)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.search.root")
         .onAppear {
