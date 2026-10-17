@@ -695,6 +695,11 @@ struct ContentView: View {
             ) {
                 if mapDetailDrawerItem != nil {
                     drawerView
+                        .clipShape(UnevenRoundedRectangle(
+                            bottomLeadingRadius: 32,
+                            bottomTrailingRadius: 32,
+                            style: .continuous
+                        ))
                 } else {
                     SaveMapSearchContent(
                         mapViewModel: mapVM,
