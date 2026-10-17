@@ -514,6 +514,48 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "atlas-passport-stamp-detail")
     }
 
+    @MainActor
+    func testCaptureStampPolishSurfaces() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour",
+                "--uitest-location-denied", "--uitest-friends-town",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        let longName = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Bar Benfiddich' AND identifier BEGINSWITH 'home.recent.'")).firstMatch
+        XCTAssertTrue(longName.waitForExistence(timeout: stepTimeout))
+        XCTAssertGreaterThanOrEqual(longName.frame.width, 160)
+        attach(app, name: "polish-home")
+
+        openRootTab("Map", app: app)
+        let search = app.buttons["map.command.search"]
+        XCTAssertTrue(search.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(search.isHittable)
+        XCTAssertGreaterThanOrEqual(search.frame.height, 44)
+        attach(app, name: "polish-map")
+
+        openRootTab("Friends", app: app)
+        let author = app.buttons["friends.author.alex"]
+        XCTAssertTrue(author.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(author.isHittable)
+        attach(app, name: "polish-friends")
+
+        openRootTab("Passport", app: app)
+        let stamp = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'profile.stamp.'")).firstMatch
+        XCTAssertTrue(stamp.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(stamp.isHittable)
+        attach(app, name: "polish-passport")
+        stamp.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+    }
+
     /// Root navigation includes Friends and keeps Plan as a child route.
     /// Run on the reference and compact devices; attachment names stay stable for parity.
     @MainActor

@@ -84,7 +84,12 @@ struct SaveFriendsView: View {
                 HStack(spacing: 12) {
                     Button { author = row.lastPost } label: {
                         HStack(spacing: 12) {
-                            SavePostageSealAvatar(name: row.authorName, size: 64)
+                            SavePostageSealAvatar(
+                                name: row.authorName,
+                                authorID: row.authorID,
+                                photoURL: row.lastPost.author_avatar_url.flatMap(URL.init(string:)),
+                                size: 64
+                            )
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(row.authorName)
                                     .font(SaveAtlasType.strong(16))
@@ -106,7 +111,7 @@ struct SaveFriendsView: View {
                             if (row.lastPost.photo_count ?? 0) > 0 {
                                 SharedPostArtwork(post: row.lastPost, compact: true)
                             } else {
-                                SaveKraftStampPixelArt(scene: .from(name: row.lastPost.name, category: row.lastPost.category))
+                                SaveKraftStampPixelArt(scene: .from(name: row.lastPost.name, category: row.lastPost.category, detail: row.lastPost.caption ?? ""))
                             }
                         }
                             .frame(width: 76, height: 76)

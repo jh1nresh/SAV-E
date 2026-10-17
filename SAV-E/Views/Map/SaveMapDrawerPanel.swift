@@ -52,22 +52,14 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .bottom)
                     .frame(height: panelHeight(totalHeight: proxy.size.height - bottomClearance), alignment: .top)
-                    .background {
-                        if stage == .collapsed {
-                            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                .fill(.regularMaterial)
-                        } else {
-                            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                                .fill(SaveAtlasPalette.paper)
-                        }
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                    .background(SaveAtlasPalette.paper, in: SaveKraftTicketShape())
+                    .clipShape(SaveKraftTicketShape())
                     .overlay {
-                        RoundedRectangle(cornerRadius: 32, style: .continuous)
-                            .stroke(SaveAtlasPalette.line.opacity(0.3), lineWidth: 1)
+                        SaveKraftTicketShape()
+                            .stroke(SaveAtlasPalette.line.opacity(0.65), lineWidth: 1)
                             .allowsHitTesting(false)
                     }
-                    .shadow(color: SaveAtlasPalette.ink.opacity(0.10), radius: 12, y: 4)
+                    .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 6, y: 3)
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel("Map search drawer")
                     .accessibilityValue(stage.accessibilityValue)

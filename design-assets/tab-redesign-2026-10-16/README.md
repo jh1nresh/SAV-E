@@ -23,6 +23,22 @@ The original procedural town remains a missing-asset fallback. This explicitly
 updates the previous renderer-only lock to use the selected detailed art; it
 does not restore a live MapKit basemap or imply real-world coordinates.
 
+### 2026-10-17 polish assets
+
+Generated with the built-in image tool for the founder's four-item polish request:
+
+- `SavvyCategoryStampArtwork.imageset/artwork.png`: 3×2 atlas, bar / hotel /
+  restaurant / noodle shop / book-and-flower shop / cottage. Generic decorative
+  category art, not photos or likenesses of named businesses. Existing place
+  category chooses the illustration; original nature scenes remain available.
+- `SavvyFriendPortraits.imageset/artwork.png`: 3×2 atlas of fictional pixel
+  travelers. A stable author-ID hash chooses a fallback; real avatar URLs take
+  precedence. No appearance is inferred and no generated avatar is persisted
+  or published to a profile.
+
+Both atlases are bundled originals (1536×1024); SwiftUI uses cached equal-cell
+cropping and nearest-neighbor display. They add no external runtime provider.
+
 ## Acceptance and verification
 
 - Atlas palette, native body text, mixed-case pixel display, clipped kraft

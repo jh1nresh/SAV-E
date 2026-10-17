@@ -2323,6 +2323,8 @@ private struct PassportTileTownCollection: View {
                         SaveKraftStamp(
                             title: place.name,
                             face: .photo(HomePlaceCardArt.photoURL(for: place)),
+                            category: place.category.rawValue,
+                            artworkDetail: place.note ?? "",
                             size: .grid,
                             accessibilityIdentifier: "profile.stamp.\(place.id.uuidString)"
                         )

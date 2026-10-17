@@ -40,7 +40,10 @@ struct SaveTileTownRootMap: View {
                         } label: {
                             SaveTileTownPeekCard(
                                 title: place.name,
-                                subtitle: place.createdAt.formatted(date: .abbreviated, time: .omitted)
+                                subtitle: place.createdAt.formatted(date: .abbreviated, time: .omitted),
+                                photoURL: HomePlaceCardArt.photoURL(for: place),
+                                category: place.category.rawValue,
+                                artworkDetail: place.note ?? ""
                             )
                         }
                         .buttonStyle(.plain)

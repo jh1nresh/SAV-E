@@ -34,9 +34,25 @@ enum SaveKraftStampFace: Equatable {
 
 enum SaveKraftStampScene: String, CaseIterable {
     case harbor, pine, maple, cafe, mountain, lake, house
+    case bar, hotel, restaurant, noodle, shop
 
-    static func from(name: String, category: String = "") -> SaveKraftStampScene {
+    static func from(name: String, category: String = "", detail: String = "") -> SaveKraftStampScene {
         let haystack = "\(name) \(category)".lowercased()
+        // Category is existing user data; these are illustrative fallbacks,
+        // never a claim about the real building or its surroundings.
+        switch category.lowercased() {
+        case "bar": return .bar
+        case "stay": return .hotel
+        case "shopping": return .shop
+        case "cafe": return .cafe
+        case "food":
+            let foodDescription = "\(haystack) \(detail.lowercased())"
+            return foodDescription.contains("ramen") || foodDescription.contains("拉麵") ? .noodle : .restaurant
+        default: break
+        }
+        let words = Set(haystack.components(separatedBy: CharacterSet.alphanumerics.inverted))
+        if words.contains("hotel") || haystack.contains("飯店") || haystack.contains("旅館") { return .hotel }
+        if words.contains("bar") || haystack.contains("酒吧") { return .bar }
         if haystack.contains("harbor") || haystack.contains("sea") || haystack.contains("水") { return .harbor }
         if haystack.contains("pine") || haystack.contains("forest") || haystack.contains("松") { return .pine }
         if haystack.contains("maple") || haystack.contains("autumn") || haystack.contains("楓") { return .maple }
@@ -51,10 +67,12 @@ enum SaveKraftStampScene: String, CaseIterable {
 struct SaveKraftStamp: View {
     let title: String
     let face: SaveKraftStampFace
+    var category: String = ""
+    var artworkDetail: String = ""
     var size: SaveKraftStampSize = .grid
     var accessibilityIdentifier: String = "stamp.kraft"
     @Environment(\.appLanguageSettings) private var language
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .body) private var recentWidth: CGFloat = 164
 
     var body: some View {
         Group {
@@ -77,7 +95,7 @@ struct SaveKraftStamp: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(10)
-                .frame(width: dynamicTypeSize.isAccessibilitySize ? 220 : 118, alignment: .leading)
+                .frame(width: recentWidth, alignment: .leading)
             } else {
                 VStack(spacing: 8) {
                     artwork
@@ -106,7 +124,7 @@ struct SaveKraftStamp: View {
     }
 
     private var artwork: some View {
-        SaveKraftStampFaceView(face: illustratedFace, glyph: fallbackGlyph)
+        SaveKraftStampFaceView(face: illustratedFace, glyph: fallbackGlyph, fallbackScene: fallbackScene)
             .clipped()
             .overlay {
                 Rectangle().stroke(SaveAtlasPalette.line.opacity(0.38), lineWidth: 1)
@@ -140,14 +158,19 @@ struct SaveKraftStamp: View {
         case .scene:
             return face
         default:
-            return .scene(SaveKraftStampScene.from(name: title))
+            return .scene(fallbackScene)
         }
+    }
+
+    private var fallbackScene: SaveKraftStampScene {
+        .from(name: title, category: category, detail: artworkDetail)
     }
 }
 
 struct SaveKraftStampFaceView: View {
     let face: SaveKraftStampFace
     var glyph: String = "seal"
+    var fallbackScene: SaveKraftStampScene = .house
 
     var body: some View {
         ZStack {
@@ -161,15 +184,15 @@ struct SaveKraftStampFaceView: View {
                         case .success(let image):
                             image.resizable().scaledToFill()
                         default:
-                            SaveKraftStampPixelArt(scene: SaveKraftStampScene.from(name: glyph))
+                            SaveKraftStampPixelArt(scene: fallbackScene)
                         }
                     }
                     .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
                 } else {
-                    SaveKraftStampPixelArt(scene: SaveKraftStampScene.from(name: glyph))
+                    SaveKraftStampPixelArt(scene: fallbackScene)
                 }
             case .glyph:
-                SaveKraftStampPixelArt(scene: SaveKraftStampScene.from(name: glyph))
+                SaveKraftStampPixelArt(scene: fallbackScene)
             case .scene(let scene):
                 SaveKraftStampPixelArt(scene: scene)
             case .locked:
@@ -211,7 +234,16 @@ struct SaveKraftStampPixelArt: View {
                               width: width, height: height)
             if let cropped = atlas.cropping(to: rect) { faces[scene] = UIImage(cgImage: cropped) }
         }
-        faces[.house] = faces[.cafe]
+        if let categories = UIImage(named: "SavvyCategoryStampArtwork")?.cgImage {
+            let categoryOrder: [SaveKraftStampScene] = [.bar, .hotel, .restaurant, .noodle, .shop, .house]
+            let cellWidth = categories.width / 3
+            let cellHeight = categories.height / 2
+            for (index, scene) in categoryOrder.enumerated() {
+                let rect = CGRect(x: (index % 3) * cellWidth, y: (index / 3) * cellHeight,
+                                  width: cellWidth, height: cellHeight)
+                if let cropped = categories.cropping(to: rect) { faces[scene] = UIImage(cgImage: cropped) }
+            }
+        }
         return faces
     }()
 
@@ -281,7 +313,7 @@ struct SaveKraftStampPixelArt: View {
         case .lake:
             fill(2...13, 8...13, water)
             fill(6...9, 5...7, deep)
-        case .house:
+        case .house, .bar, .hotel, .restaurant, .noodle, .shop:
             fill(5...10, 5...6, honey)
             fill(4...11, 7...12, wall)
             plot(7, 9, sky)
@@ -293,7 +325,8 @@ struct SaveKraftStampPixelArt: View {
 
 struct SavePostageSealAvatar: View {
     var name: String
-    var systemImage: String = "person.fill"
+    var authorID: String = ""
+    var photoURL: URL? = nil
     var size: CGFloat = 48
 
     var body: some View {
@@ -304,14 +337,55 @@ struct SavePostageSealAvatar: View {
                     SavePostcardScallopedRectangle(depth: 3, pitch: 8)
                         .stroke(SaveAtlasPalette.line.opacity(0.75), lineWidth: 1)
                 }
-            Text(String(name.prefix(1)).uppercased())
-                .font(SaveAtlasType.strong(size * 0.42))
-                .foregroundStyle(SaveAtlasPalette.forest)
+            Group {
+                if let photoURL {
+                    CachedAsyncImage(url: photoURL) { phase in
+                        if case .success(let image) = phase {
+                            image.resizable().scaledToFill()
+                        } else {
+                            portrait
+                        }
+                    }
+                } else {
+                    portrait
+                }
+            }
+            .frame(width: size - 14, height: size - 14)
+            .clipped()
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
         .accessibilityLabel(name)
     }
+
+    private var portrait: some View {
+        Image(uiImage: Self.portraitImage(for: authorID.isEmpty ? name : authorID))
+            .interpolation(.none)
+            .resizable()
+            .scaledToFit()
+    }
+
+    // Stable fictional artwork selected by opaque identity, not inferred
+    // appearance. A supplied author avatar always takes precedence.
+    static func portraitIndex(for identity: String) -> Int {
+        let hash = identity.utf8.reduce(UInt32(2166136261)) { ($0 ^ UInt32($1)) &* 16777619 }
+        return Int((hash ^ (hash >> 16)) % 6)
+    }
+
+    static func portraitImage(for identity: String) -> UIImage {
+        let index = portraitIndex(for: identity)
+        return portraits.indices.contains(index) ? portraits[index] : UIImage(systemName: "person.fill") ?? UIImage()
+    }
+
+    private static let portraits: [UIImage] = {
+        guard let atlas = UIImage(named: "SavvyFriendPortraits")?.cgImage else { return [] }
+        let width = atlas.width / 3
+        let height = atlas.height / 2
+        return (0..<6).compactMap { index in
+            atlas.cropping(to: CGRect(x: (index % 3) * width, y: (index / 3) * height,
+                                     width: width, height: height)).map { UIImage(cgImage: $0) }
+        }
+    }()
 }
 
 /// Quiet 8×8 nearest-neighbor header glyphs. Visible 44pt buttons, not SF Symbols.
@@ -491,7 +565,7 @@ enum SaveFriendLastAt {
 }
 
 /// Quiet paper ticket for controls; perforations are reserved for Map Stamps.
-struct SaveKraftTicketShape: Shape {
+nonisolated struct SaveKraftTicketShape: Shape {
     func path(in rect: CGRect) -> Path {
         let cut = min(6, min(rect.width, rect.height) / 4)
         return Path { path in

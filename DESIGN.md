@@ -159,8 +159,9 @@ Rules:
   (see Evidence Receipt).
 - Stamp language is one system: `SaveKraftStamp` encloses art and its name
   inside one perforated kraft frame. Home uses horizontal tickets; Passport
-  uses portrait stamps. `SaveKraftStampPixelArt` crops the approved six-scene
-  atlas for illustrative fallbacks; real available place photos take precedence.
+  uses portrait stamps. `SaveKraftStampPixelArt` crops the scenery and category
+  atlases for illustrative fallbacks, using the existing place category consistently
+  across Home, Map peek and Passport; real available place photos take precedence.
   Empty Passport slots show `???` once, with an accessible empty-slot label.
 
 ### Review Clue
@@ -196,6 +197,9 @@ Rules:
 - Passport identity uses the chosen photo saved for the current account on this
   device when available; otherwise it uses `SavvyLogo`. This photo has no cloud
   avatar representation and does not sync between devices.
+- Friends author rows retain supplied avatar photos. Missing or failed photos
+  use fictional pixel portraits selected consistently by author ID, without
+  inferring the person's appearance or changing their profile.
 
 ### Evidence Receipt
 
@@ -719,7 +723,7 @@ Rules:
   below `SaveTileTownProductLock.mapChromeHeight`, and only the visible
   paper hits so pins stay tappable through medium.
 - The town canvas pans with a drag. Pin tap selects the kraft peek card.
-- Drawer search (collapsed capsule) still opens the parked search panel.
+- Drawer search (collapsed paper ticket) still opens the parked search panel.
   Category, Want to try, Visited, and Nearby-distance chips may remain in
   the drawer as Map Stamp lenses; they are not Home chrome.
 - Only reliable states get pins on the town. Source-only clues have no pin.
@@ -860,7 +864,7 @@ source clues or visit timestamps appear in post projections.
 ### Friends
 
 Home / Map / + / Friends / Passport remains the root bar. Friends is
-people-first: postage-framed initials, author name, and “Shared …” / “Wants to go …” for the
+people-first: postage-framed photos or fictional pixel portraits, author name, and “Shared …” / “Wants to go …” for the
 latest explicit post. Never infer current location or a visit from a shared post. A small tile-town strip may sit under the list; it
 must not duplicate the full Map tab. An author opens a read-only passport
 under the same live follower audience gate.

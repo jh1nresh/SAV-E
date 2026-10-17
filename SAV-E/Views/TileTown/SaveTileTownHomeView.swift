@@ -283,6 +283,8 @@ struct SaveTileTownHomeView: View {
                         title: featured.name,
                         subtitle: localized("Map Stamp", "地圖章"),
                         photoURL: featured.photoURL ?? featured.photoURLs.first,
+                        category: featured.searchPlace?.category.rawValue ?? "",
+                        artworkDetail: featured.searchPlace?.note ?? "",
                         accessibilityNameID: "home.featuredName"
                     )
                 }
@@ -391,6 +393,8 @@ struct SaveTileTownHomeView: View {
                             SaveKraftStamp(
                                 title: place.name,
                                 face: .photo(place.photoURL ?? place.photoURLs.first),
+                                category: place.searchPlace?.category.rawValue ?? "",
+                                artworkDetail: place.searchPlace?.note ?? "",
                                 size: .recent,
                                 accessibilityIdentifier: "home.recent.\(place.id)"
                             )

@@ -215,6 +215,44 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertEqual(Set(faces.compactMap { $0.pngData() }).count, 6)
     }
 
+    func testCategoryArtworkUsesExistingPlaceCategoryAndSeparateFaces() throws {
+        let fixtures: [(String, String, SaveKraftStampScene)] = [
+            ("Bar Benfiddich", "bar", .bar), ("The Siam Hotel", "stay", .hotel),
+            ("Guerrilla Tacos", "food", .restaurant), ("Fujin Tree 353 Cafe", "cafe", .cafe),
+            ("Daan Forest Park", "attraction", .pine), ("Ramen Shop", "food", .noodle),
+            ("Bookshop", "shopping", .shop), ("Unknown place", "", .house)
+        ]
+        for (name, category, expected) in fixtures {
+            XCTAssertEqual(SaveKraftStampScene.from(name: name, category: category), expected)
+        }
+        // A name mentioning a landscape cannot override a known business category.
+        XCTAssertEqual(SaveKraftStampScene.from(name: "Pine View", category: "stay"), .hotel)
+        XCTAssertEqual(SaveKraftStampScene.from(name: "Ichiran Shibuya", category: "food", detail: "Tonkotsu ramen"), .noodle)
+        let art = try XCTUnwrap(UIImage(named: "SavvyCategoryStampArtwork")?.cgImage)
+        XCTAssertEqual(art.width * 2, art.height * 3)
+        let scenes: [SaveKraftStampScene] = [.bar, .hotel, .restaurant, .noodle, .shop, .house]
+        let faces = scenes.map(SaveKraftStampPixelArt.image(for:))
+        XCTAssertEqual(Set(faces.compactMap { $0.pngData() }).count, 6)
+        for face in faces {
+            XCTAssertEqual(face.cgImage?.width, art.width / 3)
+            XCTAssertEqual(face.cgImage?.height, art.height / 2)
+        }
+    }
+
+    func testFriendPortraitsAreStableAndBundled() throws {
+        let atlas = try XCTUnwrap(UIImage(named: "SavvyFriendPortraits")?.cgImage)
+        let identities = (0..<100).map { "author-\($0)" }
+        XCTAssertEqual(Set(identities.map(SavePostageSealAvatar.portraitIndex(for:))).count, 6)
+        let faces = identities.map(SavePostageSealAvatar.portraitImage(for:))
+        XCTAssertEqual(Set(faces.compactMap { $0.pngData() }).count, 6)
+        for face in faces {
+            XCTAssertEqual(face.cgImage?.width, atlas.width / 3)
+            XCTAssertEqual(face.cgImage?.height, atlas.height / 2)
+        }
+        XCTAssertEqual(SavePostageSealAvatar.portraitIndex(for: "alex"), 1)
+        XCTAssertEqual(Set(["alex", "jordan", "taylor"].map(SavePostageSealAvatar.portraitIndex(for:))).count, 3)
+    }
+
     private func memberBody(_ name: String, in source: String) -> String {
         guard let start = source.range(of: "private var \(name)") else { return "" }
         let after = source[start.upperBound...]

@@ -370,11 +370,13 @@ struct SaveTileTownPeekCard: View {
     let title: String
     var subtitle: String? = nil
     var photoURL: URL? = nil
+    var category: String = ""
+    var artworkDetail: String = ""
     var accessibilityNameID: String? = nil
 
     var body: some View {
         HStack(spacing: 10) {
-            SaveKraftStampFaceView(face: .photo(photoURL), glyph: "photo")
+            SaveKraftStampFaceView(face: .photo(photoURL), fallbackScene: .from(name: title, category: category, detail: artworkDetail))
                 .frame(width: 44, height: 44)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {

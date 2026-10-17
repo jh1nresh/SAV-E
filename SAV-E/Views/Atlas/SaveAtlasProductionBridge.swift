@@ -701,10 +701,8 @@ struct SaveAtlasInteractiveRootMap: View {
     }
 }
 
-/// Collapsed Map search stop: Apple Maps floating frosted search capsule.
-///
-/// Search is its own capsule beside the identity control, matching the Apple
-/// Maps reference. The grabber and all three stops belong to `SaveMapDrawerPanel`.
+/// Collapsed Map search stop: an opaque paper ticket with a kraft search field.
+/// The grabber and all three stops belong to `SaveMapDrawerPanel`.
 struct SaveAtlasMapCommandShelf: View {
     let mapStampCount: Int
     let onOpenAssistant: () -> Void
@@ -718,13 +716,13 @@ struct SaveAtlasMapCommandShelf: View {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Color.primary.opacity(0.45))
+                        .foregroundStyle(SaveAtlasPalette.muted)
                         .frame(width: 22, height: 22)
                         .accessibilityHidden(true)
 
                     Text(languageSettings.localized(english: "Search places", traditionalChinese: "搜尋地點"))
                         .font(SaveAtlasType.regular(16))
-                        .foregroundStyle(Color.primary.opacity(0.45))
+                        .foregroundStyle(SaveAtlasPalette.muted)
                         .lineLimit(1)
 
                     Spacer(minLength: 0)
@@ -733,8 +731,8 @@ struct SaveAtlasMapCommandShelf: View {
                 .padding(.leading, 14)
                 .padding(.trailing, 8)
                 .frame(maxWidth: .infinity, minHeight: 44, maxHeight: 44)
-                .background(SaveAtlasPalette.canvas.opacity(0.7), in: Capsule())
-                .contentShape(Capsule())
+                .background(SaveAtlasPalette.kraft.opacity(0.28), in: SaveKraftTicketShape())
+                .contentShape(SaveKraftTicketShape())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Search places")
@@ -747,7 +745,7 @@ struct SaveAtlasMapCommandShelf: View {
                 Image(systemName: "person.crop.circle.fill")
                     .font(.system(size: 36, weight: .regular))
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(AtlasPalette.forest.opacity(0.85))
+                    .foregroundStyle(SaveAtlasPalette.forest)
                     .frame(width: 44, height: 44)
             }
             .buttonStyle(.plain)
