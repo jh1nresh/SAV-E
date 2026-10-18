@@ -2594,7 +2594,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(persisted.note, "Must try the bun")
         XCTAssertEqual(persisted.sourceHandle, "la.harbor.eats")
         XCTAssertEqual(persisted.placeHighlights, ["Window seats", "Single-origin pour-over"])
-        XCTAssertEqual(persisted.recommendedItems?.map(\.name), ["Cortado", "Egg tart"])
+        XCTAssertEqual(persisted.recommendedItems?.map { $0.name }, ["Cortado", "Egg tart"])
     }
 
     @MainActor
@@ -4599,6 +4599,53 @@ final class SaveSearchControllerTests: XCTestCase {
             outputLanguage: .english
         )
     }
+
+    private static func correctionStamp() -> Place {
+        Place(
+            id: UUID(),
+            name: "Review Coffee Xinyi",
+            address: "Taipei",
+            latitude: 25.033,
+            longitude: 121.565,
+            category: .cafe,
+            status: .wantToGo,
+            note: "Must try the bun",
+            sourcePlatform: .other,
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            placeHighlights: ["Window seats"],
+            recommendedItems: [RecommendedItem(name: "Cortado", price: nil)],
+            vibeTags: ["quiet"],
+            accessNotes: ["Walk-up"]
+        )
+    }
+
+    private static func correctionClue(overlappingStamp: Bool) -> PlaceReviewCandidate {
+        PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Coffee clue",
+            address: "Taipei",
+            city: "Taipei",
+            latitude: nil,
+            longitude: nil,
+            evidence: [
+                "Source URL: https://www.instagram.com/p/harborovenpizza/",
+                "Creator handle: @la.harbor.eats",
+                "Source URL: https://www.instagram.com/p/harborovenpizza/",
+            ],
+            confidence: 0.8,
+            missingInfo: ["Exact coordinates"],
+            status: "review",
+            createdAt: Date(),
+            placeHighlights: overlappingStamp ? ["Window seats", "Single-origin pour-over"] : ["Single-origin pour-over"],
+            recommendedItems: overlappingStamp
+                ? [RecommendedItem(name: "Cortado", price: nil), RecommendedItem(name: "Egg tart", price: nil)]
+                : [RecommendedItem(name: "Egg tart", price: nil)],
+            vibeTags: overlappingStamp ? ["quiet", "sunny"] : ["sunny"],
+            accessNotes: overlappingStamp ? ["Walk-up", "No reservations"] : ["No reservations"],
+            sourceHandle: "la.harbor.eats"
+        )
+    }
 }
 
 private final class StubTripIntentClient: SaveLLMClient {
@@ -5387,53 +5434,6 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(matchesSimplifiedQuery)
         XCTAssertTrue(matchesTraditionalQuery)
         XCTAssertEqual(map.places[0].address, "臺北市信義區")
-    }
-
-    private static func correctionStamp() -> Place {
-        Place(
-            id: UUID(),
-            name: "Review Coffee Xinyi",
-            address: "Taipei",
-            latitude: 25.033,
-            longitude: 121.565,
-            category: .cafe,
-            status: .wantToGo,
-            note: "Must try the bun",
-            sourcePlatform: .other,
-            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
-            placeHighlights: ["Window seats"],
-            recommendedItems: [RecommendedItem(name: "Cortado", price: nil)],
-            vibeTags: ["quiet"],
-            accessNotes: ["Walk-up"]
-        )
-    }
-
-    private static func correctionClue(overlappingStamp: Bool) -> PlaceReviewCandidate {
-        PlaceReviewCandidate(
-            id: UUID(),
-            captureId: nil,
-            name: "Coffee clue",
-            address: "Taipei",
-            city: "Taipei",
-            latitude: nil,
-            longitude: nil,
-            evidence: [
-                "Source URL: https://www.instagram.com/p/harborovenpizza/",
-                "Creator handle: @la.harbor.eats",
-                "Source URL: https://www.instagram.com/p/harborovenpizza/",
-            ],
-            confidence: 0.8,
-            missingInfo: ["Exact coordinates"],
-            status: "review",
-            createdAt: Date(),
-            placeHighlights: overlappingStamp ? ["Window seats", "Single-origin pour-over"] : ["Single-origin pour-over"],
-            recommendedItems: overlappingStamp
-                ? [RecommendedItem(name: "Cortado", price: nil), RecommendedItem(name: "Egg tart", price: nil)]
-                : [RecommendedItem(name: "Egg tart", price: nil)],
-            vibeTags: overlappingStamp ? ["quiet", "sunny"] : ["sunny"],
-            accessNotes: overlappingStamp ? ["Walk-up", "No reservations"] : ["No reservations"],
-            sourceHandle: "la.harbor.eats"
-        )
     }
 
     private func cameraCenter(_ map: MapViewModel) -> CLLocationCoordinate2D? {
