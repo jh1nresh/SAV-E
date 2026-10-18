@@ -948,7 +948,7 @@ final class MapViewModel: ObservableObject {
 
     private func mergeSavedSources(_ incoming: Place, into existing: Place) async throws -> Place {
         let merged = existing.mergingSources(from: incoming)
-        if usesRemotePersistence { try await supabaseService.updatePlace(merged) }
+        if usesRemotePersistence { try await supabaseService.updatePlace(merged, previous: existing) }
         mirrorToLocalVault(merged)
         places = Place.consolidated(places.filter { $0.id != existing.id } + [merged])
         return merged
@@ -1000,7 +1000,7 @@ final class MapViewModel: ObservableObject {
                 let existing = remote ?? existingSavedPlace(matching: place)
                 let merged = existing?.mergingSources(from: place) ?? place
                 if remote != nil {
-                    try await supabaseService.updatePlace(merged)
+                    try await supabaseService.updatePlace(merged, previous: existing)
                 } else {
                     try await supabaseService.savePlace(merged, userId: userId)
                 }
@@ -1771,7 +1771,7 @@ final class MapViewModel: ObservableObject {
 
         var associated = place.attachingReviewClue(resolution.clue)
         if associated != place {
-            if usesRemotePersistence { try await supabaseService.updatePlace(associated) }
+            if usesRemotePersistence { try await supabaseService.updatePlace(associated, previous: place) }
             mirrorToLocalVault(associated)
             places = Place.consolidated(places.filter { $0.id != associated.id } + [associated])
         }
@@ -1811,14 +1811,14 @@ final class MapViewModel: ObservableObject {
             updatedClue.latitude = place.latitude
             updatedClue.longitude = place.longitude
             updatedClue.status = "saved"
-            // The place row is already saved above; only the id travels with
-            // the decision so the backend never inserts it a second time.
+            // The place row is already saved or PATCHed above. Send only the
+            // id so the backend never inserts `final_place` a second time
+            // (409 "final_place.id already exists").
             try await recordCorrectionEvent(
                 for: clue,
                 eventType: .confirmCandidate,
                 afterCandidate: updatedClue,
                 userFinalPlaceId: place.id,
-                finalPlace: place,
                 reason: "User resolved review candidate to an exact map place."
             )
         }
@@ -3113,7 +3113,7 @@ final class MapViewModel: ObservableObject {
             self.mirrorToLocalVault(updated)
             guard self.usesRemotePersistence else { return }
             do {
-                try await self.supabaseService.updatePlace(updated)
+                try await self.supabaseService.updatePlace(updated, previous: place)
             } catch {
                 print("MapViewModel: failed to sync Home photo: \(error)")
             }
@@ -3139,7 +3139,7 @@ final class MapViewModel: ObservableObject {
             // updatePlace PATCHes the existing row; the create endpoint is a
             // plain insert and 500s on the duplicate id, which silently kept
             // enriched photos from ever persisting.
-            try await supabaseService.updatePlace(updatedPlace)
+            try await supabaseService.updatePlace(updatedPlace, previous: place)
         } catch {
             print("MapViewModel: failed to sync business photo for \(place.name): \(error)")
         }
@@ -3363,7 +3363,7 @@ final class MapViewModel: ObservableObject {
 
         do {
             if usesRemotePersistence {
-                try await supabaseService.updatePlace(place)
+                try await supabaseService.updatePlace(place, previous: previousPlace)
                 mirrorToLocalVault(place)
             } else {
                 _ = try saveLocalVaultService.saveConfirmedPlace(place)

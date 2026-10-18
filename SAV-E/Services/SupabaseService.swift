@@ -14,7 +14,7 @@ protocol SupabaseServiceProtocol {
     func fetchPlaces(for userId: String) async throws -> [Place]
     func savePlace(_ place: Place, userId: String) async throws
     func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult
-    func updatePlace(_ place: Place) async throws
+    func updatePlace(_ place: Place, previous: Place?) async throws
     func deletePlace(_ placeId: UUID) async throws
     func createMemoryCapture(from candidate: PendingReviewCandidate, userId: String) async throws -> UUID
     func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID?) async throws -> UUID
@@ -113,6 +113,9 @@ enum SupabaseError: LocalizedError {
 
 // Existing service fakes opt out; production always creates a server session.
 extension SupabaseServiceProtocol {
+    func updatePlace(_ place: Place) async throws {
+        try await updatePlace(place, previous: nil)
+    }
     func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?) async throws -> SourceSearchRecoveryResult {
         try await recoverSourceOnlyReviewCandidates(captureId: captureId, workflowRunId: workflowRunId, explicitRetry: false)
     }
@@ -274,7 +277,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         return FriendSharedPlaceSaveResult(place: response.place.toPlace(), outcome: outcome)
     }
 
-    func updatePlace(_ place: Place) async throws {
+    func updatePlace(_ place: Place, previous: Place? = nil) async throws {
         guard isConfigured else { return }
 
         var updates: [String: Any?] = [
@@ -284,6 +287,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             "status": place.status.rawValue,
             "rating": place.rating,
             "note": place.note,
+            "source_platform": place.sourcePlatform.rawValue,
             // Enrichment fields: without these, business photos/hours fetched
             // on detail open only ever lived in memory and never synced.
             "google_place_id": place.googlePlaceId,
@@ -294,10 +298,13 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             "source_image_url": place.sourceImageUrl,
             "business_photo_urls": place.businessPhotoUrls,
         ]
-        // Account-backed attribution lives on `recommender`. Omit nil so a
-        // note-only PATCH cannot wipe a handle the server already stored.
-        if let recommender = place.recommender ?? place.sourceHandle {
-            updates["recommender"] = recommender
+        // Account-backed attribution lives on `recommender`. Send a handle
+        // only when it is displayable and actually changed, so a photo
+        // enrichment PATCH cannot rewrite or invent one.
+        let nextHandle = SaveSourceHandle.displayable(place.recommender ?? place.sourceHandle)
+        let previousHandle = SaveSourceHandle.displayable(previous?.recommender ?? previous?.sourceHandle)
+        if let nextHandle, nextHandle != previousHandle {
+            updates["recommender"] = nextHandle
         }
         if let sourceUrl = place.sourceUrl {
             updates["source_url"] = sourceUrl
@@ -1877,15 +1884,18 @@ struct PlaceRecoveryDecisionDraft: Equatable {
     var reason: String?
 
     var body: [String: Any?] {
-        [
+        var payload: [String: Any?] = [
             "action": action,
             "candidate_id": candidateId?.uuidString,
             "final_place_id": finalPlaceId?.uuidString,
-            "final_place": finalPlacePayload,
             "reason_code": reasonCode,
             "edited_payload": editedPayload,
             "reason": reason,
         ]
+        if let finalPlacePayload {
+            payload["final_place"] = finalPlacePayload
+        }
+        return payload
     }
 
     static func == (lhs: PlaceRecoveryDecisionDraft, rhs: PlaceRecoveryDecisionDraft) -> Bool {

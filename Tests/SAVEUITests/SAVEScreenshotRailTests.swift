@@ -900,6 +900,50 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.staticTexts["84%"].exists)
         XCTAssertFalse(app.staticTexts["84% confidence"].exists)
         attach(app, name: "atlas-postcard-review-drawer")
+
+        tapReachable(app.buttons["drawer.review.changePlace"])
+        XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].waitForExistence(timeout: stepTimeout))
+        let refine = app.textFields["map.search.input"]
+        XCTAssertTrue(refine.waitForExistence(timeout: stepTimeout))
+        focus(refine)
+        refine.press(forDuration: 1.0)
+        let selectAll = app.menuItems["Select All"]
+        if selectAll.waitForExistence(timeout: timeout(2)) {
+            selectAll.tap()
+        } else if let current = refine.value as? String, !current.isEmpty {
+            refine.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
+        }
+        refine.typeText("ichiran")
+        let savedStamp = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH 'map.search.saved.' AND label CONTAINS[c] %@",
+                "Ichiran"
+            )
+        ).firstMatch
+        XCTAssertTrue(
+            savedStamp.waitForExistence(timeout: stepTimeout),
+            "Review → Choose another place must list saved Map Stamps."
+        )
+        tapReachable(savedStamp)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.saved.postcardBody"].waitForExistence(timeout: stepTimeout),
+            "Choosing a saved stamp should open that Map Stamp, not leave the Review clue."
+        )
+        XCTAssertTrue(app.staticTexts["Ichiran Shibuya"].firstMatch.exists)
+        attach(app, name: "review-change-place-saved-stamp")
+
+        openSavesFromHome(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        let leftoverClue = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH 'saves.reviewCandidate.' AND label CONTAINS[c] %@",
+                "Harbor Oven Pizza"
+            )
+        ).firstMatch
+        XCTAssertFalse(
+            leftoverClue.exists,
+            "Choosing a saved Map Stamp during Review correction must retire the clue."
+        )
     }
 
     @MainActor

@@ -1008,15 +1008,56 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         place.sourceHandle = "la.harbor.eats"
         place.recommender = "la.harbor.eats"
         place.sourceUrl = "https://www.instagram.com/p/harborovenpizza/"
+        place.sourcePlatform = .instagram
         let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
         AnalysisRequestURLProtocol.handler = { request in
             XCTAssertEqual(request.httpMethod, "PATCH")
             let body = try AnalysisRequestURLProtocol.body(request)
             XCTAssertEqual(body["recommender"] as? String, "la.harbor.eats")
             XCTAssertEqual(body["source_url"] as? String, "https://www.instagram.com/p/harborovenpizza/")
+            XCTAssertEqual(body["source_platform"] as? String, "instagram")
             return (200, "{}")
         }
         try await service.updatePlace(place)
+    }
+
+    func testUpdatePlaceOmitsUnchangedOrInvalidRecommenderAndPersistsPlatform() async throws {
+        var place = Place.mock
+        place.sourceHandle = "la.harbor.eats"
+        place.recommender = "la.harbor.eats"
+        place.sourceUrl = "https://www.instagram.com/p/harborovenpizza/"
+        place.sourcePlatform = .instagram
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertNil(body["recommender"])
+            XCTAssertEqual(body["source_platform"] as? String, "instagram")
+            return (200, "{}")
+        }
+        try await service.updatePlace(place, previous: place)
+
+        var coordinateHandle = place
+        coordinateHandle.recommender = "33.7405"
+        coordinateHandle.sourceHandle = "33.7405"
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertNil(body["recommender"], "Coordinate-looking handles must not be PATCHed")
+            XCTAssertEqual(body["source_platform"] as? String, "instagram")
+            return (200, "{}")
+        }
+        try await service.updatePlace(coordinateHandle, previous: Place.mock)
+
+        var renamed = place
+        renamed.recommender = "taipei.cafe.hop"
+        renamed.sourceHandle = "taipei.cafe.hop"
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertEqual(body["recommender"] as? String, "taipei.cafe.hop")
+            XCTAssertEqual(body["source_platform"] as? String, "instagram")
+            return (200, "{}")
+        }
+        try await service.updatePlace(renamed, previous: place)
     }
 
     func testEmptyRetryDistinguishesExistingSuccessorsFromUnresolvedSource() async throws {

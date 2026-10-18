@@ -2759,7 +2759,7 @@ private struct SavedMapDetailDrawerContent: View {
         // Persist so enriched photos/hours survive relaunch and sync across
         // devices; previously they lived only in this view's state. Demo and
         // offline sessions simply skip the write.
-        try? await SupabaseService.shared.updatePlace(updatedPlace)
+        try? await SupabaseService.shared.updatePlace(updatedPlace, previous: detailPlace)
     }
 
     private var placeEditor: some View {
