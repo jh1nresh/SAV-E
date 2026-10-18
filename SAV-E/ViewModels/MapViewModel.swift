@@ -1769,15 +1769,7 @@ final class MapViewModel: ObservableObject {
     func resolveExactSearchClue(toSavedPlace place: Place) async throws -> Place {
         guard let resolution = exactSearchResolution else { return place }
 
-        var associated = place
-        let evidence = (place.sourceEvidence + resolution.clue.evidence).reduce(into: [String]()) {
-            if !$0.contains($1) { $0.append($1) }
-        }
-        associated.note = evidence.isEmpty ? nil : evidence.joined(separator: "\n")
-        associated.createdAt = min(place.createdAt, resolution.clue.createdAt)
-        if associated.sourceHandle == nil {
-            associated.sourceHandle = resolution.clue.sourceHandle
-        }
+        var associated = place.attachingReviewClue(resolution.clue)
         if associated != place {
             if usesRemotePersistence { try await supabaseService.updatePlace(associated) }
             mirrorToLocalVault(associated)
@@ -1826,6 +1818,7 @@ final class MapViewModel: ObservableObject {
                 eventType: .confirmCandidate,
                 afterCandidate: updatedClue,
                 userFinalPlaceId: place.id,
+                finalPlace: place,
                 reason: "User resolved review candidate to an exact map place."
             )
         }

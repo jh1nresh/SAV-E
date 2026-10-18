@@ -66,6 +66,35 @@ struct Place: Identifiable, Codable, Hashable {
         return merged
     }
 
+    /// Attach a Review clue to an already-saved stamp without rewriting the
+    /// user's note or changing `createdAt` (stamp order). Generated
+    /// "Source URL:" / "Recommender:" lines stay in their fields, not the note.
+    func attachingReviewClue(_ clue: PlaceReviewCandidate) -> Place {
+        var merged = self
+        let highlights = (savedPlaceHighlights + clue.placeHighlights).removingDuplicates()
+        merged.placeHighlights = highlights.isEmpty ? placeHighlights : highlights
+        let items = savedRecommendedItems + clue.recommendedItems.filter { !savedRecommendedItems.contains($0) }
+        merged.recommendedItems = items.isEmpty ? recommendedItems : items
+        let vibes = (savedVibeTags + clue.vibeTags).removingDuplicates()
+        merged.vibeTags = vibes.isEmpty ? vibeTags : vibes
+        let access = (savedAccessNotes + clue.accessNotes).removingDuplicates()
+        merged.accessNotes = access.isEmpty ? accessNotes : access
+
+        if merged.sourceHandle == nil {
+            merged.sourceHandle = clue.sourceHandle
+        }
+        if merged.recommender == nil {
+            merged.recommender = merged.sourceHandle
+        }
+        if merged.sourceUrl == nil, let url = Self.provenanceURL(in: clue.evidence) {
+            merged.sourceUrl = url
+            if merged.sourcePlatform == .other {
+                merged.sourcePlatform = SourcePlatform.from(urlString: url)
+            }
+        }
+        return merged
+    }
+
     /// Stable venue identity with every original ID retained for old trip stops.
     static func consolidated(_ places: [Place]) -> [Place] {
         var result: [Place] = []
@@ -257,6 +286,24 @@ struct Place: Identifiable, Codable, Hashable {
         }
 
         return URL(string: "https://\(raw)")
+    }
+
+    private static func provenanceURL(in evidence: [String]) -> String? {
+        for line in evidence {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lowered = trimmed.lowercased()
+            guard lowered.hasPrefix("source url:") || lowered.hasPrefix("source:") else { continue }
+            let value = trimmed
+                .split(separator: ":", maxSplits: 1)
+                .dropFirst()
+                .joined(separator: ":")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let url = URL(string: value),
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https" else { continue }
+            return value
+        }
+        return nil
     }
 
     private static func urls(in text: String) -> [URL] {

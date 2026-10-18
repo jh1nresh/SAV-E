@@ -2549,18 +2549,11 @@ final class SaveSearchControllerTests: XCTestCase {
             .appendingPathComponent("exact-search-saved-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: vaultURL) }
         let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
-        _ = try vault.saveSourceOnly(url: URL(string: "https://example.com/original")!, note: "Original source note")
-        let clue = try XCTUnwrap(vault.reviewCandidates().first)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        let clue = Self.correctionClue(overlappingStamp: true)
         let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
-        let savedCandidate = SaveMapCandidate(
-            id: "already-saved",
-            title: "Review Coffee Xinyi",
-            subtitle: "Taipei",
-            latitude: 25.033,
-            longitude: 121.565,
-            category: .cafe
-        )
-        let savedPlace = try await map.saveMapCandidateAsPlace(savedCandidate)
+        map.places = [stamp]
         let providerCandidate = SaveMapCandidate(
             id: "provider-poi",
             title: "Nearby unsaved cafe",
@@ -2574,19 +2567,89 @@ final class SaveSearchControllerTests: XCTestCase {
         map.beginExactSearchResolution(for: clue)
 
         XCTAssertTrue(map.mapCandidate(providerCandidate, resolvesReviewCandidateID: clue.id))
-        XCTAssertFalse(map.mapCandidate(savedCandidate, resolvesReviewCandidateID: clue.id))
 
-        let resolved = try await map.resolveExactSearchClue(toSavedPlace: savedPlace)
-        XCTAssertEqual(resolved.id, savedPlace.id)
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertEqual(resolved.id, stamp.id)
+        XCTAssertEqual(resolved.createdAt, stamp.createdAt)
+        XCTAssertEqual(resolved.note, "Must try the bun")
+        XCTAssertFalse((resolved.note ?? "").contains("Source URL:"))
+        XCTAssertFalse((resolved.note ?? "").contains("Recommender:"))
+        XCTAssertEqual(resolved.sourceUrl, "https://www.instagram.com/p/harborovenpizza/")
+        XCTAssertEqual(resolved.sourceHandle, "la.harbor.eats")
+        XCTAssertEqual(resolved.recommender, "la.harbor.eats")
+        XCTAssertEqual(resolved.placeHighlights, ["Window seats", "Single-origin pour-over"])
+        XCTAssertEqual(resolved.recommendedItems, [
+            RecommendedItem(name: "Cortado", price: nil),
+            RecommendedItem(name: "Egg tart", price: nil),
+        ])
+        XCTAssertEqual(resolved.vibeTags, ["quiet", "sunny"])
+        XCTAssertEqual(resolved.accessNotes, ["Walk-up", "No reservations"])
+        XCTAssertEqual(resolved.sourceEvidence.filter { $0 == "Source URL: https://www.instagram.com/p/harborovenpizza/" }.count, 1)
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
-        XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
-        XCTAssertTrue(resolved.sourceEvidence.contains("Source URL: https://example.com/original"))
 
         let reloaded = SaveLocalVaultService(overrideVaultURL: vaultURL)
         XCTAssertTrue(try reloaded.reviewCandidates().isEmpty, "Choosing a saved stamp must retire the Review clue")
-        let persisted = try XCTUnwrap(reloaded.confirmedPlaces().first { $0.id == savedPlace.id })
-        XCTAssertTrue(persisted.sourceEvidence.contains("Original source note"))
-        XCTAssertTrue(persisted.sourceEvidence.contains("Source URL: https://example.com/original"))
+        let persisted = try XCTUnwrap(reloaded.confirmedPlaces().first { $0.id == stamp.id })
+        XCTAssertEqual(persisted.createdAt, stamp.createdAt)
+        XCTAssertEqual(persisted.note, "Must try the bun")
+        XCTAssertEqual(persisted.sourceHandle, "la.harbor.eats")
+        XCTAssertEqual(persisted.placeHighlights, ["Window seats", "Single-origin pour-over"])
+        XCTAssertEqual(persisted.recommendedItems?.map(\.name), ["Cortado", "Egg tart"])
+    }
+
+    @MainActor
+    func testExactSearchResolutionPersistsHandleAndDedupesEvidenceRemotely() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-saved-remote-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-saved-remote-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let supabase = RecordingSupabaseService()
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        let runID = UUID()
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = runID
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertEqual(resolved.recommender, "la.harbor.eats")
+        XCTAssertEqual(resolved.sourceHandle, "la.harbor.eats")
+        XCTAssertEqual(resolved.note, "Must try the bun")
+        XCTAssertEqual(resolved.createdAt, stamp.createdAt)
+        XCTAssertEqual(resolved.placeHighlights, ["Window seats", "Single-origin pour-over"])
+
+        let updated = try XCTUnwrap(supabase.updatedPlaces.last)
+        XCTAssertEqual(updated.id, stamp.id)
+        XCTAssertEqual(updated.recommender, "la.harbor.eats")
+        XCTAssertEqual(updated.sourceHandle, "la.harbor.eats")
+        XCTAssertEqual(updated.sourceUrl, "https://www.instagram.com/p/harborovenpizza/")
+        XCTAssertEqual(updated.note, "Must try the bun")
+        XCTAssertEqual(updated.createdAt, stamp.createdAt)
+        XCTAssertEqual(updated.placeHighlights, ["Window seats", "Single-origin pour-over"])
+        XCTAssertEqual(
+            updated.sourceEvidence.filter { $0 == "Source URL: https://www.instagram.com/p/harborovenpizza/" }.count,
+            1
+        )
+
+        let decision = try XCTUnwrap(supabase.recoveryDecisions.last)
+        XCTAssertEqual(decision.finalPlaceId, stamp.id)
+        XCTAssertEqual(decision.finalPlace?.recommender, "la.harbor.eats")
+        XCTAssertEqual(decision.finalPlace?.sourceHandle, "la.harbor.eats")
+        XCTAssertEqual((decision.body["final_place"] as? [String: Any])?["recommender"] as? String, "la.harbor.eats")
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
     }
 
     @MainActor
@@ -5326,6 +5389,53 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual(map.places[0].address, "臺北市信義區")
     }
 
+    private static func correctionStamp() -> Place {
+        Place(
+            id: UUID(),
+            name: "Review Coffee Xinyi",
+            address: "Taipei",
+            latitude: 25.033,
+            longitude: 121.565,
+            category: .cafe,
+            status: .wantToGo,
+            note: "Must try the bun",
+            sourcePlatform: .other,
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            placeHighlights: ["Window seats"],
+            recommendedItems: [RecommendedItem(name: "Cortado", price: nil)],
+            vibeTags: ["quiet"],
+            accessNotes: ["Walk-up"]
+        )
+    }
+
+    private static func correctionClue(overlappingStamp: Bool) -> PlaceReviewCandidate {
+        PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Coffee clue",
+            address: "Taipei",
+            city: "Taipei",
+            latitude: nil,
+            longitude: nil,
+            evidence: [
+                "Source URL: https://www.instagram.com/p/harborovenpizza/",
+                "Creator handle: @la.harbor.eats",
+                "Source URL: https://www.instagram.com/p/harborovenpizza/",
+            ],
+            confidence: 0.8,
+            missingInfo: ["Exact coordinates"],
+            status: "review",
+            createdAt: Date(),
+            placeHighlights: overlappingStamp ? ["Window seats", "Single-origin pour-over"] : ["Single-origin pour-over"],
+            recommendedItems: overlappingStamp
+                ? [RecommendedItem(name: "Cortado", price: nil), RecommendedItem(name: "Egg tart", price: nil)]
+                : [RecommendedItem(name: "Egg tart", price: nil)],
+            vibeTags: overlappingStamp ? ["quiet", "sunny"] : ["sunny"],
+            accessNotes: overlappingStamp ? ["Walk-up", "No reservations"] : ["No reservations"],
+            sourceHandle: "la.harbor.eats"
+        )
+    }
+
     private func cameraCenter(_ map: MapViewModel) -> CLLocationCoordinate2D? {
         map.cameraPosition.region?.center
     }
@@ -5392,5 +5502,149 @@ final class MapReviewLocationRepairTests: XCTestCase {
             status: status,
             createdAt: Date()
         )
+    }
+}
+
+private final class RecordingSupabaseService: SupabaseServiceProtocol {
+    private(set) var updatedPlaces: [Place] = []
+    private(set) var recoveryDecisions: [PlaceRecoveryDecisionDraft] = []
+
+    func startAnalysis(id: UUID) async throws -> UUID? { nil }
+    func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {}
+    func fetchPlaces(for userId: String) async throws -> [Place] { [] }
+    func savePlace(_ place: Place, userId: String) async throws {}
+    func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult {
+        throw SupabaseError.notConfigured
+    }
+    func updatePlace(_ place: Place) async throws { updatedPlaces.append(place) }
+    func deletePlace(_ placeId: UUID) async throws {}
+    func createMemoryCapture(from candidate: PendingReviewCandidate, userId: String) async throws -> UUID {
+        throw SupabaseError.notConfigured
+    }
+    func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID?) async throws -> UUID {
+        throw SupabaseError.notConfigured
+    }
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?, explicitRetry: Bool) async throws -> SourceSearchRecoveryResult {
+        SourceSearchRecoveryResult(createdCandidates: [], sourceResolution: nil)
+    }
+    func fetchReviewCandidates() async throws -> [PlaceReviewCandidate] { [] }
+    func updatePlaceCandidateStatus(_ candidateId: UUID, status: String, placeId: UUID?) async throws {}
+    func createPlaceRecoveryWorkOrder(sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkOrder {
+        throw SupabaseError.notConfigured
+    }
+    func createPlaceRecoveryRun(workOrderId: UUID?, sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkflowRun {
+        throw SupabaseError.notConfigured
+    }
+    func recordPlaceRecoveryResult(_ result: PlaceRecoveryResultDraft, for runId: UUID) async throws -> PlaceRecoveryWorkflowRun {
+        throw SupabaseError.notConfigured
+    }
+    func recordPlaceRecoveryDecision(_ decision: PlaceRecoveryDecisionDraft, for runId: UUID) async throws -> PlaceRecoveryDecisionReceiptResponse {
+        recoveryDecisions.append(decision)
+        return PlaceRecoveryDecisionReceiptResponse(
+            run: PlaceRecoveryWorkflowRun(
+                id: runId,
+                workOrderId: nil,
+                workflowId: "fixture",
+                listingId: "fixture",
+                sourceURL: nil,
+                sourceType: "social_url",
+                status: "completed",
+                resultType: nil,
+                confidence: nil,
+                evidenceTier: "weak",
+                resultEvidenceRefs: [],
+                resultCandidateRefs: [],
+                creditReserved: 1,
+                creditSettlement: "pending",
+                receiptId: nil,
+                createdAt: nil,
+                completedAt: nil
+            ),
+            receipt: WorkflowReceipt(
+                id: UUID(),
+                runId: runId,
+                workflowId: "fixture",
+                verdict: "confirm",
+                settlement: "pending",
+                evaluatorSummary: "fixture",
+                evidenceRefs: [],
+                candidateRefs: [],
+                receiptHash: "fixture",
+                anchorStatus: "none",
+                privateURL: nil,
+                createdAt: nil
+            )
+        )
+    }
+    func fetchTrips(for userId: String) async throws -> [Trip] { [] }
+    func saveTrip(_ trip: Trip, userId: String) async throws {}
+    func updateTrip(_ trip: Trip) async throws {}
+    func deleteTrip(_ tripId: UUID) async throws {}
+    func fetchProfile(for userId: String) async throws -> UserProfile? { nil }
+    func updateProfile(_ profile: UserProfile) async throws {}
+    func fetchFollowedFriends(query: String, cursor: String?, limit: Int) async throws -> SaveFollowedFriendsPage {
+        throw SupabaseError.notConfigured
+    }
+    func followProfile(referralCode: String, lens: SaveSocialLens, source: SaveFollowSource) async throws {}
+    func followProfile(target: SaveReferralTarget, source: SaveFollowSource) async throws {}
+    func unfollowProfile(followId: String) async throws {}
+    func fetchReferralProfile(target: SaveReferralTarget) async throws -> SaveReferralProfile {
+        throw SupabaseError.notConfigured
+    }
+    func fetchSocialSignals(lens: SaveSocialLens) async throws -> [Place] { [] }
+    func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws {}
+    func createSharedPlaceLink(payload: SharedPlaceData, sourcePlaceId: UUID?, noteConsentVersion: Int?) async throws -> URL {
+        throw SupabaseError.notConfigured
+    }
+    func recordFriendShareEvent(code: String, event: FriendShareReceiptEvent, failureReason: FriendShareOpenFailureReason?) async throws {}
+    func fetchVerifiedPlaceClaims(for placeId: UUID, includePrivateEvidence: Bool) async throws -> [VerifiedPlaceClaim] { [] }
+    func createVerifiedPlaceClaim(_ draft: VerifiedPlaceClaimDraft, for placeId: UUID) async throws -> VerifiedPlaceClaim {
+        throw SupabaseError.notConfigured
+    }
+    func fetchPlaceTrustSummary(for placeId: UUID) async throws -> PlaceTrustSummaryResponse {
+        throw SupabaseError.notConfigured
+    }
+    func fetchPlaceMaatAnalysis(for placeId: UUID, includePrivateEvidence: Bool, includePublicWeb: Bool) async throws -> MaatPlaceAnalysisResponse {
+        throw SupabaseError.notConfigured
+    }
+    func recommendPlacesByClaims(_ request: ClaimRecommendationRequest) async throws -> ClaimRecommendationResponse {
+        throw SupabaseError.notConfigured
+    }
+    func recordRecommendationAnalysisReceipt(_ receipt: RecommendationAnalysisReceiptDraft) async throws -> SaveRecommendationAnalysisReceipt {
+        throw SupabaseError.notConfigured
+    }
+    func fetchMemoryPreferences() async throws -> [SaveMemoryPreference] { [] }
+    func fetchRecommendationOutcomes() async throws -> [SaveRecommendationOutcome] { [] }
+    func recordRecommendationOutcome(_ draft: SaveRecommendationOutcomeDraft) async throws {}
+    func createMemoryPreference(_ draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference {
+        throw SupabaseError.notConfigured
+    }
+    func updateMemoryPreference(_ preferenceId: UUID, status: SaveMemoryPreference.Status) async throws -> SaveMemoryPreference {
+        throw SupabaseError.notConfigured
+    }
+    func correctMemoryPreference(_ preferenceId: UUID, draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference {
+        throw SupabaseError.notConfigured
+    }
+    func fetchPublicPlaceCard(cardId: UUID) async throws -> PublicPlaceCard {
+        throw SupabaseError.notConfigured
+    }
+    func createClaimUsageReceipt(_ receipt: ClaimUsageReceiptDraft, requiresAuth: Bool) async throws -> ClaimUsageReceipt {
+        throw SupabaseError.notConfigured
+    }
+    func fetchCollaborativeListRows() async throws -> [SaveCollaborativeListServerRow] { [] }
+    func createCollaborativeListRow(id: UUID, title: String, note: String?) async throws {}
+    func addCollaborativeListItem(listID: UUID, payload: SaveListItem) async throws {}
+    func createListShareCode(listID: UUID, role: SaveListRole) async throws -> (code: String, url: URL) {
+        throw SupabaseError.notConfigured
+    }
+    func joinCollaborativeList(code: String) async throws -> SaveCollaborativeListServerRow {
+        throw SupabaseError.notConfigured
+    }
+    func fetchListMembers(listID: UUID) async throws -> [SaveListMemberRow] { [] }
+    func removeListMember(listID: UUID, userID: String) async throws {}
+    func fetchListShareCodes(listID: UUID) async throws -> [SaveListShareCodeInfoRow] { [] }
+    func revokeListShareCode(listID: UUID, code: String) async throws {}
+    func fetchMyReferral() async throws -> (code: String, url: URL) {
+        throw SupabaseError.notConfigured
     }
 }

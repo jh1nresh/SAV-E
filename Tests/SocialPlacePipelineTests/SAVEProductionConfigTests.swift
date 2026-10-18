@@ -1003,6 +1003,22 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         try await service.updatePlace(unknown)
     }
 
+    func testUpdatePlaceSendsRecommenderAndSourceURLWhenPresent() async throws {
+        var place = Place.mock
+        place.sourceHandle = "la.harbor.eats"
+        place.recommender = "la.harbor.eats"
+        place.sourceUrl = "https://www.instagram.com/p/harborovenpizza/"
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        AnalysisRequestURLProtocol.handler = { request in
+            XCTAssertEqual(request.httpMethod, "PATCH")
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertEqual(body["recommender"] as? String, "la.harbor.eats")
+            XCTAssertEqual(body["source_url"] as? String, "https://www.instagram.com/p/harborovenpizza/")
+            return (200, "{}")
+        }
+        try await service.updatePlace(place)
+    }
+
     func testEmptyRetryDistinguishesExistingSuccessorsFromUnresolvedSource() async throws {
         for status in ["saved", "confirmed", "rejected", "review", "missing", "unresolved"] {
             let capture = UUID(), source = UUID(), successor = UUID()

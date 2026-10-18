@@ -294,6 +294,14 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             "source_image_url": place.sourceImageUrl,
             "business_photo_urls": place.businessPhotoUrls,
         ]
+        // Account-backed attribution lives on `recommender`. Omit nil so a
+        // note-only PATCH cannot wipe a handle the server already stored.
+        if let recommender = place.recommender ?? place.sourceHandle {
+            updates["recommender"] = recommender
+        }
+        if let sourceUrl = place.sourceUrl {
+            updates["source_url"] = sourceUrl
+        }
         if place.createdAt > .distantPast {
             updates["created_at"] = ISO8601DateFormatter().string(from: place.createdAt)
         }
