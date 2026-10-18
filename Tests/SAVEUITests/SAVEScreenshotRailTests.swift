@@ -240,6 +240,28 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(firstPlace.frame.contains(featuredName.frame), "The readable paper caption must remain within the saved-place row.")
         XCTAssertTrue(app.textFields["home.search"].isHittable)
         attach(app, name: "review-flow-home-no-photo")
+        openSavesFromHome(app: app)
+        let seededCandidate = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH 'saves.reviewCandidate.' AND label CONTAINS[c] %@",
+                "Harbor Oven Pizza"
+            )
+        ).firstMatch
+        XCTAssertTrue(seededCandidate.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            seededCandidate.label.contains("la.harbor.eats"),
+            "Saves rows must keep the known source handle, not only the next-step sentence."
+        )
+        XCTAssertTrue(
+            seededCandidate.label.contains("Check the name and address before confirming"),
+            "Saves rows should keep next-step guidance in addition to known evidence."
+        )
+        XCTAssertFalse(
+            seededCandidate.label.contains("33.7405"),
+            "A map coordinate must never appear as the Saves-row source handle."
+        )
+        openRootTab("Home", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout))
         rootTabButton("Save", app: app).tap()
         typeText("""
         The coffee shops in Los Angeles County I always return to

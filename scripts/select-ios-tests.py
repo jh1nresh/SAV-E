@@ -15,7 +15,6 @@ BASELINE = [RAIL + name for name in (
     "testCaptureAtlasProductionParity",
     "testCaptureFiveTabLanding",
     "testAtlasHomeAndSavesRenderPersistedPlaceData",
-    "testHomeSearchAndPendingCandidateOpenDirectly",
     "testCaptureMultipleResultsExcludeOlderClues",
     "testEmptyHomeStartsCaptureAndKeepsSourceOnlyUnconfirmed",
     "testSavedPlaceEntryUsesSingleCanonicalDetail",
