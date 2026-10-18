@@ -3374,8 +3374,8 @@ private struct ReviewCandidateDetailCard: View {
                             .accessibilityIdentifier("drawer.review.changePlace")
                     } else if let onAddClue {
                         CandidateActionButton(
-                            title: languageSettings.localized(english: "Add a clue", traditionalChinese: "補上線索"),
-                            systemImage: "text.badge.plus", fill: SaveAtlasPalette.paper,
+                            title: languageSettings.localized(english: "Search for this place", traditionalChinese: "搜尋這個地點"),
+                            systemImage: "location.magnifyingglass", fill: SaveAtlasPalette.paper,
                             disabled: isWorking, action: onAddClue)
                             .accessibilityIdentifier("drawer.review.addClue")
                     }

@@ -16,6 +16,104 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testSavesRowDetailKeepsKnownEvidenceWithNextStep() {
+        let savable = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Harbor Oven Pizza",
+            address: "Berth 73, San Pedro, Los Angeles, CA 90731",
+            city: "Los Angeles",
+            latitude: 33.7405,
+            longitude: -118.2807,
+            evidence: [
+                "Source URL: https://www.instagram.com/p/harborovenpizza/",
+                "Creator handle: @la.harbor.eats",
+            ],
+            confidence: 0.84,
+            missingInfo: ["User confirmation required"],
+            status: "review",
+            createdAt: Date(),
+            sourceHandle: "la.harbor.eats"
+        )
+        let savableDetail = SaveReviewCandidateSavesRowDetail(candidate: savable)
+        XCTAssertEqual(savableDetail.knownEvidenceEnglish, "From la.harbor.eats")
+        XCTAssertEqual(savableDetail.nextStep, .confirm)
+        XCTAssertEqual(
+            savableDetail.english,
+            "From la.harbor.eats. Check the name and address before confirming."
+        )
+        XCTAssertEqual(
+            savableDetail.traditionalChinese,
+            "來自 la.harbor.eats。確認前，請核對名稱和地址。"
+        )
+
+        let pending = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Unresolved Instagram clue",
+            address: "",
+            city: nil,
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Source URL: https://www.instagram.com/reel/UnresolvedClue/"],
+            confidence: 0,
+            missingInfo: ["Analysis pending"],
+            status: "source_only",
+            createdAt: Date()
+        )
+        let pendingDetail = SaveReviewCandidateSavesRowDetail(candidate: pending)
+        XCTAssertEqual(pendingDetail.knownEvidenceEnglish, "Source saved; analysis pending")
+        XCTAssertEqual(pendingDetail.nextStep, .pendingAnalysis)
+        XCTAssertEqual(
+            pendingDetail.english,
+            "Source saved; analysis pending. Source saved; analysis still needs to finish."
+        )
+
+        let sourceClue = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Caption-only cafe",
+            address: "",
+            city: nil,
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Caption: Quiet pour-over near the park"],
+            confidence: 0,
+            missingInfo: ["Exact place"],
+            status: "source_only",
+            createdAt: Date()
+        )
+        let sourceDetail = SaveReviewCandidateSavesRowDetail(candidate: sourceClue)
+        XCTAssertEqual(sourceDetail.knownEvidenceEnglish, "Missing exact place")
+        XCTAssertEqual(sourceDetail.nextStep, .addCity)
+        XCTAssertEqual(
+            sourceDetail.english,
+            "Missing exact place. Add a city, address, or map link to narrow the search."
+        )
+
+        let addressed = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Named venue",
+            address: "1 Fixture Road",
+            city: "Taipei",
+            latitude: 25.033,
+            longitude: 121.565,
+            evidence: [],
+            confidence: 0.7,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        let addressedDetail = SaveReviewCandidateSavesRowDetail(candidate: addressed)
+        XCTAssertEqual(addressedDetail.knownEvidenceEnglish, "Taipei")
+        XCTAssertEqual(
+            addressedDetail.english,
+            "Taipei. Check the name and address before confirming."
+        )
+    }
+
+    @MainActor
     func testReviewSourceReceiptPresentationKeepsXiaohongshuProvenance() throws {
         let candidate = PlaceReviewCandidate(
             id: UUID(),

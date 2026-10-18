@@ -1310,6 +1310,8 @@ struct ContentView: View {
         openExactSearch(candidate)
     }
 
+    /// Map-search refinement for an unresolved candidate. This does not
+    /// persist a new caption, address, or map link onto the clue.
     private func addClueToReviewCandidate(_ candidate: PlaceReviewCandidate) {
         guard incomingPlaceReceipt == nil else { return }
         exactSearchRequestID = nil

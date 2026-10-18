@@ -460,7 +460,8 @@ struct SaveLibraryView: View {
     }
 
     private func candidateDetail(_ candidate: PlaceReviewCandidate) -> String {
-        localized(candidate.reviewNextStep.english, candidate.reviewNextStep.traditionalChinese)
+        let detail = SaveReviewCandidateSavesRowDetail(candidate: candidate)
+        return localized(detail.english, detail.traditionalChinese)
     }
 
     private func collectionDate(_ date: Date) -> String {

@@ -261,7 +261,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["drawer.review.primaryAction"].waitForExistence(timeout: stepTimeout))
         XCTAssertNotEqual(app.buttons["drawer.review.primaryAction"].label, "Confirm and save", "No coordinates must not become a saved place.")
         XCTAssertTrue(app.staticTexts["drawer.review.missingClue"].exists)
-        XCTAssertTrue(app.buttons["drawer.review.addClue"].exists)
+        let addClue = app.buttons["drawer.review.addClue"]
+        XCTAssertTrue(addClue.exists)
+        XCTAssertEqual(addClue.label, "Search for this place")
+        XCTAssertFalse(app.buttons["Add a clue"].exists)
         XCTAssertFalse(app.buttons["drawer.review.changePlace"].exists)
         attach(app, name: "review-next-step-unresolved")
         let reject = app.buttons["drawer.review.reject"]
@@ -294,7 +297,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.staticTexts["Analysis ready"].exists)
         XCTAssertNotEqual(app.buttons["drawer.review.primaryAction"].label, "Confirm and save")
         attach(app, name: "review-flow-source-only")
-        tapReachable(app.buttons["drawer.review.addClue"])
+        let addClue = app.buttons["drawer.review.addClue"]
+        XCTAssertTrue(addClue.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(addClue.label, "Search for this place")
+        XCTAssertFalse(app.buttons["Add a clue"].exists)
+        tapReachable(addClue)
         let refinement = app.textFields["map.search.input"]
         XCTAssertTrue(refinement.waitForExistence(timeout: stepTimeout))
         refinement.tap()
@@ -1204,6 +1211,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         let firstCandidate = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch
         XCTAssertTrue(firstCandidate.label.contains("Harbor Oven Pizza"))
+        XCTAssertTrue(
+            firstCandidate.label.contains("la.harbor.eats"),
+            "Saves rows must keep the known source handle, not only the next-step sentence."
+        )
+        XCTAssertTrue(
+            firstCandidate.label.contains("Check the name and address before confirming"),
+            "Saves rows should keep next-step guidance in addition to known evidence."
+        )
         XCTAssertLessThan(firstCandidate.frame.minY, app.frame.height * 0.35)
         XCTAssertLessThan(firstCandidate.frame.height, 150)
         XCTAssertFalse(app.descendants(matching: .any)["saves.pocket.reviewFooter"].exists)
