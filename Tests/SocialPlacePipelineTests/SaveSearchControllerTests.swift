@@ -64,10 +64,8 @@ final class SaveSearchControllerTests: XCTestCase {
         let pendingDetail = SaveReviewCandidateSavesRowDetail(candidate: pending)
         XCTAssertEqual(pendingDetail.knownEvidenceEnglish, "Source saved; analysis pending")
         XCTAssertEqual(pendingDetail.nextStep, .pendingAnalysis)
-        XCTAssertEqual(
-            pendingDetail.english,
-            "Source saved; analysis pending. Source saved; analysis still needs to finish."
-        )
+        XCTAssertEqual(pendingDetail.english, "Source saved; analysis pending")
+        XCTAssertFalse(pendingDetail.english.contains("analysis still needs to finish"))
 
         let sourceClue = PlaceReviewCandidate(
             id: UUID(),
@@ -88,7 +86,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(sourceDetail.nextStep, .addCity)
         XCTAssertEqual(
             sourceDetail.english,
-            "Missing exact place. Add a city, address, or map link to narrow the search."
+            "Missing exact place. Search for this place with a city, address, or map link."
         )
 
         let addressed = PlaceReviewCandidate(
@@ -110,6 +108,75 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(
             addressedDetail.english,
             "Taipei. Check the name and address before confirming."
+        )
+
+        let polluted = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Harbor Oven Pizza",
+            address: "Berth 73, San Pedro, Los Angeles, CA 90731",
+            city: "Los Angeles",
+            latitude: 33.7405,
+            longitude: -118.2807,
+            evidence: [
+                "Source URL: https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1",
+                "Creator handle: @la.harbor.eats",
+                "Source handle: @la.harbor.eats",
+            ],
+            confidence: 0.84,
+            missingInfo: ["User confirmation required"],
+            status: "review",
+            createdAt: Date(),
+            sourceHandle: "33.7405"
+        )
+        let pollutedDetail = SaveReviewCandidateSavesRowDetail(candidate: polluted)
+        XCTAssertEqual(pollutedDetail.knownEvidenceEnglish, "From la.harbor.eats")
+        XCTAssertFalse(pollutedDetail.english.contains("33.7405"))
+        XCTAssertTrue(pollutedDetail.english.contains("Check the name and address before confirming."))
+    }
+
+    @MainActor
+    func testSourceHandleExtractionRejectsMapCoordinateFragments() {
+        let mapURL = "https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1"
+        XCTAssertNil(SaveSourceHandle.normalized("33.7405"))
+        XCTAssertNil(SaveSourceHandle.normalized("@33.7405"))
+        XCTAssertNil(SaveSourceHandle.normalized("-118.2807"))
+        XCTAssertNil(SaveSourceHandle.normalized("12345"))
+        XCTAssertEqual(SaveSourceHandle.normalized("la.harbor.eats"), "la.harbor.eats")
+        XCTAssertEqual(SaveSourceHandle.resolved("33.7405", extracted: "la.harbor.eats"), "la.harbor.eats")
+
+        XCTAssertNil(
+            SocialPlaceStructuredHighlights.extracted(from: [mapURL], sourceURL: mapURL).sourceHandle
+        )
+        XCTAssertEqual(
+            SocialPlaceStructuredHighlights.extracted(
+                from: [
+                    mapURL,
+                    "Creator handle: @la.harbor.eats",
+                    "Source handle: @la.harbor.eats",
+                ],
+                sourceURL: mapURL
+            ).sourceHandle,
+            "la.harbor.eats"
+        )
+
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Harbor Oven Pizza",
+            address: "Berth 73, San Pedro, Los Angeles, CA 90731",
+            city: nil,
+            latitude: 33.7405,
+            longitude: -118.2807,
+            evidence: [mapURL],
+            confidence: 0.8,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        XCTAssertNil(candidate.sourceHandle)
+        XCTAssertFalse(
+            SaveReviewCandidateSavesRowDetail(candidate: candidate).english.contains("From 33.7405")
         )
     }
 

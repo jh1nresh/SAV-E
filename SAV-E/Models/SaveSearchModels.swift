@@ -265,8 +265,8 @@ enum SaveReviewNextStep: Equatable {
         case .pendingAnalysis: return "Source saved; analysis still needs to finish."
         case .chooseMatch: return "More than one map match. Check the branch and address."
         case .confirm: return "Check the name and address before confirming."
-        case .addCity: return "Add a city, address, or map link to narrow the search."
-        case .addAddress: return "Add an address, caption, or map link to identify this place."
+        case .addCity: return "Search for this place with a city, address, or map link."
+        case .addAddress: return "Search for this place with an address, caption, or map link."
         case .locatePlace: return "An address is available; find and check its map match."
         }
     }
@@ -275,8 +275,8 @@ enum SaveReviewNextStep: Equatable {
         case .pendingAnalysis: return "來源已保存，分析尚待完成。"
         case .chooseMatch: return "有多個地圖結果，請核對分店和地址。"
         case .confirm: return "確認前，請核對名稱和地址。"
-        case .addCity: return "補上城市、地址或地圖連結，縮小搜尋範圍。"
-        case .addAddress: return "補上地址、貼文文字或地圖連結，找出這個地點。"
+        case .addCity: return "用城市、地址或地圖連結搜尋這個地點。"
+        case .addAddress: return "用地址、貼文文字或地圖連結搜尋這個地點。"
         case .locatePlace: return "已有地址，請找出並核對地圖結果。"
         }
     }
@@ -305,11 +305,13 @@ struct SaveReviewCandidateSavesRowDetail: Equatable {
     }
 
     var english: String {
-        Self.combined(knownEvidenceEnglish, nextStep.english, separator: ". ")
+        if nextStep == .pendingAnalysis { return knownEvidenceEnglish }
+        return Self.combined(knownEvidenceEnglish, nextStep.english, separator: ". ")
     }
 
     var traditionalChinese: String {
-        Self.combined(knownEvidenceTraditionalChinese, nextStep.traditionalChinese, separator: "。")
+        if nextStep == .pendingAnalysis { return knownEvidenceTraditionalChinese }
+        return Self.combined(knownEvidenceTraditionalChinese, nextStep.traditionalChinese, separator: "。")
     }
 
     static func combined(_ evidence: String, _ nextStep: String, separator: String = ". ") -> String {
@@ -337,11 +339,10 @@ struct SaveReviewCandidateSavesRowDetail: Equatable {
         }
 
         let source = ReviewSourceReceiptPresentation(candidate: candidate)
-        if let handle = candidate.sourceHandle?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !handle.isEmpty {
+        if let handle = SaveSourceHandle.resolved(candidate.sourceHandle) {
             return ("From \(handle)", "來自 \(handle)")
         }
-        if let handle = source.handle {
+        if let handle = SaveSourceHandle.resolved(source.handle) {
             return ("From \(handle)", "來自 \(handle)")
         }
         if source.sourcePlatform != .other {

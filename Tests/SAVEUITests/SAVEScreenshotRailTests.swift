@@ -831,6 +831,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         ).firstMatch
         XCTAssertTrue(savedCandidate.waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(
+            savedCandidate.label.contains("33.7405"),
+            "A map coordinate must never appear as the Saves-row source handle."
+        )
+        XCTAssertTrue(
+            savedCandidate.label.contains("Check the name and address before confirming"),
+            "Saves rows should keep next-step guidance in addition to known evidence."
+        )
+        XCTAssertFalse(
             app.buttons.matching(
                 NSPredicate(format: "label CONTAINS[c] %@", "Quarter Sheets Pizza Club")
             ).firstMatch.exists
@@ -1218,6 +1226,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(
             firstCandidate.label.contains("Check the name and address before confirming"),
             "Saves rows should keep next-step guidance in addition to known evidence."
+        )
+        XCTAssertFalse(
+            firstCandidate.label.contains("33.7405"),
+            "A map coordinate must never appear as the Saves-row source handle."
         )
         XCTAssertLessThan(firstCandidate.frame.minY, app.frame.height * 0.35)
         XCTAssertLessThan(firstCandidate.frame.height, 150)

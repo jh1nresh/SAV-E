@@ -1505,13 +1505,10 @@ struct AIDrawerView: View {
         }
         mapDetailDrawerItem = nil
         viewModel.returnToCommands()
-        viewModel.query = languageSettings.localized(
-            english: "Add more clue for \(candidate.name): ",
-            traditionalChinese: "替「\(candidate.name)」補更多線索："
-        )
+        viewModel.query = candidate.refinementQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         addSpotStatus = languageSettings.localized(
-            english: "Paste a caption, address, map link, or visible OCR text. Savvy will keep it in Review until the exact place is clear.",
-            traditionalChinese: "貼上貼文說明、地址、地圖連結或看得到的 OCR 文字。Savvy 會先把它留在待確認，直到精確地點夠清楚。"
+            english: "Search for this place. Enter a city, address, or map link.",
+            traditionalChinese: "搜尋這個地點。請輸入城市、地址或地圖連結。"
         )
         searchFocused = true
         withAnimation { drawerDetent = .medium }

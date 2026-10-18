@@ -2,6 +2,7 @@
   "SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasProductionParity",
   "SAVEUITests/SAVEScreenshotRailTests/testCaptureFiveTabLanding",
   "SAVEUITests/SAVEScreenshotRailTests/testAtlasHomeAndSavesRenderPersistedPlaceData",
+  "SAVEUITests/SAVEScreenshotRailTests/testHomeSearchAndPendingCandidateOpenDirectly",
   "SAVEUITests/SAVEScreenshotRailTests/testCaptureMultipleResultsExcludeOlderClues",
   "SAVEUITests/SAVEScreenshotRailTests/testEmptyHomeStartsCaptureAndKeepsSourceOnlyUnconfirmed",
   "SAVEUITests/SAVEScreenshotRailTests/testSavedPlaceEntryUsesSingleCanonicalDetail",
