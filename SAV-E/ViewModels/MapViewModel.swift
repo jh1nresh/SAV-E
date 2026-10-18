@@ -636,9 +636,9 @@ final class MapViewModel: ObservableObject {
     /// consumes it to skip opening the detail surface — saving ends the flow,
     /// the stamp toast is the confirmation.
     private var selectionIsCameraOnly = false
-    /// The Review clue an exact-place map search is resolving, scoped to the
-    /// exact candidates returned by that search. A later unrelated map tap
-    /// must never retire the clue.
+    /// The Review clue an exact-place map search is resolving. Saving a
+    /// returned map candidate or choosing a saved Map Stamp retires that
+    /// clue. A later unrelated map tap must never retire it.
     private var exactSearchResolution: ExactSearchResolution?
     private var importFailureReasons: [UUID: SourceSearchFailureReason] = [:]
     /// Invalidates any in-flight map search before it can publish stale pins.
@@ -1762,16 +1762,54 @@ final class MapViewModel: ObservableObject {
         return resolution.clue.id == reviewCandidateID && resolution.includes(candidateID: candidate.id)
     }
 
-    /// After an exact-place search saves a map candidate, the originating
-    /// Review clue is resolved: drop it from the queue everywhere and record
-    /// the correction so the backend row leaves "review" too.
+    /// Review → Choose another place can surface an already-saved Map Stamp.
+    /// Selecting it must retire the active clue and attach that evidence to
+    /// the stamp, the same way saving a returned map candidate does.
+    @discardableResult
+    func resolveExactSearchClue(toSavedPlace place: Place) async throws -> Place {
+        guard let resolution = exactSearchResolution else { return place }
+
+        var associated = place
+        let evidence = (place.sourceEvidence + resolution.clue.evidence).reduce(into: [String]()) {
+            if !$0.contains($1) { $0.append($1) }
+        }
+        associated.note = evidence.isEmpty ? nil : evidence.joined(separator: "\n")
+        associated.createdAt = min(place.createdAt, resolution.clue.createdAt)
+        if associated.sourceHandle == nil {
+            associated.sourceHandle = resolution.clue.sourceHandle
+        }
+        if associated != place {
+            if usesRemotePersistence { try await supabaseService.updatePlace(associated) }
+            mirrorToLocalVault(associated)
+            places = Place.consolidated(places.filter { $0.id != associated.id } + [associated])
+        }
+
+        let resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
+            resolution: resolution,
+            candidateID: nil,
+            to: associated
+        )
+        guard resolvedExactSearch else { return associated }
+        associated = await refreshedConfirmedPlace(associated)
+        mirrorToLocalVault(associated)
+        places = Place.consolidated(places.filter { $0.id != associated.id } + [associated])
+        return associated
+    }
+
+    /// After an exact-place search confirms a place, the originating Review
+    /// clue is resolved: drop it from the queue everywhere and record the
+    /// correction so the backend row leaves "review" too.
+    ///
+    /// Pass `candidateID` when the user saved a returned map candidate so an
+    /// unrelated POI cannot retire the clue. Omit it when they chose an
+    /// already-saved Map Stamp during the same correction session.
     private func resolveExactSearchClueIfNeeded(
         resolution: ExactSearchResolution?,
-        candidateID: String,
+        candidateID: String?,
         to place: Place
     ) async throws -> Bool {
-        guard let resolution,
-              resolution.includes(candidateID: candidateID) else { return false }
+        guard let resolution else { return false }
+        if let candidateID, !resolution.includes(candidateID: candidateID) { return false }
 
         let clue = resolution.clue
         if usesRemotePersistence {

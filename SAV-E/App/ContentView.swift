@@ -716,7 +716,7 @@ struct ContentView: View {
                         focusesSearch: drawerLaunchRequest.focusesSearch,
                         preservesExactSearchClue: drawerLaunchRequest.preservesExactSearchClue,
                         onClose: collapseMapPanel,
-                        onOpenPlace: { openMapDetail(.savedPlace($0)) },
+                        onOpenPlace: { openSavedPlaceFromMapSearch($0) },
                         onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
                     )
                 }
@@ -1349,6 +1349,24 @@ struct ContentView: View {
         presentAfterClearingExclusiveChrome(.mapDrawer(
             DrawerLaunchRequest(target: .ask, initialQuery: query, focusesSearch: true, preservesExactSearchClue: true)
         ))
+    }
+
+    /// Saved-row taps in ordinary map search just open the stamp. During
+    /// Review correction they must also resolve the active clue onto it.
+    private func openSavedPlaceFromMapSearch(_ place: Place) {
+        guard drawerLaunchRequest.preservesExactSearchClue else {
+            openMapDetail(.savedPlace(place))
+            return
+        }
+        Task {
+            do {
+                let resolved = try await mapVM.resolveExactSearchClue(toSavedPlace: place)
+                openMapDetail(.savedPlace(resolved))
+            } catch {
+                fullScreenActionError = error.localizedDescription
+                openMapDetail(.savedPlace(place))
+            }
+        }
     }
 
     private func invalidateExactSearchRequest() {

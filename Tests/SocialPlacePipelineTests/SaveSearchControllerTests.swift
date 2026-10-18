@@ -2544,6 +2544,80 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testExactSearchResolutionRetiresClueWhenChoosingSavedPlace() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-saved-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        _ = try vault.saveSourceOnly(url: URL(string: "https://example.com/original")!, note: "Original source note")
+        let clue = try XCTUnwrap(vault.reviewCandidates().first)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        let savedCandidate = SaveMapCandidate(
+            id: "already-saved",
+            title: "Review Coffee Xinyi",
+            subtitle: "Taipei",
+            latitude: 25.033,
+            longitude: 121.565,
+            category: .cafe
+        )
+        let savedPlace = try await map.saveMapCandidateAsPlace(savedCandidate)
+        let providerCandidate = SaveMapCandidate(
+            id: "provider-poi",
+            title: "Nearby unsaved cafe",
+            subtitle: "Taipei",
+            latitude: 25.034,
+            longitude: 121.566,
+            category: .cafe
+        )
+        map.reviewCandidates = [clue]
+        map.mapCandidates = [providerCandidate]
+        map.beginExactSearchResolution(for: clue)
+
+        XCTAssertTrue(map.mapCandidate(providerCandidate, resolvesReviewCandidateID: clue.id))
+        XCTAssertFalse(map.mapCandidate(savedCandidate, resolvesReviewCandidateID: clue.id))
+
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: savedPlace)
+        XCTAssertEqual(resolved.id, savedPlace.id)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+        XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
+        XCTAssertTrue(resolved.sourceEvidence.contains("Source URL: https://example.com/original"))
+
+        let reloaded = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        XCTAssertTrue(try reloaded.reviewCandidates().isEmpty, "Choosing a saved stamp must retire the Review clue")
+        let persisted = try XCTUnwrap(reloaded.confirmedPlaces().first { $0.id == savedPlace.id })
+        XCTAssertTrue(persisted.sourceEvidence.contains("Original source note"))
+        XCTAssertTrue(persisted.sourceEvidence.contains("Source URL: https://example.com/original"))
+    }
+
+    @MainActor
+    func testExactSearchResolutionIgnoresSavedPlaceWithoutActiveClue() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-saved-noop-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        _ = try vault.saveSourceOnly(url: URL(string: "https://example.com/still-pending")!, note: "Keep this clue")
+        let clue = try XCTUnwrap(vault.reviewCandidates().first)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        let savedPlace = try await map.saveMapCandidateAsPlace(
+            SaveMapCandidate(
+                id: "unrelated-saved",
+                title: "Unrelated Stamp",
+                subtitle: "Taipei",
+                latitude: 25.033,
+                longitude: 121.565,
+                category: .cafe
+            )
+        )
+        map.reviewCandidates = [clue]
+
+        let unchanged = try await map.resolveExactSearchClue(toSavedPlace: savedPlace)
+        XCTAssertEqual(unchanged.id, savedPlace.id)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+        let reloaded = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        XCTAssertEqual(try reloaded.reviewCandidates().map(\.id), [clue.id])
+    }
+
+    @MainActor
     func testPlainMapSearchUsesExactTextAndNewerResultsWin() async {
         let search = ControlledMapCandidateSearchService()
         let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
