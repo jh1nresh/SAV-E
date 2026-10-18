@@ -1502,6 +1502,17 @@ final class SocialLinkReviewCandidateService {
     private func westernMapLinkCandidate(evidenceText: String, sourceURL: String) -> PendingReviewCandidate? {
         let mapURLStrings = ([sourceURL] + embeddedURLStrings(in: evidenceText))
             .filter { !$0.isEmpty }
+        let sourceHandle = SocialPlaceStructuredHighlights.extracted(
+            from: [evidenceText],
+            sourceURL: sourceURL
+        ).sourceHandle
+        let handleEvidence: [String] = {
+            guard let sourceHandle else { return [] }
+            return [
+                "Creator handle: @\(sourceHandle)",
+                "Source handle: @\(sourceHandle)"
+            ]
+        }()
         for urlString in mapURLStrings {
             if let match = westernMapLinkMatch(in: urlString) {
                 let diagnostic = SocialPlaceEvidenceDiagnostic(
@@ -1511,7 +1522,7 @@ final class SocialLinkReviewCandidateService {
                             "Source URL: \(sourceURL)",
                             "Structured \(match.providerName) place link: \(match.name)",
                             "Verified coordinates: \(match.latitude), \(match.longitude)"
-                        ]
+                        ] + handleEvidence
                     ),
                     attempts: appendUnique(
                         analysisMethodAttempts(evidenceText: evidenceText, sourceURL: sourceURL),
@@ -1533,7 +1544,8 @@ final class SocialLinkReviewCandidateService {
                     missingInfo: ["User confirmation required"],
                     savedAt: Date(),
                     evidenceDiagnostic: diagnostic,
-                    reviewState: "map_match_ready"
+                    reviewState: "map_match_ready",
+                    sourceHandle: sourceHandle
                 )
             }
             if let queryMatch = googleMapsQueryLinkMatch(in: urlString) {
@@ -1544,7 +1556,7 @@ final class SocialLinkReviewCandidateService {
                             "Source URL: \(sourceURL)",
                             "Structured Google Maps query link: \(queryMatch.name)",
                             queryMatch.address.isEmpty ? "" : "Address clue: \(queryMatch.address)"
-                        ]
+                        ] + handleEvidence
                     ),
                     attempts: appendUnique(
                         analysisMethodAttempts(evidenceText: evidenceText, sourceURL: sourceURL),
@@ -1564,7 +1576,8 @@ final class SocialLinkReviewCandidateService {
                     missingInfo: ["Verified coordinates", "User confirmation required"],
                     savedAt: Date(),
                     evidenceDiagnostic: diagnostic,
-                    reviewState: "map_query_ready"
+                    reviewState: "map_query_ready",
+                    sourceHandle: sourceHandle
                 )
             }
         }

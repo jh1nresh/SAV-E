@@ -339,7 +339,10 @@ struct SaveTileTownHomeView: View {
                         .font(SaveAtlasType.strong(16))
                         .foregroundStyle(SaveAtlasPalette.forest)
                     Spacer()
-                    Button(action: presentation.onReviewAll) {
+                    Button {
+                        showsMoreActions = false
+                        presentation.onReviewAll()
+                    } label: {
                         Text(localized("View all", "查看全部"))
                             .font(SaveAtlasType.display(12))
                             .foregroundStyle(SaveAtlasPalette.forest)
@@ -348,7 +351,10 @@ struct SaveTileTownHomeView: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("home.reviewAll")
                 }
-                Button { presentation.onOpenReview(item.id) } label: {
+                Button {
+                    showsMoreActions = false
+                    presentation.onOpenReview(item.id)
+                } label: {
                     HStack(spacing: 10) {
                         Image(systemName: item.icon)
                             .foregroundStyle(SaveAtlasPalette.forest)

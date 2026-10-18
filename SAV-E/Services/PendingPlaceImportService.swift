@@ -125,14 +125,14 @@ struct SocialPlaceStructuredHighlights: Codable, Hashable {
         if let labeled = labeledSourceHandle(in: evidence) {
             return labeled
         }
-        let regex = try? NSRegularExpression(pattern: #"@([A-Za-z0-9_.]{2,40})"#)
+        let regex = try? NSRegularExpression(pattern: #"@([\p{L}0-9._]{1,64})"#)
         for line in evidence.flatMap({ $0.components(separatedBy: .newlines) }) {
             let nsLine = line as NSString
             let matches = regex?.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) ?? []
             for match in matches {
                 guard match.numberOfRanges > 1 else { continue }
                 let token = nsLine.substring(with: match.range(at: 1))
-                if let handle = SaveSourceHandle.normalized(token) {
+                if let handle = SaveSourceHandle.displayable(token) {
                     return handle
                 }
             }
@@ -140,7 +140,7 @@ struct SocialPlaceStructuredHighlights: Codable, Hashable {
         if let sourceURL, let components = URLComponents(string: sourceURL), components.host?.contains("instagram") == true {
             let parts = components.path.split(separator: "/")
             if let first = parts.first, first != "reel", first != "p" {
-                return SaveSourceHandle.normalized(String(first))
+                return SaveSourceHandle.displayable(String(first))
             }
         }
         return nil
@@ -153,7 +153,7 @@ struct SocialPlaceStructuredHighlights: Codable, Hashable {
             for prefix in prefixes {
                 guard let range = trimmed.range(of: prefix, options: [.anchored, .caseInsensitive]) else { continue }
                 let value = String(trimmed[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
-                if let handle = SaveSourceHandle.normalized(value) { return handle }
+                if let handle = SaveSourceHandle.displayable(value) { return handle }
             }
         }
         return nil
@@ -170,33 +170,36 @@ struct SocialPlaceStructuredHighlights: Codable, Hashable {
     }
 }
 
-/// Social handles must contain a letter. Coordinates and numeric fragments
-/// from map URLs (`@33.7405,-118.2807`) are never handles.
+/// Stored source handles stay as written. Coordinate-looking values are
+/// filtered at display time and when extracting from evidence, never on decode.
 enum SaveSourceHandle {
     static func resolved(_ explicit: String?, extracted: String? = nil) -> String? {
-        normalized(explicit) ?? normalized(extracted)
+        displayable(explicit) ?? displayable(extracted)
     }
 
     static func normalized(_ raw: String?) -> String? {
-        guard let raw else { return nil }
-        var value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        displayable(raw)
+    }
+
+    static func stored(_ raw: String?) -> String? {
+        guard var value = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
         if value.hasPrefix("@") { value = String(value.dropFirst()) }
-        guard isPlausible(value) else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    static func displayable(_ raw: String?) -> String? {
+        guard let value = stored(raw), !looksLikeCoordinate(value) else { return nil }
         return value
     }
 
-    static func isPlausible(_ raw: String) -> Bool {
+    static func looksLikeCoordinate(_ raw: String) -> Bool {
         var value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if value.hasPrefix("@") { value = String(value.dropFirst()) }
-        guard (2...40).contains(value.count) else { return false }
-        guard value.range(of: #"^[A-Za-z0-9._]+$"#, options: .regularExpression) != nil else { return false }
-        guard value.range(of: #"[A-Za-z]"#, options: .regularExpression) != nil else { return false }
-        return !looksLikeCoordinate(value)
-    }
-
-    private static func looksLikeCoordinate(_ value: String) -> Bool {
-        value.range(
-            of: #"^[+-]?\d+(?:\.\d+)?(?:\s*,\s*[+-]?\d+(?:\.\d+)?)?$"#,
+        return value.range(
+            of: #"^[+-]?\d+\.\d+(?:\s*,\s*[+-]?\d+(?:\.\d+)?)?(?:,\d+z.*)?$"#,
             options: .regularExpression
         ) != nil
     }
@@ -344,7 +347,7 @@ struct PendingReviewCandidate: Codable {
         self.recommendedItems = recommendedItems.isEmpty ? extracted.recommendedItems : recommendedItems
         self.vibeTags = vibeTags.isEmpty ? extracted.vibeTags : vibeTags
         self.accessNotes = accessNotes.isEmpty ? extracted.accessNotes : accessNotes
-        self.sourceHandle = SaveSourceHandle.resolved(sourceHandle, extracted: extracted.sourceHandle)
+        self.sourceHandle = SaveSourceHandle.stored(sourceHandle) ?? extracted.sourceHandle
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -400,9 +403,8 @@ struct PendingReviewCandidate: Codable {
         recommendedItems = try container.decodeIfPresent([RecommendedItem].self, forKey: .recommendedItems) ?? extracted.recommendedItems
         vibeTags = try container.decodeIfPresent([String].self, forKey: .vibeTags) ?? extracted.vibeTags
         accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
-        sourceHandle = SaveSourceHandle.resolved(
-            try container.decodeIfPresent(String.self, forKey: .sourceHandle),
-            extracted: extracted.sourceHandle
+        sourceHandle = SaveSourceHandle.stored(
+            try container.decodeIfPresent(String.self, forKey: .sourceHandle)
         )
     }
 
@@ -525,7 +527,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         self.recommendedItems = recommendedItems.isEmpty ? extracted.recommendedItems : recommendedItems
         self.vibeTags = vibeTags.isEmpty ? extracted.vibeTags : vibeTags
         self.accessNotes = accessNotes.isEmpty ? extracted.accessNotes : accessNotes
-        self.sourceHandle = SaveSourceHandle.resolved(sourceHandle, extracted: extracted.sourceHandle)
+        self.sourceHandle = SaveSourceHandle.stored(sourceHandle) ?? extracted.sourceHandle
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -581,9 +583,8 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         recommendedItems = try container.decodeIfPresent([RecommendedItem].self, forKey: .recommendedItems) ?? extracted.recommendedItems
         vibeTags = try container.decodeIfPresent([String].self, forKey: .vibeTags) ?? extracted.vibeTags
         accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
-        sourceHandle = SaveSourceHandle.resolved(
-            try container.decodeIfPresent(String.self, forKey: .sourceHandle),
-            extracted: extracted.sourceHandle
+        sourceHandle = SaveSourceHandle.stored(
+            try container.decodeIfPresent(String.self, forKey: .sourceHandle)
         )
     }
 

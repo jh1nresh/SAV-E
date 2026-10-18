@@ -219,6 +219,10 @@ final class SaveLocalVaultService: Sendable {
         let texts = [existing.sourceText, incoming.sourceText].compactMap { $0 }.filter { !$0.isEmpty }
         seen.removeAll()
         merged.sourceText = texts.filter { seen.insert($0).inserted }.joined(separator: "\n")
+        merged.sourceHandle = SaveSourceHandle.displayable(incoming.sourceHandle)
+            ?? SaveSourceHandle.displayable(existing.sourceHandle)
+            ?? SaveSourceHandle.stored(incoming.sourceHandle)
+            ?? SaveSourceHandle.stored(existing.sourceHandle)
         return merged
     }
 

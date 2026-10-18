@@ -141,7 +141,10 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertNil(SaveSourceHandle.normalized("33.7405"))
         XCTAssertNil(SaveSourceHandle.normalized("@33.7405"))
         XCTAssertNil(SaveSourceHandle.normalized("-118.2807"))
-        XCTAssertNil(SaveSourceHandle.normalized("12345"))
+        XCTAssertNil(SaveSourceHandle.normalized("33.7405,-118.2807"))
+        XCTAssertEqual(SaveSourceHandle.normalized("12345"), "12345")
+        XCTAssertEqual(SaveSourceHandle.normalized("吃货小王"), "吃货小王")
+        XCTAssertEqual(SaveSourceHandle.normalized("@台北美食筆記"), "台北美食筆記")
         XCTAssertEqual(SaveSourceHandle.normalized("la.harbor.eats"), "la.harbor.eats")
         XCTAssertEqual(SaveSourceHandle.resolved("33.7405", extracted: "la.harbor.eats"), "la.harbor.eats")
 
@@ -178,6 +181,93 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertFalse(
             SaveReviewCandidateSavesRowDetail(candidate: candidate).english.contains("From 33.7405")
         )
+    }
+
+    @MainActor
+    func testSourceHandleDecodeKeepsCJKNumericAndCoordinateStorage() throws {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let cjk = try decoder.decode(SaveCardPlace.self, from: sourceHandleFixture("source-handle-cjk-xiaohongshu.json"))
+        XCTAssertEqual(cjk.sourceHandle, "吃货小王")
+        XCTAssertEqual(SaveSourceHandle.normalized(cjk.sourceHandle), "吃货小王")
+
+        let numeric = try decoder.decode(SaveCardPlace.self, from: sourceHandleFixture("source-handle-numeric-id.json"))
+        XCTAssertEqual(numeric.sourceHandle, "12345")
+        XCTAssertEqual(SaveSourceHandle.normalized(numeric.sourceHandle), "12345")
+
+        let coordinate = try decoder.decode(SaveCardPlace.self, from: sourceHandleFixture("source-handle-coordinate.json"))
+        XCTAssertEqual(coordinate.sourceHandle, "33.7405")
+        XCTAssertNil(SaveSourceHandle.normalized(coordinate.sourceHandle))
+        XCTAssertEqual(
+            SaveSourceHandle.resolved(coordinate.sourceHandle, extracted: "la.harbor.eats"),
+            "la.harbor.eats"
+        )
+
+        let record = try decoder.decode(SaveMemoryRecord.self, from: sourceHandleFixture("source-handle-cjk-memory-record.json"))
+        XCTAssertEqual(record.sourceHandle, "台北美食筆記")
+        XCTAssertEqual(SaveSourceHandle.normalized(record.sourceHandle), "台北美食筆記")
+
+        XCTAssertEqual(
+            SocialPlaceStructuredHighlights.extracted(
+                from: ["Creator handle: @吃货小王"],
+                sourceURL: "https://www.xiaohongshu.com/explore/65abc123"
+            ).sourceHandle,
+            "吃货小王"
+        )
+        XCTAssertEqual(
+            SocialPlaceStructuredHighlights.extracted(from: ["Creator handle: @12345"]).sourceHandle,
+            "12345"
+        )
+        XCTAssertEqual(
+            SocialPlaceStructuredHighlights.extracted(
+                from: ["Caption: saved from @台北美食筆記 tonight"]
+            ).sourceHandle,
+            "台北美食筆記"
+        )
+
+        let mapURL = "https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1"
+        let pending = PendingReviewCandidate(
+            candidateName: "Harbor Oven Pizza",
+            address: "",
+            category: "food",
+            latitude: 33.7405,
+            longitude: -118.2807,
+            sourceURL: mapURL,
+            sourceText: "Creator handle: @la.harbor.eats\n\(mapURL)",
+            evidence: [
+                "Source URL: \(mapURL)",
+                "Verified coordinates: 33.7405, -118.2807"
+            ],
+            confidence: 0.84,
+            missingInfo: ["User confirmation required"],
+            savedAt: Date()
+        )
+        XCTAssertEqual(pending.sourceHandle, "la.harbor.eats")
+
+        let encodedCJK = try JSONEncoder().encode(PendingReviewCandidate(
+            candidateName: "大安手冲",
+            address: "Taipei",
+            category: "food",
+            sourceURL: "https://www.xiaohongshu.com/explore/65abc123",
+            sourceText: "Creator handle: @吃货小王",
+            evidence: ["Creator handle: @吃货小王"],
+            confidence: 0.7,
+            missingInfo: [],
+            savedAt: Date(),
+            sourceHandle: "吃货小王"
+        ))
+        let decodedCJK = try JSONDecoder().decode(PendingReviewCandidate.self, from: encodedCJK)
+        XCTAssertEqual(decodedCJK.sourceHandle, "吃货小王")
+    }
+
+    private func sourceHandleFixture(_ name: String) throws -> Data {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures")
+            .appendingPathComponent(name)
+        return try Data(contentsOf: url)
     }
 
     @MainActor

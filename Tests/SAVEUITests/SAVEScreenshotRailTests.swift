@@ -795,7 +795,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-postcard-capture")
         let captureInput = app.textViews["capture.input"]
-        typeText(mapURL, into: captureInput)
+        typeText("Creator handle: @la.harbor.eats\n\(mapURL)", into: captureInput)
         let analyze = app.buttons["capture.analyze"]
         XCTAssertTrue(analyze.waitForExistence(timeout: stepTimeout))
         analyze.tap()
@@ -852,6 +852,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             )
         ).firstMatch
         XCTAssertTrue(savedCandidate.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            savedCandidate.label.contains("la.harbor.eats"),
+            "Saves rows must keep the known source handle after a maps capture, not fall through to the platform name."
+        )
         XCTAssertFalse(
             savedCandidate.label.contains("33.7405"),
             "A map coordinate must never appear as the Saves-row source handle."
@@ -1235,7 +1239,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.descendants(matching: .any)["saves.root"].exists)
         attach(app, name: "home-real-candidate-detail")
         app.buttons["drawer.place.close"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["home.more"].waitForExistence(timeout: stepTimeout))
         tapReachable(app.buttons["home.more"])
+        XCTAssertTrue(
+            app.descendants(matching: .any)["home.more.sheet"].waitForExistence(timeout: stepTimeout),
+            "Reopening More after a review candidate must show the sheet before View all."
+        )
         XCTAssertTrue(app.buttons["home.reviewAll"].waitForExistence(timeout: stepTimeout))
         app.buttons["home.reviewAll"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
