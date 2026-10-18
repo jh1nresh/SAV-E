@@ -191,7 +191,9 @@ enum SaveSourceHandle {
     }
 
     static func displayable(_ raw: String?) -> String? {
-        guard let value = stored(raw), !looksLikeCoordinate(value) else { return nil }
+        guard let value = stored(raw), !looksLikeCoordinate(value), !looksLikeURL(value) else {
+            return nil
+        }
         return value
     }
 
@@ -202,6 +204,11 @@ enum SaveSourceHandle {
             of: #"^[+-]?\d+\.\d+(?:\s*,\s*[+-]?\d+(?:\.\d+)?)?(?:,\d+z.*)?$"#,
             options: .regularExpression
         ) != nil
+    }
+
+    static func looksLikeURL(_ raw: String) -> Bool {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return value.hasPrefix("http://") || value.hasPrefix("https://") || value.hasPrefix("www.")
     }
 }
 
@@ -405,7 +412,7 @@ struct PendingReviewCandidate: Codable {
         accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
         sourceHandle = SaveSourceHandle.stored(
             try container.decodeIfPresent(String.self, forKey: .sourceHandle)
-        )
+        ) ?? extracted.sourceHandle
     }
 
     var shouldRecoverSourceOnServer: Bool {
@@ -585,7 +592,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
         sourceHandle = SaveSourceHandle.stored(
             try container.decodeIfPresent(String.self, forKey: .sourceHandle)
-        )
+        ) ?? extracted.sourceHandle
     }
 
     var hasReliableCoordinates: Bool {

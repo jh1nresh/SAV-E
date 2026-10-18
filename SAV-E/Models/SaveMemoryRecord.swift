@@ -149,7 +149,7 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
         sourceHandle = SaveSourceHandle.stored(
             try container.decodeIfPresent(String.self, forKey: .sourceHandle)
-        )
+        ) ?? extracted.sourceHandle
         latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
         longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
         category = try container.decodeIfPresent(PlaceCategory.self, forKey: .category)

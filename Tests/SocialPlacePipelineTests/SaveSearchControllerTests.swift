@@ -221,6 +221,35 @@ final class SaveSearchControllerTests: XCTestCase {
         )
         XCTAssertEqual(
             SocialPlaceStructuredHighlights.extracted(
+                from: ["Creator handle: @抖音探店王"],
+                sourceURL: "https://www.douyin.com/video/734001122233"
+            ).sourceHandle,
+            "抖音探店王"
+        )
+        XCTAssertEqual(
+            SocialPlaceStructuredHighlights.extracted(
+                from: ["Creator handle: @204912345678"],
+                sourceURL: "https://www.douyin.com/video/734001122233"
+            ).sourceHandle,
+            "204912345678"
+        )
+        XCTAssertEqual(
+            PendingReviewCandidate(
+                candidateName: "夜市小吃",
+                address: "",
+                category: "food",
+                sourceURL: "https://www.douyin.com/video/734001122233",
+                sourceText: "Creator handle: @抖音探店王",
+                evidence: ["Creator handle: @抖音探店王"],
+                confidence: 0.7,
+                missingInfo: [],
+                savedAt: Date(),
+                sourceHandle: "抖音探店王"
+            ).sourceHandle,
+            "抖音探店王"
+        )
+        XCTAssertEqual(
+            SocialPlaceStructuredHighlights.extracted(
                 from: ["Caption: saved from @台北美食筆記 tonight"]
             ).sourceHandle,
             "台北美食筆記"
@@ -259,6 +288,92 @@ final class SaveSearchControllerTests: XCTestCase {
         ))
         let decodedCJK = try JSONDecoder().decode(PendingReviewCandidate.self, from: encodedCJK)
         XCTAssertEqual(decodedCJK.sourceHandle, "吃货小王")
+    }
+
+    @MainActor
+    func testLegacyDecodeBackfillsHandleFromEvidenceWithoutOverwritingExplicit() throws {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let labeledCard = try decoder.decode(
+            SaveCardPlace.self,
+            from: sourceHandleFixture("source-handle-legacy-labeled.json")
+        )
+        XCTAssertEqual(labeledCard.sourceHandle, "la.harbor.eats")
+
+        let coordinateCard = try decoder.decode(
+            SaveCardPlace.self,
+            from: sourceHandleFixture("source-handle-legacy-coordinates.json")
+        )
+        XCTAssertNil(coordinateCard.sourceHandle)
+
+        let labeledRecord = try decoder.decode(
+            SaveMemoryRecord.self,
+            from: sourceHandleFixture("source-handle-legacy-memory-labeled.json")
+        )
+        XCTAssertEqual(labeledRecord.sourceHandle, "la.harbor.eats")
+
+        let coordinateRecord = try decoder.decode(
+            SaveMemoryRecord.self,
+            from: sourceHandleFixture("source-handle-legacy-memory-coordinates.json")
+        )
+        XCTAssertNil(coordinateRecord.sourceHandle)
+
+        let pendingJSON = """
+        {
+          "candidateName": "Harbor Oven Pizza",
+          "address": "Berth 73, San Pedro, Los Angeles, CA 90731",
+          "category": "food",
+          "sourceURL": "https://www.instagram.com/p/harborovenpizza/",
+          "sourceText": "Creator handle: @la.harbor.eats",
+          "evidence": ["Creator handle: @la.harbor.eats"],
+          "confidence": 0.84,
+          "missingInfo": ["User confirmation required"],
+          "savedAt": 1700000000
+        }
+        """.data(using: .utf8)!
+        let pending = try JSONDecoder().decode(PendingReviewCandidate.self, from: pendingJSON)
+        XCTAssertEqual(pending.sourceHandle, "la.harbor.eats")
+
+        let pendingCoordsJSON = """
+        {
+          "candidateName": "Harbor Oven Pizza",
+          "address": "",
+          "category": "food",
+          "sourceURL": "https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1",
+          "evidence": [
+            "Source URL: https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1",
+            "Verified coordinates: 33.7405, -118.2807"
+          ],
+          "confidence": 0.84,
+          "missingInfo": ["User confirmation required"],
+          "savedAt": 1700000000
+        }
+        """.data(using: .utf8)!
+        let pendingCoords = try JSONDecoder().decode(PendingReviewCandidate.self, from: pendingCoordsJSON)
+        XCTAssertNil(pendingCoords.sourceHandle)
+
+        let candidateJSON = """
+        {
+          "id": "4c8e2a71-6b0d-4f3a-9e55-2d1b8c0a7f44",
+          "name": "Harbor Oven Pizza",
+          "address": "Berth 73, San Pedro, Los Angeles, CA 90731",
+          "evidence": ["Creator handle: @la.harbor.eats"],
+          "missingInfo": [],
+          "status": "review",
+          "createdAt": 1700000000
+        }
+        """.data(using: .utf8)!
+        let candidate = try JSONDecoder().decode(PlaceReviewCandidate.self, from: candidateJSON)
+        XCTAssertEqual(candidate.sourceHandle, "la.harbor.eats")
+
+        let explicitCoordinate = try decoder.decode(
+            SaveCardPlace.self,
+            from: sourceHandleFixture("source-handle-coordinate.json")
+        )
+        XCTAssertEqual(explicitCoordinate.sourceHandle, "33.7405")
+        XCTAssertNil(SaveSourceHandle.normalized("https://www.xiaohongshu.com/user/profile/12345"))
+        XCTAssertNil(SaveSourceHandle.normalized("www.douyin.com/user/204912345678"))
     }
 
     private func sourceHandleFixture(_ name: String) throws -> Data {

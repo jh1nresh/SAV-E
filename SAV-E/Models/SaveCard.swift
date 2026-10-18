@@ -100,7 +100,7 @@ extension SaveCardPlace {
         accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
         sourceHandle = SaveSourceHandle.stored(
             try container.decodeIfPresent(String.self, forKey: .sourceHandle)
-        )
+        ) ?? extracted.sourceHandle
     }
 }
 
