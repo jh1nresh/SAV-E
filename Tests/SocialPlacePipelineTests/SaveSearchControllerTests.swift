@@ -4619,6 +4619,7 @@ final class SaveSearchControllerTests: XCTestCase {
         )
     }
 
+    @MainActor
     private static func correctionClue(overlappingStamp: Bool) -> PlaceReviewCandidate {
         PlaceReviewCandidate(
             id: UUID(),
