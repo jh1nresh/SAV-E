@@ -72,6 +72,67 @@ do {
 '''
 
 
+def handoff_fixture(source: str) -> str:
+    models = "private struct SocialPlaceEvidenceDiagnostic: Codable {" + between(
+        source, "private struct SocialPlaceEvidenceDiagnostic: Codable {", "private struct ShareMemoryRecord: Codable {"
+    )
+    keep = "    private func keepSocialSource() {" + between(
+        source, "    private func keepSocialSource() {", "    // MARK: - Gemini Parsing"
+    )
+    return "import Foundation\n" + models + r'''
+private struct Credential: Equatable { var ownerSubject: String }
+private enum ShareAnalysisKeychain {
+    static var current: Credential? = Credential(ownerSubject: "fixture-owner")
+    static func read() -> Credential? { current }
+}
+private enum ShareAnalysisError {
+    case sessionChanged
+    var errorDescription: String? { "Session changed" }
+}
+private final class HandoffHarness {
+    var isSaved = false
+    var isParsing = true
+    var parseError: String?
+    var analysisCredential = ShareAnalysisKeychain.current
+    var sharedURL = "https://example.com/source"
+    var socialCaption = "Fixture caption"
+    var reviewCandidates: [PendingReviewCandidate] = []
+    var analysisAttempt = 0
+    var saved: [PendingReviewCandidate] = []
+    var writeSucceeds = true
+    func saveReviewCandidates(_ candidates: [PendingReviewCandidate], sourceFallback: Bool) {
+        guard !isSaved else { return }
+        if writeSucceeds { saved += candidates; isSaved = true }
+        else { parseError = "Disk unavailable" }
+    }
+''' + keep + r'''
+    static func run() {
+        let successful = HandoffHarness()
+        successful.keepSocialSource()
+        precondition(successful.isSaved && !successful.isParsing)
+        precondition(successful.analysisAttempt == 1)
+        precondition(successful.saved.count == 1)
+        precondition(successful.saved[0].ownerSubject == "fixture-owner")
+        precondition(successful.saved[0].isSourceOnly == true)
+        precondition(successful.saved[0].reviewState == "analysis_pending")
+        precondition(successful.saved[0].latitude == nil)
+        successful.keepSocialSource()
+        precondition(successful.saved.count == 1 && successful.analysisAttempt == 1)
+        let failed = HandoffHarness(); failed.writeSucceeds = false
+        failed.keepSocialSource()
+        precondition(!failed.isSaved && !failed.isParsing && failed.parseError != nil)
+        precondition(failed.analysisAttempt == 0, "Failed persistence must not cancel the live request")
+        let changed = HandoffHarness()
+        ShareAnalysisKeychain.current = Credential(ownerSubject: "other-owner")
+        changed.keepSocialSource()
+        precondition(!changed.isSaved && changed.saved.isEmpty && changed.parseError != nil)
+        print("PASS: save-during-analysis preserves owner/source state; duplicate taps and failed writes stay safe")
+    }
+}
+HandoffHarness.run()
+'''
+
+
 def main() -> None:
     source = SOURCE.read_text()
     with tempfile.TemporaryDirectory(prefix="save-share-pending-") as directory:
@@ -79,6 +140,8 @@ def main() -> None:
         swift = root / "fixture.swift"
         swift.write_text(production_fixture(source))
         subprocess.run(["swift", str(swift), str(root / "pending.json")], check=True, cwd=ROOT)
+        swift.write_text(handoff_fixture(source))
+        subprocess.run(["swift", str(swift)], check=True, cwd=ROOT)
 
 
 if __name__ == "__main__":
