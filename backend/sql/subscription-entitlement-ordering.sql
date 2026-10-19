@@ -23,3 +23,17 @@ create table if not exists pending_subscription_notifications (
     signed_date_ms bigint not null,
     revocation_reversed boolean not null default false
 );
+
+-- Entitlement state is backend-only, including on Supabase public schemas.
+-- RLS is default-deny for non-owners; table revokes also block TRUNCATE, which
+-- RLS does not cover. Remove copied default grants and any older direct grants.
+alter table subscription_entitlements enable row level security;
+alter table pending_subscription_notifications enable row level security;
+revoke all privileges on table subscription_entitlements, pending_subscription_notifications from public;
+do $$
+declare browser_role text;
+begin
+    for browser_role in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
+        execute format('revoke all privileges on table subscription_entitlements, pending_subscription_notifications from %I', browser_role);
+    end loop;
+end $$;

@@ -308,8 +308,21 @@ the required backend CI job therefore cannot silently skip this payment gate.
 
 Before an authorized backend deployment, apply
 `sql/subscription-entitlement-ordering.sql` after the existing entitlement
-schema. The migration is additive and retains existing owners/statuses. Confirm
-`GET /health/entitlements` is ready before enabling purchases. This checks storage
-only; App Store Connect configuration and real Sandbox purchase/restore/refund
-validation remain separate launch gates. Never apply this migration to production
+schema, using the SQL apply helper's single transaction. Re-run this idempotent
+migration on installs that applied its earlier version: it enables RLS on both
+entitlement tables and revokes all table privileges from `PUBLIC` and any
+existing Supabase `anon`/`authenticated` roles. These tables are backend-only;
+client applications use the authenticated backend routes, never the Data API.
+No browser policies are added. The backend retains table-owner access without
+forcing RLS; a separate server role needs deliberate grants and RLS authorization.
+The migration supports plain PostgreSQL without Supabase roles and does not
+change global default privileges.
+
+The migration retains existing owner/status/data values. After an authorized
+apply, verify both tables' RLS flags and effective browser-role privileges:
+`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, and `TRIGGER`
+should all be denied. `GET /health/entitlements` checks storage shape only; it
+does not inspect these database permissions. Confirm that endpoint is ready
+before enabling purchases. App Store Connect configuration and real Sandbox
+purchase/restore/refund validation remain separate launch gates. Never apply this migration to production
 as part of ordinary local verification.
