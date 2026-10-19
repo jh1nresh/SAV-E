@@ -525,8 +525,7 @@ struct SaveMapRootView: View {
             }
 #endif
         }
-        // Identifier only. Outermost contain+id swallowed map.eat / map.go
-        // the same way home.root once swallowed home.savedPlaces.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.root")
     }
 

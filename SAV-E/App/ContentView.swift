@@ -247,6 +247,9 @@ struct ContentView: View {
                 collapseMapPanel()
             }
         }
+        .onChange(of: doodleSession.mapVisitResidueID) { _, _ in
+            resetMapVisitResidue()
+        }
         .onChange(of: fullScreenRoute?.id) { _, routeID in
             if routeID != nil {
                 invalidateExactSearchRequest()
@@ -496,6 +499,14 @@ struct ContentView: View {
         )
     }
 
+    /// Drop leftover Map-tab chrome so a reused Map remounts Eat/Go.
+    private func resetMapVisitResidue() {
+        mapVM.clearSelectedMapObject()
+        mapDetailDrawerItem = nil
+        isMapPanelExpanded = false
+        drawerVM.returnToCommands()
+    }
+
     /// Search, show-on-map, and list handoffs must drop a leftover Home
     /// Eat/Go+city filter so the place the caller asked to show is visible.
     private func showMapTab() {
@@ -522,7 +533,10 @@ struct ContentView: View {
     }
 
     private var rootTabs: some View {
-        NavigationStack(path: $rootPath) {
+        // Read identity outside the switch so a Home-tab mini-map bump is
+        // observed before Map remounts with the leftover wordmark header.
+        let mapIdentity = doodleSession.mapSurfaceID
+        return NavigationStack(path: $rootPath) {
             ReferenceViewport {
                 ZStack(alignment: .topLeading) {
                     Group {
@@ -570,7 +584,7 @@ struct ContentView: View {
                                 onPlanAroundPlace: openPlanAround,
                                 onOpenPassport: openPassport
                             )
-                            .id(doodleSession.mapSurfaceID)
+                            .id(mapIdentity)
                         case .friends:
                             SaveFriendsView(
                                 currentUserID: PrivyAuthService.shared.currentUserId,

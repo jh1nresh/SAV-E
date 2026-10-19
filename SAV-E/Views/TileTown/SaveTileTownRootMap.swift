@@ -15,11 +15,14 @@ struct SaveTileTownRootMap: View {
     @State private var showsCityPicker = false
 
     var body: some View {
-        ZStack(alignment: .top) {
+        let followsHomeFilter = session.mapFollowsHomeFilter
+        let visitResidue = session.mapVisitResidueID
+        return ZStack(alignment: .top) {
             SaveAtlasPalette.canvas.ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 10) {
-                header
+                header(followsHomeFilter: followsHomeFilter)
+                    .id(visitResidue)
                     .padding(.horizontal, 16)
                     .padding(.top, AtlasMetrics.statusBarHeight)
 
@@ -88,16 +91,27 @@ struct SaveTileTownRootMap: View {
             }
         }
         .onAppear {
-            session.consumeMiniMapHandoff()
+            applyMiniMapHandoff()
+        }
+        .onChange(of: session.mapVisitResidueID) { _, _ in
+            applyMiniMapHandoff()
         }
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
         }
     }
 
+    /// Reused Map skips `onAppear`. Residue from `beginMiniMapHandoff` remounts
+    /// Eat/Go and drops leftover lens / city-picker / selected-pin chrome.
+    private func applyMiniMapHandoff() {
+        session.consumeMiniMapHandoff()
+        lens = .saved
+        showsCityPicker = false
+    }
+
     @ViewBuilder
-    private var header: some View {
-        if session.mapFollowsHomeFilter {
+    private func header(followsHomeFilter: Bool) -> some View {
+        if followsHomeFilter {
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     SaveDisplayTitle(text: "Savvy", pointSize: 28)

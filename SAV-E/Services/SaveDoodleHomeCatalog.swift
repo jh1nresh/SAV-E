@@ -86,6 +86,11 @@ final class SaveDoodleSession: ObservableObject {
     /// cannot keep the unfiltered wordmark-only header.
     @Published private(set) var mapSurfaceID = UUID()
 
+    /// Prior Map-tab residue: selected pin, expanded search drawer, or a
+    /// header that only mounted on the first `onAppear`. Mini-map bumps this
+    /// so Map remounts Eat/Go instead of keeping the wordmark-only chrome.
+    @Published private(set) var mapVisitResidueID = UUID()
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -104,11 +109,13 @@ final class SaveDoodleSession: ObservableObject {
         mapFollowsHomeFilter = defaults.bool(forKey: Self.followKey)
     }
 
-    /// Mini-map tap. Sets follow + a fresh Map identity before the tab switch.
+    /// Mini-map tap. Sets follow, drops leftover Map-tab chrome, and gives
+    /// Map a new identity so Eat/Go remounts on a reused view.
     func beginMiniMapHandoff() {
         pendingMiniMapHandoff = true
         mapFollowsHomeFilter = true
         mapSurfaceID = UUID()
+        mapVisitResidueID = UUID()
     }
 
     /// Map appear. Re-applies follow if a tab-bar default-false write landed
