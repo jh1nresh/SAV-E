@@ -84,9 +84,7 @@ struct SaveProPaywallView: View {
                 .font(SaveTheme.Typography.eyebrow)
                 .foregroundStyle(SaveAtlasPalette.muted)
 
-            Text(headline)
-                .font(SaveAtlasType.display(28))
-                .foregroundStyle(SaveAtlasPalette.forest)
+            SaveDisplayTitle(text: headline, pointSize: 34)
 
             Text(subheadline)
                 .font(SaveAtlasType.body(14))
@@ -100,7 +98,7 @@ struct SaveProPaywallView: View {
     private var headline: String {
         languageSettings.localized(
             english: "Save every place you love",
-            traditionalChinese: "收藏每一個你愛的地方"
+            traditionalChinese: "想去的地方，全部存下"
         )
     }
 
@@ -111,8 +109,9 @@ struct SaveProPaywallView: View {
         )
     }
 
-    /// DESIGN §7.6: one free-tier line, one Pro benefit, one keep-going note.
-    /// No AI-quota copy. The free-tier sentence appears only in `subheadline`.
+    /// DESIGN §7.6: one free-tier line, one Pro benefit, and a keep-going note
+    /// only for the cap trigger. No AI-quota copy. The free-tier sentence
+    /// appears only in `subheadline`.
     private var boundaryPanel: some View {
         VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
             HStack(alignment: .top, spacing: SaveTheme.Spacing.sm) {
@@ -131,14 +130,16 @@ struct SaveProPaywallView: View {
             }
             .accessibilityIdentifier("paywall.proBenefit")
 
-            Text(languageSettings.localized(
-                english: "You've saved 50 places. Keep going.",
-                traditionalChinese: "已存 50 個地點，繼續存下去"
-            ))
-            .font(SaveAtlasType.body(15))
-            .foregroundStyle(SaveAtlasPalette.muted)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityIdentifier("paywall.keepGoing")
+            if trigger == .savedPlaceLimit {
+                Text(languageSettings.localized(
+                    english: "You've saved 50 places. Keep going.",
+                    traditionalChinese: "已存 50 個地點，繼續存下去"
+                ))
+                .font(SaveAtlasType.body(15))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("paywall.keepGoing")
+            }
         }
         .padding(SaveTheme.Spacing.lg)
         .background(SaveAtlasPalette.paper)

@@ -5,6 +5,9 @@ struct SharedPlacePost: Decodable, Identifiable, Equatable {
     let id: UUID
     let name: String
     let address: String
+    var latitude: Double? = nil
+    var longitude: Double? = nil
+    var google_place_id: String? = nil
     let category: String
     let status: PlaceStatus
     let stars: Double?
@@ -27,9 +30,9 @@ struct SharedPlacePost: Decodable, Identifiable, Equatable {
             id: id,
             name: name,
             address: address,
-            latitude: 0,
-            longitude: 0,
-            googlePlaceId: nil,
+            latitude: latitude ?? 0,
+            longitude: longitude ?? 0,
+            googlePlaceId: google_place_id,
             category: PlaceCategory(rawValue: category) ?? .attraction,
             status: status,
             rating: stars,

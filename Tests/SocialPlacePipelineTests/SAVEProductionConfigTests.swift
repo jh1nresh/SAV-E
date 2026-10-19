@@ -26,7 +26,10 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(policy.contains("enforcementEnabled"))
         XCTAssertTrue(policy.contains("freeSavedPlaceLimit = 50"))
         XCTAssertTrue(paywall.contains("Save every place you love"))
-        XCTAssertTrue(paywall.contains("收藏每一個你愛的地方"))
+        XCTAssertTrue(paywall.contains("想去的地方，全部存下"))
+        XCTAssertFalse(paywall.contains("收藏每一個你愛的地方"))
+        XCTAssertTrue(paywall.contains("SaveDisplayTitle(text: headline, pointSize: 34)"))
+        XCTAssertFalse(paywall.contains("SaveAtlasType.display(28)"))
         XCTAssertTrue(paywall.contains("Free: 50 places"))
         XCTAssertTrue(paywall.contains("免費：50 個地點"))
         XCTAssertEqual(
@@ -39,6 +42,10 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(paywall.contains("You've saved 50 places. Keep going."))
         XCTAssertTrue(paywall.contains("已存 50 個地點，繼續存下去"))
         XCTAssertTrue(paywall.contains("paywall.keepGoing"))
+        XCTAssertTrue(
+            paywall.contains("if trigger == .savedPlaceLimit"),
+            "Keep-going note belongs only on the cap trigger, not Passport or Settings"
+        )
         XCTAssertFalse(paywall.contains("Always free"))
         XCTAssertFalse(paywall.contains("永遠免費"))
         XCTAssertFalse(paywall.contains("stay free and unlimited"))
@@ -401,6 +408,9 @@ final class SAVEProductionConfigTests: XCTestCase {
             id: UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")!,
             name: "Harbor Town",
             address: "Water",
+            latitude: 25.033,
+            longitude: 121.565,
+            google_place_id: "ChIJcap-harbor",
             category: "attraction",
             status: .wantToGo,
             stars: nil,
@@ -417,6 +427,37 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(outcome, .parkedAtFreeLimit)
         XCTAssertEqual(parked?.name, "Harbor Town")
         XCTAssertEqual(parked?.id, post.id)
+        XCTAssertEqual(parked?.latitude, 25.033)
+        XCTAssertEqual(parked?.longitude, 121.565)
+        XCTAssertEqual(parked?.googlePlaceId, "ChIJcap-harbor")
+    }
+
+    func testSharedPlacePostDecodesCoordinatesAndPlaceIdForParkedSave() throws {
+        let json = """
+        {
+          "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "name": "Harbor Town",
+          "address": "Water",
+          "latitude": 25.033,
+          "longitude": 121.565,
+          "google_place_id": "ChIJcap-harbor",
+          "category": "attraction",
+          "status": "wantToGo",
+          "stars": null,
+          "caption": null,
+          "shared_at": "2026-10-12T10:00:00Z",
+          "author_id": "alex",
+          "author_name": "Alex Last",
+          "author_handle": "alex",
+          "author_avatar_url": null,
+          "visible_to_followers": true
+        }
+        """
+        let post = try JSONDecoder().decode(SharedPlacePost.self, from: Data(json.utf8))
+        let parked = post.asUnplacedPlace()
+        XCTAssertEqual(parked.latitude, 25.033)
+        XCTAssertEqual(parked.longitude, 121.565)
+        XCTAssertEqual(parked.googlePlaceId, "ChIJcap-harbor")
     }
 
     @MainActor
