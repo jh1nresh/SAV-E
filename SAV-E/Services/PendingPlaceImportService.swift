@@ -261,6 +261,12 @@ struct SocialPlaceEvidenceDiagnostic: Codable, Hashable {
     private var lowercasedMissingFields: [String] {
         missingFields.map { $0.lowercased() }
     }
+
+    /// Attempt logs are pipeline-written. Mark them at origin so confirming a
+    /// clue keeps user caption text and drops only app-generated diagnostics.
+    func candidateEvidence(extras: [String] = []) -> [String] {
+        found + attempts.map(SavvyGeneratedLine.marking) + extras
+    }
 }
 
 struct SocialPlaceEvidenceRecoveryPlan: Codable, Hashable {

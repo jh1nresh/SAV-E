@@ -286,7 +286,19 @@ struct Place: Identifiable, Codable, Hashable {
         for raw in lines.flatMap({ $0.components(separatedBy: .newlines) }) {
             let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !line.isEmpty else { continue }
-            if isGeneratedEvidenceLine(line) || isStructuredEvidenceLine(line) { continue }
+            if line.hasPrefix(memoryNoteEnvelopeMarker) { continue }
+            if SavvyGeneratedLine.isMarked(line) {
+                let unmarked = SavvyGeneratedLine.unmarked(line)
+                if isProviderOriginEvidenceLine(unmarked) {
+                    additional.append(unmarked)
+                }
+                continue
+            }
+            if isPipelineDiagnosticLine(line) || isStructuredEvidenceLine(line) { continue }
+            if isProviderOriginEvidenceLine(line) {
+                additional.append(line)
+                continue
+            }
             if isURLEvidenceLine(line) || isDurableReceiptLine(line) {
                 additional.append(line)
                 continue
@@ -332,7 +344,17 @@ struct Place: Identifiable, Codable, Hashable {
     }
 
     static func isGeneratedEvidenceLine(_ line: String) -> Bool {
-        SavvyGeneratedLine.isMarked(line) || generatedEvidencePrefixes.contains { prefix in
+        SavvyGeneratedLine.isMarked(line) || isPipelineDiagnosticLine(line)
+    }
+
+    static func isPipelineDiagnosticLine(_ line: String) -> Bool {
+        pipelineDiagnosticPrefixes.contains { prefix in
+            line.range(of: prefix, options: [.caseInsensitive, .anchored]) != nil
+        }
+    }
+
+    static func isProviderOriginEvidenceLine(_ line: String) -> Bool {
+        providerOriginEvidencePrefixes.contains { prefix in
             line.range(of: prefix, options: [.caseInsensitive, .anchored]) != nil
         }
     }
@@ -374,20 +396,38 @@ struct Place: Identifiable, Codable, Hashable {
     private static let memoryNoteEnvelopeMarker = "SavvyMemory/1"
     private static let memoryNoteEnvelopeVersion = 1
 
-    /// Diagnostics that must never become saved memory or additional evidence.
-    private static let generatedEvidencePrefixes = [
-        "Recommender:",
-        "Verified coordinates",
-        "Analysis method:",
+    /// Pipeline diagnostics that never become saved memory or Evidence Receipt.
+    /// User-authored `Recommender:` / `Analysis method:` / `Verified coordinates`
+    /// lines are not in this list; only `SavvyGenerated:` marks app-written copy.
+    private static let pipelineDiagnosticPrefixes = [
         "Analysis pipeline:",
         "Evidence tier:",
         "Location clue:",
-        "Google Places",
+        "Google Places refined match:",
+        "Google Places address:",
+        "Google Places coordinates:",
         "Venue name:",
         "Category clue:",
         "Confidence:",
         "Debug:",
         "Diagnostic:",
+    ]
+
+    /// Map-provider lines written at save time. These belong on the Evidence
+    /// Receipt, not in “Your saved memory”.
+    private static let providerOriginEvidencePrefixes = [
+        "Google Places result",
+        "Google Places match",
+        "Apple Maps result",
+        "Apple Maps POI",
+        "Amap result",
+        "Baidu Maps result",
+        "Search:",
+        "Distance:",
+        "External reviews:",
+        "Google rating:",
+        "Coordinate system:",
+        "POI:",
     ]
 
     /// Evidence Receipt lines (DESIGN.md) kept in `additionalSourceEvidence`.
@@ -845,6 +885,14 @@ enum SavvyGeneratedLine {
     static func isMarked(_ line: String) -> Bool {
         line.trimmingCharacters(in: .whitespacesAndNewlines)
             .range(of: marker, options: [.caseInsensitive, .anchored]) != nil
+    }
+
+    static func unmarked(_ line: String) -> String {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let range = trimmed.range(of: marker, options: [.caseInsensitive, .anchored]) else {
+            return trimmed
+        }
+        return String(trimmed[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 

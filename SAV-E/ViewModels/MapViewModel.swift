@@ -1210,7 +1210,8 @@ final class MapViewModel: ObservableObject {
                     candidateIDs: resolution.candidateIDs
                 )
             } else {
-                dropExactSearchResolutionUnlessLocked()
+                exactSearchResolution = nil
+                exactSearchRollbackLockPlaceID = nil
             }
         }
     }
@@ -1957,10 +1958,12 @@ final class MapViewModel: ObservableObject {
         return (true, committed)
     }
 
+    /// Terminal actions for this clue (reject / archive / source-only / confirm)
+    /// drop the rollback lock so a retired clue cannot block later corrections.
     private func clearExactSearchResolution(matching candidateID: UUID) {
-        guard exactSearchRollbackLockPlaceID == nil else { return }
         guard exactSearchResolution?.clue.id == candidateID else { return }
         exactSearchResolution = nil
+        exactSearchRollbackLockPlaceID = nil
     }
 
     @discardableResult

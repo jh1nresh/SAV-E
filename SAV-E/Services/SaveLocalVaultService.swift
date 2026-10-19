@@ -81,7 +81,7 @@ final class SaveLocalVaultService: Sendable {
             sourceURL: url.absoluteString,
             sourceText: note,
             title: sourceOnlyDisplayName(for: url),
-            evidence: diagnostic.found + diagnostic.attempts + diagnosticSearchEvidence(diagnostic),
+            evidence: diagnostic.candidateEvidence(extras: diagnosticSearchEvidence(diagnostic)),
             evidenceDiagnostic: diagnostic
         )
         return try upsertReviewRecord(record, matchSourceIdentity: true)

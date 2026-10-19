@@ -2980,6 +2980,25 @@ final class SaveSearchControllerTests: XCTestCase {
             ReviewCandidateError.correctionLockedToPreviousStamp.errorDescription
         )
         XCTAssertEqual(supabase.updatedPlaces.count, 1, "Choosing another stamp must not attach the same clue")
+
+        supabase.recordDecisionError = nil
+        supabase.failingUpdatePlaceCalls = []
+        try await map.rejectReviewCandidate(clue)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+
+        var nextClue = Self.correctionClue(overlappingStamp: true)
+        nextClue.workflowRunId = UUID()
+        nextClue.name = "Later clue"
+        map.reviewCandidates = [nextClue]
+        map.beginExactSearchResolution(for: nextClue)
+        var laterStamp = Self.correctionStamp()
+        laterStamp.name = "Later Harbor Stamp"
+        laterStamp.latitude = 25.04
+        laterStamp.longitude = 121.57
+        let laterOpened = await map.chooseSavedStampFromExactSearch(laterStamp)
+        XCTAssertEqual(laterOpened?.id, laterStamp.id)
+        XCTAssertNil(map.correctionDrawerError)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == nextClue.id })
     }
 
     @MainActor
@@ -3813,7 +3832,43 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(place.sourceUrl, "https://maps.google.com/?q=Sushi+Gen")
         XCTAssertEqual(place.sourcePlatform, .googleMaps)
         XCTAssertTrue(place.note?.contains("Visible on map") == true)
-        XCTAssertTrue(place.note?.contains("External reviews: 4100") == true)
+        XCTAssertFalse(place.note?.contains("External reviews:") == true)
+        XCTAssertEqual(place.cleanMemoryNote, "Visible on map")
+        XCTAssertTrue(place.savedAdditionalSourceEvidence.contains("External reviews: 4100"))
+    }
+
+    @MainActor
+    func testSaveDraftKeepsMapProviderDiagnosticsOutOfSavedMemory() throws {
+        let controller = SaveSearchController()
+        let draft = SavePlaceDraft(
+            title: "Harbor Oven Pizza",
+            address: "San Pedro",
+            latitude: 33.7405,
+            longitude: -118.2807,
+            category: .food,
+            sourceURL: "https://maps.google.com/?q=Harbor+Oven",
+            sourcePlatform: .googleMaps,
+            evidence: [
+                "Google Places result",
+                "Search: harbor oven pizza",
+                "Distance: 120 m away",
+            ],
+            externalReviewCount: 4100
+        )
+
+        let place = try controller.makeSavedPlace(from: draft)
+
+        XCTAssertNil(place.cleanMemoryNote)
+        XCTAssertNil(place.note)
+        XCTAssertEqual(
+            place.savedAdditionalSourceEvidence,
+            [
+                "Google Places result",
+                "Search: harbor oven pizza",
+                "Distance: 120 m away",
+                "External reviews: 4100",
+            ]
+        )
     }
 
     @MainActor
@@ -4862,6 +4917,38 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(place.sourceHandle, "taipeieats")
         XCTAssertEqual(place.recommender, "taipeieats")
         XCTAssertEqual(place.visibility, .privateMemory)
+    }
+
+    @MainActor
+    func testPlaceFromReviewCandidateKeepsPrefixLikeCaptionEvidence() {
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Harbor Oven Pizza",
+            address: "San Pedro",
+            city: "Los Angeles",
+            latitude: 33.7405,
+            longitude: -118.2807,
+            evidence: [
+                "Recommender: Alice suggested the curry",
+                "Analysis method: I asked the barista",
+                SavvyGeneratedLine.marking("Analysis method: classified the shared URL/platform and canonical post id before trusting content"),
+            ],
+            confidence: 0.8,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+
+        let place = Place.from(candidate)
+
+        XCTAssertEqual(
+            place.note,
+            "Recommender: Alice suggested the curry\nAnalysis method: I asked the barista"
+        )
+        XCTAssertEqual(place.cleanMemoryNote, place.note)
+        XCTAssertFalse((place.note ?? "").contains("classified the shared URL"))
+        XCTAssertFalse(place.savedAdditionalSourceEvidence.contains { $0.contains("classified the shared URL") })
     }
 
     @MainActor
