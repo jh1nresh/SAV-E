@@ -677,6 +677,8 @@ final class MapViewModel: ObservableObject {
     /// Spec P4: shown when a locate tap fails because location permission is
     /// denied or restricted; offers the Open Settings recovery path.
     @Published var showsLocationDeniedNotice = false
+    /// The 51st free save was parked in Review. ContentView presents Pro.
+    @Published var shouldPresentSavedPlaceLimitPaywall = false
 
     private let supabaseService: SupabaseServiceProtocol
     private let mapCandidatePlaceSaver: (Place, String) async throws -> Void
@@ -698,6 +700,7 @@ final class MapViewModel: ObservableObject {
     private let saveSearchIntentParser: SaveSearchIntentParser
     private let collaborativeListStore: SaveCollaborativeListStore
     private let referralHandoffStore: SaveReferralHandoffStore
+    private let entitlementTierProvider: () -> SaveProTier
     private let usesRemotePersistence: Bool
     private var importedPendingKeys: Set<String> = []
     private var didRequestInitialLocation = false
@@ -732,6 +735,7 @@ final class MapViewModel: ObservableObject {
         collaborativeListStore: SaveCollaborativeListStore = .shared,
         referralHandoffStore: SaveReferralHandoffStore = .shared,
         relatedPlaceSourcesService: RelatedPlaceSourcesProviding = SupabaseService.shared,
+        entitlementTierProvider: @escaping () -> SaveProTier = { SaveEntitlementStore.shared.tier },
         usesRemotePersistence: Bool = true
     ) {
         self.supabaseService = supabaseService
@@ -762,6 +766,7 @@ final class MapViewModel: ObservableObject {
         self.saveSearchIntentParser = saveSearchIntentParser
         self.collaborativeListStore = collaborativeListStore
         self.referralHandoffStore = referralHandoffStore
+        self.entitlementTierProvider = entitlementTierProvider
         self.usesRemotePersistence = usesRemotePersistence
         correctionAuthObserver = authService.$authState.dropFirst().sink { [weak self] _ in
             // Published emits before the new state is assigned. Remove projected
@@ -831,6 +836,50 @@ final class MapViewModel: ObservableObject {
         return result
     }
 
+    // MARK: - Free saved-place cap
+
+    private var currentSavedPlaceTier: SaveProTier { entitlementTierProvider() }
+
+    private var isOverFreeSavedPlaceLimit: Bool {
+        SavePlaceLimitGate.decide(
+            tier: currentSavedPlaceTier,
+            savedPlaceCount: places.count
+        ) == .overFreeLimit
+    }
+
+    func requestSavedPlaceLimitPaywall() {
+        SavePlaceLimitHandoff.markPaywallPending()
+        shouldPresentSavedPlaceLimitPaywall = true
+    }
+
+    func acknowledgeSavedPlaceLimitPaywall() {
+        shouldPresentSavedPlaceLimitPaywall = false
+        SavePlaceLimitHandoff.consumePaywallPending()
+    }
+
+    func consumePendingSavedPlaceLimitPaywall() -> Bool {
+        let local = shouldPresentSavedPlaceLimitPaywall
+        shouldPresentSavedPlaceLimitPaywall = false
+        return SavePlaceLimitHandoff.consumePaywallPending() || local
+    }
+
+    func syncSavedPlaceLimitCache() {
+        SavePlaceLimitHandoff.syncCache(
+            tier: currentSavedPlaceTier,
+            savedPlaceCount: places.count
+        )
+    }
+
+    @discardableResult
+    func parkPlaceInUnplacedInbox(_ place: Place) -> PlaceReviewCandidate {
+        let candidate = PlaceReviewCandidate.unplacedInboxItem(from: place)
+        mirrorToLocalVault(candidate)
+        reviewCandidates = [candidate] + reviewCandidates.filter { $0.id != candidate.id }
+        requestSavedPlaceLimitPaywall()
+        syncSavedPlaceLimitCache()
+        return candidate
+    }
+
     // MARK: - Actions
 
     func loadPlaces(force: Bool = false) async {
@@ -843,6 +892,7 @@ final class MapViewModel: ObservableObject {
             isLoadingPlaces = false
             isLoading = false
             hasLoadedPlaces = true
+            syncSavedPlaceLimitCache()
         }
 
         if !usesRemotePersistence {
@@ -945,12 +995,37 @@ final class MapViewModel: ObservableObject {
         guard !pending.isEmpty else { return }
 
         let previousIDs = Set(places.map(\.id))
-        let importedPlaces = pending.filter { importedPendingKeys.insert($0.deduplicationKey).inserted }.map(Place.from)
+        var keepQueued: [PendingSharedPlace] = []
+        var importedPlaces: [Place] = []
+        for pendingPlace in pending {
+            let place = Place.from(pendingPlace)
+            let isNewKey = importedPendingKeys.insert(pendingPlace.deduplicationKey).inserted
+            if existingSavedPlace(matching: place) != nil
+                || importedPlaces.contains(where: { $0.matches(place) }) {
+                if isNewKey { importedPlaces.append(place) }
+                keepQueued.append(pendingPlace)
+                continue
+            }
+            if !isNewKey {
+                keepQueued.append(pendingPlace)
+                continue
+            }
+            let projectedCount = places.count + importedPlaces.count
+            if SavePlaceLimitGate.decide(
+                tier: currentSavedPlaceTier,
+                savedPlaceCount: projectedCount
+            ) == .overFreeLimit {
+                parkPlaceInUnplacedInbox(place)
+                continue
+            }
+            importedPlaces.append(place)
+            keepQueued.append(pendingPlace)
+        }
         places = Place.consolidated(places + importedPlaces)
         let newPlaces = places.filter { !previousIDs.contains($0.id) }
         if !newPlaces.isEmpty { revealImportedPlaces(newPlaces) }
 
-        pendingImportService.restorePendingPlaces(pending)
+        pendingImportService.restorePendingPlaces(keepQueued)
     }
 
     private func localConfirmedPlaces() -> [Place] {
@@ -1030,6 +1105,9 @@ final class MapViewModel: ObservableObject {
                 let merged = existing?.mergingSources(from: place) ?? place
                 if remote != nil {
                     try await supabaseService.updatePlace(merged, previous: existing)
+                } else if isOverFreeSavedPlaceLimit {
+                    parkPlaceInUnplacedInbox(merged)
+                    continue
                 } else {
                     try await supabaseService.savePlace(merged, userId: userId)
                 }
@@ -1619,6 +1697,11 @@ final class MapViewModel: ObservableObject {
                 return existing
             }
 
+            if isOverFreeSavedPlaceLimit {
+                requestSavedPlaceLimitPaywall()
+                throw SavePlaceLimitError.parkedInUnplacedInbox
+            }
+
             _ = try saveLocalVaultService.saveConfirmedPlace(place)
             try saveLocalVaultService.removeReviewCandidate(candidate.id)
             places = [place] + places
@@ -1657,6 +1740,11 @@ final class MapViewModel: ObservableObject {
             focusSavedPlace(existing, showStampMoment: false)
             clearExactSearchResolution(matching: candidate.id)
             return existing
+        }
+
+        if isOverFreeSavedPlaceLimit {
+            requestSavedPlaceLimitPaywall()
+            throw SavePlaceLimitError.parkedInUnplacedInbox
         }
 
         var updatedCandidate = candidate
@@ -1777,6 +1865,17 @@ final class MapViewModel: ObservableObject {
                 selectedMapCandidate = nil
                 focusSavedPlace(existing, showStampMoment: false)
                 throw ReviewCandidateError.alreadySavedMapStamp(existing.name)
+            }
+
+            if isOverFreeSavedPlaceLimit {
+                if exactResolution == nil {
+                    parkPlaceInUnplacedInbox(place)
+                } else {
+                    requestSavedPlaceLimitPaywall()
+                }
+                mapCandidates.removeAll { $0.id == candidate.id }
+                selectedMapCandidate = nil
+                throw SavePlaceLimitError.parkedInUnplacedInbox
             }
 
             if exactSearchRollbackLockPlaceID != nil {
@@ -2128,6 +2227,10 @@ final class MapViewModel: ObservableObject {
             guard let userId = authService.currentUserId else {
                 throw SupabaseError.notAuthenticated
             }
+            if isOverFreeSavedPlaceLimit {
+                parkPlaceInUnplacedInbox(place)
+                throw SavePlaceLimitError.parkedInUnplacedInbox
+            }
             let result = try await supabaseService.saveFriendSharedPlace(
                 place,
                 code: code,
@@ -2146,6 +2249,11 @@ final class MapViewModel: ObservableObject {
             let existing = try await mergeSavedSources(place, into: match)
             focusSavedPlace(existing, showStampMoment: false)
             return .alreadySaved(existing)
+        }
+
+        if isOverFreeSavedPlaceLimit {
+            parkPlaceInUnplacedInbox(place)
+            throw SavePlaceLimitError.parkedInUnplacedInbox
         }
 
         let savedPlace = place
@@ -2171,9 +2279,13 @@ final class MapViewModel: ObservableObject {
     func acceptFriendRestaurantSave(_ place: Place) {
         if let index = places.firstIndex(where: { $0.id == place.id }) {
             places[index] = place
+        } else if isOverFreeSavedPlaceLimit {
+            parkPlaceInUnplacedInbox(place)
+            return
         } else {
             places.append(place)
             recordPassportFieldActionAfterSavingPlace()
+            syncSavedPlaceLimitCache()
         }
         mirrorToLocalVault(place)
     }
@@ -2185,6 +2297,13 @@ final class MapViewModel: ObservableObject {
             focusSavedPlace(existing, showStampMoment: false)
             await recordOriginSaveOutcomeBestEffort(for: socialPlace)
             return existing
+        }
+
+        if isOverFreeSavedPlaceLimit {
+            parkPlaceInUnplacedInbox(socialPlace)
+            socialPlaces.removeAll { $0.id == socialPlace.id }
+            selectedSocialPlace = nil
+            throw SavePlaceLimitError.parkedInUnplacedInbox
         }
 
         let place = Place(
@@ -2462,6 +2581,11 @@ final class MapViewModel: ObservableObject {
             return existing
         }
 
+        if isOverFreeSavedPlaceLimit {
+            parkPlaceInUnplacedInbox(place)
+            throw SavePlaceLimitError.parkedInUnplacedInbox
+        }
+
         if let userId = authService.currentUserId {
             do {
                 try await supabaseService.savePlace(place, userId: userId)
@@ -2703,6 +2827,7 @@ final class MapViewModel: ObservableObject {
     private func revealImportedPlaces(_ importedPlaces: [Place]) {
         guard let first = importedPlaces.first else { return }
         focusSavedPlace(first, extraCount: importedPlaces.count - 1)
+        syncSavedPlaceLimitCache()
     }
 
     private func focusSavedPlace(_ place: Place, extraCount: Int = 0, showStampMoment: Bool = true) {
@@ -3848,16 +3973,33 @@ final class MapViewModel: ObservableObject {
         }
 
         let existingKeys = Set(places.map(\.importDeduplicationKey))
-        return try await GoogleTakeoutBatchSaver.save(
+        let isCapped = SavePlaceLimitGate.remainingNewSaves(
+            tier: currentSavedPlaceTier,
+            savedPlaceCount: places.count
+        ) != nil
+        var parked = 0
+        let summary = try await GoogleTakeoutBatchSaver.save(
             drafts,
             existingKeys: existingKeys,
             persist: { place in
+                if isCapped, isOverFreeSavedPlaceLimit {
+                    parkPlaceInUnplacedInbox(place)
+                    parked += 1
+                    return
+                }
                 try await supabaseService.savePlace(place, userId: userId)
                 recordPassportFieldActionAfterSavingPlace()
             },
             didPersist: { place in
+                if places.contains(where: { $0.id == place.id }) { return }
+                if reviewCandidates.contains(where: { $0.id == place.id }) { return }
                 places.insert(place, at: 0)
             }
+        )
+        return GoogleTakeoutSaveSummary(
+            saved: max(0, summary.saved - parked),
+            skippedDuplicates: summary.skippedDuplicates,
+            reviewDrafts: summary.reviewDrafts + parked
         )
     }
 

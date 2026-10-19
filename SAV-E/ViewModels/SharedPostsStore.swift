@@ -133,6 +133,10 @@ final class SharedPostsStore: ObservableObject {
 
     func save(id: UUID) async throws {
         guard !isDemo else { throw SupabaseError.notAuthenticated }
+        if SavePlaceLimitHandoff.cachedDecision() == .overFreeLimit {
+            SavePlaceLimitHandoff.markPaywallPending()
+            throw SavePlaceLimitError.parkedInUnplacedInbox
+        }
         let account = PrivyAuthService.shared.currentUserId
         _ = try await service.saveSharedPost(id: id)
         guard account == PrivyAuthService.shared.currentUserId, !Task.isCancelled else { throw CancellationError() }

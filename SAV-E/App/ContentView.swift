@@ -204,6 +204,7 @@ struct ContentView: View {
     /// Dismiss handlers must not resume capture or re-present a sheet mid-swap.
     @State private var suppressChromeDismissSideEffects = false
     @State private var pendingChromePresentation: PendingChromePresentation? = nil
+    @State private var showSavedPlaceLimitPaywall = false
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
@@ -298,6 +299,11 @@ struct ContentView: View {
         .sheet(isPresented: $isPassportPresented, onDismiss: handleExclusiveChromeDismiss) {
             passportView(isRootTab: false)
         }
+        .sheet(isPresented: $showSavedPlaceLimitPaywall, onDismiss: {
+            mapVM.acknowledgeSavedPlaceLimitPaywall()
+        }) {
+            SaveProPaywallView(trigger: .savedPlaceLimit)
+        }
         .onChange(of: drawerVM.mapAction) { _, action in
             if let action { mapVM.apply(action) }
         }
@@ -347,12 +353,21 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .saveMemoryPreferencesDidChange)) { _ in
             Task { await drawerVM.loadMemoryPreferences() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: SavePlaceLimitHandoff.paywallRequestedNotification)) { _ in
+            showSavedPlaceLimitPaywall = true
+        }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
+            presentSavedPlaceLimitPaywallIfNeeded()
             Task { await mapVM.handleSceneDidBecomeActive() }
+        }
+        .onChange(of: mapVM.shouldPresentSavedPlaceLimitPaywall) { _, shouldPresent in
+            guard shouldPresent else { return }
+            showSavedPlaceLimitPaywall = true
         }
         .task {
             await loadInitialContent()
+            presentSavedPlaceLimitPaywallIfNeeded()
         }
     }
 
@@ -378,6 +393,17 @@ struct ContentView: View {
 #endif
         openPostcardDrawerUITestFixtureIfNeeded()
         runRapidChromeTransitionUITestFixtureIfNeeded()
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-show-saved-place-limit-paywall") {
+            showSavedPlaceLimitPaywall = true
+        }
+#endif
+    }
+
+    private func presentSavedPlaceLimitPaywallIfNeeded() {
+        if mapVM.consumePendingSavedPlaceLimitPaywall() {
+            showSavedPlaceLimitPaywall = true
+        }
     }
 
     /// Passport. Reachable two ways since the five-tab restructure: as the
@@ -2108,6 +2134,14 @@ private struct FriendShareReceiptView: View {
                   currentReceipt.id == receipt.id
             else { return }
             saveState = outcome.isDuplicate ? .alreadySaved : .saved
+        } catch is SavePlaceLimitError {
+            guard !Task.isCancelled,
+                  activeSaveID == saveID,
+                  case .loaded(let currentReceipt) = loadState,
+                  currentReceipt.id == receipt.id
+            else { return }
+            saveState = .idle
+            saveErrorMessage = nil
         } catch {
             guard !Task.isCancelled,
                   activeSaveID == saveID,

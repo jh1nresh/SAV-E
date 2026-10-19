@@ -15,12 +15,18 @@ enum SAVEProAccessPolicy {
     /// No paywall may present automatically at launch, ever.
     nonisolated static let showsAutomaticLaunchPaywall = false
 
-    /// The saved-place memory loop is free forever. Locking it would stop the
-    /// place-memory asset from compounding.
+    /// Free: 50 places. Stated from day one and never lowered. Pro
+    /// (`SaveProTier.pro` from the existing entitlement check) is unlimited.
+    /// Existing accounts already over 50 keep every confirmed Map Stamp; only
+    /// new saves are gated.
+    nonisolated static let freeSavedPlaceLimit = 50
+
+    /// The first Map Stamp does not require purchase. Free: 50 places.
     nonisolated static let firstMapStampRequiresPurchase = false
 
-    /// Capture, Review, Map Stamps, the private map, notebooks, search over
-    /// saved places, deterministic parsing, and cache hits are never metered.
+    /// Capture, Review, the private map, notebooks, search, deterministic
+    /// parsing, and cache hits stay free. Confirmed Map Stamps on the free
+    /// tier are capped at `freeSavedPlaceLimit`.
     nonisolated static let coreMemoryLoopIsFree = true
 
     /// Purchases are wired but products are not yet live in App Store Connect.
@@ -66,6 +72,101 @@ nonisolated enum SaveProTier: String, Codable, Equatable, Sendable {
     case pro
 
     var allowsUnlimitedAIAssists: Bool { self == .pro }
+    var allowsUnlimitedSavedPlaces: Bool { self == .pro }
+}
+
+/// Why a new confirmed Map Stamp was allowed or parked in Review (Unplaced).
+nonisolated enum SavePlaceLimitDecision: Equatable, Sendable {
+    case allowed
+    case overFreeLimit
+}
+
+/// The 51st free save is not dropped. Callers park it in the Review inbox
+/// (the existing Unplaced queue) and present `SaveProPaywallView`.
+nonisolated enum SavePlaceLimitError: LocalizedError, Equatable, Sendable {
+    case parkedInUnplacedInbox
+
+    var errorDescription: String? {
+        "Free: 50 places"
+    }
+}
+
+/// Pure saved-place cap shared by the app, Share Extension, and tests.
+nonisolated enum SavePlaceLimitGate {
+    static func decide(
+        tier: SaveProTier,
+        savedPlaceCount: Int,
+        limit: Int = SAVEProAccessPolicy.freeSavedPlaceLimit
+    ) -> SavePlaceLimitDecision {
+        guard !tier.allowsUnlimitedSavedPlaces else { return .allowed }
+        return savedPlaceCount < limit ? .allowed : .overFreeLimit
+    }
+
+    /// `nil` means Pro / unlimited. Otherwise the number of new Map Stamps
+    /// still allowed on the free tier.
+    static func remainingNewSaves(
+        tier: SaveProTier,
+        savedPlaceCount: Int,
+        limit: Int = SAVEProAccessPolicy.freeSavedPlaceLimit
+    ) -> Int? {
+        guard !tier.allowsUnlimitedSavedPlaces else { return nil }
+        return max(0, limit - savedPlaceCount)
+    }
+}
+
+/// App Group handoff so the Share Extension can honor the cap without UI
+/// and so the next app launch can open the paywall.
+enum SavePlaceLimitHandoff {
+    nonisolated static let pendingPaywallKey = "save.pendingSavedPlaceLimitPaywall"
+    nonisolated static let cachedTierKey = "save.cachedProTier"
+    nonisolated static let cachedCountKey = "save.cachedSavedPlaceCount"
+
+#if DEBUG
+    nonisolated(unsafe) static var testDefaults: UserDefaults?
+#endif
+
+    nonisolated static func makeDefaults() -> UserDefaults {
+#if DEBUG
+        if let testDefaults { return testDefaults }
+#endif
+        return UserDefaults(suiteName: SAVEProductionConfig.appGroupSuiteName) ?? .standard
+    }
+
+    nonisolated static func syncCache(
+        tier: SaveProTier,
+        savedPlaceCount: Int,
+        defaults: UserDefaults = makeDefaults()
+    ) {
+        defaults.set(tier.rawValue, forKey: cachedTierKey)
+        defaults.set(savedPlaceCount, forKey: cachedCountKey)
+    }
+
+    /// Missing cache fails open so a cold extension still writes the item.
+    /// The main app re-checks on pending-place import.
+    nonisolated static func cachedDecision(
+        defaults: UserDefaults = makeDefaults()
+    ) -> SavePlaceLimitDecision {
+        guard defaults.object(forKey: cachedCountKey) != nil else { return .allowed }
+        let tier = SaveProTier(rawValue: defaults.string(forKey: cachedTierKey) ?? "") ?? .free
+        return SavePlaceLimitGate.decide(
+            tier: tier,
+            savedPlaceCount: defaults.integer(forKey: cachedCountKey)
+        )
+    }
+
+    nonisolated static let paywallRequestedNotification = Notification.Name("save.placeLimitPaywallRequested")
+
+    nonisolated static func markPaywallPending(defaults: UserDefaults = makeDefaults()) {
+        defaults.set(true, forKey: pendingPaywallKey)
+        NotificationCenter.default.post(name: paywallRequestedNotification, object: nil)
+    }
+
+    @discardableResult
+    nonisolated static func consumePaywallPending(defaults: UserDefaults = makeDefaults()) -> Bool {
+        let pending = defaults.bool(forKey: pendingPaywallKey)
+        if pending { defaults.set(false, forKey: pendingPaywallKey) }
+        return pending
+    }
 }
 
 /// The reason an AI assist was allowed or would be refused.

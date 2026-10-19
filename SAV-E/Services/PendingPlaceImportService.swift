@@ -631,6 +631,31 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         return lhs.id.uuidString < rhs.id.uuidString
     }
 
+    /// Keep a capped save in the Review / Unplaced inbox instead of dropping it.
+    static func unplacedInboxItem(from place: Place) -> PlaceReviewCandidate {
+        PlaceReviewCandidate(
+            id: place.id,
+            captureId: nil,
+            name: place.name,
+            address: place.address,
+            city: nil,
+            latitude: place.hasValidCoordinate ? place.latitude : nil,
+            longitude: place.hasValidCoordinate ? place.longitude : nil,
+            evidence: place.sourceEvidence,
+            confidence: 1,
+            missingInfo: [],
+            status: "review",
+            createdAt: place.createdAt,
+            placeHighlights: place.savedPlaceHighlights,
+            recommendedItems: place.savedRecommendedItems,
+            vibeTags: place.savedVibeTags,
+            accessNotes: place.savedAccessNotes,
+            sourceHandle: place.savedSourceHandle,
+            googlePlaceId: place.googlePlaceId,
+            category: place.category
+        )
+    }
+
     /// A shared post can contain several venues. Reuse only an exact identity
     /// within its capture, and never turn a named venue into a source-only clue.
     func matchesImport(_ pending: PendingReviewCandidate) -> Bool {

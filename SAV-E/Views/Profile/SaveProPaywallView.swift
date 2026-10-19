@@ -3,10 +3,10 @@ import SwiftUI
 
 /// Savvy Pro paywall.
 ///
-/// Presented only as a reaction to a refused AI assist, or pulled up
-/// deliberately from Passport. Never automatic, never at launch, never before
-/// the first confirmed Map Stamp — `SaveEntitlementStore.shouldPresentPaywall`
-/// enforces that and this view does not second-guess it.
+/// Presented as a reaction to a refused AI assist, a parked 51st free save,
+/// or pulled up deliberately from Passport. Never an automatic first-launch
+/// wall. A Share Extension save over the free cap sets a pending handoff so
+/// this sheet can open the next time the app becomes active.
 ///
 /// App Store review requirements that must stay on this screen: Restore
 /// Purchases, EULA link, privacy policy link, renewal period, cancellation path.
@@ -16,6 +16,8 @@ struct SaveProPaywallView: View {
         case aiAssistExhausted
         /// The user opened Pro from Passport.
         case passport
+        /// A free save was parked in Review because the 50-place cap is full.
+        case savedPlaceLimit
     }
 
     let trigger: Trigger
@@ -90,6 +92,7 @@ struct SaveProPaywallView: View {
                 .font(SaveAtlasType.body(14))
                 .foregroundStyle(SaveAtlasPalette.muted)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("paywall.freePlaceLimit")
         }
         .accessibilityIdentifier("paywall.header")
     }
@@ -106,13 +109,18 @@ struct SaveProPaywallView: View {
                 english: "More AI, same private map",
                 traditionalChinese: "更多 AI，同一張私人地圖"
             )
+        case .savedPlaceLimit:
+            return languageSettings.localized(
+                english: "Unlimited saved places",
+                traditionalChinese: "無限收藏地點"
+            )
         }
     }
 
     private var subheadline: String {
         languageSettings.localized(
-            english: "Your saved places, Map Stamps, and private map stay free and unlimited. Pro raises the monthly allowance for the parts that call a model.",
-            traditionalChinese: "你收藏的地點、Map Stamp 與私人地圖永遠免費且無上限。Pro 只提高需要呼叫模型的每月額度。"
+            english: "Free: 50 places",
+            traditionalChinese: "免費：50 個地點"
         )
     }
 
@@ -124,7 +132,7 @@ struct SaveProPaywallView: View {
                 title: languageSettings.localized(english: "Always free", traditionalChinese: "永遠免費"),
                 tint: SaveAtlasPalette.mint,
                 items: [
-                    languageSettings.localized(english: "Unlimited saved places and Map Stamps", traditionalChinese: "無限收藏地點與 Map Stamp"),
+                    languageSettings.localized(english: "Free: 50 places", traditionalChinese: "免費：50 個地點"),
                     languageSettings.localized(english: "Your private map and notebooks", traditionalChinese: "你的私人地圖與筆記本"),
                     languageSettings.localized(english: "Search across everything you saved", traditionalChinese: "搜尋你收藏過的所有內容"),
                     languageSettings.localized(english: "Opening and editing existing trips", traditionalChinese: "開啟與編輯既有行程")

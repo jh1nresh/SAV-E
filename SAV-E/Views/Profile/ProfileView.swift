@@ -196,8 +196,8 @@ struct ProfileView: View {
                                 traditionalChinese: "Savvy Pro"
                             ),
                             detail: languageSettings.localized(
-                                english: "Core place memory stays free",
-                                traditionalChinese: "核心地點記憶維持免費"
+                                english: "Free: 50 places",
+                                traditionalChinese: "免費：50 個地點"
                             ),
                             color: SaveAtlasPalette.lavender,
                             accessibilityIdentifier: "profile.pro"

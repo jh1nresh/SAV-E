@@ -14,6 +14,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(SAVEProAccessPolicy.showsAutomaticLaunchPaywall)
         XCTAssertFalse(SAVEProAccessPolicy.firstMapStampRequiresPurchase)
         XCTAssertTrue(SAVEProAccessPolicy.coreMemoryLoopIsFree)
+        XCTAssertEqual(SAVEProAccessPolicy.freeSavedPlaceLimit, 50)
         // Slice 1 must not be able to refuse anyone.
         XCTAssertFalse(SAVEProAccessPolicy.enforcementEnabled)
         XCTAssertFalse(SAVEProAccessPolicy.purchasingIsAvailable)
@@ -23,6 +24,21 @@ final class SAVEProductionConfigTests: XCTestCase {
             XCTAssertTrue(paywall.contains(required), "Paywall must expose \(required)")
         }
         XCTAssertTrue(policy.contains("enforcementEnabled"))
+        XCTAssertTrue(policy.contains("freeSavedPlaceLimit = 50"))
+        XCTAssertTrue(paywall.contains("Free: 50 places"))
+        XCTAssertTrue(paywall.contains("免費：50 個地點"))
+        XCTAssertFalse(paywall.contains("stay free and unlimited"))
+        XCTAssertFalse(paywall.contains("Unlimited saved places and Map Stamps"))
+        XCTAssertFalse(paywall.contains("永遠免費且無上限"))
+        XCTAssertFalse(paywall.contains("無限收藏地點與 Map Stamp"))
+        XCTAssertFalse(policy.contains("saved-place memory loop is free forever"))
+
+        let share = try source(at: "SAV-EShareExtension/ShareViewController.swift")
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+        XCTAssertTrue(share.contains("SavePlaceLimitHandoff.cachedDecision()"))
+        XCTAssertTrue(share.contains("unplacedReviewCandidate"))
+        XCTAssertTrue(content.contains("SaveProPaywallView(trigger: .savedPlaceLimit)"))
+        XCTAssertTrue(content.contains("consumePendingSavedPlaceLimitPaywall"))
 
         // Backend metering stays intact and untouched by this slice.
         XCTAssertTrue(backend.contains("recordAIUsageEvent"))
@@ -71,6 +87,204 @@ final class SAVEProductionConfigTests: XCTestCase {
             ),
             .refusedAllowanceExhausted
         )
+    }
+
+    func testFreeSavedPlaceCapAllowsFiftyAndParksTheFiftyFirst() {
+        XCTAssertEqual(SAVEProAccessPolicy.freeSavedPlaceLimit, 50)
+        XCTAssertEqual(
+            SavePlaceLimitGate.decide(tier: .free, savedPlaceCount: 49),
+            .allowed
+        )
+        XCTAssertEqual(
+            SavePlaceLimitGate.decide(tier: .free, savedPlaceCount: 50),
+            .overFreeLimit
+        )
+        XCTAssertEqual(
+            SavePlaceLimitGate.decide(tier: .pro, savedPlaceCount: 9_999),
+            .allowed
+        )
+        XCTAssertEqual(
+            SavePlaceLimitGate.remainingNewSaves(tier: .free, savedPlaceCount: 60),
+            0,
+            "legacy accounts over 50 keep existing places; only new saves are gated"
+        )
+        XCTAssertNil(SavePlaceLimitGate.remainingNewSaves(tier: .pro, savedPlaceCount: 60))
+    }
+
+    func testSavedPlaceLimitHandoffMarksAndConsumesPaywall() {
+        let defaults = UserDefaults(suiteName: "save.place-limit-tests.\(UUID().uuidString)")!
+        defer { defaults.removePersistentDomain(forName: defaults.dictionaryRepresentation().keys.first ?? "") }
+
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(defaults: defaults), .allowed)
+        SavePlaceLimitHandoff.syncCache(tier: .free, savedPlaceCount: 50, defaults: defaults)
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(defaults: defaults), .overFreeLimit)
+        SavePlaceLimitHandoff.syncCache(tier: .pro, savedPlaceCount: 50, defaults: defaults)
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(defaults: defaults), .allowed)
+
+        XCTAssertFalse(SavePlaceLimitHandoff.consumePaywallPending(defaults: defaults))
+        SavePlaceLimitHandoff.markPaywallPending(defaults: defaults)
+        XCTAssertTrue(SavePlaceLimitHandoff.consumePaywallPending(defaults: defaults))
+        XCTAssertFalse(SavePlaceLimitHandoff.consumePaywallPending(defaults: defaults))
+    }
+
+    @MainActor
+    func testFreeSaveAtLimitParksInUnplacedInboxAndOpensPaywall() async throws {
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(50)
+        let candidate = SaveMapCandidate(
+            id: "cap-51",
+            title: "Fifty First Cafe",
+            subtitle: "Taipei",
+            latitude: 25.11,
+            longitude: 121.52,
+            category: .cafe
+        )
+        map.mapCandidates = [candidate]
+
+        do {
+            _ = try await map.saveMapCandidateAsPlace(candidate)
+            XCTFail("the 51st free save must not become a Map Stamp")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+            XCTAssertEqual(map.places.count, 50)
+            XCTAssertTrue(map.places.allSatisfy { $0.name.hasPrefix("Cap Place") })
+            XCTAssertEqual(map.reviewCandidates.count, 1)
+            XCTAssertEqual(map.reviewCandidates.first?.name, "Fifty First Cafe")
+            XCTAssertEqual(map.reviewCandidates.first?.status, "review")
+            XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        }
+    }
+
+    @MainActor
+    func testFreeSaveBelowLimitStillBecomesMapStamp() async throws {
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(49)
+        let candidate = SaveMapCandidate(
+            id: "cap-50",
+            title: "Fiftieth Cafe",
+            subtitle: "Taipei",
+            latitude: 25.12,
+            longitude: 121.53,
+            category: .cafe
+        )
+
+        let saved = try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertEqual(saved.name, "Fiftieth Cafe")
+        XCTAssertEqual(map.places.count, 50)
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    @MainActor
+    func testProSaveIsUnlimitedBeyondFifty() async throws {
+        let map = makeCappedMap(tier: .pro)
+        map.places = makeCappedPlaces(50)
+        let candidate = SaveMapCandidate(
+            id: "cap-pro",
+            title: "Pro Cafe",
+            subtitle: "Taipei",
+            latitude: 25.13,
+            longitude: 121.54,
+            category: .cafe
+        )
+
+        let saved = try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertEqual(saved.name, "Pro Cafe")
+        XCTAssertEqual(map.places.count, 51)
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    @MainActor
+    func testLegacyOverFiftyKeepsExistingPlacesAndParksNewSaves() async throws {
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(60)
+        let candidate = SaveMapCandidate(
+            id: "cap-legacy",
+            title: "Legacy Extra Cafe",
+            subtitle: "Taipei",
+            latitude: 25.14,
+            longitude: 121.55,
+            category: .cafe
+        )
+
+        do {
+            _ = try await map.saveMapCandidateAsPlace(candidate)
+            XCTFail("new saves over a legacy 60 must not become Map Stamps")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+            XCTAssertEqual(map.places.count, 60)
+            XCTAssertEqual(map.reviewCandidates.first?.name, "Legacy Extra Cafe")
+            XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        }
+    }
+
+    @MainActor
+    func testConfirmingReviewCandidateAtCapStaysInInbox() async throws {
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(50)
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Review Cafe",
+            address: "1 Cap Road",
+            city: nil,
+            latitude: 25.15,
+            longitude: 121.56,
+            evidence: ["Source URL: https://example.com/review-cafe"],
+            confidence: 0.9,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        map.reviewCandidates = [candidate]
+
+        do {
+            _ = try await map.saveReviewCandidateAsPlace(candidate)
+            XCTFail("confirming a clue at the free cap must stay in Review")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+            XCTAssertEqual(map.places.count, 50)
+            XCTAssertTrue(map.reviewCandidates.contains { $0.id == candidate.id })
+            XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        }
+    }
+
+    @MainActor
+    private func makeCappedMap(tier: SaveProTier) -> MapViewModel {
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.place-limit-map.\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        return MapViewModel(
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { tier },
+            usesRemotePersistence: false
+        )
+    }
+
+    private func makeCappedPlaces(_ count: Int) -> [Place] {
+        (0..<count).map { index in
+            Place(
+                id: UUID(),
+                name: "Cap Place \(index)",
+                address: "\(index) Cap Street",
+                latitude: 24.0 + Double(index) * 0.01,
+                longitude: 120.0 + Double(index) * 0.01,
+                googlePlaceId: "cap-place-\(index)",
+                category: .food,
+                status: .wantToGo,
+                rating: nil,
+                note: nil,
+                sourceUrl: nil,
+                sourcePlatform: .other,
+                sourceImageUrl: nil,
+                extractedDishes: nil,
+                priceRange: nil,
+                recommender: nil,
+                googleRating: nil,
+                googlePriceLevel: nil,
+                openingHours: nil,
+                createdAt: Date()
+            )
+        }
     }
 
     /// A missing `tier` field must resolve to free, so this build stays
@@ -228,6 +442,11 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(status.canResolveChinaPOI)
         XCTAssertEqual(status.configuredProviders, ["apple_maps", "backend_proxy"])
         XCTAssertTrue(status.missingRequirements.isEmpty)
+    }
+
+    override func tearDown() {
+        SavePlaceLimitHandoff.testDefaults = nil
+        super.tearDown()
     }
 
     private func plistTemplate(at relativePath: String) throws -> [String: Any] {

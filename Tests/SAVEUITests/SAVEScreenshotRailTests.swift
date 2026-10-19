@@ -468,6 +468,29 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testSavedPlaceLimitPaywallStatesFreeCap() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-show-saved-place-limit-paywall",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.freePlaceLimit"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Free: 50 places"].firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["Always free: unlimited saved places"].exists)
+        XCTAssertFalse(app.staticTexts["Unlimited saved places and Map Stamps"].exists)
+        XCTAssertTrue(app.buttons["paywall.close"].exists)
+        attach(app, name: "paywall-free-place-limit")
+    }
+
+    @MainActor
     func testHomeLeadsWithSavedPlacesAndUsesSaveTabForCapture() throws {
         let app = makeApp(
             launchArguments: [
