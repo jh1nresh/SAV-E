@@ -362,8 +362,13 @@ verify the caller before accessing private data. Public application projections
 continue through the backend's routes, rather than direct browser table access.
 
 The migration also removes browser default table grants for the executing
-creator in the current schema. Later runtime/optional tables created by that
-same role therefore start private before any additional RLS setup. Unknown
+creator in the current schema, and revokes schema `CREATE` from `PUBLIC` and
+existing `anon`/`authenticated` roles before those defaults are relied on.
+Later runtime/optional tables created by that same role therefore start
+private before any additional RLS setup. A leftover schema `CREATE` grant
+would let a browser role pre-create an absent runtime table such as
+`sendblue_saved_places`; `CREATE TABLE IF NOT EXISTS` would then accept that
+browser-owned object, and the owner bypasses RLS. Unknown
 **existing** tables, other creators' defaults, and database-global TABLE
 defaults are left intact. This creator's global SEQUENCE defaults to
 `PUBLIC`/`anon`/`authenticated` are revoked. A future table that intentionally needs browser access must have an
@@ -388,7 +393,9 @@ Inherited sequence defaults or owned-sequence grants to a parent role those
 browser roles can `SET ROLE` to are refused, using the same `MEMBER` check
 as tables; those parent grants are never rewritten. Sequence grants issued
 to browser roles by another grantor are refused the same way as table
-foreign-grantor ACLs. It never changes global
+foreign-grantor ACLs. Inherited or foreign-grantor schema `CREATE` is
+refused the same way, because `REVOKE CREATE` from `PUBLIC`/`anon`/
+`authenticated` cannot remove those grants. It never changes global
 TABLE defaults itself. It does revoke this creator's global and schema
 SEQUENCE defaults to `PUBLIC`/`anon`/`authenticated`. Fresh schema and any
 re-apply to an existing install must use `-v ON_ERROR_STOP=1 -1` so a refused
@@ -408,9 +415,13 @@ membership grants, SET-able NOINHERIT memberships with a real browser
 `session_user` login, delegated-grantor browser grants, browser-role table
 ownership, column-level browser grants, implicit predefined data-role
 memberships, privileged-role membership, an actual `psql` failure and
-rollback on incompatible global defaults, and the QA serial-sequence path:
+rollback on incompatible global defaults, the QA serial-sequence path:
 after Supabase-style table and sequence defaults, a runtime
 `sendblue_saved_places` (`id serial`) leaves `anon` unable to read
 `last_value` or `setval`, the backend insert still succeeds, and a
-`backend-data-privacy.sql` re-run stays closed. Coverage fails when a new
+`backend-data-privacy.sql` re-run stays closed, and the QA schema-CREATE
+path: a PG14-style `CREATE` grant lets `anon` plant `sendblue_saved_places`
+and keep ownership through `CREATE TABLE IF NOT EXISTS` (owner bypasses
+RLS), then the privacy apply removes browser `CREATE` so that plant cannot
+happen. Coverage fails when a new
 source-owned table is missing from either static allowlist.

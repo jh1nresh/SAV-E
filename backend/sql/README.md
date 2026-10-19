@@ -24,8 +24,9 @@ hygiene or docs PR.
    `./scripts/apply-sql.sh backend-data-privacy.sql --apply`.
 4. Verify (read-only), then Railway-deploy the backend, then iOS. Verify the
    privacy apply with catalog-only readback of RLS flags, effective
-   browser-role table privileges, and owned-sequence privileges on managed
-   serial/identity columns; `/health/entitlements` does not inspect
+   browser-role table privileges, owned-sequence privileges on managed
+   serial/identity columns, and schema `CREATE` denied to
+   `PUBLIC`/`anon`/`authenticated`; `/health/entitlements` does not inspect
    this boundary.
 
 `friend-ratings.sql` is self-contained for the composite FK: it creates

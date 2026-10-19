@@ -15,6 +15,9 @@
 -- the same way. Inherited sequence grants need separate authorization.
 -- Direct PUBLIC/anon/authenticated revokes do not remove privileges granted
 -- to a parent role that those browser roles can inherit or SET ROLE to.
+-- Schema CREATE granted to PUBLIC/anon/authenticated is revoked so a browser
+-- role cannot pre-create an absent runtime table. Inherited or foreign-grantor
+-- schema CREATE needs separate authorization.
 do $backend_data_privacy$
 declare
     target_schema text := current_schema();
@@ -280,6 +283,54 @@ begin
     ) then
         raise exception 'Browser-role sequence grants issued by another grantor require separate authorized remediation';
     end if;
+
+    -- Schema CREATE is not covered by default table ACLs. PUBLIC still has
+    -- CREATE on `public` in PostgreSQL 14 and upgraded databases. A browser
+    -- role can pre-create an absent allowlisted runtime table; the startup
+    -- create-if-not-exists path then accepts that owner, who bypasses RLS. Direct
+    -- PUBLIC/anon/authenticated CREATE is revoked below. MEMBER-reachable
+    -- parent CREATE and foreign-grantor CREATE need separate authorization.
+    if exists (
+        select 1
+        from pg_namespace n
+        cross join lateral aclexplode(coalesce(n.nspacl, acldefault('n', n.nspowner))) a
+        join pg_roles granted on granted.oid = a.grantee
+        join pg_roles browser on browser.rolname in ('anon', 'authenticated')
+        where n.oid = target_schema::regnamespace
+          and a.privilege_type = 'CREATE'
+          and granted.rolname not in ('anon', 'authenticated')
+          and pg_has_role(browser.oid, granted.oid, 'MEMBER')
+    ) then
+        raise exception 'Browser-role schema CREATE grants inherited through role membership require separate authorized remediation';
+    end if;
+
+    if exists (
+        select 1
+        from pg_namespace n
+        cross join lateral aclexplode(coalesce(n.nspacl, acldefault('n', n.nspowner))) a
+        where n.oid = target_schema::regnamespace
+          and a.privilege_type = 'CREATE'
+          and a.grantor <> current_user::regrole
+          and (
+              a.grantee = 0
+              or exists (
+                  select 1 from pg_roles browser
+                  where browser.rolname in ('anon', 'authenticated')
+                    and browser.oid = a.grantee
+              )
+          )
+    ) then
+        raise exception 'Browser-role schema CREATE grants issued by another grantor require separate authorized remediation';
+    end if;
+
+    -- Schema CREATE is revoked before default table ACLs. Defaults only
+    -- protect objects created by current_user; leftover PUBLIC CREATE lets
+    -- a browser role plant an absent runtime table and keep ownership
+    -- through the startup create-if-not-exists path.
+    execute format('revoke create on schema %I from public', target_schema);
+    for browser_role in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
+        execute format('revoke create on schema %I from %I', target_schema, browser_role);
+    end loop;
 
     -- Only this creator/schema. Keep service_role grants, all other creators'
     -- defaults, current-creator global TABLE defaults, and every unrelated
