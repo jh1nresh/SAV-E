@@ -221,7 +221,7 @@ struct SaveTileTownCanvas: View {
 /// Geometry stays nonisolated so layout can hash pins off the main actor;
 /// only the bitmap cache is main-actor isolated.
 nonisolated enum SaveTileTownRaster: Sendable {
-    static let mapColumns = 14
+    static let mapColumns = 36
     static let mapRows = 28
     static let tileW = 16
     static let tileH = 8
@@ -231,6 +231,8 @@ nonisolated enum SaveTileTownRaster: Sendable {
     static let rows = baseHeight
     private static let originX = 120
     private static let originY = 8
+    /// Screen-space east coast so Map is a filled village, not an island in water.
+    private static let coastX = 154
 
     enum Cell: Sendable {
         case grass, grassDeep, water, waterDeep, sand, road
@@ -238,16 +240,16 @@ nonisolated enum SaveTileTownRaster: Sendable {
         case wall, wallDeep, window, door, tree, treeDeep, trunk
     }
 
-    /// Thirty-two hashed lots spread down the island so pins do not stack.
+    /// Thirty-two hashed lots on visible land so Map pins sit in frame.
     static let houses: [(column: Int, row: Int, roof: Cell)] = [
-        (2, 1, .roofCoral), (5, 0, .roofHoney), (7, 2, .roofSky), (3, 3, .roofForest),
-        (1, 5, .roofHoney), (6, 6, .roofCoral), (4, 8, .roofSky), (8, 7, .roofHoney),
-        (2, 10, .roofSky), (5, 11, .roofCoral), (7, 13, .roofForest), (3, 14, .roofHoney),
-        (1, 16, .roofCoral), (6, 17, .roofSky), (4, 19, .roofHoney), (8, 18, .roofForest),
-        (2, 21, .roofHoney), (5, 22, .roofCoral), (7, 24, .roofSky), (3, 25, .roofForest),
-        (1, 27, .roofSky), (6, 28, .roofHoney), (4, 30, .roofCoral), (8, 29, .roofSky),
-        (2, 32, .roofForest), (5, 33, .roofHoney), (7, 35, .roofCoral), (3, 36, .roofSky),
-        (1, 38, .roofHoney), (6, 39, .roofForest), (4, 42, .roofCoral), (7, 44, .roofSky),
+        (0, 8, .roofCoral), (2, 6, .roofHoney), (4, 4, .roofSky), (6, 2, .roofForest),
+        (4, 10, .roofHoney), (6, 8, .roofSky), (8, 6, .roofForest), (9, 5, .roofCoral),
+        (6, 14, .roofSky), (8, 12, .roofForest), (10, 10, .roofCoral), (12, 8, .roofHoney),
+        (10, 16, .roofForest), (12, 14, .roofCoral), (14, 12, .roofHoney), (15, 11, .roofSky),
+        (12, 20, .roofCoral), (14, 18, .roofHoney), (16, 16, .roofSky), (18, 14, .roofForest),
+        (16, 22, .roofHoney), (18, 20, .roofSky), (20, 18, .roofForest), (21, 17, .roofCoral),
+        (18, 26, .roofSky), (20, 24, .roofForest), (22, 22, .roofCoral), (24, 20, .roofHoney),
+        (22, 28, .roofForest), (24, 26, .roofCoral), (26, 24, .roofHoney), (27, 23, .roofSky),
     ]
 
     static func integerScale(for size: CGSize) -> Int {
@@ -257,8 +259,8 @@ nonisolated enum SaveTileTownRaster: Sendable {
     }
 
     /// Same cover transform as `Image.scaledToFill` with top-center alignment,
-    /// so pins sit on house lots after the raster is cropped. The taller
-    /// bitmap fills Map; Home crops the south water, not the village.
+    /// so pins sit on house lots after the raster is cropped. Land fills the
+    /// bitmap; Home crops a little south village, not empty water.
     static func scaledToFillRect(
         viewSize: CGSize,
         imageSize: CGSize = CGSize(width: CGFloat(baseWidth), height: CGFloat(baseHeight))
@@ -310,8 +312,15 @@ nonisolated enum SaveTileTownRaster: Sendable {
         return renderer.image { context in
             let cg = context.cgContext
             cg.interpolationQuality = .none
-            cg.setFillColor(color(for: .waterDeep).cgColor)
+            cg.setFillColor(color(for: .grass).cgColor)
             cg.fill(CGRect(x: 0, y: 0, width: width, height: height))
+            cg.setFillColor(color(for: .water).cgColor)
+            cg.fill(CGRect(
+                x: coastX * scale,
+                y: 0,
+                width: max(0, width - coastX * scale),
+                height: height
+            ))
             paintIsometricTown(cg, scale: scale)
         }
     }
@@ -342,12 +351,13 @@ nonisolated enum SaveTileTownRaster: Sendable {
             blitIsoHouse(cg, column: house.column, row: house.row, roof: house.roof, scale: scale)
         }
         let trees = [
-            (1, 2), (3, 1), (5, 2), (7, 1), (0, 5), (2, 6), (6, 7),
-            (8, 5), (1, 9), (8, 9), (6, 4), (3, 8), (0, 12), (2, 13),
-            (7, 14), (1, 16), (5, 15), (8, 18), (3, 19), (6, 20),
-            (0, 22), (2, 24), (7, 23), (4, 26), (1, 28), (8, 27),
-            (0, 31), (3, 34), (8, 32), (2, 37), (5, 40), (7, 41),
-            (1, 43), (4, 46), (8, 45), (0, 48),
+            (6, 0), (3, 8), (5, 6), (7, 4), (8, 3),
+            (4, 12), (6, 10), (9, 7), (11, 5),
+            (8, 13), (10, 11), (13, 8), (16, 10),
+            (13, 18), (15, 16), (17, 14), (18, 13),
+            (21, 15), (18, 23), (20, 21), (23, 18),
+            (19, 27), (20, 26), (24, 22), (26, 20),
+            (23, 28), (25, 26), (28, 23),
         ]
         for (column, row) in trees {
             blitIsoTree(cg, column: column, row: row, scale: scale)
@@ -356,16 +366,19 @@ nonisolated enum SaveTileTownRaster: Sendable {
     }
 
     private static func ground(column: Int, row: Int) -> Cell {
-        if column >= 10 { return row % 3 == 0 ? .waterDeep : .water }
-        if column == 9 { return .sand }
+        let origin = iso(column: column, row: row)
+        if origin.x >= CGFloat(coastX) {
+            return row % 3 == 0 ? .waterDeep : .water
+        }
+        if origin.x >= CGFloat(coastX - 16) {
+            return .sand
+        }
         if isRoad(column: column, row: row) { return .road }
         return (column + row) % 5 == 0 ? .grassDeep : .grass
     }
 
     private static func isRoad(column: Int, row: Int) -> Bool {
-        column == 4
-            || row % 8 == 4 && column <= 9
-            || column == 7 && row % 11 < 8
+        (column + row) % 9 == 3 || (column - row) % 7 == 0
     }
 
     private static func fillIsoTile(
@@ -450,10 +463,14 @@ nonisolated enum SaveTileTownRaster: Sendable {
     }
 
     private static func blitIsoDock(_ cg: CGContext, scale: Int) {
-        for row in [8, 16, 24, 32, 40] {
-            for column in 9...12 {
-                fillIsoTile(cg, column: column, row: row, cell: .road, scale: scale)
-            }
+        let planks = [
+            (7, 1), (8, 0), (10, 4), (11, 3),
+            (13, 7), (14, 6), (16, 10), (17, 9),
+            (19, 13), (20, 12), (22, 16), (23, 15),
+            (25, 19), (26, 18), (28, 22), (29, 21),
+        ]
+        for (column, row) in planks {
+            fillIsoTile(cg, column: column, row: row, cell: .road, scale: scale)
         }
     }
 

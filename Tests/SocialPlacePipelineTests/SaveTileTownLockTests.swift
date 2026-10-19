@@ -62,6 +62,8 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(town.contains("地圖章，\\(pin.name)"))
         XCTAssertTrue(town.contains("isSelected ? 32 : 28"))
         XCTAssertGreaterThanOrEqual(SaveTileTownRaster.houses.count, 32)
+        XCTAssertTrue(town.contains("coastX"))
+        XCTAssertTrue(town.contains("color(for: .grass).cgColor"))
         let home = try source(at: "SAV-E/Views/TileTown/SaveTileTownHomeView.swift")
         XCTAssertTrue(home.contains("home.tileTown"))
         XCTAssertTrue(home.contains("SaveTileTownCanvas"))
@@ -273,6 +275,28 @@ final class SaveTileTownLockTests: XCTestCase {
         let rows = SaveFriendLastAt.rows(from: posts)
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows[0].lastPost.name, "Pine View")
+    }
+
+    func testTownLotsStayOnVisibleLand() {
+        let anchors = SaveTileTownRaster.normalizedHouseAnchors()
+        XCTAssertEqual(anchors.count, 32)
+        for point in anchors {
+            XCTAssertGreaterThan(point.x, 0.20)
+            XCTAssertLessThan(point.x, 0.65)
+            XCTAssertGreaterThan(point.y, 0.04)
+            XCTAssertLessThan(point.y, 0.82)
+        }
+        let mapFill = SaveTileTownRaster.scaledToFillRect(viewSize: CGSize(width: 360, height: 640))
+        for lot in anchors {
+            let point = CGPoint(
+                x: mapFill.minX + lot.x * mapFill.width,
+                y: mapFill.minY + lot.y * mapFill.height
+            )
+            XCTAssertGreaterThanOrEqual(point.x, 20, "Map pin x \(point.x) left the frame")
+            XCTAssertLessThanOrEqual(point.x, 340, "Map pin x \(point.x) left the frame")
+            XCTAssertGreaterThanOrEqual(point.y, 20, "Map pin y \(point.y) left the frame")
+            XCTAssertLessThanOrEqual(point.y, 620, "Map pin y \(point.y) left the frame")
+        }
     }
 
     func testTileTownLotsStayStableAndUnique() {
