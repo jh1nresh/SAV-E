@@ -175,7 +175,7 @@ final class SaveTileTownLockTests: XCTestCase {
         let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
         XCTAssertTrue(town.contains("interpolationQuality = .none"))
         XCTAssertTrue(town.contains("interpolation(.none)"))
-        XCTAssertTrue(town.contains("enum SaveTileTownRaster"))
+        XCTAssertTrue(town.contains("nonisolated enum SaveTileTownRaster"))
         XCTAssertTrue(town.contains("paintIsometricTown"))
         XCTAssertTrue(town.contains("normalizedHouseAnchors"))
         XCTAssertTrue(town.contains("scaledToFillRect"))

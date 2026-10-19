@@ -218,7 +218,9 @@ struct SaveTileTownCanvas: View {
 /// Nearest-neighbor isometric tile-town (founder lock 2026-10-19).
 /// Drawn at a fixed pixel grid, then scaled by an integer factor with
 /// interpolation disabled. Place-memory, not navigation. No anti-aliased curves.
-enum SaveTileTownRaster {
+/// Geometry stays nonisolated so layout can hash pins off the main actor;
+/// only the bitmap cache is main-actor isolated.
+nonisolated enum SaveTileTownRaster: Sendable {
     static let mapColumns = 14
     static let mapRows = 28
     static let tileW = 16
@@ -230,7 +232,7 @@ enum SaveTileTownRaster {
     private static let originX = 120
     private static let originY = 8
 
-    enum Cell {
+    enum Cell: Sendable {
         case grass, grassDeep, water, waterDeep, sand, road
         case roofCoral, roofHoney, roofSky, roofForest
         case wall, wallDeep, window, door, tree, treeDeep, trunk
@@ -297,6 +299,7 @@ enum SaveTileTownRaster {
         return rendered
     }
 
+    @MainActor
     private static func render(scale: Int) -> UIImage {
         let width = baseWidth * scale
         let height = baseHeight * scale
