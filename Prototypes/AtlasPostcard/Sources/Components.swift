@@ -118,6 +118,7 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
     var isRaisedControl: (Item) -> Bool = { _ in false }
     var labelFont: Font = AtlasType.display(11)
     var iconPresentation: (AnyView, CGFloat) -> AnyView = { view, _ in view }
+    var symbolImage: ((String) -> AnyView)? = nil
     let onSelect: (Item) -> Void
 
     private var tabItems: some View {
@@ -146,13 +147,16 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                         }
 
                         VStack(spacing: isRaisedControl(item) ? 1 : 2) {
-                            Image(systemName: item[keyPath: icon])
-                                .font(.system(
-                                    size: isRaisedControl(item) ? 26 : 20,
-                                    weight: isRaisedControl(item) ? .semibold : .regular
-                                ))
-                                .frame(height: 24)
-                                .modifier(AtlasIconPresentation(cellSize: 1.5, render: iconPresentation))
+                            Group {
+                                if let symbolImage {
+                                    symbolImage(item[keyPath: icon])
+                                } else {
+                                    Image(systemName: item[keyPath: icon])
+                                        .font(.system(size: isRaisedControl(item) ? 26 : 20,
+                                                      weight: isRaisedControl(item) ? .semibold : .regular))
+                                }
+                            }
+                            .frame(height: 24)
 
                             if !isRaisedControl(item) {
                                 Text(displayTitle?(item) ?? item[keyPath: title])

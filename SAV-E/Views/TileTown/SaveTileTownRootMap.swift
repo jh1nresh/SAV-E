@@ -61,9 +61,9 @@ struct SaveTileTownRootMap: View {
                         ))
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .clipShape(SaveKraftTicketShape())
                 .overlay {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    SaveKraftTicketShape()
                         .stroke(SaveAtlasPalette.line.opacity(0.22), lineWidth: 1)
                 }
                 .padding(.horizontal, 12)

@@ -253,7 +253,12 @@ enum SaveAtlasType {
         _ = registerPixelFont
         let font = UIFont(name: pixelFontName, size: size)
             ?? UIFont.systemFont(ofSize: size, weight: weight)
-        return Font(UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: font))
+        let scaled = Font(UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: font))
+        // The bundled face has one weight. Explicit SwiftUI weighting restores
+        // the display/strong hierarchy instead of silently ignoring this argument.
+        if weight >= .bold { return scaled.weight(.bold) }
+        if weight >= .semibold { return scaled.weight(.semibold) }
+        return scaled
     }
 }
 

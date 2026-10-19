@@ -102,10 +102,11 @@ struct SaveTileTownHomeView: View {
     ) -> some View {
         Button(action: action) {
             SavePixelChromeIcon(kind: kind, pointSize: 16)
+                .foregroundStyle(SaveAtlasPalette.forest)
                 .frame(width: 44, height: 44)
-                .background(SaveAtlasPalette.paper)
+                .background(SaveAtlasPalette.paper, in: SaveKraftTicketShape())
                 .overlay {
-                    Rectangle()
+                    SaveKraftTicketShape()
                         .stroke(SaveAtlasPalette.forest.opacity(0.28), lineWidth: 1)
                 }
                 .contentShape(Rectangle())
@@ -181,7 +182,7 @@ struct SaveTileTownHomeView: View {
 
     private var searchField: some View {
         HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass").savePixelated(cellSize: 1.5)
+            Image(systemName: "magnifyingglass").savePixelated(cellSize: 1)
                 .foregroundStyle(SaveAtlasPalette.muted)
                 .accessibilityHidden(true)
             TextField(localized("Search saved places", "搜尋已存地點"), text: $search.draft)
@@ -193,7 +194,7 @@ struct SaveTileTownHomeView: View {
                 .accessibilityIdentifier("home.search")
             if search.isActive {
                 Button { search.clear(); isSearchFocused = false } label: {
-                    Image(systemName: "xmark.circle.fill").savePixelated(cellSize: 1.5).frame(width: 44, height: 44)
+                    Image(systemName: "xmark.circle.fill").savePixelated(cellSize: 1).frame(width: 44, height: 44)
                 }
                 .foregroundStyle(SaveAtlasPalette.muted)
                 .accessibilityLabel(localized("Clear search", "清除搜尋"))
@@ -202,9 +203,9 @@ struct SaveTileTownHomeView: View {
         }
         .padding(.leading, 14)
         .frame(minHeight: 48)
-        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(SaveAtlasPalette.paper, in: SaveKraftTicketShape())
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            SaveKraftTicketShape()
                 .stroke(SaveAtlasPalette.line.opacity(0.35), lineWidth: 1)
         }
     }
@@ -243,7 +244,7 @@ struct SaveTileTownHomeView: View {
                 .font(SaveAtlasType.strong(16))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity, minHeight: 48)
-                .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(SaveAtlasPalette.coral, in: SaveKraftTicketShape())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(localized("Paste your first link", "貼上第一個連結"))
@@ -271,7 +272,7 @@ struct SaveTileTownHomeView: View {
     private var peek: some View {
         ZStack(alignment: .bottomLeading) {
             geographicPeek
-                .frame(height: 350)
+                .frame(height: 280)
                 // Retained for existing accessibility clients.
                 .accessibilityIdentifier("home.tileTown")
 
@@ -295,7 +296,7 @@ struct SaveTileTownHomeView: View {
                 .accessibilityIdentifier("home.place.\(featured.id)")
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(SaveKraftTicketShape())
     }
 
     @ViewBuilder
@@ -316,7 +317,7 @@ struct SaveTileTownHomeView: View {
                     }
                 }
             }
-            .mapStyle(.standard(elevation: .flat, pointsOfInterest: .all))
+            .mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
             // Keep Apple's attribution above the selected memory card.
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 Color.clear.frame(height: 148)
@@ -385,7 +386,7 @@ struct SaveTileTownHomeView: View {
                 }
                 Button { presentation.onOpenReview(item.id) } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: item.icon).savePixelated(cellSize: 1.5)
+                        Image(systemName: item.icon).savePixelated(cellSize: 1)
                             .foregroundStyle(SaveAtlasPalette.forest)
                             .frame(width: 36, height: 36)
                             .background(
@@ -408,7 +409,7 @@ struct SaveTileTownHomeView: View {
                             .foregroundStyle(SaveAtlasPalette.ink)
                     }
                     .padding(12)
-                    .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .background(SaveAtlasPalette.paper, in: SaveKraftTicketShape())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("home.reviewCandidate.\(item.id)")
@@ -471,7 +472,7 @@ struct SaveTileTownHomeView: View {
                         }
                         .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
                         .padding(12)
-                        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .background(SaveAtlasPalette.paper, in: SaveKraftTicketShape())
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("home.search.result.\(place.id)")

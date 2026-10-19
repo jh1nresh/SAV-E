@@ -570,6 +570,7 @@ struct ContentView: View {
                         isRaisedControl: { $0.isCaptureControl },
                         labelFont: SaveAtlasType.display(11),
                         iconPresentation: { icon, cell in AnyView(icon.savePixelated(cellSize: cell)) },
+                        symbolImage: { name in AnyView(SavePixelChromeIcon(kind: .rootSymbol(name), pointSize: 24)) },
                         onSelect: selectRootTab
                     )
                     .placed(

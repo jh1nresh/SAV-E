@@ -174,7 +174,7 @@ struct SaveKraftStampFaceView: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            Rectangle()
                 .fill(SaveAtlasPalette.kraft.opacity(0.28))
             switch face {
             case .photo(let url):
@@ -187,7 +187,7 @@ struct SaveKraftStampFaceView: View {
                             SaveKraftStampPixelArt(scene: fallbackScene)
                         }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                    .clipShape(Rectangle())
                 } else {
                     SaveKraftStampPixelArt(scene: fallbackScene)
                 }
@@ -201,7 +201,7 @@ struct SaveKraftStampFaceView: View {
                     .foregroundStyle(SaveAtlasPalette.muted)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(Rectangle())
     }
 
 }
@@ -395,6 +395,18 @@ enum SavePixelChromeIconKind {
     case trips
     case saves
     case more
+    case home, map, friends, passport, add
+
+    static func rootSymbol(_ name: String) -> Self {
+        switch name {
+        case "house": .home
+        case "map": .map
+        case "person.2": .friends
+        case "book.closed": .passport
+        case "plus": .add
+        default: .more
+        }
+    }
 }
 
 struct SavePixelChromeIcon: View {
@@ -405,13 +417,22 @@ struct SavePixelChromeIcon: View {
         Image(uiImage: Self.image(for: kind, pointSize: pointSize))
             .renderingMode(.template)
             .interpolation(.none)
-            .foregroundStyle(SaveAtlasPalette.forest)
             .frame(width: pointSize, height: pointSize)
             .accessibilityHidden(true)
     }
 
     private static func bits(for kind: SavePixelChromeIconKind) -> [String] {
         switch kind {
+        case .home:
+            return ["000001100000", "000011110000", "000110011000", "001100001100", "011000000110", "110000000011", "001000000100", "001001100100", "001001100100", "001001100100", "001111111100", "000000000000"]
+        case .map:
+            return ["000000000000", "001110001110", "011011011010", "010010110010", "010010010010", "010010010010", "010010010010", "010010010010", "010110010110", "011011011100", "000001110000", "000000000000"]
+        case .friends:
+            return ["000000000000", "001100011000", "010010100100", "010010100100", "001100011000", "000000000000", "001100011000", "010010100100", "100001000010", "100001000010", "111111111110", "000000000000"]
+        case .passport:
+            return ["000000000000", "001111111100", "010000000100", "010111100100", "010100100100", "010111100100", "010000000100", "010111100100", "010000000100", "011111111100", "001111111100", "000000000000"]
+        case .add:
+            return ["000000000000", "000001100000", "000001100000", "000001100000", "000001100000", "011111111110", "011111111110", "000001100000", "000001100000", "000001100000", "000001100000", "000000000000"]
         case .trips:
             return [
                 "00100100",
@@ -450,8 +471,8 @@ struct SavePixelChromeIcon: View {
 
     private static func image(for kind: SavePixelChromeIconKind, pointSize: CGFloat) -> UIImage {
         let rows = bits(for: kind)
-        let unit = max(1, Int(pointSize / 8))
-        let edge = 8 * unit
+        let unit = max(1, Int(pointSize / CGFloat(rows.count)))
+        let edge = rows.count * unit
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
         format.opaque = false

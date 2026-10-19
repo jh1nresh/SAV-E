@@ -2151,13 +2151,13 @@ private struct PassportTopBar: View {
 
             if allowsEditing {
                 Button(action: onEdit) {
-                    Image(systemName: "line.3.horizontal").savePixelated(cellSize: 1.5)
+                    Image(systemName: "line.3.horizontal").savePixelated(cellSize: 1)
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(SaveAtlasPalette.ink)
                         .frame(width: 44, height: 44)
-                        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 14))
+                        .background(SaveAtlasPalette.paper, in: SaveKraftTicketShape())
                         .overlay {
-                            RoundedRectangle(cornerRadius: 14)
+                            SaveKraftTicketShape()
                                 .stroke(SaveAtlasPalette.kraft.opacity(0.68), lineWidth: 1)
                         }
                 }

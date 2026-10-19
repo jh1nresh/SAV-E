@@ -133,6 +133,12 @@ illustrative stamp fallback, never a claim about a place's real geography.
   Home uses horizontal tickets; Passport uses portrait stamps. Empty Passport slots
   show `???` once with an accessible empty-slot label. Preserve 44pt hit targets.
 - Seals never show raw hex, debug IDs, or pipeline tokens in primary UI.
+- Cohesion refinement: native muted map emphasis only (no image filter); Home's
+  noninteractive 280pt preview excludes POIs, while Map retains selectable POIs.
+  Root tabs use authored 12×12 glyphs at 24pt, header glyphs 8×8 at 16pt; both
+  use an integer 2pt grid. Cut-corner paper fields/buttons frame the map, rectangular
+  art sits inside perforated stamps. Display/strong type has explicit weight;
+  body stays regular. Keep map attribution and 44pt hit regions intact.
 - Licensed font sources and redistribution notices ship in `Resources/PixelFont`.
   The shader requires Xcode's Metal Toolchain on local and CI build hosts.
 
