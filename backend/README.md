@@ -302,8 +302,8 @@ Public collections, OpenAPI, `llms.txt`, paid/API-key access, broad reputation g
 `npm run validate` requires PostgreSQL server tools (`initdb`, `pg_ctl`,
 `createdb`, discovered through `pg_config --bindir`). After the regular test
 suite, `npm run test:entitlements:db` creates a temporary socket-only database,
-runs the real ownership/ordering/migration fixtures, and shuts it down. It never
-uses the application's `DATABASE_URL`. Missing server tools fail validation;
+runs the real ownership/ordering/migration and backend-privacy fixtures serially,
+and shuts it down. It never uses the application's `DATABASE_URL`. Missing server tools fail validation;
 the required backend CI job therefore cannot silently skip this payment gate.
 
 Before an authorized backend deployment, apply
@@ -326,3 +326,44 @@ does not inspect these database permissions. Confirm that endpoint is ready
 before enabling purchases. App Store Connect configuration and real Sandbox
 purchase/restore/refund validation remain separate launch gates. Never apply this migration to production
 as part of ordinary local verification.
+
+### Backend-owned database privacy
+
+`sql/backend-data-privacy.sql` is the reviewed allowlist for the 64 tables
+currently declared by backend SQL and runtime stores. `schema.sql` includes the
+same protection for fresh installs. Existing installations need a separately
+authorized apply through the SQL helper, as the backend table creator/owner in
+the intended schema, after any optional table migrations. The migration is
+idempotent and skips absent optional tables; it does not create them or rewrite
+user records, table ownership, confirmation state, or subscription status.
+
+For existing allowlisted tables it enables RLS without `FORCE` and revokes all
+table privileges from `PUBLIC` and existing `anon`/`authenticated` roles.
+Backend table-owner access and existing `service_role` grants are retained;
+the Supabase gateway must keep its service-role credential server-side and
+verify the caller before accessing private data. Public application projections
+continue through the backend's routes, rather than direct browser table access.
+
+The migration also removes browser default table grants for the executing
+creator in the current schema. Later runtime/optional tables created by that
+same role therefore start private before any additional RLS setup. Unknown
+**existing** tables, other creators' defaults, and database-global defaults are
+left intact. A future table that intentionally needs browser access must have an
+explicitly reviewed grant/policy. Re-apply the privacy migration after installing
+optional source-owned tables to enable their RLS too.
+
+PostgreSQL cannot subtract global default grants with a schema-specific revoke.
+The migration therefore refuses current-creator global default table grants to
+`PUBLIC`, `anon`, or `authenticated`; resolving those requires separate scoped
+authority. It never changes those global defaults itself. Apply transactionally
+and verify effective privileges plus RLS after an authorized production apply;
+`/health/entitlements` checks storage shape, not this access boundary.
+
+The required disposable database gate tests every allowlisted table against
+real browser-role SELECT/INSERT/UPDATE/DELETE/TRUNCATE attempts and effective
+table privileges, then exercises private profile/place/capture/analysis,
+friend-rating, Sendblue, and payment paths as an ordinary table owner and a
+non-superuser `service_role` with `BYPASSRLS`. It also checks legacy data,
+idempotence, absent optional tables/roles, unrelated-table preservation, future
+private defaults, and rejection of incompatible global defaults. Coverage fails
+when a new source-owned table is missing from either static allowlist.
