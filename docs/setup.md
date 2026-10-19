@@ -82,10 +82,13 @@ AMAP_WEB_SERVICE_KEY=...                # 高德开放平台 domestic key, retur
 Amap keys are backend-only. The iOS `Secrets.plist` templates must not carry
 them; `SAVEProductionConfigTests` asserts that.
 
-Apply/update the schema against Railway Postgres when migrations/schema change:
+Apply the schema against a new empty Railway Postgres database when the
+schema changes. `schema.sql` is not a safe re-run on an existing install;
+re-applying it also needs the same transactional stop-on-error flags so a
+refused privacy guard cannot leave tables committed with unsafe grants:
 
 ```bash
-psql "$DATABASE_URL" -f backend/sql/schema.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f backend/sql/schema.sql
 ```
 
 ### 4. Generate and open the Xcode project
