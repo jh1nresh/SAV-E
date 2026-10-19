@@ -37,6 +37,9 @@ struct Place: Identifiable, Codable, Hashable {
     var accessNotes: [String]? = nil
     var sourceHandle: String? = nil
     var mergedPlaceIDs: [UUID]? = nil
+    /// Extra source lines that must survive a remote reload without being
+    /// written into the user-facing `note` shown as "Your saved memory".
+    var additionalSourceEvidence: [String]? = nil
 
     var savedIDs: Set<UUID> { Set([id] + (mergedPlaceIDs ?? [])) }
 
@@ -47,8 +50,14 @@ struct Place: Identifiable, Codable, Hashable {
         // A fresh copy of the same record owns its edits, including cleared notes.
         merged.createdAt = min(createdAt, other.createdAt)
         guard id != other.id else { return merged }
-        let evidence = (sourceEvidence + other.sourceEvidence).removingDuplicates()
-        merged.note = evidence.isEmpty ? nil : evidence.joined(separator: "\n")
+        let primaryURL = sourceUrl ?? other.sourceUrl
+        merged.additionalSourceEvidence = (savedAdditionalSourceEvidence + other.incomingEvidence(excludingNote: note))
+            .filter { line in
+                guard let primaryURL, !primaryURL.isEmpty else { return true }
+                return line != "Source URL: \(primaryURL)"
+            }
+            .removingDuplicates()
+            .nilIfEmpty
         merged.sourceUrl = sourceUrl ?? other.sourceUrl
         if sourceUrl == nil { merged.sourcePlatform = other.sourcePlatform }
         merged.recommender = recommender ?? other.recommender
@@ -59,6 +68,7 @@ struct Place: Identifiable, Codable, Hashable {
         merged.vibeTags = (savedVibeTags + other.savedVibeTags).removingDuplicates()
         merged.accessNotes = (savedAccessNotes + other.savedAccessNotes).removingDuplicates()
         merged.recommendedItems = savedRecommendedItems + other.savedRecommendedItems.filter { !savedRecommendedItems.contains($0) }
+        merged.extractedDishes = merged.savedRecommendedItems.map(\.name).nilIfEmpty
         merged.rating = rating ?? other.rating
         merged.googleRating = googleRating ?? other.googleRating
         merged.priceRange = priceRange ?? other.priceRange
@@ -70,6 +80,7 @@ struct Place: Identifiable, Codable, Hashable {
     /// and structured fields go through `mergingSources` so nothing is dropped
     /// before the clue is deleted. Stamp order (`createdAt`) stays put, and
     /// only a displayable handle is copied into `sourceHandle` / `recommender`.
+    /// The stamp's user-facing `note` is left unchanged.
     func attachingReviewClue(_ clue: PlaceReviewCandidate) -> Place {
         var incoming = Place.from(clue)
         let handle = SaveSourceHandle.displayable(incoming.sourceHandle)
@@ -82,6 +93,46 @@ struct Place: Identifiable, Codable, Hashable {
         merged.sourceHandle = SaveSourceHandle.displayable(merged.sourceHandle) ?? handle
         merged.recommender = SaveSourceHandle.displayable(merged.recommender) ?? merged.sourceHandle
         return merged
+    }
+
+    func hasStructuredDetails(unlike previous: Place?) -> Bool {
+        savedPlaceHighlights != (previous?.savedPlaceHighlights ?? [])
+            || savedVibeTags != (previous?.savedVibeTags ?? [])
+            || savedAccessNotes != (previous?.savedAccessNotes ?? [])
+            || savedRecommendedItems != (previous?.savedRecommendedItems ?? [])
+    }
+
+    func hasAdditionalEvidence(unlike previous: Place?) -> Bool {
+        savedAdditionalSourceEvidence != (previous?.savedAdditionalSourceEvidence ?? [])
+    }
+
+    /// Backend `places` has `note` and `extracted_dishes` only. Encode extra
+    /// evidence and structured arrays into the wire `note` column without
+    /// mutating the in-memory user-facing note.
+    func wireNoteForPersistence() -> String? {
+        var lines: [String] = []
+        lines.append(contentsOf: noteLines)
+        for item in savedAdditionalSourceEvidence where !Self.isGeneratedEvidenceLine(item) {
+            if Self.isURLEvidenceLine(item) {
+                lines.append(item.hasPrefix("http") ? "Source URL: \(item)" : item)
+            } else if item.lowercased().hasPrefix("evidence:") {
+                lines.append(item)
+            } else {
+                lines.append("Evidence: \(item)")
+            }
+        }
+        lines.append(contentsOf: durableStructuredEvidence)
+        let unique = lines.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .removingDuplicates()
+        return unique.isEmpty ? nil : unique.joined(separator: "\n")
+    }
+
+    var durableStructuredEvidence: [String] {
+        savedPlaceHighlights.map { "Highlight: \($0)" }
+            + savedRecommendedItems.map { "Highlight: Recommended item: \($0.displayText)" }
+            + savedVibeTags.map { "Vibe: \($0)" }
+            + savedAccessNotes.map { "Access: \($0)" }
     }
 
     /// Stable venue identity with every original ID retained for old trip stops.
@@ -109,6 +160,113 @@ struct Place: Identifiable, Codable, Hashable {
     var savedVibeTags: [String] { vibeTags ?? [] }
     var savedAccessNotes: [String] { accessNotes ?? [] }
     var savedSourceHandle: String? { sourceHandle ?? recommender }
+    var savedAdditionalSourceEvidence: [String] { additionalSourceEvidence ?? [] }
+
+    var noteLines: [String] {
+        (note ?? "")
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    func incomingEvidence(excludingNote excludedNote: String?) -> [String] {
+        var lines = savedAdditionalSourceEvidence
+        lines.append(contentsOf: noteLines)
+        if let sourceUrl, !sourceUrl.isEmpty {
+            lines.append("Source URL: \(sourceUrl)")
+        }
+        let excluded = excludedNote?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return lines
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { line in
+                guard !line.isEmpty, line != excluded else { return false }
+                return !Self.isGeneratedEvidenceLine(line) && !Self.isStructuredEvidenceLine(line)
+            }
+            .removingDuplicates()
+    }
+
+    static func classifiedSourceLines(_ lines: [String]) -> (note: String?, additional: [String]) {
+        var noteLines: [String] = []
+        var additional: [String] = []
+        for raw in lines.flatMap({ $0.components(separatedBy: .newlines) }) {
+            let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !line.isEmpty else { continue }
+            if isGeneratedEvidenceLine(line) || isStructuredEvidenceLine(line) { continue }
+            if isURLEvidenceLine(line) {
+                additional.append(line.hasPrefix("http") ? "Source URL: \(line)" : line)
+                continue
+            }
+            if let evidence = labeledEvidenceValue(line) {
+                additional.append(evidence)
+                continue
+            }
+            noteLines.append(line)
+        }
+        return (
+            noteLines.isEmpty ? nil : noteLines.joined(separator: "\n"),
+            additional.removingDuplicates()
+        )
+    }
+
+    static func decodedWireNote(_ raw: String?) -> (
+        note: String?,
+        additional: [String],
+        highlights: SocialPlaceStructuredHighlights
+    ) {
+        let lines = (raw ?? "")
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let highlights = SocialPlaceStructuredHighlights.extracted(from: lines)
+        let classified = classifiedSourceLines(lines)
+        return (classified.note, classified.additional, highlights)
+    }
+
+    static func isGeneratedEvidenceLine(_ line: String) -> Bool {
+        generatedEvidencePrefixes.contains { prefix in
+            line.range(of: prefix, options: [.caseInsensitive, .anchored]) != nil
+        }
+    }
+
+    static func isStructuredEvidenceLine(_ line: String) -> Bool {
+        structuredEvidencePrefixes.contains { prefix in
+            line.range(of: prefix, options: [.caseInsensitive, .anchored]) != nil
+        }
+    }
+
+    static func isURLEvidenceLine(_ line: String) -> Bool {
+        line.lowercased().hasPrefix("source url:") || line.hasPrefix("http://") || line.hasPrefix("https://")
+    }
+
+    private static func labeledEvidenceValue(_ line: String) -> String? {
+        guard let range = line.range(of: "Evidence:", options: [.anchored, .caseInsensitive]) else { return nil }
+        let value = String(line[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
+
+    private static let generatedEvidencePrefixes = [
+        "Creator handle:",
+        "Source handle:",
+        "Recommender:",
+        "Verified coordinates",
+        "Analysis method:",
+        "Analysis pipeline:",
+        "Evidence tier:",
+        "Location clue:",
+        "Google Places",
+        "Venue name:",
+        "Address clue:",
+        "Category clue:",
+        "Confidence:",
+        "Debug:",
+        "Diagnostic:",
+    ]
+
+    private static let structuredEvidencePrefixes = [
+        "Highlight:",
+        "Vibe:",
+        "Access:",
+    ]
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -148,12 +306,8 @@ struct Place: Identifiable, Codable, Hashable {
            !recommender.isEmpty {
             evidence.append("Recommender: \(recommender)")
         }
-        if let note {
-            evidence += note
-                .components(separatedBy: .newlines)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-        }
+        evidence += savedAdditionalSourceEvidence
+        evidence += noteLines
         return evidence.removingDuplicates()
     }
 
@@ -290,6 +444,10 @@ struct Place: Identifiable, Codable, Hashable {
                 return scheme == "http" || scheme == "https"
             }
     }
+}
+
+private extension Array {
+    var nilIfEmpty: [Element]? { isEmpty ? nil : self }
 }
 
 private extension Array where Element == String {

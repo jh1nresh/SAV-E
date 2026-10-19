@@ -45,6 +45,14 @@ struct SocialPlaceStructuredHighlights: Codable, Hashable {
                 result.recommendedItems.append(item)
                 continue
             }
+            if let vibe = labeledValue(line, prefix: "Vibe:") {
+                result.vibeTags.append(vibe)
+                continue
+            }
+            if let access = labeledValue(line, prefix: "Access:") {
+                result.accessNotes.append(access)
+                continue
+            }
             if let highlight = highlight(from: line) ?? rawHighlight(from: line) {
                 result.placeHighlights.append(highlight)
                 result.vibeTags.append(contentsOf: vibeTags(from: highlight))
@@ -56,6 +64,12 @@ struct SocialPlaceStructuredHighlights: Codable, Hashable {
         result.vibeTags = unique(result.vibeTags)
         result.accessNotes = unique(result.accessNotes)
         return result
+    }
+
+    private static func labeledValue(_ line: String, prefix: String) -> String? {
+        guard let range = line.range(of: prefix, options: [.anchored, .caseInsensitive]) else { return nil }
+        let value = String(line[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 
     private static func recommendedItem(from line: String) -> RecommendedItem? {
@@ -956,6 +970,11 @@ extension Place {
         }
 
         let sourceURL = sourceURL(from: candidate.evidence)
+        let classified = Place.classifiedSourceLines(candidate.evidence)
+        let additional = classified.additional.filter { line in
+            guard let sourceURL else { return true }
+            return line != "Source URL: \(sourceURL)"
+        }
         let providerLocation = candidate.providerLocation
         let latitude = refinedMatch?.latitude ?? candidate.latitude ?? providerLocation?.latitude ?? 0
         let longitude = refinedMatch?.longitude ?? candidate.longitude ?? providerLocation?.longitude ?? 0
@@ -973,7 +992,7 @@ extension Place {
                 PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
             status: .wantToGo,
             rating: nil,
-            note: candidate.evidence.joined(separator: "\n"),
+            note: classified.note,
             sourceUrl: sourceURL,
             sourcePlatform: SourcePlatform.from(urlString: sourceURL),
             coordinateSystem: coordinateSystem,
@@ -994,7 +1013,8 @@ extension Place {
             recommendedItems: candidate.recommendedItems.nilIfEmpty,
             vibeTags: candidate.vibeTags.nilIfEmpty,
             accessNotes: candidate.accessNotes.nilIfEmpty,
-            sourceHandle: candidate.sourceHandle
+            sourceHandle: candidate.sourceHandle,
+            additionalSourceEvidence: additional.nilIfEmpty
         )
     }
 

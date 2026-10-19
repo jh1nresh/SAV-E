@@ -1691,7 +1691,10 @@ final class MapViewModel: ObservableObject {
             externalReviewCount: candidate.reviewCount
         )
         var place = try await saveSearchController.saveMapCandidate(draft)
-        if let exactResolution { place.createdAt = min(place.createdAt, exactResolution.clue.createdAt) }
+        if let exactResolution {
+            place.createdAt = min(place.createdAt, exactResolution.clue.createdAt)
+            place = place.attachingReviewClue(exactResolution.clue)
+        }
         place.sourceImageUrl = candidate.photoURL
         place.businessPhotoUrls = candidate.businessPhotoURLStrings
         if candidate.sourcePlatform == .googleMaps,

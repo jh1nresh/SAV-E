@@ -305,6 +305,7 @@ final class SaveLocalVaultService: Sendable {
         if let sourceHandle = place.savedSourceHandle?.trimmingCharacters(in: .whitespacesAndNewlines), !sourceHandle.isEmpty {
             evidence.append("Source handle: @\(sourceHandle)")
         }
+        evidence.append(contentsOf: place.savedAdditionalSourceEvidence)
         evidence.append(contentsOf: place.savedPlaceHighlights.map { "Highlight: \($0)" })
         evidence.append(contentsOf: place.savedRecommendedItems.map { "Highlight: Recommended item: \($0.displayText)" })
         evidence.append(contentsOf: place.savedVibeTags.map { "Vibe: \($0)" })
@@ -568,7 +569,15 @@ private extension SaveMemoryRecord {
             vibeTags: vibeTags.nilIfEmpty,
             accessNotes: accessNotes.nilIfEmpty,
             sourceHandle: sourceHandle,
-            mergedPlaceIDs: mergedPlaceIDs
+            mergedPlaceIDs: mergedPlaceIDs,
+            additionalSourceEvidence: evidence.filter { line in
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return false }
+                if Place.isGeneratedEvidenceLine(trimmed) || Place.isStructuredEvidenceLine(trimmed) { return false }
+                if trimmed == sourceText { return false }
+                if let sourceURL, trimmed == "Source URL: \(sourceURL)" { return false }
+                return true
+            }.nilIfEmpty
         )
     }
 }

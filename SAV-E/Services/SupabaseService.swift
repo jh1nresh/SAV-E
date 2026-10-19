@@ -286,8 +286,6 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             "category": place.category.rawValue,
             "status": place.status.rawValue,
             "rating": place.rating,
-            "note": place.note,
-            "source_platform": place.sourcePlatform.rawValue,
             // Enrichment fields: without these, business photos/hours fetched
             // on detail open only ever lived in memory and never synced.
             "google_place_id": place.googlePlaceId,
@@ -306,8 +304,33 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         if let nextHandle, nextHandle != previousHandle {
             updates["recommender"] = nextHandle
         }
+        if previous == nil || place.sourcePlatform != previous?.sourcePlatform {
+            updates["source_platform"] = place.sourcePlatform.rawValue
+        }
         if let sourceUrl = place.sourceUrl {
             updates["source_url"] = sourceUrl
+        }
+        // Structured clue fields have no dedicated columns. Encode them, plus
+        // extra URLs/text, into the wire `note` column only when a non-empty
+        // value actually changed. The in-memory user-facing note stays put so
+        // photo-enrichment / empty arrays cannot clobber saved evidence.
+        let nextHasStructured = !place.savedPlaceHighlights.isEmpty
+            || !place.savedVibeTags.isEmpty
+            || !place.savedAccessNotes.isEmpty
+            || !place.savedRecommendedItems.isEmpty
+        if nextHasStructured, place.hasStructuredDetails(unlike: previous) {
+            updates["note"] = place.wireNoteForPersistence()
+        } else if place.hasAdditionalEvidence(unlike: previous), !place.savedAdditionalSourceEvidence.isEmpty {
+            updates["note"] = place.wireNoteForPersistence()
+        } else if place.note != previous?.note {
+            updates["note"] = nextHasStructured || !place.savedAdditionalSourceEvidence.isEmpty
+                ? place.wireNoteForPersistence()
+                : place.note
+        }
+        let nextDishes = place.savedRecommendedItems.map(\.name)
+        let previousDishes = previous?.savedRecommendedItems.map(\.name) ?? []
+        if !nextDishes.isEmpty, nextDishes != previousDishes {
+            updates["extracted_dishes"] = nextDishes
         }
         if place.createdAt > .distantPast {
             updates["created_at"] = ISO8601DateFormatter().string(from: place.createdAt)
@@ -2033,7 +2056,18 @@ private struct PlaceRow: Codable {
     let friend_share_code: String?
 
     func toPlace() -> Place {
-        Place(
+        let decoded = Place.decodedWireNote(note)
+        let extracted = decoded.highlights
+        let fromNote = extracted.recommendedItems
+        let fromDishes = (extracted_dishes ?? []).map { RecommendedItem(name: $0, price: nil) }
+        let items = fromNote + fromDishes.filter { dish in
+            !fromNote.contains { $0.name == dish.name }
+        }
+        let additional = decoded.additional.filter { line in
+            guard let source_url else { return true }
+            return line != "Source URL: \(source_url)"
+        }
+        return Place(
             id: id,
             name: name,
             address: address,
@@ -2043,7 +2077,7 @@ private struct PlaceRow: Codable {
             category: PlaceCategory(rawValue: category) ?? .food,
             status: PlaceStatus(rawValue: status) ?? .wantToGo,
             rating: rating,
-            note: note,
+            note: decoded.note,
             sourceUrl: source_url,
             sourcePlatform: SourcePlatform(rawValue: source_platform) ?? .other,
             coordinateSystem: coordinate_system.flatMap(PlaceCoordinateSystem.init(rawValue:)),
@@ -2060,7 +2094,12 @@ private struct PlaceRow: Codable {
             openingHours: opening_hours,
             createdAt: memoryCollectionDate(created_at),
             visibility: visibility.flatMap(PlaceVisibility.init(rawValue:)),
-            socialSignal: social_signal?.toSignal()
+            socialSignal: social_signal?.toSignal(),
+            placeHighlights: extracted.placeHighlights.isEmpty ? nil : extracted.placeHighlights,
+            recommendedItems: items.isEmpty ? nil : items,
+            vibeTags: extracted.vibeTags.isEmpty ? nil : extracted.vibeTags,
+            accessNotes: extracted.accessNotes.isEmpty ? nil : extracted.accessNotes,
+            additionalSourceEvidence: additional.isEmpty ? nil : additional
         )
     }
 
@@ -2076,7 +2115,7 @@ private struct PlaceRow: Codable {
             category: place.category.rawValue,
             status: place.status.rawValue,
             rating: place.rating,
-            note: place.note,
+            note: place.wireNoteForPersistence() ?? place.note,
             source_url: place.sourceUrl,
             source_platform: place.sourcePlatform.rawValue,
             coordinate_system: place.coordinateSystem?.rawValue,
