@@ -63,6 +63,8 @@ test("fresh schema privacy guard runs before DDL and documents transactional app
   assert.match(readme, /psql "\$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f backend\/sql\/schema\.sql/);
   assert.match(privacySQL, /pg_has_role\(browser\.oid, granted\.oid, 'MEMBER'\)/);
   assert.match(schemaSQL, /pg_has_role\(browser\.oid, granted\.oid, 'MEMBER'\)/);
+  assert.match(privacySQL, /a\.grantor <> current_user::regrole/);
+  assert.match(schemaSQL, /a\.grantor <> current_user::regrole/);
   assert.doesNotMatch(privacySQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
   assert.doesNotMatch(schemaSQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
   const repoRoot = new URL("../../", import.meta.url);
@@ -382,6 +384,63 @@ test("fresh schema guard refuses existing inherited table grants before any DDL"
       await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
       await fixture.db.query("grant all on places to privacy_browser_parent");
       await assert.rejects(fixture.db.query(schemaSQL), /inherit|membership/i);
+      const names = (await fixture.db.query(`select relname from pg_class
+        where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+      assert.deepEqual(names, ["places", "privacy_unrelated_sentinel"], "refused re-apply must not create managed tables");
+    });
+  }, { browser: true, install: false });
+});
+
+async function withDelegatedGrantor(fixture: Fixture, run: () => Promise<void>): Promise<void> {
+  assert.equal((await fixture.db.query("select 1 from pg_roles where rolname='privacy_delegated_grantor'")).rowCount, 0, "do not borrow another fixture's delegated grantor");
+  await fixture.db.query("create role privacy_delegated_grantor nologin nosuperuser inherit nobypassrls");
+  await fixture.db.query("grant privacy_delegated_grantor to current_user");
+  try { await run(); }
+  finally {
+    await fixture.db.query("reset role");
+    await fixture.db.query("revoke privacy_delegated_grantor from current_user");
+    await fixture.db.query("drop owned by privacy_delegated_grantor");
+    await fixture.db.query("drop role if exists privacy_delegated_grantor");
+  }
+}
+
+test("privacy migration refuses browser grants issued by a delegated grantor", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withDelegatedGrantor(fixture, async () => {
+      await fixture.db.query("grant all on places to privacy_delegated_grantor with grant option");
+      await fixture.db.query("set role privacy_delegated_grantor");
+      await fixture.db.query("grant truncate on places to public, anon, authenticated");
+      await fixture.db.query("reset role");
+      assert.equal((await fixture.db.query("select has_table_privilege('anon','places','TRUNCATE') as allowed")).rows[0].allowed, true, "delegated grantor fixture must reproduce browser TRUNCATE");
+      const ownerRevoke = async () => {
+        await fixture.db.query("revoke all on places from public, anon, authenticated");
+        return (await fixture.db.query("select has_table_privilege('anon','places','TRUNCATE') as allowed")).rows[0].allowed;
+      };
+      assert.equal(await ownerRevoke(), true, "owner REVOKE must leave the foreign-grantor TRUNCATE");
+      await fixture.db.query("set role privacy_delegated_grantor");
+      await fixture.db.query("grant truncate on places to public, anon, authenticated");
+      await fixture.db.query("reset role");
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'grantors',(select jsonb_agg(jsonb_build_array(grantor,grantee,privilege_type) order by 1,2,3)
+          from aclexplode((select relacl from pg_class where oid='places'::regclass))) ) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /grantor/i);
+      assert.deepEqual(await state(), before, "foreign-grantor refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, legacy: true });
+});
+
+test("fresh schema guard refuses foreign-grantor browser grants before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("create table places(id int primary key, name text)");
+    await withDelegatedGrantor(fixture, async () => {
+      await fixture.db.query("grant all on places to privacy_delegated_grantor with grant option");
+      await fixture.db.query("set role privacy_delegated_grantor");
+      await fixture.db.query("grant truncate on places to public, anon, authenticated");
+      await fixture.db.query("reset role");
+      await assert.rejects(fixture.db.query(schemaSQL), /grantor/i);
       const names = (await fixture.db.query(`select relname from pg_class
         where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
       assert.deepEqual(names, ["places", "privacy_unrelated_sentinel"], "refused re-apply must not create managed tables");

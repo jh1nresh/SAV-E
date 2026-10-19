@@ -359,7 +359,8 @@ The migration therefore refuses current-creator global default table grants to
 `PUBLIC`, `anon`, `authenticated`, or any role those browser roles inherit
 through membership; resolving those requires separate scoped authority. Direct
 revokes from `PUBLIC`/`anon`/`authenticated` do not remove privileges granted
-to a parent role, including SET-able NOINHERIT memberships. It never changes
+to a parent role, including SET-able NOINHERIT memberships, or privileges
+granted to those browser roles by another grantor. It never changes
 those global defaults itself. Fresh schema and any re-apply to an existing
 install must use `-v ON_ERROR_STOP=1 -1` so a refused guard cannot leave
 tables committed. Apply the migration transactionally and verify effective privileges
@@ -373,6 +374,7 @@ friend-rating, Sendblue, and payment paths as an ordinary table owner and a
 non-superuser `service_role` with `BYPASSRLS`. It also checks legacy data,
 idempotence, absent optional tables/roles, unrelated-table preservation, future
 private defaults, rejection of incompatible global defaults, inherited
-membership grants, SET-able NOINHERIT memberships, and that a refused
-fresh-schema guard creates no managed tables. Coverage fails when a new
+membership grants, SET-able NOINHERIT memberships, delegated-grantor
+browser grants, and that a refused fresh-schema guard creates no managed
+tables. Coverage fails when a new
 source-owned table is missing from either static allowlist.

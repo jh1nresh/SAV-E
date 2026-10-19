@@ -136,6 +136,27 @@ begin
         raise exception 'Browser-role table grants inherited through role membership require separate authorized remediation';
     end if;
 
+    -- Owner REVOKE cannot remove privileges granted by another role. A
+    -- delegated GRANT OPTION holder can grant TRUNCATE to PUBLIC/anon/
+    -- authenticated; those entries survive and bypass RLS.
+    if exists (
+        select 1
+        from unnest(managed_tables) as t(name)
+        join pg_class c on c.oid = to_regclass(format('%I.%I', target_schema, t.name))
+        cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+        where a.grantor <> current_user::regrole
+          and (
+              a.grantee = 0
+              or exists (
+                  select 1 from pg_roles browser
+                  where browser.rolname in ('anon', 'authenticated')
+                    and browser.oid = a.grantee
+              )
+          )
+    ) then
+        raise exception 'Browser-role table grants issued by another grantor require separate authorized remediation';
+    end if;
+
     -- Only this creator/schema. Keep service_role grants, all other creators'
     -- defaults, global defaults, and every unrelated existing table unchanged.
     -- Later optional/runtime tables start private even before RLS is enabled.
