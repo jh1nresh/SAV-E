@@ -180,8 +180,8 @@ extension Place {
                 let metadataPrefixes = [
                     "source:", "category:", "rating:", "reviews:", "hours:", "address:",
                     "location clue:", "google places", "google maps", "coordinates:",
-                    "recommender:", "creator handle:", "analysis method:", "evidence:",
-                    "highlight:", "vibe:", "access:", "verified coordinates",
+                    "recommender:", "creator handle:", "analysis method:",
+                    "verified coordinates",
                 ]
                 return !line.localizedCaseInsensitiveContains("Source URL:") &&
                 !normalizedLine.hasPrefix("distance:") &&

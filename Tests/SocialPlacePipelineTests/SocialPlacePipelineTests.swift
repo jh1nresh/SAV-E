@@ -3864,6 +3864,21 @@ final class SocialPlacePipelineTests: XCTestCase {
         XCTAssertEqual(place.memorySummary(language: .traditionalChinese), "已存成想找時間去的地點。")
     }
 
+    @MainActor
+    func testSavedPlaceMemorySummaryKeepsUserAuthoredPrefixedNotes() {
+        for note in [
+            "Highlight: the bun was amazing",
+            "Vibe: casual counter seats",
+            "Access: walk up and wait",
+            "Evidence: keep this as my memory",
+        ] {
+            var place = Place.mock
+            place.note = note
+            XCTAssertEqual(place.cleanMemoryNote, note)
+            XCTAssertEqual(place.memorySummary(language: .english), note)
+        }
+    }
+
     // MARK: - Share-text normalization (messy real-world pastes)
 
     private struct ShareTextFixture: Decodable {

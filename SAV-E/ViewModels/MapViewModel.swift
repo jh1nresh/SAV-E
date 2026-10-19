@@ -1771,15 +1771,16 @@ final class MapViewModel: ObservableObject {
     ///
     /// Claim the active correction session before the first `await` so a
     /// second saved-result tap cannot PATCH the same clue onto another stamp.
-    /// On failure, restore the session and roll the local stamp back so it
-    /// does not look corrected while the Review clue is still open.
+    /// On failure, restore the session and roll the local and remote stamp
+    /// back so it does not look corrected while the Review clue is still open.
     @discardableResult
     func resolveExactSearchClue(toSavedPlace place: Place) async throws -> Place {
         guard let resolution = exactSearchResolution else { return place }
         exactSearchResolution = nil
         var persistedMerge = false
+        var associated = place
         do {
-            var associated = place.attachingReviewClue(resolution.clue)
+            associated = place.attachingReviewClue(resolution.clue)
             if associated != place {
                 if usesRemotePersistence { try await supabaseService.updatePlace(associated, previous: place) }
                 persistedMerge = true
@@ -1799,6 +1800,13 @@ final class MapViewModel: ObservableObject {
             return associated
         } catch {
             if persistedMerge {
+                if usesRemotePersistence {
+                    do {
+                        try await supabaseService.updatePlace(place, previous: associated)
+                    } catch {
+                        print("MapViewModel: failed to roll back remote stamp merge \(place.id): \(error)")
+                    }
+                }
                 try? saveLocalVaultService.removeConfirmedPlace(place)
                 mirrorToLocalVault(place)
                 places = Place.consolidated(places.filter { $0.id != place.id } + [place])

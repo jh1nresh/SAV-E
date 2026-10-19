@@ -2879,7 +2879,10 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(local.placeHighlights, stamp.placeHighlights)
         let persisted = try XCTUnwrap(vault.confirmedPlaces().first { $0.id == stamp.id })
         XCTAssertFalse(persisted.sourceEvidence.contains("Original source note"))
-        XCTAssertEqual(supabase.updatedPlaces.map(\.id), [stamp.id])
+        XCTAssertEqual(supabase.updatedPlaces.map(\.id), [stamp.id, stamp.id])
+        XCTAssertTrue(supabase.updatedPlaces[0].sourceEvidence.contains("Original source note"))
+        XCTAssertFalse(supabase.updatedPlaces[1].sourceEvidence.contains("Original source note"))
+        XCTAssertEqual(supabase.updatedPlaces[1].note, "Must try the bun")
 
         supabase.recordDecisionError = nil
         let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
