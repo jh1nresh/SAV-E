@@ -59,6 +59,7 @@ test("apply-sql.sh dry-reads friend-ratings.sql without secrets or writes", asyn
   assert.match(out, /dry-read only/);
   assert.match(out, /overriding legacy PGSSLMODE=no-verify/);
   assert.match(out, /PGSSLMODE=require psql/);
+  assert.match(out, /set search_path to public/);
   assert.match(out, /-f sql\/friend-ratings\.sql/);
   assert.doesNotMatch(out, /-f backend\/sql\//);
   assert.doesNotMatch(out, /secret-user|secret-pass|example\.invalid/);

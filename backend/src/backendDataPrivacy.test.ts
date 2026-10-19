@@ -65,7 +65,11 @@ test("fresh schema privacy guard runs before DDL and documents transactional app
   assert.deepEqual(staticAllowlist(schemaSQL.slice(0, schemaSQL.indexOf(marker))), managedTables, "fresh-schema guard must use the same allowlist");
   const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
   const sqlReadme = readFileSync(new URL("../sql/README.md", import.meta.url), "utf8");
-  assert.match(readme, /psql "\$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f backend\/sql\/schema\.sql/);
+  assert.match(readme, /psql "\$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f backend\/sql\/schema\.sql/);
+  assert.match(privacySQL, /coalesce\(nullif\(current_setting\('save.privacy_schema', true\), ''\), 'public'\)/);
+  assert.match(schemaSQL, /coalesce\(nullif\(current_setting\('save.privacy_schema', true\), ''\), 'public'\)/);
+  assert.doesNotMatch(privacySQL, /target_schema text := current_schema\(\)/);
+  assert.doesNotMatch(schemaSQL, /target_schema text := current_schema\(\)/);
   assert.match(readme, /apply-sql\.sh backend-data-privacy\.sql/);
   assert.match(sqlReadme, /backend-data-privacy\.sql/);
   assert.match(privacySQL, /pg_has_role\(browser\.oid, granted\.oid, 'MEMBER'\)/);
@@ -133,7 +137,7 @@ async function withFixture(run: (fixture: Fixture) => Promise<void>, options: { 
   assert.equal(url.pathname, "/save_paid_fixture");
   assert.match(url.searchParams.get("host") ?? "", /^\/tmp\/save-paid-readiness-[\w-]+\/socket$/);
   const schema = `privacy_test_${randomUUID().replaceAll("-", "")}`;
-  const db = new pg.Pool({ connectionString, options: `-c search_path=${schema}`, max: 5 });
+  const db = new pg.Pool({ connectionString, options: `-c search_path=${schema} -c save.privacy_schema=${schema}`, max: 5 });
   const created: string[] = [];
   const databaseName = (await db.query("select current_database() as name")).rows[0].name as string;
   assert.match(databaseName, /^\w+$/);
@@ -764,7 +768,7 @@ test("documented fresh-install psql fails atomically on unsafe global defaults",
       if (/(?:^|\s)-1(?:\s|$)/.test(command)) args.push("-1");
       args.push("-f", fileURLToPath(new URL("../sql/schema.sql", import.meta.url)));
       const psql = `${execFileSync("pg_config", ["--bindir"], { encoding: "utf8" }).trim()}/psql`;
-      const result = spawnSync(psql, args, { encoding: "utf8", env: { ...process.env, PGOPTIONS: `-c search_path=${fixture.schema}` } });
+      const result = spawnSync(psql, args, { encoding: "utf8", env: { ...process.env, PGOPTIONS: `-c search_path=${fixture.schema} -c save.privacy_schema=${fixture.schema}` } });
       assert.ifError(result.error);
       assert.equal(result.signal, null);
       assert.notEqual(result.status, null);
@@ -1140,5 +1144,30 @@ test("fresh schema guard refuses foreign-grantor database CREATE before any DDL"
         where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
       assert.deepEqual(names, ["privacy_unrelated_sentinel"], "refused re-apply must not create managed tables");
     });
+  }, { browser: true, install: false });
+});
+
+test("privacy apply targets public when search_path resolves an empty $user schema", { skip: !connectionString }, async () => {
+  await withFixture(async () => {
+    const raw = new pg.Pool({ connectionString, max: 1 });
+    const backendRole = (await raw.query("select current_user as name")).rows[0].name as string;
+    assert.match(backendRole, /^\w+$/);
+    try {
+      await raw.query(`drop schema if exists ${backendRole} cascade`);
+      await raw.query("drop table if exists public.profiles cascade");
+      await raw.query(`create schema ${backendRole}`);
+      await raw.query("create table public.profiles(id text primary key, private_note text)");
+      await raw.query("insert into public.profiles values('shadow','PRIVATE')");
+      await raw.query("grant all on public.profiles to public, anon, authenticated");
+      assert.equal((await raw.query("select current_schema() as name")).rows[0].name, backendRole, "default search_path must resolve $user first");
+      assert.equal((await raw.query("select has_table_privilege('anon','public.profiles','SELECT') as allowed")).rows[0].allowed, true);
+      await raw.query(privacySQL);
+      assert.equal((await raw.query("select relrowsecurity from pg_class where oid='public.profiles'::regclass")).rows[0].relrowsecurity, true, "privacy apply must protect public, not the empty $user schema");
+      assert.equal((await raw.query("select has_table_privilege('anon','public.profiles','SELECT') as allowed")).rows[0].allowed, false);
+    } finally {
+      await raw.query("drop table if exists public.profiles cascade");
+      await raw.query(`drop schema if exists ${backendRole} cascade`);
+      await raw.end();
+    }
   }, { browser: true, install: false });
 });

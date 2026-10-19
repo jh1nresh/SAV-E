@@ -1,6 +1,11 @@
 -- Existing installs: separately authorized apply through the single-transaction
 -- SQL helper. Idempotent; no user rows, ownership or status are rewritten.
 -- Re-run after installing any optional source-owned tables to enable their RLS.
+select set_config(
+  'search_path',
+  coalesce(nullif(current_setting('save.privacy_schema', true), ''), 'public'),
+  false
+);
 -- Backend-owned table privacy boundary
 -- Explicit source-owned allowlist: never blanket-revoke existing public tables.
 -- Apply in the intended schema as its backend table creator/owner. Browser
@@ -22,9 +27,11 @@
 -- schema named after the backend login and shadow unqualified names via the
 -- default "$user", public search path. Inherited or foreign-grantor database
 -- CREATE needs separate authorization.
+-- Target public unless save.privacy_schema is set. current_schema() follows
+-- "$user" or DATABASE_URL and can miss the runtime schema.
 do $backend_data_privacy$
 declare
-    target_schema text := current_schema();
+    target_schema text := coalesce(nullif(current_setting('save.privacy_schema', true), ''), 'public');
     managed_table text;
     browser_role text;
     seq_name text;

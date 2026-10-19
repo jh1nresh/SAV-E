@@ -58,7 +58,7 @@ Apply schema / pending SQL (see **Deploy checklist** below and `sql/README.md`):
 # From repository root, new empty database only. Re-applying to an existing
 # install also needs -1 and ON_ERROR_STOP so a refused privacy guard cannot
 # leave tables committed with unsafe grants.
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f backend/sql/schema.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f backend/sql/schema.sql
 
 # From backend/: pending additive file (dry-read, then apply). Founder-owned.
 cd backend
@@ -364,8 +364,10 @@ continue through the backend's routes, rather than direct browser table access.
 The migration also removes browser default table grants for the executing
 creator in the current schema, and revokes schema `CREATE` and database
 `CREATE` from `PUBLIC` and existing `anon`/`authenticated` roles before those
-defaults are relied on. The backend pool pins `search_path=public` so an
-already planted `$user` schema cannot shadow unqualified runtime DDL.
+defaults are relied on. The backend pool and SQL apply pin `search_path=public`
+so an already planted `$user` schema cannot shadow unqualified runtime DDL.
+`backend-data-privacy.sql` targets `public` unless `save.privacy_schema` is set
+for an isolated fixture; it does not trust `current_schema()`.
 Later runtime/optional tables created by that same role therefore start
 private before any additional RLS setup. A leftover schema `CREATE` grant
 would let a browser role pre-create an absent runtime table such as

@@ -1,10 +1,17 @@
 -- Fresh empty database only. Re-applying to an existing install also needs
 -- the same transactional stop-on-error flags so a refused privacy guard
 -- cannot leave tables committed with unsafe grants:
---   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f backend/sql/schema.sql
+--   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f backend/sql/schema.sql
+-- Pin DDL to the runtime schema. Tests set save.privacy_schema; production
+-- defaults to public so a leftover $user schema cannot steal current_schema().
+select set_config(
+  'search_path',
+  coalesce(nullif(current_setting('save.privacy_schema', true), ''), 'public'),
+  false
+);
 do $fresh_schema_privacy_guard$
 declare
-    target_schema text := current_schema();
+    target_schema text := coalesce(nullif(current_setting('save.privacy_schema', true), ''), 'public');
     managed_tables text[] := array[
         'agent_capabilities',
         'agent_decisions',
@@ -2037,9 +2044,11 @@ create index if not exists share_extension_analyses_session_created
 -- schema named after the backend login and shadow unqualified names via the
 -- default "$user", public search path. Inherited or foreign-grantor database
 -- CREATE needs separate authorization.
+-- Target public unless save.privacy_schema is set. current_schema() follows
+-- "$user" or DATABASE_URL and can miss the runtime schema.
 do $backend_data_privacy$
 declare
-    target_schema text := current_schema();
+    target_schema text := coalesce(nullif(current_setting('save.privacy_schema', true), ''), 'public');
     managed_table text;
     browser_role text;
     seq_name text;
