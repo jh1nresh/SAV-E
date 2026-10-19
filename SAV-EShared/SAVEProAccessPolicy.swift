@@ -49,7 +49,7 @@ enum SAVEProAccessPolicy {
 
     /// Required on any subscription paywall for App Store review.
     enum Legal {
-        nonisolated static let termsURL = "https://sav-e-app.vercel.app/terms"
+        nonisolated static let termsURL = "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
         nonisolated static let privacyURL = "https://sav-e-app.vercel.app/privacy"
         nonisolated static let manageSubscriptionsURL =
             "https://apps.apple.com/account/subscriptions"
