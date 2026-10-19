@@ -89,6 +89,8 @@ test("fresh schema privacy guard runs before DDL and documents transactional app
   assert.match(schemaSQL, /revoke all privileges on sequence %I\.%I from public/);
   assert.match(privacySQL, /Browser-role sequence grants inherited through role membership/);
   assert.match(schemaSQL, /Browser-role sequence grants inherited through role membership/);
+  assert.match(privacySQL, /Browser-role sequence grants issued by another grantor/);
+  assert.match(schemaSQL, /Browser-role sequence grants issued by another grantor/);
   assert.match(schemaSQL.slice(0, guardEnd), /defaclobjtype = 'S'/, "fresh-schema guard must refuse inherited sequence defaults before DDL");
   assert.doesNotMatch(privacySQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
   assert.doesNotMatch(schemaSQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
@@ -798,6 +800,45 @@ test("privacy migration refuses sequence grants inherited through browser-role m
       const before = await state();
       await assert.rejects(fixture.db.query(privacySQL), /sequence/i);
       assert.deepEqual(await state(), before, "inherited sequence refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, install: false });
+});
+
+test("privacy migration refuses sequence grants issued by a delegated grantor", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await installRuntimeSerialTables(fixture.db);
+    await withDelegatedGrantor(fixture, async () => {
+      await fixture.db.query("grant all on sequence sendblue_saved_places_id_seq to privacy_delegated_grantor with grant option");
+      await fixture.db.query("set role privacy_delegated_grantor");
+      await fixture.db.query("grant update, select, usage on sequence sendblue_saved_places_id_seq to public, anon, authenticated");
+      await fixture.db.query("reset role");
+      await fixture.db.query("revoke all on sequence sendblue_saved_places_id_seq from public, anon, authenticated");
+      assert.equal((await fixture.db.query("select has_sequence_privilege('anon','sendblue_saved_places_id_seq','UPDATE') as allowed")).rows[0].allowed, true, "owner REVOKE must leave the foreign-grantor sequence UPDATE");
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'sequences',(select jsonb_agg(jsonb_build_array(relname,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace and relkind='S'),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'grantors',(select jsonb_agg(jsonb_build_array(grantor,grantee,privilege_type) order by 1,2,3)
+          from aclexplode((select relacl from pg_class where oid='sendblue_saved_places_id_seq'::regclass))) ) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /grantor/i);
+      assert.deepEqual(await state(), before, "foreign-grantor sequence refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, install: false });
+});
+
+test("fresh schema guard refuses foreign-grantor sequence grants before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query(sendblueSavedPlacesTableSql);
+    await withDelegatedGrantor(fixture, async () => {
+      await fixture.db.query("grant all on sequence sendblue_saved_places_id_seq to privacy_delegated_grantor with grant option");
+      await fixture.db.query("set role privacy_delegated_grantor");
+      await fixture.db.query("grant update on sequence sendblue_saved_places_id_seq to public, anon, authenticated");
+      await fixture.db.query("reset role");
+      await assert.rejects(fixture.db.query(schemaSQL), /grantor/i);
+      const names = (await fixture.db.query(`select relname from pg_class
+        where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+      assert.deepEqual(names, ["privacy_unrelated_sentinel", "sendblue_saved_places", "sendblue_user_locations"], "refused re-apply must not create managed tables");
     });
   }, { browser: true, install: false });
 });

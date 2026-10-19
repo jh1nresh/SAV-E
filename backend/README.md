@@ -386,7 +386,9 @@ predefined roles `pg_read_all_data`, `pg_write_all_data`, and `pg_maintain`
 in table or default ACLs. Memberships themselves are never rewritten.
 Inherited sequence defaults or owned-sequence grants to a parent role those
 browser roles can `SET ROLE` to are refused, using the same `MEMBER` check
-as tables; those parent grants are never rewritten. It never changes global
+as tables; those parent grants are never rewritten. Sequence grants issued
+to browser roles by another grantor are refused the same way as table
+foreign-grantor ACLs. It never changes global
 TABLE defaults itself. It does revoke this creator's global and schema
 SEQUENCE defaults to `PUBLIC`/`anon`/`authenticated`. Fresh schema and any
 re-apply to an existing install must use `-v ON_ERROR_STOP=1 -1` so a refused

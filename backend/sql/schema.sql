@@ -223,6 +223,28 @@ begin
     ) then
         raise exception 'Browser-role sequence grants inherited through role membership require separate authorized remediation';
     end if;
+    if exists (
+        select 1
+        from unnest(managed_tables) as t(name)
+        join pg_class c on c.oid = to_regclass(format('%I.%I', target_schema, t.name))
+        join pg_depend dep on dep.refobjid = c.oid
+          and dep.classid = 'pg_class'::regclass
+          and dep.refclassid = 'pg_class'::regclass
+          and dep.deptype in ('a', 'i')
+        join pg_class s on s.oid = dep.objid and s.relkind = 'S'
+        cross join lateral aclexplode(coalesce(s.relacl, acldefault('S', s.relowner))) a
+        where a.grantor <> current_user::regrole
+          and (
+              a.grantee = 0
+              or exists (
+                  select 1 from pg_roles browser
+                  where browser.rolname in ('anon', 'authenticated')
+                    and browser.oid = a.grantee
+              )
+          )
+    ) then
+        raise exception 'Browser-role sequence grants issued by another grantor require separate authorized remediation';
+    end if;
 end $fresh_schema_privacy_guard$;
 
 create extension if not exists pgcrypto;
@@ -2177,6 +2199,32 @@ begin
           and pg_has_role(browser.oid, granted.oid, 'MEMBER')
     ) then
         raise exception 'Browser-role sequence grants inherited through role membership require separate authorized remediation';
+    end if;
+
+    -- Owner REVOKE cannot remove sequence privileges granted by another role.
+    -- A delegated GRANT OPTION holder can grant UPDATE/SELECT/USAGE to
+    -- PUBLIC/anon/authenticated; those entries survive and allow setval.
+    if exists (
+        select 1
+        from unnest(managed_tables) as t(name)
+        join pg_class c on c.oid = to_regclass(format('%I.%I', target_schema, t.name))
+        join pg_depend dep on dep.refobjid = c.oid
+          and dep.classid = 'pg_class'::regclass
+          and dep.refclassid = 'pg_class'::regclass
+          and dep.deptype in ('a', 'i')
+        join pg_class s on s.oid = dep.objid and s.relkind = 'S'
+        cross join lateral aclexplode(coalesce(s.relacl, acldefault('S', s.relowner))) a
+        where a.grantor <> current_user::regrole
+          and (
+              a.grantee = 0
+              or exists (
+                  select 1 from pg_roles browser
+                  where browser.rolname in ('anon', 'authenticated')
+                    and browser.oid = a.grantee
+              )
+          )
+    ) then
+        raise exception 'Browser-role sequence grants issued by another grantor require separate authorized remediation';
     end if;
 
     -- Only this creator/schema. Keep service_role grants, all other creators'
