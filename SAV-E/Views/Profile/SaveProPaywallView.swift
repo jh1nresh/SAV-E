@@ -92,6 +92,7 @@ struct SaveProPaywallView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("paywall.freePlaceLimit")
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("paywall.header")
     }
 
@@ -148,6 +149,7 @@ struct SaveProPaywallView: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
         )
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("paywall.boundary")
     }
 

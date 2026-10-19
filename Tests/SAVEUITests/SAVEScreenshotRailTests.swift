@@ -482,9 +482,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["paywall.freePlaceLimit"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Free: 50 places"].firstMatch.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.staticTexts["Save every place you love"].firstMatch.exists)
-        XCTAssertTrue(app.staticTexts["Free: 50 places"].firstMatch.exists)
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.freePlaceLimit"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["paywall.proBenefit"].exists)
         XCTAssertTrue(app.staticTexts["Unlimited saved places"].firstMatch.exists)
         XCTAssertTrue(app.descendants(matching: .any)["paywall.keepGoing"].exists)
