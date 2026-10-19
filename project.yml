@@ -75,7 +75,6 @@ targets:
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDisplayName: Savvy
-        UIUserInterfaceStyle: Light
         UIApplicationSupportsIndirectInputEvents: true
         UIAppFonts:
           - DisplayFont/Caveat-SemiBold.ttf
@@ -190,7 +189,6 @@ targets:
         GENERATE_INFOPLIST_FILE: true
         INFOPLIST_KEY_CFBundleIconName: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: Savvy
-        INFOPLIST_KEY_UIUserInterfaceStyle: Light
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: true
         INFOPLIST_KEY_UILaunchScreen_Generation: true
         INFOPLIST_KEY_UISupportedInterfaceOrientations:

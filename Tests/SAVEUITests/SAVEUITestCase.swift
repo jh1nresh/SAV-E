@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 
 /// Shared lifecycle for the Savvy UI suite.
@@ -193,4 +194,140 @@ class SAVEUITestCase: XCTestCase {
         attachment.lifetime = .keepAlways
         add(attachment)
     }
+
+    /// Median RGB from several points just below the status bar on the left
+    /// margin, where Home/Passport show the notebook canvas rather than cards.
+    @MainActor
+    func sampleScreenshotBackground(_ screenshot: XCUIScreenshot) -> SampledRGB {
+        let image = screenshot.image
+        guard let cgImage = image.cgImage else {
+            return SampledRGB(red: 0, green: 0, blue: 0)
+        }
+        let scale = image.scale
+        let points: [(CGFloat, CGFloat)] = [
+            (3, 64), (5, 72), (4, 90), (6, 140), (3, 220),
+        ]
+        var reds: [Int] = []
+        var greens: [Int] = []
+        var blues: [Int] = []
+        for (x, y) in points {
+            let px = min(max(Int((x * scale).rounded()), 0), cgImage.width - 1)
+            let py = min(max(Int((y * scale).rounded()), 0), cgImage.height - 1)
+            guard let pixel = samplePixel(cgImage, x: px, y: py) else { continue }
+            reds.append(pixel.red)
+            greens.append(pixel.green)
+            blues.append(pixel.blue)
+        }
+        guard !reds.isEmpty else {
+            return SampledRGB(red: 0, green: 0, blue: 0)
+        }
+        return SampledRGB(
+            red: medianChannel(reds),
+            green: medianChannel(greens),
+            blue: medianChannel(blues)
+        )
+    }
+
+    @MainActor
+    @discardableResult
+    func assertScreenshotBackground(
+        _ screenshot: XCUIScreenshot,
+        nearRed red: Int,
+        green: Int,
+        blue: Int,
+        name: String,
+        tolerance: Int = 32,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) -> SampledRGB {
+        let sample = sampleScreenshotBackground(screenshot)
+        let note = XCTAttachment(string: "\(name) background \(sample.hex) luminance=\(Int(sample.luminance.rounded()))")
+        note.name = "\(name)-bg-hex"
+        note.lifetime = .keepAlways
+        add(note)
+        print("SAVE_CANVAS_BG \(name)=\(sample.hex)")
+        let expected = String(format: "#%02X%02X%02X", red, green, blue)
+        XCTAssertLessThanOrEqual(
+            abs(sample.red - red),
+            tolerance,
+            "\(name) R \(sample.hex) is not near \(expected)",
+            file: file,
+            line: line
+        )
+        XCTAssertLessThanOrEqual(
+            abs(sample.green - green),
+            tolerance,
+            "\(name) G \(sample.hex) is not near \(expected)",
+            file: file,
+            line: line
+        )
+        XCTAssertLessThanOrEqual(
+            abs(sample.blue - blue),
+            tolerance,
+            "\(name) B \(sample.hex) is not near \(expected)",
+            file: file,
+            line: line
+        )
+        if red < 80 {
+            XCTAssertLessThan(
+                sample.luminance,
+                80,
+                "\(name) must be dark near #1E1C19, got \(sample.hex) luminance \(sample.luminance)",
+                file: file,
+                line: line
+            )
+        } else {
+            XCTAssertGreaterThan(
+                sample.luminance,
+                200,
+                "\(name) must be light near #FFF9EB, got \(sample.hex) luminance \(sample.luminance)",
+                file: file,
+                line: line
+            )
+        }
+        return sample
+    }
+
+    private func samplePixel(_ image: CGImage, x: Int, y: Int) -> SampledRGB? {
+        guard let crop = image.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)) else {
+            return nil
+        }
+        var pixel = [UInt8](repeating: 0, count: 4)
+        let ok = pixel.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(
+                data: bytes.baseAddress,
+                width: 1,
+                height: 1,
+                bitsPerComponent: 8,
+                bytesPerRow: 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(crop, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            return true
+        }
+        guard ok else { return nil }
+        return SampledRGB(red: Int(pixel[0]), green: Int(pixel[1]), blue: Int(pixel[2]))
+    }
+
+    private func medianChannel(_ values: [Int]) -> Int {
+        let sorted = values.sorted()
+        return sorted[sorted.count / 2]
+    }
+}
+
+struct SampledRGB: Equatable, CustomStringConvertible {
+    let red: Int
+    let green: Int
+    let blue: Int
+
+    var hex: String {
+        String(format: "#%02X%02X%02X", red, green, blue)
+    }
+
+    var luminance: Double {
+        0.2126 * Double(red) + 0.7152 * Double(green) + 0.0722 * Double(blue)
+    }
+
+    var description: String { hex }
 }
