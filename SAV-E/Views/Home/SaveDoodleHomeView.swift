@@ -117,7 +117,7 @@ struct SaveDoodleHomeView: View {
         .buttonStyle(.plain)
         .frame(minHeight: SaveLayout.minTap)
         .accessibilityLabel(lens.title(language: languageSettings.language))
-        .accessibilityIdentifier(lens.accessibilityIdentifier)
+        .accessibilityIdentifier(lens == .eat ? "home.eat" : "home.go")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 

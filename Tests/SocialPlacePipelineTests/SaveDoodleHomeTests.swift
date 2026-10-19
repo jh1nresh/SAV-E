@@ -5,9 +5,10 @@ import XCTest
 @MainActor
 final class SaveDoodleHomeTests: XCTestCase {
     func testEatLensKeepsFoodCafeBarAndDropsGo() {
-        let food = place("Duck", "Beijing, China", .food, latitude: 39.88, longitude: 116.41)
-        let cafe = place("Grey", "Beijing, China", .cafe, latitude: 39.88, longitude: 116.40)
-        let park = place("Tiantan", "Beijing, China", .attraction, latitude: 39.88, longitude: 116.41)
+        let now = Date()
+        let food = place("Duck", "Beijing, China", .food, latitude: 39.88, longitude: 116.41, createdAt: now.addingTimeInterval(-2))
+        let cafe = place("Grey", "Beijing, China", .cafe, latitude: 39.88, longitude: 116.40, createdAt: now.addingTimeInterval(-1))
+        let park = place("Tiantan", "Beijing, China", .attraction, latitude: 39.88, longitude: 116.41, createdAt: now)
         let visible = SaveDoodleHomeCatalog.visiblePlaces(
             from: [food, cafe, park],
             lens: .eat,
@@ -15,16 +16,17 @@ final class SaveDoodleHomeTests: XCTestCase {
             location: nil,
             locationDenied: true
         )
-        XCTAssertEqual(visible.map(\.name), ["Duck", "Grey"])
+        XCTAssertEqual(visible.map(\.name), ["Grey", "Duck"])
         XCTAssertEqual(SaveDoodleHomeCatalog.lens(for: .food), .eat)
         XCTAssertEqual(SaveDoodleHomeCatalog.lens(for: .attraction), .go)
     }
 
     func testGoLensKeepsAttractionStayShopping() {
-        let park = place("Park", "Tokyo, Japan", .attraction)
-        let hotel = place("Hotel", "Tokyo, Japan", .stay)
-        let shop = place("Shop", "Tokyo, Japan", .shopping)
-        let ramen = place("Ramen", "Tokyo, Japan", .food)
+        let now = Date()
+        let park = place("Park", "Tokyo, Japan", .attraction, createdAt: now.addingTimeInterval(-3))
+        let hotel = place("Hotel", "Tokyo, Japan", .stay, createdAt: now.addingTimeInterval(-2))
+        let shop = place("Shop", "Tokyo, Japan", .shopping, createdAt: now.addingTimeInterval(-1))
+        let ramen = place("Ramen", "Tokyo, Japan", .food, createdAt: now)
         let visible = SaveDoodleHomeCatalog.visiblePlaces(
             from: [park, hotel, shop, ramen],
             lens: .go,
@@ -32,7 +34,7 @@ final class SaveDoodleHomeTests: XCTestCase {
             location: nil,
             locationDenied: true
         )
-        XCTAssertEqual(visible.map(\.name), ["Park", "Hotel", "Shop"])
+        XCTAssertEqual(visible.map(\.name), ["Shop", "Hotel", "Park"])
     }
 
     func testCityGroupsUseMetroAliases() {
