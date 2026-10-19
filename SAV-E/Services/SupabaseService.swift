@@ -285,17 +285,20 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             "address": place.address,
             "category": place.category.rawValue,
             "status": place.status.rawValue,
-            "rating": place.rating ?? NSNull(),
-            // Enrichment fields: without these, business photos/hours fetched
-            // on detail open only ever lived in memory and never synced.
-            "google_place_id": place.googlePlaceId ?? NSNull(),
-            "google_rating": place.googleRating ?? NSNull(),
-            "google_price_level": place.googlePriceLevel ?? NSNull(),
-            "price_range": place.priceRange ?? NSNull(),
-            "opening_hours": place.openingHours ?? NSNull(),
-            "source_image_url": place.sourceImageUrl ?? NSNull(),
-            "business_photo_urls": place.businessPhotoUrls ?? NSNull(),
         ]
+        // Local-vault fallbacks legitimately omit remote enrichment. Send a
+        // field only when it is present on a full write, or when it actually
+        // changed versus `previous`. JSON null is reserved for an explicit
+        // non-nil-to-nil clear.
+        let hasPrevious = previous != nil
+        Self.assignChangedOptional("rating", place.rating, previous: previous?.rating, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("google_place_id", place.googlePlaceId, previous: previous?.googlePlaceId, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("google_rating", place.googleRating, previous: previous?.googleRating, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("google_price_level", place.googlePriceLevel, previous: previous?.googlePriceLevel, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("price_range", place.priceRange, previous: previous?.priceRange, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("opening_hours", place.openingHours, previous: previous?.openingHours, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("source_image_url", place.sourceImageUrl, previous: previous?.sourceImageUrl, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("business_photo_urls", place.businessPhotoUrls, previous: previous?.businessPhotoUrls, hasPrevious: hasPrevious, into: &updates)
         // Account-backed attribution lives on `recommender`. Send a handle
         // only when it is displayable and actually changed, so a photo
         // enrichment PATCH cannot rewrite or invent one.
@@ -304,9 +307,18 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         if previous == nil {
             if let nextHandle { updates["recommender"] = nextHandle }
         } else if nextHandle != previousHandle {
-            // Displayable attribution changed. A leftover coordinate-shaped
-            // raw value must not block JSON null on rollback.
-            updates["recommender"] = nextHandle ?? NSNull()
+            if let nextHandle {
+                updates["recommender"] = nextHandle
+            } else {
+                let nextRaw = SaveSourceHandle.stored(place.recommender ?? place.sourceHandle)
+                // Explicit user clear, or an invalid leftover (coordinate/URL).
+                // A normal edit that still has a valid previous handle and a
+                // missing local copy omits this key via nextHandle == previousHandle
+                // when both displayable values are nil.
+                if nextRaw == nil || SaveSourceHandle.looksLikeCoordinate(nextRaw ?? "") || SaveSourceHandle.looksLikeURL(nextRaw ?? "") {
+                    updates["recommender"] = NSNull()
+                }
+            }
         }
         if previous == nil || place.sourcePlatform != previous?.sourcePlatform {
             updates["source_platform"] = place.sourcePlatform.rawValue
@@ -1306,6 +1318,24 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     private static func jsonBody(_ values: [String: Any?]) throws -> Data {
         let object = values.mapValues { $0 ?? NSNull() }
         return try JSONSerialization.data(withJSONObject: object)
+    }
+
+    private static func assignChangedOptional<Value: Equatable>(
+        _ key: String,
+        _ current: Value?,
+        previous: Value?,
+        hasPrevious: Bool,
+        into updates: inout [String: Any?]
+    ) {
+        if !hasPrevious {
+            if let current {
+                updates[key] = current
+            }
+            return
+        }
+        if current != previous {
+            updates[key] = current ?? NSNull()
+        }
     }
 }
 

@@ -1048,7 +1048,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             XCTAssertNil(body["source_platform"], "Unchanged source_platform must not be PATCHed")
             return (200, "{}")
         }
-        try await service.updatePlace(coordinateHandle, previous: Place.mock)
+        try await service.updatePlace(coordinateHandle, previous: place)
 
         var renamed = place
         renamed.recommender = "taipei.cafe.hop"
@@ -1060,6 +1060,56 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             return (200, "{}")
         }
         try await service.updatePlace(renamed, previous: place)
+
+        var hoursOnly = Place.mock
+        hoursOnly.openingHours = "Tue 9:00 AM - 5:00 PM"
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertNil(body["recommender"], "A normal hours edit must not rewrite or clear attribution")
+            XCTAssertEqual(body["opening_hours"] as? String, "Tue 9:00 AM - 5:00 PM")
+            return (200, "{}")
+        }
+        try await service.updatePlace(hoursOnly, previous: Place.mock)
+    }
+
+    func testUpdatePlaceOmitsNilEnrichmentUnlessExplicitlyCleared() async throws {
+        var local = Place.mock
+        local.rating = nil
+        local.googlePlaceId = nil
+        local.googleRating = nil
+        local.googlePriceLevel = nil
+        local.priceRange = nil
+        local.openingHours = nil
+        local.sourceImageUrl = nil
+        local.businessPhotoUrls = nil
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertNil(body["rating"], "Missing local enrichment must not PATCH JSON null")
+            XCTAssertNil(body["google_place_id"])
+            XCTAssertNil(body["google_rating"])
+            XCTAssertNil(body["google_price_level"])
+            XCTAssertNil(body["price_range"])
+            XCTAssertNil(body["opening_hours"])
+            XCTAssertNil(body["source_image_url"])
+            XCTAssertNil(body["business_photo_urls"])
+            return (200, "{}")
+        }
+        try await service.updatePlace(local)
+        try await service.updatePlace(local, previous: local)
+
+        var cleared = Place.mock
+        cleared.googleRating = nil
+        cleared.openingHours = nil
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertTrue(body["google_rating"] is NSNull, "Clearing a known rating must send JSON null")
+            XCTAssertTrue(body["opening_hours"] is NSNull)
+            XCTAssertNil(body["google_place_id"], "Unchanged enrichment must stay omitted")
+            return (200, "{}")
+        }
+        try await service.updatePlace(cleared, previous: Place.mock)
     }
 
     func testUpdatePlaceRollbackClearsMergedServerFieldsWithoutWritingEnvelope() async throws {

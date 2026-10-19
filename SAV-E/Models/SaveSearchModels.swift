@@ -298,7 +298,7 @@ struct SaveReviewCandidateSavesRowDetail: Equatable {
 
     init(candidate: PlaceReviewCandidate) {
         nextStep = candidate.reviewNextStep
-        let isSourceClue = candidate.status == "source_only" || !candidate.hasReliableCoordinates
+        let isSourceClue = candidate.status == "source_only" || !candidate.hasSavableLocation
         let evidence = Self.knownEvidence(candidate, isSourceClue: isSourceClue)
         knownEvidenceEnglish = evidence.english
         knownEvidenceTraditionalChinese = evidence.traditionalChinese

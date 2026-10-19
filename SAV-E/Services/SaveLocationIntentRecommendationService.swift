@@ -597,11 +597,11 @@ struct SaveLocationIntentRecommendationService {
             let category = inferredCategory(for: candidate)
             return SaveSearchResult(
                 id: "review-candidate-\(candidate.id.uuidString)",
-                objectType: candidate.hasReliableCoordinates ? .pendingCandidate : .sourceOnlyClue,
-                userState: candidate.hasReliableCoordinates ? .waitingReview : .sourceOnly,
+                objectType: candidate.hasSavableLocation ? .pendingCandidate : .sourceOnlyClue,
+                userState: candidate.hasSavableLocation ? .waitingReview : .sourceOnly,
                 title: candidate.name,
                 subtitle: candidate.address.isEmpty ? (candidate.city ?? "Needs address confirmation") : candidate.address,
-                statusLabel: candidate.hasReliableCoordinates ? "Review Candidate" : "Clue · needs exact place",
+                statusLabel: candidate.hasSavableLocation ? "Review Candidate" : "Clue · needs exact place",
                 sourceURL: nil,
                 sourcePlatform: nil,
                 category: category,
@@ -613,11 +613,11 @@ struct SaveLocationIntentRecommendationService {
                 confidence: candidate.confidence,
                 missingInfo: candidate.missingInfo,
                 evidence: candidateEvidence(candidate, currentLocation: currentLocation),
-                recoveryQueries: candidate.hasReliableCoordinates ? [] : [candidate.refinementQuery].filter { !$0.isEmpty },
+                recoveryQueries: candidate.hasSavableLocation ? [] : [candidate.refinementQuery].filter { !$0.isEmpty },
                 createdAt: candidate.createdAt,
-                canRunRecovery: !candidate.hasReliableCoordinates,
+                canRunRecovery: !candidate.hasSavableLocation,
                 isRecommendationShell: false,
-                primaryAction: candidate.hasReliableCoordinates ? .confirmMapStamp : .runRecovery,
+                primaryAction: candidate.hasSavableLocation ? .confirmMapStamp : .runRecovery,
                 distanceMeters: currentLocation.flatMap { distanceMeters(from: $0, to: candidate) }
             )
         }

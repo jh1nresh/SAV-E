@@ -442,7 +442,7 @@ struct SaveLibraryView: View {
     }
 
     private func candidateKind(_ candidate: PlaceReviewCandidate) -> SaveAtlasReviewTicketKind {
-        candidate.status == "source_only" || !candidate.hasReliableCoordinates
+        candidate.status == "source_only" || !candidate.hasSavableLocation
             ? .sourceClue
             : .reviewCandidate
     }
