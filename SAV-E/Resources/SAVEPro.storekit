@@ -31,7 +31,7 @@
           },
           "localizations" : [
             {
-              "description" : "Higher monthly AI assist allowance. Saved places stay free.",
+              "description" : "Unlimited saved places. Higher monthly AI assist allowance.",
               "displayName" : "Savvy Pro Annual",
               "locale" : "en_US"
             }
@@ -52,7 +52,7 @@
           "introductoryOffer" : null,
           "localizations" : [
             {
-              "description" : "Higher monthly AI assist allowance. Saved places stay free.",
+              "description" : "Unlimited saved places. Higher monthly AI assist allowance.",
               "displayName" : "Savvy Pro Monthly",
               "locale" : "en_US"
             }
