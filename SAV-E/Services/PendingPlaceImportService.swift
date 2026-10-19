@@ -45,6 +45,14 @@ struct SocialPlaceStructuredHighlights: Codable, Hashable {
                 result.recommendedItems.append(item)
                 continue
             }
+            if let vibe = labeledValue(line, prefix: "Vibe:") {
+                result.vibeTags.append(vibe)
+                continue
+            }
+            if let access = labeledValue(line, prefix: "Access:") {
+                result.accessNotes.append(access)
+                continue
+            }
             if let highlight = highlight(from: line) ?? rawHighlight(from: line) {
                 result.placeHighlights.append(highlight)
                 result.vibeTags.append(contentsOf: vibeTags(from: highlight))
@@ -56,6 +64,12 @@ struct SocialPlaceStructuredHighlights: Codable, Hashable {
         result.vibeTags = unique(result.vibeTags)
         result.accessNotes = unique(result.accessNotes)
         return result
+    }
+
+    private static func labeledValue(_ line: String, prefix: String) -> String? {
+        guard let range = line.range(of: prefix, options: [.anchored, .caseInsensitive]) else { return nil }
+        let value = String(line[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
     }
 
     private static func recommendedItem(from line: String) -> RecommendedItem? {
@@ -122,15 +136,38 @@ struct SocialPlaceStructuredHighlights: Codable, Hashable {
     }
 
     private static func sourceHandle(from evidence: [String], sourceURL: String?) -> String? {
-        for line in evidence {
-            if let range = line.range(of: #"@([A-Za-z0-9_.]{2,40})"#, options: .regularExpression) {
-                return String(line[range]).trimmingCharacters(in: CharacterSet(charactersIn: "@"))
+        if let labeled = labeledSourceHandle(in: evidence) {
+            return labeled
+        }
+        let regex = try? NSRegularExpression(pattern: #"@([\p{L}0-9._]{1,64})"#)
+        for line in evidence.flatMap({ $0.components(separatedBy: .newlines) }) {
+            let nsLine = line as NSString
+            let matches = regex?.matches(in: line, range: NSRange(location: 0, length: nsLine.length)) ?? []
+            for match in matches {
+                guard match.numberOfRanges > 1 else { continue }
+                let token = nsLine.substring(with: match.range(at: 1))
+                if let handle = SaveSourceHandle.displayable(token) {
+                    return handle
+                }
             }
         }
         if let sourceURL, let components = URLComponents(string: sourceURL), components.host?.contains("instagram") == true {
             let parts = components.path.split(separator: "/")
             if let first = parts.first, first != "reel", first != "p" {
-                return String(first)
+                return SaveSourceHandle.displayable(String(first))
+            }
+        }
+        return nil
+    }
+
+    private static func labeledSourceHandle(in evidence: [String]) -> String? {
+        let prefixes = ["Creator handle:", "Source handle:"]
+        for line in evidence.flatMap({ $0.components(separatedBy: .newlines) }) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            for prefix in prefixes {
+                guard let range = trimmed.range(of: prefix, options: [.anchored, .caseInsensitive]) else { continue }
+                let value = String(trimmed[range.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                if let handle = SaveSourceHandle.displayable(value) { return handle }
             }
         }
         return nil
@@ -144,6 +181,48 @@ struct SocialPlaceStructuredHighlights: Codable, Hashable {
     private static func uniqueItems(_ values: [RecommendedItem]) -> [RecommendedItem] {
         var seen = Set<String>()
         return values.filter { seen.insert($0.displayText).inserted }
+    }
+}
+
+/// Stored source handles stay as written. Coordinate-looking values are
+/// filtered at display time and when extracting from evidence, never on decode.
+enum SaveSourceHandle {
+    static func resolved(_ explicit: String?, extracted: String? = nil) -> String? {
+        displayable(explicit) ?? displayable(extracted)
+    }
+
+    static func normalized(_ raw: String?) -> String? {
+        displayable(raw)
+    }
+
+    static func stored(_ raw: String?) -> String? {
+        guard var value = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        if value.hasPrefix("@") { value = String(value.dropFirst()) }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    static func displayable(_ raw: String?) -> String? {
+        guard let value = stored(raw), !looksLikeCoordinate(value), !looksLikeURL(value) else {
+            return nil
+        }
+        return value
+    }
+
+    static func looksLikeCoordinate(_ raw: String) -> Bool {
+        var value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.hasPrefix("@") { value = String(value.dropFirst()) }
+        return value.range(
+            of: #"^[+-]?\d+\.\d+(?:\s*,\s*[+-]?\d+(?:\.\d+)?)?(?:,\d+z.*)?$"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    static func looksLikeURL(_ raw: String) -> Bool {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return value.hasPrefix("http://") || value.hasPrefix("https://") || value.hasPrefix("www.")
     }
 }
 
@@ -181,6 +260,12 @@ struct SocialPlaceEvidenceDiagnostic: Codable, Hashable {
 
     private var lowercasedMissingFields: [String] {
         missingFields.map { $0.lowercased() }
+    }
+
+    /// Attempt logs are pipeline-written. Mark them at origin so confirming a
+    /// clue keeps user caption text and drops only app-generated diagnostics.
+    func candidateEvidence(extras: [String] = []) -> [String] {
+        found + attempts.map(SavvyGeneratedLine.marking) + extras
     }
 }
 
@@ -289,7 +374,7 @@ struct PendingReviewCandidate: Codable {
         self.recommendedItems = recommendedItems.isEmpty ? extracted.recommendedItems : recommendedItems
         self.vibeTags = vibeTags.isEmpty ? extracted.vibeTags : vibeTags
         self.accessNotes = accessNotes.isEmpty ? extracted.accessNotes : accessNotes
-        self.sourceHandle = sourceHandle ?? extracted.sourceHandle
+        self.sourceHandle = SaveSourceHandle.stored(sourceHandle) ?? extracted.sourceHandle
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -345,7 +430,9 @@ struct PendingReviewCandidate: Codable {
         recommendedItems = try container.decodeIfPresent([RecommendedItem].self, forKey: .recommendedItems) ?? extracted.recommendedItems
         vibeTags = try container.decodeIfPresent([String].self, forKey: .vibeTags) ?? extracted.vibeTags
         accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
-        sourceHandle = try container.decodeIfPresent(String.self, forKey: .sourceHandle) ?? extracted.sourceHandle
+        sourceHandle = SaveSourceHandle.stored(
+            try container.decodeIfPresent(String.self, forKey: .sourceHandle)
+        ) ?? extracted.sourceHandle
     }
 
     var shouldRecoverSourceOnServer: Bool {
@@ -467,7 +554,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         self.recommendedItems = recommendedItems.isEmpty ? extracted.recommendedItems : recommendedItems
         self.vibeTags = vibeTags.isEmpty ? extracted.vibeTags : vibeTags
         self.accessNotes = accessNotes.isEmpty ? extracted.accessNotes : accessNotes
-        self.sourceHandle = sourceHandle ?? extracted.sourceHandle
+        self.sourceHandle = SaveSourceHandle.stored(sourceHandle) ?? extracted.sourceHandle
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -523,7 +610,9 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         recommendedItems = try container.decodeIfPresent([RecommendedItem].self, forKey: .recommendedItems) ?? extracted.recommendedItems
         vibeTags = try container.decodeIfPresent([String].self, forKey: .vibeTags) ?? extracted.vibeTags
         accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
-        sourceHandle = try container.decodeIfPresent(String.self, forKey: .sourceHandle) ?? extracted.sourceHandle
+        sourceHandle = SaveSourceHandle.stored(
+            try container.decodeIfPresent(String.self, forKey: .sourceHandle)
+        ) ?? extracted.sourceHandle
     }
 
     var hasReliableCoordinates: Bool {
@@ -887,6 +976,11 @@ extension Place {
         }
 
         let sourceURL = sourceURL(from: candidate.evidence)
+        let classified = Place.classifiedSourceLines(candidate.evidence)
+        let additional = classified.additional.filter { line in
+            guard let sourceURL else { return true }
+            return line != "Source URL: \(sourceURL)"
+        }
         let providerLocation = candidate.providerLocation
         let latitude = refinedMatch?.latitude ?? candidate.latitude ?? providerLocation?.latitude ?? 0
         let longitude = refinedMatch?.longitude ?? candidate.longitude ?? providerLocation?.longitude ?? 0
@@ -904,7 +998,7 @@ extension Place {
                 PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
             status: .wantToGo,
             rating: nil,
-            note: candidate.evidence.joined(separator: "\n"),
+            note: classified.note,
             sourceUrl: sourceURL,
             sourcePlatform: SourcePlatform.from(urlString: sourceURL),
             coordinateSystem: coordinateSystem,
@@ -925,7 +1019,8 @@ extension Place {
             recommendedItems: candidate.recommendedItems.nilIfEmpty,
             vibeTags: candidate.vibeTags.nilIfEmpty,
             accessNotes: candidate.accessNotes.nilIfEmpty,
-            sourceHandle: candidate.sourceHandle
+            sourceHandle: candidate.sourceHandle,
+            additionalSourceEvidence: additional.nilIfEmpty
         )
     }
 

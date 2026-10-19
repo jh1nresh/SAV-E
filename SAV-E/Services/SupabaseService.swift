@@ -14,7 +14,7 @@ protocol SupabaseServiceProtocol {
     func fetchPlaces(for userId: String) async throws -> [Place]
     func savePlace(_ place: Place, userId: String) async throws
     func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult
-    func updatePlace(_ place: Place) async throws
+    func updatePlace(_ place: Place, previous: Place?) async throws
     func deletePlace(_ placeId: UUID) async throws
     func createMemoryCapture(from candidate: PendingReviewCandidate, userId: String) async throws -> UUID
     func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID?) async throws -> UUID
@@ -113,6 +113,9 @@ enum SupabaseError: LocalizedError {
 
 // Existing service fakes opt out; production always creates a server session.
 extension SupabaseServiceProtocol {
+    func updatePlace(_ place: Place) async throws {
+        try await updatePlace(place, previous: nil)
+    }
     func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?) async throws -> SourceSearchRecoveryResult {
         try await recoverSourceOnlyReviewCandidates(captureId: captureId, workflowRunId: workflowRunId, explicitRetry: false)
     }
@@ -274,7 +277,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         return FriendSharedPlaceSaveResult(place: response.place.toPlace(), outcome: outcome)
     }
 
-    func updatePlace(_ place: Place) async throws {
+    func updatePlace(_ place: Place, previous: Place? = nil) async throws {
         guard isConfigured else { return }
 
         var updates: [String: Any?] = [
@@ -282,18 +285,89 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             "address": place.address,
             "category": place.category.rawValue,
             "status": place.status.rawValue,
-            "rating": place.rating,
-            "note": place.note,
-            // Enrichment fields: without these, business photos/hours fetched
-            // on detail open only ever lived in memory and never synced.
-            "google_place_id": place.googlePlaceId,
-            "google_rating": place.googleRating,
-            "google_price_level": place.googlePriceLevel,
-            "price_range": place.priceRange,
-            "opening_hours": place.openingHours,
-            "source_image_url": place.sourceImageUrl,
-            "business_photo_urls": place.businessPhotoUrls,
         ]
+        // Local-vault fallbacks legitimately omit remote enrichment. Send a
+        // field only when it is present on a full write, or when it actually
+        // changed versus `previous`. JSON null is reserved for an explicit
+        // non-nil-to-nil clear.
+        let hasPrevious = previous != nil
+        Self.assignChangedOptional("rating", place.rating, previous: previous?.rating, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("google_place_id", place.googlePlaceId, previous: previous?.googlePlaceId, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("google_rating", place.googleRating, previous: previous?.googleRating, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("google_price_level", place.googlePriceLevel, previous: previous?.googlePriceLevel, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("price_range", place.priceRange, previous: previous?.priceRange, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("opening_hours", place.openingHours, previous: previous?.openingHours, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("source_image_url", place.sourceImageUrl, previous: previous?.sourceImageUrl, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional("business_photo_urls", place.businessPhotoUrls, previous: previous?.businessPhotoUrls, hasPrevious: hasPrevious, into: &updates)
+        // Account-backed attribution lives on `recommender`. Send a handle
+        // only when it is displayable and actually changed, so a photo
+        // enrichment PATCH cannot rewrite or invent one.
+        let nextHandle = SaveSourceHandle.displayable(place.recommender ?? place.sourceHandle)
+        let previousHandle = SaveSourceHandle.displayable(previous?.recommender ?? previous?.sourceHandle)
+        if previous == nil {
+            if let nextHandle { updates["recommender"] = nextHandle }
+        } else if nextHandle != previousHandle {
+            if let nextHandle {
+                updates["recommender"] = nextHandle
+            } else {
+                let nextRaw = SaveSourceHandle.stored(place.recommender ?? place.sourceHandle)
+                // Explicit user clear, or an invalid leftover (coordinate/URL).
+                // A normal edit that still has a valid previous handle and a
+                // missing local copy omits this key via nextHandle == previousHandle
+                // when both displayable values are nil.
+                if nextRaw == nil || SaveSourceHandle.looksLikeCoordinate(nextRaw ?? "") || SaveSourceHandle.looksLikeURL(nextRaw ?? "") {
+                    updates["recommender"] = NSNull()
+                }
+            }
+        }
+        if previous == nil || place.sourcePlatform != previous?.sourcePlatform {
+            updates["source_platform"] = place.sourcePlatform.rawValue
+        }
+        if previous == nil {
+            if let sourceUrl = place.sourceUrl { updates["source_url"] = sourceUrl }
+        } else if place.sourceUrl != previous?.sourceUrl {
+            updates["source_url"] = place.sourceUrl ?? NSNull()
+        }
+        // `places.note` is the user's plain memory. Extra clue evidence,
+        // highlights, vibe, access, and priced recommended items live in
+        // `memory_meta`. Rewrite the column with the same user text when extra
+        // evidence changes so leftover SavvyMemory envelopes are healed; never
+        // dump structured memory into this field. Photo enrichment (unchanged
+        // note and memory) omits both. Assign `NSNull` for a cleared note —
+        // `[String: Any?]` drops a bare `nil` instead of sending JSON null.
+        let previousRawNote = previous?.note
+        let previousWasEnvelope = previousRawNote != nil
+            && Place.decodedWireNote(previousRawNote).note != previousRawNote
+        if previous == nil {
+            if let note = place.userFacingNote { updates["note"] = note }
+        } else if place.userFacingNote != previous?.userFacingNote
+            || previousWasEnvelope
+            || place.hasAdditionalEvidence(unlike: previous)
+            || place.hasStructuredDetails(unlike: previous) {
+            updates["note"] = place.userFacingNote ?? NSNull()
+        }
+        let nextMeta = place.memoryMetaForPersistence()
+        let previousMeta = previous?.memoryMetaForPersistence()
+        // Partial callers (photo enrichment) pass `previous` so unchanged
+        // structured memory is omitted instead of wiped.
+        if previous == nil {
+            if let nextMeta, !nextMeta.isEmpty {
+                updates["memory_meta"] = try nextMeta.jsonObject()
+            }
+        } else if nextMeta != previousMeta {
+            if let nextMeta, !nextMeta.isEmpty {
+                updates["memory_meta"] = try nextMeta.jsonObject()
+            } else if previousMeta != nil {
+                updates["memory_meta"] = try PlaceMemoryMeta.cleared.jsonObject()
+            }
+        }
+        let nextDishes = place.savedRecommendedItems.map(\.name)
+        let previousDishes = previous?.savedRecommendedItems.map(\.name) ?? []
+        if previous == nil {
+            if !nextDishes.isEmpty { updates["extracted_dishes"] = nextDishes }
+        } else if nextDishes != previousDishes {
+            updates["extracted_dishes"] = nextDishes
+        }
         if place.createdAt > .distantPast {
             updates["created_at"] = ISO8601DateFormatter().string(from: place.createdAt)
         }
@@ -1245,6 +1319,24 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let object = values.mapValues { $0 ?? NSNull() }
         return try JSONSerialization.data(withJSONObject: object)
     }
+
+    private static func assignChangedOptional<Value: Equatable>(
+        _ key: String,
+        _ current: Value?,
+        previous: Value?,
+        hasPrevious: Bool,
+        into updates: inout [String: Any?]
+    ) {
+        if !hasPrevious {
+            if let current {
+                updates[key] = current
+            }
+            return
+        }
+        if current != previous {
+            updates[key] = current ?? NSNull()
+        }
+    }
 }
 
 // MARK: - Row DTOs (snake_case ↔ Swift models)
@@ -1869,15 +1961,18 @@ struct PlaceRecoveryDecisionDraft: Equatable {
     var reason: String?
 
     var body: [String: Any?] {
-        [
+        var payload: [String: Any?] = [
             "action": action,
             "candidate_id": candidateId?.uuidString,
             "final_place_id": finalPlaceId?.uuidString,
-            "final_place": finalPlacePayload,
             "reason_code": reasonCode,
             "edited_payload": editedPayload,
             "reason": reason,
         ]
+        if let finalPlacePayload {
+            payload["final_place"] = finalPlacePayload
+        }
+        return payload
     }
 
     static func == (lhs: PlaceRecoveryDecisionDraft, rhs: PlaceRecoveryDecisionDraft) -> Bool {
@@ -2004,6 +2099,7 @@ private struct PlaceRow: Codable {
     let source_image_url: String?
     let business_photo_urls: [String]?
     let extracted_dishes: [String]?
+    let memory_meta: PlaceMemoryMeta?
     let price_range: String?
     let recommender: String?
     let google_rating: Double?
@@ -2015,7 +2111,53 @@ private struct PlaceRow: Codable {
     let friend_share_code: String?
 
     func toPlace() -> Place {
-        Place(
+        let decoded = Place.decodedWireNote(note)
+        let meta = memory_meta
+        let fromEnvelope = decoded.highlights.recommendedItems
+        let fromDishes = (extracted_dishes ?? []).map { RecommendedItem(name: $0, price: nil) }
+        let recommendedItems: [RecommendedItem]?
+        if let fromMeta = meta?.recommended {
+            if fromMeta.isEmpty {
+                recommendedItems = []
+            } else {
+                var items = fromMeta
+                for item in fromEnvelope + fromDishes {
+                    if let index = items.firstIndex(where: { $0.name.caseInsensitiveCompare(item.name) == .orderedSame }) {
+                        if items[index].price == nil { items[index].price = item.price }
+                    } else {
+                        items.append(item)
+                    }
+                }
+                recommendedItems = items
+            }
+        } else {
+            var items: [RecommendedItem] = []
+            for item in fromEnvelope + fromDishes {
+                if let index = items.firstIndex(where: { $0.name.caseInsensitiveCompare(item.name) == .orderedSame }) {
+                    if items[index].price == nil { items[index].price = item.price }
+                } else {
+                    items.append(item)
+                }
+            }
+            recommendedItems = items.isEmpty ? nil : items
+        }
+        let additional: [String]?
+        if let evidence = meta?.evidence {
+            additional = evidence.filter { line in
+                guard let source_url else { return true }
+                return line != "Source URL: \(source_url)"
+            }
+        } else {
+            let lines = decoded.additional.filter { line in
+                guard let source_url else { return true }
+                return line != "Source URL: \(source_url)"
+            }
+            additional = lines.isEmpty ? nil : lines
+        }
+        let highlights = meta?.highlights ?? (decoded.highlights.placeHighlights.isEmpty ? nil : decoded.highlights.placeHighlights)
+        let vibe = meta?.vibe ?? (decoded.highlights.vibeTags.isEmpty ? nil : decoded.highlights.vibeTags)
+        let access = meta?.access ?? (decoded.highlights.accessNotes.isEmpty ? nil : decoded.highlights.accessNotes)
+        return Place(
             id: id,
             name: name,
             address: address,
@@ -2025,7 +2167,7 @@ private struct PlaceRow: Codable {
             category: PlaceCategory(rawValue: category) ?? .food,
             status: PlaceStatus(rawValue: status) ?? .wantToGo,
             rating: rating,
-            note: note,
+            note: decoded.note,
             sourceUrl: source_url,
             sourcePlatform: SourcePlatform(rawValue: source_platform) ?? .other,
             coordinateSystem: coordinate_system.flatMap(PlaceCoordinateSystem.init(rawValue:)),
@@ -2042,7 +2184,12 @@ private struct PlaceRow: Codable {
             openingHours: opening_hours,
             createdAt: memoryCollectionDate(created_at),
             visibility: visibility.flatMap(PlaceVisibility.init(rawValue:)),
-            socialSignal: social_signal?.toSignal()
+            socialSignal: social_signal?.toSignal(),
+            placeHighlights: highlights,
+            recommendedItems: recommendedItems,
+            vibeTags: vibe,
+            accessNotes: access,
+            additionalSourceEvidence: additional
         )
     }
 
@@ -2058,7 +2205,7 @@ private struct PlaceRow: Codable {
             category: place.category.rawValue,
             status: place.status.rawValue,
             rating: place.rating,
-            note: place.note,
+            note: place.userFacingNote,
             source_url: place.sourceUrl,
             source_platform: place.sourcePlatform.rawValue,
             coordinate_system: place.coordinateSystem?.rawValue,
@@ -2068,6 +2215,7 @@ private struct PlaceRow: Codable {
             source_image_url: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
             business_photo_urls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
             extracted_dishes: place.extractedDishes,
+            memory_meta: place.memoryMetaForPersistence(),
             price_range: place.priceRange,
             recommender: place.recommender,
             google_rating: place.googleRating,

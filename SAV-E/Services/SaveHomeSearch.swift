@@ -109,7 +109,7 @@ struct SaveHomeSearch {
 
 enum SaveHomeReviewQueue {
     static func isSourceClue(_ candidate: PlaceReviewCandidate) -> Bool {
-        candidate.status.lowercased() == "source_only" || !candidate.hasReliableCoordinates
+        candidate.status.lowercased() == "source_only" || !candidate.hasSavableLocation
     }
 
     static func isHomePreview(_ candidate: PlaceReviewCandidate) -> Bool {
@@ -142,7 +142,7 @@ struct SaveHomeReviewCounts: Equatable {
     var total: Int { candidates + sources }
 
     init(_ items: [PlaceReviewCandidate]) {
-        sources = items.filter { $0.status == "source_only" || !$0.hasReliableCoordinates }.count
+        sources = items.filter(SaveHomeReviewQueue.isSourceClue).count
         candidates = items.count - sources
     }
 

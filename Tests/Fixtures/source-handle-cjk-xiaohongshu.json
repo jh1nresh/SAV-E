@@ -1,0 +1,14 @@
+{
+  "name": "Da'an pour-over",
+  "address": "Taipei",
+  "geo": null,
+  "status": "review_candidate",
+  "confidence": 0.72,
+  "proofLevel": "source_link",
+  "evidence": [
+    "Source URL: https://www.xiaohongshu.com/explore/65abc123",
+    "Creator handle: @吃货小王"
+  ],
+  "missingInfo": ["User confirmation required"],
+  "sourceHandle": "吃货小王"
+}
