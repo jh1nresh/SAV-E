@@ -1163,7 +1163,8 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             let data = try JSONSerialization.data(withJSONObject: [payload])
             return (200, String(data: data, encoding: .utf8) ?? "[]")
         }
-        let reloaded = try XCTUnwrap(try await service.fetchPlaces(for: "owner").first)
+        let places = try await service.fetchPlaces(for: "owner")
+        let reloaded = try XCTUnwrap(places.first)
         XCTAssertNil(reloaded.userFacingNote)
         XCTAssertNil(reloaded.note)
     }
