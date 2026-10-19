@@ -1653,11 +1653,44 @@ final class MapViewModel: ObservableObject {
 
     @discardableResult
     func saveReviewCandidateAsPlace(_ candidate: PlaceReviewCandidate, nameOverride: String? = nil) async throws -> Place {
-        guard let userId = authService.currentUserId else {
-            throw SupabaseError.notAuthenticated
-        }
         guard candidate.status != "source_only" else {
             throw ReviewCandidateError.needsReliableCoordinates
+        }
+
+        if !usesRemotePersistence {
+            let place = Place.from(candidate, refinedMatch: nil, nameOverride: nameOverride)
+            guard place.hasValidCoordinate else {
+                throw ReviewCandidateError.needsReliableCoordinates
+            }
+            if let match = existingSavedPlace(matching: place) {
+                let existing = try await mergeSavedSources(place, into: match)
+                try saveLocalVaultService.removeReviewCandidate(candidate.id)
+                reviewCandidates.removeAll { $0.id == candidate.id }
+                if selectedReviewCandidate?.id == candidate.id {
+                    selectedReviewCandidate = nil
+                }
+                focusSavedPlace(existing, showStampMoment: false)
+                clearExactSearchResolution(matching: candidate.id)
+                return existing
+            }
+            if isOverFreeSavedPlaceLimit {
+                requestSavedPlaceLimitPaywall()
+                throw SavePlaceLimitError.parkedInUnplacedInbox
+            }
+            _ = try saveLocalVaultService.saveConfirmedPlace(place)
+            try saveLocalVaultService.removeReviewCandidate(candidate.id)
+            places = [place] + places
+            reviewCandidates.removeAll { $0.id == candidate.id }
+            if selectedReviewCandidate?.id == candidate.id {
+                selectedReviewCandidate = nil
+            }
+            revealImportedPlaces([place])
+            clearExactSearchResolution(matching: candidate.id)
+            return place
+        }
+
+        guard let userId = authService.currentUserId else {
+            throw SupabaseError.notAuthenticated
         }
 
         let confirmationGeneration = authService.sessionGeneration
@@ -1675,47 +1708,12 @@ final class MapViewModel: ObservableObject {
             learnedOwnedPlace = fetched
         }
 
-        let refinedMatch: GooglePlaceMatch?
-        if usesRemotePersistence {
-            refinedMatch = try await refinedMatchIfNeeded(for: candidate)
-        } else {
-            refinedMatch = nil
-        }
+        let refinedMatch = try await refinedMatchIfNeeded(for: candidate)
         guard authService.currentUserId == userId, authService.sessionGeneration == confirmationGeneration else { throw CancellationError() }
         let place = Place.from(candidate, refinedMatch: refinedMatch, nameOverride: nameOverride)
 
         guard place.hasValidCoordinate else {
             throw ReviewCandidateError.needsReliableCoordinates
-        }
-
-        if !usesRemotePersistence {
-            if let match = learnedOwnedPlace ?? existingSavedPlace(matching: place) {
-                let existing = try await mergeSavedSources(place, into: match)
-                try saveLocalVaultService.removeReviewCandidate(candidate.id)
-                reviewCandidates.removeAll { $0.id == candidate.id }
-                if selectedReviewCandidate?.id == candidate.id {
-                    selectedReviewCandidate = nil
-                }
-                focusSavedPlace(existing, showStampMoment: false)
-                clearExactSearchResolution(matching: candidate.id)
-                return existing
-            }
-
-            if isOverFreeSavedPlaceLimit {
-                requestSavedPlaceLimitPaywall()
-                throw SavePlaceLimitError.parkedInUnplacedInbox
-            }
-
-            _ = try saveLocalVaultService.saveConfirmedPlace(place)
-            try saveLocalVaultService.removeReviewCandidate(candidate.id)
-            places = [place] + places
-            reviewCandidates.removeAll { $0.id == candidate.id }
-            if selectedReviewCandidate?.id == candidate.id {
-                selectedReviewCandidate = nil
-            }
-            revealImportedPlaces([place])
-            clearExactSearchResolution(matching: candidate.id)
-            return place
         }
 
         if let match = learnedOwnedPlace ?? existingSavedPlace(matching: place) {
