@@ -43,7 +43,7 @@ struct SaveDoodleHomeView: View {
                             .padding(.top, SaveSpace.md)
                     } else {
                         miniMap
-                            .padding(.top, presentation.reviewCount > 0 || showsLocationPrompt ? SaveSpace.md : SaveSpace.md)
+                            .padding(.top, SaveSpace.md)
                         placeList
                             .padding(.top, SaveSpace.md)
                         collectedStrip
