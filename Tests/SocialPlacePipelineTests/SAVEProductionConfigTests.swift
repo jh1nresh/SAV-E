@@ -1171,7 +1171,8 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             let data = try JSONSerialization.data(withJSONObject: [payload])
             return (200, String(data: data, encoding: .utf8) ?? "[]")
         }
-        let reloaded = try XCTUnwrap(try await service.fetchPlaces(for: "owner").first)
+        let reloadedPlaces = try await service.fetchPlaces(for: "owner")
+        let reloaded = try XCTUnwrap(reloadedPlaces.first)
         XCTAssertEqual(reloaded.note, "Must try the bun")
         XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote(reloaded.note), "Must try the bun")
         XCTAssertEqual(reloaded.placeHighlights, ["Window seats", "Single-origin pour-over"])
