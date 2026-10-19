@@ -6,6 +6,9 @@
 -- Apply in the intended schema as its backend table creator/owner. Browser
 -- table grants inherited from a global default ACL or through role membership
 -- (including SET-able NOINHERIT memberships) need separate authorization.
+-- Implicit predefined privileges (pg_read_all_data, pg_write_all_data,
+-- pg_maintain) and SUPERUSER/BYPASSRLS memberships also need separate
+-- authorization; they do not appear in table ACLs.
 -- Direct PUBLIC/anon/authenticated revokes do not remove privileges granted
 -- to a parent role that those browser roles can inherit or SET ROLE to.
 do $backend_data_privacy$
@@ -82,7 +85,28 @@ declare
 begin
     -- MEMBER covers INHERIT (USAGE) and SET-able NOINHERIT memberships.
     -- SET ROLE parent can then use parent grants, including TRUNCATE, which
-    -- RLS does not govern.
+    -- RLS does not govern. Implicit predefined data/maintenance roles and
+    -- SUPERUSER/BYPASSRLS also survive REVOKE and ordinary RLS; name lookup
+    -- is a no-op on servers where pg_maintain does not exist.
+    if exists (
+        select 1 from pg_roles browser
+        where browser.rolname in ('anon', 'authenticated')
+          and (
+              pg_has_role(browser.oid, current_user::regrole, 'MEMBER')
+              or exists (
+                  select 1 from pg_roles privileged
+                  where (
+                      privileged.rolsuper
+                      or privileged.rolbypassrls
+                      or privileged.rolname in ('pg_read_all_data', 'pg_write_all_data', 'pg_maintain')
+                  )
+                    and pg_has_role(browser.oid, privileged.oid, 'MEMBER')
+              )
+          )
+    ) then
+        raise exception 'Browser role membership reaches a backend owner or privileged role; separate authorized remediation required';
+    end if;
+
     if exists (
         select 1 from pg_default_acl d
         cross join lateral aclexplode(d.defaclacl) a

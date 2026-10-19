@@ -373,10 +373,15 @@ to a parent role, including SET-able NOINHERIT memberships, or privileges
 granted to those browser roles by another grantor. It also refuses managed
 tables owned by `anon` or `authenticated`, because owner privileges survive
 `REVOKE` and RLS without `FORCE`. Column-level grants to those browser roles
-also survive table `REVOKE` and are refused. It never changes
-those global defaults itself. Fresh schema and any re-apply to an existing
-install must use `-v ON_ERROR_STOP=1 -1` so a refused guard cannot leave
-tables committed. Apply the migration transactionally and verify effective privileges
+also survive table `REVOKE` and are refused. Browser-reachable membership in
+this applying owner, a `SUPERUSER` or `BYPASSRLS` role, or the implicit
+predefined roles `pg_read_all_data`, `pg_write_all_data`, and `pg_maintain`
+(when present) is refused before any ACL change: those rights do not appear
+in table or default ACLs. Memberships themselves are never rewritten.
+It never changes those global defaults itself. Fresh schema and any re-apply
+to an existing install must use `-v ON_ERROR_STOP=1 -1` so a refused guard
+cannot leave tables committed. Both stop-on-error and one transaction are
+required. Apply the migration transactionally and verify effective privileges
 plus RLS after an authorized production apply; `/health/entitlements` checks
 storage shape, not this access boundary.
 
@@ -387,8 +392,9 @@ friend-rating, Sendblue, and payment paths as an ordinary table owner and a
 non-superuser `service_role` with `BYPASSRLS`. It also checks legacy data,
 idempotence, absent optional tables/roles, unrelated-table preservation, future
 private defaults, rejection of incompatible global defaults, inherited
-membership grants, SET-able NOINHERIT memberships, delegated-grantor
-browser grants, browser-role table ownership, column-level browser
-grants, and that a refused fresh-schema guard creates no managed
-tables. Coverage fails when a new
+membership grants, SET-able NOINHERIT memberships with a real browser
+`session_user` login, delegated-grantor browser grants, browser-role table
+ownership, column-level browser grants, implicit predefined data-role
+memberships, privileged-role membership, and an actual `psql` failure and
+rollback on incompatible global defaults. Coverage fails when a new
 source-owned table is missing from either static allowlist.
