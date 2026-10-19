@@ -265,10 +265,12 @@ const verifyRelatedSourcesPublicVenue = createCachedGooglePublicVenueVerifier({
 const pool = new Pool({
   connectionString: databaseUrl,
   ssl: databaseSSLConfig(databaseUrl),
+  options: "-c search_path=public",
 });
 // Isolate health probes from user requests; bound connection, queue and SQL waits.
 const analysisHealthPool = new Pool({
   connectionString: databaseUrl, ssl: databaseSSLConfig(databaseUrl),
+  options: "-c search_path=public",
   max: 1, connectionTimeoutMillis: 2_000, statement_timeout: 2_000, query_timeout: 3_000,
   idleTimeoutMillis: 10_000, allowExitOnIdle: true,
 });

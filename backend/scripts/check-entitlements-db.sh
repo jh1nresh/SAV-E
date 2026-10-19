@@ -32,4 +32,4 @@ mkdir "$fixture_root/socket"
 started=true
 "$pg_bin/createdb" -h "$fixture_root/socket" -p 55439 -U save_fixture save_paid_fixture
 SAVE_ENTITLEMENT_TEST_DATABASE_URL="postgresql://save_fixture@localhost:55439/save_paid_fixture?host=$fixture_root/socket" \
-  node --test dist/entitlementPersistence.test.js
+  node --test --test-concurrency=1 dist/entitlementPersistence.test.js dist/backendDataPrivacy.test.js

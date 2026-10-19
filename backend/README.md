@@ -55,8 +55,10 @@ npm run start
 Apply schema / pending SQL (see **Deploy checklist** below and `sql/README.md`):
 
 ```bash
-# From repository root, new empty database only:
-psql "$DATABASE_URL" -f backend/sql/schema.sql
+# From repository root, new empty database only. Re-applying to an existing
+# install also needs -1 and ON_ERROR_STOP so a refused privacy guard cannot
+# leave tables committed with unsafe grants.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f backend/sql/schema.sql
 
 # From backend/: pending additive file (dry-read, then apply). Founder-owned.
 cd backend
@@ -87,14 +89,20 @@ authorization to migrate or deploy.
    - pending additive files, oldest first: `sql/analysis-usage.sql` (if those
      tables are not already present), then `sql/friend-ratings.sql`, then any
      later file listed in `sql/README.md`
+   - `sql/backend-data-privacy.sql` — existing installs only, after any
+     optional table migrations; separately authorized. Fresh schema already
+     includes the same boundary.
    - `friend-ratings.sql` creates `idx_places_id_user_id` if missing before the
      composite FK, so a database that already has `places` but lacks that index
      does not fail the way the #241 prod apply did
    - From `backend/`: dry-read, then apply: `./scripts/apply-sql.sh friend-ratings.sql`
      then `./scripts/apply-sql.sh friend-ratings.sql --apply`
+   - Existing-install privacy apply, founder-owned: dry-read, then apply
+     `./scripts/apply-sql.sh backend-data-privacy.sql` then
+     `./scripts/apply-sql.sh backend-data-privacy.sql --apply`
    - If `psql` rejects `sslmode=no-verify` (from `backend/`; known prod URL
      only carries that query param):
-     `PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -v ON_ERROR_STOP=1 -1 -f sql/friend-ratings.sql`
+     `PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f sql/friend-ratings.sql`
      Use the helper when the URL has other libpq query params — it drops
      `sslmode` only.
 2. Verify tables (read-only). Expect `t|t|t`:
@@ -105,6 +113,10 @@ authorization to migrate or deploy.
              to_regclass('public.friend_restaurant_ratings') is not null,
              to_regclass('public.friend_rating_saves') is not null;"
    ```
+
+   After an authorized privacy apply, also verify catalog-only that `places`
+   has RLS on and that `anon`/`authenticated` have no table privileges.
+   `/health/entitlements` does not inspect this boundary.
 
 3. Railway-deploy this backend (separate human approval; not this repository
    change and not `npm start`).
@@ -302,8 +314,8 @@ Public collections, OpenAPI, `llms.txt`, paid/API-key access, broad reputation g
 `npm run validate` requires PostgreSQL server tools (`initdb`, `pg_ctl`,
 `createdb`, discovered through `pg_config --bindir`). After the regular test
 suite, `npm run test:entitlements:db` creates a temporary socket-only database,
-runs the real ownership/ordering/migration fixtures, and shuts it down. It never
-uses the application's `DATABASE_URL`. Missing server tools fail validation;
+runs the real ownership/ordering/migration and backend-privacy fixtures serially,
+and shuts it down. It never uses the application's `DATABASE_URL`. Missing server tools fail validation;
 the required backend CI job therefore cannot silently skip this payment gate.
 
 Before an authorized backend deployment, apply
@@ -326,3 +338,96 @@ does not inspect these database permissions. Confirm that endpoint is ready
 before enabling purchases. App Store Connect configuration and real Sandbox
 purchase/restore/refund validation remain separate launch gates. Never apply this migration to production
 as part of ordinary local verification.
+
+### Backend-owned database privacy
+
+`sql/backend-data-privacy.sql` is the reviewed allowlist for the 64 tables
+currently declared by backend SQL and runtime stores. `schema.sql` includes the
+same protection for fresh installs. Existing installations need a separately
+authorized apply through the SQL helper, as the backend table creator/owner in
+the intended schema, after any optional table migrations. The migration is
+idempotent and skips absent optional tables; it does not create them or rewrite
+user records, table ownership, confirmation state, or subscription status.
+
+For existing allowlisted tables it enables RLS without `FORCE` and revokes all
+table privileges from `PUBLIC` and existing `anon`/`authenticated` roles.
+It also revokes this creator's default sequence privileges from those roles,
+both globally and in the current schema, and revokes all grants on owned
+serial/identity sequences of managed tables (including runtime `sendblue_*`
+`serial` tables). The backend table owner keeps implicit sequence `USAGE` so
+inserts can still `nextval`; existing `service_role` sequence grants stay.
+Backend table-owner access and existing `service_role` grants are retained;
+the Supabase gateway must keep its service-role credential server-side and
+verify the caller before accessing private data. Public application projections
+continue through the backend's routes, rather than direct browser table access.
+
+The migration also removes browser default table grants for the executing
+creator in the current schema, and revokes schema `CREATE` and database
+`CREATE` from `PUBLIC` and existing `anon`/`authenticated` roles before those
+defaults are relied on. The backend pool, photo backfill CLI, SQL apply helper, and documented
+direct `psql` fallbacks pin `search_path=public`
+so an already planted `$user` schema cannot shadow unqualified runtime DDL.
+`backend-data-privacy.sql` targets `public` unless `save.privacy_schema` is set
+for an isolated fixture; it does not trust `current_schema()`.
+Later runtime/optional tables created by that same role therefore start
+private before any additional RLS setup. A leftover schema `CREATE` grant
+would let a browser role pre-create an absent runtime table such as
+`sendblue_saved_places`; `CREATE TABLE IF NOT EXISTS` would then accept that
+browser-owned object, and the owner bypasses RLS. Unknown
+**existing** tables, other creators' defaults, and database-global TABLE
+defaults are left intact. This creator's global SEQUENCE defaults to
+`PUBLIC`/`anon`/`authenticated` are revoked. A future table that intentionally needs browser access must have an
+explicitly reviewed grant/policy. Re-apply the privacy migration after installing
+optional source-owned tables to enable their RLS too.
+
+PostgreSQL cannot subtract global default grants with a schema-specific revoke.
+The migration therefore refuses current-creator global default table grants to
+`PUBLIC`, `anon`, `authenticated`, or any role those browser roles inherit
+through membership; resolving those requires separate scoped authority. Direct
+revokes from `PUBLIC`/`anon`/`authenticated` do not remove privileges granted
+to a parent role, including SET-able NOINHERIT memberships, or privileges
+granted to those browser roles by another grantor. It also refuses managed
+tables owned by `anon` or `authenticated`, because owner privileges survive
+`REVOKE` and RLS without `FORCE`. Column-level grants to those browser roles
+also survive table `REVOKE` and are refused. Browser-reachable membership in
+this applying owner, a `SUPERUSER` or `BYPASSRLS` role, or the implicit
+predefined roles `pg_read_all_data`, `pg_write_all_data`, and `pg_maintain`
+(when present) is refused before any ACL change: those rights do not appear
+in table or default ACLs. Memberships themselves are never rewritten.
+Inherited sequence defaults or owned-sequence grants to a parent role those
+browser roles can `SET ROLE` to are refused, using the same `MEMBER` check
+as tables; those parent grants are never rewritten. Sequence grants issued
+to browser roles by another grantor are refused the same way as table
+foreign-grantor ACLs. Inherited or foreign-grantor schema `CREATE` is
+refused the same way, because `REVOKE CREATE` from `PUBLIC`/`anon`/
+`authenticated` cannot remove those grants. Inherited or foreign-grantor
+database `CREATE` is refused for the same reason. It never changes global
+TABLE defaults itself. It does revoke this creator's global and schema
+SEQUENCE defaults to `PUBLIC`/`anon`/`authenticated`. Fresh schema and any
+re-apply to an existing install must use `-v ON_ERROR_STOP=1 -1` so a refused
+guard cannot leave tables committed. Both stop-on-error and one transaction are
+required. Apply the migration transactionally and verify effective privileges
+plus RLS after an authorized production apply; `/health/entitlements` checks
+storage shape, not this access boundary.
+
+The required disposable database gate tests every allowlisted table against
+real browser-role SELECT/INSERT/UPDATE/DELETE/TRUNCATE attempts and effective
+table privileges, then exercises private profile/place/capture/analysis,
+friend-rating, Sendblue, and payment paths as an ordinary table owner and a
+non-superuser `service_role` with `BYPASSRLS`. It also checks legacy data,
+idempotence, absent optional tables/roles, unrelated-table preservation, future
+private defaults, rejection of incompatible global defaults, inherited
+membership grants, SET-able NOINHERIT memberships with a real browser
+`session_user` login, delegated-grantor browser grants, browser-role table
+ownership, column-level browser grants, implicit predefined data-role
+memberships, privileged-role membership, an actual `psql` failure and
+rollback on incompatible global defaults, the QA serial-sequence path:
+after Supabase-style table and sequence defaults, a runtime
+`sendblue_saved_places` (`id serial`) leaves `anon` unable to read
+`last_value` or `setval`, the backend insert still succeeds, and a
+`backend-data-privacy.sql` re-run stays closed, and the QA schema-CREATE
+path: a PG14-style `CREATE` grant lets `anon` plant `sendblue_saved_places`
+and keep ownership through `CREATE TABLE IF NOT EXISTS` (owner bypasses
+RLS), then the privacy apply removes browser `CREATE` so that plant cannot
+happen. Coverage fails when a new
+source-owned table is missing from either static allowlist.
