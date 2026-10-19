@@ -25,6 +25,7 @@ struct SaveProPaywallView: View {
 
     @State private var storeKit = SaveStoreKitService.shared
     @State private var selectedProductID: String = SAVEProAccessPolicy.ProductID.annual
+    @State private var isRestoring = false
     @State private var isPurchasing = false
     @State private var statusMessage: String?
 
@@ -35,6 +36,8 @@ struct SaveProPaywallView: View {
                     header
                     boundaryPanel
                     offers
+                    operationStatus
+                    accountNotice
                     legalFooter
                 }
                 .padding(SaveTheme.Spacing.lg)
@@ -66,6 +69,7 @@ struct SaveProPaywallView: View {
                         .font(SaveTheme.Typography.supporting)
                         .foregroundStyle(SaveAtlasPalette.forest)
                     }
+                    .disabled(isRestoring || isPurchasing)
                     .accessibilityIdentifier("paywall.restore")
                 }
             }
@@ -126,8 +130,7 @@ struct SaveProPaywallView: View {
                 items: [
                     languageSettings.localized(english: "Unlimited saved places and Map Stamps", traditionalChinese: "無限收藏地點與 Map Stamp"),
                     languageSettings.localized(english: "Your private map and notebooks", traditionalChinese: "你的私人地圖與筆記本"),
-                    languageSettings.localized(english: "Search across everything you saved", traditionalChinese: "搜尋你收藏過的所有內容"),
-                    languageSettings.localized(english: "Opening and editing existing trips", traditionalChinese: "開啟與編輯既有行程")
+                    languageSettings.localized(english: "Search across everything you saved", traditionalChinese: "搜尋你收藏過的所有內容")
                 ]
             )
 
@@ -135,8 +138,6 @@ struct SaveProPaywallView: View {
                 title: languageSettings.localized(english: "Counts as an AI assist", traditionalChinese: "計入 AI 協助"),
                 tint: SaveAtlasPalette.lavender,
                 items: [
-                    languageSettings.localized(english: "Ask Savvy answers that need a model", traditionalChinese: "需要模型回答的 Ask Savvy"),
-                    languageSettings.localized(english: "Generating a trip or gap suggestions", traditionalChinese: "生成行程或補齊建議"),
                     languageSettings.localized(english: "Link parsing that can't be resolved locally", traditionalChinese: "無法在本機解析的連結")
                 ]
             )
@@ -175,7 +176,13 @@ struct SaveProPaywallView: View {
 
     @ViewBuilder
     private var offers: some View {
-        if !SAVEProAccessPolicy.purchasingIsAvailable {
+        switch Self.productPresentation(
+            purchasingAvailable: SAVEProAccessPolicy.purchasingIsAvailable,
+            hasProducts: !storeKit.products.isEmpty,
+            isLoading: storeKit.isLoadingProducts,
+            hasError: storeKit.lastError != nil
+        ) {
+        case .notForSale:
             // Honest empty state. Showing a dead "Subscribe" button before the
             // products exist would imply a transaction that cannot happen.
             VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
@@ -199,20 +206,22 @@ struct SaveProPaywallView: View {
             .background(SaveAtlasPalette.mint.opacity(0.22))
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .accessibilityIdentifier("paywall.notForSale")
-        } else if storeKit.products.isEmpty {
-            ProgressView()
+        case .loading:
+            ProgressView(languageSettings.localized(
+                english: "Loading subscription options…",
+                traditionalChinese: "正在載入訂閱方案…"
+            ))
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, SaveTheme.Spacing.xl)
-        } else {
+                .accessibilityIdentifier("paywall.loading")
+        case .failed:
+            unavailableProducts(failed: true)
+        case .unavailable:
+            unavailableProducts(failed: false)
+        case .available:
             VStack(spacing: SaveTheme.Spacing.md) {
                 ForEach(storeKit.products, id: \.id) { product in
                     offerRow(product)
-                }
-
-                if let statusMessage {
-                    Text(statusMessage)
-                        .font(SaveTheme.Typography.supporting)
-                        .foregroundStyle(SaveAtlasPalette.coral)
                 }
 
                 Button {
@@ -225,10 +234,80 @@ struct SaveProPaywallView: View {
                     }
                 }
                 .buttonStyle(SaveBrandPrimaryButtonStyle(fill: SaveAtlasPalette.honey))
-                .disabled(isPurchasing)
+                .disabled(isPurchasing || isRestoring)
                 .accessibilityIdentifier("paywall.continue")
             }
         }
+    }
+
+    enum ProductPresentation: Equatable {
+        case notForSale, loading, failed, unavailable, available
+    }
+
+    /// Loading takes precedence over the previous error during a retry.
+    static func productPresentation(
+        purchasingAvailable: Bool, hasProducts: Bool, isLoading: Bool, hasError: Bool
+    ) -> ProductPresentation {
+        guard purchasingAvailable else { return .notForSale }
+        if hasProducts { return .available }
+        if isLoading { return .loading }
+        return hasError ? .failed : .unavailable
+    }
+
+    private func unavailableProducts(failed: Bool) -> some View {
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.md) {
+            Text(failed
+                 ? languageSettings.localized(english: "Couldn't load subscription options", traditionalChinese: "無法載入訂閱方案")
+                 : languageSettings.localized(english: "Subscription options aren't available yet", traditionalChinese: "訂閱方案目前尚不可用"))
+                .font(SaveTheme.Typography.cardTitle)
+                .foregroundStyle(SaveAtlasPalette.forest)
+            Text(languageSettings.localized(
+                english: "Try again later. You can still save places and use your private map.",
+                traditionalChinese: "請稍後重試。你仍可收藏地點並使用私人地圖。"
+            ))
+            .font(SaveAtlasType.body(13))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .fixedSize(horizontal: false, vertical: true)
+            Button {
+                Task { await storeKit.loadProducts() }
+            } label: {
+                Text(languageSettings.localized(english: "Try again", traditionalChinese: "重試"))
+            }
+            .buttonStyle(SaveBrandPrimaryButtonStyle(fill: SaveAtlasPalette.honey))
+            .disabled(storeKit.isLoadingProducts || isPurchasing || isRestoring)
+            .accessibilityIdentifier("paywall.retryProducts")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(SaveTheme.Spacing.lg)
+        .background(SaveAtlasPalette.paper)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityIdentifier(failed ? "paywall.productsFailed" : "paywall.productsUnavailable")
+    }
+
+    /// Operation feedback must remain visible even without products or sales enabled.
+    @ViewBuilder
+    private var operationStatus: some View {
+        if isRestoring {
+            ProgressView(languageSettings.localized(english: "Restoring purchases…", traditionalChinese: "正在恢復購買…"))
+        }
+        if let statusMessage {
+            Text(statusMessage)
+                .font(SaveTheme.Typography.supporting)
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("paywall.status")
+        }
+    }
+
+    private var accountNotice: some View {
+        Text(languageSettings.localized(
+            english: "Pro is linked to the Savvy account used at purchase. To restore on another device, sign in to that same Savvy account and the Apple Account used to purchase. Restoring does not automatically transfer Pro to a different Savvy account.",
+            traditionalChinese: "Pro 綁定購買時使用的 Savvy 帳號。若要在其他裝置恢復，請登入同一個 Savvy 帳號及原購買的 Apple 帳戶。恢復購買不會自動將 Pro 轉移至其他 Savvy 帳號。"
+        ))
+        .font(SaveAtlasType.body(13))
+        .foregroundStyle(SaveAtlasPalette.muted)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityIdentifier("paywall.accountBinding")
     }
 
     private func offerRow(_ product: Product) -> some View {
@@ -331,6 +410,8 @@ struct SaveProPaywallView: View {
 
     private func purchaseSelected() async {
         guard let product = storeKit.products.first(where: { $0.id == selectedProductID }) else { return }
+        guard !isPurchasing, !isRestoring else { return }
+        statusMessage = nil
         isPurchasing = true
         defer { isPurchasing = false }
 
@@ -358,6 +439,10 @@ struct SaveProPaywallView: View {
     }
 
     private func restore() async {
+        guard !isRestoring, !isPurchasing else { return }
+        isRestoring = true
+        statusMessage = nil
+        defer { isRestoring = false }
         SaveHaptics.tap()
         switch await storeKit.restorePurchases() {
         case .success:
@@ -370,11 +455,16 @@ struct SaveProPaywallView: View {
             statusMessage = message
         case .unavailable:
             statusMessage = languageSettings.localized(
-                english: "Nothing to restore yet.",
-                traditionalChinese: "目前沒有可恢復的購買。"
+                english: "Restoring purchases is not available right now. Please try again later.",
+                traditionalChinese: "目前無法恢復購買，請稍後再試。"
             )
-        case .userCancelled, .pending:
-            break
+        case .userCancelled:
+            statusMessage = languageSettings.localized(english: "Restore cancelled.", traditionalChinese: "已取消恢復購買。")
+        case .pending:
+            statusMessage = languageSettings.localized(
+                english: "Restore is awaiting confirmation. Pro has not been activated yet.",
+                traditionalChinese: "恢復購買仍在等待確認，Pro 尚未開通。"
+            )
         }
     }
 }

@@ -29,6 +29,52 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(backend.contains("buildGeminiUsageEvent"))
     }
 
+    @MainActor
+    func testPaywallProductFailureCanRetryAndFinishWithoutAnEndlessSpinner() {
+        func state(loading: Bool, error: Bool, products: Bool = false) -> SaveProPaywallView.ProductPresentation {
+            SaveProPaywallView.productPresentation(
+                purchasingAvailable: true, hasProducts: products, isLoading: loading, hasError: error
+            )
+        }
+        XCTAssertEqual(state(loading: true, error: false), .loading)
+        XCTAssertEqual(state(loading: false, error: true), .failed)
+        // A retry may retain the previous error until the request finishes.
+        XCTAssertEqual(state(loading: true, error: true), .loading)
+        XCTAssertEqual(state(loading: false, error: false), .unavailable)
+        XCTAssertEqual(state(loading: false, error: false, products: true), .available)
+        // A restore error must not hide already loaded offers.
+        XCTAssertEqual(state(loading: false, error: true, products: true), .available)
+    }
+
+    @MainActor
+    func testPaywallSalesGateWinsOverCachedProductsAndErrors() {
+        for hasProducts in [false, true] {
+            for isLoading in [false, true] {
+                for hasError in [false, true] {
+                    XCTAssertEqual(SaveProPaywallView.productPresentation(
+                        purchasingAvailable: false, hasProducts: hasProducts,
+                        isLoading: isLoading, hasError: hasError
+                    ), .notForSale)
+                }
+            }
+        }
+    }
+
+    func testPaywallCopyAndRestoreFeedbackStayWithinCurrentProductScope() throws {
+        let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
+        for unsupported in ["Ask Savvy", "Generating a trip", "gap suggestions", "既有行程", "補齊建議"] {
+            XCTAssertFalse(paywall.contains(unsupported), "Unsupported promise: \(unsupported)")
+        }
+        // Feedback is a sibling of offers; it cannot disappear in an empty-product branch.
+        let body = try XCTUnwrap(paywall.components(separatedBy: "// MARK: - Sections").first)
+        XCTAssertTrue(body.contains("offers\n                    operationStatus\n                    accountNotice"))
+        XCTAssertTrue(paywall.contains("paywall.retryProducts"))
+        XCTAssertTrue(paywall.contains("Task { await storeKit.loadProducts() }"))
+        XCTAssertTrue(paywall.contains("Restoring does not automatically transfer Pro to a different Savvy account."))
+        XCTAssertTrue(paywall.contains("同一個 Savvy 帳號"))
+        XCTAssertTrue(paywall.contains("不會自動將 Pro 轉移至其他 Savvy 帳號"))
+    }
+
     /// The gate is the only thing allowed to refuse an AI assist, so its truth
     /// table is pinned here.
     func testAIAssistGateFailsOpenAndRespectsEnforcementSwitch() {
