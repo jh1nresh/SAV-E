@@ -135,6 +135,8 @@ struct AIDrawerView: View {
     /// "Find exact place" promises the map: when the search lands candidate
     /// pins, the host closes this drawer surface so the user sees them.
     var onShowMapCandidatesOnMap: () -> Void = {}
+    var onAddReviewClue: ((PlaceReviewCandidate) -> Void)? = nil
+    var onFindReviewPlace: ((PlaceReviewCandidate) -> Void)? = nil
     /// Reliable Review map tap focuses that candidate without a new search.
     var onFocusReviewCandidateOnMap: (PlaceReviewCandidate) -> Void = { _ in }
     @FocusState private var searchFocused: Bool
@@ -248,6 +250,7 @@ struct AIDrawerView: View {
             onFindExactPlaceCandidate: { candidate in
                 findExactPlace(for: candidate)
             },
+            onAddReviewClue: { candidate in addMoreClue(for: candidate) },
             onFocusReviewCandidateOnMap: { candidate in
                 focusKnownReviewCandidateOnMap(candidate)
             },
@@ -1301,6 +1304,10 @@ struct AIDrawerView: View {
     }
 
     private func findExactPlace(for candidate: PlaceReviewCandidate) {
+        if let onFindReviewPlace {
+            onFindReviewPlace(candidate)
+            return
+        }
         let query = candidate.refinementQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
             addMoreClue(for: candidate)
@@ -1492,15 +1499,16 @@ struct AIDrawerView: View {
     }
 
     private func addMoreClue(for candidate: PlaceReviewCandidate) {
+        if let onAddReviewClue {
+            onAddReviewClue(candidate)
+            return
+        }
         mapDetailDrawerItem = nil
         viewModel.returnToCommands()
-        viewModel.query = languageSettings.localized(
-            english: "Add more clue for \(candidate.name): ",
-            traditionalChinese: "替「\(candidate.name)」補更多線索："
-        )
+        viewModel.query = candidate.refinementQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         addSpotStatus = languageSettings.localized(
-            english: "Paste a caption, address, map link, or visible OCR text. Savvy will keep it in Review until the exact place is clear.",
-            traditionalChinese: "貼上貼文說明、地址、地圖連結或看得到的 OCR 文字。Savvy 會先把它留在待確認，直到精確地點夠清楚。"
+            english: "Search for this place. Enter a city, address, or map link.",
+            traditionalChinese: "搜尋這個地點。請輸入城市、地址或地圖連結。"
         )
         searchFocused = true
         withAnimation { drawerDetent = .medium }
@@ -1567,6 +1575,7 @@ struct MapDetailDrawerView: View {
     let onRecommendOrder: (Place) -> Void
     let onPlanAroundPlace: (Place) -> Void
     let onFindExactPlaceCandidate: (PlaceReviewCandidate) -> Void
+    var onAddReviewClue: ((PlaceReviewCandidate) -> Void)? = nil
     var onFocusReviewCandidateOnMap: (PlaceReviewCandidate) -> Void = { _ in }
     let onSaveCandidate: (PlaceReviewCandidate, String?) -> Void
     let onRejectCandidate: (PlaceReviewCandidate) -> Void
@@ -1923,6 +1932,7 @@ struct MapDetailDrawerView: View {
                         isWorking: isWorkingReviewCandidateID == candidate.id,
                         onFindExactPlace: { onFindExactPlaceCandidate(candidate) },
                         onFocusOnMap: { onFocusReviewCandidateOnMap(candidate) },
+                        onAddClue: onAddReviewClue.map { action in { action(candidate) } },
                         onSave: { nameOverride in onSaveCandidate(candidate, nameOverride) },
                         onReject: { onRejectCandidate(candidate) },
                         onSaveSourceOnly: { onSaveCandidateAsSourceOnly(candidate) },
@@ -2749,7 +2759,7 @@ private struct SavedMapDetailDrawerContent: View {
         // Persist so enriched photos/hours survive relaunch and sync across
         // devices; previously they lived only in this view's state. Demo and
         // offline sessions simply skip the write.
-        try? await SupabaseService.shared.updatePlace(updatedPlace)
+        try? await SupabaseService.shared.updatePlace(updatedPlace, previous: detailPlace)
     }
 
     private var placeEditor: some View {
@@ -3280,6 +3290,7 @@ private struct ReviewCandidateDetailCard: View {
     var isWorking: Bool
     var onFindExactPlace: () -> Void
     var onFocusOnMap: (() -> Void)? = nil
+    var onAddClue: (() -> Void)? = nil
     var onSave: (String?) -> Void
     var onReject: () -> Void
     var onSaveSourceOnly: () -> Void
@@ -3292,6 +3303,7 @@ private struct ReviewCandidateDetailCard: View {
         isWorking: Bool,
         onFindExactPlace: @escaping () -> Void,
         onFocusOnMap: (() -> Void)? = nil,
+        onAddClue: (() -> Void)? = nil,
         onSave: @escaping (String?) -> Void,
         onReject: @escaping () -> Void,
         onSaveSourceOnly: @escaping () -> Void,
@@ -3302,6 +3314,7 @@ private struct ReviewCandidateDetailCard: View {
         self.isWorking = isWorking
         self.onFindExactPlace = onFindExactPlace
         self.onFocusOnMap = onFocusOnMap
+        self.onAddClue = onAddClue
         self.onSave = onSave
         self.onReject = onReject
         self.onSaveSourceOnly = onSaveSourceOnly
@@ -3332,6 +3345,13 @@ private struct ReviewCandidateDetailCard: View {
                     }
                 )
 
+                Text(languageSettings.localized(english: candidate.reviewNextStep.english,
+                    traditionalChinese: candidate.reviewNextStep.traditionalChinese))
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("drawer.review.missingClue")
+
                 VStack(alignment: .leading, spacing: 10) {
                     CandidateActionButton(
                         title: primaryActionTitle,
@@ -3342,6 +3362,20 @@ private struct ReviewCandidateDetailCard: View {
                         action: performPrimaryAction
                     )
                     .accessibilityIdentifier("drawer.review.primaryAction")
+
+                    if primaryAction.confirmsMapStamp {
+                        CandidateActionButton(
+                            title: languageSettings.localized(english: "Choose another place", traditionalChinese: "改選其他地點"),
+                            systemImage: "location.magnifyingglass", fill: SaveAtlasPalette.paper,
+                            disabled: isWorking, action: onFindExactPlace)
+                            .accessibilityIdentifier("drawer.review.changePlace")
+                    } else if let onAddClue {
+                        CandidateActionButton(
+                            title: languageSettings.localized(english: "Search for this place", traditionalChinese: "搜尋這個地點"),
+                            systemImage: "location.magnifyingglass", fill: SaveAtlasPalette.paper,
+                            disabled: isWorking, action: onAddClue)
+                            .accessibilityIdentifier("drawer.review.addClue")
+                    }
 
                     Button(role: .destructive, action: onReject) {
                         Label(languageSettings.localized(english: "Not this place", traditionalChinese: "不是這間"), systemImage: "xmark")
@@ -3394,14 +3428,6 @@ private struct ReviewCandidateDetailCard: View {
                     .accessibilityIdentifier("drawer.review.reanalyze")
 
                     Menu {
-                        // When the primary action is Confirm (candidate already
-                        // has coordinates), re-running the exact-place search had
-                        // no entry point — a wrong match left the user stuck.
-                        if primaryAction.confirmsMapStamp {
-                            Button(action: onFindExactPlace) {
-                                Label(languageSettings.localized(english: "Find exact place", traditionalChinese: "找出精確地點"), systemImage: "location.magnifyingglass")
-                            }
-                        }
                         Button(action: onSaveSourceOnly) {
                             Label(languageSettings.localized(english: "Keep source only", traditionalChinese: "只留來源"), systemImage: "tray.and.arrow.down")
                         }

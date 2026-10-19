@@ -247,6 +247,119 @@ struct SaveAgentActionDrawerModel: Hashable {
     }
 }
 
+/// Presentation only: these hints never promote a clue or change confirmation eligibility.
+enum SaveReviewNextStep: Equatable {
+    case pendingAnalysis, chooseMatch, confirm, addCity, addAddress, locatePlace
+
+    init(pending: Bool, savable: Bool, address: String, city: String?, missingInfo: [String]) {
+        if pending { self = .pendingAnalysis }
+        else if missingInfo.contains(where: { $0.caseInsensitiveCompare("Choose the correct map candidate") == .orderedSame }) { self = .chooseMatch }
+        else if savable { self = .confirm }
+        else if address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            self = (city ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .addCity : .addAddress
+        } else { self = .locatePlace }
+    }
+
+    var english: String {
+        switch self {
+        case .pendingAnalysis: return "Source saved; analysis still needs to finish."
+        case .chooseMatch: return "More than one map match. Check the branch and address."
+        case .confirm: return "Check the name and address before confirming."
+        case .addCity: return "Search for this place with a city, address, or map link."
+        case .addAddress: return "Search for this place with an address, caption, or map link."
+        case .locatePlace: return "An address is available; find and check its map match."
+        }
+    }
+    var traditionalChinese: String {
+        switch self {
+        case .pendingAnalysis: return "來源已保存，分析尚待完成。"
+        case .chooseMatch: return "有多個地圖結果，請核對分店和地址。"
+        case .confirm: return "確認前，請核對名稱和地址。"
+        case .addCity: return "用城市、地址或地圖連結搜尋這個地點。"
+        case .addAddress: return "用地址、貼文文字或地圖連結搜尋這個地點。"
+        case .locatePlace: return "已有地址，請找出並核對地圖結果。"
+        }
+    }
+}
+
+extension PlaceReviewCandidate {
+    var reviewNextStep: SaveReviewNextStep {
+        SaveReviewNextStep(pending: isAnalysisPending, savable: hasSavableLocation,
+                          address: address, city: city, missingInfo: missingInfo)
+    }
+}
+
+/// Saves-row copy: known evidence first, then next-step guidance. Never replaces
+/// a source handle, platform, city, address, pending, or missing-place clue.
+struct SaveReviewCandidateSavesRowDetail: Equatable {
+    let knownEvidenceEnglish: String
+    let knownEvidenceTraditionalChinese: String
+    let nextStep: SaveReviewNextStep
+
+    init(candidate: PlaceReviewCandidate) {
+        nextStep = candidate.reviewNextStep
+        let isSourceClue = candidate.status == "source_only" || !candidate.hasSavableLocation
+        let evidence = Self.knownEvidence(candidate, isSourceClue: isSourceClue)
+        knownEvidenceEnglish = evidence.english
+        knownEvidenceTraditionalChinese = evidence.traditionalChinese
+    }
+
+    var english: String {
+        if nextStep == .pendingAnalysis { return knownEvidenceEnglish }
+        return Self.combined(knownEvidenceEnglish, nextStep.english, separator: ". ")
+    }
+
+    var traditionalChinese: String {
+        if nextStep == .pendingAnalysis { return knownEvidenceTraditionalChinese }
+        return Self.combined(knownEvidenceTraditionalChinese, nextStep.traditionalChinese, separator: "。")
+    }
+
+    static func combined(_ evidence: String, _ nextStep: String, separator: String = ". ") -> String {
+        if evidence.isEmpty { return nextStep }
+        if nextStep.isEmpty { return evidence }
+        if evidence.compare(nextStep, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame {
+            return evidence
+        }
+        var trimmedEvidence = evidence
+        while trimmedEvidence.hasSuffix(".") || trimmedEvidence.hasSuffix("。") {
+            trimmedEvidence = String(trimmedEvidence.dropLast())
+        }
+        return "\(trimmedEvidence)\(separator)\(nextStep)"
+    }
+
+    private static func knownEvidence(
+        _ candidate: PlaceReviewCandidate,
+        isSourceClue: Bool
+    ) -> (english: String, traditionalChinese: String) {
+        if candidate.isAnalysisPending {
+            return ("Source saved; analysis pending", "來源已保存，分析待完成")
+        }
+        if isSourceClue {
+            return ("Missing exact place", "缺少精確地點")
+        }
+
+        let source = ReviewSourceReceiptPresentation(candidate: candidate)
+        if let handle = SaveSourceHandle.resolved(candidate.sourceHandle) {
+            return ("From \(handle)", "來自 \(handle)")
+        }
+        if let handle = SaveSourceHandle.resolved(source.handle) {
+            return ("From \(handle)", "來自 \(handle)")
+        }
+        if source.sourcePlatform != .other {
+            let name = source.sourcePlatform.displayName
+            return ("From \(name)", "來自 \(name)")
+        }
+        if let city = candidate.city?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !city.isEmpty {
+            return (city, city)
+        }
+        let address = candidate.address.trimmingCharacters(in: .whitespacesAndNewlines)
+        return address.isEmpty
+            ? ("Shared link", "分享連結")
+            : (address, address)
+    }
+}
+
 struct SavePlaceActionResolution: Hashable {
     var kind: SaveSearchPrimaryAction
     var title: String

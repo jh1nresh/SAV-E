@@ -345,6 +345,7 @@ create table if not exists places (
     google_price_level integer,
     opening_hours text,
     origin_shared_place_link_id uuid,
+    memory_meta jsonb,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
@@ -358,6 +359,10 @@ create index if not exists idx_places_fts on places
 
 alter table places add column if not exists business_photo_urls text[] default '{}';
 alter table places add column if not exists origin_shared_place_link_id uuid;
+alter table places add column if not exists memory_meta jsonb;
+alter table places drop constraint if exists places_memory_meta_object;
+alter table places add constraint places_memory_meta_object
+    check (memory_meta is null or jsonb_typeof(memory_meta) = 'object');
 
 -- One current owner-private discovery receipt per saved place. Re-searching
 -- replaces the row so storage growth remains bounded by the user's place count.

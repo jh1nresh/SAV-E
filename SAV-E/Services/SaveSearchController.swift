@@ -52,10 +52,11 @@ struct SaveSearchController {
         }
 
         let address = draft.address ?? ""
-        var noteLines = draft.evidence
+        var originLines = draft.evidence
         if let externalReviewCount = draft.externalReviewCount {
-            noteLines.append("External reviews: \(externalReviewCount)")
+            originLines.append(SavvyGeneratedLine.marking("External reviews: \(externalReviewCount)"))
         }
+        let classified = Place.classifiedSourceLines(originLines)
 
         return Place(
             id: UUID(),
@@ -67,7 +68,7 @@ struct SaveSearchController {
             category: draft.category ?? .inferred(from: "\(draft.title) \(address)"),
             status: .wantToGo,
             rating: nil,
-            note: noteLines.isEmpty ? nil : noteLines.joined(separator: "\n"),
+            note: classified.note,
             sourceUrl: draft.sourceURL,
             sourcePlatform: draft.sourcePlatform ?? .other,
             sourceImageUrl: nil,
@@ -77,7 +78,8 @@ struct SaveSearchController {
             googleRating: draft.externalRating,
             googlePriceLevel: nil,
             openingHours: nil,
-            createdAt: createdAt
+            createdAt: createdAt,
+            additionalSourceEvidence: classified.additional.isEmpty ? nil : classified.additional
         )
     }
 
