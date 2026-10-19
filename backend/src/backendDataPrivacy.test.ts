@@ -67,6 +67,8 @@ test("fresh schema privacy guard runs before DDL and documents transactional app
   assert.match(schemaSQL, /a\.grantor <> current_user::regrole/);
   assert.match(privacySQL, /Managed table ownership by a browser role requires separate authorized remediation/);
   assert.match(schemaSQL, /Managed table ownership by a browser role requires separate authorized remediation/);
+  assert.match(privacySQL, /Browser-role column grants require separate authorized remediation/);
+  assert.match(schemaSQL, /Browser-role column grants require separate authorized remediation/);
   assert.doesNotMatch(privacySQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
   assert.doesNotMatch(schemaSQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
   const repoRoot = new URL("../../", import.meta.url);
@@ -467,6 +469,40 @@ test("fresh schema guard refuses browser-owned tables before any DDL", { skip: !
     await fixture.db.query("create table places(id int primary key, name text)");
     await fixture.db.query("alter table places owner to anon");
     await assert.rejects(fixture.db.query(schemaSQL), /owner|ownership/i);
+    const names = (await fixture.db.query(`select relname from pg_class
+      where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+    assert.deepEqual(names, ["places", "privacy_unrelated_sentinel"], "refused re-apply must not create managed tables");
+  }, { browser: true, install: false });
+});
+
+test("privacy migration refuses column-level browser grants that survive table revoke", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query("revoke all on places from public, anon, authenticated");
+      await fixture.db.query("grant select (name) on places to privacy_browser_parent");
+      assert.equal((await fixture.db.query("select has_column_privilege('anon','places','name','SELECT') as allowed")).rows[0].allowed, true, "column fixture must reproduce inherited column SELECT");
+      await fixture.db.query("revoke all on places from public, anon, authenticated");
+      assert.equal((await fixture.db.query("select has_column_privilege('anon','places','name','SELECT') as allowed")).rows[0].allowed, true, "table REVOKE must leave inherited column SELECT");
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'columns',(select jsonb_agg(jsonb_build_array(c.relname,a.attname,a.attacl::text) order by 1,2)
+          from pg_attribute a join pg_class c on c.oid=a.attrelid
+          where a.attacl is not null and c.relnamespace=current_schema()::regnamespace),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole)) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /column/i);
+      assert.deepEqual(await state(), before, "column-grant refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, legacy: true });
+});
+
+test("fresh schema guard refuses column-level browser grants before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("create table places(id int primary key, name text)");
+    await fixture.db.query("revoke all on places from public, anon, authenticated");
+    await fixture.db.query("grant select (name) on places to public, anon, authenticated");
+    await assert.rejects(fixture.db.query(schemaSQL), /column/i);
     const names = (await fixture.db.query(`select relname from pg_class
       where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
     assert.deepEqual(names, ["places", "privacy_unrelated_sentinel"], "refused re-apply must not create managed tables");

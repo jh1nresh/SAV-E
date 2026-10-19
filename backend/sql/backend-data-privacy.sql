@@ -149,6 +149,30 @@ begin
         raise exception 'Managed table ownership by a browser role requires separate authorized remediation';
     end if;
 
+    -- Table-level REVOKE leaves pg_attribute.attacl intact. Column SELECT/
+    -- UPDATE/REFERENCES grants can still expose or mutate data under an
+    -- existing policy or through foreign-key checks.
+    if exists (
+        select 1
+        from unnest(managed_tables) as t(name)
+        join pg_class c on c.oid = to_regclass(format('%I.%I', target_schema, t.name))
+        join pg_attribute col on col.attrelid = c.oid
+        cross join lateral aclexplode(col.attacl) a
+        where col.attnum > 0 and not col.attisdropped
+          and col.attacl is not null
+          and (
+              a.grantee = 0
+              or exists (
+                  select 1 from pg_roles browser
+                  join pg_roles granted on granted.oid = a.grantee
+                  where browser.rolname in ('anon', 'authenticated')
+                    and pg_has_role(browser.oid, granted.oid, 'MEMBER')
+              )
+          )
+    ) then
+        raise exception 'Browser-role column grants require separate authorized remediation';
+    end if;
+
     -- Owner REVOKE cannot remove privileges granted by another role. A
     -- delegated GRANT OPTION holder can grant TRUNCATE to PUBLIC/anon/
     -- authenticated; those entries survive and bypass RLS.
