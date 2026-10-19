@@ -251,6 +251,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(content.contains("selectRootTab(_ tab: SaveRootTab, mapFollowsHomeFilter: Bool = false)"))
         XCTAssertTrue(content.contains("doodleSession.mapFollowsHomeFilter = mapFollowsHomeFilter"))
         XCTAssertTrue(content.contains("selectRootTab(.map, mapFollowsHomeFilter: true)"))
+        XCTAssertTrue(content.contains("onSelect: { selectRootTab($0) }"))
         XCTAssertTrue(session.mapFollowsHomeFilter == false)
         session.mapFollowsHomeFilter = true
         XCTAssertTrue(session.mapFollowsHomeFilter)

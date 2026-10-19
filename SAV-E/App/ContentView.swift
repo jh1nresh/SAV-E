@@ -587,7 +587,7 @@ struct ContentView: View {
                                 )
                             )
                         },
-                        onSelect: selectRootTab
+                        onSelect: { selectRootTab($0) }
                     )
                     .placed(
                         x: AtlasTabBarMetrics.leadingInset,
