@@ -28,7 +28,10 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # PRs share a group so superseded runs cancel. Non-PR events (main push,
+  # workflow_dispatch) use run_id so they never share a group: GitHub still
+  # drops pending jobs in a group even when cancel-in-progress is false.
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -59,9 +62,8 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/SAVE-DerivedData/Build
-          key: deriveddata-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-${{ github.sha }}
+          key: deriveddata-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'SAV-E.xcodeproj/project.pbxproj', 'project.yml') }}
           restore-keys: |
-            deriveddata-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}-
             deriveddata-${{ runner.os }}-
 
       - name: Build app, Share Extension, and tests without booting a simulator
