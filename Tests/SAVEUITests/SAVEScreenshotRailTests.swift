@@ -487,6 +487,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.liveSurface"].waitForExistence(timeout: stepTimeout),
+            "Parity Map must capture the live tile-town, not an illustrated atlas stand-in."
+        )
         attach(app, name: "atlas-map")
 
         openRootTab("Friends", app: app)
@@ -547,6 +551,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
             locationNoticeDismiss.tap()
         }
+        XCTAssertTrue(app.descendants(matching: .any)["map.liveSurface"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "five-tab-map")
 
         openTripsFromHome(app: app)
@@ -3048,11 +3053,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(container.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(pins.firstMatch.waitForExistence(timeout: stepTimeout))
         let bounds = container.frame.insetBy(dx: 4, dy: 4)
+        let usable = CGRect(
+            x: bounds.minX,
+            y: bounds.minY,
+            width: bounds.width,
+            height: bounds.height * 0.72
+        )
         let count = pins.count
         for index in 0..<count {
             let pin = pins.element(boundBy: index)
             guard pin.exists else { continue }
-            if bounds.intersects(pin.frame) {
+            if usable.intersects(pin.frame) {
                 return pin
             }
         }

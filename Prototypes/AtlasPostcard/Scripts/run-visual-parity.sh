@@ -25,9 +25,9 @@ Options:
   --threshold NUMBER    Gate threshold. Must be at least 0.90 (default 0.90).
 
 The screenshots directory must contain home.png, saves.png, plan.png, and
-map.png. The result-bundle mode prefers the live five-tab-home attachment for
-Home and falls back to atlas-home for prototype-only runs. Saves, Plan, and Map
-use the stable atlas-saves, atlas-plan, and atlas-map XCTest attachments.
+map.png. The result-bundle mode prefers the live five-tab-home and five-tab-map
+attachments, falling back to atlas-home / atlas-map. Saves and Plan use the
+stable atlas-saves and atlas-plan XCTest attachments.
 EOF
 }
 
@@ -275,6 +275,10 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                 atlas-home*)
                     screen="home"
                     priority=0
+                    ;;
+                five-tab-map*)
+                    screen="map"
+                    priority=1
                     ;;
                 atlas-saves*)
                     screen="saves"

@@ -268,12 +268,12 @@ struct SaveTileTownHomeView: View {
     }
 
     private var peek: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        ZStack(alignment: .bottom) {
             SaveTileTownCanvas(
                 pins: peekPins,
                 onSelect: { id in presentation.onOpenPlace(id.uuidString) }
             )
-            .frame(height: 168)
+            .frame(height: SaveTileTownProductLock.homeHeroHeight)
             .accessibilityIdentifier("home.tileTown")
 
             if let featured {
@@ -284,7 +284,8 @@ struct SaveTileTownHomeView: View {
                         photoURL: featured.photoURL ?? featured.photoURLs.first,
                         accessibilityNameID: "home.featuredName"
                     )
-                    .padding(12)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 12)
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())

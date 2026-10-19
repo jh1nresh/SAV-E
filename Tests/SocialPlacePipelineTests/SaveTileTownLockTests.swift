@@ -56,23 +56,42 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(town.contains("map.tilePin.\\(pin.id.uuidString)"))
         XCTAssertTrue(town.contains("showsPins"))
         XCTAssertTrue(town.contains("scaledToFillRect"))
+        XCTAssertTrue(town.contains("@MainActor"))
         XCTAssertTrue(town.contains("imageCache"))
+        XCTAssertTrue(town.contains("像素小鎮地圖"))
+        XCTAssertTrue(town.contains("地圖章，\\(pin.name)"))
+        XCTAssertTrue(town.contains("isSelected ? 32 : 28"))
+        XCTAssertGreaterThanOrEqual(SaveTileTownRaster.houses.count, 32)
         let home = try source(at: "SAV-E/Views/TileTown/SaveTileTownHomeView.swift")
         XCTAssertTrue(home.contains("home.tileTown"))
         XCTAssertTrue(home.contains("SaveTileTownCanvas"))
+        XCTAssertTrue(home.contains("homeHeroHeight"))
         XCTAssertTrue(home.contains("onSelect: { id in presentation.onOpenPlace(id.uuidString) }"))
-        XCTAssertFalse(home.contains(".frame(height: 168)\n            .allowsHitTesting(false)"))
+        XCTAssertFalse(home.contains(".frame(height: 168)"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("func testTileTownPinsAreTappableOnHomeAndMap"))
         XCTAssertTrue(rail.contains("identifier BEGINSWITH 'map.tilePin.'"))
-        let peek = SaveTileTownRaster.scaledToFillRect(viewSize: CGSize(width: 360, height: 168))
+        let peek = SaveTileTownRaster.scaledToFillRect(
+            viewSize: CGSize(width: 360, height: SaveTileTownProductLock.homeHeroHeight)
+        )
         XCTAssertEqual(peek.width, 360, accuracy: 0.01)
         XCTAssertEqual(peek.minY, 0, accuracy: 0.01)
-        XCTAssertGreaterThan(peek.height, 168)
+        XCTAssertGreaterThan(peek.height, SaveTileTownProductLock.homeHeroHeight)
         let exact = SaveTileTownRaster.scaledToFillRect(
-            viewSize: CGSize(width: 240, height: 176)
+            viewSize: CGSize(
+                width: CGFloat(SaveTileTownRaster.baseWidth),
+                height: CGFloat(SaveTileTownRaster.baseHeight)
+            )
         )
-        XCTAssertEqual(exact, CGRect(x: 0, y: 0, width: 240, height: 176))
+        XCTAssertEqual(
+            exact,
+            CGRect(
+                x: 0,
+                y: 0,
+                width: CGFloat(SaveTileTownRaster.baseWidth),
+                height: CGFloat(SaveTileTownRaster.baseHeight)
+            )
+        )
     }
 
     func testPixelDisplayFontIsOFLWithCJKFallbackAndSFBody() throws {
@@ -121,7 +140,9 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(home.contains("SavePixelChromeIcon"))
         XCTAssertTrue(home.contains("AtlasMetrics.statusBarHeight"))
         let peek = memberBody("peek", in: home)
-        XCTAssertFalse(peek.contains(".frame(height: 168)\n            .allowsHitTesting(false)"))
+        XCTAssertTrue(peek.contains("homeHeroHeight"))
+        XCTAssertTrue(peek.contains("ZStack(alignment: .bottom)"))
+        XCTAssertFalse(peek.contains(".frame(height: 168)"))
         XCTAssertTrue(peek.contains(".allowsHitTesting(false)"))
         XCTAssertFalse(home.contains(".overlay(alignment: .topTrailing)"))
         XCTAssertFalse(home.contains(".opacity(0.02)"))
@@ -175,6 +196,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(panel.contains("SaveTileTownProductLock.mapChromeHeight"))
         XCTAssertTrue(root.contains("SaveTileTownRootMap("))
         XCTAssertFalse(root.contains("SaveAtlasInteractiveRootMap("))
+        XCTAssertFalse(root.contains("RootAtlasMapScreen()"))
     }
 
     func testStampLanguageIsOneSystem() throws {
@@ -262,6 +284,12 @@ final class SaveTileTownLockTests: XCTestCase {
             SaveTileTownLayout.assignments(for: [first, second])[first],
             assigned[first]
         )
+        let overflow = (0..<40).map { index in
+            UUID(uuidString: String(format: "10000000-0000-4000-8000-%012d", index))!
+        }
+        let spread = SaveTileTownLayout.assignments(for: overflow)
+        XCTAssertEqual(Set(spread.values).count, overflow.count)
+        XCTAssertGreaterThan(SaveTileTownLayout.lots.count, 16)
     }
 
     func testThemeOwnsTileTownMaterials() throws {

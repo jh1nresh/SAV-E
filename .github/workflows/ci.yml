@@ -5,11 +5,8 @@ on:
     branches: [main]
   pull_request:
     # Keep required checks on the existing PR stack rooted in the #279 UI.
-    # PR B (#287) is stacked on #285 until A merges; GitHub filters this list
-    # against the *base* branch, so A's branch must be here or CI never runs.
     branches:
       - main
-      - cursor/v5-tokens-tab-pixel-font-90e1
       - cursor/tile-town-product-lock-4894
       - codex/share-analysis-recovery
       - codex/p0-provider-status

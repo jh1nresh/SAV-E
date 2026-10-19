@@ -10,6 +10,8 @@ nonisolated enum SaveTileTownProductLock: Sendable {
     static let mapShowsNearbySavedFriendsChips = true
     /// Wordmark + Nearby/Saved/Friends rail below the 48pt status band.
     static let mapChromeHeight: CGFloat = 136
+    /// Home hero town card. Matches the v5 mock: large, not a 168pt inset.
+    static let homeHeroHeight: CGFloat = 320
     /// Lets root-tab lists scroll stamp labels and bios above the tab bar.
     static let rootTabScrollClearance: CGFloat = 150
 
@@ -51,48 +53,49 @@ enum SaveTileTownMapLens: String, CaseIterable, Identifiable {
 }
 
 nonisolated enum SaveTileTownLayout: Sendable {
-    /// Normalized lots along the village roads. Pins hash here so the town
-    /// stays a memory map, not a silent GPS re-projection.
-    static let lots: [CGPoint] = [
-        CGPoint(x: 0.18, y: 0.22),
-        CGPoint(x: 0.38, y: 0.16),
-        CGPoint(x: 0.58, y: 0.24),
-        CGPoint(x: 0.78, y: 0.18),
-        CGPoint(x: 0.14, y: 0.42),
-        CGPoint(x: 0.34, y: 0.38),
-        CGPoint(x: 0.54, y: 0.44),
-        CGPoint(x: 0.72, y: 0.36),
-        CGPoint(x: 0.22, y: 0.62),
-        CGPoint(x: 0.44, y: 0.58),
-        CGPoint(x: 0.64, y: 0.64),
-        CGPoint(x: 0.82, y: 0.52),
-        CGPoint(x: 0.28, y: 0.80),
-        CGPoint(x: 0.50, y: 0.78),
-        CGPoint(x: 0.70, y: 0.82),
-        CGPoint(x: 0.86, y: 0.70),
-    ]
+    /// House footprints, then extra lots so pins past the house count do not stack.
+    static var lots: [CGPoint] { SaveTileTownRaster.normalizedHouseAnchors() }
 
     static func lotIndex(for id: UUID) -> Int {
         var hasher = Hasher()
         hasher.combine(id)
         let value = hasher.finalize()
-        return abs(value) % lots.count
+        let count = max(lots.count, 1)
+        return abs(value) % count
     }
 
     static func assignments(for ids: [UUID]) -> [UUID: Int] {
         var used = Set<Int>()
         var result: [UUID: Int] = [:]
-        for id in ids {
-            var index = lotIndex(for: id)
+        let capacity = lots.count
+        for (order, id) in ids.enumerated() {
+            var index = capacity == 0 ? order : lotIndex(for: id)
             var attempts = 0
-            while used.contains(index), attempts < lots.count {
-                index = (index + 1) % lots.count
+            while used.contains(index), attempts < capacity {
+                index = (index + 1) % capacity
                 attempts += 1
+            }
+            if used.contains(index) {
+                index = capacity + order
             }
             used.insert(index)
             result[id] = index
         }
         return result
+    }
+
+    static func point(index: Int, anchors: [CGPoint]) -> CGPoint {
+        if anchors.indices.contains(index) {
+            return anchors[index]
+        }
+        let extra = index - anchors.count
+        let columns = 6
+        let row = extra / columns
+        let column = extra % columns
+        return CGPoint(
+            x: 0.12 + CGFloat(column) * 0.14,
+            y: 0.16 + CGFloat(row) * 0.12
+        )
     }
 }
 
@@ -108,6 +111,7 @@ struct SaveTileTownCanvas: View {
     var clipsToPaper = true
     var allowsPan = false
     var onSelect: (UUID) -> Void = { _ in }
+    @Environment(\.appLanguageSettings) private var languageSettings
     @State private var pan = CGSize.zero
     @State private var panAnchor = CGSize.zero
 
@@ -140,7 +144,10 @@ struct SaveTileTownCanvas: View {
         .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.tileTown")
-        .accessibilityLabel("Tile-town map")
+        .accessibilityLabel(languageSettings.localized(
+            english: "Tile-town map",
+            traditionalChinese: "像素小鎮地圖"
+        ))
     }
 
     private func pinsLayer(in size: CGSize) -> some View {
@@ -149,10 +156,7 @@ struct SaveTileTownCanvas: View {
         let anchors = SaveTileTownRaster.normalizedHouseAnchors()
         let fill = SaveTileTownRaster.scaledToFillRect(viewSize: size)
         return ForEach(pins) { pin in
-            let lotIndex = assigned[pin.id] ?? 0
-            let lot = anchors.indices.contains(lotIndex)
-                ? anchors[lotIndex]
-                : SaveTileTownLayout.lots[lotIndex % SaveTileTownLayout.lots.count]
+            let lot = SaveTileTownLayout.point(index: assigned[pin.id] ?? 0, anchors: anchors)
             let point = CGPoint(
                 x: fill.minX + lot.x * fill.width,
                 y: fill.minY + lot.y * fill.height
@@ -161,14 +165,27 @@ struct SaveTileTownCanvas: View {
                 onSelect(pin.id)
             } label: {
                 SaveTileTownPinMark(isSelected: pin.isSelected)
-                    .frame(width: 44, height: 44)
+                    .frame(width: 44, height: 44, alignment: .bottom)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(pin.isSelected ? "Selected Map Stamp, \(pin.name)" : "Map Stamp, \(pin.name)")
+            .accessibilityLabel(pinLabel(for: pin))
             .accessibilityIdentifier("map.tilePin.\(pin.id.uuidString)")
             .position(point)
         }
+    }
+
+    private func pinLabel(for pin: SaveTileTownPin) -> String {
+        if pin.isSelected {
+            return languageSettings.localized(
+                english: "Selected Map Stamp, \(pin.name)",
+                traditionalChinese: "已選地圖章，\(pin.name)"
+            )
+        }
+        return languageSettings.localized(
+            english: "Map Stamp, \(pin.name)",
+            traditionalChinese: "地圖章，\(pin.name)"
+        )
     }
 
     private func panGesture(in size: CGSize) -> some Gesture {
@@ -203,15 +220,15 @@ struct SaveTileTownCanvas: View {
 /// interpolation disabled. Place-memory, not navigation. No anti-aliased curves.
 enum SaveTileTownRaster {
     static let mapColumns = 14
-    static let mapRows = 12
+    static let mapRows = 28
     static let tileW = 16
     static let tileH = 8
     static let baseWidth = 240
-    static let baseHeight = 176
+    static let baseHeight = 256
     static let columns = baseWidth
     static let rows = baseHeight
     private static let originX = 120
-    private static let originY = 20
+    private static let originY = 8
 
     enum Cell {
         case grass, grassDeep, water, waterDeep, sand, road
@@ -219,12 +236,16 @@ enum SaveTileTownRaster {
         case wall, wallDeep, window, door, tree, treeDeep, trunk
     }
 
-    /// Sixteen hashed lots. Pins sit on these house footprints.
+    /// Thirty-two hashed lots spread down the island so pins do not stack.
     static let houses: [(column: Int, row: Int, roof: Cell)] = [
-        (2, 2, .roofCoral), (4, 1, .roofHoney), (6, 2, .roofSky), (3, 3, .roofForest),
-        (1, 5, .roofHoney), (4, 4, .roofCoral), (6, 5, .roofSky), (8, 3, .roofHoney),
-        (2, 7, .roofSky), (5, 6, .roofCoral), (7, 7, .roofForest), (3, 8, .roofHoney),
-        (5, 9, .roofSky), (7, 8, .roofCoral), (8, 6, .roofHoney), (4, 7, .roofForest),
+        (2, 1, .roofCoral), (5, 0, .roofHoney), (7, 2, .roofSky), (3, 3, .roofForest),
+        (1, 5, .roofHoney), (6, 6, .roofCoral), (4, 8, .roofSky), (8, 7, .roofHoney),
+        (2, 10, .roofSky), (5, 11, .roofCoral), (7, 13, .roofForest), (3, 14, .roofHoney),
+        (1, 16, .roofCoral), (6, 17, .roofSky), (4, 19, .roofHoney), (8, 18, .roofForest),
+        (2, 21, .roofHoney), (5, 22, .roofCoral), (7, 24, .roofSky), (3, 25, .roofForest),
+        (1, 27, .roofSky), (6, 28, .roofHoney), (4, 30, .roofCoral), (8, 29, .roofSky),
+        (2, 32, .roofForest), (5, 33, .roofHoney), (7, 35, .roofCoral), (3, 36, .roofSky),
+        (1, 38, .roofHoney), (6, 39, .roofForest), (4, 42, .roofCoral), (7, 44, .roofSky),
     ]
 
     static func integerScale(for size: CGSize) -> Int {
@@ -234,8 +255,8 @@ enum SaveTileTownRaster {
     }
 
     /// Same cover transform as `Image.scaledToFill` with top-center alignment,
-    /// so pins sit on house lots after the raster is cropped. Home peeks are
-    /// wide and short; top alignment keeps the village and crops water, not roofs.
+    /// so pins sit on house lots after the raster is cropped. The taller
+    /// bitmap fills Map; Home crops the south water, not the village.
     static func scaledToFillRect(
         viewSize: CGSize,
         imageSize: CGSize = CGSize(width: CGFloat(baseWidth), height: CGFloat(baseHeight))
@@ -262,13 +283,12 @@ enum SaveTileTownRaster {
         }
     }
 
-    private static let cacheLock = NSLock()
-    nonisolated(unsafe) private static var imageCache: [Int: UIImage] = [:]
+    @MainActor
+    private static var imageCache: [Int: UIImage] = [:]
 
+    @MainActor
     static func image(scale: Int) -> UIImage {
         let scale = max(1, scale)
-        cacheLock.lock()
-        defer { cacheLock.unlock() }
         if let cached = imageCache[scale] {
             return cached
         }
@@ -301,10 +321,17 @@ enum SaveTileTownRaster {
     }
 
     private static func paintIsometricTown(_ cg: CGContext, scale: Int) {
-        for depth in 0..<(mapColumns + mapRows) {
+        let maxRow = max(
+            mapRows,
+            Int(ceil((CGFloat(baseHeight) + CGFloat(tileH) - CGFloat(originY)) / CGFloat(tileH / 2)))
+                + mapColumns
+        )
+        for depth in 0..<(mapColumns + maxRow) {
             for column in 0..<mapColumns {
                 let row = depth - column
-                guard row >= 0, row < mapRows else { continue }
+                guard row >= 0 else { continue }
+                let origin = iso(column: column, row: row)
+                if origin.y > CGFloat(baseHeight) + CGFloat(tileH) { continue }
                 fillIsoTile(cg, column: column, row: row, cell: ground(column: column, row: row), scale: scale)
             }
         }
@@ -312,8 +339,12 @@ enum SaveTileTownRaster {
             blitIsoHouse(cg, column: house.column, row: house.row, roof: house.roof, scale: scale)
         }
         let trees = [
-            (1, 3), (3, 1), (5, 3), (7, 2), (0, 6), (2, 6), (6, 8),
-            (8, 5), (1, 8), (8, 8), (6, 4), (3, 5),
+            (1, 2), (3, 1), (5, 2), (7, 1), (0, 5), (2, 6), (6, 7),
+            (8, 5), (1, 9), (8, 9), (6, 4), (3, 8), (0, 12), (2, 13),
+            (7, 14), (1, 16), (5, 15), (8, 18), (3, 19), (6, 20),
+            (0, 22), (2, 24), (7, 23), (4, 26), (1, 28), (8, 27),
+            (0, 31), (3, 34), (8, 32), (2, 37), (5, 40), (7, 41),
+            (1, 43), (4, 46), (8, 45), (0, 48),
         ]
         for (column, row) in trees {
             blitIsoTree(cg, column: column, row: row, scale: scale)
@@ -322,18 +353,16 @@ enum SaveTileTownRaster {
     }
 
     private static func ground(column: Int, row: Int) -> Cell {
-        let shore = 9 - (row / 4)
-        if column > shore + 1 { return row % 4 == 0 ? .waterDeep : .water }
-        if column == shore + 1 { return .sand }
+        if column >= 10 { return row % 3 == 0 ? .waterDeep : .water }
+        if column == 9 { return .sand }
         if isRoad(column: column, row: row) { return .road }
         return (column + row) % 5 == 0 ? .grassDeep : .grass
     }
 
     private static func isRoad(column: Int, row: Int) -> Bool {
-        row == 4 && column <= 9
-            || column == 4 && row <= 9
-            || row == 7 && column >= 2 && column <= 8
-            || column == 7 && row >= 3 && row <= 8
+        column == 4
+            || row % 8 == 4 && column <= 9
+            || column == 7 && row % 11 < 8
     }
 
     private static func fillIsoTile(
@@ -418,8 +447,10 @@ enum SaveTileTownRaster {
     }
 
     private static func blitIsoDock(_ cg: CGContext, scale: Int) {
-        for column in 9...12 {
-            fillIsoTile(cg, column: column, row: 8, cell: .road, scale: scale)
+        for row in [8, 16, 24, 32, 40] {
+            for column in 9...12 {
+                fillIsoTile(cg, column: column, row: row, cell: .road, scale: scale)
+            }
         }
     }
 
@@ -462,25 +493,61 @@ struct SaveTileTownPinMark: View {
 
     var body: some View {
         Canvas { context, size in
-            let unit = max(1, floor(size.width / 5))
+            let cols = 7
+            let rows = 10
+            let unit = max(1, floor(min(size.width / CGFloat(cols), size.height / CGFloat(rows))))
+            let originX = (size.width - CGFloat(cols) * unit) / 2
+            let originY = size.height - CGFloat(rows) * unit
             let coral = Color(red: 0.949, green: 0.420, blue: 0.290)
             let paper = Color(red: 1, green: 0.973, blue: 0.925)
-            let pin: [(Int, Int)] = isSelected
-                ? [(2, 0), (1, 1), (2, 1), (3, 1), (1, 2), (2, 2), (3, 2), (2, 3), (2, 4)]
-                : [(2, 0), (1, 1), (2, 1), (3, 1), (2, 2), (2, 3)]
-            for (x, y) in pin {
-                context.fill(
-                    Path(CGRect(x: CGFloat(x) * unit, y: CGFloat(y) * unit, width: unit, height: unit)),
-                    with: .color(coral)
-                )
+            let ink = Color(red: 0.184, green: 0.180, blue: 0.137)
+            let body: [(Int, Int)] = [
+                (2, 0), (3, 0), (4, 0),
+                (1, 1), (2, 1), (3, 1), (4, 1), (5, 1),
+                (1, 2), (2, 2), (3, 2), (4, 2), (5, 2),
+                (1, 3), (2, 3), (3, 3), (4, 3), (5, 3),
+                (1, 4), (2, 4), (3, 4), (4, 4), (5, 4),
+                (2, 5), (3, 5), (4, 5),
+                (3, 6),
+                (3, 7),
+                (3, 8),
+            ]
+            let outline: [(Int, Int)] = isSelected
+                ? [(2, -1), (3, -1), (4, -1), (0, 2), (6, 2), (3, 9)]
+                : []
+            for (x, y) in outline where y >= 0 {
+                fillPixel(context, x: x, y: y, unit: unit, originX: originX, originY: originY, color: ink)
             }
-            context.fill(
-                Path(CGRect(x: 2 * unit, y: unit, width: unit, height: unit)),
-                with: .color(paper)
-            )
+            for (x, y) in body {
+                fillPixel(context, x: x, y: y, unit: unit, originX: originX, originY: originY, color: coral)
+            }
+            fillPixel(context, x: 3, y: 2, unit: unit, originX: originX, originY: originY, color: paper)
+            fillPixel(context, x: 2, y: 2, unit: unit, originX: originX, originY: originY, color: paper)
+            fillPixel(context, x: 4, y: 2, unit: unit, originX: originX, originY: originY, color: paper)
+            fillPixel(context, x: 3, y: 3, unit: unit, originX: originX, originY: originY, color: paper)
         }
-        .frame(width: isSelected ? 15 : 12, height: isSelected ? 18 : 15)
+        .frame(width: isSelected ? 32 : 28, height: isSelected ? 40 : 34)
         .accessibilityHidden(true)
+    }
+
+    private func fillPixel(
+        _ context: GraphicsContext,
+        x: Int,
+        y: Int,
+        unit: CGFloat,
+        originX: CGFloat,
+        originY: CGFloat,
+        color: Color
+    ) {
+        context.fill(
+            Path(CGRect(
+                x: originX + CGFloat(x) * unit,
+                y: originY + CGFloat(y) * unit,
+                width: unit,
+                height: unit
+            )),
+            with: .color(color)
+        )
     }
 }
 

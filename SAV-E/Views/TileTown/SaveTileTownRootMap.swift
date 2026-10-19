@@ -32,6 +32,7 @@ struct SaveTileTownRootMap: View {
                         allowsPan: true,
                         onSelect: selectPin
                     )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .accessibilityIdentifier("map.liveSurface")
 
                     if let place = mapViewModel.selectedPlace {
@@ -77,7 +78,7 @@ struct SaveTileTownRootMap: View {
                         .stroke(SaveAtlasPalette.line.opacity(0.22), lineWidth: 1)
                 }
                 .padding(.horizontal, 12)
-                .padding(.bottom, 96)
+                .padding(.bottom, 8)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

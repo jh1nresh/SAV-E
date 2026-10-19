@@ -512,21 +512,12 @@ struct SaveMapRootView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
 
     var body: some View {
-        Group {
-            if SaveAtlasRuntime.usesParityFixture {
-                // Fixture-only illustrated atlas. Production Map is tile-town
-                // (2026-10-14 founder lock; H1/M1 MapKit-only base superseded).
-                RootAtlasMapScreen()
-                    .environment(\.atlasPresentation, atlasPresentation)
-            } else {
-                SaveTileTownRootMap(
-                    mapViewModel: mapViewModel,
-                    presentation: atlasPresentation,
-                    onClearSelection: mapViewModel.clearSelectedMapObject,
-                    onPlanAroundPlace: onPlanAroundPlace
-                )
-            }
-        }
+        SaveTileTownRootMap(
+            mapViewModel: mapViewModel,
+            presentation: atlasPresentation,
+            onClearSelection: mapViewModel.clearSelectedMapObject,
+            onPlanAroundPlace: onPlanAroundPlace
+        )
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
 #if DEBUG

@@ -658,8 +658,9 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 
 ### Home collection search
 
-Resting Home is Savvy + tile-town peek + clues bar + recent stamps. It is not
-the Map tab. Nearby / Saved / Friends chips must not appear here.
+Resting Home is Savvy + a large tile-town hero card + clues bar + recent stamps.
+The featured stamp overlays the bottom of the town. It is not the Map tab.
+Nearby / Saved / Friends chips must not appear here.
 
 Quiet search remains at the top of the collection job. Typing filters the
 confirmed collection locally. Category and city terms intersect: “cafe” then
@@ -733,6 +734,9 @@ Rules:
   48pt status band. The search drawer never covers them: large stop ends
   below `SaveTileTownProductLock.mapChromeHeight`, and only the visible
   paper hits so pins stay tappable through medium.
+- The town fills the remaining Map canvas under the lens rail. The search
+  shelf overlays the bottom; do not leave an empty water band in the lower
+  half. Pins are visible pixel teardrops (44pt hit targets).
 - The town canvas pans with a drag. Pin tap selects the kraft peek card.
 - Drawer search (collapsed capsule) still opens the parked search panel.
   Category, Want to try, Visited, and Nearby-distance chips may remain in
