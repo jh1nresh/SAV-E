@@ -258,11 +258,27 @@ struct SavePostageSealAvatar: View {
     }
 }
 
-/// Quiet 8×8 nearest-neighbor header glyphs. Visible 44pt buttons, not SF Symbols.
-enum SavePixelChromeIconKind {
+/// Quiet 8×8 nearest-neighbor glyphs. Visible 44pt buttons, not SF Symbols.
+enum SavePixelChromeIconKind: Equatable {
     case trips
     case saves
     case more
+    case home
+    case map
+    case plus
+    case friends
+    case passport
+
+    static func tab(iconName: String) -> SavePixelChromeIconKind {
+        switch iconName {
+        case "house": return .home
+        case "map": return .map
+        case "plus": return .plus
+        case "person.2": return .friends
+        case "book.closed": return .passport
+        default: return .more
+        }
+    }
 }
 
 struct SavePixelChromeIcon: View {
@@ -271,6 +287,7 @@ struct SavePixelChromeIcon: View {
 
     var body: some View {
         Image(uiImage: Self.image(for: kind, pointSize: pointSize))
+            .renderingMode(.template)
             .interpolation(.none)
             .frame(width: pointSize, height: pointSize)
             .accessibilityHidden(true)
@@ -311,6 +328,61 @@ struct SavePixelChromeIcon: View {
                 "00000000",
                 "00000000",
             ]
+        case .home:
+            return [
+                "00011000",
+                "00111100",
+                "01111110",
+                "11000011",
+                "10111101",
+                "10100101",
+                "10100101",
+                "11111111",
+            ]
+        case .map:
+            return [
+                "01111110",
+                "10000001",
+                "10111101",
+                "10000001",
+                "10111101",
+                "10000001",
+                "10111101",
+                "01111110",
+            ]
+        case .plus:
+            return [
+                "00011000",
+                "00011000",
+                "00011000",
+                "11111111",
+                "11111111",
+                "00011000",
+                "00011000",
+                "00011000",
+            ]
+        case .friends:
+            return [
+                "01100110",
+                "01100110",
+                "00000000",
+                "11100111",
+                "10011001",
+                "00011000",
+                "00111100",
+                "01111110",
+            ]
+        case .passport:
+            return [
+                "01111110",
+                "01000010",
+                "01011010",
+                "01000010",
+                "01011110",
+                "01000010",
+                "01111110",
+                "00111100",
+            ]
         }
     }
 
@@ -325,7 +397,7 @@ struct SavePixelChromeIcon: View {
         return renderer.image { context in
             let cg = context.cgContext
             cg.interpolationQuality = .none
-            cg.setFillColor(UIColor(red: 0.18, green: 0.29, blue: 0.20, alpha: 1).cgColor)
+            cg.setFillColor(UIColor.black.cgColor)
             for (row, line) in rows.enumerated() {
                 for (column, bit) in line.enumerated() where bit == "1" {
                     cg.fill(CGRect(x: column * unit, y: row * unit, width: unit, height: unit))
@@ -335,60 +407,19 @@ struct SavePixelChromeIcon: View {
     }
 }
 
-/// Integer-scaled 5×7 display face for Savvy / Passport titles. Body copy stays `SaveAtlasType`.
+/// Pixelify Sans (Latin) + Fusion Pixel (CJK) for Savvy and page titles.
+/// Stamp names stay `SaveAtlasType` until the shared stamp PR. Body copy stays SF.
 struct SavePixelDisplayText: View {
     let text: String
     var pointSize: CGFloat = 22
+    var relativeTo: Font.TextStyle = .title
 
     var body: some View {
-        Image(uiImage: Self.image(for: text, pointSize: pointSize))
-            .interpolation(.none)
-            .resizable()
-            .scaledToFit()
-            .frame(height: pointSize)
-            .accessibilityLabel(text)
-    }
-
-    private static let glyphs: [Character: [String]] = [
-        "A": ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
-        "C": ["01110", "10001", "10000", "10000", "10000", "10001", "01110"],
-        "E": ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
-        "O": ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
-        "P": ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
-        "R": ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
-        "S": ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
-        "T": ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
-        "V": ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
-        "Y": ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
-    ]
-
-    private static func image(for text: String, pointSize: CGFloat) -> UIImage {
-        let letters = Array(text.uppercased())
-        let unit = max(1, Int(pointSize / 7))
-        let width = max(1, letters.count * 6 * unit)
-        let height = 7 * unit
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-        format.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
-        return renderer.image { context in
-            let cg = context.cgContext
-            cg.interpolationQuality = .none
-            cg.setFillColor(UIColor(red: 0.18, green: 0.29, blue: 0.20, alpha: 1).cgColor)
-            for (index, letter) in letters.enumerated() {
-                let rows = glyphs[letter] ?? glyphs["S"]!
-                for (row, line) in rows.enumerated() {
-                    for (column, bit) in line.enumerated() where bit == "1" {
-                        cg.fill(CGRect(
-                            x: (index * 6 + column) * unit,
-                            y: row * unit,
-                            width: unit,
-                            height: unit
-                        ))
-                    }
-                }
-            }
-        }
+        Text(text)
+            .font(SavePixelType.display(pointSize, relativeTo: relativeTo))
+            .foregroundStyle(SaveAtlasPalette.forest)
+            .lineLimit(2)
+            .minimumScaleFactor(0.75)
     }
 }
 

@@ -551,7 +551,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             tabBar.contains(".glassEffect("),
             "Founder lock 2026-10-15: the root bar is a flat pixel slab, not floating glass."
         )
-        XCTAssertTrue(tabBar.contains("AtlasPalette.paper"))
+        XCTAssertTrue(tabBar.contains("AtlasPalette.canvas"))
+        XCTAssertTrue(tabBar.contains("AtlasPalette.stroke"))
         XCTAssertFalse(tabBar.contains(".clipShape(Capsule())"))
     }
 

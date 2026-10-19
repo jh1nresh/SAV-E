@@ -49,9 +49,9 @@ struct BrandHeader<Trailing: View>: View {
 /// rendering.
 ///
 /// The bar lives on the fixed 402x874 Atlas canvas (`ReferenceViewport` scales
-/// that canvas to whatever device it lands on). Founder lock 2026-10-15: a
-/// flat full-width pixel bar, not a floating glass capsule. Slot math still
-/// keeps the coral + inside its destination.
+/// that canvas to whatever device it lands on). Founder lock 2026-10-19: a
+/// flat full-width cream bar with a 2pt top rule, not a floating glass capsule.
+/// Slot math still keeps the coral + inside its destination.
 ///
 /// The pill is therefore derived from the slot, never fixed.
 enum AtlasTabBarMetrics {
@@ -64,12 +64,12 @@ enum AtlasTabBarMetrics {
     static let itemHeight: CGFloat = 54
     static let minimumHitTarget: CGFloat = 44
     static let selectionHeight: CGFloat = 46
-    /// Hairline on the coral Save circle. Counted in the chrome-fit check
-    /// because a centered stroke grows the optical disk past `diameter`.
-    static let raisedControlStrokeWidth: CGFloat = 0.8
+    /// Flat coral + has no glass ring. Kept in the chrome-fit check so a
+    /// future stroke cannot silently burst the bar.
+    static let raisedControlStrokeWidth: CGFloat = 0
     /// #179 kept a 50pt disk inside the 62pt box (6pt geometric inset). The
     /// glass pill still reads smaller than that box, so 50pt bursts the
-    /// visible chrome. Keep Save at or under the mint lozenge, minus stroke.
+    /// visible chrome. Keep the coral + at or under the bar chrome, minus stroke.
     static let raisedControlDiameter: CGFloat = 44
     static let raisedControlOffsetY: CGFloat = 0
     /// Same vertical inset as the mint selection lozenge, per side.
@@ -116,6 +116,10 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
     let accessibilityPrefix: String
     var displayTitle: ((Item) -> String)? = nil
     var isRaisedControl: (Item) -> Bool = { _ in false }
+    /// Raised capture keeps its VoiceOver name but drops the visible "Save" label.
+    var hidesTitle: (Item) -> Bool = { _ in false }
+    /// Production injects 24pt pixel line icons. The prototype keeps SF Symbols.
+    var iconView: ((Item) -> AnyView)? = nil
     let onSelect: (Item) -> Void
 
     private var tabItems: some View {
@@ -127,33 +131,34 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                     ZStack {
                         if isRaisedControl(item) {
                             Circle()
-                                .fill(AtlasPalette.coral.opacity(0.94))
+                                .fill(AtlasPalette.coral)
                                 .frame(
                                     width: AtlasTabBarMetrics.raisedControlDiameter,
                                     height: AtlasTabBarMetrics.raisedControlDiameter
                                 )
-                                .overlay {
-                                    Circle()
-                                        .stroke(
-                                            .white.opacity(0.42),
-                                            lineWidth: AtlasTabBarMetrics.raisedControlStrokeWidth
-                                        )
-                                }
                                 .offset(y: AtlasTabBarMetrics.raisedControlOffsetY)
                         }
 
-                        VStack(spacing: isRaisedControl(item) ? 1 : 2) {
-                            Image(systemName: item[keyPath: icon])
-                                .font(.system(
-                                    size: isRaisedControl(item) ? 20 : 18,
-                                    weight: isRaisedControl(item) ? .semibold : .regular
-                                ))
-                                .frame(height: 24)
+                        VStack(spacing: hidesTitle(item) ? 0 : 2) {
+                            Group {
+                                if let iconView {
+                                    iconView(item)
+                                } else {
+                                    Image(systemName: item[keyPath: icon])
+                                        .font(.system(
+                                            size: isRaisedControl(item) ? 20 : 18,
+                                            weight: isRaisedControl(item) ? .semibold : .regular
+                                        ))
+                                }
+                            }
+                            .frame(width: 24, height: 24)
 
-                            Text(displayTitle?(item) ?? item[keyPath: title])
-                                .font(AtlasType.display(isRaisedControl(item) ? 9 : 11))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
+                            if !hidesTitle(item) {
+                                Text(displayTitle?(item) ?? item[keyPath: title])
+                                    .font(AtlasType.display(11))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.85)
+                            }
                         }
                         .foregroundStyle(
                             isRaisedControl(item)
@@ -186,11 +191,11 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
 
     var body: some View {
         tabItems
-            .background(AtlasPalette.paper)
+            .background(AtlasPalette.canvas)
             .overlay(alignment: .top) {
                 Rectangle()
-                    .fill(AtlasPalette.line.opacity(0.35))
-                    .frame(height: 1)
+                    .fill(AtlasPalette.stroke)
+                    .frame(height: AtlasPalette.strokeWidth)
                     .allowsHitTesting(false)
             }
     }

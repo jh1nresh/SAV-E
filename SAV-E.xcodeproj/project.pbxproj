@@ -13,6 +13,7 @@
 		T7A100000000000000000005 /* SaveTileTownHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000006 /* SaveTileTownHomeView.swift */; };
 		T7A100000000000000000007 /* SaveTileTownRootMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000008 /* SaveTileTownRootMap.swift */; };
 		T7A100000000000000000009 /* SaveTileTownLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A10000000000000000000A /* SaveTileTownLockTests.swift */; };
+		C91900000000000000000001 /* PixelFont in Resources */ = {isa = PBXBuildFile; fileRef = C91900000000000000000002 /* PixelFont */; };
 		A117DCD202609100000000003 /* SavePlanAgentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A117DCD202609100000000004 /* SavePlanAgentTests.swift */; };
 		A117DCD202609100000000001 /* SavePlanAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A117DCD202609100000000002 /* SavePlanAgent.swift */; };
 		07EDB4CB3FDA6430623D2E69 /* Place.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76EE79719B259620EE6212C7 /* Place.swift */; };
@@ -310,6 +311,7 @@
 		T7A100000000000000000006 /* SaveTileTownHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownHomeView.swift; sourceTree = "<group>"; };
 		T7A100000000000000000008 /* SaveTileTownRootMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownRootMap.swift; sourceTree = "<group>"; };
 		T7A10000000000000000000A /* SaveTileTownLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownLockTests.swift; sourceTree = "<group>"; };
+		C91900000000000000000002 /* PixelFont */ = {isa = PBXFileReference; lastKnownFileType = folder; path = PixelFont; sourceTree = "<group>"; };
 		A117DCD202609100000000004 /* SavePlanAgentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanAgentTests.swift; sourceTree = "<group>"; };
 		A117DCD202609100000000002 /* SavePlanAgent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanAgent.swift; sourceTree = "<group>"; };
 		059853D65770FEA0F3E4A6FD /* Screens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screens.swift; sourceTree = "<group>"; };
@@ -568,6 +570,7 @@
 			children = (
 				8EBE852DE7618089938F9421 /* Assets.xcassets */,
 				6361F6E836FD533A68A17D61 /* PrivacyInfo.xcprivacy */,
+				C91900000000000000000002 /* PixelFont */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -1354,6 +1357,7 @@
 			files = (
 				78BCAADC36E4F2A6E45F076E /* Assets.xcassets in Resources */,
 				DD2947EE2F000476CB869B83 /* PrivacyInfo.xcprivacy in Resources */,
+				C91900000000000000000001 /* PixelFont in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
