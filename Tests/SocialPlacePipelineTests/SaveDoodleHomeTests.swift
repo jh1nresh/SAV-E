@@ -143,6 +143,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("home.citySwitcher"))
         XCTAssertTrue(home.contains("lens.accessibilityIdentifier"))
         XCTAssertTrue(home.contains(".contentShape(Rectangle())"))
+        XCTAssertTrue(home.contains("accessibilityElement(children: .ignore)"))
+        XCTAssertTrue(home.contains(".accessibilityIdentifier(\"home.savedPlaces\")"))
         let catalog = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")
         XCTAssertTrue(catalog.contains("home.\\(rawValue)"))
         XCTAssertTrue(catalog.contains("case eat"))
@@ -176,6 +178,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(root.contains("saves.trips"))
         XCTAssertTrue(root.contains("Trips ›"))
         XCTAssertTrue(root.contains("onOpenTrips"))
+        XCTAssertTrue(root.contains("accessibilityElement(children: .ignore)"))
+        let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
+        XCTAssertTrue(rail.contains("app.buttons[\"saves.trips\"]"))
     }
 
     func testHomeShowsLocationDeniedPromptIdentifiers() throws {

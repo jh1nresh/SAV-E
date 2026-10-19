@@ -99,6 +99,8 @@ struct SaveLibraryView: View {
                         Text(localized("Trips ›", "行程 ›"))
                             .font(SaveAtlasType.strong(15))
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityAddTraits(.isButton)
                     .accessibilityLabel(localized("Trips", "行程"))
                     .accessibilityIdentifier("saves.trips")
                 }

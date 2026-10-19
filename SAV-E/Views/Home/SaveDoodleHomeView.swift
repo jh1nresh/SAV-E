@@ -59,14 +59,13 @@ struct SaveDoodleHomeView: View {
                 .padding(.horizontal, SaveLayout.screenMargin)
                 .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
             }
+            .accessibilityIdentifier("home.savedPlaces")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SaveDottedBackground())
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("home.savedPlaces")
     }
 
     private var header: some View {
@@ -253,6 +252,7 @@ struct SaveDoodleHomeView: View {
             )
             .id(listedPlaces.map(\.place.id))
             .frame(height: 160)
+            .allowsHitTesting(false)
             .clipShape(RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
@@ -262,6 +262,8 @@ struct SaveDoodleHomeView: View {
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isButton)
         .accessibilityLabel(localized("Open map", "打開地圖"))
         .accessibilityIdentifier("home.miniMap")
     }
@@ -361,9 +363,11 @@ struct SaveDoodleHomeView: View {
                 Text(localized("+ Save your first place", "+ 存第一個地方"))
                     .font(SaveAtlasType.strong(17))
                     .foregroundStyle(SaveAtlasPalette.coral)
-                    .frame(minHeight: SaveLayout.minTap)
+                    .frame(maxWidth: .infinity, minHeight: SaveLayout.minTap)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityAddTraits(.isButton)
             .accessibilityLabel(localized("+ Save your first place", "+ 存第一個地方"))
             .accessibilityIdentifier("home.empty.capture")
 

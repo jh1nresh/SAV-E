@@ -309,7 +309,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
         launch(app)
         try signInViaReviewDemoRequired(app: app)
-        let start = app.buttons["home.empty.capture"]
+        let start = app.descendants(matching: .any)["home.empty.capture"]
         XCTAssertTrue(start.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(start.isHittable)
         XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
@@ -2972,7 +2972,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openTripsFromHome(app: XCUIApplication) {
         openSavesFromHome(app: app)
-        let entry = app.descendants(matching: .any)["saves.trips"]
+        let entry = app.buttons["saves.trips"]
         XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing Saves Trips entry")
         tapReachable(entry)
         let trips = app.descendants(matching: .any)["trips.home"]
