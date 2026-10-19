@@ -1,6 +1,7 @@
 [
   "SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasProductionParity",
   "SAVEUITests/SAVEScreenshotRailTests/testCaptureFiveTabLanding",
+  "SAVEUITests/SAVEScreenshotRailTests/testTileTownPinsAreTappableOnHomeAndMap",
   "SAVEUITests/SAVEScreenshotRailTests/testAtlasHomeAndSavesRenderPersistedPlaceData",
   "SAVEUITests/SAVEScreenshotRailTests/testCaptureMultipleResultsExcludeOlderClues",
   "SAVEUITests/SAVEScreenshotRailTests/testEmptyHomeStartsCaptureAndKeepsSourceOnlyUnconfirmed",

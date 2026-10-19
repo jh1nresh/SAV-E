@@ -14,6 +14,7 @@ TRIP_SHEET = RAIL + "testTripStopEditorSurfaceIsReachable"
 BASELINE = [RAIL + name for name in (
     "testCaptureAtlasProductionParity",
     "testCaptureFiveTabLanding",
+    "testTileTownPinsAreTappableOnHomeAndMap",
     "testAtlasHomeAndSavesRenderPersistedPlaceData",
     "testCaptureMultipleResultsExcludeOlderClues",
     "testEmptyHomeStartsCaptureAndKeepsSourceOnlyUnconfirmed",

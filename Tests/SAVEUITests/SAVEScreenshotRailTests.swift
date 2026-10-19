@@ -623,6 +623,78 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected, "Capture cancellation returns to Passport")
     }
 
+    /// Home peek pins, recent stamps, and Map pins open saved-place memory.
+    /// They must not route into a live navigation map.
+    @MainActor
+    func testTileTownPinsAreTappableOnHomeAndMap() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-home-memory-fixture",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.tileTown"].waitForExistence(timeout: stepTimeout))
+
+        let homePin = firstVisibleTilePin(in: app, within: "home.tileTown")
+        XCTAssertTrue(homePin.exists, "Home peek must expose tappable Map Stamp pins.")
+        tapReachable(homePin)
+        try assertOpenedSavedPlace(app: app)
+        attach(app, name: "tile-town-home-pin-detail")
+        closePlaceDetail(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout))
+
+        let recent = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'home.recent.'")
+        ).firstMatch
+        XCTAssertTrue(recent.waitForExistence(timeout: stepTimeout), "Recent stamps must stay tappable.")
+        tapReachable(recent)
+        try assertOpenedSavedPlace(app: app)
+        closePlaceDetail(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout))
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        let locationNoticeDismiss = app.buttons["map.locationNotice.dismiss"]
+        if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
+            locationNoticeDismiss.tap()
+        }
+        dismissLocationAlertIfPresent()
+        XCTAssertTrue(app.descendants(matching: .any)["map.liveSurface"].waitForExistence(timeout: stepTimeout))
+
+        let mapPin = firstVisibleTilePin(in: app, within: "map.liveSurface")
+        XCTAssertTrue(mapPin.exists, "Map town must expose tappable Map Stamp pins.")
+        tapReachable(mapPin)
+        XCTAssertTrue(
+            app.buttons["map.peek.card"].waitForExistence(timeout: stepTimeout),
+            "A Map pin tap selects a kraft peek card, not a directions map."
+        )
+        let selectedPin = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.' AND label BEGINSWITH 'Selected Map Stamp, '")
+        ).firstMatch
+        XCTAssertTrue(selectedPin.waitForExistence(timeout: stepTimeout))
+        let selectedName = app.staticTexts["map.peek.name"]
+        XCTAssertTrue(selectedName.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(selectedName.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        attach(app, name: "tile-town-map-pin-peek")
+        tapReachable(app.buttons["map.peek.card"])
+        try assertOpenedSavedPlace(app: app)
+        attach(app, name: "tile-town-map-pin-detail")
+        closePlaceDetail(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
+    }
+
     @MainActor
     func testCaptureAppStoreScreens() throws {
         let app = makeApp(
@@ -2967,6 +3039,49 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.swipeUp()
         }
         return element.waitForExistence(timeout: timeout(1))
+    }
+
+    @MainActor
+    private func firstVisibleTilePin(in app: XCUIApplication, within containerID: String) -> XCUIElement {
+        let container = app.descendants(matching: .any)[containerID]
+        let pins = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.'"))
+        XCTAssertTrue(container.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(pins.firstMatch.waitForExistence(timeout: stepTimeout))
+        let bounds = container.frame.insetBy(dx: 4, dy: 4)
+        let count = pins.count
+        for index in 0..<count {
+            let pin = pins.element(boundBy: index)
+            guard pin.exists else { continue }
+            if bounds.intersects(pin.frame) {
+                return pin
+            }
+        }
+        return pins.firstMatch
+    }
+
+    @MainActor
+    private func assertOpenedSavedPlace(app: XCUIApplication) throws {
+        let root = app.descendants(matching: .any)["place.detail.root"]
+        if root.waitForExistence(timeout: stepTimeout) {
+            XCTAssertFalse(
+                app.maps.firstMatch.exists,
+                "A Map Stamp is place-memory; it must not open a live navigation map."
+            )
+            return
+        }
+        XCTAssertTrue(
+            app.descendants(matching: .any)["place.detail.scroll"].waitForExistence(timeout: stepTimeout),
+            "A Map Stamp tap must open saved-place detail, not a navigation map."
+        )
+        XCTAssertFalse(app.maps.firstMatch.exists)
+    }
+
+    @MainActor
+    private func closePlaceDetail(app: XCUIApplication) {
+        let close = app.buttons["drawer.place.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: stepTimeout), "Saved-place detail must expose a close action.")
+        tapReachable(close)
+        _ = app.descendants(matching: .any)["place.detail.root"].waitForNonExistence(timeout: stepTimeout)
     }
 
     /// Dismisses the system location permission alert if it is on screen.

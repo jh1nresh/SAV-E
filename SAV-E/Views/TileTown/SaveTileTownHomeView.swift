@@ -274,7 +274,6 @@ struct SaveTileTownHomeView: View {
                 onSelect: { id in presentation.onOpenPlace(id.uuidString) }
             )
             .frame(height: 168)
-            .allowsHitTesting(false)
             .accessibilityIdentifier("home.tileTown")
 
             if let featured {

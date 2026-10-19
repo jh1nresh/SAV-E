@@ -120,7 +120,7 @@ struct SaveTileTownCanvas: View {
                     .interpolation(.none)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: size.width, height: size.height)
+                    .frame(width: size.width, height: size.height, alignment: .top)
                     .clipped()
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
@@ -147,11 +147,16 @@ struct SaveTileTownCanvas: View {
         let ids = pins.map(\.id)
         let assigned = SaveTileTownLayout.assignments(for: ids)
         let anchors = SaveTileTownRaster.normalizedHouseAnchors()
+        let fill = SaveTileTownRaster.scaledToFillRect(viewSize: size)
         return ForEach(pins) { pin in
             let lotIndex = assigned[pin.id] ?? 0
             let lot = anchors.indices.contains(lotIndex)
                 ? anchors[lotIndex]
                 : SaveTileTownLayout.lots[lotIndex % SaveTileTownLayout.lots.count]
+            let point = CGPoint(
+                x: fill.minX + lot.x * fill.width,
+                y: fill.minY + lot.y * fill.height
+            )
             Button {
                 onSelect(pin.id)
             } label: {
@@ -162,7 +167,7 @@ struct SaveTileTownCanvas: View {
             .buttonStyle(.plain)
             .accessibilityLabel(pin.isSelected ? "Selected Map Stamp, \(pin.name)" : "Map Stamp, \(pin.name)")
             .accessibilityIdentifier("map.tilePin.\(pin.id.uuidString)")
-            .position(x: lot.x * size.width, y: lot.y * size.height)
+            .position(point)
         }
     }
 
@@ -223,9 +228,28 @@ enum SaveTileTownRaster {
     ]
 
     static func integerScale(for size: CGSize) -> Int {
-        let x = Int(size.width / CGFloat(baseWidth))
-        let y = Int(size.height / CGFloat(baseHeight))
-        return max(1, min(x, y))
+        let x = size.width / CGFloat(baseWidth)
+        let y = size.height / CGFloat(baseHeight)
+        return max(1, Int(max(x, y)))
+    }
+
+    /// Same cover transform as `Image.scaledToFill` with top-center alignment,
+    /// so pins sit on house lots after the raster is cropped. Home peeks are
+    /// wide and short; top alignment keeps the village and crops water, not roofs.
+    static func scaledToFillRect(
+        viewSize: CGSize,
+        imageSize: CGSize = CGSize(width: CGFloat(baseWidth), height: CGFloat(baseHeight))
+    ) -> CGRect {
+        guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
+        let scale = max(viewSize.width / imageSize.width, viewSize.height / imageSize.height)
+        let width = imageSize.width * scale
+        let height = imageSize.height * scale
+        return CGRect(
+            x: (viewSize.width - width) / 2,
+            y: 0,
+            width: width,
+            height: height
+        )
     }
 
     static func normalizedHouseAnchors() -> [CGPoint] {
@@ -238,8 +262,22 @@ enum SaveTileTownRaster {
         }
     }
 
+    private static let cacheLock = NSLock()
+    nonisolated(unsafe) private static var imageCache: [Int: UIImage] = [:]
+
     static func image(scale: Int) -> UIImage {
         let scale = max(1, scale)
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        if let cached = imageCache[scale] {
+            return cached
+        }
+        let rendered = render(scale: scale)
+        imageCache[scale] = rendered
+        return rendered
+    }
+
+    private static func render(scale: Int) -> UIImage {
         let width = baseWidth * scale
         let height = baseHeight * scale
         let format = UIGraphicsImageRendererFormat.default()
