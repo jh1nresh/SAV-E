@@ -73,5 +73,5 @@ list, body cap 16 KiB.
 - `cd backend && npm test` (build + node --test)
 - iOS: `xcodebuild build` generic sim + `-only-testing:SAVETests` focused run
 - Deploy note: applying `schema.sql` to a new empty Railway Postgres is a
-  human-approved step (`psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f backend/sql/schema.sql`).
+  human-approved step (`psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f backend/sql/schema.sql`).
   Re-applying to an existing install also needs `-1`.

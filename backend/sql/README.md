@@ -55,7 +55,7 @@ prod URL only carries `sslmode`) is:
 
 ```bash
 PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -v ON_ERROR_STOP=1 -1 \
-  -f sql/friend-ratings.sql
+  -c "set search_path to public" -f sql/friend-ratings.sql
 ```
 
 If the URL has other query parameters (`options`, `target_session_attrs`,

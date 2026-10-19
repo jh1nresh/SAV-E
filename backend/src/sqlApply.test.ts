@@ -83,3 +83,18 @@ test("apply-sql.sh --apply without DATABASE_URL fails closed", async () => {
   assert.match(out, /DATABASE_URL is required/);
   assert.doesNotMatch(out, /applying/);
 });
+
+test("documented founder SQL fallbacks pin search_path to public", async () => {
+  const backendReadme = await readFile(new URL("../README.md", import.meta.url), "utf8");
+  const sqlReadme = await readFile(new URL("../sql/README.md", import.meta.url), "utf8");
+  const fallback = /PGSSLMODE=require psql "\$\{DATABASE_URL%%\\\?\*\}" -v ON_ERROR_STOP=1 -1(?:\s+\\)?\s+-c "set search_path to public" -f sql\/friend-ratings\.sql/;
+  assert.match(backendReadme, fallback);
+  assert.match(sqlReadme, fallback);
+  for (const [name, text] of [["backend/README.md", backendReadme], ["backend/sql/README.md", sqlReadme]] as const) {
+    const joined = text.replace(/\\\n/g, " ");
+    for (const line of joined.split("\n")) {
+      if (!/psql/.test(line) || !/-f sql\/friend-ratings\.sql/.test(line)) continue;
+      assert.match(line, /-c "set search_path to public"/, `${name}: ${line}`);
+    }
+  }
+});

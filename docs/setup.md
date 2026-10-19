@@ -88,7 +88,7 @@ re-applying it also needs the same transactional stop-on-error flags so a
 refused privacy guard cannot leave tables committed with unsafe grants:
 
 ```bash
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f backend/sql/schema.sql
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f backend/sql/schema.sql
 ```
 
 ### 4. Generate and open the Xcode project

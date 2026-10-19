@@ -14,6 +14,7 @@ import { conversationStateTableSql } from "./sendblueBot.js";
 import { reviewsTableSql } from "./sendblueReviewStore.js";
 import { verifiedVisitsTableSql } from "./sendblueReceiptStore.js";
 import { sllrBuyerTableSql } from "./sllrBuyerStore.js";
+import { selectMissingPlacePhotosSQL, updateMissingPlacePhotosSQL } from "./placePhotoBackfill.js";
 import { appAccountTokenFor, applyAppleNotification, entitlementTier, storeAppleEntitlement } from "./entitlementPersistence.js";
 import { proEntitlementPolicy, type VerifiedAppleTransaction } from "./proEntitlement.js";
 
@@ -111,8 +112,10 @@ test("fresh schema privacy guard runs before DDL and documents transactional app
   assert.match(schemaSQL.slice(0, guardEnd), /privilege_type = 'CREATE'/, "fresh-schema guard must refuse inherited schema CREATE before DDL");
   assert.match(schemaSQL.slice(0, guardEnd), /pg_database d/, "fresh-schema guard must refuse inherited database CREATE before DDL");
   const serverSrc = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+  const backfillCli = readFileSync(new URL("../src/placePhotoBackfillCli.ts", import.meta.url), "utf8");
   assert.match(serverSrc, /const pool = new Pool\(\{[\s\S]*?options:\s*"-c search_path=public"/);
   assert.match(serverSrc, /const analysisHealthPool = new Pool\(\{[\s\S]*?options:\s*"-c search_path=public"/);
+  assert.match(backfillCli, /const pool = new Pool\(\{[\s\S]*?options:\s*"-c search_path=public"/);
   assert.doesNotMatch(privacySQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
   assert.doesNotMatch(schemaSQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
   const repoRoot = new URL("../../", import.meta.url);
@@ -125,6 +128,7 @@ test("fresh schema privacy guard runs before DDL and documents transactional app
     for (const line of text.split("\n")) {
       if (!/psql/.test(line) || !/-f/.test(line) || !/schema\.sql/.test(line) || /mistake/i.test(line)) continue;
       assert.match(line, /-v ON_ERROR_STOP=1 -1/, `${name}: ${line}`);
+      assert.match(line, /-c "set search_path to public"/, `${name}: ${line}`);
     }
   }
   const runbook = readFileSync(new URL("../../docs/2026-08-04-backend-rebuild-runbook.md", import.meta.url), "utf8");
@@ -1166,6 +1170,63 @@ test("privacy apply targets public when search_path resolves an empty $user sche
       assert.equal((await raw.query("select has_table_privilege('anon','public.profiles','SELECT') as allowed")).rows[0].allowed, false);
     } finally {
       await raw.query("drop table if exists public.profiles cascade");
+      await raw.query(`drop schema if exists ${backendRole} cascade`);
+      await raw.end();
+    }
+  }, { browser: true, install: false });
+});
+
+test("photo backfill pool pin updates public.places when a $user schema is planted", { skip: !connectionString }, async () => {
+  await withFixture(async () => {
+    const raw = new pg.Pool({ connectionString, max: 1 });
+    const backendRole = (await raw.query("select current_user as name")).rows[0].name as string;
+    assert.match(backendRole, /^\w+$/);
+    const publicId = randomUUID();
+    const plantedId = randomUUID();
+    const userId = "did:privy:photo-backfill-owner";
+    try {
+      await raw.query(`drop schema if exists ${backendRole} cascade`);
+      await raw.query("drop table if exists public.places cascade");
+      await raw.query(`create schema ${backendRole}`);
+      await raw.query(`create table public.places (
+        id uuid primary key,
+        user_id text not null,
+        name text not null,
+        address text,
+        latitude double precision,
+        longitude double precision,
+        google_place_id text,
+        source_image_url text,
+        business_photo_urls text[],
+        created_at timestamptz not null default now()
+      )`);
+      await raw.query(`create table ${backendRole}.places (like public.places including all)`);
+      await raw.query(
+        `insert into public.places (id, user_id, name, address, latitude, longitude) values ($1,$2,'Public Cafe','Public St',35.66,139.70)`,
+        [publicId, userId],
+      );
+      await raw.query(
+        `insert into ${backendRole}.places (id, user_id, name, address, latitude, longitude) values ($1,$2,'Planted Cafe','Shadow St',1,1)`,
+        [plantedId, userId],
+      );
+      assert.equal((await raw.query("select current_schema() as name")).rows[0].name, backendRole, "default search_path must resolve $user first");
+      const unpinned = new pg.Pool({ connectionString, max: 1 });
+      const pinned = new pg.Pool({ connectionString, options: "-c search_path=public", max: 1 });
+      try {
+        const shadowed = await unpinned.query(selectMissingPlacePhotosSQL, [userId, 10]);
+        assert.equal(String(shadowed.rows[0].id), plantedId, "unpinned backfill must resolve the planted $user.places table");
+        const real = await pinned.query(selectMissingPlacePhotosSQL, [userId, 10]);
+        assert.equal(String(real.rows[0].id), publicId, "pinned backfill pool must resolve public.places");
+        const updated = await pinned.query(updateMissingPlacePhotosSQL, [publicId, userId, "https://example.test/photo", ["https://example.test/photo"]]);
+        assert.equal(String(updated.rows[0].id), publicId);
+        assert.equal((await raw.query("select source_image_url from public.places where id=$1", [publicId])).rows[0].source_image_url, "https://example.test/photo");
+        assert.equal((await raw.query(`select source_image_url from ${backendRole}.places where id=$1`, [plantedId])).rows[0].source_image_url, null);
+      } finally {
+        await unpinned.end();
+        await pinned.end();
+      }
+    } finally {
+      await raw.query("drop table if exists public.places cascade");
       await raw.query(`drop schema if exists ${backendRole} cascade`);
       await raw.end();
     }

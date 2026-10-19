@@ -102,7 +102,7 @@ authorization to migrate or deploy.
      `./scripts/apply-sql.sh backend-data-privacy.sql --apply`
    - If `psql` rejects `sslmode=no-verify` (from `backend/`; known prod URL
      only carries that query param):
-     `PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -v ON_ERROR_STOP=1 -1 -f sql/friend-ratings.sql`
+     `PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f sql/friend-ratings.sql`
      Use the helper when the URL has other libpq query params — it drops
      `sslmode` only.
 2. Verify tables (read-only). Expect `t|t|t`:
@@ -364,7 +364,8 @@ continue through the backend's routes, rather than direct browser table access.
 The migration also removes browser default table grants for the executing
 creator in the current schema, and revokes schema `CREATE` and database
 `CREATE` from `PUBLIC` and existing `anon`/`authenticated` roles before those
-defaults are relied on. The backend pool and SQL apply pin `search_path=public`
+defaults are relied on. The backend pool, photo backfill CLI, SQL apply helper, and documented
+direct `psql` fallbacks pin `search_path=public`
 so an already planted `$user` schema cannot shadow unqualified runtime DDL.
 `backend-data-privacy.sql` targets `public` unless `save.privacy_schema` is set
 for an isolated fixture; it does not trust `current_schema()`.

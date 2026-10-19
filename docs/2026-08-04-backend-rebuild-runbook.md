@@ -23,15 +23,15 @@
 
 ```bash
 export DATABASE_URL='postgresql://...'   # new Supabase pooled URL
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f backend/sql/schema.sql
-for f in supabase/migrations/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f "$f"; done
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f backend/sql/schema.sql
+for f in supabase/migrations/*.sql; do psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f "$f"; done
 # optional data restore:
 # pg_restore --no-owner --no-privileges -d "$DATABASE_URL" save-prod.dump
 ```
 
 `schema.sql` is for a new empty database only; it is not a safe idempotent
 re-run. Re-applying it to an existing install also needs
-`psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f backend/sql/schema.sql` so a
+`psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f backend/sql/schema.sql` so a
 refused privacy guard cannot leave tables committed with unsafe grants.
 Additive migrations are ordered by filename.
 
