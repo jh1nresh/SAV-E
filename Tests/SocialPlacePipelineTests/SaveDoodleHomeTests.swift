@@ -252,9 +252,32 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(content.contains("doodleSession.mapFollowsHomeFilter = mapFollowsHomeFilter"))
         XCTAssertTrue(content.contains("selectRootTab(.map, mapFollowsHomeFilter: true)"))
         XCTAssertTrue(content.contains("onSelect: { selectRootTab($0) }"))
+        XCTAssertTrue(content.contains("private func showMapTab()"))
+        XCTAssertTrue(content.contains("doodleSession.mapFollowsHomeFilter = false"))
+        XCTAssertEqual(
+            content.components(separatedBy: "selectedRootTab = .map").count - 1,
+            1,
+            "Only showMapTab() may assign Map directly; other opens must go through it"
+        )
+        for name in [
+            "func openMapSearch",
+            "func openCollaborativeListOnMap",
+            "func showMapCandidatesOnMap",
+            "func addClueToReviewCandidate",
+            "func openExactSearch",
+        ] {
+            XCTAssertTrue(content.contains(name), name)
+        }
+        XCTAssertGreaterThanOrEqual(
+            content.components(separatedBy: "showMapTab()").count - 1,
+            6,
+            "Search, show-on-map, and list handoffs must clear the Home filter"
+        )
         XCTAssertTrue(session.mapFollowsHomeFilter == false)
         session.mapFollowsHomeFilter = true
         XCTAssertTrue(session.mapFollowsHomeFilter)
+        session.mapFollowsHomeFilter = false
+        XCTAssertFalse(session.mapFollowsHomeFilter)
     }
 
     private func place(

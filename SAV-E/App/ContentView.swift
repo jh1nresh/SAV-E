@@ -485,6 +485,13 @@ struct ContentView: View {
         )
     }
 
+    /// Search, show-on-map, and list handoffs must drop a leftover Home
+    /// Eat/Go+city filter so the place the caller asked to show is visible.
+    private func showMapTab() {
+        doodleSession.mapFollowsHomeFilter = false
+        selectedRootTab = .map
+    }
+
     private var capturePresentation: Binding<SaveFullScreenRoute?> {
         Binding(
             get: { if case .capture = fullScreenRoute { return fullScreenRoute }; return nil },
@@ -1050,7 +1057,7 @@ struct ContentView: View {
         mapVM.clearSelectedMapObject()
         drawerVM.returnToCommands()
         rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
-        selectedRootTab = .map
+        showMapTab()
         presentAfterClearingExclusiveChrome(.mapDrawer(
             DrawerLaunchRequest(target: .ask, initialQuery: initialQuery, focusesSearch: focusesSearch)
         ))
@@ -1174,7 +1181,7 @@ struct ContentView: View {
 
     private func openCollaborativeListOnMap(_ list: SaveCollaborativeList) {
         isPassportPresented = false
-        selectedRootTab = .map
+        showMapTab()
         rootPath.removeAll()
         Task {
             await mapVM.planCollaborativeList(list)
@@ -1325,7 +1332,7 @@ struct ContentView: View {
         isRootSheetPresented = false
         isMapPanelExpanded = false
         rootPath.removeAll()
-        selectedRootTab = .map
+        showMapTab()
         drawerVM.returnToCommands()
     }
 
@@ -1334,7 +1341,6 @@ struct ContentView: View {
         if mapVM.focusReviewCandidateOnMap(candidate) {
             fullScreenRoute = nil
             rootPath.removeAll()
-            selectedRootTab = .map
             showMapCandidatesOnMap()
             return
         }
@@ -1347,7 +1353,7 @@ struct ContentView: View {
         guard incomingPlaceReceipt == nil else { return }
         exactSearchRequestID = nil
         rootPath.removeAll()
-        selectedRootTab = .map
+        showMapTab()
         isExactSearchSessionActive = true
         mapVM.beginExactSearchResolution(for: candidate)
         openExactSearchRefine(query: candidate.refinementQuery)
@@ -1364,7 +1370,7 @@ struct ContentView: View {
         }
         fullScreenRoute = nil
         rootPath.removeAll()
-        selectedRootTab = .map
+        showMapTab()
         isExactSearchSessionActive = true
         mapVM.beginExactSearchResolution(for: candidate)
         // The tile-town canvas shows saved stamps, not unconfirmed search pins.
