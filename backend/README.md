@@ -296,3 +296,20 @@ curl -X POST "$SAVE_API_URL/v0/exports/trek-kml" \
 Import `save-map-stamps.kml` from TREK's planner file-import surface. Savvy remains the place-memory source of truth; TREK owns downstream itinerary editing and route planning.
 
 Public collections, OpenAPI, `llms.txt`, paid/API-key access, broad reputation graph exports, external checkout, per-run on-chain receipts, and marketplace UI are intentionally out of scope for the first verified-claims/workflow-ledger slices.
+
+### Subscription persistence verification
+
+`npm run validate` requires PostgreSQL server tools (`initdb`, `pg_ctl`,
+`createdb`, discovered through `pg_config --bindir`). After the regular test
+suite, `npm run test:entitlements:db` creates a temporary socket-only database,
+runs the real ownership/ordering/migration fixtures, and shuts it down. It never
+uses the application's `DATABASE_URL`. Missing server tools fail validation;
+the required backend CI job therefore cannot silently skip this payment gate.
+
+Before an authorized backend deployment, apply
+`sql/subscription-entitlement-ordering.sql` after the existing entitlement
+schema. The migration is additive and retains existing owners/statuses. Confirm
+`GET /health/entitlements` is ready before enabling purchases. This checks storage
+only; App Store Connect configuration and real Sandbox purchase/restore/refund
+validation remain separate launch gates. Never apply this migration to production
+as part of ordinary local verification.

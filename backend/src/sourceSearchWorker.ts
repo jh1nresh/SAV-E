@@ -1515,11 +1515,12 @@ export async function resolveSourceDocument(
         parsed = result.redirect;
         redirectChain.push(parsed.toString());
       } else {
-        // Instagram can return a 200 shell with a post ID but no caption. It
-        // resolves the URL, not the content; caching it defeats later retries.
-        const instagramSource = hostMatchesDomain(normalizedHostname(new URL(originalURL)), "instagram.com");
+        // Social platforms can return a 200 shell without readable content.
+        // Resolving a URL does not make an empty document a reusable analysis
+        // source. Apply the retry rule to every supported social adapter.
+        const socialSource = isPlacePlatformURL(new URL(originalURL)) || isPlacePlatformURL(currentURL);
         if (result.document.resolution.status === "resolved"
-          && (!instagramSource || hasUsableSourceCaption(result.document.resolution.caption))) {
+          && (!socialSource || hasUsableSourceCaption(result.document.resolution.caption))) {
           cacheResolvedSourceDocument(cacheKey, result.document);
         }
         return result.document;

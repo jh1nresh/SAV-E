@@ -28,9 +28,11 @@ export type ProEntitlementStatus = "active" | "expired" | "revoked" | "none";
 export type VerifiedAppleTransaction = {
   originalTransactionId: string;
   transactionId: string;
+  appAccountToken: string | null;
   productId: string;
   bundleId: string;
   purchaseDateMs: number;
+  signedDateMs: number;
   expiresDateMs: number | null;
   revocationDateMs: number | null;
   environment: string;
@@ -41,16 +43,14 @@ export type VerifiedAppleTransaction = {
 /// Deliberately time-based rather than trusting a stored boolean: a renewal or
 /// cancellation notification can be missed, but an expiry timestamp cannot lie.
 export function resolveTier(
-  row: { status: ProEntitlementStatus; expires_at: string | null } | undefined,
+  row: { status: ProEntitlementStatus; expires_at: string | Date | null } | undefined,
   now: Date = new Date(),
 ): "free" | "pro" {
-  if (!row) return "free";
-  if (row.status === "revoked") return "free";
-  if (row.expires_at) {
-    const expiresMs = Date.parse(row.expires_at);
-    if (Number.isFinite(expiresMs) && expiresMs <= now.getTime()) return "free";
-  }
-  return row.status === "active" ? "pro" : "free";
+  if (!row || row.status !== "active" || !row.expires_at) return "free";
+  const expiresMs = row.expires_at instanceof Date
+    ? row.expires_at.getTime() : Date.parse(row.expires_at);
+  return Number.isFinite(now.getTime()) && Number.isFinite(expiresMs) && expiresMs > now.getTime()
+    ? "pro" : "free";
 }
 
 export function monthlyLimitUnits(tier: "free" | "pro"): number {
@@ -105,28 +105,51 @@ export async function verifyAppleSignedTransaction(
     return null;
   }
 
+  return readAppleTransaction(payload, { expectedBundleID, allowedProductIDs });
+}
+
+/// Shared claim validation for client transactions and nested notification data.
+/// These products are subscriptions: absent/malformed expiry is never lifetime access.
+export function readAppleTransaction(
+  payload: JWTPayload,
+  limits: { expectedBundleID: string; allowedProductIDs: readonly string[] },
+): VerifiedAppleTransaction | null {
   const bundleId = stringField(payload.bundleId);
   const productId = stringField(payload.productId);
   const originalTransactionId = stringField(payload.originalTransactionId);
   const transactionId = stringField(payload.transactionId);
+  const environment = stringField(payload.environment);
+  const appAccountToken = payload.appAccountToken === undefined
+    ? null : appleAccountToken(payload.appAccountToken);
+  if (payload.appAccountToken !== undefined && appAccountToken === null) return null;
+  if (bundleId !== limits.expectedBundleID || !productId || !limits.allowedProductIDs.includes(productId)) return null;
+  if (!originalTransactionId || !transactionId || !environment || !["Production", "Sandbox", "Xcode"].includes(environment)) return null;
 
-  if (!bundleId || bundleId !== expectedBundleID) return null;
-  if (!productId || !allowedProductIDs.includes(productId)) return null;
-  if (!originalTransactionId || !transactionId) return null;
+  const purchaseDateMs = appleTimestamp(payload.purchaseDate);
+  const signedDateMs = appleTimestamp(payload.signedDate);
+  const expiresDateMs = appleTimestamp(payload.expiresDate);
+  const revocationDateMs = payload.revocationDate === undefined
+    ? null : appleTimestamp(payload.revocationDate);
+  if (purchaseDateMs === null || signedDateMs === null || expiresDateMs === null) return null;
+  if (payload.revocationDate !== undefined && revocationDateMs === null) return null;
+  if (expiresDateMs <= purchaseDateMs || signedDateMs < purchaseDateMs) return null;
+  if (revocationDateMs !== null && revocationDateMs < purchaseDateMs) return null;
 
-  const purchaseDateMs = numberField(payload.purchaseDate);
-  if (purchaseDateMs === null) return null;
+  return { originalTransactionId, transactionId, appAccountToken, productId, bundleId,
+    purchaseDateMs, signedDateMs, expiresDateMs, revocationDateMs, environment };
+}
 
-  return {
-    originalTransactionId,
-    transactionId,
-    productId,
-    bundleId,
-    purchaseDateMs,
-    expiresDateMs: numberField(payload.expiresDate),
-    revocationDateMs: numberField(payload.revocationDate),
-    environment: stringField(payload.environment) ?? "Production",
-  };
+function appleAccountToken(value: unknown): string | null {
+  return typeof value === "string"
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
+    ? value.toLowerCase() : null;
+}
+
+/// Apple timestamps are integer milliseconds. Bound them to JS Date's range so
+/// a signed malformed value cannot throw at persistence or imply no expiry.
+export function appleTimestamp(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value)
+    && value >= 0 && value <= 8_640_000_000_000_000 ? value : null;
 }
 
 export function statusFor(
@@ -134,6 +157,7 @@ export function statusFor(
   now: Date = new Date(),
 ): ProEntitlementStatus {
   if (transaction.revocationDateMs !== null) return "revoked";
+  if (transaction.expiresDateMs === null || appleTimestamp(transaction.expiresDateMs) === null) return "expired";
   if (transaction.expiresDateMs !== null && transaction.expiresDateMs <= now.getTime()) {
     return "expired";
   }
@@ -189,13 +213,4 @@ function derToPem(der: string): string {
 
 function stringField(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
-}
-
-function numberField(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return Math.trunc(parsed);
-  }
-  return null;
 }

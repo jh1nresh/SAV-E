@@ -350,6 +350,8 @@ final class PrivyAuthService: ObservableObject {
     private func transitionToAuthenticated(userId: String) {
         if currentUserId != userId {
             sessionGeneration &+= 1
+            SaveStoreKitService.shared.resetForSessionChange()
+            SaveEntitlementStore.shared.resetForSessionChange()
         }
         authState = .authenticated(userId: userId)
         synchronizeShareAnalysisSession(userId: userId)
@@ -409,6 +411,8 @@ final class PrivyAuthService: ObservableObject {
         invalidateShareAnalysisSession()
         if authState != .unauthenticated {
             sessionGeneration &+= 1
+            SaveStoreKitService.shared.resetForSessionChange()
+            SaveEntitlementStore.shared.resetForSessionChange()
         }
         authState = .unauthenticated
     }
