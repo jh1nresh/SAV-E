@@ -546,6 +546,7 @@ struct ContentView: View {
                                 },
                                 onOpenPassport: openPassport,
                                 onOpenMap: {
+                                    doodleSession.mapFollowsHomeFilter = true
                                     selectRootTab(.map, mapFollowsHomeFilter: true)
                                 }
                             )

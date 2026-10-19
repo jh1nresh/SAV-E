@@ -73,8 +73,10 @@ final class SaveDoodleSession: ObservableObject {
 
     /// Q5: Map applies Home's Eat/Go + city only after a mini-map open.
     /// Opening the Map tab directly leaves this false so Saved/Nearby stay
-    /// unfiltered.
-    @Published var mapFollowsHomeFilter = false
+    /// unfiltered. Persisted so a tab switch cannot drop a just-set handoff.
+    @Published var mapFollowsHomeFilter: Bool {
+        didSet { defaults.set(mapFollowsHomeFilter, forKey: Self.followKey) }
+    }
 
     private let defaults: UserDefaults
 
@@ -91,6 +93,7 @@ final class SaveDoodleSession: ObservableObject {
         } else {
             city = .nearYou
         }
+        mapFollowsHomeFilter = defaults.bool(forKey: Self.followKey)
     }
 
     private static var suiteSuffix: String {
@@ -99,6 +102,7 @@ final class SaveDoodleSession: ObservableObject {
 
     static var lensKey: String { "save.doodle.lens.\(suiteSuffix)" }
     static var cityKey: String { "save.doodle.city.\(suiteSuffix)" }
+    static var followKey: String { "save.doodle.mapFollows.\(suiteSuffix)" }
 }
 
 enum SaveDoodleHomeCatalog {

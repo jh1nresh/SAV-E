@@ -847,7 +847,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(rootTabButton("Home", app: app).waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.textFields["home.search"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["home.eat"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["home.citySwitcher"].waitForExistence(timeout: stepTimeout))
         let homeShot = app.screenshot()
         attach(app, name: homeName)
         assertScreenshotBackground(

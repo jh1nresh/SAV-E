@@ -126,11 +126,14 @@ final class SaveDoodleHomeTests: XCTestCase {
         let session = SaveDoodleSession(defaults: defaults)
         XCTAssertEqual(session.lens, .eat)
         XCTAssertEqual(session.city, .nearYou)
+        XCTAssertFalse(session.mapFollowsHomeFilter)
         session.lens = .go
         session.city = .city("tokyo")
+        session.mapFollowsHomeFilter = true
         let restored = SaveDoodleSession(defaults: defaults)
         XCTAssertEqual(restored.lens, .go)
         XCTAssertEqual(restored.city, .city("tokyo"))
+        XCTAssertTrue(restored.mapFollowsHomeFilter)
     }
 
     func testProductionHomeIsDoodleNotTileTown() throws {
@@ -250,10 +253,19 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(map.contains("map.city.\\(group.id)"))
         XCTAssertTrue(content.contains("selectRootTab(_ tab: SaveRootTab, mapFollowsHomeFilter: Bool = false)"))
         XCTAssertTrue(content.contains("doodleSession.mapFollowsHomeFilter = mapFollowsHomeFilter"))
+        XCTAssertTrue(content.contains("doodleSession.mapFollowsHomeFilter = true"))
         XCTAssertTrue(content.contains("selectRootTab(.map, mapFollowsHomeFilter: true)"))
         XCTAssertTrue(content.contains("onSelect: { selectRootTab($0) }"))
         XCTAssertTrue(content.contains("private func showMapTab()"))
         XCTAssertTrue(content.contains("doodleSession.mapFollowsHomeFilter = false"))
+        let catalogSource = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")
+        XCTAssertTrue(catalogSource.contains("save.doodle.mapFollows."))
+        XCTAssertTrue(catalogSource.contains("mapFollowsHomeFilter = defaults.bool(forKey: Self.followKey)"))
+        let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
+        XCTAssertTrue(rail.contains("func testHomeAndPassportWarmDarkMode"))
+        XCTAssertTrue(rail.contains("home.eat"))
+        XCTAssertTrue(rail.contains("home.citySwitcher"))
+        XCTAssertTrue(rail.contains("captureHomeAndPassportCanvas"))
         XCTAssertEqual(
             content.components(separatedBy: "selectedRootTab = .map").count - 1,
             1,
