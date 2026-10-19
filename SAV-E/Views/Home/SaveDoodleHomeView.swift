@@ -145,6 +145,7 @@ struct SaveDoodleHomeView: View {
                         .frame(height: 2)
                         .padding(.top, 1)
                 }
+                .fixedSize(horizontal: true, vertical: false)
                 Text("▾")
                     .font(SaveAtlasType.body(13))
                     .foregroundStyle(SaveAtlasPalette.forest)

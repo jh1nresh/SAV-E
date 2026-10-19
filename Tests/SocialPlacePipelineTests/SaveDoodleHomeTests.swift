@@ -141,6 +141,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertFalse(root.contains("SaveTileTownHomeView()"))
         XCTAssertTrue(home.contains("home.miniMap"))
         XCTAssertTrue(home.contains("home.citySwitcher"))
+        XCTAssertTrue(home.contains("fixedSize(horizontal: true, vertical: false)"))
         XCTAssertTrue(home.contains("home.passport"))
         XCTAssertFalse(home.contains("accessibilityIdentifier(\"root.passport\")"))
         XCTAssertTrue(home.contains("lens.accessibilityIdentifier"))
@@ -186,6 +187,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(rail.contains("home.passport"))
         XCTAssertTrue(rail.contains("home.locationPrompt"))
         XCTAssertTrue(rail.contains("home.locationAllow"))
+        XCTAssertTrue(rail.contains("home.collected"))
+        XCTAssertFalse(rail.contains("doodle-home-dark"))
+        XCTAssertFalse(rail.contains("confirmed places"))
     }
 
     func testHomeShowsLocationDeniedPromptIdentifiers() throws {

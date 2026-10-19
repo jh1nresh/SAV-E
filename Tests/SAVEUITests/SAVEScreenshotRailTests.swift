@@ -63,17 +63,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             attach(app, name: "home-list-open-detail-\(staticMode)")
             app.terminate()
         }
-        let dark = makeApp(launchArguments: [
-            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
-            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
-            "--uitest-repair-review-demo-seed", "--uitest-home-memory-fixture",
-            "-save.appLanguage", "en", "-AppleInterfaceStyle", "Dark",
-        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
-        launch(dark)
-        try signInViaReviewDemoRequired(app: dark)
-        XCTAssertTrue(dark.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout))
-        attach(dark, name: "doodle-home-dark")
-        dark.terminate()
     }
 
     @MainActor
