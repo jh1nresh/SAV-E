@@ -65,6 +65,7 @@ struct SaveTileTownRootMap: View {
                 .overlay {
                     SaveKraftTicketShape()
                         .stroke(SaveAtlasPalette.line.opacity(0.22), lineWidth: 1)
+                        .allowsHitTesting(false)
                 }
                 .padding(.horizontal, 12)
                 // Reserve the collapsed command shelf as well as the root tab bar.
