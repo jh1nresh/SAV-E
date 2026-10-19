@@ -19,16 +19,18 @@ via `SaveAtlasType` (system rounded).
 
 - Upstream: Iansui v1.020 `Iansui-Regular.ttf` (9,447,424 bytes)
   https://github.com/ButTaiwan/iansui/releases/tag/v1.020
-- Bundled file: `Iansui-SavvySubset.ttf` — MOE 4808 common characters plus
-  fixed title / city-switcher strings. Rebuild with
-  `scripts/subset-iansui.py`
+- Bundled file: `Iansui-SavvySubset.ttf` (3,475,528 bytes) — MOE 4808
+  common characters plus fixed title / city-switcher strings. Rebuild
+  with `scripts/subset-iansui.py --src Iansui-Regular.ttf`
+- The 4808 table lives in `scripts/doodle-fonts/` so charset `.txt`
+  files are **not** copied into the app bundle
 - License: SIL Open Font License 1.1 (`LICENSES/iansui/OFL.txt`)
 - PostScript name remains `Iansui-Regular` (no Reserved Font Name)
 - Missing glyphs cascade to PingFang TC via `kCTFontCascadeListAttribute`
 
-The handwritten Iansui glyf table does not compress to the spec's 1.5 MB
-hope at 4808 coverage. The shipped subset is the smallest TTF that still
-keeps those characters; leftover glyphs fall back to PingFang TC.
+Founder accepted the 3.48 MB TTF. iOS `UIAppFonts` / `CTFontManager`
+accept TTF and OTF only, not WOFF2. Leftover glyphs fall back to
+PingFang TC.
 
 Runtime registration is in `SaveDisplayType`. `UIAppFonts` also lists these
 files. Titles scale with Dynamic Type (`UIFontMetrics`).

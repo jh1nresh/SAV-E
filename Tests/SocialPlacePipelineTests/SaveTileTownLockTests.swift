@@ -102,6 +102,21 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(info.contains("DisplayFont/Caveat-SemiBold.ttf"))
         XCTAssertTrue(info.contains("DisplayFont/Iansui-SavvySubset.ttf"))
         XCTAssertFalse(info.contains("PixelFont/"))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent(
+                "SAV-E/Resources/DisplayFont/edu-standard-4808.txt"
+            ).path
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent(
+                "SAV-E/Resources/DisplayFont/iansui-savvy-charset.txt"
+            ).path
+        ))
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent(
+                "scripts/doodle-fonts/edu-standard-4808.txt"
+            ).path
+        ))
     }
 
     func testHomeChromeOmitsMapLensesAndKeepsSearch() throws {
@@ -307,6 +322,21 @@ final class SaveTileTownLockTests: XCTestCase {
                 "SAV-E/Resources/Assets.xcassets/PaperGrainDark.imageset/paper-grain-dark@2x.png"
             ).path
         ))
+    }
+
+    func testWarmDarkModeIsUnlockedOnTheProductApp() throws {
+        let info = try source(at: "SAV-E/Info.plist")
+        XCTAssertFalse(info.contains("UIUserInterfaceStyle"))
+        let project = try source(at: "project.yml")
+        XCTAssertFalse(project.contains("UIUserInterfaceStyle: Light"))
+        XCTAssertFalse(project.contains("INFOPLIST_KEY_UIUserInterfaceStyle"))
+        let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
+        XCTAssertTrue(theme.contains("dark: \"1E1C19\""))
+        XCTAssertTrue(theme.contains("enum SaveDoodle"))
+        XCTAssertTrue(theme.contains("PaperGrainDark"))
+        XCTAssertTrue(theme.contains("colorScheme == .dark"))
+        XCTAssertFalse(theme.contains("static let mutedMap"))
+        XCTAssertFalse(theme.contains("static let mapOverlay"))
     }
 
     private func memberBody(_ name: String, in source: String) -> String {
