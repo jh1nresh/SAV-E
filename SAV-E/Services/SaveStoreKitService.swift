@@ -1,14 +1,63 @@
 import Foundation
+import Observation
 import StoreKit
+
+nonisolated struct SaveEntitlementSession: Equatable, Sendable {
+    let generation: Int
+    let owner: String?
+
+    @MainActor static var current: Self {
+        Self(generation: PrivyAuthService.shared.sessionGeneration, owner: PrivyAuthService.shared.currentUserId)
+    }
+}
+
+nonisolated enum SaveSubscriptionRegistrationError: Error {
+    case ownershipConflict
+    case accountBindingRequired
+
+    static func from(status: Int, body: Data) -> Self? {
+        guard status == 409,
+              let value = try? JSONSerialization.jsonObject(with: body) as? [String: Any] else { return nil }
+        switch value["code"] as? String {
+        case "subscription_owner_conflict": return .ownershipConflict
+        case "subscription_account_binding_required": return .accountBindingRequired
+        default: return nil
+        }
+    }
+}
+
+/// Only constructed from locally verified StoreKit results in production.
+nonisolated struct SaveStoreTransaction: Sendable {
+    let productID: String
+    let signedRepresentation: String
+    let expirationDate: Date?
+    let revocationDate: Date?
+    let finish: @Sendable () async -> Void
+
+    init(productID: String, signedRepresentation: String, expirationDate: Date?, revocationDate: Date?, finish: @escaping @Sendable () async -> Void) {
+        self.productID = productID
+        self.signedRepresentation = signedRepresentation
+        self.expirationDate = expirationDate
+        self.revocationDate = revocationDate
+        self.finish = finish
+    }
+
+    init?(_ verification: VerificationResult<Transaction>) {
+        guard case .verified(let transaction) = verification else { return nil }
+        productID = transaction.productID
+        signedRepresentation = verification.jwsRepresentation
+        expirationDate = transaction.expirationDate
+        revocationDate = transaction.revocationDate
+        finish = { await transaction.finish() }
+    }
+}
 
 /// StoreKit 2 wrapper for Savvy Pro.
 ///
 /// Deliberate boundary: this type may *observe* Apple transactions and report
-/// them. It may not decide entitlement on its own. Slice 2 adds
-/// `POST /v0/entitlements/apple`, and from then on the server response is the
-/// only thing that grants Pro. Until that exists, `verifiedTier` stays `.free`
-/// unless a locally verified transaction is present AND purchasing is enabled,
-/// which keeps sandbox builds honest.
+/// them. Only the server response grants Pro. A successful Apple payment is
+/// not reported as activated until its signed transaction is persisted by the
+/// backend for the same Savvy session.
 @MainActor
 @Observable
 final class SaveStoreKitService {
@@ -22,8 +71,23 @@ final class SaveStoreKitService {
     /// Tier confirmed by the backend for the most recent registered
     /// transaction. `nil` means no server confirmation is available yet, which
     /// must be read as "not proven Pro" rather than "free forever".
-    private(set) var serverVerifiedTier: SaveProTier?
+    private var registeredTier: SaveProTier?
+    private var registeredTierValidUntil: Date?
+    var serverVerifiedTier: SaveProTier? {
+        guard stateSession == currentSession() else { return nil }
+        if registeredTier == .pro {
+            guard let registeredTierValidUntil, registeredTierValidUntil > now() else { return nil }
+        }
+        return registeredTier
+    }
 
+    private let currentSession: () -> SaveEntitlementSession
+    private let readEntitlements: () async -> [SaveStoreTransaction]
+    private let synchronizePurchases: () async throws -> Void
+    private let purchasingAvailable: () -> Bool
+    private let now: () -> Date
+    private let loadAccountToken: () async throws -> UUID
+    private var stateSession: SaveEntitlementSession?
     private var updatesTask: Task<Void, Never>?
 
     /// Injected so tests can observe registration without a network call.
@@ -34,20 +98,42 @@ final class SaveStoreKitService {
     /// property is intentionally not named `isPro` so no caller mistakes a
     /// client signal for granted access.
     var locallyObservedTier: SaveProTier {
-        purchasedProductIDs.isEmpty ? .free : .pro
+        stateSession == currentSession() && !purchasedProductIDs.isEmpty ? .pro : .free
     }
 
     init(
         registerTransaction: @escaping (String) async throws -> SaveEntitlementResponse = { jws in
             try await SupabaseService.shared.registerAppleTransaction(signedTransaction: jws)
+        },
+        currentSession: @escaping () -> SaveEntitlementSession = { .current },
+        readEntitlements: @escaping () async -> [SaveStoreTransaction] = {
+            var transactions: [SaveStoreTransaction] = []
+            for await result in Transaction.currentEntitlements {
+                if let transaction = SaveStoreTransaction(result) { transactions.append(transaction) }
+            }
+            return transactions
+        },
+        synchronizePurchases: @escaping () async throws -> Void = { try await AppStore.sync() },
+        purchasingAvailable: @escaping () -> Bool = { SAVEProAccessPolicy.purchasingIsAvailable },
+        observeUpdates: Bool = true,
+        now: @escaping () -> Date = Date.init,
+        loadAccountToken: @escaping () async throws -> UUID = {
+            try await SupabaseService.shared.fetchPurchaseAccountToken()
         }
     ) {
         self.registerTransaction = registerTransaction
+        self.currentSession = currentSession
+        self.readEntitlements = readEntitlements
+        self.synchronizePurchases = synchronizePurchases
+        self.purchasingAvailable = purchasingAvailable
+        self.loadAccountToken = loadAccountToken
+        self.now = now
         // Transaction updates must be observed for the whole app lifetime,
         // including renewals and purchases made on another device. This is a
         // singleton that outlives every screen, so the task is never cancelled;
         // a `deinit` cancel would also be MainActor-isolated and cannot run
         // from a nonisolated deinit.
+        guard observeUpdates else { return }
         updatesTask = Task(priority: .background) { [weak self] in
             for await update in Transaction.updates {
                 await self?.handle(verificationResult: update)
@@ -58,7 +144,7 @@ final class SaveStoreKitService {
     // MARK: - Products
 
     func loadProducts() async {
-        guard SAVEProAccessPolicy.purchasingIsAvailable else {
+        guard purchasingAvailable() else {
             // Products do not exist in App Store Connect yet. Loading would log
             // a spurious failure on every launch, so skip it deliberately.
             products = []
@@ -92,81 +178,165 @@ final class SaveStoreKitService {
     }
 
     func purchase(_ product: Product) async -> PurchaseOutcome {
-        guard SAVEProAccessPolicy.purchasingIsAvailable else { return .unavailable }
-
+        guard purchasingAvailable() else { return .unavailable }
+        let session = prepareSession()
+        guard session.owner != nil else { return .failed("Sign in to Savvy before purchasing.") }
+        guard SAVEProAccessPolicy.ProductID.all.contains(product.id) else { return .unavailable }
         do {
-            let result = try await product.purchase()
+            let token = try await purchaseAccountToken(for: session)
+            let result = try await product.purchase(options: [.appAccountToken(token)])
+            guard isCurrent(session) else { return sessionChangedOutcome }
             switch result {
             case .success(let verification):
-                await handle(verificationResult: verification)
-                return .success
+                guard let transaction = SaveStoreTransaction(verification) else {
+                    return .failed("Apple could not verify this purchase. Please try Restore Purchases.")
+                }
+                return await activate(transaction, for: session)
             case .userCancelled:
                 return .userCancelled
             case .pending:
-                // Ask-to-buy / SCA. Entitlement arrives later via
-                // Transaction.updates, so do not report success here.
                 return .pending
             @unknown default:
                 return .failed("Unrecognized purchase result.")
             }
         } catch {
+            guard isCurrent(session) else { return sessionChangedOutcome }
             return .failed("Purchase could not be completed.")
         }
     }
 
-    /// Required by App Store review on every subscription paywall.
+    /// Fetch the account token before opening Apple's purchase sheet. A token
+    /// obtained for a superseded login must never be used by a new account.
+    func purchaseAccountToken(for session: SaveEntitlementSession) async throws -> UUID {
+        _ = prepareSession()
+        guard session.owner != nil, isCurrent(session) else { throw CancellationError() }
+        let token = try await loadAccountToken()
+        guard isCurrent(session) else { throw CancellationError() }
+        return token
+    }
+
+    /// Restore is successful only after a verified active transaction has
+    /// reconciled with the backend. Local Apple ownership alone is insufficient.
     func restorePurchases() async -> PurchaseOutcome {
-        guard SAVEProAccessPolicy.purchasingIsAvailable else { return .unavailable }
+        guard purchasingAvailable() else { return .unavailable }
+        let session = prepareSession()
+        guard session.owner != nil else { return .failed("Sign in to Savvy before restoring purchases.") }
         do {
-            try await AppStore.sync()
-            await refreshEntitlements()
-            return .success
+            try await synchronizePurchases()
+            guard isCurrent(session) else { return sessionChangedOutcome }
+            return await reconcileEntitlements(for: session)
         } catch {
-            return .failed("Restore could not be completed.")
+            guard isCurrent(session) else { return sessionChangedOutcome }
+            return .failed("Restore could not be completed. Please try again.")
         }
     }
 
-    // MARK: - Entitlement observation
+    // MARK: - Entitlement reconciliation
 
     func refreshEntitlements() async {
-        var owned: Set<String> = []
-        for await entitlement in Transaction.currentEntitlements {
-            guard case .verified(let transaction) = entitlement else { continue }
-            guard transaction.revocationDate == nil else { continue }
-            if let expiration = transaction.expirationDate, expiration <= Date() { continue }
-            owned.insert(transaction.productID)
+        let session = prepareSession()
+        guard session.owner != nil else { return }
+        _ = await reconcileEntitlements(for: session)
+    }
+
+    func resetForSessionChange() {
+        stateSession = nil
+        registeredTier = nil
+        registeredTierValidUntil = nil
+        purchasedProductIDs = []
+        lastError = nil
+    }
+
+    private func prepareSession() -> SaveEntitlementSession {
+        let session = currentSession()
+        if stateSession != session {
+            resetForSessionChange()
+            stateSession = session
         }
-        purchasedProductIDs = owned
+        return session
+    }
+
+    private func isCurrent(_ session: SaveEntitlementSession) -> Bool {
+        !Task.isCancelled && currentSession() == session && stateSession == session
+    }
+
+    private var sessionChangedOutcome: PurchaseOutcome {
+        .failed("Your Savvy account changed. Sign in to the purchasing account and restore purchases.")
+    }
+
+    private func reconcileEntitlements(for session: SaveEntitlementSession) async -> PurchaseOutcome {
+        let transactions = await readEntitlements()
+        guard isCurrent(session) else { return sessionChangedOutcome }
+        let active = transactions.filter {
+            SAVEProAccessPolicy.ProductID.all.contains($0.productID)
+                && $0.revocationDate == nil
+                && ($0.expirationDate.map { $0 > now() } ?? false)
+        }
+        purchasedProductIDs = Set(active.map(\.productID))
+        guard !active.isEmpty else {
+            registeredTier = nil
+            return .failed("No active Savvy Pro subscription was found for this Apple account.")
+        }
+        var activated = false
+        var failure: PurchaseOutcome = .failed("Purchases could not be restored. Please try again.")
+        for transaction in active {
+            guard isCurrent(session) else { return sessionChangedOutcome }
+            let outcome = await activate(transaction, for: session)
+            if outcome == .success { activated = true } else { failure = outcome }
+        }
+        guard isCurrent(session) else { return sessionChangedOutcome }
+        return activated && serverVerifiedTier == .pro ? .success : failure
     }
 
     private func handle(verificationResult: VerificationResult<Transaction>) async {
-        guard case .verified(let transaction) = verificationResult else {
-            // An unverified transaction is not evidence of anything. Ignore it
-            // rather than guessing.
-            return
-        }
+        guard let transaction = SaveStoreTransaction(verificationResult) else { return }
+        let session = prepareSession()
+        guard session.owner != nil else { return }
+        _ = await activate(transaction, for: session)
+    }
 
-        // Forward the signed JWS so the server can verify it against Apple's
-        // certificate chain. Apple's local check proves the payload was not
-        // tampered with on-device; only the server round-trip turns that into
-        // entitlement.
-        let jws = verificationResult.jwsRepresentation
+    /// Internal seam also exercised with synthetic transactions by host checks.
+    /// Production callers construct it only after StoreKit verifies the result.
+    func activate(_ transaction: SaveStoreTransaction, for session: SaveEntitlementSession) async -> PurchaseOutcome {
+        _ = prepareSession()
+        guard session.owner != nil, isCurrent(session) else { return sessionChangedOutcome }
+        guard SAVEProAccessPolicy.ProductID.all.contains(transaction.productID) else { return .unavailable }
         do {
-            let response = try await registerTransaction(jws)
-            serverVerifiedTier = response.resolvedTier
+            let response = try await registerTransaction(transaction.signedRepresentation)
+            guard isCurrent(session) else { return sessionChangedOutcome }
+            registeredTier = response.resolvedTier
+            // This is only a short-lived offline display fallback. A server
+            // verdict must not remain Pro indefinitely after expiry/refund.
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let expiry = response.expiresAt.flatMap { formatter.date(from: $0) }
+            registeredTierValidUntil = min(expiry ?? now(), now().addingTimeInterval(300))
+            if transaction.revocationDate == nil, let expiry = transaction.expirationDate, expiry > now() {
+                purchasedProductIDs.insert(transaction.productID)
+            } else {
+                purchasedProductIDs.remove(transaction.productID)
+            }
             lastError = nil
+            // Finish only after the server persisted the transaction for this
+            // session. Failed activation remains unfinished and can be retried.
+            await transaction.finish()
+            guard isCurrent(session) else { return sessionChangedOutcome }
+            return response.resolvedTier == .pro ? .success : .failed("This subscription is not active. Please check your Apple subscriptions.")
         } catch {
-            // Registration failed (offline, backend down, schema not applied).
-            // Do NOT grant Pro from the local signal — but do not lose the
-            // transaction either: it stays unfinished so StoreKit redelivers it
-            // on the next launch.
-            serverVerifiedTier = nil
-            lastError = "Purchase saved. It will finish activating shortly."
-            await refreshEntitlements()
-            return
+            guard isCurrent(session) else { return sessionChangedOutcome }
+            // Preserve any earlier server-confirmed tier for this same session.
+            // Never promote the local Apple observation to a granted tier.
+            let message: String
+            switch error {
+            case SaveSubscriptionRegistrationError.ownershipConflict:
+                message = "This subscription belongs to another Savvy account. Sign in to the account used for the purchase, then restore it."
+            case SaveSubscriptionRegistrationError.accountBindingRequired:
+                message = "This purchase is not linked to a Savvy account. Contact support to recover it; do not purchase again."
+            default:
+                message = "Your Apple purchase is saved, but Savvy could not activate it. Please try Restore Purchases."
+            }
+            lastError = message
+            return .failed(message)
         }
-
-        await refreshEntitlements()
-        await transaction.finish()
     }
 }

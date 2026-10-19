@@ -210,11 +210,22 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     /// Only the opaque JWS is sent. The server reads product, expiry, and
     /// revocation out of Apple's signature, so nothing this client asserts
     /// about its own tier is trusted.
+    func fetchPurchaseAccountToken() async throws -> UUID {
+        struct TokenResponse: Decodable { let app_account_token: UUID }
+        let data = try await request(path: "/v0/entitlements/apple/account-token")
+        return try JSONDecoder().decode(TokenResponse.self, from: data).app_account_token
+    }
+
     func registerAppleTransaction(signedTransaction: String) async throws -> SaveEntitlementResponse {
         guard isConfigured else { throw SupabaseError.notConfigured }
         let body = try Self.jsonBody(["signed_transaction": signedTransaction])
-        let data = try await request(path: "/v0/entitlements/apple", method: "POST", body: body)
-        return try JSONDecoder.supabase.decode(SaveEntitlementResponse.self, from: data)
+        do {
+            let data = try await request(path: "/v0/entitlements/apple", method: "POST", body: body)
+            return try JSONDecoder.supabase.decode(SaveEntitlementResponse.self, from: data)
+        } catch SupabaseError.apiError(let status, let body) {
+            if let error = SaveSubscriptionRegistrationError.from(status: status, body: Data(body.utf8)) { throw error }
+            throw SupabaseError.apiError(status, body)
+        }
     }
 
     func deleteAccount() async throws {
@@ -1146,6 +1157,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     ) async throws -> (Data, HTTPURLResponse) {
         let isSocialRequest = ["/v0/friend-ratings", "/v0/shared-posts", "/v0/passports", "/v0/social-profile", "/v0/follows", "/v0/followers"].contains { path.hasPrefix($0) }
         let sessionBound = isSocialRequest || path.hasPrefix("/v0/analysis")
+            || path.hasPrefix("/v0/entitlements/") || path == "/v0/usage/quota"
         let friendSession: (Int, String?)?
         if let importing = SAVEPendingImportSessionScope.current {
             friendSession = (importing.generation, importing.owner)

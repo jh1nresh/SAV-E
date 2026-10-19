@@ -689,14 +689,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(grantPathFiles.isDisjoint(with: oneJobSwiftFiles))
 
         let store = try source(at: "SAV-E/Services/SaveEntitlementStore.swift")
-        // The literal here must match the shipped grant path. The original
-        // assertion looked for "serverVerifiedTier ?? locallyObservedTier",
-        // a string that has never existed in this file (the call is qualified
-        // with `storeKit.`), so it could only ever have failed. It never did,
-        // because the file was not a member of any build target.
-        XCTAssertTrue(
-            store.contains("storeKit.serverVerifiedTier ?? storeKit.locallyObservedTier")
-        )
+        // Presentation must not promote a local Apple observation into Pro.
+        // Purchase, restore and offline expiry behavior is exercised by
+        // SaveEntitlementWiringTests against the real service types.
+        XCTAssertTrue(store.contains("storeKit.serverVerifiedTier"))
+        XCTAssertFalse(store.contains("storeKit.locallyObservedTier"))
     }
 
     private func typeBody(_ typeName: String, in source: String) throws -> String {

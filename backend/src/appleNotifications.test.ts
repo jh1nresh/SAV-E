@@ -65,7 +65,7 @@ async function sign(pki: TestPKI, claims: Record<string, unknown>): Promise<stri
     .sign(key);
 }
 
-const EXPIRES_FUTURE = 1_790_000_000_000;
+const EXPIRES_FUTURE = 1_900_000_000_000;
 
 function transactionClaims(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -74,6 +74,7 @@ function transactionClaims(overrides: Record<string, unknown> = {}): Record<stri
     originalTransactionId: "2000000900000001",
     transactionId: "2000000900000002",
     purchaseDate: 1_755_000_000_000,
+    signedDate: 1_755_000_000_001,
     expiresDate: EXPIRES_FUTURE,
     environment: "Sandbox",
     ...overrides,
@@ -89,6 +90,7 @@ async function signNotification(
   const signedTransactionInfo = await sign(pki, transactionClaims(opts.transaction));
   return sign(pki, {
     notificationType,
+    signedDate: 1_755_000_000_002,
     subtype: opts.subtype,
     notificationUUID: "11111111-2222-3333-4444-555555555555",
     data: { signedTransactionInfo },
@@ -166,12 +168,15 @@ function notification(
     notificationType: type as VerifiedAppleNotification["notificationType"],
     subtype,
     notificationUUID: "uuid",
+    signedDateMs: 1_755_000_000_002,
     transaction: {
       originalTransactionId: "1",
       transactionId: "2",
+    appAccountToken: null,
       productId: proEntitlementPolicy.productIDs[0],
       bundleId: proEntitlementPolicy.expectedBundleID,
       purchaseDateMs: 1_755_000_000_000,
+      signedDateMs: 1_755_000_000_001,
       expiresDateMs: EXPIRES_FUTURE,
       revocationDateMs: null,
       environment: "Sandbox",
@@ -252,11 +257,14 @@ test("the webhook updates but never inserts entitlement rows", () => {
   // An insert here would let a forged delivery mint entitlement against an
   // arbitrary user.
   assert.doesNotMatch(handler, /insert\s+into/i);
-  assert.match(handler, /update subscription_entitlements/);
-  assert.match(handler, /where original_transaction_id = \$1/);
+  assert.match(handler, /applyAppleNotification\(/);
 
   // Unknown subscription: acknowledge, do not create.
-  assert.match(handler, /rowCount === 0/);
+  const persistence = readFileSync(new URL("../src/entitlementPersistence.ts", import.meta.url), "utf8");
+  const apply = persistence.slice(persistence.indexOf("export async function applyAppleNotification"), persistence.indexOf("export async function entitlementTier"));
+  assert.doesNotMatch(apply, /insert\s+into/i);
+  assert.match(apply, /current.original_transaction_id = incoming.original_transaction_id/);
+  assert.match(handler, /Entitlement storage is unavailable.*503/s);
 
   // An unverified payload must not be acknowledged with 200.
   assert.match(handler, /Notification could not be verified.*400/s);
@@ -277,3 +285,33 @@ test("notification verification reuses the pinned chain path", () => {
   assert.match(source, /verifyCertificateChain/);
   assert.match(source, /APPLE_ROOT_CA_G3_SHA256/);
 });
+
+test("renewal evidence cannot override signed revocation or expiry", () => {
+  const revoked = notificationEffect(notification("DID_RENEW", { revocationDateMs: 1_760_000_000_000 }));
+  assert.equal(revoked.kind === "update" && revoked.status, "revoked");
+  const expired = notificationEffect(notification("SUBSCRIBED", { expiresDateMs: 1_760_000_000_000 }), new Date(1_770_000_000_000));
+  assert.equal(expired.kind === "update" && expired.status, "expired");
+});
+
+test("notification and nested transaction timestamps must be valid", withPKI(async (pki) => {
+  for (const overrides of [{ expiresDate: undefined }, { expiresDate: "bad" }, { signedDate: undefined }, { revocationDate: "bad" }]) {
+    const payload = await signNotification(pki, "DID_RENEW", { transaction: overrides });
+    assert.equal(await verifyAppleNotification(payload, { trustedRootFingerprints: [pki.rootFingerprint] }), null);
+  }
+  const signedTransactionInfo = await sign(pki, transactionClaims());
+  for (const signedDate of [undefined, "bad", -1, 1e30]) {
+    const payload = await sign(pki, { notificationType: "DID_RENEW", signedDate, data: { signedTransactionInfo } });
+    assert.equal(await verifyAppleNotification(payload, { trustedRootFingerprints: [pki.rootFingerprint] }), null);
+  }
+}));
+
+test("a verified REFUND_REVERSED event explicitly authorizes reversal, but not perpetual access", withPKI(async (pki) => {
+  const payload = await signNotification(pki, "REFUND_REVERSED");
+  const verified = await verifyAppleNotification(payload, { trustedRootFingerprints: [pki.rootFingerprint] });
+  assert.ok(verified);
+  const effect = notificationEffect(verified);
+  assert.equal(effect.kind === "update" && effect.revocationReversed, true);
+  assert.equal(effect.kind === "update" && effect.status, "active");
+  const expired = notificationEffect(notification("REFUND_REVERSED", { expiresDateMs: 1_760_000_000_000 }), new Date(1_770_000_000_000));
+  assert.equal(expired.kind === "update" && expired.status, "expired");
+}));

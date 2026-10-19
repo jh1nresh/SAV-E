@@ -217,15 +217,17 @@ import {
 } from "./usageQuota.js";
 import {
   monthlyLimitUnits,
-  resolveTier,
-  statusFor,
   verifyAppleSignedTransaction,
-  type ProEntitlementStatus,
 } from "./proEntitlement.js";
 import {
   notificationEffect,
   verifyAppleNotification,
 } from "./appleNotifications.js";
+import {
+  storeAppleEntitlement, applyAppleNotification, entitlementTier, readEntitlementReadiness,
+  EntitlementOwnershipError, EntitlementBindingRequiredError,
+  appAccountTokenFor, isEntitlementSchemaUnavailable,
+} from "./entitlementPersistence.js";
 import { deleteAccount } from "./accountDeletion.js";
 import {
   FriendRatingError, listFriendRatings, getFriendRating, ownFriendRatings,
@@ -936,6 +938,11 @@ createServer(async (request, response) => {
       response.setHeader("Cache-Control", "no-store");
       return sendJson(response, { ...status, analysis, ready }, ready ? 200 : 503);
     }
+    if (request.method === "GET" && url.pathname === "/health/entitlements") {
+      const status = await readEntitlementReadiness(analysisHealthPool);
+      response.setHeader("Cache-Control", "no-store");
+      return sendJson(response, status, status.ready ? 200 : 503);
+    }
     // Apple posts server notifications with no user session. Authentication is
     // the JWS signature itself, verified against the pinned Apple root, so this
     // route is matched before the bearer-token gate.
@@ -1117,8 +1124,16 @@ createServer(async (request, response) => {
     if (isV0 && resource === "usage" && id === "quota" && segments.length === 2) {
       return await handleUsageQuotaPreview(request, response, userId);
     }
-    if (isV0 && resource === "entitlements" && id === "apple" && segments.length === 2) {
-      return await handleAppleEntitlement(request, response, userId);
+    if (isV0 && resource === "entitlements" && id === "apple") {
+      if (!hasAccountBearerAuthorization(request.headers.authorization)) {
+        return sendJson(response, { error: "Sign in to a Savvy account to manage purchases" }, 401);
+      }
+      if (segments.length === 3 && segments[2] === "account-token") {
+        if (request.method !== "GET") return sendJson(response, { error: "Method not allowed" }, 405);
+        response.setHeader("Cache-Control", "private, no-store");
+        return sendJson(response, { app_account_token: appAccountTokenFor(userId) });
+      }
+      if (segments.length === 2) return await handleAppleEntitlement(request, response, userId);
     }
     if (isV0 && resource === "analysis") {
       return await handleAnalysis(request,response,segments.slice(1),userId);
@@ -2760,16 +2775,7 @@ async function handleUsageQuotaPreview(
 /// cannot lock anyone out either.
 async function currentEntitlementTier(userId: string): Promise<"free" | "pro"> {
   try {
-    const { rows } = await pool.query(
-      `select status, expires_at
-       from subscription_entitlements
-       where user_id = $1
-       order by expires_at desc nulls first
-       limit 1`,
-      [userId],
-    );
-    const row = rows[0] as { status: ProEntitlementStatus; expires_at: string | null } | undefined;
-    return resolveTier(row);
+    return await entitlementTier(pool, userId);
   } catch (error) {
     if (!isMissingRelationError(error)) {
       console.warn("Entitlement lookup failed; treating the caller as free.");
@@ -2807,62 +2813,33 @@ async function handleAppleEntitlement(
     return sendJson(response, { error: "Transaction could not be verified" }, 400);
   }
 
-  const status = statusFor(transaction);
-  const expiresAt = transaction.expiresDateMs === null
-    ? null
-    : new Date(transaction.expiresDateMs).toISOString();
-
   try {
-    await pool.query(
-      `insert into subscription_entitlements (
-         user_id, original_transaction_id, product_id, status, environment,
-         expires_at, last_verified_at
-       ) values ($1, $2, $3, $4, $5, $6, now())
-       on conflict (original_transaction_id) do update set
-         user_id = excluded.user_id,
-         product_id = excluded.product_id,
-         status = excluded.status,
-         environment = excluded.environment,
-         expires_at = excluded.expires_at,
-         last_verified_at = now()`,
-      [
-        userId,
-        transaction.originalTransactionId,
-        transaction.productId,
-        status,
-        transaction.environment,
-        expiresAt,
-      ],
-    );
+    const { row } = await storeAppleEntitlement(pool, userId, transaction);
+    return sendJson(response, {
+      tier: await currentEntitlementTier(userId),
+      status: row.status,
+      product_id: row.product_id,
+      expires_at: row.expires_at,
+      environment: row.environment,
+    });
   } catch (error) {
-    if (!isMissingRelationError(error)) throw error;
-    // Schema not applied yet. Report honestly rather than implying the
-    // entitlement was stored.
-    console.warn("subscription_entitlements is missing; entitlement was not persisted.");
+    if (error instanceof EntitlementOwnershipError) {
+      return sendJson(response, { code: "subscription_owner_conflict", error: error.message }, 409);
+    }
+    if (error instanceof EntitlementBindingRequiredError) {
+      return sendJson(response, { code: "subscription_account_binding_required", error: error.message }, 409);
+    }
+    if (!isEntitlementSchemaUnavailable(error)) throw error;
+    console.warn("Entitlement schema is unavailable; transaction was not persisted.");
     return sendJson(response, { error: "Entitlement storage is unavailable" }, 503);
   }
-
-  const tier = resolveTier({ status, expires_at: expiresAt });
-  return sendJson(response, {
-    tier,
-    status,
-    product_id: transaction.productId,
-    expires_at: expiresAt,
-    environment: transaction.environment,
-  });
 }
 
 /// Handle an App Store Server Notification v2.
 ///
-/// Three rules govern this handler, each protecting against a specific failure:
-///
-/// 1. Once the signature verifies, always return 200. Apple retries non-2xx for
-///    days, so a 500 loop on one odd notification is worse than a no-op.
-/// 2. Never insert. Entitlement rows are only ever created by an authenticated
-///    user posting their own transaction; if a webhook could insert, anyone who
-///    could forge a delivery would mint entitlement against an arbitrary user.
-/// 3. Update by `original_transaction_id` only, so repeated deliveries of the
-///    same notification converge instead of accumulating.
+/// Verify before applying, never create ownership from a webhook, and compare
+/// signed period/event versions atomically. Storage failures return non-2xx so
+/// Apple can retry rather than permanently losing a refund or renewal.
 async function handleAppleServerNotification(
   request: IncomingMessage,
   response: ServerResponse,
@@ -2882,8 +2859,7 @@ async function handleAppleServerNotification(
 
   const notification = await verifyAppleNotification(signedPayload);
   if (!notification) {
-    // Unverified: reject. This is the one case that must NOT return 200,
-    // because acknowledging an unsigned payload would invite replay.
+    // Unverified signed data must never reach entitlement persistence.
     return sendJson(response, { error: "Notification could not be verified" }, 400);
   }
 
@@ -2896,38 +2872,18 @@ async function handleAppleServerNotification(
   }
 
   try {
-    const { rowCount } = await pool.query(
-      `update subscription_entitlements
-       set status = $2,
-           expires_at = $3,
-           product_id = $4,
-           environment = $5,
-           last_verified_at = now()
-       where original_transaction_id = $1`,
-      [
-        notification.transaction.originalTransactionId,
-        effect.status,
-        effect.expiresAt,
-        notification.transaction.productId,
-        notification.transaction.environment,
-      ],
+    const applied = await applyAppleNotification(
+      pool, notification.transaction, effect, notification.signedDateMs,
     );
-
-    if (rowCount === 0) {
-      // No local row for this subscription. Acknowledge so Apple stops
-      // retrying, but do not create one -- see rule 2 above.
-      console.log(
-        `[apple-notifications] ${notification.notificationType} for unknown subscription; ignored`,
-      );
-      return sendJson(response, { received: true, applied: false });
-    }
+    return sendJson(response, { received: true, applied });
   } catch (error) {
-    if (!isMissingRelationError(error)) throw error;
-    console.warn("subscription_entitlements is missing; notification was not applied.");
-    return sendJson(response, { received: true, applied: false });
+    if (error instanceof EntitlementOwnershipError) {
+      return sendJson(response, { code: "subscription_owner_conflict", error: error.message }, 409);
+    }
+    if (!isEntitlementSchemaUnavailable(error)) throw error;
+    console.warn("Entitlement schema is unavailable; notification was not applied.");
+    return sendJson(response, { error: "Entitlement storage is unavailable" }, 503);
   }
-
-  return sendJson(response, { received: true, applied: true });
 }
 
 async function recordGeminiFailure(

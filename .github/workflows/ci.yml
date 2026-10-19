@@ -87,6 +87,7 @@ jobs:
         if: steps.scope.outputs.run == 'true'
         run: |
           scripts/check-account-export.sh
+          scripts/check-entitlements.sh
           python3 -B -m unittest discover -s Tests/account_preservation -p 'test_*.py' -v
 
       - name: Cache SwiftPM packages
