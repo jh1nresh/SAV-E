@@ -383,6 +383,26 @@ final class SaveHomeLibrarySearchTests: XCTestCase {
         XCTAssertTrue(SaveHomeReviewQueue.isSourceClue(source))
         XCTAssertTrue(SaveHomeReviewQueue.isSourceClue(missingCoords))
         XCTAssertFalse(SaveHomeReviewQueue.isSourceClue(newestCandidate))
+        let amap = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Qingdao noodle shop",
+            address: "Hong Kong East Road",
+            city: nil,
+            latitude: nil,
+            longitude: nil,
+            evidence: [
+                "Amap POI id: B0FFFAKEQINGDAO",
+                "Amap reference coordinates (GCJ-02): 36.064812, 120.421421",
+                "Provider map URL: https://uri.amap.com/marker?position=120.421421,36.064812&name=qingdao&src=save",
+            ],
+            confidence: 0.8,
+            missingInfo: ["WGS84 coordinates for the unified Atlas map"],
+            status: "review",
+            createdAt: now
+        )
+        XCTAssertTrue(amap.hasSavableLocation)
+        XCTAssertFalse(SaveHomeReviewQueue.isSourceClue(amap))
         XCTAssertEqual(
             SaveHomeReviewQueue.previewIDs(in: [missingCoords, rejected, olderCandidate, newestCandidate, source]),
             [newestCandidate.id.uuidString, olderCandidate.id.uuidString, source.id.uuidString, missingCoords.id.uuidString]

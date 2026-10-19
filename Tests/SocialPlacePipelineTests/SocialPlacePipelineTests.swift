@@ -3851,7 +3851,7 @@ final class SocialPlacePipelineTests: XCTestCase {
             longitude: -117.826,
             category: .cafe,
             status: .wantToGo,
-            note: "Distance: 852m away",
+            note: SavvyGeneratedLine.marking("Distance: 852m away"),
             sourcePlatform: .googleMaps,
             priceRange: "$$",
             googleRating: 4.6,
@@ -3862,6 +3862,34 @@ final class SocialPlacePipelineTests: XCTestCase {
 
         XCTAssertNil(place.cleanMemoryNote)
         XCTAssertEqual(place.memorySummary(language: .traditionalChinese), "已存成想找時間去的地點。")
+
+        var userDistance = Place.mock
+        userDistance.name = "Utopia Euro Caffe"
+        userDistance.address = "Selected on map"
+        userDistance.note = "Distance: 852m away"
+        XCTAssertEqual(userDistance.cleanMemoryNote, "Distance: 852m away")
+    }
+
+    @MainActor
+    func testSavedPlaceMemorySummaryKeepsUserAuthoredPrefixedNotes() {
+        for note in [
+            "Highlight: the bun was amazing",
+            "Vibe: casual counter seats",
+            "Access: walk up and wait",
+            "Evidence: keep this as my memory",
+            "Creator handle: @me.and.the.bun",
+            "source: a friend told me",
+            "address: use the side street",
+            "rating: better than the reviews",
+            "Recommender: Alice suggested the curry",
+            "Analysis method: I asked the barista",
+            "Source handle: @me.and.the.bun",
+        ] {
+            var place = Place.mock
+            place.note = note
+            XCTAssertEqual(place.cleanMemoryNote, note)
+            XCTAssertEqual(place.memorySummary(language: .english), note)
+        }
     }
 
     // MARK: - Share-text normalization (messy real-world pastes)
@@ -5029,7 +5057,11 @@ final class SocialPlacePipelineTests: XCTestCase {
                 missingInfo: item.missingInfo, status: "review", createdAt: Date())
             let place = Place.from(review)
             let sharedNote = ShareRoutePayloadSanitizer.publicNote(place.note) ?? ""
-            XCTAssertEqual(place.note, item.evidence.joined(separator: "\n"))
+            XCTAssertEqual(place.note, "Venue named in source")
+            XCTAssertFalse((place.note ?? "").contains("Evidence tier:"))
+            XCTAssertFalse((place.note ?? "").contains("Google Places refined match:"))
+            XCTAssertFalse((place.note ?? "").contains("Google Places address:"))
+            XCTAssertFalse((place.note ?? "").contains("Google Places coordinates:"))
             let persistedCandidate = String(decoding: try JSONEncoder().encode(item), as: UTF8.self)
             for text in [persistedCandidate, item.evidence.joined(separator: "\n"), place.note ?? "", sharedNote] {
                 for diagnostic in [snapshot.analysisID.uuidString, "analysis_id", "Analysis search counts", "resolver_attempts", "resolver_errors", "resolver_cache_hits", "public_attempts", "public_errors", "public_cache_hits"] {

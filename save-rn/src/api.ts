@@ -38,6 +38,8 @@ type BackendPlace = {
   source_url?: string | null;
   source_platform: Place["sourcePlatform"];
   note?: string | null;
+  // Owner-private structured stamp memory. Never copy into `note`.
+  memory_meta?: unknown | null;
   price_range?: string | null;
   recommender?: string | null;
 };
