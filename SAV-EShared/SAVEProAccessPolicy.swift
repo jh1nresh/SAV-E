@@ -129,7 +129,9 @@ enum SavePlaceLimitHandoff {
 #if DEBUG
         if let testDefaults { return testDefaults }
 #endif
-        return UserDefaults(suiteName: SAVEProductionConfig.appGroupSuiteName) ?? .standard
+        // Same App Group as `SAVEProductionConfig.appGroupSuiteName`. Kept as a
+        // literal so the host entitlement checker can compile this file alone.
+        return UserDefaults(suiteName: "group.com.wanderly.app") ?? .standard
     }
 
     nonisolated static func syncCache(
