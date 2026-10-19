@@ -3,11 +3,80 @@
 -- cannot leave tables committed with unsafe grants:
 --   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f backend/sql/schema.sql
 do $fresh_schema_privacy_guard$
+declare
+    target_schema text := current_schema();
+    managed_tables text[] := array[
+        'agent_capabilities',
+        'agent_decisions',
+        'agent_tool_calls',
+        'ai_usage_events',
+        'analysis_captures',
+        'analysis_recovery_runs',
+        'analysis_sessions',
+        'analysis_usage_events',
+        'candidate_extraction_inputs',
+        'captures',
+        'claim_usage_receipts',
+        'clearing_block_items',
+        'clearing_blocks',
+        'collection_places',
+        'collections',
+        'credit_ledger',
+        'evidence_items',
+        'extraction_cache_epochs',
+        'follows',
+        'friend_rating_saves',
+        'friend_restaurant_ratings',
+        'friend_share_events',
+        'ig_bot_links',
+        'list_items',
+        'list_members',
+        'list_share_codes',
+        'lists',
+        'memory_preferences',
+        'pending_subscription_notifications',
+        'place_candidates',
+        'place_claims',
+        'place_identity_feedback',
+        'place_signal_state',
+        'place_social_signals',
+        'place_visibility',
+        'places',
+        'profiles',
+        'recommendation_analysis_receipts',
+        'recommendation_items',
+        'recommendation_outcomes',
+        'recommendation_sets',
+        'related_place_source_packs',
+        'semantic_extraction_cache',
+        'sendblue_conversation_state',
+        'sendblue_reviews',
+        'sendblue_saved_places',
+        'sendblue_sllr_buyers',
+        'sendblue_sllr_notified_runs',
+        'sendblue_user_locations',
+        'sendblue_verified_visits',
+        'share_extension_analyses',
+        'share_extension_sessions',
+        'shared_place_links',
+        'source_artifacts',
+        'subscription_entitlements',
+        'trip_stops',
+        'trips',
+        'user_channels',
+        'user_decisions',
+        'work_orders',
+        'workflow_receipts',
+        'workflow_reputation_snapshots',
+        'workflow_runs',
+        'workflow_steps'
+    ];
 begin
     -- Same current-user default and membership checks as the privacy boundary
     -- below, before any DDL. MEMBER covers INHERIT (USAGE) and SET-able
-    -- NOINHERIT memberships. Existing-table checks fire on re-apply; a fresh
-    -- empty schema has none. psql without -1 commits each statement.
+    -- NOINHERIT memberships. Existing-table checks inspect only the managed
+    -- allowlist so unrelated tables cannot block a documented re-apply.
+    -- A fresh empty schema has none. psql without -1 commits each statement.
     if exists (
         select 1 from pg_default_acl d
         cross join lateral aclexplode(d.defaclacl) a
@@ -36,41 +105,41 @@ begin
           and granted.rolname not in ('anon', 'authenticated')
           and pg_has_role(browser.oid, granted.oid, 'MEMBER')
     ) or exists (
-        select 1 from pg_class c
+        select 1
+        from unnest(managed_tables) as t(name)
+        join pg_class c on c.oid = to_regclass(format('%I.%I', target_schema, t.name))
         cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
         join pg_roles granted on granted.oid = a.grantee
         join pg_roles browser on browser.rolname in ('anon', 'authenticated')
-        where c.relnamespace = current_schema()::regnamespace
-          and c.relkind = 'r'
-          and granted.rolname not in ('anon', 'authenticated')
+        where granted.rolname not in ('anon', 'authenticated')
           and pg_has_role(browser.oid, granted.oid, 'MEMBER')
     ) or exists (
-        select 1 from pg_class c
+        select 1
+        from unnest(managed_tables) as t(name)
+        join pg_class c on c.oid = to_regclass(format('%I.%I', target_schema, t.name))
         join pg_roles owner on owner.oid = c.relowner
         join pg_roles browser on browser.rolname in ('anon', 'authenticated')
-        where c.relnamespace = current_schema()::regnamespace
-          and c.relkind = 'r'
-          and browser.oid <> owner.oid
+        where browser.oid <> owner.oid
           and pg_has_role(browser.oid, owner.oid, 'MEMBER')
     ) then
         raise exception 'Browser-role table grants inherited through role membership require separate authorized remediation';
     end if;
     if exists (
-        select 1 from pg_class c
+        select 1
+        from unnest(managed_tables) as t(name)
+        join pg_class c on c.oid = to_regclass(format('%I.%I', target_schema, t.name))
         join pg_roles owner on owner.oid = c.relowner
-        where c.relnamespace = current_schema()::regnamespace
-          and c.relkind = 'r'
-          and owner.rolname in ('anon', 'authenticated')
+        where owner.rolname in ('anon', 'authenticated')
     ) then
         raise exception 'Managed table ownership by a browser role requires separate authorized remediation';
     end if;
     if exists (
-        select 1 from pg_class c
+        select 1
+        from unnest(managed_tables) as t(name)
+        join pg_class c on c.oid = to_regclass(format('%I.%I', target_schema, t.name))
         join pg_attribute col on col.attrelid = c.oid
         cross join lateral aclexplode(col.attacl) a
-        where c.relnamespace = current_schema()::regnamespace
-          and c.relkind = 'r'
-          and col.attnum > 0 and not col.attisdropped
+        where col.attnum > 0 and not col.attisdropped
           and col.attacl is not null
           and (
               a.grantee = 0
@@ -88,11 +157,11 @@ begin
     -- delegated GRANT OPTION holder can grant TRUNCATE to PUBLIC/anon/
     -- authenticated; those entries survive and bypass RLS.
     if exists (
-        select 1 from pg_class c
+        select 1
+        from unnest(managed_tables) as t(name)
+        join pg_class c on c.oid = to_regclass(format('%I.%I', target_schema, t.name))
         cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
-        where c.relnamespace = current_schema()::regnamespace
-          and c.relkind = 'r'
-          and a.grantor <> current_user::regrole
+        where a.grantor <> current_user::regrole
           and (
               a.grantee = 0
               or exists (

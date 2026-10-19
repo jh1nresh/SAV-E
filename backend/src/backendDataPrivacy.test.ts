@@ -55,12 +55,17 @@ test("privacy allowlists cover every backend schema table without including unre
 
 test("fresh schema privacy guard runs before DDL and documents transactional apply", () => {
   const guard = schemaSQL.search(/Global default table grants to browser roles require separate authorized remediation/);
-  const tableGrantGuard = schemaSQL.search(/from pg_class c\s+cross join lateral aclexplode\(coalesce\(c\.relacl/);
+  const guardEnd = schemaSQL.indexOf("end $fresh_schema_privacy_guard$");
   const ddl = schemaSQL.search(/\bcreate\s+(extension|table)\b/i);
   assert.ok(guard >= 0 && ddl >= 0 && guard < ddl, "fresh-schema guard must run before DDL");
-  assert.ok(tableGrantGuard >= 0 && tableGrantGuard < ddl, "re-apply table-grant refusal must run before DDL");
+  assert.ok(guardEnd >= 0 && guardEnd < ddl, "fresh-schema guard must close before DDL");
+  assert.match(schemaSQL.slice(0, guardEnd), /unnest\(managed_tables\)/, "re-apply table-grant refusal must run before DDL and use the managed allowlist");
+  assert.deepEqual(staticAllowlist(schemaSQL.slice(0, schemaSQL.indexOf(marker))), managedTables, "fresh-schema guard must use the same allowlist");
   const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
+  const sqlReadme = readFileSync(new URL("../sql/README.md", import.meta.url), "utf8");
   assert.match(readme, /psql "\$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f backend\/sql\/schema\.sql/);
+  assert.match(readme, /apply-sql\.sh backend-data-privacy\.sql/);
+  assert.match(sqlReadme, /backend-data-privacy\.sql/);
   assert.match(privacySQL, /pg_has_role\(browser\.oid, granted\.oid, 'MEMBER'\)/);
   assert.match(schemaSQL, /pg_has_role\(browser\.oid, granted\.oid, 'MEMBER'\)/);
   assert.match(privacySQL, /a\.grantor <> current_user::regrole/);
@@ -379,6 +384,18 @@ test("privacy migration refuses SET-able NOINHERIT browser-role memberships", { 
       assert.deepEqual(await state(), before, "NOINHERIT membership refusal must leave existing access and defaults unchanged");
     });
   }, { browser: true, legacy: true });
+});
+
+test("fresh schema guard ignores inherited grants on unrelated tables", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query("grant all on privacy_unrelated_sentinel to privacy_browser_parent");
+      await fixture.db.query(schemaSQL);
+      assert.equal((await fixture.db.query("select to_regclass('places') is not null as present")).rows[0].present, true);
+      assert.equal((await fixture.db.query("select has_table_privilege('anon','privacy_unrelated_sentinel','TRUNCATE') as allowed")).rows[0].allowed, true, "unrelated inherited grants stay untouched");
+    });
+  }, { browser: true, install: false });
 });
 
 test("fresh schema guard refuses existing inherited table grants before any DDL", { skip: !connectionString }, async () => {

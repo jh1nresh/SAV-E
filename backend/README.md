@@ -89,11 +89,17 @@ authorization to migrate or deploy.
    - pending additive files, oldest first: `sql/analysis-usage.sql` (if those
      tables are not already present), then `sql/friend-ratings.sql`, then any
      later file listed in `sql/README.md`
+   - `sql/backend-data-privacy.sql` — existing installs only, after any
+     optional table migrations; separately authorized. Fresh schema already
+     includes the same boundary.
    - `friend-ratings.sql` creates `idx_places_id_user_id` if missing before the
      composite FK, so a database that already has `places` but lacks that index
      does not fail the way the #241 prod apply did
    - From `backend/`: dry-read, then apply: `./scripts/apply-sql.sh friend-ratings.sql`
      then `./scripts/apply-sql.sh friend-ratings.sql --apply`
+   - Existing-install privacy apply, founder-owned: dry-read, then apply
+     `./scripts/apply-sql.sh backend-data-privacy.sql` then
+     `./scripts/apply-sql.sh backend-data-privacy.sql --apply`
    - If `psql` rejects `sslmode=no-verify` (from `backend/`; known prod URL
      only carries that query param):
      `PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -v ON_ERROR_STOP=1 -1 -f sql/friend-ratings.sql`
@@ -107,6 +113,10 @@ authorization to migrate or deploy.
              to_regclass('public.friend_restaurant_ratings') is not null,
              to_regclass('public.friend_rating_saves') is not null;"
    ```
+
+   After an authorized privacy apply, also verify catalog-only that `places`
+   has RLS on and that `anon`/`authenticated` have no table privileges.
+   `/health/entitlements` does not inspect this boundary.
 
 3. Railway-deploy this backend (separate human approval; not this repository
    change and not `npm start`).

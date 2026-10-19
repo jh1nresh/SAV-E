@@ -14,7 +14,15 @@ hygiene or docs PR.
      that composite unique index.
    - `share-extension-sessions.sql` — after `analysis-usage.sql`; stores only
      hashed Share Extension tokens and their bounded analysis replay records.
-3. Verify (read-only), then Railway-deploy the backend, then iOS.
+3. `backend-data-privacy.sql` — existing installs only, after the additive
+   files above. Separately authorized. Fresh `schema.sql` already includes the
+   same boundary. From `backend/`:
+   `./scripts/apply-sql.sh backend-data-privacy.sql` then
+   `./scripts/apply-sql.sh backend-data-privacy.sql --apply`.
+4. Verify (read-only), then Railway-deploy the backend, then iOS. Verify the
+   privacy apply with catalog-only readback of RLS flags and effective
+   browser-role table privileges; `/health/entitlements` does not inspect
+   this boundary.
 
 `friend-ratings.sql` is self-contained for the composite FK: it creates
 `idx_places_id_user_id` with `IF NOT EXISTS` before
