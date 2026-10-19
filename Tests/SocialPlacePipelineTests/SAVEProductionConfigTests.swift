@@ -432,6 +432,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(parked?.googlePlaceId, "ChIJcap-harbor")
     }
 
+    @MainActor
     func testSharedPlacePostDecodesCoordinatesAndPlaceIdForParkedSave() throws {
         let json = """
         {
