@@ -6,7 +6,7 @@
 > chrome, with the 2026-10-19 v5 cream/ink/stroke lock below. **Tile-town** is
 > the product Map / Home peek / Friends strip base (founder lock 2026-10-14).
 > The 2026-10-19 founder decision replaces the Home hero and Map tab with a
-> full-pixel **isometric** tile town; that renderer is a follow-up PR. **Soft
+> full-pixel **isometric** tile town (`SaveTileTownRaster`). **Soft
 > Pixel** is accents-only *on* tile-town (pins / seals / Memo). **Cream-notebook**
 > tokens are legacy-surface-only. See "Tile Town", "Atlas Postcard Tokens",
 > and "Legacy Cream-Notebook Tokens" below.
@@ -127,9 +127,9 @@ Rules:
 - Tile-town is nearest-neighbor integer tiles (`SaveTileTownRaster`): buildings,
   roofs, trees, water, and roads are crisp cells. No anti-aliased vector houses
   or curved roads. Do not blurry-upscale pixel art.
-- **2026-10-19:** Home hero and Map become a full-pixel isometric tile town
-  (place-memory, not navigation). Pins and saved stamps stay tappable. The
-  isometric renderer is sequenced after this chrome/token PR.
+- **2026-10-19:** Home hero and Map use a full-pixel isometric tile town
+  (`SaveTileTownRaster`, place-memory, not navigation). Pins and saved stamps
+  stay tappable on house lots. Nearest-neighbor only.
 - App Store frames and product UI share this town. In-app **titles** (Savvy
   wordmark, page titles) use `SavePixelDisplayText` / `SavePixelType`
   (Pixelify Sans Latin + Fusion Pixel CJK). Stamp names stay SF Rounded until
@@ -290,10 +290,10 @@ table ever disagree, fix whichever one drifted in the same PR.
 | Stroke / line | `SaveAtlasPalette.stroke` / `.line` | `#C9AF8B` | `#8A7358` | Hard 2px strokes (`strokeWidth`) |
 | Card radius | `SaveAtlasPalette.cardRadius` | `6` | `6` | Default paper corner |
 
-Tile-town materials live in `SaveTileTownPalette` (code wins). Grass `#8FBF6A`,
-water `#7EC8E3`, road `#F4E6C8`, roofs coral/honey/sky, house paper `#FFF8E8`.
-Do not treat these as Atlas paper substitutes for tickets or chrome. A v5
-isometric retune of these cells is a follow-up with the town renderer.
+Tile-town materials live in `SaveTileTownPalette` (code wins). Sampled from the
+v5 isometric mocks: grass `#6BB34A`, water `#3DB5DC`, road `#E8D5A3`, roofs
+terracotta/honey/sky, house paper `#F3E6C8`. Do not treat these as Atlas paper
+substitutes for tickets or chrome.
 
 Palette rules:
 

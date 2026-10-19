@@ -146,8 +146,12 @@ struct SaveTileTownCanvas: View {
     private func pinsLayer(in size: CGSize) -> some View {
         let ids = pins.map(\.id)
         let assigned = SaveTileTownLayout.assignments(for: ids)
+        let anchors = SaveTileTownRaster.normalizedHouseAnchors()
         return ForEach(pins) { pin in
-            let lot = SaveTileTownLayout.lots[assigned[pin.id] ?? 0]
+            let lotIndex = assigned[pin.id] ?? 0
+            let lot = anchors.indices.contains(lotIndex)
+                ? anchors[lotIndex]
+                : SaveTileTownLayout.lots[lotIndex % SaveTileTownLayout.lots.count]
             Button {
                 onSelect(pin.id)
             } label: {
@@ -189,28 +193,55 @@ struct SaveTileTownCanvas: View {
     }
 }
 
-/// Nearest-neighbor tile-town. Drawn at a fixed cell grid, then scaled by an
-/// integer factor with interpolation disabled. No anti-aliased curves.
+/// Nearest-neighbor isometric tile-town (founder lock 2026-10-19).
+/// Drawn at a fixed pixel grid, then scaled by an integer factor with
+/// interpolation disabled. Place-memory, not navigation. No anti-aliased curves.
 enum SaveTileTownRaster {
-    static let columns = 48
-    static let rows = 32
+    static let mapColumns = 14
+    static let mapRows = 12
+    static let tileW = 16
+    static let tileH = 8
+    static let baseWidth = 240
+    static let baseHeight = 176
+    static let columns = baseWidth
+    static let rows = baseHeight
+    private static let originX = 120
+    private static let originY = 20
 
-    enum Cell: UInt8 {
+    enum Cell {
         case grass, grassDeep, water, waterDeep, sand, road
         case roofCoral, roofHoney, roofSky, roofForest
-        case wall, window, door, tree, treeDeep, trunk
+        case wall, wallDeep, window, door, tree, treeDeep, trunk
     }
 
+    /// Sixteen hashed lots. Pins sit on these house footprints.
+    static let houses: [(column: Int, row: Int, roof: Cell)] = [
+        (2, 2, .roofCoral), (4, 1, .roofHoney), (6, 2, .roofSky), (3, 3, .roofForest),
+        (1, 5, .roofHoney), (4, 4, .roofCoral), (6, 5, .roofSky), (8, 3, .roofHoney),
+        (2, 7, .roofSky), (5, 6, .roofCoral), (7, 7, .roofForest), (3, 8, .roofHoney),
+        (5, 9, .roofSky), (7, 8, .roofCoral), (8, 6, .roofHoney), (4, 7, .roofForest),
+    ]
+
     static func integerScale(for size: CGSize) -> Int {
-        let x = Int(size.width / CGFloat(columns))
-        let y = Int(size.height / CGFloat(rows))
+        let x = Int(size.width / CGFloat(baseWidth))
+        let y = Int(size.height / CGFloat(baseHeight))
         return max(1, min(x, y))
+    }
+
+    static func normalizedHouseAnchors() -> [CGPoint] {
+        houses.map { house in
+            let point = iso(column: house.column, row: house.row)
+            return CGPoint(
+                x: CGFloat(point.x) / CGFloat(baseWidth),
+                y: CGFloat(point.y - 12) / CGFloat(baseHeight)
+            )
+        }
     }
 
     static func image(scale: Int) -> UIImage {
         let scale = max(1, scale)
-        let width = columns * scale
-        let height = rows * scale
+        let width = baseWidth * scale
+        let height = baseHeight * scale
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 1
         format.opaque = true
@@ -218,122 +249,173 @@ enum SaveTileTownRaster {
         return renderer.image { context in
             let cg = context.cgContext
             cg.interpolationQuality = .none
-            let grid = paint()
-            for row in 0..<rows {
-                for column in 0..<columns {
-                    cg.setFillColor(color(for: Cell(rawValue: grid[row][column]) ?? .grass).cgColor)
-                    cg.fill(CGRect(
-                        x: column * scale,
-                        y: row * scale,
-                        width: scale,
-                        height: scale
-                    ))
-                }
-            }
+            cg.setFillColor(color(for: .waterDeep).cgColor)
+            cg.fill(CGRect(x: 0, y: 0, width: width, height: height))
+            paintIsometricTown(cg, scale: scale)
         }
     }
 
-    private static func paint() -> [[UInt8]] {
-        var grid = (0..<rows).map { row in
-            (0..<columns).map { column -> UInt8 in
-                ((row + column) % 7 == 0) ? Cell.grassDeep.rawValue : Cell.grass.rawValue
+    private static func iso(column: Int, row: Int) -> CGPoint {
+        CGPoint(
+            x: originX + (column - row) * (tileW / 2),
+            y: originY + (column + row) * (tileH / 2)
+        )
+    }
+
+    private static func paintIsometricTown(_ cg: CGContext, scale: Int) {
+        for depth in 0..<(mapColumns + mapRows) {
+            for column in 0..<mapColumns {
+                let row = depth - column
+                guard row >= 0, row < mapRows else { continue }
+                fillIsoTile(cg, column: column, row: row, cell: ground(column: column, row: row), scale: scale)
             }
         }
-        for row in 0..<rows {
-            let shore = 30 + (row / 6) % 3
-            for column in shore..<columns {
-                grid[row][column] = (column == shore ? Cell.sand : (row % 5 == 0 ? Cell.waterDeep : Cell.water)).rawValue
-            }
-        }
-        paintRoad(&grid, from: (2, 6), to: (28, 12), width: 2)
-        paintRoad(&grid, from: (28, 12), to: (18, 28), width: 2)
-        paintRoad(&grid, from: (1, 18), to: (26, 10), width: 2)
-        paintRoad(&grid, from: (8, 2), to: (8, 28), width: 2)
-        paintRoad(&grid, from: (20, 4), to: (20, 26), width: 2)
-        let houses: [(Int, Int, Cell)] = [
-            (4, 3, .roofCoral), (12, 2, .roofHoney), (22, 4, .roofSky),
-            (6, 10, .roofForest), (16, 11, .roofCoral), (24, 9, .roofHoney),
-            (5, 17, .roofSky), (14, 18, .roofCoral), (23, 16, .roofForest),
-            (9, 23, .roofHoney), (18, 24, .roofSky), (26, 21, .roofCoral),
-        ]
-        for (x, y, roof) in houses {
-            blitHouse(&grid, x: x, y: y, roof: roof)
+        for house in houses {
+            blitIsoHouse(cg, column: house.column, row: house.row, roof: house.roof, scale: scale)
         }
         let trees = [
-            (2, 8), (10, 7), (18, 8), (3, 21), (13, 15), (25, 14), (17, 22), (27, 26),
-            (11, 26), (21, 20),
+            (1, 3), (3, 1), (5, 3), (7, 2), (0, 6), (2, 6), (6, 8),
+            (8, 5), (1, 8), (8, 8), (6, 4), (3, 5),
         ]
-        for (x, y) in trees {
-            blitTree(&grid, x: x, y: y)
+        for (column, row) in trees {
+            blitIsoTree(cg, column: column, row: row, scale: scale)
         }
-        return grid
+        blitIsoDock(cg, scale: scale)
     }
 
-    private static func paintRoad(_ grid: inout [[UInt8]], from: (Int, Int), to: (Int, Int), width: Int) {
-        var x = from.0
-        var y = from.1
-        while x != to.0 || y != to.1 {
-            stampRoad(&grid, x: x, y: y, width: width)
-            if x != to.0 { x += x < to.0 ? 1 : -1 }
-            if y != to.1 { y += y < to.1 ? 1 : -1 }
+    private static func ground(column: Int, row: Int) -> Cell {
+        let shore = 9 - (row / 4)
+        if column > shore + 1 { return row % 4 == 0 ? .waterDeep : .water }
+        if column == shore + 1 { return .sand }
+        if isRoad(column: column, row: row) { return .road }
+        return (column + row) % 5 == 0 ? .grassDeep : .grass
+    }
+
+    private static func isRoad(column: Int, row: Int) -> Bool {
+        row == 4 && column <= 9
+            || column == 4 && row <= 9
+            || row == 7 && column >= 2 && column <= 8
+            || column == 7 && row >= 3 && row <= 8
+    }
+
+    private static func fillIsoTile(
+        _ cg: CGContext,
+        column: Int,
+        row: Int,
+        cell: Cell,
+        scale: Int
+    ) {
+        let origin = iso(column: column, row: row)
+        fillDiamond(
+            cg,
+            x: Int(origin.x) * scale,
+            y: Int(origin.y) * scale,
+            tileW: tileW * scale,
+            tileH: tileH * scale,
+            color: color(for: cell)
+        )
+    }
+
+    private static func fillDiamond(
+        _ cg: CGContext,
+        x: Int,
+        y: Int,
+        tileW: Int,
+        tileH: Int,
+        color: UIColor
+    ) {
+        cg.setFillColor(color.cgColor)
+        for dy in 0..<tileH {
+            let t = dy < tileH / 2 ? dy + 1 : tileH - dy
+            let half = max(1, t * tileW / tileH)
+            cg.fill(CGRect(x: x - half, y: y + dy, width: half * 2, height: 1))
         }
-        stampRoad(&grid, x: to.0, y: to.1, width: width)
     }
 
-    private static func stampRoad(_ grid: inout [[UInt8]], x: Int, y: Int, width: Int) {
-        for dy in 0..<width {
-            for dx in 0..<width {
-                plot(&grid, x: x + dx, y: y + dy, cell: .road)
-            }
+    private static func blitIsoHouse(
+        _ cg: CGContext,
+        column: Int,
+        row: Int,
+        roof: Cell,
+        scale: Int
+    ) {
+        let origin = iso(column: column, row: row)
+        let x = Int(origin.x) * scale
+        let y = Int(origin.y) * scale
+        let wallH = 10 * scale
+        let half = 8 * scale
+        cg.setFillColor(color(for: .wallDeep).cgColor)
+        for h in 0..<wallH {
+            cg.fill(CGRect(x: x - half, y: y + 4 * scale - wallH + h, width: half, height: 1))
         }
-    }
-
-    private static func blitHouse(_ grid: inout [[UInt8]], x: Int, y: Int, roof: Cell) {
-        let sprite: [[Cell]] = [
-            [.grass, roof, roof, roof, .grass],
-            [roof, roof, roof, roof, roof],
-            [.wall, .window, .door, .window, .wall],
-            [.wall, .wall, .door, .wall, .wall],
-        ]
-        for (row, line) in sprite.enumerated() {
-            for (column, cell) in line.enumerated() where cell != .grass {
-                plot(&grid, x: x + column, y: y + row, cell: cell)
-            }
+        cg.setFillColor(color(for: .wall).cgColor)
+        for h in 0..<wallH {
+            cg.fill(CGRect(x: x, y: y + 4 * scale - wallH + h, width: half, height: 1))
         }
+        cg.setFillColor(color(for: .window).cgColor)
+        cg.fill(CGRect(x: x - 5 * scale, y: y + 6 * scale - wallH, width: 2 * scale, height: 3 * scale))
+        cg.fill(CGRect(x: x + 3 * scale, y: y + 6 * scale - wallH, width: 2 * scale, height: 3 * scale))
+        cg.setFillColor(color(for: .door).cgColor)
+        cg.fill(CGRect(x: x - scale, y: y + 8 * scale - wallH, width: 2 * scale, height: 4 * scale))
+        fillDiamond(
+            cg,
+            x: x,
+            y: y - wallH,
+            tileW: tileW * scale,
+            tileH: tileH * scale,
+            color: color(for: roof)
+        )
     }
 
-    private static func blitTree(_ grid: inout [[UInt8]], x: Int, y: Int) {
-        plot(&grid, x: x + 1, y: y, cell: .tree)
-        plot(&grid, x: x, y: y + 1, cell: .treeDeep)
-        plot(&grid, x: x + 1, y: y + 1, cell: .tree)
-        plot(&grid, x: x + 2, y: y + 1, cell: .treeDeep)
-        plot(&grid, x: x + 1, y: y + 2, cell: .trunk)
+    private static func blitIsoTree(_ cg: CGContext, column: Int, row: Int, scale: Int) {
+        let origin = iso(column: column, row: row)
+        let x = Int(origin.x) * scale
+        let y = Int(origin.y) * scale
+        cg.setFillColor(color(for: .trunk).cgColor)
+        cg.fill(CGRect(x: x - scale, y: y + 2 * scale, width: 2 * scale, height: 4 * scale))
+        cg.setFillColor(color(for: .treeDeep).cgColor)
+        cg.fill(CGRect(x: x - 3 * scale, y: y - 4 * scale, width: 6 * scale, height: 5 * scale))
+        cg.setFillColor(color(for: .tree).cgColor)
+        cg.fill(CGRect(x: x - 2 * scale, y: y - 6 * scale, width: 4 * scale, height: 4 * scale))
     }
 
-    private static func plot(_ grid: inout [[UInt8]], x: Int, y: Int, cell: Cell) {
-        guard y >= 0, y < rows, x >= 0, x < columns else { return }
-        grid[y][x] = cell.rawValue
+    private static func blitIsoDock(_ cg: CGContext, scale: Int) {
+        for column in 9...12 {
+            fillIsoTile(cg, column: column, row: 8, cell: .road, scale: scale)
+        }
     }
 
     private static func color(for cell: Cell) -> UIColor {
+        // Light-column hexes from SaveTileTownPalette. Raw sRGB so this
+        // raster stays off the main-actor Color bridge.
         switch cell {
-        case .grass: return UIColor(red: 0.561, green: 0.749, blue: 0.416, alpha: 1)
-        case .grassDeep: return UIColor(red: 0.435, green: 0.627, blue: 0.306, alpha: 1)
-        case .water: return UIColor(red: 0.494, green: 0.784, blue: 0.890, alpha: 1)
-        case .waterDeep: return UIColor(red: 0.310, green: 0.659, blue: 0.784, alpha: 1)
-        case .sand: return UIColor(red: 0.933, green: 0.855, blue: 0.667, alpha: 1)
-        case .road: return UIColor(red: 0.957, green: 0.902, blue: 0.784, alpha: 1)
-        case .roofCoral: return UIColor(red: 0.878, green: 0.478, blue: 0.373, alpha: 1)
-        case .roofHoney: return UIColor(red: 0.910, green: 0.722, blue: 0.427, alpha: 1)
-        case .roofSky: return UIColor(red: 0.494, green: 0.714, blue: 0.831, alpha: 1)
-        case .roofForest: return UIColor(red: 0.290, green: 0.455, blue: 0.333, alpha: 1)
-        case .wall: return UIColor(red: 1.000, green: 0.973, blue: 0.910, alpha: 1)
-        case .window: return UIColor(red: 0.420, green: 0.620, blue: 0.760, alpha: 1)
-        case .door: return UIColor(red: 0.557, green: 0.369, blue: 0.247, alpha: 1)
-        case .tree: return UIColor(red: 0.310, green: 0.541, blue: 0.227, alpha: 1)
-        case .treeDeep: return UIColor(red: 0.227, green: 0.420, blue: 0.173, alpha: 1)
-        case .trunk: return UIColor(red: 0.482, green: 0.333, blue: 0.200, alpha: 1)
+        case .grass: return rgb(0x6BB34A)
+        case .grassDeep: return rgb(0x4E9A32)
+        case .water: return rgb(0x3DB5DC)
+        case .waterDeep: return rgb(0x2A8FBE)
+        case .sand: return rgb(0xE8D5A3)
+        case .road: return rgb(0xE8D5A3)
+        case .roofCoral: return rgb(0xD45A32)
+        case .roofHoney: return rgb(0xE0A04A)
+        case .roofSky: return rgb(0x4A8BB5)
+        case .roofForest: return rgb(0x2C6A1E)
+        case .wall: return rgb(0xF3E6C8)
+        case .wallDeep: return rgb(0xDBC69E)
+        case .window: return rgb(0x2A8FBE)
+        case .door: return rgb(0x8F5E40)
+        case .tree: return rgb(0x3D8A2C)
+        case .treeDeep: return rgb(0x2C6A1E)
+        case .trunk: return rgb(0x7A5433)
         }
+    }
+
+    private static func rgb(_ hex: UInt32) -> UIColor {
+        UIColor(
+            red: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: 1
+        )
     }
 }
 
