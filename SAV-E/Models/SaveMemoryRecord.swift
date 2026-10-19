@@ -82,7 +82,7 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         self.recommendedItems = recommendedItems.isEmpty ? extracted.recommendedItems : recommendedItems
         self.vibeTags = vibeTags.isEmpty ? extracted.vibeTags : vibeTags
         self.accessNotes = accessNotes.isEmpty ? extracted.accessNotes : accessNotes
-        self.sourceHandle = sourceHandle ?? extracted.sourceHandle
+        self.sourceHandle = SaveSourceHandle.stored(sourceHandle) ?? extracted.sourceHandle
         self.latitude = latitude
         self.longitude = longitude
         self.category = category
@@ -147,7 +147,9 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         recommendedItems = try container.decodeIfPresent([RecommendedItem].self, forKey: .recommendedItems) ?? extracted.recommendedItems
         vibeTags = try container.decodeIfPresent([String].self, forKey: .vibeTags) ?? extracted.vibeTags
         accessNotes = try container.decodeIfPresent([String].self, forKey: .accessNotes) ?? extracted.accessNotes
-        sourceHandle = try container.decodeIfPresent(String.self, forKey: .sourceHandle) ?? extracted.sourceHandle
+        sourceHandle = SaveSourceHandle.stored(
+            try container.decodeIfPresent(String.self, forKey: .sourceHandle)
+        ) ?? extracted.sourceHandle
         latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
         longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
         category = try container.decodeIfPresent(PlaceCategory.self, forKey: .category)

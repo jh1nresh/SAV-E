@@ -61,7 +61,9 @@ struct SaveMapDrawerPanel<ExpandedContent: View>: View {
                                 .fill(SaveAtlasPalette.paper)
                         }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+                    // The shaped paper owns rounding. Avoid masking the live
+                    // editor subtree while keyboard safe-area layout changes.
+                    .contentShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 32, style: .continuous)
                             .stroke(SaveAtlasPalette.line.opacity(0.3), lineWidth: 1)
@@ -346,6 +348,7 @@ struct SaveMapSearchContent: View {
                                 } label: {
                                     resultRow(candidate.title, detail: candidate.subtitle, state: localized("Not saved", "未儲存"), tint: SaveAtlasPalette.sky)
                                 }
+                                .accessibilityIdentifier("map.search.candidate.\(candidate.id)")
                             }
                         }
                     }
@@ -355,8 +358,14 @@ struct SaveMapSearchContent: View {
                 .padding(16)
             }
             .scrollDismissesKeyboard(.interactively)
+            // Clip only the scrolling rows, leaving the live editor outside
+            // the mask. The enclosing panel supplies the rounded paper.
+            .clipShape(UnevenRoundedRectangle(
+                bottomLeadingRadius: 32,
+                bottomTrailingRadius: 32,
+                style: .continuous
+            ))
         }
-        .background(SaveAtlasPalette.paper)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.search.root")
         .onAppear {

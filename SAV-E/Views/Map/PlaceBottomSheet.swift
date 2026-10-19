@@ -165,38 +165,19 @@ extension Place {
     }
 
     var cleanMemoryNote: String? {
-        guard let note = note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty else {
+        guard let note = userFacingNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty else {
             return nil
         }
+        // `places.note` is unclassified user memory. Strip only lines Savvy
+        // itself marked; do not hide user-authored Recommender:/Source handle:
+        // /Analysis method: text by prefix.
         let cleanedLines = note
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .filter { line in
                 let normalizedLine = line.normalizedSummaryText
-                // Vault-imported notes carry machine-written pipeline lines
-                // (location clue, Google Places match/address/coordinates) —
-                // debug text stays out of primary UI (DESIGN.md).
-                let metadataPrefixes = [
-                    "source:", "category:", "rating:", "reviews:", "hours:", "address:",
-                    "location clue:", "google places", "google maps", "coordinates:",
-                ]
-                return !line.localizedCaseInsensitiveContains("Source URL:") &&
-                !normalizedLine.hasPrefix("distance:") &&
-                !line.localizedCaseInsensitiveContains("Analysis pipeline:") &&
-                !line.localizedCaseInsensitiveContains("Evidence tier:") &&
-                !line.localizedCaseInsensitiveContains("Apple Maps POI") &&
-                !line.localizedCaseInsensitiveContains("Apple Maps result") &&
-                !line.localizedCaseInsensitiveContains("POI:") &&
-                !line.localizedCaseInsensitiveContains("MKPOICategory") &&
-                !line.localizedCaseInsensitiveContains("Business photo: Google Places") &&
-                !line.localizedCaseInsensitiveContains("External reviews:") &&
-                !line.localizedCaseInsensitiveContains("Venue name:") &&
-                !line.localizedCaseInsensitiveContains("Address clue:") &&
-                !line.localizedCaseInsensitiveContains("Source saved") &&
-                !line.localizedCaseInsensitiveContains("citiesmemory") &&
-                !line.localizedCaseInsensitiveContains("Public rating") &&
-                !metadataPrefixes.contains { normalizedLine.hasPrefix($0) } &&
+                return !SavvyGeneratedLine.isMarked(line) &&
                 normalizedLine != name.normalizedSummaryText &&
                 normalizedLine != address.normalizedSummaryText
             }

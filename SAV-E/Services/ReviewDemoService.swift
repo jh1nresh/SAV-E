@@ -1,4 +1,5 @@
 import Foundation
+import MapKit
 
 // MARK: - App Review Demo Account
 //
@@ -120,16 +121,41 @@ enum ReviewDemoStorage {
     }
 
     static func makeMapViewModel() -> MapViewModel {
-        MapViewModel(
+        var searchService: MapCandidateSearchServiceProtocol = MapCandidateSearchService()
+#if DEBUG
+        if ReviewDemo.isOfflineUITestMode,
+           ProcessInfo.processInfo.arguments.contains("--uitest-review-map-results") {
+            searchService = ReviewMapResultsFixture()
+        }
+#endif
+        return MapViewModel(
             pendingImportService: pendingImportService,
             saveLocalVaultService: localVaultService,
             correctionEventStore: correctionEventStore,
+            mapCandidateSearchService: searchService,
             collaborativeListStore: collaborativeListStore,
             referralHandoffStore: referralHandoffStore,
             usesRemotePersistence: !ReviewDemo.isOfflineUITestMode
         )
     }
 }
+
+#if DEBUG
+/// A deterministic result for the Review -> change place -> search-panel rail.
+/// Selected only by the explicit offline UI-test launch flag above.
+private struct ReviewMapResultsFixture: MapCandidateSearchServiceProtocol {
+    func searchCandidates(near coordinate: CLLocationCoordinate2D, span: MKCoordinateSpan,
+                          excluding savedPlaces: [Place], categories: Set<PlaceCategory>) async -> [SaveMapCandidate] { [] }
+
+    func searchCandidates(matching query: String, near coordinate: CLLocationCoordinate2D?,
+                          span: MKCoordinateSpan?, excluding savedPlaces: [Place]) async -> [SaveMapCandidate] {
+        guard query.contains("Harbor Oven Pizza") else { return [] }
+        return [SaveMapCandidate(id: "review-map-result-fixture", title: "Harbor Oven Pizza — corrected branch",
+            subtitle: "1 Fixture Road, Los Angeles", latitude: 33.741, longitude: -118.281,
+            category: .food, evidence: ["Synthetic map-search result"])]
+    }
+}
+#endif
 
 // MARK: - Guest Token Holder
 

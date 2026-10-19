@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 const fields = {
-  places: 'id user_id name address latitude longitude google_place_id category status rating note source_url source_platform source_image_url business_photo_urls extracted_dishes price_range recommender google_rating google_price_level opening_hours origin_shared_place_link_id created_at updated_at coordinate_system location_provider provider_place_id provider_map_url'.split(' '),
+  places: 'id user_id name address latitude longitude google_place_id category status rating note source_url source_platform source_image_url business_photo_urls extracted_dishes memory_meta price_range recommender google_rating google_price_level opening_hours origin_shared_place_link_id created_at updated_at coordinate_system location_provider provider_place_id provider_map_url'.split(' '),
   captures: 'id user_id source_type source_url raw_text title source_resolution status created_at updated_at'.split(' '),
   place_candidates: 'id capture_id place_id name address city latitude longitude evidence confidence missing_info status created_at updated_at workflow_run_id'.split(' '),
 };

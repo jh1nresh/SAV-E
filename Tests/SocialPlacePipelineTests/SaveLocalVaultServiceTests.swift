@@ -327,6 +327,33 @@ final class SaveLocalVaultServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testReviewMergeKeepsExistingSourceHandleWhenIncomingOmitsIt() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        var seeded = makePendingCandidate(localID: UUID())
+        seeded.isSourceOnly = false
+        seeded.candidateName = "Harbor Oven Pizza"
+        seeded.address = "Berth 73, San Pedro, Los Angeles, CA 90731"
+        seeded.latitude = 33.7405
+        seeded.longitude = -118.2807
+        seeded.sourceURL = "https://www.instagram.com/p/harborovenpizza/"
+        seeded.sourceHandle = "la.harbor.eats"
+        seeded.evidence += ["Creator handle: @la.harbor.eats"]
+        let original = try vault.saveReviewCandidate(seeded)
+
+        var incoming = seeded
+        incoming.sourceHandle = nil
+        incoming.evidence += [
+            "Source URL: https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1"
+        ]
+        let merged = try vault.saveReviewCandidate(incoming)
+        XCTAssertEqual(merged.id, original.id)
+        XCTAssertEqual(merged.sourceHandle, "la.harbor.eats")
+        XCTAssertEqual(try vault.reviewCandidates().first?.sourceHandle, "la.harbor.eats")
+    }
+
+    @MainActor
     func testOlderPendingQueueWithoutLocalRecordIdentityStillDecodes() throws {
         let original = makePendingCandidate(localID: nil)
         let data = try JSONEncoder().encode(original)

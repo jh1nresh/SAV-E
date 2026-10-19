@@ -781,7 +781,7 @@ final class SocialLinkReviewCandidateService {
             longitude: nil,
             sourceURL: sourceURL,
             sourceText: evidenceText.isEmpty ? nil : evidenceText,
-            evidence: diagnostic.found + diagnostic.attempts + diagnosticSearchEvidence(diagnostic),
+            evidence: diagnostic.candidateEvidence(extras: diagnosticSearchEvidence(diagnostic)),
             confidence: 0,
             missingInfo: diagnostic.missingFields,
             savedAt: Date(),
@@ -1009,7 +1009,7 @@ final class SocialLinkReviewCandidateService {
         evidence.append(contentsOf: candidate.evidence)
         if let diagnostic = candidate.evidenceDiagnostic {
             evidence.append(contentsOf: diagnostic.found)
-            evidence.append(contentsOf: diagnostic.attempts)
+            evidence.append(contentsOf: diagnostic.attempts.map(SavvyGeneratedLine.marking))
         }
         return appendUnique([], evidence)
     }
@@ -1480,7 +1480,7 @@ final class SocialLinkReviewCandidateService {
                 longitude: hasAppleCompatibleCoordinates ? match.longitude : nil,
                 sourceURL: sourceURL,
                 sourceText: evidenceText.isEmpty ? nil : evidenceText,
-                evidence: diagnostic.found + diagnostic.attempts + ["Map provider: \(match.provider.rawValue)"],
+                evidence: diagnostic.candidateEvidence(extras: ["Map provider: \(match.provider.rawValue)"]),
                 confidence: hasAppleCompatibleCoordinates ? 0.86 : 0.72,
                 missingInfo: missingFields,
                 savedAt: Date(),
@@ -1502,6 +1502,17 @@ final class SocialLinkReviewCandidateService {
     private func westernMapLinkCandidate(evidenceText: String, sourceURL: String) -> PendingReviewCandidate? {
         let mapURLStrings = ([sourceURL] + embeddedURLStrings(in: evidenceText))
             .filter { !$0.isEmpty }
+        let sourceHandle = SocialPlaceStructuredHighlights.extracted(
+            from: [evidenceText],
+            sourceURL: sourceURL
+        ).sourceHandle
+        let handleEvidence: [String] = {
+            guard let sourceHandle else { return [] }
+            return [
+                "Creator handle: @\(sourceHandle)",
+                "Source handle: @\(sourceHandle)"
+            ]
+        }()
         for urlString in mapURLStrings {
             if let match = westernMapLinkMatch(in: urlString) {
                 let diagnostic = SocialPlaceEvidenceDiagnostic(
@@ -1511,7 +1522,7 @@ final class SocialLinkReviewCandidateService {
                             "Source URL: \(sourceURL)",
                             "Structured \(match.providerName) place link: \(match.name)",
                             "Verified coordinates: \(match.latitude), \(match.longitude)"
-                        ]
+                        ] + handleEvidence
                     ),
                     attempts: appendUnique(
                         analysisMethodAttempts(evidenceText: evidenceText, sourceURL: sourceURL),
@@ -1528,12 +1539,13 @@ final class SocialLinkReviewCandidateService {
                     longitude: match.longitude,
                     sourceURL: sourceURL,
                     sourceText: evidenceText.isEmpty ? nil : evidenceText,
-                    evidence: diagnostic.found + diagnostic.attempts + ["Map provider: \(match.providerName)"],
+                    evidence: diagnostic.candidateEvidence(extras: ["Map provider: \(match.providerName)"]),
                     confidence: 0.84,
                     missingInfo: ["User confirmation required"],
                     savedAt: Date(),
                     evidenceDiagnostic: diagnostic,
-                    reviewState: "map_match_ready"
+                    reviewState: "map_match_ready",
+                    sourceHandle: sourceHandle
                 )
             }
             if let queryMatch = googleMapsQueryLinkMatch(in: urlString) {
@@ -1544,7 +1556,7 @@ final class SocialLinkReviewCandidateService {
                             "Source URL: \(sourceURL)",
                             "Structured Google Maps query link: \(queryMatch.name)",
                             queryMatch.address.isEmpty ? "" : "Address clue: \(queryMatch.address)"
-                        ]
+                        ] + handleEvidence
                     ),
                     attempts: appendUnique(
                         analysisMethodAttempts(evidenceText: evidenceText, sourceURL: sourceURL),
@@ -1559,12 +1571,13 @@ final class SocialLinkReviewCandidateService {
                     category: category(from: "\(queryMatch.name) \(queryMatch.address) \(evidenceText)"),
                     sourceURL: sourceURL,
                     sourceText: evidenceText.isEmpty ? nil : evidenceText,
-                    evidence: diagnostic.found + diagnostic.attempts + ["Map provider: Google Maps"],
+                    evidence: diagnostic.candidateEvidence(extras: ["Map provider: Google Maps"]),
                     confidence: 0.78,
                     missingInfo: ["Verified coordinates", "User confirmation required"],
                     savedAt: Date(),
                     evidenceDiagnostic: diagnostic,
-                    reviewState: "map_query_ready"
+                    reviewState: "map_query_ready",
+                    sourceHandle: sourceHandle
                 )
             }
         }
@@ -2266,7 +2279,7 @@ final class SocialLinkReviewCandidateService {
             longitude: nil,
             sourceURL: sourceURL,
             sourceText: evidenceText.isEmpty ? nil : evidenceText,
-            evidence: diagnostic.found + diagnostic.attempts + ["Dianping source stays review-only until verified"],
+            evidence: diagnostic.candidateEvidence(extras: ["Dianping source stays review-only until verified"]),
             confidence: address.isEmpty ? 0.58 : 0.66,
             missingInfo: diagnostic.missingFields,
             savedAt: Date(),
@@ -2608,7 +2621,7 @@ final class SocialLinkReviewCandidateService {
             longitude: nil,
             sourceURL: sourceURL,
             sourceText: evidenceText.isEmpty ? nil : evidenceText,
-            evidence: diagnostic.found + diagnostic.attempts + diagnosticSearchEvidence(diagnostic),
+            evidence: diagnostic.candidateEvidence(extras: diagnosticSearchEvidence(diagnostic)),
             confidence: 0,
             missingInfo: diagnostic.missingFields,
             savedAt: Date(),
@@ -2633,7 +2646,7 @@ final class SocialLinkReviewCandidateService {
             category: category(for: analysis.sourceIntent),
             sourceURL: sourceURL,
             sourceText: evidenceText.isEmpty ? nil : evidenceText,
-            evidence: diagnostic.found + diagnostic.attempts + diagnosticSearchEvidence(diagnostic) + ["Next best clue: \(diagnostic.nextBestClue)"],
+            evidence: diagnostic.candidateEvidence(extras: diagnosticSearchEvidence(diagnostic) + ["Next best clue: \(diagnostic.nextBestClue)"]),
             confidence: confidence(for: analysis.sourceIntent),
             missingInfo: diagnostic.missingFields,
             savedAt: Date(),

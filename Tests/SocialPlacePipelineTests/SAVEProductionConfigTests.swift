@@ -992,7 +992,8 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             let body = try AnalysisRequestURLProtocol.body(request)
             if expectsDate {
                 XCTAssertEqual(body["created_at"] as? String, "2020-01-02T03:04:05Z")
-                XCTAssertTrue((body["note"] as? String)?.contains("Earlier source evidence") == true)
+                XCTAssertFalse((body["note"] as? String)?.contains("Earlier source evidence") == true)
+                XCTAssertTrue(merged.savedAdditionalSourceEvidence.contains("Earlier source evidence"))
             } else { XCTAssertNil(body["created_at"]) }
             return (200, "{}")
         }
@@ -1001,6 +1002,425 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         var unknown = merged
         unknown.createdAt = .distantPast
         try await service.updatePlace(unknown)
+    }
+
+    func testUpdatePlaceSendsRecommenderAndSourceURLWhenPresent() async throws {
+        var place = Place.mock
+        place.sourceHandle = "la.harbor.eats"
+        place.recommender = "la.harbor.eats"
+        place.sourceUrl = "https://www.instagram.com/p/harborovenpizza/"
+        place.sourcePlatform = .instagram
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        AnalysisRequestURLProtocol.handler = { request in
+            XCTAssertEqual(request.httpMethod, "PATCH")
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertEqual(body["recommender"] as? String, "la.harbor.eats")
+            XCTAssertEqual(body["source_url"] as? String, "https://www.instagram.com/p/harborovenpizza/")
+            XCTAssertEqual(body["source_platform"] as? String, "instagram")
+            return (200, "{}")
+        }
+        try await service.updatePlace(place)
+    }
+
+    func testUpdatePlaceOmitsUnchangedOrInvalidRecommenderAndPersistsPlatform() async throws {
+        var place = Place.mock
+        place.sourceHandle = "la.harbor.eats"
+        place.recommender = "la.harbor.eats"
+        place.sourceUrl = "https://www.instagram.com/p/harborovenpizza/"
+        place.sourcePlatform = .instagram
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertNil(body["recommender"])
+            XCTAssertNil(body["extracted_dishes"])
+            XCTAssertNil(body["source_platform"], "Unchanged source_platform must not be PATCHed")
+            return (200, "{}")
+        }
+        try await service.updatePlace(place, previous: place)
+
+        var coordinateHandle = place
+        coordinateHandle.recommender = "33.7405"
+        coordinateHandle.sourceHandle = "33.7405"
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertTrue(body["recommender"] is NSNull, "Clearing a displayable handle must send JSON null even if the raw value is coordinate-shaped")
+            XCTAssertNil(body["source_platform"], "Unchanged source_platform must not be PATCHed")
+            return (200, "{}")
+        }
+        try await service.updatePlace(coordinateHandle, previous: place)
+
+        var renamed = place
+        renamed.recommender = "taipei.cafe.hop"
+        renamed.sourceHandle = "taipei.cafe.hop"
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertEqual(body["recommender"] as? String, "taipei.cafe.hop")
+            XCTAssertNil(body["source_platform"], "Unchanged source_platform must not be PATCHed")
+            return (200, "{}")
+        }
+        try await service.updatePlace(renamed, previous: place)
+
+        var hoursOnly = Place.mock
+        hoursOnly.openingHours = "Tue 9:00 AM - 5:00 PM"
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertNil(body["recommender"], "A normal hours edit must not rewrite or clear attribution")
+            XCTAssertEqual(body["opening_hours"] as? String, "Tue 9:00 AM - 5:00 PM")
+            return (200, "{}")
+        }
+        try await service.updatePlace(hoursOnly, previous: Place.mock)
+    }
+
+    func testUpdatePlaceOmitsNilEnrichmentUnlessExplicitlyCleared() async throws {
+        var local = Place.mock
+        local.rating = nil
+        local.googlePlaceId = nil
+        local.googleRating = nil
+        local.googlePriceLevel = nil
+        local.priceRange = nil
+        local.openingHours = nil
+        local.sourceImageUrl = nil
+        local.businessPhotoUrls = nil
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertNil(body["rating"], "Missing local enrichment must not PATCH JSON null")
+            XCTAssertNil(body["google_place_id"])
+            XCTAssertNil(body["google_rating"])
+            XCTAssertNil(body["google_price_level"])
+            XCTAssertNil(body["price_range"])
+            XCTAssertNil(body["opening_hours"])
+            XCTAssertNil(body["source_image_url"])
+            XCTAssertNil(body["business_photo_urls"])
+            return (200, "{}")
+        }
+        try await service.updatePlace(local)
+        try await service.updatePlace(local, previous: local)
+
+        var cleared = Place.mock
+        cleared.googleRating = nil
+        cleared.openingHours = nil
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertTrue(body["google_rating"] is NSNull, "Clearing a known rating must send JSON null")
+            XCTAssertTrue(body["opening_hours"] is NSNull)
+            XCTAssertNil(body["google_place_id"], "Unchanged enrichment must stay omitted")
+            return (200, "{}")
+        }
+        try await service.updatePlace(cleared, previous: Place.mock)
+    }
+
+    func testUpdatePlaceRollbackClearsMergedServerFieldsWithoutWritingEnvelope() async throws {
+        var original = Place.mock
+        original.note = "Must try the bun"
+        original.sourceUrl = nil
+        original.sourcePlatform = .other
+        original.recommender = nil
+        original.sourceHandle = nil
+        original.recommendedItems = [RecommendedItem(name: "Cortado", price: "$6")]
+        original.extractedDishes = ["Cortado"]
+
+        var merged = original
+        merged.sourceUrl = "https://www.instagram.com/p/harborovenpizza/"
+        merged.sourcePlatform = .instagram
+        merged.recommender = "la.harbor.eats"
+        merged.sourceHandle = "la.harbor.eats"
+        merged.additionalSourceEvidence = ["Original source note"]
+        merged.placeHighlights = ["Window seats", "Single-origin pour-over"]
+        merged.recommendedItems = [
+            RecommendedItem(name: "Cortado", price: nil),
+            RecommendedItem(name: "Egg tart", price: nil),
+        ]
+        merged.extractedDishes = ["Cortado", "Egg tart"]
+
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        var mergedBody: [String: Any] = [:]
+        AnalysisRequestURLProtocol.handler = { request in
+            mergedBody = try AnalysisRequestURLProtocol.body(request)
+            return (200, "{}")
+        }
+        try await service.updatePlace(merged, previous: original)
+        XCTAssertEqual(mergedBody["note"] as? String, "Must try the bun")
+        XCTAssertFalse((mergedBody["note"] as? String ?? "").hasPrefix("SavvyMemory/"))
+        XCTAssertEqual(mergedBody["source_url"] as? String, "https://www.instagram.com/p/harborovenpizza/")
+        XCTAssertEqual(mergedBody["source_platform"] as? String, "instagram")
+        XCTAssertEqual(mergedBody["recommender"] as? String, "la.harbor.eats")
+        XCTAssertEqual(mergedBody["extracted_dishes"] as? [String], ["Cortado", "Egg tart"])
+        let mergedMeta = try decodeMemoryMeta(mergedBody["memory_meta"])
+        XCTAssertEqual(mergedMeta.evidence, ["Original source note"])
+        XCTAssertEqual(mergedMeta.highlights, ["Window seats", "Single-origin pour-over"])
+
+        var rolledBackBody: [String: Any] = [:]
+        AnalysisRequestURLProtocol.handler = { request in
+            rolledBackBody = try AnalysisRequestURLProtocol.body(request)
+            return (200, "{}")
+        }
+        try await service.updatePlace(original, previous: merged)
+        XCTAssertEqual(rolledBackBody["note"] as? String, "Must try the bun")
+        XCTAssertFalse((rolledBackBody["note"] as? String ?? "").hasPrefix("SavvyMemory/"))
+        XCTAssertTrue(rolledBackBody["source_url"] is NSNull)
+        XCTAssertEqual(rolledBackBody["source_platform"] as? String, "other")
+        XCTAssertTrue(rolledBackBody["recommender"] is NSNull)
+        XCTAssertEqual(rolledBackBody["extracted_dishes"] as? [String], ["Cortado"])
+
+        var legacyOriginal = original
+        legacyOriginal.recommender = "33.7405"
+        legacyOriginal.sourceHandle = "33.7405"
+        var legacyRollbackBody: [String: Any] = [:]
+        AnalysisRequestURLProtocol.handler = { request in
+            legacyRollbackBody = try AnalysisRequestURLProtocol.body(request)
+            return (200, "{}")
+        }
+        try await service.updatePlace(legacyOriginal, previous: merged)
+        XCTAssertTrue(
+            legacyRollbackBody["recommender"] is NSNull,
+            "Rollback must clear a clue handle even when the original raw recommender is coordinate-shaped"
+        )
+        XCTAssertFalse((rolledBackBody["note"] as? String ?? "").contains("Original source note"))
+        let rolledBackMeta = try decodeMemoryMeta(rolledBackBody["memory_meta"])
+        XCTAssertEqual(rolledBackMeta.recommended, [RecommendedItem(name: "Cortado", price: "$6")])
+        XCTAssertNil(rolledBackMeta.evidence)
+        XCTAssertNil(rolledBackMeta.highlights)
+
+        var emptyOriginal = original
+        emptyOriginal.recommendedItems = []
+        emptyOriginal.extractedDishes = []
+        var emptiedDishesBody: [String: Any] = [:]
+        AnalysisRequestURLProtocol.handler = { request in
+            emptiedDishesBody = try AnalysisRequestURLProtocol.body(request)
+            return (200, "{}")
+        }
+        try await service.updatePlace(emptyOriginal, previous: merged)
+        XCTAssertEqual(emptiedDishesBody["extracted_dishes"] as? [String], [])
+    }
+
+    func testUpdatePlaceClearsNoteWithJSONNull() async throws {
+        var previous = Place.mock
+        previous.note = "Must try the bun"
+        var cleared = previous
+        cleared.note = nil
+        var patched: [String: Any] = [:]
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        AnalysisRequestURLProtocol.handler = { request in
+            patched = try AnalysisRequestURLProtocol.body(request)
+            return (200, "{}")
+        }
+        try await service.updatePlace(cleared, previous: previous)
+        XCTAssertTrue(patched["note"] is NSNull, "A cleared user note must PATCH JSON null, not omit the key")
+
+        AnalysisRequestURLProtocol.handler = { request in
+            let payload: [String: Any] = [
+                "id": cleared.id.uuidString,
+                "user_id": "owner",
+                "name": cleared.name,
+                "address": cleared.address,
+                "latitude": cleared.latitude,
+                "longitude": cleared.longitude,
+                "category": cleared.category.rawValue,
+                "status": cleared.status.rawValue,
+                "source_platform": cleared.sourcePlatform.rawValue,
+                "note": NSNull(),
+                "created_at": "2020-01-02T03:04:05Z",
+            ]
+            let data = try JSONSerialization.data(withJSONObject: [payload])
+            return (200, String(data: data, encoding: .utf8) ?? "[]")
+        }
+        let places = try await service.fetchPlaces(for: "owner")
+        let reloaded = try XCTUnwrap(places.first)
+        XCTAssertNil(reloaded.userFacingNote)
+        XCTAssertNil(reloaded.note)
+    }
+
+    func testUpdatePlacePersistsMergedStructuredFieldsAcrossRemoteReload() async throws {
+        var previous = Place.mock
+        previous.note = "Must try the bun"
+        previous.placeHighlights = ["Window seats"]
+        previous.recommendedItems = [RecommendedItem(name: "Cortado", price: "$6")]
+        previous.vibeTags = ["quiet"]
+        previous.accessNotes = ["Walk-up"]
+        previous.extractedDishes = ["Cortado"]
+
+        var merged = previous
+        merged.additionalSourceEvidence = [
+            "Original source note",
+            "Source URL: https://www.xiaohongshu.com/explore/extra-clue",
+        ]
+        merged.placeHighlights = ["Window seats", "Single-origin pour-over"]
+        merged.recommendedItems = [
+            RecommendedItem(name: "Cortado", price: "$6"),
+            RecommendedItem(name: "Egg tart", price: "NT$45"),
+        ]
+        merged.vibeTags = ["quiet", "sunny"]
+        merged.accessNotes = ["Walk-up", "No reservations"]
+
+        var patched: [String: Any] = [:]
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        AnalysisRequestURLProtocol.handler = { request in
+            patched = try AnalysisRequestURLProtocol.body(request)
+            return (200, "{}")
+        }
+        try await service.updatePlace(merged, previous: previous)
+        XCTAssertEqual(patched["extracted_dishes"] as? [String], ["Cortado", "Egg tart"])
+        let note = try XCTUnwrap(patched["note"] as? String)
+        XCTAssertEqual(note, "Must try the bun")
+        XCTAssertFalse(note.hasPrefix("SavvyMemory/"))
+        XCTAssertFalse(note.contains("Original source note"))
+        XCTAssertFalse(note.contains("https://www.xiaohongshu.com/explore/extra-clue"))
+        XCTAssertFalse(note.contains("Window seats"))
+        XCTAssertFalse(note.contains("Single-origin pour-over"))
+        XCTAssertFalse(note.contains("sunny"))
+        XCTAssertFalse(note.contains("No reservations"))
+        XCTAssertNil(patched["place_highlights"])
+        XCTAssertNil(patched["vibe_tags"])
+        XCTAssertNil(patched["access_notes"])
+        XCTAssertNil(patched["recommended_items"])
+        XCTAssertNil(patched["additional_source_evidence"])
+        let meta = try decodeMemoryMeta(patched["memory_meta"])
+        XCTAssertEqual(meta.v, 1)
+        XCTAssertEqual(meta.evidence, [
+            "Original source note",
+            "Source URL: https://www.xiaohongshu.com/explore/extra-clue",
+        ])
+        XCTAssertEqual(meta.highlights, ["Window seats", "Single-origin pour-over"])
+        XCTAssertEqual(meta.vibe, ["quiet", "sunny"])
+        XCTAssertEqual(meta.access, ["Walk-up", "No reservations"])
+        XCTAssertEqual(meta.recommended, [
+            RecommendedItem(name: "Cortado", price: "$6"),
+            RecommendedItem(name: "Egg tart", price: "NT$45"),
+        ])
+
+        var enriched = merged
+        enriched.businessPhotoUrls = ["https://photos.example/1.jpg"]
+        var enrichmentBody: [String: Any] = [:]
+        AnalysisRequestURLProtocol.handler = { request in
+            enrichmentBody = try AnalysisRequestURLProtocol.body(request)
+            return (200, "{}")
+        }
+        try await service.updatePlace(enriched, previous: merged)
+        XCTAssertNil(enrichmentBody["extracted_dishes"], "Photo enrichment must not rewrite dishes")
+        XCTAssertNil(enrichmentBody["note"], "Photo enrichment must not rewrite the user note")
+        XCTAssertNil(enrichmentBody["memory_meta"], "Photo enrichment must not rewrite stamp memory")
+        XCTAssertEqual(enrichmentBody["business_photo_urls"] as? [String], ["https://photos.example/1.jpg"])
+
+        var emptied = merged
+        emptied.placeHighlights = []
+        emptied.recommendedItems = []
+        emptied.vibeTags = []
+        emptied.accessNotes = []
+        emptied.extractedDishes = []
+        emptied.additionalSourceEvidence = []
+        var emptiedBody: [String: Any] = [:]
+        AnalysisRequestURLProtocol.handler = { request in
+            emptiedBody = try AnalysisRequestURLProtocol.body(request)
+            return (200, "{}")
+        }
+        try await service.updatePlace(emptied, previous: merged)
+        XCTAssertEqual(emptiedBody["extracted_dishes"] as? [String], [])
+        XCTAssertEqual(emptiedBody["note"] as? String, "Must try the bun")
+        XCTAssertFalse((emptiedBody["note"] as? String ?? "").hasPrefix("SavvyMemory/"))
+        let emptiedMeta = try decodeMemoryMeta(emptiedBody["memory_meta"])
+        XCTAssertEqual(emptiedMeta, PlaceMemoryMeta.cleared, "Empty structured memory must send a tombstone object, not omit the column")
+
+        AnalysisRequestURLProtocol.handler = { request in
+            let payload: [String: Any] = [
+                "id": merged.id.uuidString,
+                "user_id": "owner",
+                "name": merged.name,
+                "address": merged.address,
+                "latitude": merged.latitude,
+                "longitude": merged.longitude,
+                "category": merged.category.rawValue,
+                "status": merged.status.rawValue,
+                "source_platform": merged.sourcePlatform.rawValue,
+                "note": patched["note"] as? String ?? "",
+                "extracted_dishes": patched["extracted_dishes"] as? [String] ?? [],
+                "memory_meta": patched["memory_meta"] as Any,
+                "created_at": "2020-01-02T03:04:05Z",
+            ]
+            let data = try JSONSerialization.data(withJSONObject: [payload])
+            return (200, String(data: data, encoding: .utf8) ?? "[]")
+        }
+        let reloadedPlaces = try await service.fetchPlaces(for: "owner")
+        let reloaded = try XCTUnwrap(reloadedPlaces.first)
+        XCTAssertEqual(reloaded.note, "Must try the bun")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote(reloaded.note), "Must try the bun")
+        XCTAssertEqual(reloaded.placeHighlights, ["Window seats", "Single-origin pour-over"])
+        XCTAssertEqual(reloaded.recommendedItems, [
+            RecommendedItem(name: "Cortado", price: "$6"),
+            RecommendedItem(name: "Egg tart", price: "NT$45"),
+        ])
+        XCTAssertEqual(reloaded.vibeTags, ["quiet", "sunny"])
+        XCTAssertEqual(reloaded.accessNotes, ["Walk-up", "No reservations"])
+        XCTAssertTrue(reloaded.sourceEvidence.contains("Must try the bun"))
+        XCTAssertTrue(reloaded.sourceEvidence.contains("Original source note"))
+        XCTAssertTrue(reloaded.sourceEvidence.contains("Source URL: https://www.xiaohongshu.com/explore/extra-clue"))
+        XCTAssertFalse((reloaded.note ?? "").contains("Highlight:"))
+        XCTAssertFalse((reloaded.note ?? "").contains("Vibe:"))
+        XCTAssertFalse((reloaded.note ?? "").contains("Evidence:"))
+        XCTAssertFalse((reloaded.note ?? "").hasPrefix("SavvyMemory/"))
+    }
+
+    func testDecodedWireNotePreservesUntaggedUserNotes() throws {
+        for raw in [
+            "Highlight: the bun was amazing",
+            "Vibe: casual counter seats",
+            "Evidence: keep this as my memory",
+            "Creator handle: @me.and.the.bun",
+        ] {
+            let decoded = Place.decodedWireNote(raw)
+            XCTAssertEqual(decoded.note, raw)
+            XCTAssertTrue(decoded.additional.isEmpty)
+            XCTAssertTrue(decoded.highlights.placeHighlights.isEmpty)
+            XCTAssertTrue(decoded.highlights.vibeTags.isEmpty)
+            XCTAssertTrue(decoded.highlights.accessNotes.isEmpty)
+            XCTAssertTrue(decoded.highlights.recommendedItems.isEmpty)
+        }
+
+        var place = Place.mock
+        place.note = "Highlight: the bun was amazing"
+        place.additionalSourceEvidence = ["Original source note"]
+        place.placeHighlights = ["Window seats"]
+        let wire = try XCTUnwrap(place.wireNoteForPersistence())
+        XCTAssertEqual(wire, "Highlight: the bun was amazing")
+        XCTAssertFalse(wire.hasPrefix("SavvyMemory/"))
+        let decoded = Place.decodedWireNote(wire)
+        XCTAssertEqual(decoded.note, "Highlight: the bun was amazing")
+        XCTAssertTrue(decoded.additional.isEmpty)
+        XCTAssertTrue(decoded.highlights.placeHighlights.isEmpty)
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote(wire), "Highlight: the bun was amazing")
+
+        let leftoverEnvelope = """
+        SavvyMemory/1
+        {"v":1,"note":"Must try the bun","evidence":["Original source note"]}
+        """
+        let fromEnvelope = Place.decodedWireNote(leftoverEnvelope)
+        XCTAssertEqual(fromEnvelope.note, "Must try the bun")
+        XCTAssertEqual(fromEnvelope.additional, ["Original source note"])
+        XCTAssertNil(ShareRoutePayloadSanitizer.publicNote(leftoverEnvelope))
+
+        let multiline = Place.decodedWireNote("""
+        Must try the bun
+        Evidence: keep this as my memory
+        Highlight: the seating was great
+        Vibe: loud in a good way
+        Access: walk up
+        """)
+        XCTAssertEqual(
+            multiline.note,
+            """
+            Must try the bun
+            Evidence: keep this as my memory
+            Highlight: the seating was great
+            Vibe: loud in a good way
+            Access: walk up
+            """
+        )
+        XCTAssertTrue(multiline.additional.isEmpty)
+        XCTAssertTrue(multiline.highlights.placeHighlights.isEmpty)
+        XCTAssertTrue(multiline.highlights.vibeTags.isEmpty)
+        XCTAssertTrue(multiline.highlights.accessNotes.isEmpty)
     }
 
     func testEmptyRetryDistinguishesExistingSuccessorsFromUnresolvedSource() async throws {
@@ -1043,6 +1463,13 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [AnalysisRequestURLProtocol.self]
         return URLSession(configuration: config)
+    }
+
+    private func decodeMemoryMeta(_ value: Any?) throws -> PlaceMemoryMeta {
+        let object = try XCTUnwrap(value)
+        XCTAssertFalse(object is NSNull)
+        let data = try JSONSerialization.data(withJSONObject: object)
+        return try JSONDecoder().decode(PlaceMemoryMeta.self, from: data)
     }
 
     private func gemini(session: URLSession) -> SAVEGeminiTransport {

@@ -1,9 +1,417 @@
 import XCTest
 import MapKit
 import CoreLocation
+import SwiftUI
+import UIKit
 @testable import SAVE
 
 final class SaveSearchControllerTests: XCTestCase {
+    @MainActor
+    func testReviewNextStepUsesEvidenceWithoutPromotingClues() {
+        XCTAssertEqual(SaveReviewNextStep(pending: true, savable: false, address: "", city: nil, missingInfo: []), .pendingAnalysis)
+        XCTAssertEqual(SaveReviewNextStep(pending: false, savable: false, address: " ", city: " ", missingInfo: []), .addCity)
+        XCTAssertEqual(SaveReviewNextStep(pending: false, savable: false, address: "", city: "Taipei", missingInfo: []), .addAddress)
+        XCTAssertEqual(SaveReviewNextStep(pending: false, savable: false, address: "1 Fixture Road", city: nil, missingInfo: []), .locatePlace)
+        XCTAssertEqual(SaveReviewNextStep(pending: false, savable: true, address: "1 Fixture Road", city: nil, missingInfo: []), .confirm)
+        XCTAssertEqual(SaveReviewNextStep(pending: false, savable: true, address: "1 Fixture Road", city: nil,
+            missingInfo: ["Choose the correct map candidate"]), .chooseMatch)
+    }
+
+    @MainActor
+    func testSavesRowDetailKeepsKnownEvidenceWithNextStep() {
+        let savable = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Harbor Oven Pizza",
+            address: "Berth 73, San Pedro, Los Angeles, CA 90731",
+            city: "Los Angeles",
+            latitude: 33.7405,
+            longitude: -118.2807,
+            evidence: [
+                "Source URL: https://www.instagram.com/p/harborovenpizza/",
+                "Creator handle: @la.harbor.eats",
+            ],
+            confidence: 0.84,
+            missingInfo: ["User confirmation required"],
+            status: "review",
+            createdAt: Date(),
+            sourceHandle: "la.harbor.eats"
+        )
+        let savableDetail = SaveReviewCandidateSavesRowDetail(candidate: savable)
+        XCTAssertEqual(savableDetail.knownEvidenceEnglish, "From la.harbor.eats")
+        XCTAssertEqual(savableDetail.nextStep, .confirm)
+        XCTAssertEqual(
+            savableDetail.english,
+            "From la.harbor.eats. Check the name and address before confirming."
+        )
+        XCTAssertEqual(
+            savableDetail.traditionalChinese,
+            "來自 la.harbor.eats。確認前，請核對名稱和地址。"
+        )
+
+        let pending = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Unresolved Instagram clue",
+            address: "",
+            city: nil,
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Source URL: https://www.instagram.com/reel/UnresolvedClue/"],
+            confidence: 0,
+            missingInfo: ["Analysis pending"],
+            status: "source_only",
+            createdAt: Date()
+        )
+        let pendingDetail = SaveReviewCandidateSavesRowDetail(candidate: pending)
+        XCTAssertEqual(pendingDetail.knownEvidenceEnglish, "Source saved; analysis pending")
+        XCTAssertEqual(pendingDetail.nextStep, .pendingAnalysis)
+        XCTAssertEqual(pendingDetail.english, "Source saved; analysis pending")
+        XCTAssertFalse(pendingDetail.english.contains("analysis still needs to finish"))
+
+        let sourceClue = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Caption-only cafe",
+            address: "",
+            city: nil,
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Caption: Quiet pour-over near the park"],
+            confidence: 0,
+            missingInfo: ["Exact place"],
+            status: "source_only",
+            createdAt: Date()
+        )
+        let sourceDetail = SaveReviewCandidateSavesRowDetail(candidate: sourceClue)
+        XCTAssertEqual(sourceDetail.knownEvidenceEnglish, "Missing exact place")
+        XCTAssertEqual(sourceDetail.nextStep, .addCity)
+        XCTAssertEqual(
+            sourceDetail.english,
+            "Missing exact place. Search for this place with a city, address, or map link."
+        )
+
+        let addressed = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Named venue",
+            address: "1 Fixture Road",
+            city: "Taipei",
+            latitude: 25.033,
+            longitude: 121.565,
+            evidence: [],
+            confidence: 0.7,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        let addressedDetail = SaveReviewCandidateSavesRowDetail(candidate: addressed)
+        XCTAssertEqual(addressedDetail.knownEvidenceEnglish, "Taipei")
+
+        let amap = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "柳州肥姨妈大骨螺蛳粉(青大店)",
+            address: "金家岭街道香港东路18号6号楼3号1层",
+            city: nil,
+            latitude: nil,
+            longitude: nil,
+            evidence: [
+                "Amap POI id: B0FFFAKEQINGDAO",
+                "Amap reference coordinates (GCJ-02): 36.064812, 120.421421",
+                "Provider map URL: https://uri.amap.com/marker?position=120.421421,36.064812&name=qingdao&src=save",
+            ],
+            confidence: 0.8,
+            missingInfo: ["WGS84 coordinates for the unified Atlas map"],
+            status: "review",
+            createdAt: Date()
+        )
+        XCTAssertFalse(amap.hasReliableCoordinates)
+        XCTAssertTrue(amap.hasSavableLocation)
+        XCTAssertFalse(SaveHomeReviewQueue.isSourceClue(amap))
+        let amapDetail = SaveReviewCandidateSavesRowDetail(candidate: amap)
+        XCTAssertNotEqual(amapDetail.knownEvidenceEnglish, "Missing exact place")
+        XCTAssertEqual(amapDetail.nextStep, .confirm)
+        XCTAssertEqual(
+            addressedDetail.english,
+            "Taipei. Check the name and address before confirming."
+        )
+
+        let polluted = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Harbor Oven Pizza",
+            address: "Berth 73, San Pedro, Los Angeles, CA 90731",
+            city: "Los Angeles",
+            latitude: 33.7405,
+            longitude: -118.2807,
+            evidence: [
+                "Source URL: https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1",
+                "Creator handle: @la.harbor.eats",
+                "Source handle: @la.harbor.eats",
+            ],
+            confidence: 0.84,
+            missingInfo: ["User confirmation required"],
+            status: "review",
+            createdAt: Date(),
+            sourceHandle: "33.7405"
+        )
+        let pollutedDetail = SaveReviewCandidateSavesRowDetail(candidate: polluted)
+        XCTAssertEqual(pollutedDetail.knownEvidenceEnglish, "From la.harbor.eats")
+        XCTAssertFalse(pollutedDetail.english.contains("33.7405"))
+        XCTAssertTrue(pollutedDetail.english.contains("Check the name and address before confirming."))
+    }
+
+    @MainActor
+    func testSourceHandleExtractionRejectsMapCoordinateFragments() {
+        let mapURL = "https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1"
+        XCTAssertNil(SaveSourceHandle.normalized("33.7405"))
+        XCTAssertNil(SaveSourceHandle.normalized("@33.7405"))
+        XCTAssertNil(SaveSourceHandle.normalized("-118.2807"))
+        XCTAssertNil(SaveSourceHandle.normalized("33.7405,-118.2807"))
+        XCTAssertEqual(SaveSourceHandle.normalized("12345"), "12345")
+        XCTAssertEqual(SaveSourceHandle.normalized("吃货小王"), "吃货小王")
+        XCTAssertEqual(SaveSourceHandle.normalized("@台北美食筆記"), "台北美食筆記")
+        XCTAssertEqual(SaveSourceHandle.normalized("la.harbor.eats"), "la.harbor.eats")
+        XCTAssertEqual(SaveSourceHandle.resolved("33.7405", extracted: "la.harbor.eats"), "la.harbor.eats")
+
+        XCTAssertNil(
+            SocialPlaceStructuredHighlights.extracted(from: [mapURL], sourceURL: mapURL).sourceHandle
+        )
+        XCTAssertEqual(
+            SocialPlaceStructuredHighlights.extracted(
+                from: [
+                    mapURL,
+                    "Creator handle: @la.harbor.eats",
+                    "Source handle: @la.harbor.eats",
+                ],
+                sourceURL: mapURL
+            ).sourceHandle,
+            "la.harbor.eats"
+        )
+
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Harbor Oven Pizza",
+            address: "Berth 73, San Pedro, Los Angeles, CA 90731",
+            city: nil,
+            latitude: 33.7405,
+            longitude: -118.2807,
+            evidence: [mapURL],
+            confidence: 0.8,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        XCTAssertNil(candidate.sourceHandle)
+        XCTAssertFalse(
+            SaveReviewCandidateSavesRowDetail(candidate: candidate).english.contains("From 33.7405")
+        )
+    }
+
+    @MainActor
+    func testSourceHandleDecodeKeepsCJKNumericAndCoordinateStorage() throws {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let cjk = try decoder.decode(SaveCardPlace.self, from: sourceHandleFixture("source-handle-cjk-xiaohongshu.json"))
+        XCTAssertEqual(cjk.sourceHandle, "吃货小王")
+        XCTAssertEqual(SaveSourceHandle.normalized(cjk.sourceHandle), "吃货小王")
+
+        let numeric = try decoder.decode(SaveCardPlace.self, from: sourceHandleFixture("source-handle-numeric-id.json"))
+        XCTAssertEqual(numeric.sourceHandle, "12345")
+        XCTAssertEqual(SaveSourceHandle.normalized(numeric.sourceHandle), "12345")
+
+        let coordinate = try decoder.decode(SaveCardPlace.self, from: sourceHandleFixture("source-handle-coordinate.json"))
+        XCTAssertEqual(coordinate.sourceHandle, "33.7405")
+        XCTAssertNil(SaveSourceHandle.normalized(coordinate.sourceHandle))
+        XCTAssertEqual(
+            SaveSourceHandle.resolved(coordinate.sourceHandle, extracted: "la.harbor.eats"),
+            "la.harbor.eats"
+        )
+
+        let record = try decoder.decode(SaveMemoryRecord.self, from: sourceHandleFixture("source-handle-cjk-memory-record.json"))
+        XCTAssertEqual(record.sourceHandle, "台北美食筆記")
+        XCTAssertEqual(SaveSourceHandle.normalized(record.sourceHandle), "台北美食筆記")
+
+        XCTAssertEqual(
+            SocialPlaceStructuredHighlights.extracted(
+                from: ["Creator handle: @吃货小王"],
+                sourceURL: "https://www.xiaohongshu.com/explore/65abc123"
+            ).sourceHandle,
+            "吃货小王"
+        )
+        XCTAssertEqual(
+            SocialPlaceStructuredHighlights.extracted(from: ["Creator handle: @12345"]).sourceHandle,
+            "12345"
+        )
+        XCTAssertEqual(
+            SocialPlaceStructuredHighlights.extracted(
+                from: ["Creator handle: @抖音探店王"],
+                sourceURL: "https://www.douyin.com/video/734001122233"
+            ).sourceHandle,
+            "抖音探店王"
+        )
+        XCTAssertEqual(
+            SocialPlaceStructuredHighlights.extracted(
+                from: ["Creator handle: @204912345678"],
+                sourceURL: "https://www.douyin.com/video/734001122233"
+            ).sourceHandle,
+            "204912345678"
+        )
+        XCTAssertEqual(
+            PendingReviewCandidate(
+                candidateName: "夜市小吃",
+                address: "",
+                category: "food",
+                sourceURL: "https://www.douyin.com/video/734001122233",
+                sourceText: "Creator handle: @抖音探店王",
+                evidence: ["Creator handle: @抖音探店王"],
+                confidence: 0.7,
+                missingInfo: [],
+                savedAt: Date(),
+                sourceHandle: "抖音探店王"
+            ).sourceHandle,
+            "抖音探店王"
+        )
+        XCTAssertEqual(
+            SocialPlaceStructuredHighlights.extracted(
+                from: ["Caption: saved from @台北美食筆記 tonight"]
+            ).sourceHandle,
+            "台北美食筆記"
+        )
+
+        let mapURL = "https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1"
+        let pending = PendingReviewCandidate(
+            candidateName: "Harbor Oven Pizza",
+            address: "",
+            category: "food",
+            latitude: 33.7405,
+            longitude: -118.2807,
+            sourceURL: mapURL,
+            sourceText: "Creator handle: @la.harbor.eats\n\(mapURL)",
+            evidence: [
+                "Source URL: \(mapURL)",
+                "Verified coordinates: 33.7405, -118.2807"
+            ],
+            confidence: 0.84,
+            missingInfo: ["User confirmation required"],
+            savedAt: Date()
+        )
+        XCTAssertEqual(pending.sourceHandle, "la.harbor.eats")
+
+        let encodedCJK = try JSONEncoder().encode(PendingReviewCandidate(
+            candidateName: "大安手冲",
+            address: "Taipei",
+            category: "food",
+            sourceURL: "https://www.xiaohongshu.com/explore/65abc123",
+            sourceText: "Creator handle: @吃货小王",
+            evidence: ["Creator handle: @吃货小王"],
+            confidence: 0.7,
+            missingInfo: [],
+            savedAt: Date(),
+            sourceHandle: "吃货小王"
+        ))
+        let decodedCJK = try JSONDecoder().decode(PendingReviewCandidate.self, from: encodedCJK)
+        XCTAssertEqual(decodedCJK.sourceHandle, "吃货小王")
+    }
+
+    @MainActor
+    func testLegacyDecodeBackfillsHandleFromEvidenceWithoutOverwritingExplicit() throws {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let labeledCard = try decoder.decode(
+            SaveCardPlace.self,
+            from: sourceHandleFixture("source-handle-legacy-labeled.json")
+        )
+        XCTAssertEqual(labeledCard.sourceHandle, "la.harbor.eats")
+
+        let coordinateCard = try decoder.decode(
+            SaveCardPlace.self,
+            from: sourceHandleFixture("source-handle-legacy-coordinates.json")
+        )
+        XCTAssertNil(coordinateCard.sourceHandle)
+
+        let labeledRecord = try decoder.decode(
+            SaveMemoryRecord.self,
+            from: sourceHandleFixture("source-handle-legacy-memory-labeled.json")
+        )
+        XCTAssertEqual(labeledRecord.sourceHandle, "la.harbor.eats")
+
+        let coordinateRecord = try decoder.decode(
+            SaveMemoryRecord.self,
+            from: sourceHandleFixture("source-handle-legacy-memory-coordinates.json")
+        )
+        XCTAssertNil(coordinateRecord.sourceHandle)
+
+        let pendingJSON = """
+        {
+          "candidateName": "Harbor Oven Pizza",
+          "address": "Berth 73, San Pedro, Los Angeles, CA 90731",
+          "category": "food",
+          "sourceURL": "https://www.instagram.com/p/harborovenpizza/",
+          "sourceText": "Creator handle: @la.harbor.eats",
+          "evidence": ["Creator handle: @la.harbor.eats"],
+          "confidence": 0.84,
+          "missingInfo": ["User confirmation required"],
+          "savedAt": 1700000000
+        }
+        """.data(using: .utf8)!
+        let pending = try JSONDecoder().decode(PendingReviewCandidate.self, from: pendingJSON)
+        XCTAssertEqual(pending.sourceHandle, "la.harbor.eats")
+
+        let pendingCoordsJSON = """
+        {
+          "candidateName": "Harbor Oven Pizza",
+          "address": "",
+          "category": "food",
+          "sourceURL": "https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1",
+          "evidence": [
+            "Source URL: https://www.google.com/maps/place/Harbor+Oven+Pizza/@33.7405,-118.2807,17z/data=!3m1",
+            "Verified coordinates: 33.7405, -118.2807"
+          ],
+          "confidence": 0.84,
+          "missingInfo": ["User confirmation required"],
+          "savedAt": 1700000000
+        }
+        """.data(using: .utf8)!
+        let pendingCoords = try JSONDecoder().decode(PendingReviewCandidate.self, from: pendingCoordsJSON)
+        XCTAssertNil(pendingCoords.sourceHandle)
+
+        let candidateJSON = """
+        {
+          "id": "4c8e2a71-6b0d-4f3a-9e55-2d1b8c0a7f44",
+          "name": "Harbor Oven Pizza",
+          "address": "Berth 73, San Pedro, Los Angeles, CA 90731",
+          "evidence": ["Creator handle: @la.harbor.eats"],
+          "missingInfo": [],
+          "status": "review",
+          "createdAt": 1700000000
+        }
+        """.data(using: .utf8)!
+        let candidate = try JSONDecoder().decode(PlaceReviewCandidate.self, from: candidateJSON)
+        XCTAssertEqual(candidate.sourceHandle, "la.harbor.eats")
+
+        let explicitCoordinate = try decoder.decode(
+            SaveCardPlace.self,
+            from: sourceHandleFixture("source-handle-coordinate.json")
+        )
+        XCTAssertEqual(explicitCoordinate.sourceHandle, "33.7405")
+        XCTAssertNil(SaveSourceHandle.normalized("https://www.xiaohongshu.com/user/profile/12345"))
+        XCTAssertNil(SaveSourceHandle.normalized("www.douyin.com/user/204912345678"))
+    }
+
+    private func sourceHandleFixture(_ name: String) throws -> Data {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures")
+            .appendingPathComponent(name)
+        return try Data(contentsOf: url)
+    }
+
     @MainActor
     func testReviewSourceReceiptPresentationKeepsXiaohongshuProvenance() throws {
         let candidate = PlaceReviewCandidate(
@@ -2163,6 +2571,874 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testExactSearchResolutionRetiresClueWhenChoosingSavedPlace() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-saved-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        let clue = Self.correctionClue(overlappingStamp: true)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        let providerCandidate = SaveMapCandidate(
+            id: "provider-poi",
+            title: "Nearby unsaved cafe",
+            subtitle: "Taipei",
+            latitude: 25.034,
+            longitude: 121.566,
+            category: .cafe
+        )
+        map.reviewCandidates = [clue]
+        map.mapCandidates = [providerCandidate]
+        map.beginExactSearchResolution(for: clue)
+
+        XCTAssertTrue(map.mapCandidate(providerCandidate, resolvesReviewCandidateID: clue.id))
+
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertEqual(resolved.id, stamp.id)
+        XCTAssertEqual(resolved.createdAt, stamp.createdAt)
+        XCTAssertTrue(resolved.sourceEvidence.contains("Must try the bun"))
+        XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
+        XCTAssertTrue(resolved.sourceEvidence.contains("Source URL: https://www.instagram.com/p/harborovenpizza/"))
+        XCTAssertTrue(resolved.sourceEvidence.contains("https://www.xiaohongshu.com/explore/extra-clue"))
+        XCTAssertEqual(resolved.sourceUrl, "https://www.instagram.com/p/harborovenpizza/")
+        XCTAssertEqual(resolved.sourcePlatform, .instagram)
+        XCTAssertEqual(resolved.sourceHandle, "la.harbor.eats")
+        XCTAssertEqual(resolved.recommender, "la.harbor.eats")
+        XCTAssertEqual(resolved.note, "Must try the bun")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote(resolved.note), "Must try the bun")
+        XCTAssertFalse((resolved.note ?? "").contains("Creator handle:"))
+        XCTAssertFalse((resolved.note ?? "").contains("Verified coordinates"))
+        XCTAssertFalse((resolved.note ?? "").contains("Analysis method:"))
+        XCTAssertEqual(resolved.placeHighlights, ["Window seats", "Single-origin pour-over"])
+        XCTAssertEqual(resolved.recommendedItems, [
+            RecommendedItem(name: "Cortado", price: nil),
+            RecommendedItem(name: "Egg tart", price: nil),
+        ])
+        XCTAssertEqual(resolved.vibeTags, ["quiet", "sunny"])
+        XCTAssertEqual(resolved.accessNotes, ["Walk-up", "No reservations"])
+        XCTAssertEqual(resolved.sourceEvidence.filter { $0 == "Source URL: https://www.instagram.com/p/harborovenpizza/" }.count, 1)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+
+        let reloaded = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        XCTAssertTrue(try reloaded.reviewCandidates().isEmpty, "Choosing a saved stamp must retire the Review clue")
+        let persisted = try XCTUnwrap(reloaded.confirmedPlaces().first { $0.id == stamp.id })
+        XCTAssertEqual(persisted.createdAt, stamp.createdAt)
+        XCTAssertTrue(persisted.sourceEvidence.contains("Must try the bun"))
+        XCTAssertTrue(persisted.sourceEvidence.contains("Original source note"))
+        XCTAssertTrue(persisted.sourceEvidence.contains("Source URL: https://www.instagram.com/p/harborovenpizza/"))
+        XCTAssertTrue(persisted.sourceEvidence.contains("https://www.xiaohongshu.com/explore/extra-clue"))
+        XCTAssertEqual(persisted.sourceHandle, "la.harbor.eats")
+        XCTAssertEqual(persisted.sourcePlatform, .instagram)
+        XCTAssertEqual(persisted.note, "Must try the bun")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote(persisted.note), "Must try the bun")
+        XCTAssertEqual(persisted.placeHighlights, ["Window seats", "Single-origin pour-over"])
+        XCTAssertEqual(persisted.recommendedItems?.map { $0.name }, ["Cortado", "Egg tart"])
+    }
+
+    @MainActor
+    func testExactSearchResolutionPersistsHandleAndDedupesEvidenceRemotely() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-saved-remote-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-saved-remote-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let supabase = RecordingSupabaseService()
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        let runID = UUID()
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = runID
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertEqual(resolved.recommender, "la.harbor.eats")
+        XCTAssertEqual(resolved.sourceHandle, "la.harbor.eats")
+        XCTAssertEqual(resolved.sourcePlatform, .instagram)
+        XCTAssertTrue(resolved.sourceEvidence.contains("Must try the bun"))
+        XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
+        XCTAssertTrue(resolved.sourceEvidence.contains("Source URL: https://www.instagram.com/p/harborovenpizza/"))
+        XCTAssertEqual(resolved.createdAt, stamp.createdAt)
+        XCTAssertEqual(resolved.note, "Must try the bun")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote(resolved.note), "Must try the bun")
+        XCTAssertEqual(resolved.placeHighlights, ["Window seats", "Single-origin pour-over"])
+
+        let updated = try XCTUnwrap(supabase.updatedPlaces.last)
+        XCTAssertEqual(updated.id, stamp.id)
+        XCTAssertEqual(updated.recommender, "la.harbor.eats")
+        XCTAssertEqual(updated.sourceHandle, "la.harbor.eats")
+        XCTAssertEqual(updated.sourcePlatform, .instagram)
+        XCTAssertEqual(updated.sourceUrl, "https://www.instagram.com/p/harborovenpizza/")
+        XCTAssertEqual(updated.note, "Must try the bun")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote(updated.note), "Must try the bun")
+        XCTAssertFalse((updated.note ?? "").contains("Creator handle:"))
+        XCTAssertFalse((updated.note ?? "").contains("Verified coordinates"))
+        XCTAssertFalse((updated.note ?? "").contains("Analysis method:"))
+        XCTAssertFalse((updated.note ?? "").contains("Highlight:"))
+        XCTAssertTrue(updated.sourceEvidence.contains("Must try the bun"))
+        XCTAssertTrue(updated.sourceEvidence.contains("Original source note"))
+        XCTAssertEqual(updated.createdAt, stamp.createdAt)
+        XCTAssertEqual(updated.placeHighlights, ["Window seats", "Single-origin pour-over"])
+        XCTAssertEqual(updated.extractedDishes, ["Cortado", "Egg tart"])
+        XCTAssertEqual(updated.vibeTags, ["quiet", "sunny"])
+        XCTAssertEqual(updated.accessNotes, ["Walk-up", "No reservations"])
+        let wire = try XCTUnwrap(updated.wireNoteForPersistence())
+        XCTAssertEqual(wire, "Must try the bun")
+        XCTAssertFalse(wire.hasPrefix("SavvyMemory/"))
+        let meta = try XCTUnwrap(updated.memoryMetaForPersistence())
+        XCTAssertTrue(meta.evidence?.contains("Original source note") == true)
+        XCTAssertEqual(meta.highlights, ["Window seats", "Single-origin pour-over"])
+        XCTAssertEqual(meta.vibe, ["quiet", "sunny"])
+        XCTAssertEqual(meta.access, ["Walk-up", "No reservations"])
+        XCTAssertEqual(meta.recommended?.map(\.name), ["Cortado", "Egg tart"])
+        XCTAssertFalse(wire.contains("Single-origin pour-over"))
+        XCTAssertFalse(wire.contains("Original source note"))
+        XCTAssertEqual(
+            updated.sourceEvidence.filter { $0 == "Source URL: https://www.instagram.com/p/harborovenpizza/" }.count,
+            1
+        )
+
+        let decision = try XCTUnwrap(supabase.recoveryDecisions.last)
+        XCTAssertEqual(decision.finalPlaceId, stamp.id)
+        XCTAssertNil(decision.finalPlace, "The stamp row already exists; resending final_place 409s")
+        XCTAssertFalse(decision.body.keys.contains("final_place"))
+        XCTAssertNil(decision.body["final_place"] as? [String: Any])
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionPreservesSecondaryCreatorHandle() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-secondary-handle-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        var stamp = Self.correctionStamp()
+        stamp.sourceHandle = "ichiran.official"
+        stamp.recommender = "ichiran.official"
+        _ = try vault.saveConfirmedPlace(stamp)
+        let clue = Self.correctionClue(overlappingStamp: true)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertEqual(resolved.sourceHandle, "ichiran.official")
+        XCTAssertEqual(resolved.recommender, "ichiran.official")
+        XCTAssertEqual(resolved.note, "Must try the bun")
+        XCTAssertTrue(resolved.sourceEvidence.contains("Creator handle: @la.harbor.eats"))
+        XCTAssertFalse((resolved.note ?? "").contains("Creator handle:"))
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+
+        var remoteStamp = Self.correctionStamp()
+        remoteStamp.sourceHandle = nil
+        remoteStamp.recommender = "ichiran.official"
+        let remoteMerged = remoteStamp.attachingReviewClue(clue)
+        XCTAssertNil(remoteMerged.sourceHandle)
+        XCTAssertEqual(remoteMerged.recommender, "ichiran.official")
+        XCTAssertEqual(remoteMerged.note, "Must try the bun")
+        XCTAssertTrue(remoteMerged.sourceEvidence.contains("Creator handle: @la.harbor.eats"))
+    }
+
+    @MainActor
+    func testExactSearchResolutionKeepsAddressClueAsEvidence() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-address-clue-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        var stamp = Self.correctionStamp()
+        stamp.address = "1-31-15 Nishiikebukuro, Toshima"
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.address = "LA Harbor"
+        clue.evidence.append("Address clue: 1111 S. Harbor Blvd, San Pedro")
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertEqual(resolved.address, stamp.address)
+        XCTAssertEqual(resolved.note, "Must try the bun")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote(resolved.note), "Must try the bun")
+        XCTAssertTrue(resolved.sourceEvidence.contains("Address clue: 1111 S. Harbor Blvd, San Pedro"))
+        XCTAssertFalse((resolved.note ?? "").contains("Address clue:"))
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionSerializesSavedResultTaps() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-serialize-taps-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-serialize-taps-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.holdNextUpdatePlace()
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stampA = Self.correctionStamp()
+        var stampB = Self.correctionStamp()
+        stampB.name = "Other Harbor Stamp"
+        _ = try vault.saveConfirmedPlace(stampA)
+        _ = try vault.saveConfirmedPlace(stampB)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stampA, stampB]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let first = Task { try await map.resolveExactSearchClue(toSavedPlace: stampA) }
+        for _ in 0..<200 where supabase.updatePlaceStarted == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(supabase.updatePlaceStarted, 1)
+
+        let secondOpened = await map.chooseSavedStampFromExactSearch(stampB)
+        XCTAssertNil(secondOpened, "A claimed correction must not open the second stamp")
+        XCTAssertEqual(
+            map.correctionDrawerError,
+            ReviewCandidateError.correctionInFlight.errorDescription
+        )
+
+        supabase.resumeHeldUpdatePlace()
+        let resolved = try await first.value
+        XCTAssertEqual(resolved.id, stampA.id)
+        XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
+        XCTAssertEqual(supabase.updatedPlaces.map(\.id), [stampA.id])
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+        XCTAssertNil(map.correctionDrawerError)
+    }
+
+    @MainActor
+    func testExactSearchResolutionRestoresSessionWhenMergeWriteFails() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-restore-session-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-restore-session-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.updatePlaceError = NSError(domain: "test", code: 1)
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        do {
+            _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+            XCTFail("Merge PATCH failure must surface")
+        } catch {
+            XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+        }
+
+        supabase.updatePlaceError = nil
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertEqual(resolved.note, "Must try the bun")
+        XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionRollsBackLocalStampWhenDecisionFails() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-rollback-local-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-rollback-local-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.recordDecisionError = NSError(domain: "test", code: 2)
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let opened = await map.chooseSavedStampFromExactSearch(stamp)
+        XCTAssertNil(opened, "Drawer tap must not open the stamp after a failed correction")
+        XCTAssertEqual(map.correctionDrawerError, supabase.recordDecisionError?.localizedDescription)
+        XCTAssertFalse(map.correctionDrawerError?.isEmpty == true)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+
+        let local = try XCTUnwrap(map.places.first { $0.id == stamp.id })
+        XCTAssertEqual(local.note, "Must try the bun")
+        XCTAssertFalse(local.sourceEvidence.contains("Original source note"))
+        XCTAssertEqual(local.placeHighlights, stamp.placeHighlights)
+        let persisted = try XCTUnwrap(vault.confirmedPlaces().first { $0.id == stamp.id })
+        XCTAssertFalse(persisted.sourceEvidence.contains("Original source note"))
+        XCTAssertEqual(supabase.updatedPlaces.map(\.id), [stamp.id, stamp.id])
+        XCTAssertTrue(supabase.updatedPlaces[0].sourceEvidence.contains("Original source note"))
+        XCTAssertFalse(supabase.updatedPlaces[1].sourceEvidence.contains("Original source note"))
+        XCTAssertEqual(supabase.updatedPlaces[1].note, "Must try the bun")
+        XCTAssertEqual(supabase.updatedPlaces[0].wireNoteForPersistence(), "Must try the bun")
+        XCTAssertEqual(supabase.updatedPlaces[1].wireNoteForPersistence(), "Must try the bun")
+        XCTAssertFalse((supabase.updatedPlaces[0].wireNoteForPersistence() ?? "").hasPrefix("SavvyMemory/"))
+
+        supabase.recordDecisionError = nil
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
+        XCTAssertNil(map.correctionDrawerError)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionSurfacesFailedRollbackAfterRetry() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-rollback-retry-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-rollback-retry-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.recordDecisionError = NSError(domain: "test", code: 2)
+        supabase.failingUpdatePlaceCalls = [2]
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let retried = await map.chooseSavedStampFromExactSearch(stamp)
+        XCTAssertNil(retried)
+        XCTAssertEqual(supabase.updatePlaceStarted, 3, "Merge plus two rollback attempts")
+        XCTAssertEqual(supabase.updatedPlaces.count, 2)
+        XCTAssertFalse(supabase.updatedPlaces[1].sourceEvidence.contains("Original source note"))
+        XCTAssertEqual(map.correctionDrawerError, supabase.recordDecisionError?.localizedDescription)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionSurfacesRollbackErrorWhenRetryFails() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-rollback-fail-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-rollback-fail-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.recordDecisionError = NSError(domain: "test", code: 2)
+        supabase.failingUpdatePlaceCalls = [2, 3]
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let opened = await map.chooseSavedStampFromExactSearch(stamp)
+        XCTAssertNil(opened)
+        XCTAssertEqual(supabase.updatePlaceStarted, 3)
+        XCTAssertEqual(supabase.updatedPlaces.count, 1, "Rollback never succeeded, so only the merge PATCH was recorded")
+        XCTAssertEqual(map.correctionDrawerError, NSError(domain: "test", code: 3).localizedDescription)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+        let local = try XCTUnwrap(map.places.first { $0.id == stamp.id })
+        XCTAssertFalse(local.sourceEvidence.contains("Original source note"))
+
+        var other = Self.correctionStamp()
+        other.name = "Other Harbor Stamp"
+        let secondOpened = await map.chooseSavedStampFromExactSearch(other)
+        XCTAssertNil(secondOpened, "A failed rollback must keep the correction claimed on the first stamp")
+        XCTAssertEqual(
+            map.correctionDrawerError,
+            ReviewCandidateError.correctionLockedToPreviousStamp.errorDescription
+        )
+        XCTAssertEqual(supabase.updatedPlaces.count, 1, "Choosing another stamp must not attach the same clue")
+
+        supabase.recordDecisionError = nil
+        supabase.failingUpdatePlaceCalls = []
+        try await map.rejectReviewCandidate(clue)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+
+        var nextClue = Self.correctionClue(overlappingStamp: true)
+        nextClue.workflowRunId = UUID()
+        nextClue.name = "Later clue"
+        map.reviewCandidates = [nextClue]
+        map.beginExactSearchResolution(for: nextClue)
+        var laterStamp = Self.correctionStamp()
+        laterStamp.name = "Later Harbor Stamp"
+        laterStamp.latitude = 25.04
+        laterStamp.longitude = 121.57
+        let laterOpened = await map.chooseSavedStampFromExactSearch(laterStamp)
+        XCTAssertEqual(laterOpened?.id, laterStamp.id)
+        XCTAssertNil(map.correctionDrawerError)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == nextClue.id })
+    }
+
+    @MainActor
+    func testExactSearchMapCandidateMergeLocksOnFailedRollback() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-map-merge-lock-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-map-merge-lock-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.recordDecisionError = NSError(domain: "test", code: 2)
+        supabase.failingUpdatePlaceCalls = [2, 3]
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let candidate = SaveMapCandidate(
+            id: "duplicate-stamp",
+            title: stamp.name,
+            subtitle: stamp.address,
+            latitude: stamp.latitude,
+            longitude: stamp.longitude,
+            category: .cafe
+        )
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.mapCandidates = [candidate]
+        map.beginExactSearchResolution(for: clue)
+
+        do {
+            _ = try await map.saveMapCandidateAsPlace(candidate)
+            XCTFail("A failed decision must reach the caller")
+        } catch {
+            XCTAssertEqual((error as NSError).domain, "test")
+        }
+        XCTAssertEqual(supabase.updatePlaceStarted, 3)
+        XCTAssertEqual(supabase.updatedPlaces.count, 1, "Rollback never succeeded, so only the merge PATCH was recorded")
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+
+        var other = Self.correctionStamp()
+        other.name = "Other Harbor Stamp"
+        let secondOpened = await map.chooseSavedStampFromExactSearch(other)
+        XCTAssertNil(secondOpened, "A failed map-candidate merge rollback must keep the correction claimed on the first stamp")
+        XCTAssertEqual(
+            map.correctionDrawerError,
+            ReviewCandidateError.correctionLockedToPreviousStamp.errorDescription
+        )
+        XCTAssertEqual(supabase.updatedPlaces.count, 1)
+    }
+
+    @MainActor
+    func testExactSearchNewRowHonorsFailedRollbackLock() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-new-row-lock-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-new-row-lock-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.recordDecisionError = NSError(domain: "test", code: 2)
+        supabase.failingUpdatePlaceCalls = [2, 3]
+        var savedPlaces: [Place] = []
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let otherCandidate = SaveMapCandidate(
+            id: "other-harbor",
+            title: "Other Harbor Cafe",
+            subtitle: "Santa Monica",
+            latitude: 34.0194,
+            longitude: -118.4912,
+            category: .cafe
+        )
+        let map = MapViewModel(
+            supabaseService: supabase,
+            mapCandidatePlaceSaver: { place, _ in savedPlaces.append(place) },
+            mapCandidateUserIDProvider: { "owner" },
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.mapCandidates = [otherCandidate]
+        map.beginExactSearchResolution(for: clue)
+
+        do {
+            _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+            XCTFail("A failed decision must reach the caller")
+        } catch {
+            XCTAssertEqual((error as NSError).domain, "test")
+        }
+        XCTAssertEqual(supabase.updatedPlaces.count, 1)
+
+        do {
+            _ = try await map.saveMapCandidateAsPlace(otherCandidate)
+            XCTFail("A failed rollback must not insert a new stamp for the same clue")
+        } catch ReviewCandidateError.correctionLockedToPreviousStamp {
+            // Expected
+        }
+        XCTAssertTrue(savedPlaces.isEmpty)
+        XCTAssertEqual(supabase.recoveryDecisions.count, 0)
+        XCTAssertEqual(supabase.updatedPlaces.count, 1)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+        XCTAssertEqual(
+            map.correctionDrawerError,
+            ReviewCandidateError.correctionLockedToPreviousStamp.errorDescription
+        )
+    }
+
+    @MainActor
+    func testExactSearchNewRowClaimsBeforeAwaitAndBlocksInFlightStampTap() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-new-row-inflight-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-new-row-inflight-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.holdNextUpdatePlace()
+        var savedPlaces: [Place] = []
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let otherCandidate = SaveMapCandidate(
+            id: "other-harbor",
+            title: "Other Harbor Cafe",
+            subtitle: "Santa Monica",
+            latitude: 34.0194,
+            longitude: -118.4912,
+            category: .cafe
+        )
+        let map = MapViewModel(
+            supabaseService: supabase,
+            mapCandidatePlaceSaver: { place, _ in savedPlaces.append(place) },
+            mapCandidateUserIDProvider: { "owner" },
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.mapCandidates = [otherCandidate]
+        map.beginExactSearchResolution(for: clue)
+
+        let first = Task { try await map.resolveExactSearchClue(toSavedPlace: stamp) }
+        for _ in 0..<200 where supabase.updatePlaceStarted == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(supabase.updatePlaceStarted, 1)
+
+        do {
+            _ = try await map.saveMapCandidateAsPlace(otherCandidate)
+            XCTFail("An in-flight stamp merge must block a new-row save")
+        } catch ReviewCandidateError.correctionInFlight {
+            // Expected
+        }
+        XCTAssertTrue(savedPlaces.isEmpty)
+        XCTAssertEqual(
+            map.correctionDrawerError,
+            ReviewCandidateError.correctionInFlight.errorDescription
+        )
+
+        supabase.resumeHeldUpdatePlace()
+        let resolved = try await first.value
+        XCTAssertEqual(resolved.id, stamp.id)
+        XCTAssertEqual(supabase.updatedPlaces.map(\.id), [stamp.id])
+        XCTAssertEqual(supabase.recoveryDecisions.count, 1)
+        XCTAssertTrue(savedPlaces.isEmpty)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionDoesNotRollBackAfterSessionChangeOnCommittedDecision() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        auth.authState = .authenticated(userId: "owner")
+        defer { auth.authState = previousAuth }
+
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-session-commit-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-session-commit-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.onRecordDecision = {
+            auth.authState = .authenticated(userId: "other")
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        do {
+            _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+            XCTFail("A session change after commit must abort local continuation")
+        } catch ReviewCandidateError.sessionChangedAfterCommit {
+            // Expected: remote decision stays, local vault/places are not updated for the new session.
+        }
+        XCTAssertEqual(supabase.updatedPlaces.count, 1, "A committed decision must not PATCH the stamp back after a session change")
+        XCTAssertEqual(supabase.recoveryDecisions.count, 1)
+        XCTAssertEqual(supabase.fetchPlacesCalls, 0, "Must not refresh the new account's places after a session change")
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id }, "Must skip post-commit local clue removal for the new session")
+    }
+
+    @MainActor
+    func testExactSearchResolutionDoesNotRollBackAfterCommittedDecision() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-committed-no-rollback-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-committed-no-rollback-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        vault.removeReviewCandidateError = NSError(domain: "test", code: 4)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
+        XCTAssertEqual(supabase.updatedPlaces.count, 1, "A committed decision must not PATCH the stamp back")
+        XCTAssertEqual(supabase.recoveryDecisions.count, 1)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+        XCTAssertNil(map.correctionDrawerError)
+    }
+
+    @MainActor
+    func testExactSearchResolutionOmitsExistingPlaceFromMapCandidateDecision() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-map-candidate-remote-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-map-candidate-remote-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        let runID = UUID()
+        var clue = Self.correctionClue(overlappingStamp: false)
+        clue.workflowRunId = runID
+        let candidate = SaveMapCandidate(
+            id: "returned-candidate",
+            title: "Review Coffee Xinyi",
+            subtitle: "Taipei",
+            latitude: 25.033,
+            longitude: 121.565,
+            category: .cafe
+        )
+        let map = MapViewModel(
+            supabaseService: supabase,
+            mapCandidatePlaceSaver: { _, _ in },
+            mapCandidateUserIDProvider: { "owner" },
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.reviewCandidates = [clue]
+        map.mapCandidates = [candidate]
+        map.beginExactSearchResolution(for: clue)
+
+        let saved = try await map.saveMapCandidateAsPlace(candidate)
+        let decision = try XCTUnwrap(supabase.recoveryDecisions.last)
+        XCTAssertEqual(decision.finalPlaceId, saved.id)
+        XCTAssertNil(decision.finalPlace, "saveMapCandidateAsPlace already inserted the row")
+        XCTAssertFalse(decision.body.keys.contains("final_place"))
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testNewRowConfirmStillSendsFinalPlace() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        auth.authState = .authenticated(userId: "owner")
+        defer { auth.authState = previousAuth }
+
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-row-confirm-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("new-row-confirm-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        var clue = Self.correctionClue(overlappingStamp: false)
+        clue.name = "Brand New Harbor Cafe"
+        clue.address = "100 New Harbor Rd"
+        clue.latitude = 34.01
+        clue.longitude = -118.49
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.reviewCandidates = [clue]
+
+        let saved = try await map.saveReviewCandidateAsPlace(clue)
+        let decision = try XCTUnwrap(supabase.recoveryDecisions.last)
+        XCTAssertEqual(decision.finalPlaceId, saved.id)
+        XCTAssertEqual(decision.finalPlace?.id, saved.id)
+        XCTAssertNotNil(decision.finalPlace, "New-row confirm must send final_place so the backend can insert the stamp")
+        XCTAssertEqual(decision.body["final_place_id"] as? String, saved.id.uuidString)
+        XCTAssertEqual((decision.body["final_place"] as? [String: Any])?["id"] as? String, saved.id.uuidString)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionDropsCoordinateHandleOnSavedStamp() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-coord-handle-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.sourceHandle = "33.7405"
+        clue.evidence = [
+            "Original source note",
+            "Source URL: https://www.instagram.com/p/harborovenpizza/",
+        ]
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertNil(resolved.sourceHandle)
+        XCTAssertNil(resolved.recommender)
+        XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
+        XCTAssertTrue(resolved.sourceEvidence.contains("Source URL: https://www.instagram.com/p/harborovenpizza/"))
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionIgnoresSavedPlaceWithoutActiveClue() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-saved-noop-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        _ = try vault.saveSourceOnly(url: URL(string: "https://example.com/still-pending")!, note: "Keep this clue")
+        let clue = try XCTUnwrap(vault.reviewCandidates().first)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        let savedPlace = try await map.saveMapCandidateAsPlace(
+            SaveMapCandidate(
+                id: "unrelated-saved",
+                title: "Unrelated Stamp",
+                subtitle: "Taipei",
+                latitude: 25.033,
+                longitude: 121.565,
+                category: .cafe
+            )
+        )
+        map.reviewCandidates = [clue]
+
+        let opened = await map.chooseSavedStampFromExactSearch(savedPlace)
+        XCTAssertNil(opened, "Without an active correction the drawer tap must not look successful")
+        XCTAssertEqual(map.correctionDrawerError, ReviewCandidateError.noActiveCorrectionSession.errorDescription)
+        XCTAssertFalse(map.correctionDrawerError?.isEmpty == true)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+        let reloaded = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        XCTAssertEqual(try reloaded.reviewCandidates().map(\.id), [clue.id])
+    }
+
+    @MainActor
     func testPlainMapSearchUsesExactTextAndNewerResultsWin() async {
         let search = ControlledMapCandidateSearchService()
         let map = MapViewModel(mapCandidateSearchService: search, usesRemotePersistence: false)
@@ -2819,7 +4095,43 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(place.sourceUrl, "https://maps.google.com/?q=Sushi+Gen")
         XCTAssertEqual(place.sourcePlatform, .googleMaps)
         XCTAssertTrue(place.note?.contains("Visible on map") == true)
-        XCTAssertTrue(place.note?.contains("External reviews: 4100") == true)
+        XCTAssertFalse(place.note?.contains("External reviews:") == true)
+        XCTAssertEqual(place.cleanMemoryNote, "Visible on map")
+        XCTAssertTrue(place.savedAdditionalSourceEvidence.contains("External reviews: 4100"))
+    }
+
+    @MainActor
+    func testSaveDraftKeepsMapProviderDiagnosticsOutOfSavedMemory() throws {
+        let controller = SaveSearchController()
+        let draft = SavePlaceDraft(
+            title: "Harbor Oven Pizza",
+            address: "San Pedro",
+            latitude: 33.7405,
+            longitude: -118.2807,
+            category: .food,
+            sourceURL: "https://maps.google.com/?q=Harbor+Oven",
+            sourcePlatform: .googleMaps,
+            evidence: [
+                "Google Places result",
+                "Search: harbor oven pizza",
+                "Distance: 120 m away",
+            ],
+            externalReviewCount: 4100
+        )
+
+        let place = try controller.makeSavedPlace(from: draft)
+
+        XCTAssertNil(place.cleanMemoryNote)
+        XCTAssertNil(place.note)
+        XCTAssertEqual(
+            place.savedAdditionalSourceEvidence,
+            [
+                "Google Places result",
+                "Search: harbor oven pizza",
+                "Distance: 120 m away",
+                "External reviews: 4100",
+            ]
+        )
     }
 
     @MainActor
@@ -3871,6 +5183,38 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testPlaceFromReviewCandidateKeepsPrefixLikeCaptionEvidence() {
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Harbor Oven Pizza",
+            address: "San Pedro",
+            city: "Los Angeles",
+            latitude: 33.7405,
+            longitude: -118.2807,
+            evidence: [
+                "Recommender: Alice suggested the curry",
+                "Analysis method: I asked the barista",
+                SavvyGeneratedLine.marking("Analysis method: classified the shared URL/platform and canonical post id before trusting content"),
+            ],
+            confidence: 0.8,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+
+        let place = Place.from(candidate)
+
+        XCTAssertEqual(
+            place.note,
+            "Recommender: Alice suggested the curry\nAnalysis method: I asked the barista"
+        )
+        XCTAssertEqual(place.cleanMemoryNote, place.note)
+        XCTAssertFalse((place.note ?? "").contains("classified the shared URL"))
+        XCTAssertFalse(place.savedAdditionalSourceEvidence.contains { $0.contains("classified the shared URL") })
+    }
+
+    @MainActor
     func testFoodPlaceInsightServiceUsesSavedPrivateStructuredMemoryAndIgnoresPublicShell() {
         let saved = place(
             name: "Known Noodle",
@@ -4079,6 +5423,56 @@ final class SaveSearchControllerTests: XCTestCase {
             allowedPlaceIds: allowedIDs,
             sections: [SaveSearchSection(id: "test", title: "Test", subtitle: "", results: [result])],
             outputLanguage: .english
+        )
+    }
+
+    private static func correctionStamp() -> Place {
+        Place(
+            id: UUID(),
+            name: "Review Coffee Xinyi",
+            address: "Taipei",
+            latitude: 25.033,
+            longitude: 121.565,
+            category: .cafe,
+            status: .wantToGo,
+            note: "Must try the bun",
+            sourcePlatform: .other,
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            placeHighlights: ["Window seats"],
+            recommendedItems: [RecommendedItem(name: "Cortado", price: nil)],
+            vibeTags: ["quiet"],
+            accessNotes: ["Walk-up"]
+        )
+    }
+
+    @MainActor
+    private static func correctionClue(overlappingStamp: Bool) -> PlaceReviewCandidate {
+        PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Coffee clue",
+            address: "Taipei",
+            city: "Taipei",
+            latitude: nil,
+            longitude: nil,
+            evidence: [
+                "Original source note",
+                "Source URL: https://www.instagram.com/p/harborovenpizza/",
+                "Creator handle: @la.harbor.eats",
+                "https://www.xiaohongshu.com/explore/extra-clue",
+                "Source URL: https://www.instagram.com/p/harborovenpizza/",
+            ],
+            confidence: 0.8,
+            missingInfo: ["Exact coordinates"],
+            status: "review",
+            createdAt: Date(),
+            placeHighlights: overlappingStamp ? ["Window seats", "Single-origin pour-over"] : ["Single-origin pour-over"],
+            recommendedItems: overlappingStamp
+                ? [RecommendedItem(name: "Cortado", price: nil), RecommendedItem(name: "Egg tart", price: nil)]
+                : [RecommendedItem(name: "Egg tart", price: nil)],
+            vibeTags: overlappingStamp ? ["quiet", "sunny"] : ["sunny"],
+            accessNotes: overlappingStamp ? ["Walk-up", "No reservations"] : ["No reservations"],
+            sourceHandle: "la.harbor.eats"
         )
     }
 }
@@ -4843,6 +6237,36 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(content.contains("openExactSearchRefine"))
         XCTAssertTrue(content.contains("preservesExactSearchClue: true"))
         XCTAssertFalse(content.contains("openMapSearch(initialQuery: query)"))
+        XCTAssertTrue(content.contains("chooseSavedStampFromExactSearch"))
+        XCTAssertTrue(content.contains("mapDrawerPresentedActionError"))
+        XCTAssertTrue(content.contains("MapDrawerActionErrorAlert"))
+        XCTAssertTrue(content.contains("map.drawer.actionError"))
+    }
+
+    @MainActor
+    func testMapDrawerActionErrorAlertAppearsOnScreen() {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let host = UIHostingController(
+            rootView: Color.clear
+                .frame(width: 390, height: 844)
+                .modifier(MapDrawerActionErrorAlert(
+                    title: "Couldn’t finish that action",
+                    okTitle: "OK",
+                    isEnabled: true,
+                    message: .constant("Couldn’t roll that stamp back.")
+                ))
+        )
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.layoutIfNeeded()
+        let deadline = Date().addingTimeInterval(1)
+        while host.presentedViewController == nil, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        let alert = host.presentedViewController as? UIAlertController
+        XCTAssertNotNil(alert, "The drawer error alert must appear on screen")
+        XCTAssertEqual(alert?.title, "Couldn’t finish that action")
+        XCTAssertEqual(alert?.message, "Couldn’t roll that stamp back.")
     }
 
     func testTaipeiAndTaibeiMatchBothWaysWithoutRewriting() {
@@ -4937,5 +6361,190 @@ final class MapReviewLocationRepairTests: XCTestCase {
             status: status,
             createdAt: Date()
         )
+    }
+}
+
+private final class RecordingSupabaseService: SupabaseServiceProtocol {
+    private(set) var updatedPlaces: [Place] = []
+    private(set) var recoveryDecisions: [PlaceRecoveryDecisionDraft] = []
+    private(set) var updatePlaceStarted = 0
+    var updatePlaceError: Error?
+    var failingUpdatePlaceCalls: Set<Int> = []
+    var recordDecisionError: Error?
+    var onRecordDecision: (() -> Void)?
+    private var holdUpdatePlace = false
+    private var resumeUpdatePlace: (() -> Void)?
+
+    func holdNextUpdatePlace() {
+        holdUpdatePlace = true
+    }
+
+    func resumeHeldUpdatePlace() {
+        resumeUpdatePlace?()
+        resumeUpdatePlace = nil
+    }
+
+    private(set) var fetchPlacesCalls = 0
+    private(set) var savedPlaces: [Place] = []
+
+    func startAnalysis(id: UUID) async throws -> UUID? { nil }
+    func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {}
+    func fetchPlaces(for userId: String) async throws -> [Place] {
+        fetchPlacesCalls += 1
+        return []
+    }
+    func savePlace(_ place: Place, userId: String) async throws {
+        savedPlaces.append(place)
+    }
+    func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult {
+        throw SupabaseError.notConfigured
+    }
+    func updatePlace(_ place: Place, previous: Place?) async throws {
+        if holdUpdatePlace {
+            holdUpdatePlace = false
+            await withCheckedContinuation { continuation in
+                resumeUpdatePlace = { continuation.resume() }
+                updatePlaceStarted += 1
+            }
+        } else {
+            updatePlaceStarted += 1
+        }
+        if failingUpdatePlaceCalls.contains(updatePlaceStarted) {
+            throw NSError(domain: "test", code: 3)
+        }
+        if let updatePlaceError { throw updatePlaceError }
+        updatedPlaces.append(place)
+    }
+    func deletePlace(_ placeId: UUID) async throws {}
+    func createMemoryCapture(from candidate: PendingReviewCandidate, userId: String) async throws -> UUID {
+        throw SupabaseError.notConfigured
+    }
+    func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID?) async throws -> UUID {
+        throw SupabaseError.notConfigured
+    }
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?, explicitRetry: Bool) async throws -> SourceSearchRecoveryResult {
+        SourceSearchRecoveryResult(createdCandidates: [], sourceResolution: nil)
+    }
+    func fetchReviewCandidates() async throws -> [PlaceReviewCandidate] { [] }
+    func updatePlaceCandidateStatus(_ candidateId: UUID, status: String, placeId: UUID?) async throws {}
+    func createPlaceRecoveryWorkOrder(sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkOrder {
+        throw SupabaseError.notConfigured
+    }
+    func createPlaceRecoveryRun(workOrderId: UUID?, sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkflowRun {
+        throw SupabaseError.notConfigured
+    }
+    func recordPlaceRecoveryResult(_ result: PlaceRecoveryResultDraft, for runId: UUID) async throws -> PlaceRecoveryWorkflowRun {
+        throw SupabaseError.notConfigured
+    }
+    func recordPlaceRecoveryDecision(_ decision: PlaceRecoveryDecisionDraft, for runId: UUID) async throws -> PlaceRecoveryDecisionReceiptResponse {
+        onRecordDecision?()
+        if let recordDecisionError { throw recordDecisionError }
+        recoveryDecisions.append(decision)
+        return PlaceRecoveryDecisionReceiptResponse(
+            run: PlaceRecoveryWorkflowRun(
+                id: runId,
+                workOrderId: nil,
+                workflowId: "fixture",
+                listingId: "fixture",
+                sourceURL: nil,
+                sourceType: "social_url",
+                status: "completed",
+                resultType: nil,
+                confidence: nil,
+                evidenceTier: "weak",
+                resultEvidenceRefs: [],
+                resultCandidateRefs: [],
+                creditReserved: 1,
+                creditSettlement: "pending",
+                receiptId: nil,
+                createdAt: nil,
+                completedAt: nil
+            ),
+            receipt: WorkflowReceipt(
+                id: UUID(),
+                runId: runId,
+                workflowId: "fixture",
+                verdict: "confirm",
+                settlement: "pending",
+                evaluatorSummary: "fixture",
+                evidenceRefs: [],
+                candidateRefs: [],
+                receiptHash: "fixture",
+                anchorStatus: "none",
+                privateURL: nil,
+                createdAt: nil
+            )
+        )
+    }
+    func fetchTrips(for userId: String) async throws -> [Trip] { [] }
+    func saveTrip(_ trip: Trip, userId: String) async throws {}
+    func updateTrip(_ trip: Trip) async throws {}
+    func deleteTrip(_ tripId: UUID) async throws {}
+    func fetchProfile(for userId: String) async throws -> UserProfile? { nil }
+    func updateProfile(_ profile: UserProfile) async throws {}
+    func fetchFollowedFriends(query: String, cursor: String?, limit: Int) async throws -> SaveFollowedFriendsPage {
+        throw SupabaseError.notConfigured
+    }
+    func followProfile(referralCode: String, lens: SaveSocialLens, source: SaveFollowSource) async throws {}
+    func followProfile(target: SaveReferralTarget, source: SaveFollowSource) async throws {}
+    func unfollowProfile(followId: String) async throws {}
+    func fetchReferralProfile(target: SaveReferralTarget) async throws -> SaveReferralProfile {
+        throw SupabaseError.notConfigured
+    }
+    func fetchSocialSignals(lens: SaveSocialLens) async throws -> [Place] { [] }
+    func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws {}
+    func createSharedPlaceLink(payload: SharedPlaceData, sourcePlaceId: UUID?, noteConsentVersion: Int?) async throws -> URL {
+        throw SupabaseError.notConfigured
+    }
+    func recordFriendShareEvent(code: String, event: FriendShareReceiptEvent, failureReason: FriendShareOpenFailureReason?) async throws {}
+    func fetchVerifiedPlaceClaims(for placeId: UUID, includePrivateEvidence: Bool) async throws -> [VerifiedPlaceClaim] { [] }
+    func createVerifiedPlaceClaim(_ draft: VerifiedPlaceClaimDraft, for placeId: UUID) async throws -> VerifiedPlaceClaim {
+        throw SupabaseError.notConfigured
+    }
+    func fetchPlaceTrustSummary(for placeId: UUID) async throws -> PlaceTrustSummaryResponse {
+        throw SupabaseError.notConfigured
+    }
+    func fetchPlaceMaatAnalysis(for placeId: UUID, includePrivateEvidence: Bool, includePublicWeb: Bool) async throws -> MaatPlaceAnalysisResponse {
+        throw SupabaseError.notConfigured
+    }
+    func recommendPlacesByClaims(_ request: ClaimRecommendationRequest) async throws -> ClaimRecommendationResponse {
+        throw SupabaseError.notConfigured
+    }
+    func recordRecommendationAnalysisReceipt(_ receipt: RecommendationAnalysisReceiptDraft) async throws -> SaveRecommendationAnalysisReceipt {
+        throw SupabaseError.notConfigured
+    }
+    func fetchMemoryPreferences() async throws -> [SaveMemoryPreference] { [] }
+    func fetchRecommendationOutcomes() async throws -> [SaveRecommendationOutcome] { [] }
+    func recordRecommendationOutcome(_ draft: SaveRecommendationOutcomeDraft) async throws {}
+    func createMemoryPreference(_ draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference {
+        throw SupabaseError.notConfigured
+    }
+    func updateMemoryPreference(_ preferenceId: UUID, status: SaveMemoryPreference.Status) async throws -> SaveMemoryPreference {
+        throw SupabaseError.notConfigured
+    }
+    func correctMemoryPreference(_ preferenceId: UUID, draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference {
+        throw SupabaseError.notConfigured
+    }
+    func fetchPublicPlaceCard(cardId: UUID) async throws -> PublicPlaceCard {
+        throw SupabaseError.notConfigured
+    }
+    func createClaimUsageReceipt(_ receipt: ClaimUsageReceiptDraft, requiresAuth: Bool) async throws -> ClaimUsageReceipt {
+        throw SupabaseError.notConfigured
+    }
+    func fetchCollaborativeListRows() async throws -> [SaveCollaborativeListServerRow] { [] }
+    func createCollaborativeListRow(id: UUID, title: String, note: String?) async throws {}
+    func addCollaborativeListItem(listID: UUID, payload: SaveListItem) async throws {}
+    func createListShareCode(listID: UUID, role: SaveListRole) async throws -> (code: String, url: URL) {
+        throw SupabaseError.notConfigured
+    }
+    func joinCollaborativeList(code: String) async throws -> SaveCollaborativeListServerRow {
+        throw SupabaseError.notConfigured
+    }
+    func fetchListMembers(listID: UUID) async throws -> [SaveListMemberRow] { [] }
+    func removeListMember(listID: UUID, userID: String) async throws {}
+    func fetchListShareCodes(listID: UUID) async throws -> [SaveListShareCodeInfoRow] { [] }
+    func revokeListShareCode(listID: UUID, code: String) async throws {}
+    func fetchMyReferral() async throws -> (code: String, url: URL) {
+        throw SupabaseError.notConfigured
     }
 }

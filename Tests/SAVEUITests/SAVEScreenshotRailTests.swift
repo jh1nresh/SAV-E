@@ -240,6 +240,28 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(firstPlace.frame.contains(featuredName.frame), "The readable paper caption must remain within the saved-place row.")
         XCTAssertTrue(app.textFields["home.search"].isHittable)
         attach(app, name: "review-flow-home-no-photo")
+        openSavesFromHome(app: app)
+        let seededCandidate = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH 'saves.reviewCandidate.' AND label CONTAINS[c] %@",
+                "Harbor Oven Pizza"
+            )
+        ).firstMatch
+        XCTAssertTrue(seededCandidate.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            seededCandidate.label.contains("la.harbor.eats"),
+            "Saves rows must keep the known source handle, not only the next-step sentence."
+        )
+        XCTAssertTrue(
+            seededCandidate.label.contains("Check the name and address before confirming"),
+            "Saves rows should keep next-step guidance in addition to known evidence."
+        )
+        XCTAssertFalse(
+            seededCandidate.label.contains("33.7405"),
+            "A map coordinate must never appear as the Saves-row source handle."
+        )
+        openRootTab("Home", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout))
         rootTabButton("Save", app: app).tap()
         typeText("""
         The coffee shops in Los Angeles County I always return to
@@ -260,6 +282,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         rows.firstMatch.tap()
         XCTAssertTrue(app.buttons["drawer.review.primaryAction"].waitForExistence(timeout: stepTimeout))
         XCTAssertNotEqual(app.buttons["drawer.review.primaryAction"].label, "Confirm and save", "No coordinates must not become a saved place.")
+        XCTAssertTrue(app.staticTexts["drawer.review.missingClue"].exists)
+        let addClue = app.buttons["drawer.review.addClue"]
+        XCTAssertTrue(addClue.exists)
+        XCTAssertEqual(addClue.label, "Search for this place")
+        XCTAssertFalse(app.buttons["Add a clue"].exists)
+        XCTAssertFalse(app.buttons["drawer.review.changePlace"].exists)
+        attach(app, name: "review-next-step-unresolved")
         let reject = app.buttons["drawer.review.reject"]
         tapReachable(reject)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
@@ -271,7 +300,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     func testEmptyHomeStartsCaptureAndKeepsSourceOnlyUnconfirmed() throws {
         let app = makeApp(launchArguments: [
-            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline", "--uitest-location-denied",
             "--uitest-reset-review-demo-storage", "--uitest-empty-home", "-save.appLanguage", "en"
         ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
         launch(app)
@@ -290,6 +319,43 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.staticTexts["Analysis ready"].exists)
         XCTAssertNotEqual(app.buttons["drawer.review.primaryAction"].label, "Confirm and save")
         attach(app, name: "review-flow-source-only")
+        let addClue = app.buttons["drawer.review.addClue"]
+        XCTAssertTrue(addClue.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(addClue.label, "Search for this place")
+        XCTAssertFalse(app.buttons["Add a clue"].exists)
+        tapReachable(addClue)
+        let refinement = app.textFields["map.search.input"]
+        XCTAssertTrue(refinement.waitForExistence(timeout: stepTimeout))
+        refinement.tap()
+        refinement.typeText(" Taipei")
+        XCTAssertTrue((refinement.value as? String)?.contains("Taipei") == true)
+        XCTAssertTrue(refinement.isHittable)
+        XCTAssertGreaterThan(refinement.frame.height, 20)
+        XCTAssertLessThan(refinement.frame.maxY, app.keyboards.firstMatch.frame.minY)
+        XCTAssertFalse(app.buttons["drawer.review.primaryAction"].exists)
+        attach(app, name: "review-next-step-add-clue")
+        try assertSearchEditorIsPainted(refinement)
+    }
+
+    /// A field can remain accessible and accept typing while a parent mask
+    /// hides all its pixels. Inspect the light-mode fixture's actual editor.
+    @MainActor
+    private func assertSearchEditorIsPainted(_ field: XCUIElement) throws {
+        let image = try XCTUnwrap(field.screenshot().image.cgImage)
+        var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        try pixels.withUnsafeMutableBytes { bytes in
+            let context = try XCTUnwrap(CGContext(data: bytes.baseAddress,
+                width: image.width, height: image.height, bitsPerComponent: 8,
+                bytesPerRow: image.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        }
+        let samples = stride(from: 0, to: pixels.count, by: 4)
+        let paper = samples.filter { pixels[$0] > 225 && pixels[$0 + 1] > 220 && pixels[$0 + 2] > 210 }.count
+        let ink = samples.filter { pixels[$0] < 140 && pixels[$0 + 1] < 140 && pixels[$0 + 2] < 140 }.count
+        let count = Double(image.width * image.height)
+        XCTAssertGreaterThan(Double(paper) / count, 0.65, "Search must render on paper, not the town behind its hidden mask.")
+        XCTAssertGreaterThan(Double(ink) / count, 0.01, "The typed clue must be visibly painted, not only accessible.")
     }
 
     @MainActor
@@ -711,6 +777,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-complete-onboarding",
                 "--skip-map-tour",
                 "--uitest-review-demo-offline",
+                "--uitest-review-map-results",
                 "--uitest-reset-review-demo-storage",
                 "-save.appLanguage", "en",
             ],
@@ -728,7 +795,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-postcard-capture")
         let captureInput = app.textViews["capture.input"]
-        typeText(mapURL, into: captureInput)
+        typeText("Creator handle: @la.harbor.eats\n\(mapURL)", into: captureInput)
         let analyze = app.buttons["capture.analyze"]
         XCTAssertTrue(analyze.waitForExistence(timeout: stepTimeout))
         analyze.tap()
@@ -739,11 +806,26 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(receipt.label.contains("Found 1 clue"))
         let confirm = app.buttons["drawer.review.primaryAction"]
         XCTAssertEqual(confirm.label, "Confirm and save")
+        XCTAssertTrue(app.staticTexts["drawer.review.missingClue"].exists)
+        XCTAssertTrue(app.buttons["drawer.review.changePlace"].exists)
+        XCTAssertFalse(app.buttons["drawer.review.addClue"].exists)
         let context = app.descendants(matching: .any)["drawer.review.contextHero"].firstMatch
         XCTAssertTrue(context.exists)
         XCTAssertLessThan(context.frame.minY, confirm.frame.minY)
         XCTAssertTrue(app.buttons["drawer.review.reject"].exists)
         attach(app, name: "review-flow-single-result")
+
+        // A populated search must remain actionable on the tile-town Map.
+        // The former pin-only route closed the panel and stranded this result.
+        tapReachable(app.buttons["drawer.review.changePlace"])
+        let corrected = app.buttons["map.search.candidate.review-map-result-fixture"]
+        XCTAssertTrue(corrected.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["map.liveSurface"].exists)
+        XCTAssertTrue(app.staticTexts["Map results · Not saved"].exists)
+        tapReachable(corrected)
+        XCTAssertTrue(app.buttons["drawer.unsaved.primaryAction"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "review-change-place-tile-town")
 
         terminate(app)
         app.launchArguments.removeAll { $0 == "--uitest-reset-review-demo-storage" }
@@ -770,6 +852,18 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             )
         ).firstMatch
         XCTAssertTrue(savedCandidate.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            savedCandidate.label.contains("la.harbor.eats"),
+            "Saves rows must keep the known source handle after a maps capture, not fall through to the platform name."
+        )
+        XCTAssertFalse(
+            savedCandidate.label.contains("33.7405"),
+            "A map coordinate must never appear as the Saves-row source handle."
+        )
+        XCTAssertTrue(
+            savedCandidate.label.contains("Check the name and address before confirming"),
+            "Saves rows should keep next-step guidance in addition to known evidence."
+        )
         XCTAssertFalse(
             app.buttons.matching(
                 NSPredicate(format: "label CONTAINS[c] %@", "Quarter Sheets Pizza Club")
@@ -806,6 +900,50 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.staticTexts["84%"].exists)
         XCTAssertFalse(app.staticTexts["84% confidence"].exists)
         attach(app, name: "atlas-postcard-review-drawer")
+
+        tapReachable(app.buttons["drawer.review.changePlace"])
+        XCTAssertTrue(app.descendants(matching: .any)["map.search.root"].waitForExistence(timeout: stepTimeout))
+        let refine = app.textFields["map.search.input"]
+        XCTAssertTrue(refine.waitForExistence(timeout: stepTimeout))
+        focus(refine)
+        refine.press(forDuration: 1.0)
+        let selectAll = app.menuItems["Select All"]
+        if selectAll.waitForExistence(timeout: timeout(2)) {
+            selectAll.tap()
+        } else if let current = refine.value as? String, !current.isEmpty {
+            refine.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: current.count))
+        }
+        refine.typeText("ichiran")
+        let savedStamp = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH 'map.search.saved.' AND label CONTAINS[c] %@",
+                "Ichiran"
+            )
+        ).firstMatch
+        XCTAssertTrue(
+            savedStamp.waitForExistence(timeout: stepTimeout),
+            "Review → Choose another place must list saved Map Stamps."
+        )
+        tapReachable(savedStamp)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["drawer.saved.postcardBody"].waitForExistence(timeout: stepTimeout),
+            "Choosing a saved stamp should open that Map Stamp, not leave the Review clue."
+        )
+        XCTAssertTrue(app.staticTexts["Ichiran Shibuya"].firstMatch.exists)
+        attach(app, name: "review-change-place-saved-stamp")
+
+        openSavesFromHome(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        let leftoverClue = app.buttons.matching(
+            NSPredicate(
+                format: "identifier BEGINSWITH 'saves.reviewCandidate.' AND label CONTAINS[c] %@",
+                "Harbor Oven Pizza"
+            )
+        ).firstMatch
+        XCTAssertFalse(
+            leftoverClue.exists,
+            "Choosing a saved Map Stamp during Review correction must retire the clue."
+        )
     }
 
     @MainActor
@@ -1145,12 +1283,29 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.descendants(matching: .any)["saves.root"].exists)
         attach(app, name: "home-real-candidate-detail")
         app.buttons["drawer.place.close"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["home.more"].waitForExistence(timeout: stepTimeout))
         tapReachable(app.buttons["home.more"])
+        XCTAssertTrue(
+            app.descendants(matching: .any)["home.more.sheet"].waitForExistence(timeout: stepTimeout),
+            "Reopening More after a review candidate must show the sheet before View all."
+        )
         XCTAssertTrue(app.buttons["home.reviewAll"].waitForExistence(timeout: stepTimeout))
         app.buttons["home.reviewAll"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         let firstCandidate = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch
         XCTAssertTrue(firstCandidate.label.contains("Harbor Oven Pizza"))
+        XCTAssertTrue(
+            firstCandidate.label.contains("la.harbor.eats"),
+            "Saves rows must keep the known source handle, not only the next-step sentence."
+        )
+        XCTAssertTrue(
+            firstCandidate.label.contains("Check the name and address before confirming"),
+            "Saves rows should keep next-step guidance in addition to known evidence."
+        )
+        XCTAssertFalse(
+            firstCandidate.label.contains("33.7405"),
+            "A map coordinate must never appear as the Saves-row source handle."
+        )
         XCTAssertLessThan(firstCandidate.frame.minY, app.frame.height * 0.35)
         XCTAssertLessThan(firstCandidate.frame.height, 150)
         XCTAssertFalse(app.descendants(matching: .any)["saves.pocket.reviewFooter"].exists)

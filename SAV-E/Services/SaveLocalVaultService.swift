@@ -17,6 +17,9 @@ final class SaveLocalVaultService: Sendable {
     private let fileName = "save-memory-records.json"
     private let overrideVaultURL: URL?
     private let lock = NSLock()
+#if DEBUG
+    nonisolated(unsafe) var removeReviewCandidateError: Error?
+#endif
 
     init(overrideVaultURL: URL? = nil) {
         self.overrideVaultURL = overrideVaultURL
@@ -78,7 +81,7 @@ final class SaveLocalVaultService: Sendable {
             sourceURL: url.absoluteString,
             sourceText: note,
             title: sourceOnlyDisplayName(for: url),
-            evidence: diagnostic.found + diagnostic.attempts + diagnosticSearchEvidence(diagnostic),
+            evidence: diagnostic.candidateEvidence(extras: diagnosticSearchEvidence(diagnostic)),
             evidenceDiagnostic: diagnostic
         )
         return try upsertReviewRecord(record, matchSourceIdentity: true)
@@ -219,6 +222,10 @@ final class SaveLocalVaultService: Sendable {
         let texts = [existing.sourceText, incoming.sourceText].compactMap { $0 }.filter { !$0.isEmpty }
         seen.removeAll()
         merged.sourceText = texts.filter { seen.insert($0).inserted }.joined(separator: "\n")
+        merged.sourceHandle = SaveSourceHandle.displayable(incoming.sourceHandle)
+            ?? SaveSourceHandle.displayable(existing.sourceHandle)
+            ?? SaveSourceHandle.stored(incoming.sourceHandle)
+            ?? SaveSourceHandle.stored(existing.sourceHandle)
         return merged
     }
 
@@ -278,6 +285,9 @@ final class SaveLocalVaultService: Sendable {
     }
 
     func removeReviewCandidate(_ candidateID: UUID) throws {
+#if DEBUG
+        if let removeReviewCandidateError { throw removeReviewCandidateError }
+#endif
         try withLock {
             try withCoordinatedVaultWrite { url in
                 var records = try loadRecords(from: url)
@@ -301,6 +311,7 @@ final class SaveLocalVaultService: Sendable {
         if let sourceHandle = place.savedSourceHandle?.trimmingCharacters(in: .whitespacesAndNewlines), !sourceHandle.isEmpty {
             evidence.append("Source handle: @\(sourceHandle)")
         }
+        evidence.append(contentsOf: place.savedAdditionalSourceEvidence)
         evidence.append(contentsOf: place.savedPlaceHighlights.map { "Highlight: \($0)" })
         evidence.append(contentsOf: place.savedRecommendedItems.map { "Highlight: Recommended item: \($0.displayText)" })
         evidence.append(contentsOf: place.savedVibeTags.map { "Vibe: \($0)" })
@@ -564,7 +575,15 @@ private extension SaveMemoryRecord {
             vibeTags: vibeTags.nilIfEmpty,
             accessNotes: accessNotes.nilIfEmpty,
             sourceHandle: sourceHandle,
-            mergedPlaceIDs: mergedPlaceIDs
+            mergedPlaceIDs: mergedPlaceIDs,
+            additionalSourceEvidence: evidence.filter { line in
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return false }
+                if Place.isGeneratedEvidenceLine(trimmed) || Place.isStructuredEvidenceLine(trimmed) { return false }
+                if trimmed == sourceText { return false }
+                if let sourceURL, trimmed == "Source URL: \(sourceURL)" { return false }
+                return true
+            }.nilIfEmpty
         )
     }
 }
