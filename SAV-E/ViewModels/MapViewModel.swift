@@ -8,6 +8,7 @@ enum ReviewCandidateError: LocalizedError {
     case alreadySavedMapStamp(String)
     case sourceStillUnresolved
     case sourceAlreadyReviewed
+    case noActiveCorrectionSession
 
     var errorDescription: String? {
         switch self {
@@ -19,6 +20,8 @@ enum ReviewCandidateError: LocalizedError {
             return "This candidate needs Google Places refinement or a map link before it can be saved."
         case .alreadySavedMapStamp(let name):
             return "\(name) is already saved as a Map Stamp."
+        case .noActiveCorrectionSession:
+            return nil
         }
     }
 }
@@ -1788,7 +1791,9 @@ final class MapViewModel: ObservableObject {
     /// back so it does not look corrected while the Review clue is still open.
     @discardableResult
     func resolveExactSearchClue(toSavedPlace place: Place) async throws -> Place {
-        guard let resolution = exactSearchResolution else { return place }
+        guard let resolution = exactSearchResolution else {
+            throw ReviewCandidateError.noActiveCorrectionSession
+        }
         exactSearchResolution = nil
         correctionDrawerError = nil
         var persistedMerge = false
@@ -1814,21 +1819,41 @@ final class MapViewModel: ObservableObject {
             return associated
         } catch {
             if persistedMerge {
+                var rollbackError: Error?
                 if usesRemotePersistence {
                     do {
-                        try await supabaseService.updatePlace(place, previous: associated)
+                        try await rollBackRemoteStampMerge(original: place, merged: associated)
                     } catch {
-                        print("MapViewModel: failed to roll back remote stamp merge \(place.id): \(error)")
+                        rollbackError = error
                     }
                 }
                 try? saveLocalVaultService.removeConfirmedPlace(place)
                 mirrorToLocalVault(place)
                 places = Place.consolidated(places.filter { $0.id != place.id } + [place])
+                exactSearchResolution = resolution
+                if let rollbackError {
+                    correctionDrawerError = rollbackError.localizedDescription
+                    throw rollbackError
+                }
+            } else {
+                exactSearchResolution = resolution
             }
-            exactSearchResolution = resolution
             correctionDrawerError = error.localizedDescription
             throw error
         }
+    }
+
+    private func rollBackRemoteStampMerge(original: Place, merged: Place) async throws {
+        var lastError: Error?
+        for _ in 1...2 {
+            do {
+                try await supabaseService.updatePlace(original, previous: merged)
+                return
+            } catch {
+                lastError = error
+            }
+        }
+        throw lastError ?? ReviewCandidateError.sourceStillUnresolved
     }
 
     /// After an exact-place search confirms a place, the originating Review

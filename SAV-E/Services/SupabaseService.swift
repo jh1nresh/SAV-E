@@ -318,21 +318,34 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         } else if place.sourceUrl != previous?.sourceUrl {
             updates["source_url"] = place.sourceUrl
         }
-        // `places.note` is the user's plain memory. Extra clue evidence has
-        // no dedicated column (see `Place.wireNoteForPersistence`); never
-        // write a SavvyMemory envelope or labeled dump into this field.
-        // Rewrite the column with the same user text when extra evidence
-        // changes so leftover envelopes from earlier builds are healed.
-        // Photo enrichment (unchanged note and evidence) omits it.
+        // `places.note` is the user's plain memory. Extra clue evidence,
+        // highlights, vibe, access, and priced recommended items live in
+        // `memory_meta`. Rewrite the column with the same user text when extra
+        // evidence changes so leftover SavvyMemory envelopes are healed; never
+        // dump structured memory into this field. Photo enrichment (unchanged
+        // note and memory) omits both.
+        let previousRawNote = previous?.note
+        let previousWasEnvelope = previousRawNote != nil
+            && Place.decodedWireNote(previousRawNote).note != previousRawNote
         if previous == nil
             || place.userFacingNote != previous?.userFacingNote
+            || previousWasEnvelope
             || place.hasAdditionalEvidence(unlike: previous)
             || place.hasStructuredDetails(unlike: previous) {
             updates["note"] = place.userFacingNote
         }
+        let nextMeta = place.memoryMetaForPersistence()
+        let previousMeta = previous?.memoryMetaForPersistence()
+        if previous == nil {
+            if let nextMeta { updates["memory_meta"] = try nextMeta.jsonObject() }
+        } else if nextMeta != previousMeta {
+            updates["memory_meta"] = try nextMeta?.jsonObject()
+        }
         let nextDishes = place.savedRecommendedItems.map(\.name)
         let previousDishes = previous?.savedRecommendedItems.map(\.name) ?? []
-        if !nextDishes.isEmpty, nextDishes != previousDishes {
+        if previous == nil {
+            if !nextDishes.isEmpty { updates["extracted_dishes"] = nextDishes }
+        } else if nextDishes != previousDishes {
             updates["extracted_dishes"] = nextDishes
         }
         if place.createdAt > .distantPast {
@@ -2048,6 +2061,7 @@ private struct PlaceRow: Codable {
     let source_image_url: String?
     let business_photo_urls: [String]?
     let extracted_dishes: [String]?
+    let memory_meta: PlaceMemoryMeta?
     let price_range: String?
     let recommender: String?
     let google_rating: Double?
@@ -2060,16 +2074,25 @@ private struct PlaceRow: Codable {
 
     func toPlace() -> Place {
         let decoded = Place.decodedWireNote(note)
-        let extracted = decoded.highlights
-        let fromNote = extracted.recommendedItems
+        let meta = memory_meta
+        let fromMeta = meta?.recommended ?? []
+        let fromEnvelope = decoded.highlights.recommendedItems
         let fromDishes = (extracted_dishes ?? []).map { RecommendedItem(name: $0, price: nil) }
-        let items = fromNote + fromDishes.filter { dish in
-            !fromNote.contains { $0.name == dish.name }
+        var items = fromMeta
+        for item in fromEnvelope + fromDishes {
+            if let index = items.firstIndex(where: { $0.name.caseInsensitiveCompare(item.name) == .orderedSame }) {
+                if items[index].price == nil { items[index].price = item.price }
+            } else {
+                items.append(item)
+            }
         }
-        let additional = decoded.additional.filter { line in
+        let additional = (meta?.evidence ?? decoded.additional).filter { line in
             guard let source_url else { return true }
             return line != "Source URL: \(source_url)"
         }
+        let highlights = meta?.highlights ?? decoded.highlights.placeHighlights
+        let vibe = meta?.vibe ?? decoded.highlights.vibeTags
+        let access = meta?.access ?? decoded.highlights.accessNotes
         return Place(
             id: id,
             name: name,
@@ -2098,10 +2121,10 @@ private struct PlaceRow: Codable {
             createdAt: memoryCollectionDate(created_at),
             visibility: visibility.flatMap(PlaceVisibility.init(rawValue:)),
             socialSignal: social_signal?.toSignal(),
-            placeHighlights: extracted.placeHighlights.isEmpty ? nil : extracted.placeHighlights,
+            placeHighlights: highlights.isEmpty ? nil : highlights,
             recommendedItems: items.isEmpty ? nil : items,
-            vibeTags: extracted.vibeTags.isEmpty ? nil : extracted.vibeTags,
-            accessNotes: extracted.accessNotes.isEmpty ? nil : extracted.accessNotes,
+            vibeTags: vibe.isEmpty ? nil : vibe,
+            accessNotes: access.isEmpty ? nil : access,
             additionalSourceEvidence: additional.isEmpty ? nil : additional
         )
     }
@@ -2128,6 +2151,7 @@ private struct PlaceRow: Codable {
             source_image_url: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
             business_photo_urls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
             extracted_dishes: place.extractedDishes,
+            memory_meta: place.memoryMetaForPersistence(),
             price_range: place.priceRange,
             recommender: place.recommender,
             google_rating: place.googleRating,

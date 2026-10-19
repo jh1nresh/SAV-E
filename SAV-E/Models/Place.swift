@@ -49,9 +49,14 @@ struct Place: Identifiable, Codable, Hashable {
         merged.mergedPlaceIDs = aliases.isEmpty ? nil : aliases
         // A fresh copy of the same record owns its edits, including cleared notes.
         merged.createdAt = min(createdAt, other.createdAt)
-        guard id != other.id else { return merged }
         let primaryURL = sourceUrl ?? other.sourceUrl
-        merged.additionalSourceEvidence = (savedAdditionalSourceEvidence + other.incomingEvidence(excludingNote: note))
+        // Same-id remote+local reloads must still union evidence and structured
+        // memory. Different-id merges can also lift the other stamp's note
+        // lines into additional evidence; same-id keeps `self.note`.
+        let extraEvidence = id == other.id
+            ? other.savedAdditionalSourceEvidence
+            : other.incomingEvidence(excludingNote: note)
+        merged.additionalSourceEvidence = (savedAdditionalSourceEvidence + extraEvidence)
             .filter { line in
                 guard let primaryURL, !primaryURL.isEmpty else { return true }
                 return line != "Source URL: \(primaryURL)"
@@ -67,7 +72,7 @@ struct Place: Identifiable, Codable, Hashable {
         merged.placeHighlights = (savedPlaceHighlights + other.savedPlaceHighlights).removingDuplicates()
         merged.vibeTags = (savedVibeTags + other.savedVibeTags).removingDuplicates()
         merged.accessNotes = (savedAccessNotes + other.savedAccessNotes).removingDuplicates()
-        merged.recommendedItems = savedRecommendedItems + other.savedRecommendedItems.filter { !savedRecommendedItems.contains($0) }
+        merged.recommendedItems = Self.mergingRecommendedItems(savedRecommendedItems, with: other.savedRecommendedItems)
         merged.extractedDishes = merged.savedRecommendedItems.map(\.name).nilIfEmpty
         merged.rating = rating ?? other.rating
         merged.googleRating = googleRating ?? other.googleRating
@@ -118,14 +123,37 @@ struct Place: Identifiable, Codable, Hashable {
         savedAdditionalSourceEvidence != (previous?.savedAdditionalSourceEvidence ?? [])
     }
 
+    private static func mergingRecommendedItems(_ primary: [RecommendedItem], with other: [RecommendedItem]) -> [RecommendedItem] {
+        var items = primary
+        for item in other {
+            if let index = items.firstIndex(where: { $0.name.caseInsensitiveCompare(item.name) == .orderedSame }) {
+                if items[index].price == nil { items[index].price = item.price }
+            } else {
+                items.append(item)
+            }
+        }
+        return items
+    }
+
     /// Wire value for `places.note`. That column is plain user memory
     /// (`placeClaims` analysisSummary and save-rn `mapPlace` read it as text).
-    /// Extra clue evidence, highlights, vibe, and access have no dedicated
-    /// `places` column (`extracted_dishes` is recommended-item names only);
-    /// this PR does not add a migration. Those fields stay on the local
-    /// vault / in-memory stamp.
+    /// Extra clue evidence, highlights, vibe, access, and priced recommended
+    /// items live in `places.memory_meta`, not in `note`.
     func wireNoteForPersistence() -> String? {
         userFacingNote
+    }
+
+    func memoryMetaForPersistence() -> PlaceMemoryMeta? {
+        let additional = savedAdditionalSourceEvidence.filter { !Self.isGeneratedEvidenceLine($0) }
+        let meta = PlaceMemoryMeta(
+            v: 1,
+            evidence: additional.nilIfEmpty,
+            highlights: savedPlaceHighlights.nilIfEmpty,
+            recommended: savedRecommendedItems.nilIfEmpty,
+            vibe: savedVibeTags.nilIfEmpty,
+            access: savedAccessNotes.nilIfEmpty
+        )
+        return meta.isEmpty ? nil : meta
     }
 
     /// User-authored memory only. Leftover `SavvyMemory/1` envelopes written
@@ -718,6 +746,30 @@ extension Place {
     static func socialSignalSeeds(near _: [Place]) -> [Place] {
         // Real social signals must come from follows/referrals/trending data, not demo seeds.
         []
+    }
+}
+
+struct PlaceMemoryMeta: Codable, Equatable, Hashable {
+    var v: Int = 1
+    var evidence: [String]?
+    var highlights: [String]?
+    var recommended: [RecommendedItem]?
+    var vibe: [String]?
+    var access: [String]?
+
+    var isEmpty: Bool {
+        (evidence ?? []).isEmpty
+            && (highlights ?? []).isEmpty
+            && (recommended ?? []).isEmpty
+            && (vibe ?? []).isEmpty
+            && (access ?? []).isEmpty
+    }
+
+    func jsonObject() throws -> [String: Any] {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let data = try encoder.encode(self)
+        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
     }
 }
 

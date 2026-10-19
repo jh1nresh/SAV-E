@@ -3872,6 +3872,9 @@ final class SocialPlacePipelineTests: XCTestCase {
             "Access: walk up and wait",
             "Evidence: keep this as my memory",
             "Creator handle: @me.and.the.bun",
+            "source: a friend told me",
+            "address: use the side street",
+            "rating: better than the reviews",
         ] {
             var place = Place.mock
             place.note = note

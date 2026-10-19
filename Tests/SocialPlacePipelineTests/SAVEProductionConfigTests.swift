@@ -1069,7 +1069,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         original.sourcePlatform = .other
         original.recommender = nil
         original.sourceHandle = nil
-        original.recommendedItems = [RecommendedItem(name: "Cortado", price: nil)]
+        original.recommendedItems = [RecommendedItem(name: "Cortado", price: "$6")]
         original.extractedDishes = ["Cortado"]
 
         var merged = original
@@ -1094,6 +1094,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             XCTAssertEqual(body["source_platform"] as? String, "instagram")
             XCTAssertEqual(body["recommender"] as? String, "la.harbor.eats")
             XCTAssertEqual(body["extracted_dishes"] as? [String], ["Cortado", "Egg tart"])
+            XCTAssertNotNil(body["memory_meta"])
             return (200, "{}")
         }
         try await service.updatePlace(merged, previous: original)
@@ -1107,16 +1108,31 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             XCTAssertTrue(body["recommender"] is NSNull)
             XCTAssertEqual(body["extracted_dishes"] as? [String], ["Cortado"])
             XCTAssertFalse((body["note"] as? String ?? "").contains("Original source note"))
+            let rolledBackMeta = try XCTUnwrap(body["memory_meta"] as? [String: Any])
+            XCTAssertEqual((rolledBackMeta["recommended"] as? [[String: Any]])?.map { $0["name"] as? String }, ["Cortado"])
+            XCTAssertEqual((rolledBackMeta["recommended"] as? [[String: Any]])?.map { $0["price"] as? String }, ["$6"])
+            XCTAssertNil(rolledBackMeta["evidence"])
+            XCTAssertNil(rolledBackMeta["highlights"])
             return (200, "{}")
         }
         try await service.updatePlace(original, previous: merged)
+
+        var emptyOriginal = original
+        emptyOriginal.recommendedItems = []
+        emptyOriginal.extractedDishes = []
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertEqual(body["extracted_dishes"] as? [String], [])
+            return (200, "{}")
+        }
+        try await service.updatePlace(emptyOriginal, previous: merged)
     }
 
     func testUpdatePlacePersistsMergedStructuredFieldsAcrossRemoteReload() async throws {
         var previous = Place.mock
         previous.note = "Must try the bun"
         previous.placeHighlights = ["Window seats"]
-        previous.recommendedItems = [RecommendedItem(name: "Cortado", price: nil)]
+        previous.recommendedItems = [RecommendedItem(name: "Cortado", price: "$6")]
         previous.vibeTags = ["quiet"]
         previous.accessNotes = ["Walk-up"]
         previous.extractedDishes = ["Cortado"]
@@ -1128,8 +1144,8 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         ]
         merged.placeHighlights = ["Window seats", "Single-origin pour-over"]
         merged.recommendedItems = [
-            RecommendedItem(name: "Cortado", price: nil),
-            RecommendedItem(name: "Egg tart", price: nil),
+            RecommendedItem(name: "Cortado", price: "$6"),
+            RecommendedItem(name: "Egg tart", price: "NT$45"),
         ]
         merged.vibeTags = ["quiet", "sunny"]
         merged.accessNotes = ["Walk-up", "No reservations"]
@@ -1154,6 +1170,18 @@ final class SAVEAnalysisTransportTests: XCTestCase {
                 XCTAssertNil(patched["access_notes"])
                 XCTAssertNil(patched["recommended_items"])
                 XCTAssertNil(patched["additional_source_evidence"])
+                let meta = try XCTUnwrap(patched["memory_meta"] as? [String: Any])
+                XCTAssertEqual((meta["v"] as? NSNumber)?.intValue, 1)
+                XCTAssertEqual(meta["evidence"] as? [String], [
+                    "Original source note",
+                    "Source URL: https://www.xiaohongshu.com/explore/extra-clue",
+                ])
+                XCTAssertEqual(meta["highlights"] as? [String], ["Window seats", "Single-origin pour-over"])
+                XCTAssertEqual(meta["vibe"] as? [String], ["quiet", "sunny"])
+                XCTAssertEqual(meta["access"] as? [String], ["Walk-up", "No reservations"])
+                let recommended = try XCTUnwrap(meta["recommended"] as? [[String: Any]])
+                XCTAssertEqual(recommended.map { $0["name"] as? String }, ["Cortado", "Egg tart"])
+                XCTAssertEqual(recommended.map { $0["price"] as? String }, ["$6", "NT$45"])
                 return (200, "{}")
             }
             let payload: [String: Any] = [
@@ -1168,6 +1196,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
                 "source_platform": merged.sourcePlatform.rawValue,
                 "note": patched["note"] as? String ?? "",
                 "extracted_dishes": patched["extracted_dishes"] as? [String] ?? [],
+                "memory_meta": patched["memory_meta"] as Any,
                 "created_at": "2020-01-02T03:04:05Z",
             ]
             let data = try JSONSerialization.data(withJSONObject: [payload])
@@ -1181,6 +1210,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             let body = try AnalysisRequestURLProtocol.body(request)
             XCTAssertNil(body["extracted_dishes"], "Photo enrichment must not rewrite dishes")
             XCTAssertNil(body["note"], "Photo enrichment must not rewrite the user note")
+            XCTAssertNil(body["memory_meta"], "Photo enrichment must not rewrite stamp memory")
             XCTAssertEqual(body["business_photo_urls"] as? [String], ["https://photos.example/1.jpg"])
             return (200, "{}")
         }
@@ -1194,9 +1224,10 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         emptied.extractedDishes = []
         AnalysisRequestURLProtocol.handler = { request in
             let body = try AnalysisRequestURLProtocol.body(request)
-            XCTAssertNil(body["extracted_dishes"], "Empty arrays must not clobber dishes already stored")
+            XCTAssertEqual(body["extracted_dishes"] as? [String], [])
             XCTAssertEqual(body["note"] as? String, "Must try the bun")
             XCTAssertFalse((body["note"] as? String ?? "").hasPrefix("SavvyMemory/"))
+            XCTAssertTrue(body["memory_meta"] is NSNull, "Empty structured memory must clear memory_meta")
             return (200, "{}")
         }
         try await service.updatePlace(emptied, previous: merged)
@@ -1214,6 +1245,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
                 "source_platform": merged.sourcePlatform.rawValue,
                 "note": patched["note"] as? String ?? "",
                 "extracted_dishes": patched["extracted_dishes"] as? [String] ?? [],
+                "memory_meta": patched["memory_meta"] as Any,
                 "created_at": "2020-01-02T03:04:05Z",
             ]
             let data = try JSONSerialization.data(withJSONObject: [payload])
@@ -1223,15 +1255,16 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         let reloaded = try XCTUnwrap(reloadedPlaces.first)
         XCTAssertEqual(reloaded.note, "Must try the bun")
         XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote(reloaded.note), "Must try the bun")
-        XCTAssertEqual(reloaded.recommendedItems?.map(\.name), ["Cortado", "Egg tart"])
-        // Flag: places has no column for extra URLs, highlights, vibe, or
-        // access. Those stay on the local stamp; a remote-only reload cannot
-        // reconstruct them from `note`.
-        XCTAssertEqual(reloaded.placeHighlights ?? [], [])
-        XCTAssertEqual(reloaded.vibeTags ?? [], [])
-        XCTAssertEqual(reloaded.accessNotes ?? [], [])
-        XCTAssertFalse(reloaded.sourceEvidence.contains("Original source note"))
-        XCTAssertFalse(reloaded.sourceEvidence.contains("Source URL: https://www.xiaohongshu.com/explore/extra-clue"))
+        XCTAssertEqual(reloaded.placeHighlights, ["Window seats", "Single-origin pour-over"])
+        XCTAssertEqual(reloaded.recommendedItems, [
+            RecommendedItem(name: "Cortado", price: "$6"),
+            RecommendedItem(name: "Egg tart", price: "NT$45"),
+        ])
+        XCTAssertEqual(reloaded.vibeTags, ["quiet", "sunny"])
+        XCTAssertEqual(reloaded.accessNotes, ["Walk-up", "No reservations"])
+        XCTAssertTrue(reloaded.sourceEvidence.contains("Must try the bun"))
+        XCTAssertTrue(reloaded.sourceEvidence.contains("Original source note"))
+        XCTAssertTrue(reloaded.sourceEvidence.contains("Source URL: https://www.xiaohongshu.com/explore/extra-clue"))
         XCTAssertFalse((reloaded.note ?? "").contains("Highlight:"))
         XCTAssertFalse((reloaded.note ?? "").contains("Vibe:"))
         XCTAssertFalse((reloaded.note ?? "").contains("Evidence:"))

@@ -178,7 +178,7 @@ extension Place {
                 // (location clue, Google Places match/address/coordinates) —
                 // debug text stays out of primary UI (DESIGN.md).
                 let metadataPrefixes = [
-                    "source:", "category:", "rating:", "reviews:", "hours:", "address:",
+                    "category:", "reviews:", "hours:",
                     "location clue:", "google places", "google maps", "coordinates:",
                     "recommender:", "analysis method:",
                     "verified coordinates",

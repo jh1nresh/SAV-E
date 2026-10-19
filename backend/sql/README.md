@@ -14,6 +14,9 @@ hygiene or docs PR.
      that composite unique index.
    - `share-extension-sessions.sql` — after `analysis-usage.sql`; stores only
      hashed Share Extension tokens and their bounded analysis replay records.
+   - `places-memory-meta.sql` — nullable jsonb on `places` for extra clue
+     evidence, highlights, vibe, access, and priced recommended items. Do not
+     write this into `places.note`.
 3. Verify (read-only), then Railway-deploy the backend, then iOS.
 
 `friend-ratings.sql` is self-contained for the composite FK: it creates

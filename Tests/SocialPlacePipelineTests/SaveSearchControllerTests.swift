@@ -2671,6 +2671,12 @@ final class SaveSearchControllerTests: XCTestCase {
         let wire = try XCTUnwrap(updated.wireNoteForPersistence())
         XCTAssertEqual(wire, "Must try the bun")
         XCTAssertFalse(wire.hasPrefix("SavvyMemory/"))
+        let meta = try XCTUnwrap(updated.memoryMetaForPersistence())
+        XCTAssertTrue(meta.evidence?.contains("Original source note") == true)
+        XCTAssertEqual(meta.highlights, ["Window seats", "Single-origin pour-over"])
+        XCTAssertEqual(meta.vibe, ["quiet", "sunny"])
+        XCTAssertEqual(meta.access, ["Walk-up", "No reservations"])
+        XCTAssertEqual(meta.recommended?.map(\.name), ["Cortado", "Egg tart"])
         XCTAssertFalse(wire.contains("Single-origin pour-over"))
         XCTAssertFalse(wire.contains("Original source note"))
         XCTAssertEqual(
@@ -2782,10 +2788,9 @@ final class SaveSearchControllerTests: XCTestCase {
         }
         XCTAssertEqual(supabase.updatePlaceStarted, 1)
 
-        let second = try await map.resolveExactSearchClue(toSavedPlace: stampB)
-        XCTAssertEqual(second.id, stampB.id)
-        XCTAssertEqual(second.note, "Must try the bun")
-        XCTAssertFalse(second.sourceEvidence.contains("Original source note"))
+        let secondOpened = await map.chooseSavedStampFromExactSearch(stampB)
+        XCTAssertNil(secondOpened, "A claimed correction must not open the second stamp")
+        XCTAssertNil(map.correctionDrawerError)
 
         supabase.resumeHeldUpdatePlace()
         let resolved = try await first.value
@@ -2863,10 +2868,8 @@ final class SaveSearchControllerTests: XCTestCase {
         map.reviewCandidates = [clue]
         map.beginExactSearchResolution(for: clue)
 
-        XCTAssertNil(
-            await map.chooseSavedStampFromExactSearch(stamp),
-            "Drawer tap must not open the stamp after a failed correction"
-        )
+        let opened = await map.chooseSavedStampFromExactSearch(stamp)
+        XCTAssertNil(opened, "Drawer tap must not open the stamp after a failed correction")
         XCTAssertEqual(map.correctionDrawerError, supabase.recordDecisionError?.localizedDescription)
         XCTAssertFalse(map.correctionDrawerError?.isEmpty == true)
         XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
@@ -2890,6 +2893,81 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
         XCTAssertNil(map.correctionDrawerError)
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionSurfacesFailedRollbackAfterRetry() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-rollback-retry-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-rollback-retry-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.recordDecisionError = NSError(domain: "test", code: 2)
+        supabase.failingUpdatePlaceCalls = [2]
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let retried = await map.chooseSavedStampFromExactSearch(stamp)
+        XCTAssertNil(retried)
+        XCTAssertEqual(supabase.updatePlaceStarted, 3, "Merge plus two rollback attempts")
+        XCTAssertEqual(supabase.updatedPlaces.count, 2)
+        XCTAssertFalse(supabase.updatedPlaces[1].sourceEvidence.contains("Original source note"))
+        XCTAssertEqual(map.correctionDrawerError, supabase.recordDecisionError?.localizedDescription)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionSurfacesRollbackErrorWhenRetryFails() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-rollback-fail-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-rollback-fail-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.recordDecisionError = NSError(domain: "test", code: 2)
+        supabase.failingUpdatePlaceCalls = [2, 3]
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let opened = await map.chooseSavedStampFromExactSearch(stamp)
+        XCTAssertNil(opened)
+        XCTAssertEqual(supabase.updatePlaceStarted, 3)
+        XCTAssertEqual(supabase.updatedPlaces.count, 1, "Rollback never succeeded, so only the merge PATCH was recorded")
+        XCTAssertEqual(map.correctionDrawerError, NSError(domain: "test", code: 3).localizedDescription)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+        let local = try XCTUnwrap(map.places.first { $0.id == stamp.id })
+        XCTAssertFalse(local.sourceEvidence.contains("Original source note"))
     }
 
     @MainActor
@@ -3022,8 +3100,9 @@ final class SaveSearchControllerTests: XCTestCase {
         )
         map.reviewCandidates = [clue]
 
-        let unchanged = try await map.resolveExactSearchClue(toSavedPlace: savedPlace)
-        XCTAssertEqual(unchanged.id, savedPlace.id)
+        let opened = await map.chooseSavedStampFromExactSearch(savedPlace)
+        XCTAssertNil(opened, "Without an active correction the drawer tap must not look successful")
+        XCTAssertNil(map.correctionDrawerError)
         XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
         let reloaded = SaveLocalVaultService(overrideVaultURL: vaultURL)
         XCTAssertEqual(try reloaded.reviewCandidates().map(\.id), [clue.id])
@@ -5864,6 +5943,7 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     private(set) var recoveryDecisions: [PlaceRecoveryDecisionDraft] = []
     private(set) var updatePlaceStarted = 0
     var updatePlaceError: Error?
+    var failingUpdatePlaceCalls: Set<Int> = []
     var recordDecisionError: Error?
     private var holdUpdatePlace = false
     private var resumeUpdatePlace: (() -> Void)?
@@ -5893,6 +5973,9 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
             }
         } else {
             updatePlaceStarted += 1
+        }
+        if failingUpdatePlaceCalls.contains(updatePlaceStarted) {
+            throw NSError(domain: "test", code: 3)
         }
         if let updatePlaceError { throw updatePlaceError }
         updatedPlaces.append(place)

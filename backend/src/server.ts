@@ -521,6 +521,7 @@ const placeFields = [
   "source_image_url",
   "business_photo_urls",
   "extracted_dishes",
+  "memory_meta",
   "price_range",
   "recommender",
   "google_rating",
@@ -914,6 +915,7 @@ const jsonbFields = new Set([
   "private_payload",
   "public_summary",
   "ratings",
+  "memory_meta",
 ]);
 
 const analysisUsageStore = new AnalysisUsageStore(pool);
