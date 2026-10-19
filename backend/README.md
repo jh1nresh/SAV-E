@@ -55,8 +55,9 @@ npm run start
 Apply schema / pending SQL (see **Deploy checklist** below and `sql/README.md`):
 
 ```bash
-# From repository root, new empty database only:
-psql "$DATABASE_URL" -f backend/sql/schema.sql
+# From repository root, new empty database only. -1 and ON_ERROR_STOP keep a
+# refused privacy guard from leaving tables committed with unsafe grants.
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f backend/sql/schema.sql
 
 # From backend/: pending additive file (dry-read, then apply). Founder-owned.
 cd backend
@@ -354,10 +355,14 @@ optional source-owned tables to enable their RLS too.
 
 PostgreSQL cannot subtract global default grants with a schema-specific revoke.
 The migration therefore refuses current-creator global default table grants to
-`PUBLIC`, `anon`, or `authenticated`; resolving those requires separate scoped
-authority. It never changes those global defaults itself. Apply transactionally
-and verify effective privileges plus RLS after an authorized production apply;
-`/health/entitlements` checks storage shape, not this access boundary.
+`PUBLIC`, `anon`, `authenticated`, or any role those browser roles inherit
+through membership; resolving those requires separate scoped authority. Direct
+revokes from `PUBLIC`/`anon`/`authenticated` do not remove privileges granted
+to a parent role. It never changes those global defaults itself. Fresh schema
+must use `-v ON_ERROR_STOP=1 -1` so a refused guard cannot leave tables
+committed. Apply the migration transactionally and verify effective privileges
+plus RLS after an authorized production apply; `/health/entitlements` checks
+storage shape, not this access boundary.
 
 The required disposable database gate tests every allowlisted table against
 real browser-role SELECT/INSERT/UPDATE/DELETE/TRUNCATE attempts and effective
@@ -365,5 +370,7 @@ table privileges, then exercises private profile/place/capture/analysis,
 friend-rating, Sendblue, and payment paths as an ordinary table owner and a
 non-superuser `service_role` with `BYPASSRLS`. It also checks legacy data,
 idempotence, absent optional tables/roles, unrelated-table preservation, future
-private defaults, and rejection of incompatible global defaults. Coverage fails
-when a new source-owned table is missing from either static allowlist.
+private defaults, rejection of incompatible global defaults, inherited
+membership grants, and that a refused fresh-schema guard creates no managed
+tables. Coverage fails when a new source-owned table is missing from either
+static allowlist.

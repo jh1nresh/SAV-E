@@ -4,33 +4,15 @@
 -- Backend-owned table privacy boundary
 -- Explicit source-owned allowlist: never blanket-revoke existing public tables.
 -- Apply in the intended schema as its backend table creator/owner. Browser
--- table grants inherited from a global default ACL need separate authorization.
+-- table grants inherited from a global default ACL or through role membership
+-- need separate authorization. Direct PUBLIC/anon/authenticated revokes do not
+-- remove privileges granted to a parent role that those browser roles inherit.
 do $backend_data_privacy$
 declare
     target_schema text := current_schema();
     managed_table text;
     browser_role text;
-begin
-    if exists (
-        select 1 from pg_default_acl d
-        cross join lateral aclexplode(d.defaclacl) a
-        left join pg_roles r on r.oid = a.grantee
-        where d.defaclrole = current_user::regrole
-          and d.defaclnamespace = 0 and d.defaclobjtype = 'r'
-          and (a.grantee = 0 or r.rolname in ('anon', 'authenticated'))
-    ) then
-        raise exception 'Global default table grants to browser roles require separate authorized remediation';
-    end if;
-
-    -- Only this creator/schema. Keep service_role grants, all other creators'
-    -- defaults, global defaults, and every unrelated existing table unchanged.
-    -- Later optional/runtime tables start private even before RLS is enabled.
-    execute format('alter default privileges for role %I in schema %I revoke all privileges on tables from public', current_user, target_schema);
-    for browser_role in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
-        execute format('alter default privileges for role %I in schema %I revoke all privileges on tables from %I', current_user, target_schema, browser_role);
-    end loop;
-
-    foreach managed_table in array array[
+    managed_tables text[] := array[
         'agent_capabilities',
         'agent_decisions',
         'agent_tool_calls',
@@ -95,7 +77,72 @@ begin
         'workflow_reputation_snapshots',
         'workflow_runs',
         'workflow_steps'
-    ] loop
+    ];
+begin
+    -- USAGE follows INHERIT membership, the path that yields effective table
+    -- privileges (including TRUNCATE, which RLS does not govern).
+    if exists (
+        select 1 from pg_default_acl d
+        cross join lateral aclexplode(d.defaclacl) a
+        where d.defaclrole = current_user::regrole
+          and d.defaclnamespace = 0 and d.defaclobjtype = 'r'
+          and (
+              a.grantee = 0
+              or exists (
+                  select 1 from pg_roles browser
+                  join pg_roles granted on granted.oid = a.grantee
+                  where browser.rolname in ('anon', 'authenticated')
+                    and pg_has_role(browser.oid, granted.oid, 'USAGE')
+              )
+          )
+    ) then
+        raise exception 'Global default table grants to browser roles require separate authorized remediation';
+    end if;
+
+    -- Parent-role schema defaults and existing table/owner grants are not
+    -- removed by the PUBLIC/anon/authenticated revokes below. Refuse before
+    -- changing any ACL so a membership hole cannot remain after a "successful"
+    -- apply, and so refusal stays atomic.
+    if exists (
+        select 1 from pg_default_acl d
+        cross join lateral aclexplode(d.defaclacl) a
+        join pg_roles granted on granted.oid = a.grantee
+        join pg_roles browser on browser.rolname in ('anon', 'authenticated')
+        where d.defaclrole = current_user::regrole
+          and d.defaclnamespace = target_schema::regnamespace
+          and d.defaclobjtype = 'r'
+          and granted.rolname not in ('anon', 'authenticated')
+          and pg_has_role(browser.oid, granted.oid, 'USAGE')
+    ) or exists (
+        select 1
+        from unnest(managed_tables) as t(name)
+        join pg_class c on c.oid = to_regclass(format('%I.%I', target_schema, t.name))
+        cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) a
+        join pg_roles granted on granted.oid = a.grantee
+        join pg_roles browser on browser.rolname in ('anon', 'authenticated')
+        where granted.rolname not in ('anon', 'authenticated')
+          and pg_has_role(browser.oid, granted.oid, 'USAGE')
+    ) or exists (
+        select 1
+        from unnest(managed_tables) as t(name)
+        join pg_class c on c.oid = to_regclass(format('%I.%I', target_schema, t.name))
+        join pg_roles owner on owner.oid = c.relowner
+        join pg_roles browser on browser.rolname in ('anon', 'authenticated')
+        where browser.oid <> owner.oid
+          and pg_has_role(browser.oid, owner.oid, 'USAGE')
+    ) then
+        raise exception 'Browser-role table grants inherited through role membership require separate authorized remediation';
+    end if;
+
+    -- Only this creator/schema. Keep service_role grants, all other creators'
+    -- defaults, global defaults, and every unrelated existing table unchanged.
+    -- Later optional/runtime tables start private even before RLS is enabled.
+    execute format('alter default privileges for role %I in schema %I revoke all privileges on tables from public', current_user, target_schema);
+    for browser_role in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
+        execute format('alter default privileges for role %I in schema %I revoke all privileges on tables from %I', current_user, target_schema, browser_role);
+    end loop;
+
+    foreach managed_table in array managed_tables loop
         if to_regclass(format('%I.%I', target_schema, managed_table)) is null then
             continue; -- Optional installations are not created by this migration.
         end if;
