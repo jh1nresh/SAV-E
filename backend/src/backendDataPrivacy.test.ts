@@ -55,12 +55,30 @@ test("privacy allowlists cover every backend schema table without including unre
 
 test("fresh schema privacy guard runs before DDL and documents transactional apply", () => {
   const guard = schemaSQL.search(/Global default table grants to browser roles require separate authorized remediation/);
+  const tableGrantGuard = schemaSQL.search(/from pg_class c\s+cross join lateral aclexplode\(coalesce\(c\.relacl/);
   const ddl = schemaSQL.search(/\bcreate\s+(extension|table)\b/i);
   assert.ok(guard >= 0 && ddl >= 0 && guard < ddl, "fresh-schema guard must run before DDL");
+  assert.ok(tableGrantGuard >= 0 && tableGrantGuard < ddl, "re-apply table-grant refusal must run before DDL");
   const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
   assert.match(readme, /psql "\$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f backend\/sql\/schema\.sql/);
-  assert.match(privacySQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
-  assert.match(schemaSQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
+  assert.match(privacySQL, /pg_has_role\(browser\.oid, granted\.oid, 'MEMBER'\)/);
+  assert.match(schemaSQL, /pg_has_role\(browser\.oid, granted\.oid, 'MEMBER'\)/);
+  assert.doesNotMatch(privacySQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
+  assert.doesNotMatch(schemaSQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
+  const repoRoot = new URL("../../", import.meta.url);
+  const markdown = readdirSync(repoRoot, { recursive: true, encoding: "utf8" })
+    .filter(name => name.endsWith(".md") && !name.includes("node_modules/"));
+  const unsafeApply = /psql "\$DATABASE_URL" -f (?:backend\/)?sql\/schema\.sql/;
+  for (const name of markdown) {
+    const text = readFileSync(new URL(name, repoRoot), "utf8");
+    assert.doesNotMatch(text, unsafeApply, name);
+    for (const line of text.split("\n")) {
+      if (!/psql/.test(line) || !/-f/.test(line) || !/schema\.sql/.test(line) || /mistake/i.test(line)) continue;
+      assert.match(line, /-v ON_ERROR_STOP=1 -1/, `${name}: ${line}`);
+    }
+  }
+  const runbook = readFileSync(new URL("../../docs/2026-08-04-backend-rebuild-runbook.md", import.meta.url), "utf8");
+  assert.doesNotMatch(runbook, /schema\.sql is idempotent/);
 });
 
 type Fixture = { db: pg.Pool; schema: string };
@@ -324,6 +342,51 @@ test("privacy migration refuses table grants inherited through browser-role memb
       assert.deepEqual(await state(), before, "membership refusal must leave existing access and defaults unchanged");
     });
   }, { browser: true, legacy: true });
+});
+
+test("privacy migration refuses SET-able NOINHERIT browser-role memberships", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated with inherit false, set true");
+      await fixture.db.query("revoke all on places from public, anon, authenticated");
+      await fixture.db.query("grant all on places to privacy_browser_parent");
+      assert.equal((await fixture.db.query("select has_table_privilege('anon','places','SELECT') as allowed")).rows[0].allowed, false, "NOINHERIT membership must not grant effective SELECT");
+      assert.equal((await fixture.db.query("select pg_has_role('anon','privacy_browser_parent','USAGE') as allowed")).rows[0].allowed, false, "USAGE must miss SET-able NOINHERIT membership");
+      assert.equal((await fixture.db.query("select pg_has_role('anon','privacy_browser_parent','MEMBER') as allowed")).rows[0].allowed, true);
+      const client = await fixture.db.connect();
+      try {
+        await client.query("begin");
+        await client.query("set local role anon");
+        await client.query("set local role privacy_browser_parent");
+        assert.equal((await client.query("select name from places where false")).rowCount, 0, "SET ROLE parent must be able to read places");
+      } finally {
+        await client.query("rollback");
+        client.release();
+      }
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'members',(select pg_has_role('anon','privacy_browser_parent','MEMBER')),
+        'inherit',(select pg_has_role('anon','privacy_browser_parent','USAGE')) ) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /inherit|membership/i);
+      assert.deepEqual(await state(), before, "NOINHERIT membership refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, legacy: true });
+});
+
+test("fresh schema guard refuses existing inherited table grants before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("create table places(id int primary key, name text)");
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query("grant all on places to privacy_browser_parent");
+      await assert.rejects(fixture.db.query(schemaSQL), /inherit|membership/i);
+      const names = (await fixture.db.query(`select relname from pg_class
+        where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+      assert.deepEqual(names, ["places", "privacy_unrelated_sentinel"], "refused re-apply must not create managed tables");
+    });
+  }, { browser: true, install: false });
 });
 
 test("privacy migration refuses global defaults inherited through browser-role membership", { skip: !connectionString }, async () => {

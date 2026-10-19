@@ -55,8 +55,9 @@ npm run start
 Apply schema / pending SQL (see **Deploy checklist** below and `sql/README.md`):
 
 ```bash
-# From repository root, new empty database only. -1 and ON_ERROR_STOP keep a
-# refused privacy guard from leaving tables committed with unsafe grants.
+# From repository root, new empty database only. Re-applying to an existing
+# install also needs -1 and ON_ERROR_STOP so a refused privacy guard cannot
+# leave tables committed with unsafe grants.
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -1 -f backend/sql/schema.sql
 
 # From backend/: pending additive file (dry-read, then apply). Founder-owned.
@@ -358,9 +359,10 @@ The migration therefore refuses current-creator global default table grants to
 `PUBLIC`, `anon`, `authenticated`, or any role those browser roles inherit
 through membership; resolving those requires separate scoped authority. Direct
 revokes from `PUBLIC`/`anon`/`authenticated` do not remove privileges granted
-to a parent role. It never changes those global defaults itself. Fresh schema
-must use `-v ON_ERROR_STOP=1 -1` so a refused guard cannot leave tables
-committed. Apply the migration transactionally and verify effective privileges
+to a parent role, including SET-able NOINHERIT memberships. It never changes
+those global defaults itself. Fresh schema and any re-apply to an existing
+install must use `-v ON_ERROR_STOP=1 -1` so a refused guard cannot leave
+tables committed. Apply the migration transactionally and verify effective privileges
 plus RLS after an authorized production apply; `/health/entitlements` checks
 storage shape, not this access boundary.
 
@@ -371,6 +373,6 @@ friend-rating, Sendblue, and payment paths as an ordinary table owner and a
 non-superuser `service_role` with `BYPASSRLS`. It also checks legacy data,
 idempotence, absent optional tables/roles, unrelated-table preservation, future
 private defaults, rejection of incompatible global defaults, inherited
-membership grants, and that a refused fresh-schema guard creates no managed
-tables. Coverage fails when a new source-owned table is missing from either
-static allowlist.
+membership grants, SET-able NOINHERIT memberships, and that a refused
+fresh-schema guard creates no managed tables. Coverage fails when a new
+source-owned table is missing from either static allowlist.

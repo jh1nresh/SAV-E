@@ -5,8 +5,9 @@
 -- Explicit source-owned allowlist: never blanket-revoke existing public tables.
 -- Apply in the intended schema as its backend table creator/owner. Browser
 -- table grants inherited from a global default ACL or through role membership
--- need separate authorization. Direct PUBLIC/anon/authenticated revokes do not
--- remove privileges granted to a parent role that those browser roles inherit.
+-- (including SET-able NOINHERIT memberships) need separate authorization.
+-- Direct PUBLIC/anon/authenticated revokes do not remove privileges granted
+-- to a parent role that those browser roles can inherit or SET ROLE to.
 do $backend_data_privacy$
 declare
     target_schema text := current_schema();
@@ -79,8 +80,9 @@ declare
         'workflow_steps'
     ];
 begin
-    -- USAGE follows INHERIT membership, the path that yields effective table
-    -- privileges (including TRUNCATE, which RLS does not govern).
+    -- MEMBER covers INHERIT (USAGE) and SET-able NOINHERIT memberships.
+    -- SET ROLE parent can then use parent grants, including TRUNCATE, which
+    -- RLS does not govern.
     if exists (
         select 1 from pg_default_acl d
         cross join lateral aclexplode(d.defaclacl) a
@@ -92,7 +94,7 @@ begin
                   select 1 from pg_roles browser
                   join pg_roles granted on granted.oid = a.grantee
                   where browser.rolname in ('anon', 'authenticated')
-                    and pg_has_role(browser.oid, granted.oid, 'USAGE')
+                    and pg_has_role(browser.oid, granted.oid, 'MEMBER')
               )
           )
     ) then
@@ -112,7 +114,7 @@ begin
           and d.defaclnamespace = target_schema::regnamespace
           and d.defaclobjtype = 'r'
           and granted.rolname not in ('anon', 'authenticated')
-          and pg_has_role(browser.oid, granted.oid, 'USAGE')
+          and pg_has_role(browser.oid, granted.oid, 'MEMBER')
     ) or exists (
         select 1
         from unnest(managed_tables) as t(name)
@@ -121,7 +123,7 @@ begin
         join pg_roles granted on granted.oid = a.grantee
         join pg_roles browser on browser.rolname in ('anon', 'authenticated')
         where granted.rolname not in ('anon', 'authenticated')
-          and pg_has_role(browser.oid, granted.oid, 'USAGE')
+          and pg_has_role(browser.oid, granted.oid, 'MEMBER')
     ) or exists (
         select 1
         from unnest(managed_tables) as t(name)
@@ -129,7 +131,7 @@ begin
         join pg_roles owner on owner.oid = c.relowner
         join pg_roles browser on browser.rolname in ('anon', 'authenticated')
         where browser.oid <> owner.oid
-          and pg_has_role(browser.oid, owner.oid, 'USAGE')
+          and pg_has_role(browser.oid, owner.oid, 'MEMBER')
     ) then
         raise exception 'Browser-role table grants inherited through role membership require separate authorized remediation';
     end if;
