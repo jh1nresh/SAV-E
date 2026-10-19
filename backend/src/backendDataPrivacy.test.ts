@@ -65,6 +65,8 @@ test("fresh schema privacy guard runs before DDL and documents transactional app
   assert.match(schemaSQL, /pg_has_role\(browser\.oid, granted\.oid, 'MEMBER'\)/);
   assert.match(privacySQL, /a\.grantor <> current_user::regrole/);
   assert.match(schemaSQL, /a\.grantor <> current_user::regrole/);
+  assert.match(privacySQL, /Managed table ownership by a browser role requires separate authorized remediation/);
+  assert.match(schemaSQL, /Managed table ownership by a browser role requires separate authorized remediation/);
   assert.doesNotMatch(privacySQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
   assert.doesNotMatch(schemaSQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
   const repoRoot = new URL("../../", import.meta.url);
@@ -445,6 +447,29 @@ test("fresh schema guard refuses foreign-grantor browser grants before any DDL",
         where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
       assert.deepEqual(names, ["places", "privacy_unrelated_sentinel"], "refused re-apply must not create managed tables");
     });
+  }, { browser: true, install: false });
+});
+
+test("privacy migration refuses managed tables owned by a browser role", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("alter table places owner to anon");
+    const state = async () => (await fixture.db.query(`select jsonb_build_object(
+      'tables',(select jsonb_agg(jsonb_build_array(relname,relowner::regrole::text,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+      'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole)) as state`)).rows[0].state;
+    const before = await state();
+    await assert.rejects(fixture.db.query(privacySQL), /owner|ownership/i);
+    assert.deepEqual(await state(), before, "browser-owner refusal must leave existing access and defaults unchanged");
+  }, { browser: true, legacy: true });
+});
+
+test("fresh schema guard refuses browser-owned tables before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("create table places(id int primary key, name text)");
+    await fixture.db.query("alter table places owner to anon");
+    await assert.rejects(fixture.db.query(schemaSQL), /owner|ownership/i);
+    const names = (await fixture.db.query(`select relname from pg_class
+      where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+    assert.deepEqual(names, ["places", "privacy_unrelated_sentinel"], "refused re-apply must not create managed tables");
   }, { browser: true, install: false });
 });
 

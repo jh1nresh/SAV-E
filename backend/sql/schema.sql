@@ -55,6 +55,15 @@ begin
     ) then
         raise exception 'Browser-role table grants inherited through role membership require separate authorized remediation';
     end if;
+    if exists (
+        select 1 from pg_class c
+        join pg_roles owner on owner.oid = c.relowner
+        where c.relnamespace = current_schema()::regnamespace
+          and c.relkind = 'r'
+          and owner.rolname in ('anon', 'authenticated')
+    ) then
+        raise exception 'Managed table ownership by a browser role requires separate authorized remediation';
+    end if;
     -- Owner REVOKE cannot remove privileges granted by another role. A
     -- delegated GRANT OPTION holder can grant TRUNCATE to PUBLIC/anon/
     -- authenticated; those entries survive and bypass RLS.
@@ -1910,6 +1919,19 @@ begin
           and pg_has_role(browser.oid, owner.oid, 'MEMBER')
     ) then
         raise exception 'Browser-role table grants inherited through role membership require separate authorized remediation';
+    end if;
+
+    -- Table owners keep implicit privileges that REVOKE cannot remove, and
+    -- RLS without FORCE does not apply to the owner. Direct browser-role
+    -- ownership is therefore an incompatible state.
+    if exists (
+        select 1
+        from unnest(managed_tables) as t(name)
+        join pg_class c on c.oid = to_regclass(format('%I.%I', target_schema, t.name))
+        join pg_roles owner on owner.oid = c.relowner
+        where owner.rolname in ('anon', 'authenticated')
+    ) then
+        raise exception 'Managed table ownership by a browser role requires separate authorized remediation';
     end if;
 
     -- Owner REVOKE cannot remove privileges granted by another role. A
