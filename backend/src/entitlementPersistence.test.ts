@@ -23,7 +23,10 @@ function transaction(overrides: Partial<VerifiedAppleTransaction> = {}): Verifie
 
 // Deliberately opt-in: tests must never create/drop schema on a configured app
 // database. The controller owns this local socket-only disposable instance.
-async function withDatabase(run: (db: pg.Pool) => Promise<void>, legacy = false): Promise<void> {
+async function withDatabase(
+  run: (db: pg.Pool) => Promise<void>, legacy = false,
+  beforeTables?: (db: pg.Pool, schemaName: string) => Promise<void>,
+): Promise<void> {
   const url = new URL(connectionString!);
   assert.equal(url.pathname, "/save_paid_fixture");
   assert.match(url.searchParams.get("host") ?? "", /^\/tmp\/save-paid-readiness-[\w-]+\/socket$/);
@@ -31,6 +34,7 @@ async function withDatabase(run: (db: pg.Pool) => Promise<void>, legacy = false)
   const db = new pg.Pool({ connectionString, options: `-c search_path=${schemaName}`, max: 8 });
   try {
     await db.query(`create schema ${schemaName}`);
+    await beforeTables?.(db, schemaName);
     await db.query("create table profiles(id text primary key)");
     await db.query("insert into profiles values ('user-a'), ('user-b')");
     const sql = readFileSync(new URL("../sql/schema.sql", import.meta.url), "utf8");
@@ -372,4 +376,128 @@ test("registration rollback preserves pending denial evidence and never partiall
     assert.equal((await db.query("select count(*)::int as total from pending_subscription_notifications")).rows[0].total, 0);
     assert.equal(await entitlementTier(db, "user-a"), "free");
   });
+});
+
+// The normal fixtures above run on plain PostgreSQL without Supabase roles.
+// These roles/default ACLs reproduce public-schema browser access separately.
+async function withBrowserDefaults(run: (db: pg.Pool) => Promise<void>, legacy = false): Promise<void> {
+  const roles = ["anon", "authenticated", "entitlement_public_probe", "entitlement_backend_owner"];
+  const createdRoles: string[] = [];
+  let database: pg.Pool | undefined;
+  try {
+    await withDatabase(async (db) => {
+      database = db;
+      await run(db);
+    }, legacy, async (db, schemaName) => {
+      database = db;
+      for (const role of roles) {
+        // Exact standard browser roles exist only in this isolated test cluster.
+        // Do not change or delete a role left by some other fixture.
+        assert.equal((await db.query("select 1 from pg_roles where rolname=$1", [role])).rowCount, 0);
+        await db.query(`create role ${role} nologin nosuperuser nobypassrls`);
+        createdRoles.push(role);
+      }
+      await db.query(`grant usage on schema ${schemaName} to public`);
+      await db.query(`alter default privileges in schema ${schemaName} grant all on tables to public, anon, authenticated`);
+    });
+  } finally {
+    // withDatabase dropped its owned schema/default ACLs and closed its pool.
+    if (database && createdRoles.length) {
+      const cleanup = new pg.Pool({ connectionString });
+      try { for (const role of createdRoles.reverse()) await cleanup.query(`drop role ${role}`); }
+      finally { await cleanup.end(); }
+    }
+  }
+}
+
+async function assertBrowserRolesDenied(db: pg.Pool): Promise<void> {
+  const allowed: string[] = [];
+  for (const role of ["anon", "authenticated", "entitlement_public_probe"]) {
+    for (const table of ["subscription_entitlements", "pending_subscription_notifications"]) {
+      const insert = table === "subscription_entitlements"
+        ? `insert into ${table}(user_id,original_transaction_id,product_id,status) values('user-a','client-insert','fixture','active')`
+        : `insert into ${table}(original_transaction_id,transaction_id,product_id,status,environment,expires_at,purchase_date_ms,signed_date_ms)
+           values('client-insert','fixture-txn','fixture','revoked','Sandbox',now(),1,2)`;
+      const operations = [
+        ["select", `select * from ${table}`], ["insert", insert],
+        ["update", `update ${table} set status='active'`],
+        ["delete", `delete from ${table}`], ["truncate", `truncate ${table}`],
+      ];
+      for (const [operation, sql] of operations) {
+        const client = await db.connect();
+        try {
+          await client.query("begin");
+          await client.query(`set local role ${role}`);
+          assert.equal((await client.query("select has_schema_privilege(current_schema(), 'usage') as allowed")).rows[0].allowed, true);
+          try { await client.query(sql); allowed.push(`${role}:${table}:${operation}`); }
+          catch (error) { assert.equal((error as { code: string }).code, "42501"); }
+        } finally { await client.query("rollback"); client.release(); }
+      }
+    }
+  }
+  assert.deepEqual(allowed, [], "browser roles must have no table read, write or truncate path");
+  for (const role of ["anon", "authenticated", "entitlement_public_probe"]) {
+    for (const table of ["subscription_entitlements", "pending_subscription_notifications"]) {
+      for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"]) {
+        assert.equal((await db.query("select has_table_privilege($1,$2,$3) as allowed", [role, table, privilege])).rows[0].allowed,
+          false, `${role}:${table}:${privilege}`);
+      }
+    }
+  }
+  const { rows } = await db.query(`select relname, relrowsecurity, relforcerowsecurity from pg_class
+    where relnamespace=current_schema()::regnamespace and relname=any($1::text[]) order by relname`,
+    [["subscription_entitlements", "pending_subscription_notifications"]]);
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every(row => row.relrowsecurity && !row.relforcerowsecurity), "both tables need RLS while preserving owner access");
+}
+
+async function assertOwnerPaymentFlow(db: pg.Pool): Promise<void> {
+  const schemaName = (await db.query("select current_schema() as name")).rows[0].name;
+  await db.query("alter table subscription_entitlements owner to entitlement_backend_owner");
+  await db.query("alter table pending_subscription_notifications owner to entitlement_backend_owner");
+  const owner = new pg.Pool({ connectionString, options: `-c search_path=${schemaName} -c role=entitlement_backend_owner` });
+  try {
+    const role = (await owner.query("select current_user, rolsuper, rolbypassrls from pg_roles where rolname=current_user")).rows[0];
+    assert.equal(role.current_user, "entitlement_backend_owner");
+    assert.equal(role.rolsuper, false);
+    assert.equal(role.rolbypassrls, false);
+    const purchased = transaction();
+    assert.equal((await storeAppleEntitlement(owner, "user-a", purchased)).row.status, "active");
+    assert.equal((await storeAppleEntitlement(owner, "user-a", { ...purchased, appAccountToken: null })).row.user_id, "user-a");
+    await applyAppleNotification(owner, purchased, { status: "revoked" }, period + 50);
+    assert.equal(await entitlementTier(owner, "user-a"), "free");
+    const pending = transaction();
+    await applyAppleNotification(owner, pending, { status: "revoked" }, period + 50);
+    assert.equal((await storeAppleEntitlement(owner, "user-a", pending)).row.status, "revoked");
+  } finally { await owner.end(); }
+}
+
+test("new entitlement tables deny Supabase browser roles despite default ALL grants", { skip: !connectionString }, async () => {
+  await withBrowserDefaults(async db => {
+    const purchased = transaction();
+    await storeAppleEntitlement(db, "user-a", purchased);
+    await applyAppleNotification(db, purchased, { status: "revoked" }, period + 50);
+    await applyAppleNotification(db, transaction(), { status: "revoked" }, period + 50);
+    await assertBrowserRolesDenied(db);
+    await assertOwnerPaymentFlow(db);
+  });
+});
+
+test("ordering migration removes legacy/browser grants without rewriting owners or status", { skip: !connectionString }, async () => {
+  await withBrowserDefaults(async db => {
+    await db.query(`insert into subscription_entitlements(user_id,original_transaction_id,product_id,status,environment,expires_at)
+      values('user-a','legacy-owner','fixture','revoked','Sandbox','2030-01-01')`);
+    // Older explicit grants must be removed as well as default grants copied
+    // when the table was first created. PUBLIC supplies the probe's privileges.
+    await db.query("grant all on subscription_entitlements to public, anon, authenticated");
+    const before = (await db.query("select * from subscription_entitlements")).rows;
+    const migration = readFileSync(new URL("../sql/subscription-entitlement-ordering.sql", import.meta.url), "utf8");
+    await db.query(migration);
+    await db.query(migration);
+    const after = (await db.query("select * from subscription_entitlements")).rows;
+    assert.equal(after.length, before.length);
+    for (const key of Object.keys(before[0])) assert.deepEqual(after[0][key], before[0][key], key);
+    await assertBrowserRolesDenied(db);
+    await assertOwnerPaymentFlow(db);
+  }, true);
 });
