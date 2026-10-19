@@ -193,7 +193,7 @@ struct Place: Identifiable, Codable, Hashable {
             guard !line.isEmpty else { continue }
             if isGeneratedEvidenceLine(line) || isStructuredEvidenceLine(line) { continue }
             if isURLEvidenceLine(line) {
-                additional.append(line.hasPrefix("http") ? "Source URL: \(line)" : line)
+                additional.append(line)
                 continue
             }
             if let evidence = labeledEvidenceValue(line) {

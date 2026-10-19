@@ -5029,7 +5029,11 @@ final class SocialPlacePipelineTests: XCTestCase {
                 missingInfo: item.missingInfo, status: "review", createdAt: Date())
             let place = Place.from(review)
             let sharedNote = ShareRoutePayloadSanitizer.publicNote(place.note) ?? ""
-            XCTAssertEqual(place.note, item.evidence.joined(separator: "\n"))
+            XCTAssertEqual(place.note, "Venue named in source")
+            XCTAssertFalse((place.note ?? "").contains("Evidence tier:"))
+            XCTAssertFalse((place.note ?? "").contains("Google Places refined match:"))
+            XCTAssertFalse((place.note ?? "").contains("Google Places address:"))
+            XCTAssertFalse((place.note ?? "").contains("Google Places coordinates:"))
             let persistedCandidate = String(decoding: try JSONEncoder().encode(item), as: UTF8.self)
             for text in [persistedCandidate, item.evidence.joined(separator: "\n"), place.note ?? "", sharedNote] {
                 for diagnostic in [snapshot.analysisID.uuidString, "analysis_id", "Analysis search counts", "resolver_attempts", "resolver_errors", "resolver_cache_hits", "public_attempts", "public_errors", "public_cache_hits"] {
