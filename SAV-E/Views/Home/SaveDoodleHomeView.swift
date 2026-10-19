@@ -46,6 +46,12 @@ struct SaveDoodleHomeView: View {
                             .padding(.top, SaveSpace.md)
                         placeList
                             .padding(.top, SaveSpace.md)
+                    }
+
+                    seeAllSaves
+                        .padding(.top, showsEmptyHome ? SaveSpace.xs : SaveSpace.tight)
+
+                    if !showsEmptyHome {
                         collectedStrip
                             .padding(.top, SaveSpace.md)
                     }
@@ -174,6 +180,26 @@ struct SaveDoodleHomeView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(cluesText)
         .accessibilityIdentifier("home.review")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    private var seeAllSaves: some View {
+        Button(action: presentation.onOpenSaves) {
+            HStack(spacing: SaveSpace.tight) {
+                Text(localized("See all saves", "看全部收藏"))
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                Text("›")
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                Spacer(minLength: 0)
+            }
+            .frame(minHeight: SaveLayout.minTap, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(localized("See all saves", "看全部收藏"))
+        .accessibilityIdentifier("home.saves")
         .accessibilityAddTraits(.isButton)
     }
 
@@ -391,17 +417,6 @@ struct SaveDoodleHomeView: View {
                     }
                     .accessibilityIdentifier("home.city.\(group.id)")
                 }
-#if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("--uitest-complete-onboarding") {
-                    Button {
-                        showsCityPicker = false
-                        presentation.onOpenTrips()
-                    } label: {
-                        Text(localized("Trips", "行程"))
-                    }
-                    .accessibilityIdentifier("home.trips")
-                }
-#endif
             }
             .scrollContentBackground(.hidden)
             .background(SaveAtlasPalette.paper)

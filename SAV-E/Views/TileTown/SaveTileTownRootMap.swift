@@ -9,6 +9,7 @@ struct SaveTileTownRootMap: View {
     let onClearSelection: () -> Void
     let onPlanAroundPlace: (Place) -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
+    @EnvironmentObject private var session: SaveDoodleSession
     @ObservedObject private var locationService = LocationService.shared
     @State private var lens: SaveTileTownMapLens = .saved
 
@@ -17,10 +18,20 @@ struct SaveTileTownRootMap: View {
             SaveAtlasPalette.canvas.ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 10) {
-                SaveDisplayTitle(text: "Savvy", pointSize: 28)
-                    .padding(.horizontal, 16)
-                    .padding(.top, AtlasMetrics.statusBarHeight)
-                    .accessibilityIdentifier("map.wordmark")
+                HStack(alignment: .center, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        SaveDisplayTitle(text: "Savvy", pointSize: 28)
+                            .accessibilityIdentifier("map.wordmark")
+                        Text(cityTitle)
+                            .font(SaveAtlasType.body(13))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                            .accessibilityIdentifier("map.city")
+                    }
+                    Spacer(minLength: 8)
+                    eatGoRail
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, AtlasMetrics.statusBarHeight)
 
                 lensRail
                     .padding(.horizontal, 16)
@@ -127,22 +138,84 @@ struct SaveTileTownRootMap: View {
         .accessibilityIdentifier("map.lensRail")
     }
 
+    private var eatGoRail: some View {
+        HStack(spacing: 8) {
+            ForEach(SaveDoodleLens.allCases) { item in
+                let selected = session.lens == item
+                Button {
+                    SaveHaptics.select()
+                    session.lens = item
+                } label: {
+                    Text(item.title(language: languageSettings.language))
+                        .font(SaveAtlasType.strong(13))
+                        .foregroundStyle(selected ? Color.white : SaveAtlasPalette.ink)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                        .background(
+                            selected ? SaveAtlasPalette.coral : Color.clear,
+                            in: Capsule()
+                        )
+                        .overlay {
+                            Capsule()
+                                .stroke(
+                                    selected ? Color.clear : SaveAtlasPalette.ink,
+                                    lineWidth: SaveAtlasPalette.strokeWidth
+                                )
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier(item.mapAccessibilityIdentifier)
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .accessibilityIdentifier("map.eatGo")
+    }
+
+    private var cityTitle: String {
+        switch SaveDoodleHomeCatalog.resolvedSelection(
+            session.city,
+            places: mapViewModel.places,
+            locationDenied: locationService.isAuthorizationDenied
+        ) {
+        case .nearYou:
+            return languageSettings.localized(english: "Near you", traditionalChinese: "附近")
+        case .city(let id):
+            return SaveHomeSearch.cityLabel(
+                for: id,
+                traditionalChinese: languageSettings.language == .traditionalChinese
+            ) ?? id
+        }
+    }
+
     private var visiblePlaces: [Place] {
         switch lens {
         case .saved:
-            return mapViewModel.places
+            return sessionPlaces(from: mapViewModel.places)
         case .nearby:
-            return SaveMapIntentFilter.places(
-                mapViewModel.places,
-                categories: [],
-                intents: [.nearby],
-                nearbyAnchor: locationService.currentLocation?.coordinate
-                    ?? mapViewModel.nearbyFilterAnchor
+            return sessionPlaces(
+                from: SaveMapIntentFilter.places(
+                    mapViewModel.places,
+                    categories: [],
+                    intents: [.nearby],
+                    nearbyAnchor: locationService.currentLocation?.coordinate
+                        ?? mapViewModel.nearbyFilterAnchor
+                )
             )
         case .friends:
             let social = mapViewModel.visibleSocialPlaces
             return social.isEmpty ? mapViewModel.socialPlaces : social
         }
+    }
+
+    private func sessionPlaces(from places: [Place]) -> [Place] {
+        SaveDoodleHomeCatalog.visiblePlaces(
+            from: places,
+            lens: session.lens,
+            selection: session.city,
+            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
+            locationDenied: locationService.isAuthorizationDenied
+        )
     }
 
     private var visiblePins: [SaveTileTownPin] {

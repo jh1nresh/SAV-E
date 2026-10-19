@@ -312,6 +312,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let start = app.buttons["home.empty.capture"]
         XCTAssertTrue(start.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(start.isHittable)
+        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
         attach(app, name: "review-flow-home-empty")
         attach(app, name: "doodle-home-empty")
         start.tap()
@@ -505,6 +507,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.eat"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["home.citySwitcher"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["home.miniMap"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["home.locationPrompt"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["home.locationAllow"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
+        tapReachable(app.buttons["home.go"])
+        tapReachable(app.descendants(matching: .any)["home.miniMap"])
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        let mapGo = app.buttons["map.go"]
+        XCTAssertTrue(mapGo.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(mapGo.isSelected, "Mini-map must open Map with the same Eat/Go lens")
+        XCTAssertTrue(app.descendants(matching: .any)["map.city"].exists)
+        openRootTab("Home", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(app.state, .runningForeground)
         XCTAssertTrue(rootTabButton("Save", app: app).isHittable)
         XCTAssertFalse(
@@ -976,6 +991,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.eat"].exists)
         XCTAssertTrue(app.buttons["home.citySwitcher"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.review"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.locationPrompt"].exists)
+        XCTAssertTrue(app.buttons["home.locationAllow"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
 
         for tab in ["Home", "Map", "Save", "Passport"] {
             XCTAssertTrue(rootTabButton(tab, app: app).waitForExistence(timeout: stepTimeout), "Missing \(tab) root tab")
@@ -2850,23 +2869,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        let moreActions = app.descendants(matching: .any)["home.more"]
-        if moreActions.waitForExistence(timeout: timeout(2)) {
-            tapReachable(moreActions)
-        }
-        // Doodle Home: clues line (`home.review`). Parity-fixture Home still
-        // uses Review clues / More. Keep the older Manage labels as fallback.
-        let candidates: [XCUIElement] = [
-            app.descendants(matching: .any)["home.review"],
-            app.buttons["Review"],
-            app.buttons["確認"],
-            app.descendants(matching: .any)["home.saves"],
-            app.buttons["Manage saved places"],
-            app.buttons["管理已存地點"],
-            app.buttons["Review clues"],
-        ]
-        let entry = firstExisting(candidates, timeout: stepTimeout)
-        XCTAssertTrue(entry.exists, "Missing Home Saves entry")
+        // HoP: quiet always-on `home.saves` below the list. Review stays N>0.
+        let entry = app.descendants(matching: .any)["home.saves"]
+        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing Home Saves entry")
+        _ = scrollUntilHittable(entry, in: app.scrollViews.firstMatch)
         tapReachable(entry)
         let saves = app.descendants(matching: .any)["saves.root"]
         if !saves.waitForExistence(timeout: timeout(5)) {
@@ -2883,34 +2889,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
     private func openTripsFromHome(app: XCUIApplication) {
-        openRootTab("Home", app: app)
-        let moreActions = app.descendants(matching: .any)["home.more"]
-        if moreActions.waitForExistence(timeout: timeout(2)) {
-            tapReachable(moreActions)
-        }
-        let citySwitcher = app.buttons["home.citySwitcher"]
-        if citySwitcher.waitForExistence(timeout: timeout(2)) {
-            tapReachable(citySwitcher)
-        }
-        let candidates: [XCUIElement] = [
-            app.descendants(matching: .any)["home.trips"],
-            app.buttons["Trips"],
-            app.buttons["行程"],
-        ]
-        let entry = firstExisting(candidates, timeout: stepTimeout)
-        XCTAssertTrue(entry.exists, "Missing Home Trips entry")
+        openSavesFromHome(app: app)
+        let entry = app.descendants(matching: .any)["saves.trips"]
+        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing Saves Trips entry")
         tapReachable(entry)
         let trips = app.descendants(matching: .any)["trips.home"]
         if !trips.waitForExistence(timeout: timeout(5)) {
-            if app.descendants(matching: .any)["profile.root"].exists
-                || app.descendants(matching: .any)["plan.root"].exists {
-                openRootTab("Home", app: app)
-            }
-            tapReachable(firstExisting(candidates, timeout: timeout(2)))
+            tapReachable(entry)
         }
         XCTAssertTrue(
             trips.waitForExistence(timeout: stepTimeout),
-            "Home Trips entry did not open Trips"
+            "saves.trips did not open Trips"
         )
     }
 

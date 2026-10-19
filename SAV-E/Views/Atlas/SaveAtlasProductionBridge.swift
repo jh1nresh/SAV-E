@@ -136,6 +136,11 @@ enum SaveAtlasPresentationFactory {
                 mapStampCount: mapViewModel.places.count
             )
             presentation.tripsBetaLabel = "BETA"
+        } else {
+            // Fixture Home is SaveDoodleHomeView. Attach live Place objects so
+            // the gate measures the real Eat/Go list, not an empty plate.
+            presentation.savedPlaces = orderedHomePlaces(mapViewModel.places, location: homeLocation).map(placePresentation)
+            presentation.reviewCount = mapViewModel.reviewCandidates.count
         }
 
         presentation.onCapture = onCapture

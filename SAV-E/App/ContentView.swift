@@ -523,7 +523,6 @@ struct ContentView: View {
                                     )
                                 },
                                 onOpenTrips: {
-                                    // Existing trips remain available from Home's city sheet in UI tests.
                                     rootPath = SaveChromeNavigation.pathByOpening(
                                         .trips,
                                         currently: rootPath
@@ -1187,6 +1186,12 @@ struct ContentView: View {
             onOpenReviewCandidate: { openReviewCandidate($0, tripID: captureResultIDs == nil ? nil : pendingCaptureTripID) },
             onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
             onOpenPassport: openPassport,
+            onOpenTrips: {
+                rootPath = SaveChromeNavigation.pathByOpening(
+                    .trips,
+                    currently: rootPath
+                )
+            },
             captureResultCount: captureResultIDs?.count,
             onLoadDuplicateAudit: { try await mapVM.reviewDuplicateAudit() }
         )

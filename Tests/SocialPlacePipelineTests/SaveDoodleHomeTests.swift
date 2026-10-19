@@ -144,6 +144,11 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("home.collected"))
         XCTAssertTrue(home.contains("home.empty.capture"))
         XCTAssertTrue(home.contains("home.review"))
+        XCTAssertTrue(home.contains("home.saves"))
+        XCTAssertTrue(home.contains("See all saves"))
+        XCTAssertTrue(home.contains("看全部收藏"))
+        XCTAssertTrue(home.contains("presentation.reviewCount > 0"))
+        XCTAssertFalse(home.contains("accessibilityIdentifier(\"home.trips\")"))
         XCTAssertTrue(home.contains("SaveDisplayTitle(text: \"Savvy\", pointSize: 34"))
         XCTAssertTrue(home.contains(".mapStyle(.standard(emphasis: .automatic))"))
         XCTAssertTrue(home.contains("Marker("))
@@ -159,6 +164,59 @@ final class SaveDoodleHomeTests: XCTestCase {
                 "SAV-E/Views/TileTown/SaveTileTownHomeView.swift"
             ).path
         ))
+        XCTAssertTrue(root.contains("SaveDoodleHomeView("))
+        XCTAssertFalse(root.contains("HomeAtlasScreen()"))
+        XCTAssertTrue(root.contains("saves.trips"))
+        XCTAssertTrue(root.contains("Trips ›"))
+        XCTAssertTrue(root.contains("onOpenTrips"))
+    }
+
+    func testHomeShowsLocationDeniedPromptIdentifiers() throws {
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        XCTAssertTrue(home.contains("home.locationPrompt"))
+        XCTAssertTrue(home.contains("home.locationAllow"))
+        XCTAssertTrue(home.contains("showsLocationPrompt"))
+        XCTAssertTrue(home.contains("isAuthorizationDenied && !showsEmptyHome"))
+    }
+
+    func testMapAppliesSharedDoodleSessionFilter() throws {
+        let tokyoEat = place(
+            "Ichiran",
+            "1-22-7 Jinnan, Shibuya City, Tokyo, Japan",
+            .food
+        )
+        let tokyoGo = place(
+            "teamLab",
+            "1-3-8 Aomi, Koto City, Tokyo, Japan",
+            .attraction
+        )
+        let taipeiEat = place(
+            "Fujin",
+            "No. 353, Section 1, Fuxing S Rd, Da'an District, Taipei",
+            .cafe
+        )
+        let session = SaveDoodleSession(
+            defaults: UserDefaults(suiteName: "save.doodle.map.\(UUID().uuidString)")!
+        )
+        session.lens = .go
+        session.city = .city("tokyo")
+        let homeIDs = SaveDoodleHomeCatalog.visiblePlaces(
+            from: [tokyoEat, tokyoGo, taipeiEat],
+            lens: session.lens,
+            selection: session.city,
+            location: nil,
+            locationDenied: true
+        ).map(\.id)
+        XCTAssertEqual(homeIDs, [tokyoGo.id])
+
+        let map = try source(at: "SAV-E/Views/TileTown/SaveTileTownRootMap.swift")
+        XCTAssertTrue(map.contains("@EnvironmentObject private var session: SaveDoodleSession"))
+        XCTAssertTrue(map.contains("SaveDoodleHomeCatalog.visiblePlaces("))
+        XCTAssertTrue(map.contains("session.lens"))
+        XCTAssertTrue(map.contains("session.city"))
+        XCTAssertTrue(map.contains("mapAccessibilityIdentifier"))
+        XCTAssertTrue(map.contains("map.city"))
+        XCTAssertTrue(map.contains("map.eatGo"))
     }
 
     private func place(

@@ -12,6 +12,8 @@ enum SaveDoodleLens: String, CaseIterable, Identifiable {
 
     var accessibilityIdentifier: String { "home.\(rawValue)" }
 
+    var mapAccessibilityIdentifier: String { "map.\(rawValue)" }
+
     func title(language: AppLanguage) -> String {
         switch self {
         case .eat:

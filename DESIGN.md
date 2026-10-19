@@ -648,8 +648,10 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
   rounded capsule.
 - Home owns waiting clues and the nearby Eat/Go list. The mini-map is an
   index; tapping it opens Map with the same city and Eat/Go filter. Review
-  clues stay on the one-line `N clues waiting · Review` entry. Collected
-  opens Passport. Do not add a duplicate Saves tab.
+  clues stay on the one-line `N clues waiting · Review` entry when N>0.
+  "See all saves" is a quiet always-on row into the existing Saves screen.
+  Collected opens Passport. Do not add a duplicate Saves tab. Trips stay a
+  production child reached from Saves as `Trips ›`.
 - + opens capture and leaves the previous destination selected when dismissed.
 - Plan is a secondary route while planning demand remains unvalidated.
 - Trips remain a child route. Home no longer shows a More menu.
@@ -677,8 +679,11 @@ Location denied: hide "Near you", show the last city sorted by most
 recent save, and prompt to allow location. Empty nearby: Caveat title,
 coral + Save link, and a latest-save jump when another city has saves.
 
-Clues stay on the one-line Review entry when N>0. Collected opens
-Passport. Wordmark titles use `SaveDisplayTitle` (Caveat / Iansui);
+Clues stay on the one-line Review entry when N>0. Below the list, a quiet
+always-visible `See all saves ›` / `看全部收藏 ›` row (`home.saves`) opens
+the existing Saves screen. Saves reaches Trips from its header as
+`Trips ›` (`saves.trips`). Do not add a second Home Trips row. Collected
+opens Passport. Wordmark titles use `SaveDisplayTitle` (Caveat / Iansui);
 body copy stays `SaveAtlasType`.
 
 ### Sign-In
@@ -726,7 +731,10 @@ Rules:
   three chips are Map-only, 44pt buttons (`map.lens.*`), and stay below the
   48pt status band. The search drawer never covers them: large stop ends
   below `SaveTileTownProductLock.mapChromeHeight`, and only the visible
-  paper hits so pins stay tappable through medium.
+  paper hits so pins stay tappable through medium. Home's shared Eat/Go +
+  city (`SaveDoodleSession`) apply to Saved/Nearby pins when Map opens from
+  the mini-map. Map Eat/Go chips (`map.eat` / `map.go`) and city label
+  (`map.city`) may change that shared state afterwards.
 - The town canvas pans with a drag. Pin tap selects the kraft peek card.
 - Drawer search (collapsed capsule) still opens the parked search panel.
   Category, Want to try, Visited, and Nearby-distance chips may remain in

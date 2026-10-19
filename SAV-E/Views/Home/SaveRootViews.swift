@@ -15,16 +15,10 @@ struct SaveHomeView: View {
     @ObservedObject private var locationService = LocationService.shared
 
     var body: some View {
-        Group {
-            if SaveAtlasRuntime.usesParityFixture {
-                HomeAtlasScreen()
-            } else {
-                SaveDoodleHomeView(
-                    locationService: locationService,
-                    onOpenMap: onOpenMap
-                )
-            }
-        }
+        SaveDoodleHomeView(
+            locationService: locationService,
+            onOpenMap: onOpenMap
+        )
         .environment(\.atlasPresentation, atlasPresentation)
         .task(id: locationService.authorizationStatus) {
             guard !ReviewDemo.isOfflineUITestMode,
@@ -72,6 +66,7 @@ struct SaveLibraryView: View {
     let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onOpenPassport: () -> Void
+    var onOpenTrips: () -> Void = {}
     var captureResultCount: Int? = nil
     var onLoadDuplicateAudit: () async throws -> [SaveReviewDuplicateGroup] = { [] }
     @State private var showsDuplicateAudit = false
@@ -97,6 +92,18 @@ struct SaveLibraryView: View {
         // back control when the child's toolbar modifier won.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("saves.root")
+        .toolbar {
+            if captureResultCount == nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: onOpenTrips) {
+                        Text(localized("Trips ›", "行程 ›"))
+                            .font(SaveAtlasType.strong(15))
+                    }
+                    .accessibilityLabel(localized("Trips", "行程"))
+                    .accessibilityIdentifier("saves.trips")
+                }
+            }
+        }
         .sheet(isPresented: $showsDuplicateAudit, onDismiss: {
             if let candidate = auditSelection {
                 auditSelection = nil
