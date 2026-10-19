@@ -721,6 +721,17 @@ struct ContentView: View {
                     )
                 }
             }
+            .alert(
+                languageSettings.localized(english: "Couldn’t finish that action", traditionalChinese: "無法完成這個動作"),
+                isPresented: Binding(
+                    get: { fullScreenRoute == nil && fullScreenActionError != nil },
+                    set: { if !$0 { fullScreenActionError = nil } }
+                )
+            ) {
+                Button(languageSettings.text(.ok)) { fullScreenActionError = nil }
+            } message: {
+                Text(fullScreenActionError ?? "")
+            }
         }
     }
 
@@ -1363,8 +1374,9 @@ struct ContentView: View {
                 let resolved = try await mapVM.resolveExactSearchClue(toSavedPlace: place)
                 openMapDetail(.savedPlace(resolved))
             } catch {
+                // Stay on the Map search/correction surface. The fullscreen
+                // alert is not visible from this embedded drawer.
                 fullScreenActionError = error.localizedDescription
-                openMapDetail(.savedPlace(place))
             }
         }
     }

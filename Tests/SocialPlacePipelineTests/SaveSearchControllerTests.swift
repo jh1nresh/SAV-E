@@ -2840,6 +2840,54 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testExactSearchResolutionRollsBackLocalStampWhenDecisionFails() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-rollback-local-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-rollback-local-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.recordDecisionError = NSError(domain: "test", code: 2)
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        do {
+            _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+            XCTFail("Decision failure must surface after the stamp PATCH")
+        } catch {
+            XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+        }
+
+        let local = try XCTUnwrap(map.places.first { $0.id == stamp.id })
+        XCTAssertEqual(local.note, "Must try the bun")
+        XCTAssertFalse(local.sourceEvidence.contains("Original source note"))
+        XCTAssertEqual(local.placeHighlights, stamp.placeHighlights)
+        let persisted = try XCTUnwrap(vault.confirmedPlaces().first { $0.id == stamp.id })
+        XCTAssertFalse(persisted.sourceEvidence.contains("Original source note"))
+        XCTAssertEqual(supabase.updatedPlaces.map(\.id), [stamp.id])
+
+        supabase.recordDecisionError = nil
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
     func testExactSearchResolutionOmitsExistingPlaceFromMapCandidateDecision() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("exact-search-map-candidate-remote-\(UUID().uuidString).json")
@@ -5707,6 +5755,8 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(content.contains("openExactSearchRefine"))
         XCTAssertTrue(content.contains("preservesExactSearchClue: true"))
         XCTAssertFalse(content.contains("openMapSearch(initialQuery: query)"))
+        XCTAssertTrue(content.contains("fullScreenRoute == nil && fullScreenActionError != nil"))
+        XCTAssertTrue(content.contains("Stay on the Map search/correction surface"))
     }
 
     func testTaipeiAndTaibeiMatchBothWaysWithoutRewriting() {
@@ -5809,6 +5859,7 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     private(set) var recoveryDecisions: [PlaceRecoveryDecisionDraft] = []
     private(set) var updatePlaceStarted = 0
     var updatePlaceError: Error?
+    var recordDecisionError: Error?
     private var holdUpdatePlace = false
     private var resumeUpdatePlace: (() -> Void)?
 
@@ -5863,6 +5914,7 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
         throw SupabaseError.notConfigured
     }
     func recordPlaceRecoveryDecision(_ decision: PlaceRecoveryDecisionDraft, for runId: UUID) async throws -> PlaceRecoveryDecisionReceiptResponse {
+        if let recordDecisionError { throw recordDecisionError }
         recoveryDecisions.append(decision)
         return PlaceRecoveryDecisionReceiptResponse(
             run: PlaceRecoveryWorkflowRun(

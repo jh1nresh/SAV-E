@@ -1771,7 +1771,8 @@ final class MapViewModel: ObservableObject {
     ///
     /// Claim the active correction session before the first `await` so a
     /// second saved-result tap cannot PATCH the same clue onto another stamp.
-    /// Restore the session only when nothing was written yet.
+    /// On failure, restore the session and roll the local stamp back so it
+    /// does not look corrected while the Review clue is still open.
     @discardableResult
     func resolveExactSearchClue(toSavedPlace place: Place) async throws -> Place {
         guard let resolution = exactSearchResolution else { return place }
@@ -1797,9 +1798,12 @@ final class MapViewModel: ObservableObject {
             places = Place.consolidated(places.filter { $0.id != associated.id } + [associated])
             return associated
         } catch {
-            if !persistedMerge {
-                exactSearchResolution = resolution
+            if persistedMerge {
+                try? saveLocalVaultService.removeConfirmedPlace(place)
+                mirrorToLocalVault(place)
+                places = Place.consolidated(places.filter { $0.id != place.id } + [place])
             }
+            exactSearchResolution = resolution
             throw error
         }
     }
