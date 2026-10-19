@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   persistableGooglePhotoURL,
@@ -19,6 +20,11 @@ const place: MissingPhotoPlace = {
   latitude: 35.6629,
   longitude: 139.7078,
 };
+
+test("photo backfill CLI pins search_path to public", () => {
+  const cli = readFileSync(new URL("../src/placePhotoBackfillCli.ts", import.meta.url), "utf8");
+  assert.match(cli, /const pool = new Pool\(\{[\s\S]*?options:\s*"-c search_path=public"/);
+});
 
 test("photo candidate requires the same name or a nearby coordinate", () => {
   const unrelated = {
