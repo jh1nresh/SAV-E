@@ -58,7 +58,7 @@ final class AtlasFiveTabBarTests: XCTestCase {
         XCTAssertLessThan(AtlasTabBarMetrics.height, 76)
         XCTAssertGreaterThanOrEqual(AtlasTabBarMetrics.itemHeight, 44)
         XCTAssertGreaterThanOrEqual(AtlasTabBarMetrics.itemHeight, AtlasTabBarMetrics.minimumHitTarget)
-        XCTAssertEqual(AtlasPalette.strokeWidth, 2)
+        XCTAssertEqual(AtlasPalette.strokeWidth, 1)
         XCTAssertEqual(AtlasTabBarMetrics.raisedControlStrokeWidth, 0)
     }
 
