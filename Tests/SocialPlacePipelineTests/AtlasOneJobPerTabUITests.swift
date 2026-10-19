@@ -382,6 +382,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(rail.contains("waitForHomeCoverImagery(app)"))
         XCTAssertTrue(rail.contains("home.miniMap"))
         XCTAssertTrue(rail.contains("home.eat"))
+        XCTAssertTrue(rail.contains("home.passport"))
         XCTAssertTrue(rail.contains("testHomeListProgressiveSearch"))
         XCTAssertTrue(selector.contains("testHomeListProgressiveSearch"))
         XCTAssertTrue(rail.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))

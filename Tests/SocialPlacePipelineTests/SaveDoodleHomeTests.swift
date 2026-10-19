@@ -141,9 +141,11 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertFalse(root.contains("SaveTileTownHomeView()"))
         XCTAssertTrue(home.contains("home.miniMap"))
         XCTAssertTrue(home.contains("home.citySwitcher"))
+        XCTAssertTrue(home.contains("home.passport"))
+        XCTAssertFalse(home.contains("accessibilityIdentifier(\"root.passport\")"))
         XCTAssertTrue(home.contains("lens.accessibilityIdentifier"))
         XCTAssertTrue(home.contains(".contentShape(Rectangle())"))
-        XCTAssertTrue(home.contains("accessibilityElement(children: .ignore)"))
+        XCTAssertTrue(home.contains("accessibilityElement(children: .contain)"))
         XCTAssertTrue(home.contains(".accessibilityIdentifier(\"home.savedPlaces\")"))
         let catalog = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")
         XCTAssertTrue(catalog.contains("home.\\(rawValue)"))
@@ -181,14 +183,23 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(root.contains("accessibilityElement(children: .ignore)"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("app.buttons[\"saves.trips\"]"))
+        XCTAssertTrue(rail.contains("home.passport"))
+        XCTAssertTrue(rail.contains("home.locationPrompt"))
+        XCTAssertTrue(rail.contains("home.locationAllow"))
     }
 
     func testHomeShowsLocationDeniedPromptIdentifiers() throws {
         let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(home.contains("home.locationPrompt"))
         XCTAssertTrue(home.contains("home.locationAllow"))
         XCTAssertTrue(home.contains("showsLocationPrompt"))
         XCTAssertTrue(home.contains("isAuthorizationDenied && !showsEmptyHome"))
+        XCTAssertTrue(home.contains(".accessibilityIdentifier(\"home.locationPrompt\")"))
+        XCTAssertTrue(rail.contains("func testHomeListProgressiveSearch"))
+        XCTAssertTrue(rail.contains("func testCaptureFiveTabLanding"))
+        XCTAssertTrue(rail.contains("home.locationPrompt"))
+        XCTAssertTrue(rail.contains("home.locationAllow"))
     }
 
     func testMapAppliesSharedDoodleSessionFilter() throws {

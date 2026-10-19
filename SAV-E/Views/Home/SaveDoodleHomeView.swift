@@ -58,8 +58,9 @@ struct SaveDoodleHomeView: View {
                 }
                 .padding(.horizontal, SaveLayout.screenMargin)
                 .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("home.savedPlaces")
             }
-            .accessibilityIdentifier("home.savedPlaces")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SaveDottedBackground())
@@ -79,7 +80,7 @@ struct SaveDoodleHomeView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(localized("Open Savvy Passport", "開啟 Savvy 護照"))
-            .accessibilityIdentifier("root.passport")
+            .accessibilityIdentifier("home.passport")
 
             Spacer(minLength: SaveSpace.xs)
 
@@ -241,31 +242,33 @@ struct SaveDoodleHomeView: View {
                 RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
                     .stroke(SaveAtlasPalette.line, lineWidth: SaveAtlasPalette.strokeWidth)
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("home.locationPrompt")
     }
 
     private var miniMap: some View {
-        Button(action: onOpenMap) {
-            SaveDoodleMiniMap(
-                places: listedPlaces,
-                userLocation: locationService.currentLocation
-            )
-            .id(listedPlaces.map(\.place.id))
-            .frame(height: 160)
-            .allowsHitTesting(false)
-            .clipShape(RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
-                    .stroke(SaveAtlasPalette.line, lineWidth: SaveAtlasPalette.strokeWidth)
-                    .allowsHitTesting(false)
-            }
+        SaveDoodleMiniMap(
+            places: listedPlaces,
+            userLocation: locationService.currentLocation
+        )
+        .id(listedPlaces.map(\.place.id))
+        .frame(height: 160)
+        .clipShape(RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                .stroke(SaveAtlasPalette.line, lineWidth: SaveAtlasPalette.strokeWidth)
+                .allowsHitTesting(false)
         }
-        .buttonStyle(.plain)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .ignore)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(localized("Open map", "打開地圖"))
-        .accessibilityIdentifier("home.miniMap")
+        .overlay {
+            Button(action: onOpenMap) {
+                Color.clear
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(localized("Open map", "打開地圖"))
+            .accessibilityIdentifier("home.miniMap")
+        }
     }
 
     private var placeList: some View {
@@ -367,6 +370,7 @@ struct SaveDoodleHomeView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .contain)
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(localized("+ Save your first place", "+ 存第一個地方"))
             .accessibilityIdentifier("home.empty.capture")
@@ -384,6 +388,7 @@ struct SaveDoodleHomeView: View {
         }
         .padding(.bottom, SaveSpace.xxl)
         .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.savedPlaces.empty")
     }
 

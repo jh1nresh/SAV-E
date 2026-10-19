@@ -23,10 +23,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
             launch(app)
             try signInViaReviewDemoRequired(app: app)
-            XCTAssertTrue(app.buttons["root.passport"].waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(app.buttons["home.passport"].waitForExistence(timeout: stepTimeout))
             XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout))
             XCTAssertTrue(app.buttons["home.eat"].waitForExistence(timeout: stepTimeout))
             XCTAssertTrue(app.buttons["home.go"].waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(app.descendants(matching: .any)["home.locationPrompt"].waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(app.buttons["home.locationAllow"].waitForExistence(timeout: stepTimeout))
             XCTAssertFalse(app.descendants(matching: .any)["home.memoryPile"].exists)
             XCTAssertFalse(app.buttons["home.viewAll"].exists)
             XCTAssertFalse(app.textFields["home.search"].exists)
@@ -464,7 +466,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
             "Live Home should lead with the saved-place library."
         )
-        app.buttons["root.passport"].tap()
+        app.buttons["home.passport"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.buttons["profile.proPreview"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["paywall.root"].exists)
@@ -700,6 +702,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertGreaterThan(trailingInset, 12, "Root tabs must not touch the trailing screen edge.")
         XCTAssertEqual(leadingInset, trailingInset, accuracy: 2)
         waitForHomeCoverImagery(app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.locationPrompt"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["home.locationAllow"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "five-tab-home")
         attach(app, name: "doodle-home-light")
 
@@ -2454,11 +2458,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
 
         XCTAssertTrue(
-            app.buttons["root.passport"].waitForExistence(timeout: stepTimeout),
+            app.buttons["home.passport"].waitForExistence(timeout: stepTimeout),
             "Home should keep the fixed Passport entry in its Savvy lockup."
         )
         openPlanFromTrips(app: app)
         XCTAssertTrue(app.navigationBars["Plan"].buttons.firstMatch.isHittable)
+        XCTAssertFalse(app.buttons["home.passport"].exists, "Plan uses native child navigation")
         XCTAssertFalse(app.buttons["root.passport"].exists, "Plan uses native child navigation")
 
         popPlan(app: app, returningTo: "trips.home")
@@ -2534,8 +2539,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         launch(app)
         try signInViaReviewDemo(app: app)
 
-        XCTAssertTrue(app.buttons["root.passport"].waitForExistence(timeout: launchTimeout))
-        app.buttons["root.passport"].tap()
+        XCTAssertTrue(app.buttons["home.passport"].waitForExistence(timeout: launchTimeout))
+        app.buttons["home.passport"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
 
         let connections = app.buttons["profile.following"]
@@ -2768,9 +2773,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         seededApp.buttons["Close capture"].tap()
 
         XCTAssertTrue(
-            seededApp.buttons["root.passport"].waitForExistence(timeout: stepTimeout)
+            seededApp.buttons["home.passport"].waitForExistence(timeout: stepTimeout)
         )
-        seededApp.buttons["root.passport"].tap()
+        seededApp.buttons["home.passport"].tap()
         XCTAssertTrue(
             seededApp.descendants(matching: .any)["profile.root"]
                 .waitForExistence(timeout: stepTimeout)
