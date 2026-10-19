@@ -384,6 +384,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(rail.contains("home.eat"))
         XCTAssertTrue(rail.contains("testHomeListProgressiveSearch"))
         XCTAssertTrue(selector.contains("testHomeListProgressiveSearch"))
+        XCTAssertTrue(rail.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertTrue(selector.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {

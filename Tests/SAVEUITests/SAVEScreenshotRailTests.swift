@@ -59,58 +59,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
             XCTAssertTrue(app.staticTexts["Taipei Window Cafe"].firstMatch.exists)
             attach(app, name: "home-list-open-detail-\(staticMode)")
-            if !staticMode {
-                let closeDetail = app.buttons["drawer.place.close"]
-                XCTAssertTrue(closeDetail.waitForExistence(timeout: stepTimeout))
-                tapReachable(closeDetail)
-                XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout))
-                openRootTab("Map", app: app)
-                XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-                XCTAssertFalse(
-                    app.buttons["map.go"].exists,
-                    "Direct Map tab must keep the unfiltered default"
-                )
-                XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.10000000-0000-0000-0000-000000000001"].waitForExistence(timeout: stepTimeout))
-                XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.10000000-0000-0000-0000-000000000002"].exists)
-                XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.10000000-0000-0000-0000-000000000005"].exists)
-
-                openRootTab("Home", app: app)
-                tapReachable(app.buttons["home.go"])
-                XCTAssertTrue(app.buttons["home.place.10000000-0000-0000-0000-000000000005"].waitForExistence(timeout: stepTimeout))
-                tapReachable(app.descendants(matching: .any)["home.miniMap"])
-                XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-                XCTAssertTrue(app.buttons["map.go"].waitForExistence(timeout: stepTimeout))
-                XCTAssertTrue(app.buttons["map.go"].isSelected, "Mini-map must carry the Go lens")
-                XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.10000000-0000-0000-0000-000000000005"].waitForExistence(timeout: stepTimeout))
-                XCTAssertFalse(app.descendants(matching: .any)["map.tilePin.10000000-0000-0000-0000-000000000001"].exists)
-
-                openRootTab("Home", app: app)
-                tapReachable(app.buttons["home.eat"])
-                XCTAssertTrue(cafe.waitForExistence(timeout: stepTimeout))
-                tapReachable(app.descendants(matching: .any)["home.miniMap"])
-                XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-                XCTAssertTrue(app.buttons["map.eat"].waitForExistence(timeout: stepTimeout))
-                XCTAssertTrue(app.buttons["map.eat"].isSelected)
-                XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.10000000-0000-0000-0000-000000000001"].waitForExistence(timeout: stepTimeout))
-                XCTAssertFalse(app.descendants(matching: .any)["map.tilePin.10000000-0000-0000-0000-000000000002"].exists)
-
-                tapReachable(app.descendants(matching: .any)["map.city"])
-                let mapTainan = app.descendants(matching: .any)["map.city.tainan"]
-                XCTAssertTrue(mapTainan.waitForExistence(timeout: stepTimeout), "map.city must open a city picker")
-                tapReachable(mapTainan)
-                XCTAssertTrue(
-                    app.descendants(matching: .any)["map.tilePin.10000000-0000-0000-0000-000000000002"].waitForExistence(timeout: stepTimeout),
-                    "Changing map.city must update Map pins"
-                )
-                XCTAssertFalse(app.descendants(matching: .any)["map.tilePin.10000000-0000-0000-0000-000000000001"].exists)
-
-                openRootTab("Home", app: app)
-                XCTAssertTrue(
-                    app.buttons["home.place.10000000-0000-0000-0000-000000000002"].waitForExistence(timeout: stepTimeout),
-                    "Map city chips write the shared session so Home follows"
-                )
-                XCTAssertFalse(app.buttons["home.place.10000000-0000-0000-0000-000000000001"].exists)
-            }
             app.terminate()
         }
         let dark = makeApp(launchArguments: [
