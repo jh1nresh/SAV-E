@@ -17,6 +17,9 @@ final class SaveLocalVaultService: Sendable {
     private let fileName = "save-memory-records.json"
     private let overrideVaultURL: URL?
     private let lock = NSLock()
+#if DEBUG
+    nonisolated(unsafe) var removeReviewCandidateError: Error?
+#endif
 
     init(overrideVaultURL: URL? = nil) {
         self.overrideVaultURL = overrideVaultURL
@@ -282,6 +285,9 @@ final class SaveLocalVaultService: Sendable {
     }
 
     func removeReviewCandidate(_ candidateID: UUID) throws {
+#if DEBUG
+        if let removeReviewCandidateError { throw removeReviewCandidateError }
+#endif
         try withLock {
             try withCoordinatedVaultWrite { url in
                 var records = try loadRecords(from: url)

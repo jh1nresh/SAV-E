@@ -219,6 +219,32 @@ final class PlaceDeduplicationTests: XCTestCase {
     }
 
     @MainActor
+    func testSameIDRemoteLocalMergeDoesNotRestoreClearedStructuredMemory() {
+        var remote = makePlace(name: "Cafe", address: "1 Test Way", googlePlaceId: "venue", sourceUrl: nil)
+        remote.note = "Must try the bun"
+        remote.placeHighlights = []
+        remote.vibeTags = []
+        remote.accessNotes = []
+        remote.recommendedItems = []
+        remote.additionalSourceEvidence = []
+        remote.createdAt = Date(timeIntervalSince1970: 1)
+        var local = remote
+        local.placeHighlights = ["Window seats"]
+        local.vibeTags = ["quiet"]
+        local.accessNotes = ["Walk-up"]
+        local.recommendedItems = [RecommendedItem(name: "Cortado", price: "$6")]
+        local.additionalSourceEvidence = ["Original source note"]
+        let merged = Place.consolidated([remote, local]).first
+        XCTAssertEqual(merged?.note, "Must try the bun")
+        XCTAssertEqual(merged?.placeHighlights, [])
+        XCTAssertEqual(merged?.vibeTags, [])
+        XCTAssertEqual(merged?.accessNotes, [])
+        XCTAssertEqual(merged?.recommendedItems, [])
+        XCTAssertEqual(merged?.additionalSourceEvidence, [])
+        XCTAssertFalse(merged?.sourceEvidence.contains("Original source note") == true)
+    }
+
+    @MainActor
     func testImportIdentityKeepsBranchesAndSourceOnlySeparate() {
         let existing = review(date: 1, located: true)
         var pending = PendingReviewCandidate(

@@ -53,27 +53,44 @@ struct Place: Identifiable, Codable, Hashable {
         // Same-id remote+local reloads must still union evidence and structured
         // memory. Different-id merges can also lift the other stamp's note
         // lines into additional evidence; same-id keeps `self.note`.
-        let extraEvidence = id == other.id
-            ? other.savedAdditionalSourceEvidence
-            : other.incomingEvidence(excludingNote: note)
-        merged.additionalSourceEvidence = (savedAdditionalSourceEvidence + extraEvidence)
-            .filter { line in
+        // Empty arrays are deliberate clears and must not be restored from the
+        // other copy; nil means unknown and can take the other side.
+        if id == other.id {
+            merged.additionalSourceEvidence = Self.mergingExplicitList(
+                additionalSourceEvidence,
+                other.additionalSourceEvidence
+            )?.filter { line in
                 guard let primaryURL, !primaryURL.isEmpty else { return true }
                 return line != "Source URL: \(primaryURL)"
             }
-            .removingDuplicates()
-            .nilIfEmpty
+            merged.placeHighlights = Self.mergingExplicitList(placeHighlights, other.placeHighlights)
+            merged.vibeTags = Self.mergingExplicitList(vibeTags, other.vibeTags)
+            merged.accessNotes = Self.mergingExplicitList(accessNotes, other.accessNotes)
+            merged.recommendedItems = Self.mergingExplicitRecommendedItems(recommendedItems, other.recommendedItems)
+            if let items = merged.recommendedItems {
+                merged.extractedDishes = items.map(\.name)
+            }
+        } else {
+            let extraEvidence = other.incomingEvidence(excludingNote: note)
+            merged.additionalSourceEvidence = (savedAdditionalSourceEvidence + extraEvidence)
+                .filter { line in
+                    guard let primaryURL, !primaryURL.isEmpty else { return true }
+                    return line != "Source URL: \(primaryURL)"
+                }
+                .removingDuplicates()
+                .nilIfEmpty
+            merged.placeHighlights = (savedPlaceHighlights + other.savedPlaceHighlights).removingDuplicates().nilIfEmpty
+            merged.vibeTags = (savedVibeTags + other.savedVibeTags).removingDuplicates().nilIfEmpty
+            merged.accessNotes = (savedAccessNotes + other.savedAccessNotes).removingDuplicates().nilIfEmpty
+            merged.recommendedItems = Self.mergingRecommendedItems(savedRecommendedItems, with: other.savedRecommendedItems)
+            merged.extractedDishes = merged.savedRecommendedItems.map(\.name).nilIfEmpty
+        }
         merged.sourceUrl = sourceUrl ?? other.sourceUrl
         if sourceUrl == nil { merged.sourcePlatform = other.sourcePlatform }
         merged.recommender = recommender ?? other.recommender
         merged.googlePlaceId = googlePlaceId ?? other.googlePlaceId
         merged.sourceImageUrl = sourceImageUrl ?? other.sourceImageUrl
         merged.businessPhotoUrls = (businessPhotoURLStrings + other.businessPhotoURLStrings).removingDuplicates()
-        merged.placeHighlights = (savedPlaceHighlights + other.savedPlaceHighlights).removingDuplicates()
-        merged.vibeTags = (savedVibeTags + other.savedVibeTags).removingDuplicates()
-        merged.accessNotes = (savedAccessNotes + other.savedAccessNotes).removingDuplicates()
-        merged.recommendedItems = Self.mergingRecommendedItems(savedRecommendedItems, with: other.savedRecommendedItems)
-        merged.extractedDishes = merged.savedRecommendedItems.map(\.name).nilIfEmpty
         merged.rating = rating ?? other.rating
         merged.googleRating = googleRating ?? other.googleRating
         merged.priceRange = priceRange ?? other.priceRange
@@ -135,6 +152,32 @@ struct Place: Identifiable, Codable, Hashable {
         return items
     }
 
+    /// Same-id reload: nil is unknown, `[]` is a deliberate clear.
+    private static func mergingExplicitList(_ primary: [String]?, _ other: [String]?) -> [String]? {
+        switch (primary, other) {
+        case (nil, nil): return nil
+        case (nil, let other): return other
+        case (let primary, nil): return primary
+        case (let primary?, let other?):
+            if primary.isEmpty || other.isEmpty { return [] }
+            return (primary + other).removingDuplicates()
+        }
+    }
+
+    private static func mergingExplicitRecommendedItems(
+        _ primary: [RecommendedItem]?,
+        _ other: [RecommendedItem]?
+    ) -> [RecommendedItem]? {
+        switch (primary, other) {
+        case (nil, nil): return nil
+        case (nil, let other): return other
+        case (let primary, nil): return primary
+        case (let primary?, let other?):
+            if primary.isEmpty || other.isEmpty { return [] }
+            return mergingRecommendedItems(primary, with: other)
+        }
+    }
+
     /// Wire value for `places.note`. That column is plain user memory
     /// (`placeClaims` analysisSummary and save-rn `mapPlace` read it as text).
     /// Extra clue evidence, highlights, vibe, access, and priced recommended
@@ -144,16 +187,21 @@ struct Place: Identifiable, Codable, Hashable {
     }
 
     func memoryMetaForPersistence() -> PlaceMemoryMeta? {
-        let additional = savedAdditionalSourceEvidence.filter { !Self.isGeneratedEvidenceLine($0) }
-        let meta = PlaceMemoryMeta(
+        let hasExplicitFields = additionalSourceEvidence != nil
+            || placeHighlights != nil
+            || recommendedItems != nil
+            || vibeTags != nil
+            || accessNotes != nil
+        guard hasExplicitFields else { return nil }
+        let additional = (additionalSourceEvidence ?? []).filter { !Self.isGeneratedEvidenceLine($0) }
+        return PlaceMemoryMeta(
             v: 1,
-            evidence: additional.nilIfEmpty,
-            highlights: savedPlaceHighlights.nilIfEmpty,
-            recommended: savedRecommendedItems.nilIfEmpty,
-            vibe: savedVibeTags.nilIfEmpty,
-            access: savedAccessNotes.nilIfEmpty
+            evidence: additionalSourceEvidence == nil ? nil : additional,
+            highlights: placeHighlights,
+            recommended: recommendedItems,
+            vibe: vibeTags,
+            access: accessNotes
         )
-        return meta.isEmpty ? nil : meta
     }
 
     /// User-authored memory only. Leftover `SavvyMemory/1` envelopes written
@@ -186,7 +234,7 @@ struct Place: Identifiable, Codable, Hashable {
     }
 
     var savedRecommendedItems: [RecommendedItem] {
-        if let recommendedItems, !recommendedItems.isEmpty { return recommendedItems }
+        if let recommendedItems { return recommendedItems }
         return (extractedDishes ?? []).map { RecommendedItem(name: $0, price: nil) }
     }
 
@@ -284,7 +332,7 @@ struct Place: Identifiable, Codable, Hashable {
     }
 
     static func isGeneratedEvidenceLine(_ line: String) -> Bool {
-        generatedEvidencePrefixes.contains { prefix in
+        SavvyGeneratedLine.isMarked(line) || generatedEvidencePrefixes.contains { prefix in
             line.range(of: prefix, options: [.caseInsensitive, .anchored]) != nil
         }
     }
@@ -757,6 +805,15 @@ struct PlaceMemoryMeta: Codable, Equatable, Hashable {
     var vibe: [String]?
     var access: [String]?
 
+    static let cleared = PlaceMemoryMeta(
+        v: 1,
+        evidence: [],
+        highlights: [],
+        recommended: [],
+        vibe: [],
+        access: []
+    )
+
     var isEmpty: Bool {
         (evidence ?? []).isEmpty
             && (highlights ?? []).isEmpty
@@ -770,6 +827,24 @@ struct PlaceMemoryMeta: Codable, Equatable, Hashable {
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         let data = try encoder.encode(self)
         return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    }
+}
+
+/// Origin marker for lines Savvy itself wrote. User-authored memory is never
+/// prefixed with this; display and share strip only marked lines, not labels
+/// such as `Recommender:` that a person typed.
+enum SavvyGeneratedLine {
+    static let marker = "SavvyGenerated:"
+
+    static func marking(_ line: String) -> String {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isMarked(trimmed) { return trimmed }
+        return "\(marker) \(trimmed)"
+    }
+
+    static func isMarked(_ line: String) -> Bool {
+        line.trimmingCharacters(in: .whitespacesAndNewlines)
+            .range(of: marker, options: [.caseInsensitive, .anchored]) != nil
     }
 }
 

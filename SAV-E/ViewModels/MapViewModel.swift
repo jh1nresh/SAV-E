@@ -9,6 +9,9 @@ enum ReviewCandidateError: LocalizedError {
     case sourceStillUnresolved
     case sourceAlreadyReviewed
     case noActiveCorrectionSession
+    case correctionInFlight
+    case correctionLockedToPreviousStamp
+    case signInRequired
 
     var errorDescription: String? {
         switch self {
@@ -21,7 +24,13 @@ enum ReviewCandidateError: LocalizedError {
         case .alreadySavedMapStamp(let name):
             return "\(name) is already saved as a Map Stamp."
         case .noActiveCorrectionSession:
+            return "This correction is still waiting. Try again from Review."
+        case .correctionInFlight:
             return nil
+        case .correctionLockedToPreviousStamp:
+            return "Couldn’t finish recovering the previous stamp. Choose that stamp again."
+        case .signInRequired:
+            return "Sign in to finish this correction."
         }
     }
 }
@@ -646,6 +655,10 @@ final class MapViewModel: ObservableObject {
     /// returned map candidate or choosing a saved Map Stamp retires that
     /// clue. A later unrelated map tap must never retire it.
     private var exactSearchResolution: ExactSearchResolution?
+    /// After a failed rollback the correction stays claimed on this stamp so
+    /// the same clue cannot attach to a second place.
+    private var exactSearchRollbackLockPlaceID: UUID?
+    private var isResolvingExactSearchClue = false
     private var importFailureReasons: [UUID: SourceSearchFailureReason] = [:]
     /// Invalidates any in-flight map search before it can publish stale pins.
     private var mapCandidateSearchGeneration = UUID()
@@ -1151,7 +1164,9 @@ final class MapViewModel: ObservableObject {
         }
         if let id = focusedReviewCandidateID, affected.contains(id) { focusedReviewCandidateID = nil }
         if let resolution = exactSearchResolution,
-           affected.contains(resolution.clue.id) || (discard && resolution.clue.correctionLearningPlaceID != nil) { exactSearchResolution = nil }
+           affected.contains(resolution.clue.id) || (discard && resolution.clue.correctionLearningPlaceID != nil) {
+            dropExactSearchResolutionUnlessLocked()
+        }
         for id in affected { correctionOriginalCandidates.removeValue(forKey: id) }
     }
 
@@ -1195,7 +1210,7 @@ final class MapViewModel: ObservableObject {
                     candidateIDs: resolution.candidateIDs
                 )
             } else {
-                exactSearchResolution = nil
+                dropExactSearchResolutionUnlessLocked()
             }
         }
     }
@@ -1715,7 +1730,7 @@ final class MapViewModel: ObservableObject {
                 resolution: exactResolution,
                 candidateID: candidate.id,
                 to: existing
-            )
+            ).resolved
             if resolvedExactSearch {
                 existing = await refreshedConfirmedPlace(existing)
                 mirrorToLocalVault(existing)
@@ -1747,7 +1762,7 @@ final class MapViewModel: ObservableObject {
         do {
             resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
                 resolution: exactResolution, candidateID: candidate.id, to: place
-            )
+            ).resolved
         } catch {
             // The place insert already succeeded. Retain its ID so retrying the
             // pending decision reuses this stamp instead of inserting another.
@@ -1777,6 +1792,10 @@ final class MapViewModel: ObservableObject {
         do {
             return try await resolveExactSearchClue(toSavedPlace: place)
         } catch {
+            if correctionDrawerError == nil, let message = (error as? LocalizedError)?.errorDescription,
+               !message.isEmpty {
+                correctionDrawerError = message
+            }
             return nil
         }
     }
@@ -1787,16 +1806,32 @@ final class MapViewModel: ObservableObject {
     ///
     /// Claim the active correction session before the first `await` so a
     /// second saved-result tap cannot PATCH the same clue onto another stamp.
-    /// On failure, restore the session and roll the local and remote stamp
-    /// back so it does not look corrected while the Review clue is still open.
+    /// On a pre-commit failure, restore the session and roll the local and
+    /// remote stamp back. After the decision commits, local cleanup is
+    /// best-effort and never rolls the stamp back. A failed rollback keeps
+    /// the correction claimed on the first stamp.
     @discardableResult
     func resolveExactSearchClue(toSavedPlace place: Place) async throws -> Place {
-        guard let resolution = exactSearchResolution else {
-            throw ReviewCandidateError.noActiveCorrectionSession
+        if isResolvingExactSearchClue {
+            throw ReviewCandidateError.correctionInFlight
         }
+        guard let resolution = exactSearchResolution else {
+            let error: ReviewCandidateError = (usesRemotePersistence && authService.currentUserId == nil)
+                ? .signInRequired
+                : .noActiveCorrectionSession
+            correctionDrawerError = error.errorDescription
+            throw error
+        }
+        if let locked = exactSearchRollbackLockPlaceID, locked != place.id {
+            correctionDrawerError = ReviewCandidateError.correctionLockedToPreviousStamp.errorDescription
+            throw ReviewCandidateError.correctionLockedToPreviousStamp
+        }
+        isResolvingExactSearchClue = true
+        defer { isResolvingExactSearchClue = false }
         exactSearchResolution = nil
         correctionDrawerError = nil
         var persistedMerge = false
+        var decisionCommitted = false
         var associated = place
         do {
             associated = place.attachingReviewClue(resolution.clue)
@@ -1812,12 +1847,19 @@ final class MapViewModel: ObservableObject {
                 candidateID: nil,
                 to: associated
             )
-            guard resolvedExactSearch else { return associated }
+            decisionCommitted = resolvedExactSearch.committed
+            exactSearchRollbackLockPlaceID = nil
+            guard resolvedExactSearch.resolved else { return associated }
             associated = await refreshedConfirmedPlace(associated)
             mirrorToLocalVault(associated)
             places = Place.consolidated(places.filter { $0.id != associated.id } + [associated])
             return associated
         } catch {
+            if decisionCommitted {
+                exactSearchRollbackLockPlaceID = nil
+                correctionDrawerError = error.localizedDescription
+                throw error
+            }
             if persistedMerge {
                 var rollbackError: Error?
                 if usesRemotePersistence {
@@ -1830,11 +1872,14 @@ final class MapViewModel: ObservableObject {
                 try? saveLocalVaultService.removeConfirmedPlace(place)
                 mirrorToLocalVault(place)
                 places = Place.consolidated(places.filter { $0.id != place.id } + [place])
-                exactSearchResolution = resolution
                 if let rollbackError {
+                    exactSearchResolution = resolution
+                    exactSearchRollbackLockPlaceID = place.id
                     correctionDrawerError = rollbackError.localizedDescription
                     throw rollbackError
                 }
+                exactSearchResolution = resolution
+                exactSearchRollbackLockPlaceID = nil
             } else {
                 exactSearchResolution = resolution
             }
@@ -1867,11 +1912,12 @@ final class MapViewModel: ObservableObject {
         resolution: ExactSearchResolution?,
         candidateID: String?,
         to place: Place
-    ) async throws -> Bool {
-        guard let resolution else { return false }
-        if let candidateID, !resolution.includes(candidateID: candidateID) { return false }
+    ) async throws -> (resolved: Bool, committed: Bool) {
+        guard let resolution else { return (false, false) }
+        if let candidateID, !resolution.includes(candidateID: candidateID) { return (false, false) }
 
         let clue = resolution.clue
+        var committed = false
         if usesRemotePersistence {
             var updatedClue = clue
             updatedClue.name = place.name
@@ -1889,12 +1935,17 @@ final class MapViewModel: ObservableObject {
                 userFinalPlaceId: place.id,
                 reason: "User resolved review candidate to an exact map place."
             )
+            committed = true
         }
 
         // Remote persistence must succeed before the local clue disappears.
-        // On failure the candidate stays visible and the error reaches the UI,
-        // so the user can retry without a clue that later reappears on refresh.
-        try saveLocalVaultService.removeReviewCandidate(clue.id)
+        // After the decision commits, local cleanup is best-effort so a vault
+        // write cannot roll back a stamp the server already accepted.
+        if committed {
+            try? saveLocalVaultService.removeReviewCandidate(clue.id)
+        } else {
+            try saveLocalVaultService.removeReviewCandidate(clue.id)
+        }
         reviewCandidates.removeAll { $0.id == clue.id }
         if selectedReviewCandidate?.id == clue.id {
             selectedReviewCandidate = nil
@@ -1903,10 +1954,11 @@ final class MapViewModel: ObservableObject {
             exactSearchResolution = nil
         }
         if usesRemotePersistence { await refreshReviewCandidatesLoggingFailures() }
-        return true
+        return (true, committed)
     }
 
     private func clearExactSearchResolution(matching candidateID: UUID) {
+        guard exactSearchRollbackLockPlaceID == nil else { return }
         guard exactSearchResolution?.clue.id == candidateID else { return }
         exactSearchResolution = nil
     }
@@ -2787,7 +2839,7 @@ final class MapViewModel: ObservableObject {
     ) async {
         guard !isLoadingMapCandidates else { return }
         let searchGeneration = beginMapCandidateSearch()
-        exactSearchResolution = nil
+        dropExactSearchResolutionUnlessLocked()
         let requestedCenter = coordinate.flatMap { MapSearchGeography.isTrustworthyCoordinate($0) ? $0 : nil }
         guard let searchCenter = requestedCenter ?? genericSearchAnchor()?.center else {
             mapSearchNeedsLocationHint = true
@@ -2822,7 +2874,7 @@ final class MapViewModel: ObservableObject {
         let generation = beginMapCandidateSearch()
         let preservedResolution = preservesExactSearchClue ? exactSearchResolution : nil
         if !preservesExactSearchClue {
-            exactSearchResolution = nil
+            dropExactSearchResolutionUnlessLocked()
         }
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -2882,7 +2934,7 @@ final class MapViewModel: ObservableObject {
         let searchGeneration = beginMapCandidateSearch()
         let preservedResolution = preservesExactSearchClue ? exactSearchResolution : nil
         if !preservesExactSearchClue {
-            exactSearchResolution = nil
+            dropExactSearchResolutionUnlessLocked()
         }
         guard saveSearchController.shouldPrepareMapCandidates(for: query) else {
             mapCandidates = []
@@ -3271,7 +3323,7 @@ final class MapViewModel: ObservableObject {
         selectedIntentFilters = []
         nearbyFilterAnchor = nil
         activeFilter = nil
-        exactSearchResolution = nil
+        dropExactSearchResolutionUnlessLocked()
         mapSearchNeedsLocationHint = false
         lastSearchAnchor = nil
         clearRoute()
@@ -3281,11 +3333,26 @@ final class MapViewModel: ObservableObject {
     /// from, so saving a candidate also retires that clue. Empty IDs are
     /// allowed so a later refine in the same session can attach results.
     func beginExactSearchResolution(for candidate: PlaceReviewCandidate) {
+        if let lockPlaceID = exactSearchRollbackLockPlaceID {
+            guard exactSearchResolution?.clue.id == candidate.id else { return }
+            guard let currentClue = reviewCandidates.first(where: { $0.id == candidate.id }) else { return }
+            exactSearchResolution = ExactSearchResolution(
+                clue: currentClue,
+                candidateIDs: Set(mapCandidates.map(\.id))
+            )
+            exactSearchRollbackLockPlaceID = lockPlaceID
+            return
+        }
         guard let currentClue = reviewCandidates.first(where: { $0.id == candidate.id }) else { return }
         exactSearchResolution = ExactSearchResolution(
             clue: currentClue,
             candidateIDs: Set(mapCandidates.map(\.id))
         )
+    }
+
+    private func dropExactSearchResolutionUnlessLocked() {
+        guard exactSearchRollbackLockPlaceID == nil else { return }
+        exactSearchResolution = nil
     }
 
     @discardableResult

@@ -3851,7 +3851,7 @@ final class SocialPlacePipelineTests: XCTestCase {
             longitude: -117.826,
             category: .cafe,
             status: .wantToGo,
-            note: "Distance: 852m away",
+            note: SavvyGeneratedLine.marking("Distance: 852m away"),
             sourcePlatform: .googleMaps,
             priceRange: "$$",
             googleRating: 4.6,
@@ -3862,6 +3862,12 @@ final class SocialPlacePipelineTests: XCTestCase {
 
         XCTAssertNil(place.cleanMemoryNote)
         XCTAssertEqual(place.memorySummary(language: .traditionalChinese), "已存成想找時間去的地點。")
+
+        var userDistance = Place.mock
+        userDistance.name = "Utopia Euro Caffe"
+        userDistance.address = "Selected on map"
+        userDistance.note = "Distance: 852m away"
+        XCTAssertEqual(userDistance.cleanMemoryNote, "Distance: 852m away")
     }
 
     @MainActor
@@ -3875,6 +3881,9 @@ final class SocialPlacePipelineTests: XCTestCase {
             "source: a friend told me",
             "address: use the side street",
             "rating: better than the reviews",
+            "Recommender: Alice suggested the curry",
+            "Analysis method: I asked the barista",
+            "Source handle: @me.and.the.bun",
         ] {
             var place = Place.mock
             place.note = note

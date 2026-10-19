@@ -1,6 +1,8 @@
 import XCTest
 import MapKit
 import CoreLocation
+import SwiftUI
+import UIKit
 @testable import SAVE
 
 final class SaveSearchControllerTests: XCTestCase {
@@ -2968,6 +2970,51 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
         let local = try XCTUnwrap(map.places.first { $0.id == stamp.id })
         XCTAssertFalse(local.sourceEvidence.contains("Original source note"))
+
+        var other = Self.correctionStamp()
+        other.name = "Other Harbor Stamp"
+        let secondOpened = await map.chooseSavedStampFromExactSearch(other)
+        XCTAssertNil(secondOpened, "A failed rollback must keep the correction claimed on the first stamp")
+        XCTAssertEqual(
+            map.correctionDrawerError,
+            ReviewCandidateError.correctionLockedToPreviousStamp.errorDescription
+        )
+        XCTAssertEqual(supabase.updatedPlaces.count, 1, "Choosing another stamp must not attach the same clue")
+    }
+
+    @MainActor
+    func testExactSearchResolutionDoesNotRollBackAfterCommittedDecision() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-committed-no-rollback-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-committed-no-rollback-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        vault.removeReviewCandidateError = NSError(domain: "test", code: 4)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
+        XCTAssertEqual(supabase.updatedPlaces.count, 1, "A committed decision must not PATCH the stamp back")
+        XCTAssertEqual(supabase.recoveryDecisions.count, 1)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+        XCTAssertNil(map.correctionDrawerError)
     }
 
     @MainActor
@@ -3102,7 +3149,8 @@ final class SaveSearchControllerTests: XCTestCase {
 
         let opened = await map.chooseSavedStampFromExactSearch(savedPlace)
         XCTAssertNil(opened, "Without an active correction the drawer tap must not look successful")
-        XCTAssertNil(map.correctionDrawerError)
+        XCTAssertEqual(map.correctionDrawerError, ReviewCandidateError.noActiveCorrectionSession.errorDescription)
+        XCTAssertFalse(map.correctionDrawerError?.isEmpty == true)
         XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
         let reloaded = SaveLocalVaultService(overrideVaultURL: vaultURL)
         XCTAssertEqual(try reloaded.reviewCandidates().map(\.id), [clue.id])
@@ -5841,6 +5889,34 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertFalse(content.contains("openMapSearch(initialQuery: query)"))
         XCTAssertTrue(content.contains("chooseSavedStampFromExactSearch"))
         XCTAssertTrue(content.contains("mapDrawerPresentedActionError"))
+        XCTAssertTrue(content.contains("MapDrawerActionErrorAlert"))
+        XCTAssertTrue(content.contains("map.drawer.actionError"))
+    }
+
+    @MainActor
+    func testMapDrawerActionErrorAlertAppearsOnScreen() {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let host = UIHostingController(
+            rootView: Color.clear
+                .frame(width: 390, height: 844)
+                .modifier(MapDrawerActionErrorAlert(
+                    title: "Couldn’t finish that action",
+                    okTitle: "OK",
+                    isEnabled: true,
+                    message: .constant("Couldn’t roll that stamp back.")
+                ))
+        )
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        host.view.layoutIfNeeded()
+        let deadline = Date().addingTimeInterval(1)
+        while host.presentedViewController == nil, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        let alert = host.presentedViewController as? UIAlertController
+        XCTAssertNotNil(alert, "The drawer error alert must appear on screen")
+        XCTAssertEqual(alert?.title, "Couldn’t finish that action")
+        XCTAssertEqual(alert?.message, "Couldn’t roll that stamp back.")
     }
 
     func testTaipeiAndTaibeiMatchBothWaysWithoutRewriting() {

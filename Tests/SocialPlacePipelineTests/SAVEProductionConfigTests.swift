@@ -1132,6 +1132,42 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         XCTAssertEqual(emptiedDishesBody["extracted_dishes"] as? [String], [])
     }
 
+    func testUpdatePlaceClearsNoteWithJSONNull() async throws {
+        var previous = Place.mock
+        previous.note = "Must try the bun"
+        var cleared = previous
+        cleared.note = nil
+        var patched: [String: Any] = [:]
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        AnalysisRequestURLProtocol.handler = { request in
+            patched = try AnalysisRequestURLProtocol.body(request)
+            return (200, "{}")
+        }
+        try await service.updatePlace(cleared, previous: previous)
+        XCTAssertTrue(patched["note"] is NSNull, "A cleared user note must PATCH JSON null, not omit the key")
+
+        AnalysisRequestURLProtocol.handler = { request in
+            let payload: [String: Any] = [
+                "id": cleared.id.uuidString,
+                "user_id": "owner",
+                "name": cleared.name,
+                "address": cleared.address,
+                "latitude": cleared.latitude,
+                "longitude": cleared.longitude,
+                "category": cleared.category.rawValue,
+                "status": cleared.status.rawValue,
+                "source_platform": cleared.sourcePlatform.rawValue,
+                "note": NSNull(),
+                "created_at": "2020-01-02T03:04:05Z",
+            ]
+            let data = try JSONSerialization.data(withJSONObject: [payload])
+            return (200, String(data: data, encoding: .utf8) ?? "[]")
+        }
+        let reloaded = try XCTUnwrap(try await service.fetchPlaces(for: "owner").first)
+        XCTAssertNil(reloaded.userFacingNote)
+        XCTAssertNil(reloaded.note)
+    }
+
     func testUpdatePlacePersistsMergedStructuredFieldsAcrossRemoteReload() async throws {
         var previous = Place.mock
         previous.note = "Must try the bun"
@@ -1219,7 +1255,8 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         XCTAssertEqual(emptiedBody["extracted_dishes"] as? [String], [])
         XCTAssertEqual(emptiedBody["note"] as? String, "Must try the bun")
         XCTAssertFalse((emptiedBody["note"] as? String ?? "").hasPrefix("SavvyMemory/"))
-        XCTAssertTrue(emptiedBody["memory_meta"] is NSNull, "Empty structured memory must clear memory_meta")
+        let emptiedMeta = try decodeMemoryMeta(emptiedBody["memory_meta"])
+        XCTAssertEqual(emptiedMeta, PlaceMemoryMeta.cleared, "Empty structured memory must send a tombstone object, not omit the column")
 
         AnalysisRequestURLProtocol.handler = { request in
             let payload: [String: Any] = [

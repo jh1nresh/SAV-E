@@ -721,17 +721,15 @@ struct ContentView: View {
                     )
                 }
             }
-            .alert(
-                languageSettings.localized(english: "Couldn’t finish that action", traditionalChinese: "無法完成這個動作"),
-                isPresented: Binding(
-                    get: { fullScreenRoute == nil && mapDrawerPresentedActionError != nil },
-                    set: { if !$0 { clearMapDrawerActionError() } }
+            .modifier(MapDrawerActionErrorAlert(
+                title: languageSettings.localized(english: "Couldn’t finish that action", traditionalChinese: "無法完成這個動作"),
+                okTitle: languageSettings.text(.ok),
+                isEnabled: fullScreenRoute == nil,
+                message: Binding(
+                    get: { mapDrawerPresentedActionError },
+                    set: { if $0 == nil { clearMapDrawerActionError() } }
                 )
-            ) {
-                Button(languageSettings.text(.ok)) { clearMapDrawerActionError() }
-            } message: {
-                Text(mapDrawerPresentedActionError ?? "")
-            }
+            ))
         }
     }
 
@@ -2136,6 +2134,26 @@ private struct FriendShareReceiptView: View {
         case .missingOrExpired: return "這個分享連結不存在或已過期。"
         case .serverUnavailable: return "分享收據暫時無法使用。"
         case .invalidResponse: return "Savvy 無法驗證這張分享收據。"
+        }
+    }
+}
+
+/// Map-search correction failures surface here instead of opening the stamp.
+struct MapDrawerActionErrorAlert: ViewModifier {
+    let title: String
+    let okTitle: String
+    let isEnabled: Bool
+    @Binding var message: String?
+
+    func body(content: Content) -> some View {
+        content.alert(title, isPresented: Binding(
+            get: { isEnabled && message != nil },
+            set: { if !$0 { message = nil } }
+        )) {
+            Button(okTitle) { message = nil }
+        } message: {
+            Text(message ?? "")
+                .accessibilityIdentifier("map.drawer.actionError")
         }
     }
 }

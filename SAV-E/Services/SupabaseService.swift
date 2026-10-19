@@ -285,16 +285,16 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             "address": place.address,
             "category": place.category.rawValue,
             "status": place.status.rawValue,
-            "rating": place.rating,
+            "rating": place.rating ?? NSNull(),
             // Enrichment fields: without these, business photos/hours fetched
             // on detail open only ever lived in memory and never synced.
-            "google_place_id": place.googlePlaceId,
-            "google_rating": place.googleRating,
-            "google_price_level": place.googlePriceLevel,
-            "price_range": place.priceRange,
-            "opening_hours": place.openingHours,
-            "source_image_url": place.sourceImageUrl,
-            "business_photo_urls": place.businessPhotoUrls,
+            "google_place_id": place.googlePlaceId ?? NSNull(),
+            "google_rating": place.googleRating ?? NSNull(),
+            "google_price_level": place.googlePriceLevel ?? NSNull(),
+            "price_range": place.priceRange ?? NSNull(),
+            "opening_hours": place.openingHours ?? NSNull(),
+            "source_image_url": place.sourceImageUrl ?? NSNull(),
+            "business_photo_urls": place.businessPhotoUrls ?? NSNull(),
         ]
         // Account-backed attribution lives on `recommender`. Send a handle
         // only when it is displayable and actually changed, so a photo
@@ -323,23 +323,33 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         // `memory_meta`. Rewrite the column with the same user text when extra
         // evidence changes so leftover SavvyMemory envelopes are healed; never
         // dump structured memory into this field. Photo enrichment (unchanged
-        // note and memory) omits both.
+        // note and memory) omits both. Assign `NSNull` for a cleared note —
+        // `[String: Any?]` drops a bare `nil` instead of sending JSON null.
         let previousRawNote = previous?.note
         let previousWasEnvelope = previousRawNote != nil
             && Place.decodedWireNote(previousRawNote).note != previousRawNote
-        if previous == nil
-            || place.userFacingNote != previous?.userFacingNote
+        if previous == nil {
+            if let note = place.userFacingNote { updates["note"] = note }
+        } else if place.userFacingNote != previous?.userFacingNote
             || previousWasEnvelope
             || place.hasAdditionalEvidence(unlike: previous)
             || place.hasStructuredDetails(unlike: previous) {
-            updates["note"] = place.userFacingNote
+            updates["note"] = place.userFacingNote ?? NSNull()
         }
         let nextMeta = place.memoryMetaForPersistence()
         let previousMeta = previous?.memoryMetaForPersistence()
+        // Partial callers (photo enrichment) pass `previous` so unchanged
+        // structured memory is omitted instead of wiped.
         if previous == nil {
-            if let nextMeta { updates["memory_meta"] = try nextMeta.jsonObject() }
+            if let nextMeta, !nextMeta.isEmpty {
+                updates["memory_meta"] = try nextMeta.jsonObject()
+            }
         } else if nextMeta != previousMeta {
-            updates["memory_meta"] = try nextMeta?.jsonObject() ?? NSNull()
+            if let nextMeta, !nextMeta.isEmpty {
+                updates["memory_meta"] = try nextMeta.jsonObject()
+            } else if previousMeta != nil {
+                updates["memory_meta"] = try PlaceMemoryMeta.cleared.jsonObject()
+            }
         }
         let nextDishes = place.savedRecommendedItems.map(\.name)
         let previousDishes = previous?.savedRecommendedItems.map(\.name) ?? []
@@ -2075,24 +2085,50 @@ private struct PlaceRow: Codable {
     func toPlace() -> Place {
         let decoded = Place.decodedWireNote(note)
         let meta = memory_meta
-        let fromMeta = meta?.recommended ?? []
         let fromEnvelope = decoded.highlights.recommendedItems
         let fromDishes = (extracted_dishes ?? []).map { RecommendedItem(name: $0, price: nil) }
-        var items = fromMeta
-        for item in fromEnvelope + fromDishes {
-            if let index = items.firstIndex(where: { $0.name.caseInsensitiveCompare(item.name) == .orderedSame }) {
-                if items[index].price == nil { items[index].price = item.price }
+        let recommendedItems: [RecommendedItem]?
+        if let fromMeta = meta?.recommended {
+            if fromMeta.isEmpty {
+                recommendedItems = []
             } else {
-                items.append(item)
+                var items = fromMeta
+                for item in fromEnvelope + fromDishes {
+                    if let index = items.firstIndex(where: { $0.name.caseInsensitiveCompare(item.name) == .orderedSame }) {
+                        if items[index].price == nil { items[index].price = item.price }
+                    } else {
+                        items.append(item)
+                    }
+                }
+                recommendedItems = items
             }
+        } else {
+            var items: [RecommendedItem] = []
+            for item in fromEnvelope + fromDishes {
+                if let index = items.firstIndex(where: { $0.name.caseInsensitiveCompare(item.name) == .orderedSame }) {
+                    if items[index].price == nil { items[index].price = item.price }
+                } else {
+                    items.append(item)
+                }
+            }
+            recommendedItems = items.isEmpty ? nil : items
         }
-        let additional = (meta?.evidence ?? decoded.additional).filter { line in
-            guard let source_url else { return true }
-            return line != "Source URL: \(source_url)"
+        let additional: [String]?
+        if let evidence = meta?.evidence {
+            additional = evidence.filter { line in
+                guard let source_url else { return true }
+                return line != "Source URL: \(source_url)"
+            }
+        } else {
+            let lines = decoded.additional.filter { line in
+                guard let source_url else { return true }
+                return line != "Source URL: \(source_url)"
+            }
+            additional = lines.isEmpty ? nil : lines
         }
-        let highlights = meta?.highlights ?? decoded.highlights.placeHighlights
-        let vibe = meta?.vibe ?? decoded.highlights.vibeTags
-        let access = meta?.access ?? decoded.highlights.accessNotes
+        let highlights = meta?.highlights ?? (decoded.highlights.placeHighlights.isEmpty ? nil : decoded.highlights.placeHighlights)
+        let vibe = meta?.vibe ?? (decoded.highlights.vibeTags.isEmpty ? nil : decoded.highlights.vibeTags)
+        let access = meta?.access ?? (decoded.highlights.accessNotes.isEmpty ? nil : decoded.highlights.accessNotes)
         return Place(
             id: id,
             name: name,
@@ -2121,11 +2157,11 @@ private struct PlaceRow: Codable {
             createdAt: memoryCollectionDate(created_at),
             visibility: visibility.flatMap(PlaceVisibility.init(rawValue:)),
             socialSignal: social_signal?.toSignal(),
-            placeHighlights: highlights.isEmpty ? nil : highlights,
-            recommendedItems: items.isEmpty ? nil : items,
-            vibeTags: vibe.isEmpty ? nil : vibe,
-            accessNotes: access.isEmpty ? nil : access,
-            additionalSourceEvidence: additional.isEmpty ? nil : additional
+            placeHighlights: highlights,
+            recommendedItems: recommendedItems,
+            vibeTags: vibe,
+            accessNotes: access,
+            additionalSourceEvidence: additional
         )
     }
 

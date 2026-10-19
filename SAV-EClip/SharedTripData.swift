@@ -99,30 +99,6 @@ struct SharedPlaceData: Codable {
     }
 
     private static func publicNote(_ value: String?) -> String? {
-        let diagnosticPrefixes = [
-            "Source URL:",
-            "Venue name:",
-            "Address clue:",
-            "Category clue:",
-            "Location clue:",
-            "Analysis pipeline:",
-            "Analysis method:",
-            "Evidence tier:",
-            "Recommender:",
-            "Source handle:",
-            "Verified coordinates",
-            "Google Places refined match:",
-            "Google Places address:",
-            "Google Places coordinates:",
-            "Confidence:",
-            "Analysis failed:",
-            "SavvyMemory/",
-            "Debug:",
-            "Diagnostic:",
-            "Error:",
-            "Source recovery failed:",
-            "Stack trace:",
-        ]
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if trimmed.hasPrefix("SavvyMemory/") { return nil }
         let text = trimmed
@@ -130,9 +106,10 @@ struct SharedPlaceData: Codable {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { line in
                 guard !line.isEmpty else { return false }
-                return !diagnosticPrefixes.contains {
-                    line.range(of: $0, options: [.caseInsensitive, .anchored]) != nil
-                }
+                return line.range(
+                    of: "SavvyGenerated:",
+                    options: [.caseInsensitive, .anchored]
+                ) == nil
             }
             .prefix(2)
             .joined(separator: " · ")
