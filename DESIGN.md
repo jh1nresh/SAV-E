@@ -1,11 +1,13 @@
 # Savvy Design System
 
-> Last updated: 2026-10-15
+> Last updated: 2026-10-19
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** still governs paper, type, kraft, and coral
-> chrome. **Tile-town** is the product Map / Home peek / Friends strip base
-> (founder lock 2026-10-14). **Soft Pixel** is accents-only *on* tile-town
-> (pins / seals / Memo) — it is no longer the map base. **Cream-notebook**
+> chrome, with the 2026-10-19 v5 cream/ink/stroke lock below. **Tile-town** is
+> the product Map / Home peek / Friends strip base (founder lock 2026-10-14).
+> The 2026-10-19 founder decision replaces the Home hero and Map tab with a
+> full-pixel **isometric** tile town; that renderer is a follow-up PR. **Soft
+> Pixel** is accents-only *on* tile-town (pins / seals / Memo). **Cream-notebook**
 > tokens are legacy-surface-only. See "Tile Town", "Atlas Postcard Tokens",
 > and "Legacy Cream-Notebook Tokens" below.
 
@@ -124,10 +126,14 @@ Rules:
   Source-only clues still have no pin.
 - Tile-town is nearest-neighbor integer tiles (`SaveTileTownRaster`): buildings,
   roofs, trees, water, and roads are crisp cells. No anti-aliased vector houses
-  or curved roads.
+  or curved roads. Do not blurry-upscale pixel art.
+- **2026-10-19:** Home hero and Map become a full-pixel isometric tile town
+  (place-memory, not navigation). Pins and saved stamps stay tappable. The
+  isometric renderer is sequenced after this chrome/token PR.
 - App Store frames and product UI share this town. In-app **titles** (Savvy
-  wordmark, Passport header) use `SavePixelDisplayText`. Body copy stays
-  `SaveAtlasType`.
+  wordmark, page titles, stamp names) use `SavePixelDisplayText` /
+  `SavePixelType` (Pixelify Sans Latin + Fusion Pixel CJK). Body copy stays
+  San Francisco via `SaveAtlasType`.
 
 ### Soft Pixel accents (on tile-town)
 
@@ -150,9 +156,11 @@ Rules:
   replacing Atlas paper cards, type, or kraft chips wholesale; a one-off
   16-bit city asset as a silent MapKit substitute.
 - Root tabs stay production Home / Map / + / Friends / Passport
-  (`Primary Navigation`). Tab shell is a flat full-width pixel bar with quiet
-  line icons — not a floating rounded glass capsule. Coral marks the
-  selected tab only. The center `+` is a coral circle on every screen.
+  (`Primary Navigation`). Tab shell is a flat full-width cream bar
+  (`#FFF9EB`) with a hard 2px `#C9AF8B` top rule, 24px pixel line icons,
+  coral on the active destination, and a coral `+` circle with no visible
+  "Save" label. Not a floating rounded glass capsule. VoiceOver still names
+  the capture control.
 - Seals never show raw hex, debug IDs, or pipeline tokens in primary UI
   (see Evidence Receipt).
 - Stamp language is one system: illustrated pixel stamp art (`SaveKraftStamp`
@@ -267,28 +275,32 @@ table ever disagree, fix whichever one drifted in the same PR.
 
 | Role | Token | Light | Dark | Use |
 | --- | --- | --- | --- | --- |
-| Canvas | `SaveAtlasPalette.canvas` | `#FDF8F3` | `#11161C` | Full-screen Atlas background |
-| Paper | `SaveAtlasPalette.paper` | `#FFFDF7` | `#1B2027` | Cards, panels, drawer sheets (`saveAtlasPaper`) |
+| Canvas | `SaveAtlasPalette.canvas` | `#FFF9EB` | `#11161C` | Full-screen Atlas background |
+| Paper | `SaveAtlasPalette.paper` | `#FFF9EB` | `#1B2027` | Cards, panels, drawer sheets (`saveAtlasPaper`) |
 | Forest | `SaveAtlasPalette.forest` | `#0E4A33` | `#B9E0C9` | Display headings, ticket titles, confirmed accent |
-| Ink | `SaveAtlasPalette.ink` | `#2E2117` | `#FFF8ED` | Primary text, shadows at low opacity |
+| Ink | `SaveAtlasPalette.ink` | `#2F2E23` | `#F4F1E4` | Primary text, shadows at low opacity |
 | Muted | `SaveAtlasPalette.muted` | `#62594F` | `#CFC4B8` | Supporting and secondary copy |
 | Coral | `SaveAtlasPalette.coral` | `#F26B4A` | `#D97861` | Postage accent: primary CTA, source-clue state |
 | Mint | `SaveAtlasPalette.mint` | `#D6E8C4` | `#4F7258` | Confirmed / saved state fills |
 | Sky | `SaveAtlasPalette.sky` | `#B5E3F5` | `#3F758B` | Review state fills |
 | Lavender | `SaveAtlasPalette.lavender` | `#E3D6F7` | `#57466F` | Premium and soft brand accent |
-| Kraft | `SaveAtlasPalette.kraft` | `#F0CFA1` | `#71543C` | Chips, tags, Passport spine, neutral fills |
+| Kraft | `SaveAtlasPalette.kraft` | `#EADDC6` | `#71543C` | Chips, tags, Passport spine, neutral fills |
+| Kraft light | `SaveAtlasPalette.kraftLight` | `#F0E3CA` | `#5A4E3C` | Upper kraft range, stamp fills |
 | Honey | `SaveAtlasPalette.honey` | `#FFCC4F` | `#A87328` | Stamp emphasis, highlights |
-| Line | `SaveAtlasPalette.line` | `#A68F78` | `#807365` | Hairline strokes, postmark linework |
+| Stroke / line | `SaveAtlasPalette.stroke` / `.line` | `#C9AF8B` | `#8A7358` | Hard 2px strokes (`strokeWidth`) |
+| Card radius | `SaveAtlasPalette.cardRadius` | `6` | `6` | Default paper corner |
 
-Tile-town materials live in `SaveTileTownPalette` (code wins). Grass `#8FBF6A`,
-water `#7EC8E3`, road `#F4E6C8`, roofs coral/honey/sky, house paper `#FFF8E8`.
-Do not treat these as Atlas paper substitutes for tickets or chrome.
+Tile-town materials live in `SaveTileTownPalette` (code wins). Sampled from the
+v5 isometric mocks: grass `#6BB34A`, water `#3DB5DC`, road `#E8D5A3`, roofs
+terracotta/honey/sky, house paper `#F3E6C8`. Do not treat these as Atlas paper
+substitutes for tickets or chrome.
 
 Palette rules:
 
 - Canvas is the page; paper is the object. Panels sit on canvas as
-  `SaveAtlasPalette.paper` with a `line` stroke at roughly 0.28 to 0.70
-  opacity (`saveAtlasPaper(radius:shadow:)` is the standard treatment).
+  `SaveAtlasPalette.paper` with a hard `stroke` at `strokeWidth` 2pt
+  (`saveAtlasPaper(radius:shadow:)` is the standard treatment; default
+  radius is `cardRadius` ~6).
 - Forest is the Atlas "brand ink" for headings and ticket titles; body copy
   uses `ink`, support copy uses `muted`.
 - State colors keep the legacy nouns: mint means confirmed/saved, sky means
@@ -305,9 +317,9 @@ accept `relativeTo:`, and editorial scales relative to headline.
 
 | Role | Token | Face | Use |
 | --- | --- | --- | --- |
-| Pixel display | `SavePixelDisplayText` | 5×7 nearest-neighbor | Savvy wordmark, Passport header |
-| Pixel chrome | `SavePixelChromeIcon` | 8×8 nearest-neighbor | Quiet Home header Trips / Saves / More |
-| Display | `SaveAtlasType.display(_:)` | System Rounded Semibold | Hero numerals, action labels, display moments |
+| Pixel display | `SavePixelDisplayText` / `SavePixelType` | Pixelify Sans + Fusion Pixel CJK | Savvy wordmark, page titles, stamp names. OFL. Zpix is not bundled (commercial). |
+| Pixel chrome | `SavePixelChromeIcon` | 8×8 nearest-neighbor | Quiet Home header Trips / Saves / More and 24px root tab icons |
+| Display | `SaveAtlasType.display(_:)` | System Rounded Semibold (SF) | Hero numerals, action labels, display moments |
 | Strong | `SaveAtlasType.strong(_:)` | System Rounded Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
 | Body | `SaveAtlasType.body(_:)` | System Rounded Medium | Body and detail copy |
 | Regular | `SaveAtlasType.regular(_:)` | System Rounded Regular | Captions, subtitles, count labels |
@@ -625,10 +637,12 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 ### Primary Navigation
 
 - Root controls are Home / Map / + / Friends / Passport, in that order.
-- Tab bible: flat full-width pixel bar; quiet line icons (`house`, `map`,
-  `plus`, `person.2`, `book.closed`); coral on the active destination only;
-  the center `+` is a coral circle on every screen. Do not use a mint
-  selection pill or a floating rounded capsule.
+- Tab bible: flat full-width cream bar (`canvas`) with a hard 2px `stroke`
+  top rule; 24px pixel line icons (`SavePixelChromeIcon`: house, map, plus,
+  people, booklet); coral on the active destination only; the center `+` is
+  a coral circle with no visible "Save" label, but VoiceOver and
+  `root.tab.save` keep the capture name. Do not use a mint selection pill or
+  a floating rounded capsule.
 - Home owns waiting clues and recent Map Stamps, with a tile-town peek. The
   full private library stays reachable from More → Manage saved places and
   from quiet Home search. Do not add a duplicate Saves tab.
@@ -665,6 +679,11 @@ the review queue.
 Reduce Motion, VoiceOver and accessibility text sizes use the same static
 list. Existing distance/newest ordering remains the ordering within matching
 results.
+
+Density cuts proposed in the 2026-10-19 packet (removing Home search plus the
+three round header buttons, Passport social counts, and the Map search sheet)
+are **not approved**. Head of Product must OK them before any of those
+controls leave the product.
 
 ### Sign-In
 

@@ -21,10 +21,67 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(bar.contains("AtlasPalette.coral"))
         XCTAssertFalse(bar.contains("AtlasPalette.mint.opacity(0.62)"))
         XCTAssertTrue(bar.contains("selection == item"))
+        XCTAssertTrue(bar.contains("hidesTitle"))
+        XCTAssertTrue(bar.contains("AtlasPalette.strokeWidth"))
+        XCTAssertTrue(bar.contains("iconView"))
+        XCTAssertEqual(AtlasTabBarMetrics.raisedControlStrokeWidth, 0)
+        XCTAssertEqual(AtlasPalette.strokeWidth, 2)
+        let root = try source(at: "SAV-E/App/ContentView.swift")
+        XCTAssertTrue(root.contains("hidesTitle: { $0.isCaptureControl }"))
+        XCTAssertTrue(root.contains("SavePixelChromeIcon("))
+        XCTAssertTrue(root.contains("pointSize: 24"))
         let design = try source(at: "DESIGN.md")
         XCTAssertTrue(design.contains("coral on the active destination only"))
         XCTAssertTrue(design.contains("full-pixel tile-town"))
         XCTAssertTrue(design.contains("superseded for the map base"))
+        XCTAssertTrue(design.contains("no visible \"Save\" label"))
+    }
+
+    func testCaptureTabKeepsAccessibilityNameWithoutVisibleSaveLabel() throws {
+        XCTAssertEqual(SaveRootTab.capture.atlasTitle, "Save")
+        XCTAssertEqual(SaveRootTab.capture.title(language: .english), "Save")
+        XCTAssertEqual(SaveRootTab.capture.title(language: .traditionalChinese), "收藏")
+        let bar = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
+        XCTAssertTrue(bar.contains(".accessibilityLabel(displayTitle?(item) ?? item[keyPath: title])"))
+        XCTAssertTrue(bar.contains("if !hidesTitle(item)"))
+        XCTAssertTrue(bar.contains("root.tab"))
+    }
+
+    func testTownPinsRemainTappableOnHomeAndMap() throws {
+        let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
+        XCTAssertTrue(town.contains("map.tilePin.\\(pin.id.uuidString)"))
+        XCTAssertTrue(town.contains("showsPins"))
+        let home = try source(at: "SAV-E/Views/TileTown/SaveTileTownHomeView.swift")
+        XCTAssertTrue(home.contains("home.tileTown"))
+        XCTAssertTrue(home.contains("SaveTileTownCanvas"))
+    }
+
+    func testPixelDisplayFontIsOFLWithCJKFallbackAndSFBody() throws {
+        let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
+        XCTAssertTrue(theme.contains("enum SavePixelType"))
+        XCTAssertTrue(theme.contains("PixelifySans-SemiBold"))
+        XCTAssertTrue(theme.contains("Fusion-Pixel-12px-Prop-zh-Hant-Regular"))
+        XCTAssertTrue(theme.contains("kCTFontCascadeListAttribute"))
+        XCTAssertTrue(theme.contains("UIFontMetrics"))
+        XCTAssertTrue(theme.contains("fontDescriptor.withDesign(.rounded)"))
+        XCTAssertFalse(theme.contains("Zpix"))
+        XCTAssertFalse(theme.contains("zpix"))
+        let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
+        XCTAssertTrue(stamp.contains("SavePixelType.display"))
+        XCTAssertTrue(stamp.contains("SavePixelType.regular"))
+        XCTAssertTrue(stamp.contains("struct SavePixelDisplayText"))
+        XCTAssertTrue(stamp.contains("Text(text)"))
+        XCTAssertFalse(stamp.contains("private static let glyphs"))
+        let readme = try source(at: "SAV-E/Resources/PixelFont/README.md")
+        XCTAssertTrue(readme.contains("SIL Open Font License"))
+        XCTAssertTrue(readme.contains("Zpix"))
+        XCTAssertTrue(readme.contains("not bundled"))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent("SAV-E/Resources/PixelFont/zpix.ttf").path
+        ))
+        let info = try source(at: "SAV-E/Info.plist")
+        XCTAssertTrue(info.contains("PixelFont/PixelifySans-Regular.ttf"))
+        XCTAssertTrue(info.contains("PixelFont/fusion-pixel-12px-proportional-zh_hant.otf"))
     }
 
     func testHomeChromeOmitsMapLensesAndKeepsSearch() throws {
@@ -183,9 +240,13 @@ final class SaveTileTownLockTests: XCTestCase {
     func testThemeOwnsTileTownMaterials() throws {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
         XCTAssertTrue(theme.contains("enum SaveTileTownPalette"))
-        XCTAssertTrue(theme.contains("8FBF6A"))
-        XCTAssertTrue(theme.contains("7EC8E3"))
-        XCTAssertTrue(theme.contains("F4E6C8"))
+        XCTAssertTrue(theme.contains("6BB34A"))
+        XCTAssertTrue(theme.contains("3DB5DC"))
+        XCTAssertTrue(theme.contains("E8D5A3"))
+        XCTAssertTrue(theme.contains("FFF9EB"))
+        XCTAssertTrue(theme.contains("2F2E23"))
+        XCTAssertTrue(theme.contains("EADDC6"))
+        XCTAssertTrue(theme.contains("C9AF8B"))
         XCTAssertFalse(theme.contains("FFF8EE"))
     }
 

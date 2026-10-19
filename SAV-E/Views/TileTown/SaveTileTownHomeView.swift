@@ -101,6 +101,7 @@ struct SaveTileTownHomeView: View {
     ) -> some View {
         Button(action: action) {
             SavePixelChromeIcon(kind: kind, pointSize: 16)
+                .foregroundStyle(SaveAtlasPalette.forest)
                 .frame(width: 44, height: 44)
                 .background(SaveAtlasPalette.paper)
                 .overlay {

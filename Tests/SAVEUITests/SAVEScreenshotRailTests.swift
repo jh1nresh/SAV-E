@@ -521,6 +521,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertTrue(tab.waitForExistence(timeout: stepTimeout))
             XCTAssertGreaterThanOrEqual(tab.frame.height, 44)
         }
+        XCTAssertEqual(rootTabButton("Save", app: app).label, "Save")
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'root.tab.'")).count, 5)
         XCTAssertFalse(rootTabButton("Plan", app: app).exists)
         for pair in zip(tabs, tabs.dropFirst()) {

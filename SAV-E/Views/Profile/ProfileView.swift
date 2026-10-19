@@ -2304,7 +2304,7 @@ private struct PassportTileTownCollection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             SavePixelDisplayText(
-                text: languageSettings.localized(english: "Passport", traditionalChinese: "PASSPORT"),
+                text: languageSettings.localized(english: "Passport", traditionalChinese: "護照"),
                 pointSize: 24
             )
             .accessibilityLabel(languageSettings.localized(english: "Passport", traditionalChinese: "護照"))

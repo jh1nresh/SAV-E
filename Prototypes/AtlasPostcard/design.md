@@ -185,16 +185,18 @@ Light hexes match the production `SaveAtlasPalette` light column in
 production wins.
 
 ```text
-canvas      #FDF8F3
-paper       #FFFDF7
+canvas      #FFF9EB
+paper       #FFF9EB
 forest      #0E4A33
-ink         #2E2117
+ink         #2F2E23
 muted       #62594F
 coral       #F26B4A
 mint        #D6E8C4
 sky         #B5E3F5
 lavender    #E3D6F7
-kraft       #F0CFA1
+kraft       #EADDC6
+kraft light #F0E3CA
+stroke      #C9AF8B
 route ink   #403B33
 ```
 
@@ -211,7 +213,8 @@ geography, never competing primary actions.
 - Envelope uses a different silhouette from cards.
 - Ticket overlap is deliberate: adjacent tickets overlap by 4–8 pt and the
   envelope mouth overlaps the final ticket. Flat separated rows fail fidelity.
-- Tab active state is one pale mint lozenge.
+- Tab active state is coral on the destination icon and label. The bar is a
+  flat cream slab with a 2px kraft stroke, not a mint lozenge or glass pill.
 - Shadows stay under 8% opacity.
 
 ## Anti-slop gate
