@@ -6,11 +6,8 @@ Keeps:
 - Taiwan MOE 常用國字標準字體表 (4808)
 - CJK / fullwidth punctuation used next to titles
 
-The 4808 table lives in scripts/doodle-fonts/ so charset .txt files
-are not copied into the DisplayFont app bundle. Missing glyphs fall
-through to PingFang TC via kCTFontCascadeListAttribute.
-
-Founder accepted the 3.48 MB TTF. Do not shrink further.
+Target: Iansui-SavvySubset.ttf <= 1.5 MB. Missing glyphs fall through
+to PingFang TC via kCTFontCascadeListAttribute.
 """
 
 from __future__ import annotations
@@ -18,7 +15,6 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 # Titles and city-switcher copy that must render in Iansui, not fallback.
@@ -58,36 +54,21 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     repo = Path(__file__).resolve().parents[1]
     fonts = repo / "SAV-E/Resources/DisplayFont"
-    tables = repo / "scripts/doodle-fonts"
     parser.add_argument(
         "--src",
         type=Path,
         help="Upstream Iansui-Regular.ttf (v1.020). Not committed; download from GitHub releases.",
     )
-    parser.add_argument("--edu", type=Path, default=tables / "edu-standard-4808.txt")
+    parser.add_argument("--edu", type=Path, default=fonts / "edu-standard-4808.txt")
     parser.add_argument("--out", type=Path, default=fonts / "Iansui-SavvySubset.ttf")
-    parser.add_argument(
-        "--charset-out",
-        type=Path,
-        default=None,
-        help="Optional charset dump. Defaults to a temp file so DisplayFont stays font-only.",
-    )
+    parser.add_argument("--charset-out", type=Path, default=fonts / "iansui-savvy-charset.txt")
     args = parser.parse_args()
     if args.src is None:
         parser.error(" --src Iansui-Regular.ttf is required (download v1.020 from ButTaiwan/iansui)")
 
     text = charset(args.edu)
-    cleanup = False
-    if args.charset_out is not None:
-        charset_path = args.charset_out
-        charset_path.parent.mkdir(parents=True, exist_ok=True)
-        charset_path.write_text(text + "\n", encoding="utf-8")
-    else:
-        tmp = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8")
-        tmp.write(text + "\n")
-        tmp.close()
-        charset_path = Path(tmp.name)
-        cleanup = True
+    charset_path = args.charset_out or args.out.with_suffix(".charset.txt")
+    charset_path.write_text(text + "\n", encoding="utf-8")
 
     # Handwritten Iansui outlines dominate size. Drop hinting, vertical
     # metrics, and GSUB/GPOS so 4808 glyphs stay as small as a TTF allows.
@@ -106,13 +87,16 @@ def main() -> int:
         "--layout-features=",
         "--drop-tables+=FFTM,DSIG,LTSH,hdmx,VDMX,PCLT,gasp,BASE,GDEF,GPOS,GSUB,vhea,vmtx,JSTF,MATH",
     ]
-    try:
-        subprocess.check_call(cmd)
-    finally:
-        if cleanup:
-            charset_path.unlink(missing_ok=True)
+    subprocess.check_call(cmd)
     size = args.out.stat().st_size
     print(f"wrote {args.out} ({size} bytes, {len(text)} chars)")
+    if size > 1_500_000:
+        print(
+            f"warning: subset is {size} bytes; spec target is <= 1.5 MB. "
+            "glyf outlines for 4808 handwritten glyphs do not compress further "
+            "in TTF. Missing glyphs still cascade to PingFang TC.",
+            file=sys.stderr,
+        )
     return 0
 
 

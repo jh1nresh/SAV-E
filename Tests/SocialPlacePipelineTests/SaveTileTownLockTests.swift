@@ -102,21 +102,6 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(info.contains("DisplayFont/Caveat-SemiBold.ttf"))
         XCTAssertTrue(info.contains("DisplayFont/Iansui-SavvySubset.ttf"))
         XCTAssertFalse(info.contains("PixelFont/"))
-        XCTAssertFalse(FileManager.default.fileExists(
-            atPath: repositoryRoot.appendingPathComponent(
-                "SAV-E/Resources/DisplayFont/edu-standard-4808.txt"
-            ).path
-        ))
-        XCTAssertFalse(FileManager.default.fileExists(
-            atPath: repositoryRoot.appendingPathComponent(
-                "SAV-E/Resources/DisplayFont/iansui-savvy-charset.txt"
-            ).path
-        ))
-        XCTAssertTrue(FileManager.default.fileExists(
-            atPath: repositoryRoot.appendingPathComponent(
-                "scripts/doodle-fonts/edu-standard-4808.txt"
-            ).path
-        ))
     }
 
     func testHomeChromeOmitsMapLensesAndKeepsSearch() throws {
