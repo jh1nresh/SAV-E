@@ -4,6 +4,7 @@ import UIKit
 
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.appLanguageSettings) private var languageSettings
     @StateObject private var viewModel = ProfileViewModel()
@@ -458,6 +459,12 @@ struct ProfileView: View {
             isPresented: $showDeleteAccountConfirmation,
             titleVisibility: .visible
         ) {
+            if let manageSubscriptionsURL = URL(string: SAVEProAccessPolicy.Legal.manageSubscriptionsURL) {
+                Button(languageSettings.localized(english: "Manage Apple Subscriptions", traditionalChinese: "管理 Apple 訂閱")) {
+                    openURL(manageSubscriptionsURL)
+                }
+                .accessibilityIdentifier("profile.deleteAccount.manageSubscriptions")
+            }
             Button(
                 languageSettings.localized(english: "Delete Account", traditionalChinese: "刪除帳號"),
                 role: .destructive
@@ -467,8 +474,8 @@ struct ProfileView: View {
             Button(languageSettings.localized(english: "Cancel", traditionalChinese: "取消"), role: .cancel) {}
         } message: {
             Text(languageSettings.localized(
-                english: "This deletes your Savvy account and saved places. This cannot be undone.",
-                traditionalChinese: "這會刪除你的 Savvy 帳號與已儲存地點，而且無法復原。"
+                english: "This permanently deletes your Savvy account and saved places. Deleting your account does not cancel Apple subscriptions. If you have an active subscription, cancel it in Apple subscription settings first to avoid further charges. A new Savvy account will not automatically inherit Pro.",
+                traditionalChinese: "這會永久刪除你的 Savvy 帳號與已儲存地點，無法復原。刪除帳號不會取消 Apple 訂閱。若有有效訂閱，請先到 Apple 管理訂閱取消，以免繼續扣款。新的 Savvy 帳號不會自動繼承 Pro。"
             ))
         }
     }
