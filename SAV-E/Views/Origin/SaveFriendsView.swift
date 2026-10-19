@@ -13,10 +13,10 @@ struct SaveFriendsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                SavePixelDisplayText(text: "Savvy", pointSize: 28)
+                SaveDisplayTitle(text: "Savvy", pointSize: 28)
 
                 HStack {
-                    SavePixelDisplayText(
+                    SaveDisplayTitle(
                         text: language.localized(english: "Friends", traditionalChinese: "朋友"),
                         pointSize: 22
                     )

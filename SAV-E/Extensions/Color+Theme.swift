@@ -2,6 +2,33 @@ import CoreText
 import SwiftUI
 import UIKit
 
+/// 8pt spacing scale for the doodle journal. Allowed values: 4 / 8 / 12 / 16 / 24 / 32 / 48.
+enum SaveSpace {
+    static let tight: CGFloat = 4
+    static let xs: CGFloat = 8
+    static let sm: CGFloat = 12
+    static let md: CGFloat = 16
+    static let lg: CGFloat = 24
+    static let xl: CGFloat = 32
+    static let xxl: CGFloat = 48
+}
+
+enum SaveLayout {
+    static let screenMargin: CGFloat = 24
+    static let rowMinHeight: CGFloat = 64
+    static let rowVerticalPadding: CGFloat = 12
+    static let stickerBox: CGFloat = 48
+    static let stickerToText: CGFloat = 12
+    static let numberBadge: CGFloat = 24
+    static let titleToMeta: CGFloat = 4
+    static let sectionGap: CGFloat = 24
+    static let cardPadding: CGFloat = 16
+    static let cardGap: CGFloat = 16
+    static let minTap: CGFloat = 44
+    static let buttonHeight: CGFloat = 48
+    static let chipHeight: CGFloat = 32
+}
+
 enum SaveTheme {
     enum Colors {
         static let nearBlack = Color(hex: "050403")
@@ -10,19 +37,14 @@ enum SaveTheme {
         static let amber = Color(hex: "FFD66B")
     }
 
-    /// Shared spacing scale per DESIGN.md "Shape, Stroke, Spacing".
-    /// Compact rows 8-10, cards 12-18, sheet sections 14-16.
+    /// Compatibility aliases for the 8pt `SaveSpace` scale.
+    /// `xl` was the off-grid 22; it now maps to `SaveSpace.lg` (24).
     enum Spacing {
-        /// Tight icon/text gaps inside chips and badges.
-        static let xs: CGFloat = 4
-        /// Compact row internal spacing.
-        static let sm: CGFloat = 8
-        /// Default card padding.
-        static let md: CGFloat = 12
-        /// Comfortable card / sheet section padding.
-        static let lg: CGFloat = 16
-        /// Large notebook or Passport panel padding.
-        static let xl: CGFloat = 22
+        static let xs = SaveSpace.tight
+        static let sm = SaveSpace.xs
+        static let md = SaveSpace.sm
+        static let lg = SaveSpace.md
+        static let xl = SaveSpace.lg
     }
 
     enum Elevation {
@@ -173,9 +195,9 @@ extension Color {
 }
 
 enum SaveAtlasPalette {
-    /// Founder lock 2026-10-19 v5 cream page.
-    static let canvas = Color(light: "FFF9EB", dark: "11161C")
-    static let paper = Color(light: "FFF9EB", dark: "1B2027")
+    /// Doodle journal lock 2026-10-19. Warm paper, warm charcoal dark.
+    static let canvas = Color(light: "FFF9EB", dark: "1E1C19")
+    static let paper = Color(light: "FFF9EB", dark: "1E1C19")
     static let forest = Color(light: "0E4A33", dark: "B9E0C9")
     static let ink = Color(light: "2F2E23", dark: "F4F1E4")
     static let muted = Color(light: "62594F", dark: "CFC4B8")
@@ -183,14 +205,24 @@ enum SaveAtlasPalette {
     static let mint = Color(light: "D6E8C4", dark: "4F7258")
     static let sky = Color(light: "B5E3F5", dark: "3F758B")
     static let lavender = Color(light: "E3D6F7", dark: "57466F")
-    static let kraft = Color(light: "EADDC6", dark: "71543C")
-    static let kraftLight = Color(light: "F0E3CA", dark: "5A4E3C")
+    static let kraft = Color(light: "EADDC6", dark: "4A3F32")
+    static let kraftLight = Color(light: "F0E3CA", dark: "3A332A")
     static let honey = Color(light: "FFCC4F", dark: "A87328")
-    /// Hard 2pt stroke. Alias of `line`.
-    static let stroke = Color(light: "C9AF8B", dark: "8A7358")
+    /// 1pt hairline. Alias of `line`.
+    static let stroke = Color(light: "DCCFB9", dark: "4A443B")
     static let line = stroke
-    static let cardRadius: CGFloat = 6
-    static let strokeWidth: CGFloat = 2
+    static let cardRadius: CGFloat = 12
+    static let strokeWidth: CGFloat = 1
+}
+
+/// Hand-drawn extras. Coral stays the only CTA / pin / + color.
+/// Do not add muted-map or overlay tokens; Map stays native Apple Maps.
+enum SaveDoodle {
+    static let pencil = Color(light: "A39C8E", dark: "8A8478")
+    static let washGreen = Color(light: "D3E4C1", dark: "3E5236")
+    static let washBlue = Color(light: "D2E6EC", dark: "33505A")
+    static let stampRed = Color(light: "C8372D", dark: "E0675C")
+    static let stampGold = Color(light: "B8902F", dark: "D9B45A")
 }
 
 /// Full-pixel tile-town materials (founder lock 2026-10-14).
@@ -258,21 +290,20 @@ enum SaveAtlasType {
     }
 }
 
-/// Pixel display face for the logo and page titles. Stamp names stay
-/// `SaveAtlasType` until the shared stamp PR. Body copy stays San Francisco.
-enum SavePixelType {
-    static let latinRegularName = "PixelifySans-Regular"
-    static let latinSemiboldName = "PixelifySans-SemiBold"
-    static let cjkName = "Fusion-Pixel-12px-Prop-zh-Hant-Regular"
+/// Caveat (Latin) + Iansui (CJK subset) for the logo and page titles.
+/// Stamp names stay `SaveAtlasType` until the shared stamp PR. Body copy
+/// stays San Francisco via `SaveAtlasType`.
+enum SaveDisplayType {
+    static let latinName = "Caveat-SemiBold"
+    static let cjkName = "Iansui-Regular"
 
     private static let register: Void = {
         let files: [(String, String)] = [
-            ("PixelifySans-Regular", "ttf"),
-            ("PixelifySans-SemiBold", "ttf"),
-            ("fusion-pixel-12px-proportional-zh_hant", "otf"),
+            ("Caveat-SemiBold", "ttf"),
+            ("Iansui-SavvySubset", "ttf"),
         ]
         for (name, ext) in files {
-            let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "PixelFont")
+            let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "DisplayFont")
                 ?? Bundle.main.url(forResource: name, withExtension: ext)
             if let url {
                 CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
@@ -284,14 +315,7 @@ enum SavePixelType {
         _ size: CGFloat,
         relativeTo style: Font.TextStyle = .title
     ) -> Font {
-        Font(scaledFont(size: size, name: latinSemiboldName, relativeTo: style))
-    }
-
-    static func regular(
-        _ size: CGFloat,
-        relativeTo style: Font.TextStyle = .callout
-    ) -> Font {
-        Font(scaledFont(size: size, name: latinRegularName, relativeTo: style))
+        Font(scaledFont(size: size, name: latinName, relativeTo: style))
     }
 
     private static func scaledFont(
@@ -302,22 +326,23 @@ enum SavePixelType {
         _ = register
         let latin = UIFont(name: name, size: size)
             ?? UIFont.systemFont(ofSize: size, weight: .semibold)
-        let font: UIFont
+        var cascade: [UIFontDescriptor] = []
         if let cjk = UIFont(name: cjkName, size: size) {
+            cascade.append(cjk.fontDescriptor)
+        }
+        if let pingFang = UIFont(name: "PingFangTC-Regular", size: size) {
+            cascade.append(pingFang.fontDescriptor)
+        }
+        let font: UIFont
+        if cascade.isEmpty {
+            font = latin
+        } else {
             let descriptor = latin.fontDescriptor.addingAttributes([
-                UIFontDescriptor.AttributeName(rawValue: kCTFontCascadeListAttribute as String): [
-                    cjk.fontDescriptor,
-                ],
+                UIFontDescriptor.AttributeName(rawValue: kCTFontCascadeListAttribute as String): cascade,
             ])
             font = UIFont(descriptor: descriptor, size: size)
-        } else {
-            font = latin
         }
-        // Dynamic Type must keep integer pixel sizes so the face does not
-        // blur between designed pixel grid steps.
-        let scaled = UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: font)
-        let pixelSize = max(1, scaled.pointSize.rounded())
-        return scaled.withSize(pixelSize)
+        return UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: font)
     }
 }
 
@@ -469,45 +494,18 @@ struct SaveIconTile: View {
     }
 }
 
+/// Canvas plus a tiled `PaperGrain` / `PaperGrainDark` asset.
+/// The checked-in tiles are placeholders from `scripts/generate-paper-grain.py`
+/// until DESIGN ships the official 256pt grain.
 struct SaveDottedBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
-        Color.saveNotebookBackground
+        SaveAtlasPalette.canvas
             .overlay {
-                LinearGradient(
-                    colors: [
-                        Color.saveBlush.opacity(0.38),
-                        Color.clear,
-                        Color.saveSky.opacity(0.18),
-                        Color.saveLeaf.opacity(0.20)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .allowsHitTesting(false)
-            }
-            .overlay {
-                LinearGradient(
-                    colors: [
-                        Color.white.opacity(0.26),
-                        Color.clear,
-                        Color.saveNotebookSpine.opacity(0.10)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .allowsHitTesting(false)
-            }
-            .overlay {
-                Canvas { context, size in
-                    let spacing: CGFloat = 18
-                    for x in stride(from: CGFloat(8), through: size.width, by: spacing) {
-                        for y in stride(from: CGFloat(8), through: size.height, by: spacing) {
-                            let rect = CGRect(x: x, y: y, width: 2, height: 2)
-                            context.fill(Path(ellipseIn: rect), with: .color(Color.saveNotebookLine.opacity(0.055)))
-                        }
-                    }
-                }
-                .allowsHitTesting(false)
+                Image(colorScheme == .dark ? "PaperGrainDark" : "PaperGrain")
+                    .resizable(resizingMode: .tile)
+                    .allowsHitTesting(false)
             }
     }
 }

@@ -2135,7 +2135,7 @@ private struct PassportTopBar: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                SavePixelDisplayText(text: "Savvy", pointSize: 22)
+                SaveDisplayTitle(text: "Savvy", pointSize: 22)
                     .accessibilityLabel("Savvy")
                     .accessibilityIdentifier("profile.brandLogo")
                 Text(languageSettings.localized(english: "Your personal atlas", traditionalChinese: "你的私人地點圖鑑"))
@@ -2303,7 +2303,7 @@ private struct PassportTileTownCollection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SavePixelDisplayText(
+            SaveDisplayTitle(
                 text: languageSettings.localized(english: "Passport", traditionalChinese: "護照"),
                 pointSize: 24
             )

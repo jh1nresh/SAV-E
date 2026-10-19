@@ -63,7 +63,7 @@ struct SaveTileTownHomeView: View {
     private var header: some View {
         HStack(spacing: 9) {
             Button(action: presentation.onOpenPassport) {
-                SavePixelDisplayText(text: "Savvy", pointSize: 28)
+                SaveDisplayTitle(text: "Savvy", pointSize: 28)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(localized("Open Savvy Passport", "開啟 Savvy 護照"))

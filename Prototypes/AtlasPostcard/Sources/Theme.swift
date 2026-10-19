@@ -7,11 +7,11 @@ enum AtlasMetrics {
 }
 
 enum AtlasSpacing {
-    static let tight: CGFloat = 4
-    static let compact: CGFloat = 8
-    static let control: CGFloat = 12
-    static let content: CGFloat = 16
-    static let section: CGFloat = 24
+    static let tight = SaveSpace.tight
+    static let compact = SaveSpace.xs
+    static let control = SaveSpace.sm
+    static let content = SaveSpace.md
+    static let section = SaveSpace.lg
 }
 
 enum AtlasElevation {
@@ -38,10 +38,10 @@ enum AtlasPalette {
     static let honey = Color(atlasHex: 0xFFCC4F)
     /// Prototype-only route stroke; no production twin.
     static let routeInk = Color(atlasHex: 0x403B33)
-    static let stroke = Color(atlasHex: 0xC9AF8B)
+    static let stroke = Color(atlasHex: 0xDCCFB9)
     static let line = stroke
-    static let cardRadius: CGFloat = 6
-    static let strokeWidth: CGFloat = 2
+    static let cardRadius: CGFloat = 12
+    static let strokeWidth: CGFloat = 1
 }
 
 private extension Color {

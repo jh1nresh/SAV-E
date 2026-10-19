@@ -407,16 +407,16 @@ struct SavePixelChromeIcon: View {
     }
 }
 
-/// Pixelify Sans (Latin) + Fusion Pixel (CJK) for Savvy and page titles.
+/// Caveat (Latin) + Iansui (CJK subset) for Savvy and page titles.
 /// Stamp names stay `SaveAtlasType` until the shared stamp PR. Body copy stays SF.
-struct SavePixelDisplayText: View {
+struct SaveDisplayTitle: View {
     let text: String
     var pointSize: CGFloat = 22
     var relativeTo: Font.TextStyle = .title
 
     var body: some View {
         Text(text)
-            .font(SavePixelType.display(pointSize, relativeTo: relativeTo))
+            .font(SaveDisplayType.display(pointSize, relativeTo: relativeTo))
             .foregroundStyle(SaveAtlasPalette.forest)
             .lineLimit(2)
             .minimumScaleFactor(0.75)

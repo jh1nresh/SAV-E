@@ -37,8 +37,8 @@ targets:
           - Resources/Secrets.plist
           - Resources/Secrets.plist.template
           - Resources/SAVEPro.storekit
-          - Resources/PixelFont
-      - path: SAV-E/Resources/PixelFont
+          - Resources/DisplayFont
+      - path: SAV-E/Resources/DisplayFont
         type: folder
         buildPhase: resources
       - path: SAV-EShared
@@ -78,9 +78,8 @@ targets:
         UIUserInterfaceStyle: Light
         UIApplicationSupportsIndirectInputEvents: true
         UIAppFonts:
-          - PixelFont/PixelifySans-Regular.ttf
-          - PixelFont/PixelifySans-SemiBold.ttf
-          - PixelFont/fusion-pixel-12px-proportional-zh_hant.otf
+          - DisplayFont/Caveat-SemiBold.ttf
+          - DisplayFont/Iansui-SavvySubset.ttf
         UILaunchScreen:
           UIColorName: LaunchCanvas
         UISupportedInterfaceOrientations:

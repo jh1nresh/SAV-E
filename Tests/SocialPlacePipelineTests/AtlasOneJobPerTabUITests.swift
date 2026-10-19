@@ -636,7 +636,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(rootHeader.contains("accessibilityIdentifier(\"root.passport\")"))
         XCTAssertTrue(rootHeader.contains("Open Savvy Passport"))
         XCTAssertFalse(rootHeader.contains("MemoMascotMark"))
-        XCTAssertTrue(passportTopBar.contains("SavePixelDisplayText(text: \"Savvy\""))
+        XCTAssertTrue(passportTopBar.contains("SaveDisplayTitle(text: \"Savvy\""))
         XCTAssertTrue(passportTopBar.contains("accessibilityLabel(\"Savvy\")"))
         XCTAssertTrue(passportTopBar.contains("profile.brandLogo"))
 
