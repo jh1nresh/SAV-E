@@ -44,7 +44,11 @@ final class SaveTileTownLockTests: XCTestCase {
         let bar = try source(at: "Prototypes/AtlasPostcard/Sources/Components.swift")
         XCTAssertTrue(bar.contains(".accessibilityLabel(displayTitle?(item) ?? item[keyPath: title])"))
         XCTAssertTrue(bar.contains("if !hidesTitle(item)"))
-        XCTAssertTrue(bar.contains("root.tab"))
+        XCTAssertTrue(bar.contains("accessibilityPrefix"))
+        XCTAssertTrue(bar.contains("item[keyPath: title].lowercased()"))
+        let root = try source(at: "SAV-E/App/ContentView.swift")
+        XCTAssertTrue(root.contains("accessibilityPrefix: \"root.tab\""))
+        XCTAssertTrue(root.contains("hidesTitle: { $0.isCaptureControl }"))
     }
 
     func testTownPinsRemainTappableOnHomeAndMap() throws {
@@ -67,10 +71,10 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertFalse(theme.contains("Zpix"))
         XCTAssertFalse(theme.contains("zpix"))
         let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
-        XCTAssertTrue(stamp.contains("SavePixelType.display"))
-        XCTAssertTrue(stamp.contains("SavePixelType.regular"))
         XCTAssertTrue(stamp.contains("struct SavePixelDisplayText"))
         XCTAssertTrue(stamp.contains("Text(text)"))
+        XCTAssertTrue(stamp.contains("SavePixelType.display"))
+        XCTAssertTrue(stamp.contains("SaveAtlasType.strong(size.title)"))
         XCTAssertFalse(stamp.contains("private static let glyphs"))
         let readme = try source(at: "SAV-E/Resources/PixelFont/README.md")
         XCTAssertTrue(readme.contains("SIL Open Font License"))
@@ -240,9 +244,9 @@ final class SaveTileTownLockTests: XCTestCase {
     func testThemeOwnsTileTownMaterials() throws {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
         XCTAssertTrue(theme.contains("enum SaveTileTownPalette"))
-        XCTAssertTrue(theme.contains("6BB34A"))
-        XCTAssertTrue(theme.contains("3DB5DC"))
-        XCTAssertTrue(theme.contains("E8D5A3"))
+        XCTAssertTrue(theme.contains("8FBF6A"))
+        XCTAssertTrue(theme.contains("7EC8E3"))
+        XCTAssertTrue(theme.contains("F4E6C8"))
         XCTAssertTrue(theme.contains("FFF9EB"))
         XCTAssertTrue(theme.contains("2F2E23"))
         XCTAssertTrue(theme.contains("EADDC6"))

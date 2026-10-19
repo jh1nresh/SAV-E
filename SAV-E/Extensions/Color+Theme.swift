@@ -197,19 +197,17 @@ enum SaveAtlasPalette {
 /// These paint the product Map base and Home/Friends peeks. Soft Pixel remains
 /// the pin / seal / Memo accent language on top of this town, not the map itself.
 enum SaveTileTownPalette {
-    /// Sampled from the 2026-10-19 v5 isometric mocks. The isometric town
-    /// renderer itself is a follow-up; these materials are the token lock.
-    static let grass = Color(light: "6BB34A", dark: "3D5A32")
-    static let grassDeep = Color(light: "4E9A32", dark: "2E4526")
-    static let water = Color(light: "3DB5DC", dark: "2F5A6E")
-    static let waterDeep = Color(light: "2A8FBE", dark: "24485A")
-    static let road = Color(light: "E8D5A3", dark: "4A3F32")
-    static let roofCoral = Color(light: "D45A32", dark: "8A4A3A")
-    static let roofHoney = Color(light: "E0A04A", dark: "7A5A28")
-    static let roofSky = Color(light: "4A8BB5", dark: "3A5A6A")
-    static let housePaper = Color(light: "F3E6C8", dark: "2A2620")
-    static let tree = Color(light: "3D8A2C", dark: "2E5A28")
-    static let treeDeep = Color(light: "2C6A1E", dark: "24451C")
+    static let grass = Color(light: "8FBF6A", dark: "3D5A32")
+    static let grassDeep = Color(light: "6FA04E", dark: "2E4526")
+    static let water = Color(light: "7EC8E3", dark: "2F5A6E")
+    static let waterDeep = Color(light: "4FA8C8", dark: "24485A")
+    static let road = Color(light: "F4E6C8", dark: "4A3F32")
+    static let roofCoral = Color(light: "E07A5F", dark: "8A4A3A")
+    static let roofHoney = Color(light: "E8B86D", dark: "7A5A28")
+    static let roofSky = Color(light: "7EB6D4", dark: "3A5A6A")
+    static let housePaper = Color(light: "FFF8E8", dark: "2A2620")
+    static let tree = Color(light: "4F8A3A", dark: "2E5A28")
+    static let treeDeep = Color(light: "3A6B2C", dark: "24451C")
 }
 
 enum SaveAtlasType {
@@ -260,8 +258,8 @@ enum SaveAtlasType {
     }
 }
 
-/// Pixel display face for the logo, page titles, and stamp names.
-/// Body copy stays `SaveAtlasType` (San Francisco).
+/// Pixel display face for the logo and page titles. Stamp names stay
+/// `SaveAtlasType` until the shared stamp PR. Body copy stays San Francisco.
 enum SavePixelType {
     static let latinRegularName = "PixelifySans-Regular"
     static let latinSemiboldName = "PixelifySans-SemiBold"

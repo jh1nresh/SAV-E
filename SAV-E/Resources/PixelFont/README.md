@@ -1,7 +1,8 @@
 # Pixel display faces
 
-Used only for the Savvy wordmark, page titles, and stamp names.
-Body copy stays San Francisco via `SaveAtlasType` (system rounded).
+Used only for the Savvy wordmark and page titles. Stamp names stay
+San Francisco until the shared stamp PR. Body copy stays San Francisco
+via `SaveAtlasType` (system rounded).
 
 ## Pixelify Sans — Latin
 

@@ -74,7 +74,7 @@ struct SaveKraftStamp: View {
             .accessibilityHidden(true)
 
             Text(visibleTitle)
-                .font(SavePixelType.regular(size.title, relativeTo: .caption))
+                .font(SaveAtlasType.strong(size.title))
                 .foregroundStyle(face == .locked ? SaveAtlasPalette.muted : SaveAtlasPalette.forest)
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
@@ -139,7 +139,7 @@ struct SaveKraftStampFaceView: View {
                 SaveKraftStampPixelArt(scene: scene)
             case .locked:
                 Text("???")
-                    .font(SavePixelType.display(16, relativeTo: .title))
+                    .font(SaveAtlasType.strong(16))
                     .foregroundStyle(SaveAtlasPalette.muted)
             }
         }
@@ -407,8 +407,8 @@ struct SavePixelChromeIcon: View {
     }
 }
 
-/// Pixelify Sans (Latin) + Fusion Pixel (CJK) for Savvy / page titles / stamp names.
-/// Body copy stays `SaveAtlasType`. Scales with Dynamic Type.
+/// Pixelify Sans (Latin) + Fusion Pixel (CJK) for Savvy and page titles.
+/// Stamp names stay `SaveAtlasType` until the shared stamp PR. Body copy stays SF.
 struct SavePixelDisplayText: View {
     let text: String
     var pointSize: CGFloat = 22

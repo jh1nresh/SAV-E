@@ -131,9 +131,9 @@ Rules:
   (place-memory, not navigation). Pins and saved stamps stay tappable. The
   isometric renderer is sequenced after this chrome/token PR.
 - App Store frames and product UI share this town. In-app **titles** (Savvy
-  wordmark, page titles, stamp names) use `SavePixelDisplayText` /
-  `SavePixelType` (Pixelify Sans Latin + Fusion Pixel CJK). Body copy stays
-  San Francisco via `SaveAtlasType`.
+  wordmark, page titles) use `SavePixelDisplayText` / `SavePixelType`
+  (Pixelify Sans Latin + Fusion Pixel CJK). Stamp names stay SF Rounded until
+  the shared stamp PR. Body copy stays San Francisco via `SaveAtlasType`.
 
 ### Soft Pixel accents (on tile-town)
 
@@ -290,10 +290,10 @@ table ever disagree, fix whichever one drifted in the same PR.
 | Stroke / line | `SaveAtlasPalette.stroke` / `.line` | `#C9AF8B` | `#8A7358` | Hard 2px strokes (`strokeWidth`) |
 | Card radius | `SaveAtlasPalette.cardRadius` | `6` | `6` | Default paper corner |
 
-Tile-town materials live in `SaveTileTownPalette` (code wins). Sampled from the
-v5 isometric mocks: grass `#6BB34A`, water `#3DB5DC`, road `#E8D5A3`, roofs
-terracotta/honey/sky, house paper `#F3E6C8`. Do not treat these as Atlas paper
-substitutes for tickets or chrome.
+Tile-town materials live in `SaveTileTownPalette` (code wins). Grass `#8FBF6A`,
+water `#7EC8E3`, road `#F4E6C8`, roofs coral/honey/sky, house paper `#FFF8E8`.
+Do not treat these as Atlas paper substitutes for tickets or chrome. A v5
+isometric retune of these cells is a follow-up with the town renderer.
 
 Palette rules:
 
@@ -317,7 +317,7 @@ accept `relativeTo:`, and editorial scales relative to headline.
 
 | Role | Token | Face | Use |
 | --- | --- | --- | --- |
-| Pixel display | `SavePixelDisplayText` / `SavePixelType` | Pixelify Sans + Fusion Pixel CJK | Savvy wordmark, page titles, stamp names. OFL. Zpix is not bundled (commercial). |
+| Pixel display | `SavePixelDisplayText` / `SavePixelType` | Pixelify Sans + Fusion Pixel CJK | Savvy wordmark and page titles. OFL. Zpix is not bundled (commercial). Stamp names wait for the shared stamp PR. |
 | Pixel chrome | `SavePixelChromeIcon` | 8×8 nearest-neighbor | Quiet Home header Trips / Saves / More and 24px root tab icons |
 | Display | `SaveAtlasType.display(_:)` | System Rounded Semibold (SF) | Hero numerals, action labels, display moments |
 | Strong | `SaveAtlasType.strong(_:)` | System Rounded Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
@@ -640,9 +640,11 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 - Tab bible: flat full-width cream bar (`canvas`) with a hard 2px `stroke`
   top rule; 24px pixel line icons (`SavePixelChromeIcon`: house, map, plus,
   people, booklet); coral on the active destination only; the center `+` is
-  a coral circle with no visible "Save" label, but VoiceOver and
-  `root.tab.save` keep the capture name. Do not use a mint selection pill or
-  a floating rounded capsule.
+  a coral (`#F26B4A`) circle with no visible "Save" label, but VoiceOver and
+  `root.tab.save` keep the capture name. **DESIGN question:** the 2026-10-19
+  packet asked for a red `+` circle; this PR keeps production coral until
+  that token is decided. Do not use a mint selection pill or a floating
+  rounded capsule.
 - Home owns waiting clues and recent Map Stamps, with a tile-town peek. The
   full private library stays reachable from More → Manage saved places and
   from quiet Home search. Do not add a duplicate Saves tab.
