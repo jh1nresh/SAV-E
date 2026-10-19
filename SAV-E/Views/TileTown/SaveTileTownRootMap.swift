@@ -17,7 +17,7 @@ struct SaveTileTownRootMap: View {
             SaveAtlasPalette.canvas.ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 10) {
-                SavePixelDisplayText(text: "Savvy", pointSize: 28)
+                SaveDisplayTitle(text: "Savvy", pointSize: 28)
                     .padding(.horizontal, 16)
                     .padding(.top, AtlasMetrics.statusBarHeight)
                     .accessibilityIdentifier("map.wordmark")

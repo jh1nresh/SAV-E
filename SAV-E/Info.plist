@@ -55,9 +55,8 @@
 	<string>Light</string>
 	<key>UIAppFonts</key>
 	<array>
-		<string>PixelFont/PixelifySans-Regular.ttf</string>
-		<string>PixelFont/PixelifySans-SemiBold.ttf</string>
-		<string>PixelFont/fusion-pixel-12px-proportional-zh_hant.otf</string>
+		<string>DisplayFont/Caveat-SemiBold.ttf</string>
+		<string>DisplayFont/Iansui-SavvySubset.ttf</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict>
