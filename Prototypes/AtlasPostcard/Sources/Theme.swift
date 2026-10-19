@@ -20,25 +20,27 @@ enum AtlasElevation {
     static let cardY: CGFloat = 5
 }
 
-// Light-only mirror of the production light column in `SaveAtlasPalette`
-// (SAV-E/Extensions/Color+Theme.swift). Per DESIGN.md, production wins on
-// any mismatch — keep these hex values byte-identical to production.
+// Adaptive tokens. The light column stays the locked production hexes
+// Color(atlasHex: 0xFFF9EB) / 0x0E4A33 / 0xF26B4A / 0xB5E3F5 / 0x2F2E23 /
+// 0x62594F / 0xD6E8C4 / 0xE3D6F7 / 0xEADDC6 / 0xF0E3CA / 0xFFCC4F / 0xDCCFB9.
+// Home and Passport sit inside `ReferenceViewport`, which paints `canvas`,
+// so a light-only mirror made dark-mode captures render cream.
 enum AtlasPalette {
-    static let canvas = Color(atlasHex: 0xFFF9EB)
-    static let paper = Color(atlasHex: 0xFFF9EB)
-    static let forest = Color(atlasHex: 0x0E4A33)
-    static let ink = Color(atlasHex: 0x2F2E23)
-    static let muted = Color(atlasHex: 0x62594F)
-    static let coral = Color(atlasHex: 0xF26B4A)
-    static let mint = Color(atlasHex: 0xD6E8C4)
-    static let sky = Color(atlasHex: 0xB5E3F5)
-    static let lavender = Color(atlasHex: 0xE3D6F7)
-    static let kraft = Color(atlasHex: 0xEADDC6)
-    static let kraftLight = Color(atlasHex: 0xF0E3CA)
-    static let honey = Color(atlasHex: 0xFFCC4F)
+    static let canvas = SaveAtlasPalette.canvas
+    static let paper = SaveAtlasPalette.paper
+    static let forest = SaveAtlasPalette.forest
+    static let ink = SaveAtlasPalette.ink
+    static let muted = SaveAtlasPalette.muted
+    static let coral = SaveAtlasPalette.coral
+    static let mint = SaveAtlasPalette.mint
+    static let sky = SaveAtlasPalette.sky
+    static let lavender = SaveAtlasPalette.lavender
+    static let kraft = SaveAtlasPalette.kraft
+    static let kraftLight = SaveAtlasPalette.kraftLight
+    static let honey = SaveAtlasPalette.honey
     /// Prototype-only route stroke; no production twin.
     static let routeInk = Color(atlasHex: 0x403B33)
-    static let stroke = Color(atlasHex: 0xDCCFB9)
+    static let stroke = SaveAtlasPalette.stroke
     static let line = stroke
     static let cardRadius: CGFloat = 12
     static let strokeWidth: CGFloat = 1
@@ -102,14 +104,9 @@ struct ReferenceViewport<Content: View>: View {
 
 struct AtlasCanvas: View {
     var body: some View {
-        ZStack {
-            AtlasPalette.canvas
-            Image("PaperTexture")
-                .resizable(resizingMode: .tile)
-                .opacity(0.04)
-        }
-        .frame(width: AtlasMetrics.width, height: AtlasMetrics.height)
-        .allowsHitTesting(false)
+        SaveDottedBackground()
+            .frame(width: AtlasMetrics.width, height: AtlasMetrics.height)
+            .allowsHitTesting(false)
     }
 }
 

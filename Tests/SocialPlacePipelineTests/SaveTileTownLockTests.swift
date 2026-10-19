@@ -346,8 +346,21 @@ final class SaveTileTownLockTests: XCTestCase {
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("func testHomeAndPassportWarmDarkMode"))
         XCTAssertTrue(rail.contains("XCUIDevice.shared.appearance = .dark"))
+        XCTAssertTrue(rail.contains("-AppleInterfaceStyle"))
+        XCTAssertTrue(rail.contains("--uitest-force-dark"))
+        XCTAssertTrue(rail.contains("--uitest-force-light"))
+        XCTAssertTrue(rail.contains("assertScreenshotBackground"))
+        XCTAssertTrue(rail.contains("0x1E"))
+        XCTAssertTrue(rail.contains("0xFF"))
         XCTAssertTrue(rail.contains("dark-home"))
         XCTAssertTrue(rail.contains("dark-passport"))
+        let app = try source(at: "SAV-E/App/SaveApp.swift")
+        XCTAssertTrue(app.contains("--uitest-force-dark"))
+        XCTAssertTrue(app.contains("overrideUserInterfaceStyle"))
+        XCTAssertTrue(app.contains("preferredColorScheme"))
+        let viewportTheme = try source(at: "Prototypes/AtlasPostcard/Sources/Theme.swift")
+        XCTAssertTrue(viewportTheme.contains("SaveAtlasPalette.canvas"))
+        XCTAssertTrue(viewportTheme.contains("SaveDottedBackground()"))
     }
 
     private func memberBody(_ name: String, in source: String) -> String {

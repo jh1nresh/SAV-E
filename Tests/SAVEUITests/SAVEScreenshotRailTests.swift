@@ -690,13 +690,48 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     /// Warm dark tokens from spec §1 must paint Home and Passport once Light is unlocked.
+    /// Appearance is forced before launch (`-AppleInterfaceStyle`, `--uitest-force-*`,
+    /// and `XCUIDevice.appearance`). Background pixels must be near #1E1C19 / #FFF9EB.
     /// Attachment names stay off the production-parity set (`five-tab-*`, `atlas-*`).
     @MainActor
     func testHomeAndPassportWarmDarkMode() throws {
-        XCUIDevice.shared.appearance = .dark
         addTeardownBlock {
             XCUIDevice.shared.appearance = .light
         }
+        try captureHomeAndPassportCanvas(
+            appearance: .dark,
+            appleInterfaceStyle: "Dark",
+            forceArgument: "--uitest-force-dark",
+            homeName: "dark-home",
+            passportName: "dark-passport",
+            expectedRed: 0x1E,
+            expectedGreen: 0x1C,
+            expectedBlue: 0x19
+        )
+        try captureHomeAndPassportCanvas(
+            appearance: .light,
+            appleInterfaceStyle: "Light",
+            forceArgument: "--uitest-force-light",
+            homeName: "light-home",
+            passportName: "light-passport",
+            expectedRed: 0xFF,
+            expectedGreen: 0xF9,
+            expectedBlue: 0xEB
+        )
+    }
+
+    @MainActor
+    private func captureHomeAndPassportCanvas(
+        appearance: XCUIDevice.Appearance,
+        appleInterfaceStyle: String,
+        forceArgument: String,
+        homeName: String,
+        passportName: String,
+        expectedRed: Int,
+        expectedGreen: Int,
+        expectedBlue: Int
+    ) throws {
+        XCUIDevice.shared.appearance = appearance
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
@@ -705,6 +740,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
                 "-save.appLanguage", "en",
+                "-AppleInterfaceStyle", appleInterfaceStyle,
+                forceArgument,
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
         )
@@ -714,12 +751,29 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(rootTabButton("Home", app: app).waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.textFields["home.search"].waitForExistence(timeout: stepTimeout))
-        attach(app, name: "dark-home")
+        let homeShot = app.screenshot()
+        attach(app, name: homeName)
+        assertScreenshotBackground(
+            homeShot,
+            nearRed: expectedRed,
+            green: expectedGreen,
+            blue: expectedBlue,
+            name: homeName
+        )
 
         openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected)
-        attach(app, name: "dark-passport")
+        let passportShot = app.screenshot()
+        attach(app, name: passportName)
+        assertScreenshotBackground(
+            passportShot,
+            nearRed: expectedRed,
+            green: expectedGreen,
+            blue: expectedBlue,
+            name: passportName
+        )
+        terminate(app)
     }
 
     @MainActor

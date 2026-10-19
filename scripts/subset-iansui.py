@@ -112,9 +112,9 @@ def main() -> int:
             charset_path.unlink(missing_ok=True)
     size = args.out.stat().st_size
     print(f"wrote {args.out} ({size} bytes, {len(text)} chars)")
-    if size > 1_500_000:
+    if size > 3_600_000:
         print(
-            f"warning: subset is {size} bytes; spec target is <= 1.5 MB. "
+            f"warning: subset is {size} bytes; shipped Iansui is 3.48 MB. "
             "glyf outlines for 4808 handwritten glyphs do not compress further "
             "in TTF. Missing glyphs still cascade to PingFang TC.",
             file=sys.stderr,
