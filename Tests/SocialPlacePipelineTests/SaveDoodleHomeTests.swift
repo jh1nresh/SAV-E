@@ -141,8 +141,13 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertFalse(root.contains("SaveTileTownHomeView()"))
         XCTAssertTrue(home.contains("home.miniMap"))
         XCTAssertTrue(home.contains("home.citySwitcher"))
-        XCTAssertTrue(home.contains("home.eat"))
-        XCTAssertTrue(home.contains("home.go"))
+        XCTAssertTrue(home.contains("lens.accessibilityIdentifier"))
+        XCTAssertTrue(home.contains(".contentShape(Rectangle())"))
+        let catalog = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")
+        XCTAssertTrue(catalog.contains("home.\\(rawValue)"))
+        XCTAssertTrue(catalog.contains("case eat"))
+        XCTAssertTrue(catalog.contains("case go"))
+        XCTAssertTrue(catalog.contains("var accessibilityIdentifier: String { \"home.\\(rawValue)\" }"))
         XCTAssertTrue(home.contains("home.collected"))
         XCTAssertTrue(home.contains("home.empty.capture"))
         XCTAssertTrue(home.contains("home.review"))
@@ -212,13 +217,22 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(homeIDs, [tokyoGo.id])
 
         let map = try source(at: "SAV-E/Views/TileTown/SaveTileTownRootMap.swift")
+        let content = try source(at: "SAV-E/App/ContentView.swift")
         XCTAssertTrue(map.contains("@EnvironmentObject private var session: SaveDoodleSession"))
+        XCTAssertTrue(map.contains("guard session.mapFollowsHomeFilter else { return places }"))
         XCTAssertTrue(map.contains("SaveDoodleHomeCatalog.visiblePlaces("))
         XCTAssertTrue(map.contains("session.lens"))
         XCTAssertTrue(map.contains("session.city"))
         XCTAssertTrue(map.contains("mapAccessibilityIdentifier"))
         XCTAssertTrue(map.contains("map.city"))
         XCTAssertTrue(map.contains("map.eatGo"))
+        XCTAssertTrue(map.contains("showsCityPicker = true"))
+        XCTAssertTrue(map.contains("map.city.\\(group.id)"))
+        XCTAssertTrue(content.contains("doodleSession.mapFollowsHomeFilter = false"))
+        XCTAssertTrue(content.contains("doodleSession.mapFollowsHomeFilter = true"))
+        XCTAssertTrue(session.mapFollowsHomeFilter == false)
+        session.mapFollowsHomeFilter = true
+        XCTAssertTrue(session.mapFollowsHomeFilter)
     }
 
     private func place(

@@ -472,6 +472,9 @@ struct ContentView: View {
             openDrawer(.addLink, tripID: nil)
             return
         }
+        if tab == .map {
+            doodleSession.mapFollowsHomeFilter = false
+        }
         // Root destinations must leave any pushed Saves, Trips, or Trip route.
         // The tab bar can remain in the accessibility tree behind those
         // children, so changing only the selection leaves the child visible.
@@ -535,7 +538,10 @@ struct ContentView: View {
                                     )
                                 },
                                 onOpenPassport: openPassport,
-                                onOpenMap: { selectRootTab(.map) }
+                                onOpenMap: {
+                                    selectRootTab(.map)
+                                    doodleSession.mapFollowsHomeFilter = true
+                                }
                             )
                         case .map:
                             SaveMapRootView(

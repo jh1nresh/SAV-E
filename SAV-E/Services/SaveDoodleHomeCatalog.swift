@@ -71,6 +71,11 @@ final class SaveDoodleSession: ObservableObject {
         didSet { defaults.set(city.storageValue, forKey: Self.cityKey) }
     }
 
+    /// Q5: Map applies Home's Eat/Go + city only after a mini-map open.
+    /// Opening the Map tab directly leaves this false so Saved/Nearby stay
+    /// unfiltered.
+    @Published var mapFollowsHomeFilter = false
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {

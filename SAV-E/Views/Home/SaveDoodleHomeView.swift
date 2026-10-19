@@ -117,7 +117,7 @@ struct SaveDoodleHomeView: View {
         .buttonStyle(.plain)
         .frame(minHeight: SaveLayout.minTap)
         .accessibilityLabel(lens.title(language: languageSettings.language))
-        .accessibilityIdentifier(lens == .eat ? "home.eat" : "home.go")
+        .accessibilityIdentifier(lens.accessibilityIdentifier)
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -261,6 +261,7 @@ struct SaveDoodleHomeView: View {
             }
         }
         .buttonStyle(.plain)
+        .contentShape(Rectangle())
         .accessibilityLabel(localized("Open map", "打開地圖"))
         .accessibilityIdentifier("home.miniMap")
     }

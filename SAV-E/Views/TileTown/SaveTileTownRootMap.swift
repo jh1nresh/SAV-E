@@ -12,26 +12,16 @@ struct SaveTileTownRootMap: View {
     @EnvironmentObject private var session: SaveDoodleSession
     @ObservedObject private var locationService = LocationService.shared
     @State private var lens: SaveTileTownMapLens = .saved
+    @State private var showsCityPicker = false
 
     var body: some View {
         ZStack(alignment: .top) {
             SaveAtlasPalette.canvas.ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .center, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        SaveDisplayTitle(text: "Savvy", pointSize: 28)
-                            .accessibilityIdentifier("map.wordmark")
-                        Text(cityTitle)
-                            .font(SaveAtlasType.body(13))
-                            .foregroundStyle(SaveAtlasPalette.muted)
-                            .accessibilityIdentifier("map.city")
-                    }
-                    Spacer(minLength: 8)
-                    eatGoRail
-                }
-                .padding(.horizontal, 16)
-                .padding(.top, AtlasMetrics.statusBarHeight)
+                header
+                    .padding(.horizontal, 16)
+                    .padding(.top, AtlasMetrics.statusBarHeight)
 
                 lensRail
                     .padding(.horizontal, 16)
@@ -96,6 +86,44 @@ struct SaveTileTownRootMap: View {
             if newLens == .friends {
                 mapViewModel.selectSocialLens(.forYou)
             }
+        }
+        .sheet(isPresented: $showsCityPicker) {
+            cityPicker
+        }
+    }
+
+    @ViewBuilder
+    private var header: some View {
+        if session.mapFollowsHomeFilter {
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    SaveDisplayTitle(text: "Savvy", pointSize: 28)
+                        .accessibilityIdentifier("map.wordmark")
+                    Button { showsCityPicker = true } label: {
+                        HStack(spacing: 4) {
+                            Text(cityTitle)
+                                .font(SaveAtlasType.body(13))
+                                .foregroundStyle(SaveAtlasPalette.muted)
+                            Text("▾")
+                                .font(SaveAtlasType.body(11))
+                                .foregroundStyle(SaveAtlasPalette.muted)
+                        }
+                        .frame(minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(languageSettings.localized(
+                        english: "Choose city",
+                        traditionalChinese: "選擇城市"
+                    ) + ", " + cityTitle)
+                    .accessibilityIdentifier("map.city")
+                }
+                Spacer(minLength: 8)
+                eatGoRail
+            }
+        } else {
+            SaveDisplayTitle(text: "Savvy", pointSize: 28)
+                .accessibilityIdentifier("map.wordmark")
         }
     }
 
@@ -208,8 +236,71 @@ struct SaveTileTownRootMap: View {
         }
     }
 
+    private var cityGroups: [SaveDoodleCityGroup] {
+        SaveDoodleHomeCatalog.cityGroups(from: mapViewModel.places)
+    }
+
+    private var cityPicker: some View {
+        NavigationStack {
+            List {
+                if !locationService.isAuthorizationDenied {
+                    Button {
+                        session.city = .nearYou
+                        showsCityPicker = false
+                    } label: {
+                        HStack {
+                            Text(languageSettings.localized(
+                                english: "Near you (current location)",
+                                traditionalChinese: "附近（目前位置）"
+                            ))
+                            Spacer()
+                            if case .nearYou = session.city {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(SaveAtlasPalette.coral)
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("map.city.nearYou")
+                }
+                ForEach(cityGroups) { group in
+                    Button {
+                        session.city = .city(group.id)
+                        showsCityPicker = false
+                    } label: {
+                        HStack {
+                            Text("\(group.displayName(language: languageSettings.language)) \(group.count)")
+                            Spacer()
+                            if case .city(let id) = SaveDoodleHomeCatalog.resolvedSelection(
+                                session.city,
+                                places: mapViewModel.places,
+                                locationDenied: locationService.isAuthorizationDenied
+                            ), id == group.id {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(SaveAtlasPalette.coral)
+                            }
+                        }
+                    }
+                    .accessibilityIdentifier("map.city.\(group.id)")
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(SaveAtlasPalette.paper)
+            .navigationTitle(languageSettings.localized(english: "City", traditionalChinese: "城市"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(languageSettings.localized(english: "Close", traditionalChinese: "關閉")) {
+                        showsCityPicker = false
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+    }
+
     private func sessionPlaces(from places: [Place]) -> [Place] {
-        SaveDoodleHomeCatalog.visiblePlaces(
+        guard session.mapFollowsHomeFilter else { return places }
+        return SaveDoodleHomeCatalog.visiblePlaces(
             from: places,
             lens: session.lens,
             selection: session.city,

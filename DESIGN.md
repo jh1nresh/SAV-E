@@ -732,9 +732,11 @@ Rules:
   48pt status band. The search drawer never covers them: large stop ends
   below `SaveTileTownProductLock.mapChromeHeight`, and only the visible
   paper hits so pins stay tappable through medium. Home's shared Eat/Go +
-  city (`SaveDoodleSession`) apply to Saved/Nearby pins when Map opens from
-  the mini-map. Map Eat/Go chips (`map.eat` / `map.go`) and city label
-  (`map.city`) may change that shared state afterwards.
+  city (`SaveDoodleSession`) apply to Saved/Nearby pins only when Map opens
+  from the Home mini-map. Opening the Map tab directly keeps the unfiltered
+  Saved/Nearby/Friends default. After a mini-map handoff, Map Eat/Go chips
+  (`map.eat` / `map.go`) and the city control (`map.city`) can change that
+  shared state.
 - The town canvas pans with a drag. Pin tap selects the kraft peek card.
 - Drawer search (collapsed capsule) still opens the parked search panel.
   Category, Want to try, Visited, and Nearby-distance chips may remain in
