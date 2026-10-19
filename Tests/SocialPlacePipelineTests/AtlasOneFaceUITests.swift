@@ -6,7 +6,7 @@ final class AtlasOneFaceUITests: XCTestCase {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
         let prototype = try source(at: "Prototypes/AtlasPostcard/Sources/Theme.swift")
         let spec = try source(at: "Prototypes/AtlasPostcard/design.md")
-        let productionHexes = ["FDF8F3", "0E4A33", "F26B4A", "B5E3F5", "2E2117", "62594F"]
+        let productionHexes = ["FFF9EB", "0E4A33", "F26B4A", "B5E3F5", "2F2E23", "62594F"]
         let retiredDraftHexes = ["FFF8EE", "174E37", "F27D5C", "CDEDF4", "3F281A", "80664F"]
 
         for hex in productionHexes {

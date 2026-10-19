@@ -1,3 +1,4 @@
+import CoreText
 import SwiftUI
 import UIKit
 
@@ -172,18 +173,24 @@ extension Color {
 }
 
 enum SaveAtlasPalette {
-    static let canvas = Color(light: "FDF8F3", dark: "11161C")
-    static let paper = Color(light: "FFFDF7", dark: "1B2027")
+    /// Founder lock 2026-10-19 v5 cream page.
+    static let canvas = Color(light: "FFF9EB", dark: "11161C")
+    static let paper = Color(light: "FFF9EB", dark: "1B2027")
     static let forest = Color(light: "0E4A33", dark: "B9E0C9")
-    static let ink = Color(light: "2E2117", dark: "FFF8ED")
+    static let ink = Color(light: "2F2E23", dark: "F4F1E4")
     static let muted = Color(light: "62594F", dark: "CFC4B8")
     static let coral = Color(light: "F26B4A", dark: "D97861")
     static let mint = Color(light: "D6E8C4", dark: "4F7258")
     static let sky = Color(light: "B5E3F5", dark: "3F758B")
     static let lavender = Color(light: "E3D6F7", dark: "57466F")
-    static let kraft = Color(light: "F0CFA1", dark: "71543C")
+    static let kraft = Color(light: "EADDC6", dark: "71543C")
+    static let kraftLight = Color(light: "F0E3CA", dark: "5A4E3C")
     static let honey = Color(light: "FFCC4F", dark: "A87328")
-    static let line = Color(light: "A68F78", dark: "807365")
+    /// Hard 2pt stroke. Alias of `line`.
+    static let stroke = Color(light: "C9AF8B", dark: "8A7358")
+    static let line = stroke
+    static let cardRadius: CGFloat = 6
+    static let strokeWidth: CGFloat = 2
 }
 
 /// Full-pixel tile-town materials (founder lock 2026-10-14).
@@ -251,6 +258,69 @@ enum SaveAtlasType {
     }
 }
 
+/// Pixel display face for the logo and page titles. Stamp names stay
+/// `SaveAtlasType` until the shared stamp PR. Body copy stays San Francisco.
+enum SavePixelType {
+    static let latinRegularName = "PixelifySans-Regular"
+    static let latinSemiboldName = "PixelifySans-SemiBold"
+    static let cjkName = "Fusion-Pixel-12px-Prop-zh-Hant-Regular"
+
+    private static let register: Void = {
+        let files: [(String, String)] = [
+            ("PixelifySans-Regular", "ttf"),
+            ("PixelifySans-SemiBold", "ttf"),
+            ("fusion-pixel-12px-proportional-zh_hant", "otf"),
+        ]
+        for (name, ext) in files {
+            let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "PixelFont")
+                ?? Bundle.main.url(forResource: name, withExtension: ext)
+            if let url {
+                CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+            }
+        }
+    }()
+
+    static func display(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .title
+    ) -> Font {
+        Font(scaledFont(size: size, name: latinSemiboldName, relativeTo: style))
+    }
+
+    static func regular(
+        _ size: CGFloat,
+        relativeTo style: Font.TextStyle = .callout
+    ) -> Font {
+        Font(scaledFont(size: size, name: latinRegularName, relativeTo: style))
+    }
+
+    private static func scaledFont(
+        size: CGFloat,
+        name: String,
+        relativeTo style: Font.TextStyle
+    ) -> UIFont {
+        _ = register
+        let latin = UIFont(name: name, size: size)
+            ?? UIFont.systemFont(ofSize: size, weight: .semibold)
+        let font: UIFont
+        if let cjk = UIFont(name: cjkName, size: size) {
+            let descriptor = latin.fontDescriptor.addingAttributes([
+                UIFontDescriptor.AttributeName(rawValue: kCTFontCascadeListAttribute as String): [
+                    cjk.fontDescriptor,
+                ],
+            ])
+            font = UIFont(descriptor: descriptor, size: size)
+        } else {
+            font = latin
+        }
+        // Dynamic Type must keep integer pixel sizes so the face does not
+        // blur between designed pixel grid steps.
+        let scaled = UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: font)
+        let pixelSize = max(1, scaled.pointSize.rounded())
+        return scaled.withSize(pixelSize)
+    }
+}
+
 private extension Font.TextStyle {
     var uiTextStyle: UIFont.TextStyle {
         if self == .largeTitle { return .largeTitle }
@@ -300,14 +370,14 @@ private extension UIColor {
 }
 
 extension View {
-    func saveAtlasPaper(radius: CGFloat, shadow: Bool = false) -> some View {
+    func saveAtlasPaper(radius: CGFloat = SaveAtlasPalette.cardRadius, shadow: Bool = false) -> some View {
         background(
             SaveAtlasPalette.paper,
             in: RoundedRectangle(cornerRadius: radius, style: .continuous)
         )
         .overlay {
             RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .stroke(SaveAtlasPalette.line.opacity(0.34), lineWidth: 1)
+                .stroke(SaveAtlasPalette.stroke, lineWidth: SaveAtlasPalette.strokeWidth)
         }
         .shadow(
             color: shadow ? SaveAtlasPalette.ink.opacity(SaveTheme.Elevation.cardOpacity) : .clear,

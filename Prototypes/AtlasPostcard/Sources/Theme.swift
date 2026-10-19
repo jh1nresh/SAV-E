@@ -24,20 +24,24 @@ enum AtlasElevation {
 // (SAV-E/Extensions/Color+Theme.swift). Per DESIGN.md, production wins on
 // any mismatch — keep these hex values byte-identical to production.
 enum AtlasPalette {
-    static let canvas = Color(atlasHex: 0xFDF8F3)
-    static let paper = Color(atlasHex: 0xFFFDF7)
+    static let canvas = Color(atlasHex: 0xFFF9EB)
+    static let paper = Color(atlasHex: 0xFFF9EB)
     static let forest = Color(atlasHex: 0x0E4A33)
-    static let ink = Color(atlasHex: 0x2E2117)
+    static let ink = Color(atlasHex: 0x2F2E23)
     static let muted = Color(atlasHex: 0x62594F)
     static let coral = Color(atlasHex: 0xF26B4A)
     static let mint = Color(atlasHex: 0xD6E8C4)
     static let sky = Color(atlasHex: 0xB5E3F5)
     static let lavender = Color(atlasHex: 0xE3D6F7)
-    static let kraft = Color(atlasHex: 0xF0CFA1)
+    static let kraft = Color(atlasHex: 0xEADDC6)
+    static let kraftLight = Color(atlasHex: 0xF0E3CA)
     static let honey = Color(atlasHex: 0xFFCC4F)
     /// Prototype-only route stroke; no production twin.
     static let routeInk = Color(atlasHex: 0x403B33)
-    static let line = Color(atlasHex: 0xA68F78)
+    static let stroke = Color(atlasHex: 0xC9AF8B)
+    static let line = stroke
+    static let cardRadius: CGFloat = 6
+    static let strokeWidth: CGFloat = 2
 }
 
 private extension Color {

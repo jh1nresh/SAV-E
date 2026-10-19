@@ -568,6 +568,15 @@ struct ContentView: View {
                         accessibilityPrefix: "root.tab",
                         displayTitle: { $0.title(language: languageSettings.language) },
                         isRaisedControl: { $0.isCaptureControl },
+                        hidesTitle: { $0.isCaptureControl },
+                        iconView: { item in
+                            AnyView(
+                                SavePixelChromeIcon(
+                                    kind: .tab(iconName: item.atlasIcon),
+                                    pointSize: 24
+                                )
+                            )
+                        },
                         onSelect: selectRootTab
                     )
                     .placed(

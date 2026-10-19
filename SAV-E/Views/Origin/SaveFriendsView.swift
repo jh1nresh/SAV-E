@@ -16,9 +16,10 @@ struct SaveFriendsView: View {
                 SavePixelDisplayText(text: "Savvy", pointSize: 28)
 
                 HStack {
-                    Text(language.localized(english: "Friends", traditionalChinese: "朋友"))
-                        .font(SaveAtlasType.strong(22))
-                        .foregroundStyle(SaveAtlasPalette.forest)
+                    SavePixelDisplayText(
+                        text: language.localized(english: "Friends", traditionalChinese: "朋友"),
+                        pointSize: 22
+                    )
                     Spacer(minLength: 4)
                     Button(action: onConnections) {
                         Text(language.localized(english: "Invite", traditionalChinese: "邀請"))

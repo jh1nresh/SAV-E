@@ -53,6 +53,12 @@
 	<true/>
 	<key>UIUserInterfaceStyle</key>
 	<string>Light</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>PixelFont/PixelifySans-Regular.ttf</string>
+		<string>PixelFont/PixelifySans-SemiBold.ttf</string>
+		<string>PixelFont/fusion-pixel-12px-proportional-zh_hant.otf</string>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
