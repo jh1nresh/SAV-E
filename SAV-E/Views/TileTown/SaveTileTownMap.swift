@@ -2,10 +2,9 @@ import CoreLocation
 import SwiftUI
 import UIKit
 
-/// Founder lock 2026-10-14: product Map base is full-pixel tile-town.
-/// MapKit remains for Trip navigation maps and Apple Maps handoff only.
+/// Founder revision 2026-10-19: geographic MapKit base, pixel presentation elsewhere.
 nonisolated enum SaveTileTownProductLock: Sendable {
-    static let productMapBaseIsTileTown = true
+    static let productMapBaseIsTileTown = false
     static let homeShowsMapFilterChips = false
     static let mapShowsNearbySavedFriendsChips = true
     /// Wordmark + Nearby/Saved/Friends rail below the 48pt status band.

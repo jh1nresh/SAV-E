@@ -568,6 +568,8 @@ struct ContentView: View {
                         accessibilityPrefix: "root.tab",
                         displayTitle: { $0.title(language: languageSettings.language) },
                         isRaisedControl: { $0.isCaptureControl },
+                        labelFont: SaveAtlasType.display(11),
+                        iconPresentation: { icon, cell in AnyView(icon.savePixelated(cellSize: cell)) },
                         onSelect: selectRootTab
                     )
                     .placed(

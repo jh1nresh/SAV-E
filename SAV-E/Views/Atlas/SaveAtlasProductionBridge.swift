@@ -7,24 +7,15 @@ enum SaveAtlasRuntime {
     }
 }
 
-/// Soft Pixel accent lock (DESIGN.md).
-///
-/// Founder lock 2026-10-14 supersedes the 2026-10-13 H1/M1 *map-base* rule:
-/// product Map and Home peek use a full-pixel tile-town base, not MapKit /
-/// Atlas paper with Soft Pixel accents only. Soft Pixel remains the accent
-/// language for pins, Map Stamp seals, and Memo *on* that town.
-///
-/// M1 is unchanged: seals never show raw hex, debug IDs, or pipeline tokens.
-///
-/// Random `SoftPixel` / `16-bit` *asset names* stay forbidden so a one-off
-/// city PNG cannot silently replace the owned tile-town renderer.
+/// Normal geographic maps with pixel memory UI (founder direction 2026-10-19).
+/// Native basemaps and their attribution remain untouched. Seals never show
+/// raw hex, debug IDs, or pipeline tokens; city artwork is not map geography.
 nonisolated enum SaveSoftPixelAccentsLock: Sendable {
-    /// Live Home uses the tile-town peek composition, not the One-Face
-    /// illustrated-atlas fixture. Only `--uitest-atlas-parity-fixture` opts in.
+    /// Only the explicit parity fixture opts into the old illustrated composition.
     static let productionLocksOneFaceHomeComposition = false
 
-    /// Product Map / Home peek / Friends strip use `SaveTileTownCanvas`.
-    static let productMapBaseIsTileTown = true
+    /// Product Map and Home use MapKit with reliable saved-place coordinates.
+    static let productMapBaseIsTileTown = false
 
     static let illustratedCityAtlasAssets: Set<String> = [
         "HomeAtlasScene",

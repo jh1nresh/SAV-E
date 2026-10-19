@@ -11,6 +11,7 @@ struct SharedPostArtwork: View {
             VStack(spacing: compact ? 8 : 18) {
                 Image(systemName: post.icon)
                     .font(.system(size: compact ? 26 : 48, weight: .light))
+                    .savePixelated()
                 if !compact {
                     Text(post.address).font(SaveAtlasType.body(13)).lineLimit(2)
                 }
@@ -53,6 +54,7 @@ private struct SharedPostPhoto: View {
                 if let image {
                     Image(uiImage: image).resizable().scaledToFill()
                         .frame(width: geometry.size.width, height: geometry.size.height).clipped()
+                        .savePixelated(cellSize: 3)
                         .accessibilityLabel(language.localized(english: "Photo \(index + 1)", traditionalChinese: "照片 \(index + 1)"))
                 } else if failed {
                     Button { retry += 1 } label: {

@@ -349,10 +349,10 @@ struct ProfileView: View {
                 .font(SaveAtlasType.body(13)).foregroundStyle(SaveAtlasPalette.muted)
             HStack(spacing: 10) {
                 Button { editIdentity() } label: {
-                    Text(languageSettings.localized(english: "Edit profile", traditionalChinese: "編輯個人資料")).frame(maxWidth: .infinity, minHeight: 38)
+                    Text(languageSettings.localized(english: "Edit profile", traditionalChinese: "編輯個人資料")).frame(maxWidth: .infinity, minHeight: 44)
                 }.disabled(PrivyAuthService.shared.isReviewerDemo).accessibilityIdentifier("profile.edit")
                 Button { showNewPost = true } label: {
-                    Label(languageSettings.localized(english: "New post", traditionalChinese: "新增分享"), systemImage: "plus").frame(maxWidth: .infinity, minHeight: 38)
+                    Label(languageSettings.localized(english: "New post", traditionalChinese: "新增分享"), systemImage: "plus").frame(maxWidth: .infinity, minHeight: 44)
                 }.accessibilityIdentifier("posts.new")
             }
             .font(SaveAtlasType.strong(13)).buttonStyle(.bordered).tint(SaveAtlasPalette.forest)
@@ -2144,7 +2144,7 @@ private struct PassportTopBar: View {
 
             if allowsEditing {
                 Button(action: onEdit) {
-                    Image(systemName: "line.3.horizontal")
+                    Image(systemName: "line.3.horizontal").savePixelated(cellSize: 1.5)
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(SaveAtlasPalette.ink)
                         .frame(width: 44, height: 44)
@@ -2247,6 +2247,8 @@ private struct ProfileAvatarView: View {
             }
         }
         .frame(width: size, height: size)
+        .clipped()
+        .savePixelated(cellSize: 2)
         .clipShape(Circle())
         .overlay(Circle().stroke(SaveAtlasPalette.line, lineWidth: 1.6))
     }

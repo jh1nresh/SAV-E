@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        C91900000000000000000001 /* PixelFont in Resources */ = {isa = PBXBuildFile; fileRef = C91900000000000000000002 /* PixelFont */; };
+        C91900000000000000000003 /* SavePixelate.metal in Sources */ = {isa = PBXBuildFile; fileRef = C91900000000000000000004 /* SavePixelate.metal */; };
 		F815A0000000000000000001 /* SaveFriendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F815A0000000000000000002 /* SaveFriendsView.swift */; };
 		T7A100000000000000000001 /* SaveTileTownMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000002 /* SaveTileTownMap.swift */; };
 		T7A100000000000000000003 /* SaveKraftStamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000004 /* SaveKraftStamp.swift */; };
@@ -304,6 +306,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        C91900000000000000000002 /* PixelFont */ = {isa = PBXFileReference; lastKnownFileType = folder; path = PixelFont; sourceTree = "<group>"; };
+        C91900000000000000000004 /* SavePixelate.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = SavePixelate.metal; sourceTree = "<group>"; };
 		F815A0000000000000000002 /* SaveFriendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveFriendsView.swift; sourceTree = "<group>"; };
 		T7A100000000000000000002 /* SaveTileTownMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownMap.swift; sourceTree = "<group>"; };
 		T7A100000000000000000004 /* SaveKraftStamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveKraftStamp.swift; sourceTree = "<group>"; };
@@ -566,6 +570,8 @@
 		0CD117A9316F8ACC15DAF519 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+                C91900000000000000000002 /* PixelFont */,
+                C91900000000000000000004 /* SavePixelate.metal */,
 				8EBE852DE7618089938F9421 /* Assets.xcassets */,
 				6361F6E836FD533A68A17D61 /* PrivacyInfo.xcprivacy */,
 			);
@@ -1352,6 +1358,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                C91900000000000000000001 /* PixelFont in Resources */,
 				78BCAADC36E4F2A6E45F076E /* Assets.xcassets in Resources */,
 				DD2947EE2F000476CB869B83 /* PrivacyInfo.xcprivacy in Resources */,
 			);
@@ -1542,6 +1549,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+                C91900000000000000000003 /* SavePixelate.metal in Sources */,
 				E1765044D53DA1C39EA3DC25 /* AIDrawerView.swift in Sources */,
 				A2044F57E65B309A4A9CD9E7 /* AIDrawerViewModel.swift in Sources */,
 				A0CF383392FBA76C9B676E0F /* AIParsingService.swift in Sources */,

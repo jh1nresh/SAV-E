@@ -54,7 +54,7 @@ final class AtlasOneFaceUITests: XCTestCase {
         let mapRoot = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
 
         XCTAssertTrue(bridge.contains("productionLocksOneFaceHomeComposition = false"))
-        XCTAssertTrue(bridge.contains("productMapBaseIsTileTown = true"))
+        XCTAssertTrue(bridge.contains("productMapBaseIsTileTown = false"))
         XCTAssertTrue(bridge.contains("locksOneFaceHomeComposition = SaveSoftPixelAccentsLock.productionLocksOneFaceHomeComposition"))
         XCTAssertTrue(home.contains("HomeSavedPlacesLibrary()"))
         XCTAssertTrue(home.contains("homeCityHero("))
@@ -78,8 +78,8 @@ final class AtlasOneFaceUITests: XCTestCase {
         XCTAssertFalse(SaveSoftPixelAccentsLock.allowsIllustratedCityAtlasAsset("pixel-art-city"))
         XCTAssertTrue(SaveSoftPixelAccentsLock.containsForbiddenHeroToken("soft-pixel-city"))
         XCTAssertFalse(SaveSoftPixelAccentsLock.productionLocksOneFaceHomeComposition)
-        XCTAssertTrue(SaveSoftPixelAccentsLock.productMapBaseIsTileTown)
-        XCTAssertTrue(SaveTileTownProductLock.productMapBaseIsTileTown)
+        XCTAssertFalse(SaveSoftPixelAccentsLock.productMapBaseIsTileTown)
+        XCTAssertFalse(SaveTileTownProductLock.productMapBaseIsTileTown)
     }
 
     func testSoftPixelM1StampSurfacesOmitHexAndPipelineTokens() throws {

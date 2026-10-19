@@ -182,7 +182,7 @@ struct SaveKraftStampFaceView: View {
                     CachedAsyncImage(url: url) { phase in
                         switch phase {
                         case .success(let image):
-                            image.resizable().scaledToFill()
+                            image.resizable().scaledToFill().savePixelated(cellSize: 2)
                         default:
                             SaveKraftStampPixelArt(scene: fallbackScene)
                         }
@@ -218,6 +218,7 @@ struct SaveKraftStampPixelArt: View {
                 .scaledToFill()
                 .frame(width: geometry.size.width, height: geometry.size.height)
                 .clipped()
+                .savePixelated(cellSize: 2)
         }
         .accessibilityHidden(true)
     }
@@ -341,7 +342,7 @@ struct SavePostageSealAvatar: View {
                 if let photoURL {
                     CachedAsyncImage(url: photoURL) { phase in
                         if case .success(let image) = phase {
-                            image.resizable().scaledToFill()
+                            image.resizable().scaledToFill().savePixelated(cellSize: 2)
                         } else {
                             portrait
                         }
@@ -352,6 +353,7 @@ struct SavePostageSealAvatar: View {
             }
             .frame(width: size - 14, height: size - 14)
             .clipped()
+            .savePixelated(cellSize: 2)
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
@@ -467,71 +469,18 @@ struct SavePixelChromeIcon: View {
     }
 }
 
-/// Integer-scaled 5×7 display face for Savvy / Passport titles. Body copy stays `SaveAtlasType`.
+/// Localized pixel face with the same Dynamic Type behavior as body copy.
 struct SavePixelDisplayText: View {
     let text: String
     var pointSize: CGFloat = 22
 
     var body: some View {
-        Image(uiImage: Self.image(for: text, pointSize: pointSize))
-            .renderingMode(.template)
-            .interpolation(.none)
-            .resizable()
-            .scaledToFit()
-            .frame(width: CGFloat(text.count * 6) / 7 * pointSize, height: pointSize)
+        Text(text)
+            .font(SaveAtlasType.display(pointSize, relativeTo: .title))
             .foregroundStyle(SaveAtlasPalette.forest)
-            .accessibilityLabel(text)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
-    private static let glyphs: [Character: [String]] = [
-        "a": ["00000", "00000", "01110", "00001", "01111", "10001", "01111"],
-        "v": ["00000", "00000", "10001", "10001", "10001", "01010", "00100"],
-        "y": ["00000", "10001", "10001", "01111", "00001", "10001", "01110"],
-        "s": ["00000", "00000", "01111", "10000", "01110", "00001", "11110"],
-        "p": ["00000", "11110", "10001", "11110", "10000", "10000", "10000"],
-        "o": ["00000", "00000", "01110", "10001", "10001", "10001", "01110"],
-        "r": ["00000", "00000", "10110", "11001", "10000", "10000", "10000"],
-        "t": ["00100", "00100", "11111", "00100", "00100", "00101", "00010"],
-        "A": ["01110", "10001", "10001", "11111", "10001", "10001", "10001"],
-        "C": ["01110", "10001", "10000", "10000", "10000", "10001", "01110"],
-        "E": ["11111", "10000", "10000", "11110", "10000", "10000", "11111"],
-        "O": ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
-        "P": ["11110", "10001", "10001", "11110", "10000", "10000", "10000"],
-        "R": ["11110", "10001", "10001", "11110", "10100", "10010", "10001"],
-        "S": ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
-        "T": ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
-        "V": ["10001", "10001", "10001", "10001", "10001", "01010", "00100"],
-        "Y": ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
-    ]
-
-    private static func image(for text: String, pointSize: CGFloat) -> UIImage {
-        let letters = Array(text)
-        let unit = max(1, Int(pointSize / 7))
-        let width = max(1, letters.count * 6 * unit)
-        let height = 7 * unit
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-        format.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format)
-        return renderer.image { context in
-            let cg = context.cgContext
-            cg.interpolationQuality = .none
-            cg.setFillColor(UIColor(red: 0.18, green: 0.29, blue: 0.20, alpha: 1).cgColor)
-            for (index, letter) in letters.enumerated() {
-                let rows = glyphs[letter] ?? glyphs["S"]!
-                for (row, line) in rows.enumerated() {
-                    for (column, bit) in line.enumerated() where bit == "1" {
-                        cg.fill(CGRect(
-                            x: (index * 6 + column) * unit,
-                            y: row * unit,
-                            width: unit,
-                            height: unit
-                        ))
-                    }
-                }
-            }
-        }
-    }
 }
 
 enum SaveFriendLastAt {

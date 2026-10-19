@@ -556,6 +556,32 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
     }
 
+    @MainActor
+    func testPixelInterfaceChineseLargeType() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour",
+                "--uitest-location-denied", "--uitest-friends-town",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "-save.appLanguage", "zh-Hant",
+                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityM",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        for tab in ["Home", "Map", "Friends", "Passport"] {
+            openRootTab(tab, app: app)
+            XCTAssertTrue(rootTabButton(tab, app: app).isHittable)
+            XCTAssertGreaterThanOrEqual(rootTabButton(tab, app: app).frame.height, 44)
+            if tab == "Map" {
+                XCTAssertTrue(app.descendants(matching: .any)["map.liveSurface"].firstMatch.exists)
+                XCTAssertTrue(app.buttons["map.lens.saved"].isHittable)
+            }
+            attach(app, name: "pixel-zh-large-\(tab.lowercased())")
+        }
+    }
+
     /// Root navigation includes Friends and keeps Plan as a child route.
     /// Run on the reference and compact devices; attachment names stay stable for parity.
     @MainActor

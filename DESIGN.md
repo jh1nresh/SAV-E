@@ -1,13 +1,11 @@
 # Savvy Design System
 
-> Last updated: 2026-10-15
+> Last updated: 2026-10-19
 > Status: source of truth for native iOS design work
-> Token systems: **Atlas Postcard** still governs paper, type, kraft, and coral
-> chrome. **Tile-town** is the product Map / Home peek / Friends strip base
-> (founder lock 2026-10-14). **Soft Pixel** is accents-only *on* tile-town
-> (pins / seals / Memo) — it is no longer the map base. **Cream-notebook**
-> tokens are legacy-surface-only. See "Tile Town", "Atlas Postcard Tokens",
-> and "Legacy Cream-Notebook Tokens" below.
+> Atlas Postcard governs paper, kraft and coral. The current founder direction is
+> native MapKit geography with pixel typography, controls, photos and avatars.
+> Tile-town assets remain illustrative stamp fallbacks. Cream-notebook tokens
+> are legacy-surface-only. See "Geographic map and pixel interface" below.
 
 ## Product Frame
 
@@ -21,9 +19,9 @@ for place memory, evidence, and review.
 
 Assumptions locked by current code:
 
-- Native app is SwiftUI. Product Map and Home peek use `SaveTileTownCanvas`,
-  not a live MapKit basemap. MapKit remains for Trip maps and Apple Maps
-  handoff only.
+- Native app is SwiftUI. Product Map and Home peek use native MapKit geography;
+  pixel presentation applies to surrounding controls, photos and avatars.
+  Trip maps and Apple Maps handoff retain their existing behavior.
 - `Color+Theme.swift` owns the current palette tokens, including
   `SaveTileTownPalette`.
 - `MemoMascotMark` owns the Memo elephant mark.
@@ -103,66 +101,40 @@ Rules:
 - Map Stamp actions can include Navigate, Plan around this, View source, Edit,
   and Delete with explicit confirmation.
 
-### Tile Town (product map base)
+### Geographic map and pixel interface (2026-10-19 founder revision)
 
-**Lock (2026-10-14 founder, via CEO):** product Map and Home peek use a
-full-pixel tile-town base. Soft Pixel accents-only on MapKit (H1/M1 from
-2026-10-13 / PRs #277–#278) is **superseded for the map base**. Do not
-silent-partial Soft Pixel: a MapKit atlas with pixel pins is not the lock.
+The latest user direction supersedes the 2026-10-14 full-pixel tile-town base:
+**normal MapKit geography; pixel presentation for the surrounding interface,
+place imagery, avatars, stamps and controls.** Tile-town artwork remains an
+illustrative stamp fallback, never a claim about a place's real geography.
 
-Rules:
-
-- Product Map tab (`SaveTileTownRootMap`) and Home peek (`SaveTileTownHomeView`)
-  render `SaveTileTownCanvas`. Friends may show a small peek strip of the same
-  town. One town language, three sizes.
-- Tile-town is a memory map. Pins hash to village lots. It does not silently
-  confirm places and it does not invent GPS truth. Navigate / Trip maps may
-  still hand off to MapKit or Apple Maps.
-- Nearby / Saved / Friends filter chips live on **Map only**. Home must not
-  reuse that chrome.
-- Coral pins only. Selected stamp elevates to a kraft peek card (name + date/area).
-  Source-only clues still have no pin.
-- Tile-town uses the approved 2026-10-16 detailed pixel scenery asset through
-  `SaveTileTownRaster`, with nearest-neighbor display. The procedural integer
-  tiles remain a missing-asset fallback. Native SwiftUI owns every pin, tap,
-  selection and gesture; no UI controls or geographic claims are baked into art.
-  See `design-assets/tab-redesign-2026-10-16/README.md` for provenance.
-- App Store frames and product UI share this town. In-app **titles** (Savvy
-  wordmark, Passport header) use case-preserving `SavePixelDisplayText` in adaptive forest ink. Body copy stays
-  `SaveAtlasType`.
-
-### Soft Pixel accents (on tile-town)
-
-Soft Pixel is the accent language on top of tile-town and Atlas paper. It
-does not replace Atlas tokens, the cream notebook canvas, or the tile-town
-map base.
-
-**Lock (2026-10-14 founder):** Soft Pixel appears as pins, Map Stamp seals,
-and Memo. Not a full Soft Pixel / 16-bit UI chrome system. The map *base*
-is the owned tile-town renderer, not a random `SoftPixel*` / `16-bit` city
-PNG and not live MapKit.
-
-Rules:
-
-- Allowed Soft Pixel surfaces: tile-town pin marks, Map Stamp seals
-  (`SaveKraftStamp` / `SaveMemoryBadge` stamp family), Memo (`MemoMascotMark`),
-  small stamp chips on tickets. Trip MapKit pins may keep `PlaceMapPin` /
-  `ReviewCandidateMapPin`.
-- Forbidden: Soft Pixel chrome on every inactive root tab; Soft Pixel
-  replacing Atlas paper cards, type, or kraft chips wholesale; a one-off
-  16-bit city asset as a silent MapKit substitute.
-- Root tabs stay production Home / Map / + / Friends / Passport
-  (`Primary Navigation`). Tab shell is a flat full-width pixel bar with quiet
-  line icons — not a floating rounded glass capsule. Coral marks the
-  selected tab only. The center `+` is a coral circle on every screen.
-- Seals never show raw hex, debug IDs, or pipeline tokens in primary UI
-  (see Evidence Receipt).
-- Stamp language is one system: `SaveKraftStamp` encloses art and its name
-  inside one perforated kraft frame. Home uses horizontal tickets; Passport
-  uses portrait stamps. `SaveKraftStampPixelArt` crops the scenery and category
-  atlases for illustrative fallbacks, using the existing place category consistently
-  across Home, Map peek and Passport; real available place photos take precedence.
-  Empty Passport slots show `???` once, with an accessible empty-slot label.
+- Home (`SaveTileTownHomeView`) and Map (`SaveTileTownRootMap`) use native MapKit.
+  Keep map labels, attribution, camera gestures and geographic coordinates intact.
+  Never pixel-filter the map layer or place pins on invented village lots.
+- Only reliable, MapKit-mappable coordinates receive pins. Source-only clues
+  remain unpinned. Review candidates keep their existing distinct state and actions.
+- Nearby / Saved / Friends chips live on Map only. Home retains clues and recent
+  Map Stamps, with a native geographic preview and an explicit no-coordinate state.
+- Friends shows explicit sharing activity and a shared-place summary. A post does
+  not imply current location, visiting, or a coordinate-backed map strip.
+- `SaveAtlasType` uses bundled Fusion Pixel 12px (Traditional Chinese and Latin),
+  with Dynamic Type scaling. `SavePixelDisplayText` uses the same font so localized
+  headings never replace unsupported letters with another glyph.
+- Pixel sampling belongs on image and icon leaves. Never rasterize entire controls,
+  accessibility content, text, MapKit views or sheets. Original image bytes, cache
+  lifetime, authorization and shared-photo metadata handling stay unchanged.
+- Photos still take precedence over category illustrations, but are displayed with
+  pixel sampling. Missing-image illustrations are visibly illustrative; fictional
+  avatar fallback artwork does not infer a user's appearance.
+- Keep the Atlas paper/forest/coral palette, existing state labels and four root
+  destinations with the center Save action. The tab shell is flat full-width with
+  coral on the active destination only; the center `+` stays coral on every screen.
+- `SaveKraftStamp` encloses art and name in one rectangular-perforation kraft frame.
+  Home uses horizontal tickets; Passport uses portrait stamps. Empty Passport slots
+  show `???` once with an accessible empty-slot label. Preserve 44pt hit targets.
+- Seals never show raw hex, debug IDs, or pipeline tokens in primary UI.
+- Licensed font sources and redistribution notices ship in `Resources/PixelFont`.
+  The shader requires Xcode's Metal Toolchain on local and CI build hosts.
 
 ### Review Clue
 
@@ -251,7 +223,7 @@ Avoid these in user-facing UI:
 ## Atlas Postcard Tokens
 
 Atlas Postcard is the current visual system for Savvy's primary surfaces. It
-reads as an illustrated travel atlas: warm paper panels, native rounded
+reads as an illustrated travel atlas: warm paper panels, pixel
 type, kraft luggage-tag chips, and postage/ticket shapes.
 
 Canonical source of truth is code:
@@ -313,13 +285,13 @@ accept `relativeTo:`, and editorial scales relative to headline.
 
 | Role | Token | Face | Use |
 | --- | --- | --- | --- |
-| Pixel display | `SavePixelDisplayText` | 5×7 nearest-neighbor | Savvy wordmark, Passport header |
+| Pixel display | `SavePixelDisplayText` | Fusion Pixel 12px | Savvy wordmark, Passport header |
 | Pixel chrome | `SavePixelChromeIcon` | 8×8 nearest-neighbor | Quiet Home header Trips / Saves / More |
-| Display | `SaveAtlasType.display(_:)` | System Rounded Semibold | Hero numerals, action labels, display moments |
-| Strong | `SaveAtlasType.strong(_:)` | System Rounded Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
-| Body | `SaveAtlasType.body(_:)` | System Rounded Medium | Body and detail copy |
-| Regular | `SaveAtlasType.regular(_:)` | System Rounded Regular | Captions, subtitles, count labels |
-| Editorial | `SaveAtlasType.editorial(_:)` | System Rounded Regular Italic | Editorial brand moments: envelope titles, counts, postcard captions |
+| Display | `SaveAtlasType.display(_:)` | Fusion Pixel 12px | Hero numerals, action labels, display moments |
+| Strong | `SaveAtlasType.strong(_:)` | Fusion Pixel 12px | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
+| Body | `SaveAtlasType.body(_:)` | Fusion Pixel 12px | Body and detail copy |
+| Regular | `SaveAtlasType.regular(_:)` | Fusion Pixel 12px | Captions, subtitles, count labels |
+| Editorial | `SaveAtlasType.editorial(_:)` | Fusion Pixel 12px Italic | Editorial brand moments: envelope titles, counts, postcard captions |
 
 Typography rules:
 
@@ -369,11 +341,11 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 
 | Surface | System |
 | --- | --- |
-| Home (`SaveTileTownHomeView`) | Tile-town peek + Atlas chrome |
+| Home (`SaveTileTownHomeView`) | Native geographic peek + pixel Atlas chrome |
 | Saves drawer + search results | Atlas |
 | Plan (`SavePlanView`) | Atlas |
 | Trips (`TripPackViews`) | Atlas |
-| Map shell and drawer panel (`SaveTileTownRootMap`, `SaveMapDrawerPanel`) | Tile-town base + Atlas chrome |
+| Map shell and drawer panel (`SaveTileTownRootMap`, `SaveMapDrawerPanel`) | Native MapKit base + pixel Atlas chrome |
 | Ask drawer (`AIDrawerView`) | Atlas |
 | Onboarding | Atlas |
 | Google Takeout import | Atlas (some legacy tokens remain inline) |
@@ -518,7 +490,7 @@ Source: `SAV-E/Extensions/Color+Theme.swift`.
 
 ### Map Pins
 
-Source: product Map uses `SaveTileTownPinMark` on `SaveTileTownCanvas`.
+Source: product Map uses existing saved/review/social annotations on native MapKit.
 Trip / Navigate MapKit still uses `SAV-E/Views/Map/MapView.swift`.
 
 Rules:
@@ -638,7 +610,7 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
   `plus`, `person.2`, `book.closed`); coral on the active destination only;
   the center `+` is a coral circle on every screen. Do not use a mint
   selection pill or a floating rounded capsule.
-- Home owns waiting clues and recent Map Stamps, with a tile-town peek. The
+- Home owns waiting clues and recent Map Stamps, with a native geographic peek. The
   full private library stays reachable from More → Manage saved places and
   from quiet Home search. Do not add a duplicate Saves tab.
 - + opens capture and leaves the previous destination selected when dismissed.
@@ -651,7 +623,7 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 
 ### Home collection search
 
-Resting Home is Savvy + tile-town peek + clues bar + recent stamps. It is not
+Resting Home is Savvy + native geographic peek + clues bar + recent stamps. It is not
 the Map tab. Nearby / Saved / Friends chips must not appear here.
 
 Quiet search remains at the top of the collection job. Typing filters the
@@ -662,7 +634,7 @@ place metadata. No provider search or analysis calls, inference of missing
 facts, public discovery or automatic saves occur on this Home surface.
 Clearing search returns to the peek + clues + recent-stamps rest state.
 
-The peek card places a confirmed Map Stamp label inside the town; recent stamps
+The peek card labels a confirmed Map Stamp above its geographic preview; recent stamps
 use `SaveKraftStamp` (photo face + name inside the same perforated ticket).
 Recent-stamp labels scroll above the tab bar (`rootTabScrollClearance`).
 The clues bar keeps Review clues. Waiting for review (Review Candidate and
@@ -712,8 +684,8 @@ private input, or adds a place.
 
 ### Map
 
-The map is the spatial memory canvas. The product Map tab is tile-town, not
-live MapKit.
+The map is the spatial memory canvas. The product Map tab uses live MapKit,
+with pixel icons and kraft chrome outside the basemap.
 
 Rules:
 
@@ -722,11 +694,11 @@ Rules:
   48pt status band. The search drawer never covers them: large stop ends
   below `SaveTileTownProductLock.mapChromeHeight`, and only the visible
   paper hits so pins stay tappable through medium.
-- The town canvas pans with a drag. Pin tap selects the kraft peek card.
+- The native map preserves pan and zoom. Pin tap selects the kraft peek card.
 - Drawer search (collapsed paper ticket) still opens the parked search panel.
   Category, Want to try, Visited, and Nearby-distance chips may remain in
   the drawer as Map Stamp lenses; they are not Home chrome.
-- Only reliable states get pins on the town. Source-only clues have no pin.
+- Only reliable coordinates get pins on the map. Source-only clues have no pin.
 - Unsaved nearby candidates are shown only after an explicit drawer action.
 - Selected stamp shows a kraft peek (name + date/area), not a default card
   at rest.
@@ -734,8 +706,7 @@ Rules:
   focuses the search field, and shows the keyboard.
 - Dragging the handle or panel resizes through parked stages and must not
   request keyboard focus. Tapping the resize handle remains a resize control.
-- Trip maps and Navigate may still use MapKit / Apple Maps. That is not the
-  product Map base.
+- Trip maps and Navigate continue to use MapKit / Apple Maps.
 
 ### Plan
 
@@ -865,7 +836,7 @@ source clues or visit timestamps appear in post projections.
 
 Home / Map / + / Friends / Passport remains the root bar. Friends is
 people-first: postage-framed photos or fictional pixel portraits, author name, and “Shared …” / “Wants to go …” for the
-latest explicit post. Never infer current location or a visit from a shared post. A small tile-town strip may sit under the list; it
+latest explicit post. Never infer current location or a visit from a shared post. A sharing summary may sit under the list; it
 must not duplicate the full Map tab. An author opens a read-only passport
 under the same live follower audience gate.
 Loading, retry, empty and withdrawn states are explicit; sample activity exists

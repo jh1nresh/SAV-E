@@ -514,13 +514,13 @@ struct SaveMapRootView: View {
     var body: some View {
         Group {
             if SaveAtlasRuntime.usesParityFixture {
-                // Fixture-only illustrated atlas. Production Map is tile-town
-                // (2026-10-14 founder lock; H1/M1 MapKit-only base superseded).
+                // Fixture-only illustrated atlas. Production uses normal MapKit geography.
                 RootAtlasMapScreen()
                     .environment(\.atlasPresentation, atlasPresentation)
             } else {
                 SaveTileTownRootMap(
                     mapViewModel: mapViewModel,
+                    shouldFocusOnUserLocation: shouldFocusOnUserLocation,
                     presentation: atlasPresentation,
                     onClearSelection: mapViewModel.clearSelectedMapObject,
                     onPlanAroundPlace: onPlanAroundPlace

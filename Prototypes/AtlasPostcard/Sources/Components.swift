@@ -116,6 +116,8 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
     let accessibilityPrefix: String
     var displayTitle: ((Item) -> String)? = nil
     var isRaisedControl: (Item) -> Bool = { _ in false }
+    var labelFont: Font = AtlasType.display(11)
+    var iconPresentation: (AnyView, CGFloat) -> AnyView = { view, _ in view }
     let onSelect: (Item) -> Void
 
     private var tabItems: some View {
@@ -139,6 +141,7 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                                             lineWidth: AtlasTabBarMetrics.raisedControlStrokeWidth
                                         )
                                 }
+                                .modifier(AtlasIconPresentation(cellSize: 2, render: iconPresentation))
                                 .offset(y: AtlasTabBarMetrics.raisedControlOffsetY)
                         }
 
@@ -149,10 +152,11 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                                     weight: isRaisedControl(item) ? .semibold : .regular
                                 ))
                                 .frame(height: 24)
+                                .modifier(AtlasIconPresentation(cellSize: 1.5, render: iconPresentation))
 
                             if !isRaisedControl(item) {
                                 Text(displayTitle?(item) ?? item[keyPath: title])
-                                    .font(AtlasType.display(11))
+                                    .font(labelFont)
                                     .lineLimit(1)
                                     .minimumScaleFactor(0.85)
                             }
@@ -196,6 +200,14 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                     .allowsHitTesting(false)
             }
     }
+}
+
+/// The standalone prototype retains its default rendering. Production injects
+/// pixel styling without adding an app-only dependency to the shared component.
+private struct AtlasIconPresentation: ViewModifier {
+    let cellSize: CGFloat
+    let render: (AnyView, CGFloat) -> AnyView
+    func body(content: Content) -> some View { render(AnyView(content), cellSize) }
 }
 
 struct RoundStamp: View {

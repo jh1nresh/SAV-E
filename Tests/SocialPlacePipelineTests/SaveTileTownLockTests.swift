@@ -1,11 +1,41 @@
 import XCTest
 import UIKit
+import SwiftUI
+import CoreText
+import Metal
 @testable import SAVE
 
 @MainActor
 final class SaveTileTownLockTests: XCTestCase {
-    func testFounderLockSupersedesMapKitSoftPixelBase() {
-        XCTAssertTrue(SaveTileTownProductLock.productMapBaseIsTileTown)
+    func testBundledPixelFontHasLatinAndTraditionalChineseGlyphs() throws {
+        _ = SaveAtlasType.body(16)
+        let font = try XCTUnwrap(UIFont(name: SaveAtlasType.pixelFontName, size: 16))
+        XCTAssertEqual(font.fontName, SaveAtlasType.pixelFontName)
+        let characters = Array("Savvy地圖護照朋友".utf16)
+        var glyphs = [CGGlyph](repeating: 0, count: characters.count)
+        XCTAssertTrue(CTFontGetGlyphsForCharacters(font as CTFont, characters, &glyphs, characters.count))
+        XCTAssertFalse(glyphs.contains(0))
+    }
+
+    func testPixelShaderIsBundledAndStampPerforationsStayInsideBounds() throws {
+        let device = try XCTUnwrap(MTLCreateSystemDefaultDevice())
+        let library = try XCTUnwrap(device.makeDefaultLibrary())
+        XCTAssertTrue(library.functionNames.contains("savePixelate"))
+        for size in [CGSize(width: 164, height: 64), CGSize(width: 72, height: 96), CGSize(width: 2, height: 2)] {
+            let bounds = CGRect(origin: .zero, size: size)
+            let path = SavePostcardScallopedRectangle(depth: 3, pitch: 9).path(in: bounds)
+            XCTAssertTrue(bounds.insetBy(dx: -0.01, dy: -0.01).contains(path.boundingRect))
+            path.forEach { element in
+                switch element {
+                case .quadCurve, .curve: XCTFail("Pixel perforations must have straight edges")
+                default: break
+                }
+            }
+        }
+    }
+
+    func testNormalMapDirectionRetainsRootLensAndPassportContract() {
+        XCTAssertFalse(SaveTileTownProductLock.productMapBaseIsTileTown)
         XCTAssertFalse(SaveTileTownProductLock.homeShowsMapFilterChips)
         XCTAssertTrue(SaveTileTownProductLock.mapShowsNearbySavedFriendsChips)
         XCTAssertEqual(SaveTileTownProductLock.passportGoal(for: 4), 12)
@@ -24,13 +54,13 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(bar.contains("selection == item"))
         let design = try source(at: "DESIGN.md")
         XCTAssertTrue(design.contains("coral on the active destination only"))
-        XCTAssertTrue(design.contains("full-pixel tile-town"))
-        XCTAssertTrue(design.contains("superseded for the map base"))
+        XCTAssertTrue(design.contains("MapKit"))
     }
 
     func testHomeChromeOmitsMapLensesAndKeepsSearch() throws {
         let home = try source(at: "SAV-E/Views/TileTown/SaveTileTownHomeView.swift")
-        XCTAssertTrue(home.contains("SaveTileTownCanvas"))
+        XCTAssertFalse(home.contains("SaveTileTownCanvas"))
+        XCTAssertTrue(home.contains("Map("))
         XCTAssertTrue(home.contains("home.tileTown"))
         XCTAssertTrue(home.contains("home.cluesBar"))
         XCTAssertTrue(home.contains("Recent stamps") || home.contains("home.recentSaves"))
@@ -66,16 +96,18 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(design.contains("lives under More"))
     }
 
-    func testMapOwnsNearbySavedFriendsChipsOnTileTown() throws {
+    func testMapOwnsNearbySavedFriendsChipsWithNativeGeography() throws {
         let map = try source(at: "SAV-E/Views/TileTown/SaveTileTownRootMap.swift")
         let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
-        XCTAssertTrue(map.contains("SaveTileTownCanvas"))
+        XCTAssertFalse(map.contains("SaveTileTownCanvas"))
+        XCTAssertTrue(map.contains("MapView("))
         XCTAssertTrue(map.contains("AtlasMetrics.statusBarHeight"))
         XCTAssertFalse(map.contains(".padding(.top, 8)"))
         XCTAssertTrue(map.contains("SaveTileTownPeekCard"))
         XCTAssertTrue(map.contains("map.peek.card"))
         XCTAssertTrue(map.contains("accessibilityElement(children: .contain)"))
-        XCTAssertTrue(map.contains("allowsPan: true"))
+        XCTAssertTrue(map.contains("tracksVisibleRegion: true"))
+        XCTAssertFalse(map.contains("SaveTileTownLayout"))
         XCTAssertTrue(map.contains(".frame(minHeight: 44)"))
         let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
         XCTAssertTrue(town.contains("interpolationQuality = .none"))
@@ -90,7 +122,9 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertFalse(town.contains("struct Triangle"))
         XCTAssertTrue(map.contains("map.lens.nearby") || map.contains("map.lensRail"))
         XCTAssertTrue(map.contains("SaveTileTownMapLens"))
-        XCTAssertTrue(map.contains("map.liveSurface"))
+        let nativeMap = try source(at: "SAV-E/Views/Map/MapView.swift")
+        XCTAssertTrue(nativeMap.contains("map.liveSurface"))
+        XCTAssertFalse(map.contains("accessibilityIdentifier(\"map.liveSurface\")"))
         let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
         XCTAssertTrue(panel.contains("Spacer(minLength: 0)"))
         XCTAssertTrue(panel.contains("alignment: .bottom"))
@@ -130,6 +164,8 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(friends.contains("Wants to go ·"))
         XCTAssertFalse(friends.contains("Last at"))
         XCTAssertTrue(friends.contains("friends.mapStrip"))
+        XCTAssertFalse(friends.contains("SaveTileTownCanvas"))
+        XCTAssertTrue(friends.contains("sharedPlacesSummary"))
         XCTAssertTrue(friends.contains("friends.empty"))
         XCTAssertTrue(friends.contains("friends.findFriends"))
         XCTAssertTrue(friends.contains("friends.author."))
@@ -178,6 +214,44 @@ final class SaveTileTownLockTests: XCTestCase {
         let rows = SaveFriendLastAt.rows(from: posts)
         XCTAssertEqual(rows.count, 1)
         XCTAssertEqual(rows[0].lastPost.name, "Pine View")
+    }
+
+    func testHomeMapPreviewRejectsInvalidAndProviderOnlyCoordinates() throws {
+        let valid = try XCTUnwrap(ReviewDemoSeed.places().first)
+        let invalidCoordinates: [(Double, Double)] = [
+            (0, 0), (.nan, 121), (25, .infinity), (91, 121), (25, -181)
+        ]
+        for (latitude, longitude) in invalidCoordinates {
+            var invalid = valid
+            invalid.latitude = latitude
+            invalid.longitude = longitude
+            XCTAssertTrue(SaveHomeMapPreview.places(from: [mapPresentation(invalid)]).isEmpty)
+        }
+        var providerOnly = valid
+        providerOnly.coordinateSystem = .gcj02
+        XCTAssertTrue(SaveHomeMapPreview.places(from: [mapPresentation(providerOnly)]).isEmpty)
+        let preview = SaveHomeMapPreview.places(from: [mapPresentation(providerOnly), mapPresentation(valid)])
+        XCTAssertEqual(preview.map(\.id), [valid.id])
+        XCTAssertEqual(preview.first?.latitude, valid.latitude)
+        XCTAssertEqual(preview.first?.longitude, valid.longitude)
+    }
+
+    func testHomeMapDoesNotInventPinsFromPresentationOnlyCoordinates() {
+        let clue = AtlasPlacePresentation(
+            id: UUID().uuidString, name: "Unconfirmed clue", area: "",
+            region: nil, photoURL: nil, latitude: 25.033, longitude: 121.565,
+            relativeDay: "", note: ""
+        )
+        XCTAssertTrue(SaveHomeMapPreview.places(from: [clue]).isEmpty)
+        XCTAssertTrue(SaveHomeMapPreview.places(from: []).isEmpty)
+    }
+
+    private func mapPresentation(_ place: Place) -> AtlasPlacePresentation {
+        AtlasPlacePresentation(
+            id: place.id.uuidString, name: place.name, area: place.address,
+            region: nil, photoURL: nil, latitude: place.latitude, longitude: place.longitude,
+            relativeDay: "", note: "", searchPlace: place
+        )
     }
 
     func testTileTownLotsStayStableAndUnique() {

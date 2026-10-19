@@ -1,6 +1,7 @@
 import SwiftUI
+import MapKit
 
-/// Production Home for the 2026-10-14 tile-town lock.
+/// Production Home with a coordinate-backed MapKit peek and pixel memory UI.
 /// Resting chrome: Savvy + visible quiet pixel Trips/Saves/More + map peek +
 /// clues bar + recent stamps. Waiting for review lives under More.
 /// Nearby / Saved / Friends chips stay off this surface (Map-only).
@@ -180,7 +181,7 @@ struct SaveTileTownHomeView: View {
 
     private var searchField: some View {
         HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
+            Image(systemName: "magnifyingglass").savePixelated(cellSize: 1.5)
                 .foregroundStyle(SaveAtlasPalette.muted)
                 .accessibilityHidden(true)
             TextField(localized("Search saved places", "搜尋已存地點"), text: $search.draft)
@@ -192,7 +193,7 @@ struct SaveTileTownHomeView: View {
                 .accessibilityIdentifier("home.search")
             if search.isActive {
                 Button { search.clear(); isSearchFocused = false } label: {
-                    Image(systemName: "xmark.circle.fill").frame(width: 44, height: 44)
+                    Image(systemName: "xmark.circle.fill").savePixelated(cellSize: 1.5).frame(width: 44, height: 44)
                 }
                 .foregroundStyle(SaveAtlasPalette.muted)
                 .accessibilityLabel(localized("Clear search", "清除搜尋"))
@@ -269,13 +270,10 @@ struct SaveTileTownHomeView: View {
 
     private var peek: some View {
         ZStack(alignment: .bottomLeading) {
-            SaveTileTownCanvas(
-                pins: peekPins,
-                onSelect: { id in presentation.onOpenPlace(id.uuidString) }
-            )
-            .frame(height: 350)
-            .allowsHitTesting(false)
-            .accessibilityIdentifier("home.tileTown")
+            geographicPeek
+                .frame(height: 350)
+                // Retained for existing accessibility clients.
+                .accessibilityIdentifier("home.tileTown")
 
             if let featured {
                 Button { presentation.onOpenPlace(featured.id) } label: {
@@ -298,6 +296,45 @@ struct SaveTileTownHomeView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var geographicPeek: some View {
+        if let anchor = peekPlaces.first {
+            Map(
+                position: .constant(.region(MKCoordinateRegion(
+                    center: anchor.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.035, longitudeDelta: 0.035)
+                ))),
+                interactionModes: []
+            ) {
+                ForEach(peekPlaces) { place in
+                    Annotation("", coordinate: place.coordinate) {
+                        PlaceMapPin(place: place, isSelected: place.id.uuidString == featured?.id) {
+                            presentation.onOpenPlace(place.id.uuidString)
+                        }
+                    }
+                }
+            }
+            .mapStyle(.standard(elevation: .flat, pointsOfInterest: .all))
+            // Keep Apple's attribution above the selected memory card.
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Color.clear.frame(height: 148)
+            }
+        } else {
+            VStack(spacing: 10) {
+                Image(systemName: "map")
+                    .font(SaveAtlasType.display(28))
+                    .savePixelated(cellSize: 2)
+                Text(localized("No mapped places yet", "還沒有可顯示在地圖上的地點"))
+                    .font(SaveAtlasType.body(14))
+                    .multilineTextAlignment(.center)
+            }
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top, 48)
+            .background(SaveAtlasPalette.paper)
+        }
     }
 
     private var cluesBar: some View {
@@ -348,7 +385,7 @@ struct SaveTileTownHomeView: View {
                 }
                 Button { presentation.onOpenReview(item.id) } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: item.icon)
+                        Image(systemName: item.icon).savePixelated(cellSize: 1.5)
                             .foregroundStyle(SaveAtlasPalette.forest)
                             .frame(width: 36, height: 36)
                             .background(
@@ -450,15 +487,8 @@ struct SaveTileTownHomeView: View {
         presentation.savedPlaces.first
     }
 
-    private var peekPins: [SaveTileTownPin] {
-        presentation.savedPlaces.prefix(8).compactMap { place in
-            guard let id = UUID(uuidString: place.id) else { return nil }
-            return SaveTileTownPin(
-                id: id,
-                name: place.name,
-                isSelected: place.id == featured?.id
-            )
-        }
+    private var peekPlaces: [Place] {
+        SaveHomeMapPreview.places(from: presentation.savedPlaces)
     }
 
     private var matchingPlaces: [AtlasPlacePresentation] {
@@ -497,5 +527,13 @@ struct SaveTileTownHomeView: View {
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
         languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
+    }
+}
+
+/// Presentation coordinates alone cannot establish a saved Map Stamp identity.
+/// Provider-only, source-only and invalid coordinates never become Home pins.
+enum SaveHomeMapPreview {
+    static func places(from savedPlaces: [AtlasPlacePresentation]) -> [Place] {
+        Array(savedPlaces.compactMap(\.searchPlace).filter(\.isMapKitMappable).prefix(8))
     }
 }

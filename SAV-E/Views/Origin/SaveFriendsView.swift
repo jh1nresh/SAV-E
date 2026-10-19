@@ -43,8 +43,7 @@ struct SaveFriendsView: View {
                         .disabled(store.isLoading).frame(maxWidth: .infinity, minHeight: 44)
                 }
                 if !store.posts.isEmpty {
-                    SaveTileTownCanvas(pins: friendPins, showsPins: true, clipsToPaper: true)
-                        .frame(height: 88)
+                    sharedPlacesSummary
                         .accessibilityIdentifier("friends.mapStrip")
                 }
             }
@@ -63,7 +62,7 @@ struct SaveFriendsView: View {
 
     private var emptyState: some View {
         VStack(spacing: 16) {
-            Image(systemName: "person.2").font(.system(size: 46, weight: .light))
+            Image(systemName: "person.2").font(.system(size: 46, weight: .light)).savePixelated()
             Text(language.localized(english: "Their next place could be yours", traditionalChinese: "下一個想去的地方，從朋友開始"))
                 .font(SaveAtlasType.strong(21)).multilineTextAlignment(.center)
                 .accessibilityIdentifier("friends.empty")
@@ -135,10 +134,21 @@ struct SaveFriendsView: View {
         }
     }
 
-    private var friendPins: [SaveTileTownPin] {
-        store.posts.prefix(6).map { post in
-            SaveTileTownPin(id: post.id, name: post.name, isSelected: false)
-        }
+    /// Shared posts have no coordinates. A paper summary avoids implying
+    /// either a geographic position or a friend's current location.
+    private var sharedPlacesSummary: some View {
+        Label(
+            language.localized(
+                english: "Places explicitly shared by friends",
+                traditionalChinese: "朋友主動分享的地點"
+            ),
+            systemImage: "person.2"
+        )
+        .font(SaveAtlasType.body(13))
+        .foregroundStyle(SaveAtlasPalette.muted)
+        .frame(maxWidth: .infinity, minHeight: 64)
+        .padding(.horizontal, 16)
+        .background(SaveAtlasPalette.paper, in: SaveKraftTicketShape())
     }
 
     private func lastAtText(_ post: SharedPlacePost) -> String {

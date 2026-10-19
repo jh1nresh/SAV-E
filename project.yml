@@ -37,6 +37,10 @@ targets:
           - Resources/Secrets.plist
           - Resources/Secrets.plist.template
           - Resources/SAVEPro.storekit
+          - Resources/PixelFont
+      - path: SAV-E/Resources/PixelFont
+        type: folder
+        buildPhase: resources
       - path: SAV-EShared
       - path: Prototypes/AtlasPostcard/Sources
         excludes:

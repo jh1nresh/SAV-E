@@ -1,3 +1,4 @@
+import CoreText
 import SwiftUI
 import UIKit
 
@@ -186,9 +187,8 @@ enum SaveAtlasPalette {
     static let line = Color(light: "A68F78", dark: "807365")
 }
 
-/// Full-pixel tile-town materials (founder lock 2026-10-14).
-/// These paint the product Map base and Home/Friends peeks. Soft Pixel remains
-/// the pin / seal / Memo accent language on top of this town, not the map itself.
+/// Illustration materials retained for stamp fallback art.
+/// Product geography uses unfiltered native MapKit (2026-10-19 revision).
 enum SaveTileTownPalette {
     static let grass = Color(light: "8FBF6A", dark: "3D5A32")
     static let grassDeep = Color(light: "6FA04E", dark: "2E4526")
@@ -204,6 +204,15 @@ enum SaveTileTownPalette {
 }
 
 enum SaveAtlasType {
+    static let pixelFontName = "Fusion-Pixel-12px-Prop-zh-Hant-Regular"
+    private static let registerPixelFont: Void = {
+        guard let url = Bundle.main.url(
+            forResource: "fusion-pixel-12px-proportional-zh_hant",
+            withExtension: "otf", subdirectory: "PixelFont"
+        ) else { return }
+        CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+    }()
+
     static func display(
         _ size: CGFloat,
         relativeTo style: Font.TextStyle = .body
@@ -241,13 +250,10 @@ enum SaveAtlasType {
         weight: UIFont.Weight,
         relativeTo style: Font.TextStyle
     ) -> Font {
-        let systemFont = UIFont.systemFont(ofSize: size, weight: weight)
-        let descriptor = systemFont.fontDescriptor.withDesign(.rounded)
-            ?? systemFont.fontDescriptor
-        let roundedFont = UIFont(descriptor: descriptor, size: size)
-        let scaledFont = UIFontMetrics(forTextStyle: style.uiTextStyle)
-            .scaledFont(for: roundedFont)
-        return Font(scaledFont)
+        _ = registerPixelFont
+        let font = UIFont(name: pixelFontName, size: size)
+            ?? UIFont.systemFont(ofSize: size, weight: weight)
+        return Font(UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: font))
     }
 }
 
@@ -738,48 +744,35 @@ nonisolated struct SavePostcardScallopedRectangle: Shape {
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let radius = pitch / 2
-        path.move(to: CGPoint(x: rect.minX + radius, y: rect.minY + depth))
-
-        var x = rect.minX + radius
-        while x < rect.maxX - radius {
-            path.addQuadCurve(
-                to: CGPoint(x: x + pitch, y: rect.minY + depth),
-                control: CGPoint(x: x + radius, y: rect.minY - depth)
-            )
-            x += pitch
+        let inset = min(max(0, depth), min(rect.width, rect.height) / 4)
+        let step = max(4, pitch)
+        let corners = [CGPoint(x: rect.minX + inset, y: rect.minY + inset),
+                       CGPoint(x: rect.maxX - inset, y: rect.minY + inset),
+                       CGPoint(x: rect.maxX - inset, y: rect.maxY - inset),
+                       CGPoint(x: rect.minX + inset, y: rect.maxY - inset)]
+        path.move(to: corners[0])
+        for edge in 0..<4 {
+            let start = corners[edge]
+            let end = corners[(edge + 1) % 4]
+            let length = hypot(end.x - start.x, end.y - start.y)
+            guard length > 0 else { continue }
+            let dx = (end.x - start.x) / length
+            let dy = (end.y - start.y) / length
+            let count = max(1, Int(length / step))
+            let unit = length / CGFloat(count)
+            func point(_ distance: CGFloat, _ outward: CGFloat = 0) -> CGPoint {
+                CGPoint(x: start.x + dx * distance + dy * outward,
+                        y: start.y + dy * distance - dx * outward)
+            }
+            for tooth in 0..<count {
+                let offset = CGFloat(tooth) * unit
+                path.addLine(to: point(offset + unit * 0.25))
+                path.addLine(to: point(offset + unit * 0.25, inset))
+                path.addLine(to: point(offset + unit * 0.75, inset))
+                path.addLine(to: point(offset + unit * 0.75))
+                path.addLine(to: point(offset + unit))
+            }
         }
-
-        path.addLine(to: CGPoint(x: rect.maxX - depth, y: rect.minY + radius))
-        var y = rect.minY + radius
-        while y < rect.maxY - radius {
-            path.addQuadCurve(
-                to: CGPoint(x: rect.maxX - depth, y: y + pitch),
-                control: CGPoint(x: rect.maxX + depth, y: y + radius)
-            )
-            y += pitch
-        }
-
-        path.addLine(to: CGPoint(x: rect.maxX - radius, y: rect.maxY - depth))
-        x = rect.maxX - radius
-        while x > rect.minX + radius {
-            path.addQuadCurve(
-                to: CGPoint(x: x - pitch, y: rect.maxY - depth),
-                control: CGPoint(x: x - radius, y: rect.maxY + depth)
-            )
-            x -= pitch
-        }
-
-        path.addLine(to: CGPoint(x: rect.minX + depth, y: rect.maxY - radius))
-        y = rect.maxY - radius
-        while y > rect.minY + radius {
-            path.addQuadCurve(
-                to: CGPoint(x: rect.minX + depth, y: y - pitch),
-                control: CGPoint(x: rect.minX - depth, y: y - radius)
-            )
-            y -= pitch
-        }
-
         path.closeSubpath()
         return path
     }
@@ -807,5 +800,17 @@ nonisolated struct SavePostcardSealShape: Shape {
         }
         path.closeSubpath()
         return path
+    }
+}
+
+/// Display-only sampling. Apply to image/icon leaves, never maps or whole controls.
+/// Source bytes, image caches, accessibility labels and hit targets are unchanged.
+extension View {
+    func savePixelated(cellSize: CGFloat = 2) -> some View {
+        let cell = max(1, cellSize)
+        return layerEffect(
+            ShaderLibrary.savePixelate(.boundingRect, .float(Float(cell))),
+            maxSampleOffset: CGSize(width: cell, height: cell)
+        )
     }
 }

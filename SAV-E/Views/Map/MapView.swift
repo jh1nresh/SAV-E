@@ -7,6 +7,9 @@ struct MapView: View {
     let shouldFocusOnUserLocationOnLaunch: Bool
     let displayedPlaces: [Place]?
     let showsAuxiliaryPins: Bool
+    let showsSocialPins: Bool
+    let tracksVisibleRegion: Bool
+    let bottomOverlayClearance: CGFloat?
     let numberedPlacePositions: [UUID: Int]
     let contextBadgeText: String?
 
@@ -15,6 +18,9 @@ struct MapView: View {
         shouldFocusOnUserLocationOnLaunch: Bool,
         displayedPlaces: [Place]? = nil,
         showsAuxiliaryPins: Bool = true,
+        showsSocialPins: Bool = true,
+        tracksVisibleRegion: Bool = false,
+        bottomOverlayClearance: CGFloat? = nil,
         numberedPlacePositions: [UUID: Int] = [:],
         contextBadgeText: String? = nil
     ) {
@@ -22,6 +28,9 @@ struct MapView: View {
         self.shouldFocusOnUserLocationOnLaunch = shouldFocusOnUserLocationOnLaunch
         self.displayedPlaces = displayedPlaces
         self.showsAuxiliaryPins = showsAuxiliaryPins
+        self.showsSocialPins = showsSocialPins
+        self.tracksVisibleRegion = tracksVisibleRegion
+        self.bottomOverlayClearance = bottomOverlayClearance
         self.numberedPlacePositions = numberedPlacePositions
         self.contextBadgeText = contextBadgeText
     }
@@ -34,12 +43,12 @@ struct MapView: View {
             // trailing clearance is enough. Selection swaps the pill for a
             // taller place peek, so locate rises with that chrome.
             let isEmbeddedCrop = displayedPlaces != nil
-            let bottomChromeInset = isEmbeddedCrop
+            let bottomChromeInset = bottomOverlayClearance ?? (isEmbeddedCrop
                 ? max(geo.safeAreaInsets.bottom + 18, 28)
                 : max(
                     geo.safeAreaInsets.bottom + (viewModel.selectedPlace == nil ? 148 : 240),
                     viewModel.selectedPlace == nil ? 160 : 252
-                )
+                ))
 
             ZStack {
                 Map(position: $viewModel.cameraPosition, selection: $viewModel.selectedMapFeature) {
@@ -82,7 +91,7 @@ struct MapView: View {
                             }
                         }
 
-                        ForEach(viewModel.visibleSocialPlaces) { place in
+                        ForEach(showsSocialPins ? viewModel.visibleSocialPlaces.filter(\.isMapKitMappable) : []) { place in
                             Annotation("", coordinate: place.coordinate) {
                                 SocialPlaceMapPin(
                                     place: place,
@@ -140,7 +149,7 @@ struct MapView: View {
                     viewModel.selectMapFeature(feature)
                 }
                 .onMapCameraChange(frequency: .onEnd) { context in
-                    guard displayedPlaces == nil else { return }
+                    guard displayedPlaces == nil || tracksVisibleRegion else { return }
                     viewModel.updateVisibleMapRegion(context.region)
                 }
                 .accessibilityIdentifier("map.liveSurface")
@@ -156,7 +165,9 @@ struct MapView: View {
                     .padding(.trailing, 16)
                     // Apple Maps / DESIGN.md: one-handed bottom-trailing locate,
                     // cleared above the floating search pill or place peek.
-                    .padding(.bottom, bottomChromeInset)
+                    // Root Map credits sit above the bottom map inset. Keep
+                    // the locate button another control-gap above attribution.
+                    .padding(.bottom, bottomChromeInset + (bottomOverlayClearance == nil ? 0 : 32))
                 }
                 .animation(SaveTheme.Motion.standardSpring, value: viewModel.selectedPlace?.id)
 
@@ -376,6 +387,7 @@ private struct CurrentLocationButton: View {
                     Image(systemName: "location.fill")
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(controlForeground)
+                        .savePixelated(cellSize: 2)
                 }
             }
             .frame(width: 48, height: 48)
@@ -583,6 +595,7 @@ private struct DefaultPOIMarker: View {
                 .font(.system(size: isSelected ? 15 : 12, weight: .semibold))
                 .foregroundStyle(state == .saved ? SaveAtlasPalette.paper : tint)
         }
+        .savePixelated(cellSize: 2)
         .shadow(color: SaveAtlasPalette.ink.opacity(isSelected ? 0.16 : 0.08), radius: 2, y: 1)
         // Every state keeps its symbol at rest and a 44pt touch region.
         .frame(width: 44, height: 44)

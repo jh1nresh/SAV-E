@@ -1,16 +1,18 @@
 import CoreLocation
 import SwiftUI
 
-/// Product Map tab: full-pixel tile-town base with Nearby / Saved / Friends
-/// lenses. Drawer search and Trip MapKit stay elsewhere.
+/// Product Map uses normal MapKit geography with Nearby / Saved / Friends
+/// lenses. The surrounding memory UI retains the pixel presentation.
 struct SaveTileTownRootMap: View {
     @ObservedObject var mapViewModel: MapViewModel
+    let shouldFocusOnUserLocation: Bool
     let presentation: AtlasPresentation
     let onClearSelection: () -> Void
     let onPlanAroundPlace: (Place) -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject private var locationService = LocationService.shared
     @State private var lens: SaveTileTownMapLens = .saved
+    @State private var didPrepareInitialCamera = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -26,13 +28,14 @@ struct SaveTileTownRootMap: View {
                     .padding(.horizontal, 16)
 
                 ZStack(alignment: .bottomLeading) {
-                    SaveTileTownCanvas(
-                        pins: visiblePins,
-                        clipsToPaper: false,
-                        allowsPan: true,
-                        onSelect: selectPin
+                    MapView(
+                        viewModel: mapViewModel,
+                        shouldFocusOnUserLocationOnLaunch: false,
+                        displayedPlaces: visiblePlaces,
+                        showsSocialPins: lens == .friends,
+                        tracksVisibleRegion: true,
+                        bottomOverlayClearance: mapViewModel.selectedPlace == nil ? 28 : 164
                     )
-                    .accessibilityIdentifier("map.liveSurface")
 
                     if let place = mapViewModel.selectedPlace {
                         Button {
@@ -58,39 +61,34 @@ struct SaveTileTownRootMap: View {
                         ))
                     }
                 }
-                .overlay(alignment: .topTrailing) {
-                    Button {
-                        lens = .nearby
-                        Task { _ = await locationService.requestCurrentLocation() }
-                    } label: {
-                        Image(systemName: "location.fill")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(SaveAtlasPalette.forest)
-                            .frame(width: 48, height: 48)
-                            .background(SaveAtlasPalette.paper, in: Circle())
-                            .overlay {
-                                Circle().stroke(SaveAtlasPalette.line.opacity(0.22), lineWidth: 1)
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(languageSettings.localized(
-                        english: "Center map on current location",
-                        traditionalChinese: "將地圖移到目前位置"
-                    ))
-                    .accessibilityIdentifier("map.currentLocation")
-                    .padding(.trailing, 14)
-                    .padding(.top, 14)
-                }
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .stroke(SaveAtlasPalette.line.opacity(0.22), lineWidth: 1)
                 }
                 .padding(.horizontal, 12)
-                .padding(.bottom, 96)
+                // Reserve the collapsed command shelf as well as the root tab bar.
+                .padding(.bottom, 160)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task {
+            guard !didPrepareInitialCamera else { return }
+            didPrepareInitialCamera = true
+            // Preserve a search/review focus or the user's last panned viewport.
+            guard mapViewModel.visibleMapRegion == nil,
+                  !mapViewModel.cameraPosition.positionedByUser,
+                  mapViewModel.selectedReviewCandidate == nil,
+                  mapViewModel.selectedMapCandidate == nil,
+                  mapViewModel.selectedSocialPlace == nil else { return }
+            if shouldAutomaticallyLocate && mapViewModel.selectedPlace == nil {
+                // Existing permission only. The explicit locate button owns prompts.
+                await mapViewModel.focusOnUserLocationOnLaunch()
+            } else if let place = (mapViewModel.selectedPlace.map { [$0] } ?? visiblePlaces)
+                .first(where: \.isMapKitMappable) {
+                mapViewModel.focusRegion(latitude: place.latitude, longitude: place.longitude)
+            }
+        }
         .onChange(of: lens) { _, newLens in
             if newLens == .friends {
                 mapViewModel.selectSocialLens(.forYou)
@@ -109,6 +107,7 @@ struct SaveTileTownRootMap: View {
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: item.systemImage)
+                            .savePixelated(cellSize: 2)
                         Text(item.title(language: languageSettings.language))
                     }
                     .font(SaveAtlasType.strong(13))
@@ -134,40 +133,30 @@ struct SaveTileTownRootMap: View {
                 .accessibilityAddTraits(lens == item ? .isSelected : [])
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.lensRail")
+    }
+
+    private var shouldAutomaticallyLocate: Bool {
+        shouldFocusOnUserLocation &&
+            [.authorizedAlways, .authorizedWhenInUse].contains(locationService.authorizationStatus)
     }
 
     private var visiblePlaces: [Place] {
         switch lens {
         case .saved:
-            return mapViewModel.places
+            return mapViewModel.filteredPlaces
         case .nearby:
             return SaveMapIntentFilter.places(
-                mapViewModel.places,
+                mapViewModel.filteredPlaces,
                 categories: [],
                 intents: [.nearby],
                 nearbyAnchor: locationService.currentLocation?.coordinate
                     ?? mapViewModel.nearbyFilterAnchor
             )
         case .friends:
-            let social = mapViewModel.visibleSocialPlaces
-            return social.isEmpty ? mapViewModel.socialPlaces : social
-        }
-    }
-
-    private var visiblePins: [SaveTileTownPin] {
-        visiblePlaces.map { place in
-            SaveTileTownPin(
-                id: place.id,
-                name: place.name,
-                isSelected: mapViewModel.selectedPlace?.id == place.id
-            )
-        }
-    }
-
-    private func selectPin(_ id: UUID) {
-        if let place = visiblePlaces.first(where: { $0.id == id }) {
-            mapViewModel.selectPlace(place)
+            // Social pins retain their unsaved state and selection action in MapView.
+            return []
         }
     }
 
