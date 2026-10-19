@@ -574,7 +574,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.place.\(taipeiParkID)"].waitForExistence(timeout: stepTimeout))
         tapReachable(app.descendants(matching: .any)["home.miniMap"])
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-        let mapGo = app.descendants(matching: .any)["map.go"]
+        let mapGo = app.buttons["map.go"]
         XCTAssertTrue(mapGo.waitForExistence(timeout: stepTimeout), "Mini-map must open Map with Eat/Go")
         XCTAssertTrue(mapGo.isSelected, "Mini-map must carry the Go lens")
         XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.\(taipeiParkID)"].waitForExistence(timeout: stepTimeout))
@@ -585,7 +585,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.place.\(taipeiCafeID)"].waitForExistence(timeout: stepTimeout))
         tapReachable(app.descendants(matching: .any)["home.miniMap"])
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-        let mapEat = app.descendants(matching: .any)["map.eat"]
+        let mapEat = app.buttons["map.eat"]
         XCTAssertTrue(mapEat.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(mapEat.isSelected)
         XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.\(taipeiCafeID)"].waitForExistence(timeout: stepTimeout))

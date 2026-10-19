@@ -473,7 +473,7 @@ struct ContentView: View {
             return
         }
         if tab == .map {
-            doodleSession.mapFollowsHomeFilter = mapFollowsHomeFilter
+            doodleSession.applyMapTabSelection(followsHomeFilter: mapFollowsHomeFilter)
         }
         // Root destinations must leave any pushed Saves, Trips, or Trip route.
         // The tab bar can remain in the accessibility tree behind those
@@ -485,10 +485,21 @@ struct ContentView: View {
         )
     }
 
+    /// Mini-map does not go through `selectRootTab` so a default-false Map
+    /// write cannot clear the handoff before Map appears.
+    private func openMapFromMiniMap() {
+        doodleSession.beginMiniMapHandoff()
+        rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
+        selectedRootTab = SaveChromeNavigation.destination(
+            afterSelecting: .map,
+            current: selectedRootTab
+        )
+    }
+
     /// Search, show-on-map, and list handoffs must drop a leftover Home
     /// Eat/Go+city filter so the place the caller asked to show is visible.
     private func showMapTab() {
-        doodleSession.mapFollowsHomeFilter = false
+        doodleSession.abandonMiniMapHandoff()
         selectedRootTab = .map
     }
 
@@ -545,10 +556,7 @@ struct ContentView: View {
                                     )
                                 },
                                 onOpenPassport: openPassport,
-                                onOpenMap: {
-                                    doodleSession.mapFollowsHomeFilter = true
-                                    selectRootTab(.map, mapFollowsHomeFilter: true)
-                                }
+                                onOpenMap: { openMapFromMiniMap() }
                             )
                         case .map:
                             SaveMapRootView(
@@ -562,6 +570,7 @@ struct ContentView: View {
                                 onPlanAroundPlace: openPlanAround,
                                 onOpenPassport: openPassport
                             )
+                            .id(doodleSession.mapSurfaceID)
                         case .friends:
                             SaveFriendsView(
                                 currentUserID: PrivyAuthService.shared.currentUserId,

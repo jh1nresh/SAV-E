@@ -87,6 +87,9 @@ struct SaveTileTownRootMap: View {
                 mapViewModel.selectSocialLens(.forYou)
             }
         }
+        .onAppear {
+            session.consumeMiniMapHandoff()
+        }
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
         }

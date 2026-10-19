@@ -78,6 +78,14 @@ final class SaveDoodleSession: ObservableObject {
         didSet { defaults.set(mapFollowsHomeFilter, forKey: Self.followKey) }
     }
 
+    /// In-memory handoff. A later `selectRootTab(.map)` default-false write
+    /// cannot win while this is set; Map consumes it on appear.
+    @Published private(set) var pendingMiniMapHandoff = false
+
+    /// Bumped on mini-map open and on abandon so a reused Map tab identity
+    /// cannot keep the unfiltered wordmark-only header.
+    @Published private(set) var mapSurfaceID = UUID()
+
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -94,6 +102,43 @@ final class SaveDoodleSession: ObservableObject {
             city = .nearYou
         }
         mapFollowsHomeFilter = defaults.bool(forKey: Self.followKey)
+    }
+
+    /// Mini-map tap. Sets follow + a fresh Map identity before the tab switch.
+    func beginMiniMapHandoff() {
+        pendingMiniMapHandoff = true
+        mapFollowsHomeFilter = true
+        mapSurfaceID = UUID()
+    }
+
+    /// Map appear. Re-applies follow if a tab-bar default-false write landed
+    /// after `beginMiniMapHandoff`.
+    func consumeMiniMapHandoff() {
+        guard pendingMiniMapHandoff else { return }
+        mapFollowsHomeFilter = true
+        pendingMiniMapHandoff = false
+    }
+
+    /// Search / show-on-map / list handoffs drop a leftover Home filter.
+    func abandonMiniMapHandoff() {
+        pendingMiniMapHandoff = false
+        if mapFollowsHomeFilter {
+            mapSurfaceID = UUID()
+        }
+        mapFollowsHomeFilter = false
+    }
+
+    /// Tab-bar Map keeps the pending mini-map handoff; any other Map tab
+    /// selection uses the requested follow flag.
+    func applyMapTabSelection(followsHomeFilter: Bool) {
+        if pendingMiniMapHandoff {
+            mapFollowsHomeFilter = true
+            return
+        }
+        if mapFollowsHomeFilter != followsHomeFilter {
+            mapSurfaceID = UUID()
+        }
+        mapFollowsHomeFilter = followsHomeFilter
     }
 
     private static var suiteSuffix: String {

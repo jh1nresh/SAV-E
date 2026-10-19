@@ -127,6 +127,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(session.lens, .eat)
         XCTAssertEqual(session.city, .nearYou)
         XCTAssertFalse(session.mapFollowsHomeFilter)
+        XCTAssertFalse(session.pendingMiniMapHandoff)
         session.lens = .go
         session.city = .city("tokyo")
         session.mapFollowsHomeFilter = true
@@ -134,6 +135,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(restored.lens, .go)
         XCTAssertEqual(restored.city, .city("tokyo"))
         XCTAssertTrue(restored.mapFollowsHomeFilter)
+        XCTAssertFalse(restored.pendingMiniMapHandoff)
     }
 
     func testProductionHomeIsDoodleNotTileTown() throws {
@@ -242,6 +244,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         let map = try source(at: "SAV-E/Views/TileTown/SaveTileTownRootMap.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
         XCTAssertTrue(map.contains("@EnvironmentObject private var session: SaveDoodleSession"))
+        XCTAssertTrue(map.contains("if session.mapFollowsHomeFilter"))
         XCTAssertTrue(map.contains("guard session.mapFollowsHomeFilter else { return places }"))
         XCTAssertTrue(map.contains("SaveDoodleHomeCatalog.visiblePlaces("))
         XCTAssertTrue(map.contains("session.lens"))
@@ -252,20 +255,37 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(map.contains("showsCityPicker = true"))
         XCTAssertTrue(map.contains("map.city.\\(group.id)"))
         XCTAssertTrue(content.contains("selectRootTab(_ tab: SaveRootTab, mapFollowsHomeFilter: Bool = false)"))
-        XCTAssertTrue(content.contains("doodleSession.mapFollowsHomeFilter = mapFollowsHomeFilter"))
-        XCTAssertTrue(content.contains("doodleSession.mapFollowsHomeFilter = true"))
-        XCTAssertTrue(content.contains("selectRootTab(.map, mapFollowsHomeFilter: true)"))
+        XCTAssertTrue(content.contains("applyMapTabSelection(followsHomeFilter: mapFollowsHomeFilter)"))
+        XCTAssertTrue(content.contains("private func openMapFromMiniMap()"))
+        XCTAssertTrue(content.contains("beginMiniMapHandoff()"))
+        XCTAssertTrue(content.contains("onOpenMap: { openMapFromMiniMap() }"))
+        XCTAssertTrue(content.contains(".id(doodleSession.mapSurfaceID)"))
         XCTAssertTrue(content.contains("onSelect: { selectRootTab($0) }"))
         XCTAssertTrue(content.contains("private func showMapTab()"))
-        XCTAssertTrue(content.contains("doodleSession.mapFollowsHomeFilter = false"))
+        XCTAssertTrue(content.contains("abandonMiniMapHandoff()"))
+        XCTAssertTrue(map.contains("consumeMiniMapHandoff()"))
         let catalogSource = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")
         XCTAssertTrue(catalogSource.contains("save.doodle.mapFollows."))
         XCTAssertTrue(catalogSource.contains("mapFollowsHomeFilter = defaults.bool(forKey: Self.followKey)"))
+        XCTAssertTrue(catalogSource.contains("func beginMiniMapHandoff()"))
+        XCTAssertTrue(catalogSource.contains("func consumeMiniMapHandoff()"))
+        XCTAssertTrue(catalogSource.contains("func abandonMiniMapHandoff()"))
+        XCTAssertTrue(catalogSource.contains("func applyMapTabSelection(followsHomeFilter: Bool)"))
+        let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        XCTAssertTrue(root.contains("session.consumeMiniMapHandoff()"))
+        XCTAssertTrue(root.contains(".accessibilityIdentifier(\"map.root\")"))
+        XCTAssertFalse(
+            root.contains("accessibilityElement(children: .contain)\n        .accessibilityIdentifier(\"map.root\")"),
+            "map.root must not wrap children in contain+id or map.eat/map.go disappear"
+        )
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("func testHomeAndPassportWarmDarkMode"))
         XCTAssertTrue(rail.contains("home.eat"))
         XCTAssertTrue(rail.contains("home.citySwitcher"))
         XCTAssertTrue(rail.contains("captureHomeAndPassportCanvas"))
+        XCTAssertTrue(rail.contains("func testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertTrue(rail.contains("app.buttons[\"map.go\"]"))
+        XCTAssertTrue(rail.contains("app.buttons[\"map.eat\"]"))
         XCTAssertEqual(
             content.components(separatedBy: "selectedRootTab = .map").count - 1,
             1,
@@ -290,6 +310,51 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(session.mapFollowsHomeFilter)
         session.mapFollowsHomeFilter = false
         XCTAssertFalse(session.mapFollowsHomeFilter)
+        XCTAssertTrue(map.contains("[.isButton, .isSelected] : .isButton"))
+    }
+
+    func testMiniMapHandoffSurvivesDefaultFalseAndShowOnMapClearsIt() {
+        let defaults = UserDefaults(suiteName: "save.doodle.handoff.\(UUID().uuidString)")!
+        let session = SaveDoodleSession(defaults: defaults)
+        XCTAssertFalse(session.mapFollowsHomeFilter)
+        XCTAssertFalse(session.pendingMiniMapHandoff)
+        let firstSurface = session.mapSurfaceID
+
+        session.beginMiniMapHandoff()
+        XCTAssertTrue(session.pendingMiniMapHandoff)
+        XCTAssertTrue(session.mapFollowsHomeFilter)
+        XCTAssertNotEqual(session.mapSurfaceID, firstSurface)
+
+        session.applyMapTabSelection(followsHomeFilter: false)
+        XCTAssertTrue(
+            session.mapFollowsHomeFilter,
+            "A tab-bar default-false write must not beat a pending mini-map handoff"
+        )
+
+        session.consumeMiniMapHandoff()
+        XCTAssertTrue(session.mapFollowsHomeFilter)
+        XCTAssertFalse(session.pendingMiniMapHandoff)
+
+        session.abandonMiniMapHandoff()
+        XCTAssertFalse(session.mapFollowsHomeFilter)
+        XCTAssertFalse(session.pendingMiniMapHandoff)
+
+        session.beginMiniMapHandoff()
+        session.consumeMiniMapHandoff()
+        XCTAssertTrue(session.mapFollowsHomeFilter)
+        session.applyMapTabSelection(followsHomeFilter: false)
+        XCTAssertFalse(
+            session.mapFollowsHomeFilter,
+            "Direct Map tab after a consumed handoff must clear Eat/Go"
+        )
+
+        session.beginMiniMapHandoff()
+        session.abandonMiniMapHandoff()
+        XCTAssertFalse(
+            session.mapFollowsHomeFilter,
+            "show-on-map / search must abandon a leftover mini-map filter"
+        )
+        XCTAssertFalse(session.pendingMiniMapHandoff)
     }
 
     private func place(

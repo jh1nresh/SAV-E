@@ -496,6 +496,7 @@ struct SaveMapRootView: View {
     let onPlanAroundPlace: (Place) -> Void
     let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
+    @EnvironmentObject private var session: SaveDoodleSession
 
     var body: some View {
         Group {
@@ -515,6 +516,7 @@ struct SaveMapRootView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
+            session.consumeMiniMapHandoff()
 #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--uitest-map-place-selected"),
                mapViewModel.selectedPlace == nil,
@@ -523,7 +525,8 @@ struct SaveMapRootView: View {
             }
 #endif
         }
-        .accessibilityElement(children: .contain)
+        // Identifier only. Outermost contain+id swallowed map.eat / map.go
+        // the same way home.root once swallowed home.savedPlaces.
         .accessibilityIdentifier("map.root")
     }
 
