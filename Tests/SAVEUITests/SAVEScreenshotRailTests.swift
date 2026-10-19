@@ -689,6 +689,39 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected, "Capture cancellation returns to Passport")
     }
 
+    /// Warm dark tokens from spec §1 must paint Home and Passport once Light is unlocked.
+    /// Attachment names stay off the production-parity set (`five-tab-*`, `atlas-*`).
+    @MainActor
+    func testHomeAndPassportWarmDarkMode() throws {
+        XCUIDevice.shared.appearance = .dark
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(rootTabButton("Home", app: app).waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.textFields["home.search"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "dark-home")
+
+        openRootTab("Passport", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Passport", app: app).isSelected)
+        attach(app, name: "dark-passport")
+    }
+
     @MainActor
     func testCaptureAppStoreScreens() throws {
         let app = makeApp(
