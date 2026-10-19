@@ -362,8 +362,10 @@ verify the caller before accessing private data. Public application projections
 continue through the backend's routes, rather than direct browser table access.
 
 The migration also removes browser default table grants for the executing
-creator in the current schema, and revokes schema `CREATE` from `PUBLIC` and
-existing `anon`/`authenticated` roles before those defaults are relied on.
+creator in the current schema, and revokes schema `CREATE` and database
+`CREATE` from `PUBLIC` and existing `anon`/`authenticated` roles before those
+defaults are relied on. The backend pool pins `search_path=public` so an
+already planted `$user` schema cannot shadow unqualified runtime DDL.
 Later runtime/optional tables created by that same role therefore start
 private before any additional RLS setup. A leftover schema `CREATE` grant
 would let a browser role pre-create an absent runtime table such as
@@ -395,7 +397,8 @@ as tables; those parent grants are never rewritten. Sequence grants issued
 to browser roles by another grantor are refused the same way as table
 foreign-grantor ACLs. Inherited or foreign-grantor schema `CREATE` is
 refused the same way, because `REVOKE CREATE` from `PUBLIC`/`anon`/
-`authenticated` cannot remove those grants. It never changes global
+`authenticated` cannot remove those grants. Inherited or foreign-grantor
+database `CREATE` is refused for the same reason. It never changes global
 TABLE defaults itself. It does revoke this creator's global and schema
 SEQUENCE defaults to `PUBLIC`/`anon`/`authenticated`. Fresh schema and any
 re-apply to an existing install must use `-v ON_ERROR_STOP=1 -1` so a refused
