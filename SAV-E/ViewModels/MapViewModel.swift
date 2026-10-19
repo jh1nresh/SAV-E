@@ -871,11 +871,15 @@ final class MapViewModel: ObservableObject {
     }
 
     @discardableResult
-    func parkPlaceInUnplacedInbox(_ place: Place) -> PlaceReviewCandidate {
+    func parkPlaceInUnplacedInbox(_ place: Place, requestPaywall: Bool = true) -> PlaceReviewCandidate {
         let candidate = PlaceReviewCandidate.unplacedInboxItem(from: place)
         mirrorToLocalVault(candidate)
         reviewCandidates = [candidate] + reviewCandidates.filter { $0.id != candidate.id }
-        requestSavedPlaceLimitPaywall()
+        if requestPaywall {
+            requestSavedPlaceLimitPaywall()
+        } else {
+            SavePlaceLimitHandoff.markPaywallPending(notify: false)
+        }
         syncSavedPlaceLimitCache()
         return candidate
     }
@@ -3968,8 +3972,14 @@ final class MapViewModel: ObservableObject {
     }
 
     func saveImportedPlaces(_ drafts: [ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary {
-        guard let userId = authService.currentUserId else {
-            throw SupabaseError.notAuthenticated
+        let remoteUserId: String?
+        if usesRemotePersistence {
+            guard let userId = authService.currentUserId else {
+                throw SupabaseError.notAuthenticated
+            }
+            remoteUserId = userId
+        } else {
+            remoteUserId = nil
         }
 
         let existingKeys = Set(places.map(\.importDeduplicationKey))
@@ -3987,8 +3997,12 @@ final class MapViewModel: ObservableObject {
                     parked += 1
                     return
                 }
-                try await supabaseService.savePlace(place, userId: userId)
-                recordPassportFieldActionAfterSavingPlace()
+                if let userId = remoteUserId {
+                    try await supabaseService.savePlace(place, userId: userId)
+                    recordPassportFieldActionAfterSavingPlace()
+                } else {
+                    mirrorToLocalVault(place)
+                }
             },
             didPersist: { place in
                 if places.contains(where: { $0.id == place.id }) { return }

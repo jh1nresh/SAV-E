@@ -158,8 +158,14 @@ enum SavePlaceLimitHandoff {
 
     nonisolated static let paywallRequestedNotification = Notification.Name("save.placeLimitPaywallRequested")
 
-    nonisolated static func markPaywallPending(defaults: UserDefaults = makeDefaults()) {
+    nonisolated static func markPaywallPending(
+        defaults: UserDefaults = makeDefaults(),
+        notify: Bool = true
+    ) {
         defaults.set(true, forKey: pendingPaywallKey)
+        // Nested social sheets present the paywall themselves. Skip the
+        // notification so ContentView does not try to present underneath.
+        guard notify else { return }
         NotificationCenter.default.post(name: paywallRequestedNotification, object: nil)
     }
 
@@ -169,6 +175,24 @@ enum SavePlaceLimitHandoff {
         if pending { defaults.set(false, forKey: pendingPaywallKey) }
         return pending
     }
+}
+
+/// Where a Share Extension ready-to-save place goes when the free cap is full.
+nonisolated enum SaveShareExtensionPlaceDestination: Equatable, Sendable {
+    case pendingMapStamp
+    case unplacedInbox
+
+    static func resolve(
+        cached: SavePlaceLimitDecision
+    ) -> SaveShareExtensionPlaceDestination {
+        cached == .overFreeLimit ? .unplacedInbox : .pendingMapStamp
+    }
+}
+
+/// Distinct result for a social-post save that hit the free cap.
+nonisolated enum SharedPostSaveOutcome: Equatable, Sendable {
+    case saved
+    case parkedAtFreeLimit
 }
 
 /// The reason an AI assist was allowed or would be refused.

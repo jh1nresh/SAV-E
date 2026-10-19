@@ -3646,7 +3646,9 @@ struct ShareExtensionView: View {
             return
         }
 
-        if SavePlaceLimitHandoff.cachedDecision() == .overFreeLimit {
+        if SaveShareExtensionPlaceDestination.resolve(
+            cached: SavePlaceLimitHandoff.cachedDecision()
+        ) == .unplacedInbox {
             let candidate = unplacedReviewCandidate(
                 from: place,
                 sourceURLString: sharedURL.isEmpty ? sharedText : sharedURL,

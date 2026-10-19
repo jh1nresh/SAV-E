@@ -20,6 +20,32 @@ struct SharedPlacePost: Decodable, Identifiable, Equatable {
     var photo_version: String? = nil
 
     var icon: String { PlaceCategory(rawValue: category)?.iconName ?? "mappin.and.ellipse" }
+
+    /// Review/Unplaced stand-in when the free cap blocks a confirmed Map Stamp.
+    func asUnplacedPlace() -> Place {
+        Place(
+            id: id,
+            name: name,
+            address: address,
+            latitude: 0,
+            longitude: 0,
+            googlePlaceId: nil,
+            category: PlaceCategory(rawValue: category) ?? .attraction,
+            status: status,
+            rating: stars,
+            note: caption,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: author_handle ?? author_name,
+            googleRating: stars,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
+        )
+    }
 }
 
 struct SharedPlacePostsPage: Decodable {

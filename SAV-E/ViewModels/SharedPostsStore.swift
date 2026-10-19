@@ -14,6 +14,15 @@ final class SharedPostsStore: ObservableObject {
     private var requestID = UUID()
     private var route: Route = .feed
     private let service = SupabaseService.shared
+    var isOverFreeLimit: () -> Bool = {
+        SavePlaceLimitHandoff.cachedDecision() == .overFreeLimit
+    }
+    var parkOverLimitPlace: (Place) -> PlaceReviewCandidate = { place in
+        let candidate = PlaceReviewCandidate.unplacedInboxItem(from: place)
+        _ = try? SaveLocalVaultService.shared.saveReviewCandidate(candidate)
+        SavePlaceLimitHandoff.markPaywallPending(notify: false)
+        return candidate
+    }
 
     var isDemo: Bool { PrivyAuthService.shared.isReviewerDemo }
 
@@ -131,15 +140,20 @@ final class SharedPostsStore: ObservableObject {
         await refresh(route)
     }
 
-    func save(id: UUID) async throws {
+    func save(_ post: SharedPlacePost) async throws -> SharedPostSaveOutcome {
         guard !isDemo else { throw SupabaseError.notAuthenticated }
-        if SavePlaceLimitHandoff.cachedDecision() == .overFreeLimit {
-            SavePlaceLimitHandoff.markPaywallPending()
-            throw SavePlaceLimitError.parkedInUnplacedInbox
+        if isOverFreeLimit() {
+            _ = parkOverLimitPlace(post.asUnplacedPlace())
+            return .parkedAtFreeLimit
         }
         let account = PrivyAuthService.shared.currentUserId
-        _ = try await service.saveSharedPost(id: id)
+        _ = try await service.saveSharedPost(id: post.id)
         guard account == PrivyAuthService.shared.currentUserId, !Task.isCancelled else { throw CancellationError() }
+        return .saved
+    }
+
+    func acknowledgeSavedPlaceLimitPaywall() {
+        SavePlaceLimitHandoff.consumePaywallPending()
     }
 
     private static var fixturePosts: [SharedPlacePost] {
