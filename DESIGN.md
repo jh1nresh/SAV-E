@@ -641,10 +641,9 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
   top rule; 24px pixel line icons (`SavePixelChromeIcon`: house, map, plus,
   people, booklet); coral on the active destination only; the center `+` is
   a coral (`#F26B4A`) circle with no visible "Save" label, but VoiceOver and
-  `root.tab.save` keep the capture name. **DESIGN question:** the 2026-10-19
-  packet asked for a red `+` circle; this PR keeps production coral until
-  that token is decided. Do not use a mint selection pill or a floating
-  rounded capsule.
+  `root.tab.save` keep the capture name. Founder lock 2026-10-19: the `+`
+  stays coral `#F26B4A`, not red. Do not use a mint selection pill or a
+  floating rounded capsule.
 - Home owns waiting clues and recent Map Stamps, with a tile-town peek. The
   full private library stays reachable from More → Manage saved places and
   from quiet Home search. Do not add a duplicate Saves tab.
