@@ -3270,12 +3270,12 @@ struct ShareExtensionView: View {
             evidence: [
                 "Held in Review: Free: 50 places",
                 sourceURLString.isEmpty ? nil : "Source URL: \(sourceURLString)",
-                sourceText.isEmpty ? nil : String(sourceText.prefix(300))
+                sourceText.isEmpty ? nil : String(sourceText.prefix(300)),
+                place.googlePlaceId.map { "Google Place ID: \($0)" }
             ].compactMap { $0 },
             confidence: 0.9,
             missingInfo: [],
-            savedAt: Date(),
-            googlePlaceId: place.googlePlaceId
+            savedAt: Date()
         )
     }
 
