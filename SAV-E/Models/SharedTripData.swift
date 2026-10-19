@@ -587,6 +587,30 @@ enum ShareRoutePayloadLimits {
 }
 
 enum ShareRoutePayloadSanitizer {
+    /// Pipeline diagnostics that must never travel in a public share URL.
+    /// User-authored Recommender:/Source handle:/Analysis method:/Verified
+    /// coordinates lines are consented note text and are kept.
+    private static let diagnosticPrefixes = [
+        "Source URL:",
+        "Venue name:",
+        "Address clue:",
+        "Category clue:",
+        "Location clue:",
+        "Analysis pipeline:",
+        "Evidence tier:",
+        "Google Places refined match:",
+        "Google Places address:",
+        "Google Places coordinates:",
+        "Confidence:",
+        "Analysis failed:",
+        "SavvyMemory/",
+        "Debug:",
+        "Diagnostic:",
+        "Error:",
+        "Source recovery failed:",
+        "Stack trace:",
+    ]
+
     static func publicPhotoURLs(_ values: [String]) -> [String] {
         var seen = Set<String>()
         return Array(values
@@ -618,7 +642,10 @@ enum ShareRoutePayloadSanitizer {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { line in
                 guard !line.isEmpty else { return false }
-                return !SavvyGeneratedLine.isMarked(line)
+                if SavvyGeneratedLine.isMarked(line) { return false }
+                return !diagnosticPrefixes.contains {
+                    line.range(of: $0, options: [.caseInsensitive, .anchored]) != nil
+                }
             }
         let text = lines.prefix(2).joined(separator: " · ").trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
