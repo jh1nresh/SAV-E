@@ -76,9 +76,11 @@ begin
     -- below, before any DDL. MEMBER covers INHERIT (USAGE) and SET-able
     -- NOINHERIT memberships. Implicit predefined data/maintenance roles and
     -- SUPERUSER/BYPASSRLS also survive REVOKE and ordinary RLS. Existing-table
-    -- checks inspect only the managed allowlist so unrelated tables cannot
-    -- block a documented re-apply. A fresh empty schema has none. psql
-    -- without -1 commits each statement.
+    -- and owned-sequence checks inspect only the managed allowlist so unrelated
+    -- tables cannot block a documented re-apply. Direct PUBLIC/anon/
+    -- authenticated sequence defaults are revoked later; inherited sequence
+    -- grants are refused here. A fresh empty schema has none. psql without
+    -- -1 commits each statement.
     if exists (
         select 1 from pg_roles browser
         where browser.rolname in ('anon', 'authenticated')
@@ -192,6 +194,34 @@ begin
           )
     ) then
         raise exception 'Browser-role table grants issued by another grantor require separate authorized remediation';
+    end if;
+    if exists (
+        select 1 from pg_default_acl d
+        cross join lateral aclexplode(d.defaclacl) a
+        join pg_roles granted on granted.oid = a.grantee
+        join pg_roles browser on browser.rolname in ('anon', 'authenticated')
+        where d.defaclrole = current_user::regrole
+          and d.defaclobjtype = 'S'
+          and (d.defaclnamespace = 0 or d.defaclnamespace = current_schema()::regnamespace)
+          and granted.rolname not in ('anon', 'authenticated')
+          and pg_has_role(browser.oid, granted.oid, 'MEMBER')
+    ) or exists (
+        select 1
+        from unnest(managed_tables) as t(name)
+        join pg_class c on c.oid = to_regclass(format('%I.%I', target_schema, t.name))
+        join pg_depend dep on dep.refobjid = c.oid
+          and dep.classid = 'pg_class'::regclass
+          and dep.refclassid = 'pg_class'::regclass
+          and dep.deptype in ('a', 'i')
+        join pg_class s on s.oid = dep.objid and s.relkind = 'S'
+        cross join lateral aclexplode(s.relacl) a
+        join pg_roles granted on granted.oid = a.grantee
+        join pg_roles browser on browser.rolname in ('anon', 'authenticated')
+        where s.relacl is not null
+          and granted.rolname not in ('anon', 'authenticated')
+          and pg_has_role(browser.oid, granted.oid, 'MEMBER')
+    ) then
+        raise exception 'Browser-role sequence grants inherited through role membership require separate authorized remediation';
     end if;
 end $fresh_schema_privacy_guard$;
 
@@ -1903,6 +1933,10 @@ create index if not exists share_extension_analyses_session_created
 -- Implicit predefined privileges (pg_read_all_data, pg_write_all_data,
 -- pg_maintain) and SUPERUSER/BYPASSRLS memberships also need separate
 -- authorization; they do not appear in table ACLs.
+-- Table REVOKE does not remove sequence privileges. Current-creator default
+-- sequence grants to PUBLIC/anon/authenticated are revoked globally and in
+-- this schema; owned serial/identity sequences of managed tables are revoked
+-- the same way. Inherited sequence grants need separate authorization.
 -- Direct PUBLIC/anon/authenticated revokes do not remove privileges granted
 -- to a parent role that those browser roles can inherit or SET ROLE to.
 do $backend_data_privacy$
@@ -1910,6 +1944,7 @@ declare
     target_schema text := current_schema();
     managed_table text;
     browser_role text;
+    seq_name text;
     managed_tables text[] := array[
         'agent_capabilities',
         'agent_decisions',
@@ -2112,12 +2147,51 @@ begin
         raise exception 'Browser-role table grants issued by another grantor require separate authorized remediation';
     end if;
 
+    -- Sequence defaults and owned serial/identity sequences are not covered by
+    -- table REVOKE. Direct PUBLIC/anon/authenticated grants are revoked below.
+    -- MEMBER-reachable parent grants are not removed and must be refused.
+    if exists (
+        select 1 from pg_default_acl d
+        cross join lateral aclexplode(d.defaclacl) a
+        join pg_roles granted on granted.oid = a.grantee
+        join pg_roles browser on browser.rolname in ('anon', 'authenticated')
+        where d.defaclrole = current_user::regrole
+          and d.defaclobjtype = 'S'
+          and (d.defaclnamespace = 0 or d.defaclnamespace = target_schema::regnamespace)
+          and granted.rolname not in ('anon', 'authenticated')
+          and pg_has_role(browser.oid, granted.oid, 'MEMBER')
+    ) or exists (
+        select 1
+        from unnest(managed_tables) as t(name)
+        join pg_class c on c.oid = to_regclass(format('%I.%I', target_schema, t.name))
+        join pg_depend dep on dep.refobjid = c.oid
+          and dep.classid = 'pg_class'::regclass
+          and dep.refclassid = 'pg_class'::regclass
+          and dep.deptype in ('a', 'i')
+        join pg_class s on s.oid = dep.objid and s.relkind = 'S'
+        cross join lateral aclexplode(s.relacl) a
+        join pg_roles granted on granted.oid = a.grantee
+        join pg_roles browser on browser.rolname in ('anon', 'authenticated')
+        where s.relacl is not null
+          and granted.rolname not in ('anon', 'authenticated')
+          and pg_has_role(browser.oid, granted.oid, 'MEMBER')
+    ) then
+        raise exception 'Browser-role sequence grants inherited through role membership require separate authorized remediation';
+    end if;
+
     -- Only this creator/schema. Keep service_role grants, all other creators'
-    -- defaults, global defaults, and every unrelated existing table unchanged.
-    -- Later optional/runtime tables start private even before RLS is enabled.
+    -- defaults, current-creator global TABLE defaults, and every unrelated
+    -- existing table unchanged. Later optional/runtime tables start private
+    -- even before RLS is enabled. Sequence defaults for this creator are
+    -- revoked globally and in this schema so later serial columns start
+    -- without browser USAGE/SELECT/UPDATE.
     execute format('alter default privileges for role %I in schema %I revoke all privileges on tables from public', current_user, target_schema);
+    execute format('alter default privileges for role %I revoke all privileges on sequences from public', current_user);
+    execute format('alter default privileges for role %I in schema %I revoke all privileges on sequences from public', current_user, target_schema);
     for browser_role in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
         execute format('alter default privileges for role %I in schema %I revoke all privileges on tables from %I', current_user, target_schema, browser_role);
+        execute format('alter default privileges for role %I revoke all privileges on sequences from %I', current_user, browser_role);
+        execute format('alter default privileges for role %I in schema %I revoke all privileges on sequences from %I', current_user, target_schema, browser_role);
     end loop;
 
     foreach managed_table in array managed_tables loop
@@ -2130,6 +2204,23 @@ begin
         execute format('revoke all privileges on table %I.%I from public', target_schema, managed_table);
         for browser_role in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
             execute format('revoke all privileges on table %I.%I from %I', target_schema, managed_table, browser_role);
+        end loop;
+        -- serial/identity sequences keep a separate ACL. Owner implicit
+        -- privileges and existing service_role grants are retained so
+        -- backend inserts can still nextval.
+        for seq_name in
+            select distinct s.relname
+            from pg_depend dep
+            join pg_class s on s.oid = dep.objid and s.relkind = 'S'
+            where dep.refobjid = to_regclass(format('%I.%I', target_schema, managed_table))
+              and dep.classid = 'pg_class'::regclass
+              and dep.refclassid = 'pg_class'::regclass
+              and dep.deptype in ('a', 'i')
+        loop
+            execute format('revoke all privileges on sequence %I.%I from public', target_schema, seq_name);
+            for browser_role in select rolname from pg_roles where rolname in ('anon', 'authenticated') loop
+                execute format('revoke all privileges on sequence %I.%I from %I', target_schema, seq_name, browser_role);
+            end loop;
         end loop;
     end loop;
 end $backend_data_privacy$;

@@ -351,6 +351,11 @@ user records, table ownership, confirmation state, or subscription status.
 
 For existing allowlisted tables it enables RLS without `FORCE` and revokes all
 table privileges from `PUBLIC` and existing `anon`/`authenticated` roles.
+It also revokes this creator's default sequence privileges from those roles,
+both globally and in the current schema, and revokes all grants on owned
+serial/identity sequences of managed tables (including runtime `sendblue_*`
+`serial` tables). The backend table owner keeps implicit sequence `USAGE` so
+inserts can still `nextval`; existing `service_role` sequence grants stay.
 Backend table-owner access and existing `service_role` grants are retained;
 the Supabase gateway must keep its service-role credential server-side and
 verify the caller before accessing private data. Public application projections
@@ -359,8 +364,9 @@ continue through the backend's routes, rather than direct browser table access.
 The migration also removes browser default table grants for the executing
 creator in the current schema. Later runtime/optional tables created by that
 same role therefore start private before any additional RLS setup. Unknown
-**existing** tables, other creators' defaults, and database-global defaults are
-left intact. A future table that intentionally needs browser access must have an
+**existing** tables, other creators' defaults, and database-global TABLE
+defaults are left intact. This creator's global SEQUENCE defaults to
+`PUBLIC`/`anon`/`authenticated` are revoked. A future table that intentionally needs browser access must have an
 explicitly reviewed grant/policy. Re-apply the privacy migration after installing
 optional source-owned tables to enable their RLS too.
 
@@ -378,9 +384,13 @@ this applying owner, a `SUPERUSER` or `BYPASSRLS` role, or the implicit
 predefined roles `pg_read_all_data`, `pg_write_all_data`, and `pg_maintain`
 (when present) is refused before any ACL change: those rights do not appear
 in table or default ACLs. Memberships themselves are never rewritten.
-It never changes those global defaults itself. Fresh schema and any re-apply
-to an existing install must use `-v ON_ERROR_STOP=1 -1` so a refused guard
-cannot leave tables committed. Both stop-on-error and one transaction are
+Inherited sequence defaults or owned-sequence grants to a parent role those
+browser roles can `SET ROLE` to are refused, using the same `MEMBER` check
+as tables; those parent grants are never rewritten. It never changes global
+TABLE defaults itself. It does revoke this creator's global and schema
+SEQUENCE defaults to `PUBLIC`/`anon`/`authenticated`. Fresh schema and any
+re-apply to an existing install must use `-v ON_ERROR_STOP=1 -1` so a refused
+guard cannot leave tables committed. Both stop-on-error and one transaction are
 required. Apply the migration transactionally and verify effective privileges
 plus RLS after an authorized production apply; `/health/entitlements` checks
 storage shape, not this access boundary.
@@ -395,6 +405,10 @@ private defaults, rejection of incompatible global defaults, inherited
 membership grants, SET-able NOINHERIT memberships with a real browser
 `session_user` login, delegated-grantor browser grants, browser-role table
 ownership, column-level browser grants, implicit predefined data-role
-memberships, privileged-role membership, and an actual `psql` failure and
-rollback on incompatible global defaults. Coverage fails when a new
+memberships, privileged-role membership, an actual `psql` failure and
+rollback on incompatible global defaults, and the QA serial-sequence path:
+after Supabase-style table and sequence defaults, a runtime
+`sendblue_saved_places` (`id serial`) leaves `anon` unable to read
+`last_value` or `setval`, the backend insert still succeeds, and a
+`backend-data-privacy.sql` re-run stays closed. Coverage fails when a new
 source-owned table is missing from either static allowlist.

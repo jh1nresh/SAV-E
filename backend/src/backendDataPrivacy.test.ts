@@ -83,6 +83,13 @@ test("fresh schema privacy guard runs before DDL and documents transactional app
   assert.match(privacySQL, /privileged\.rolsuper/);
   assert.match(schemaSQL, /privileged\.rolsuper/);
   assert.match(schemaSQL.slice(0, guardEnd), /pg_read_all_data/, "fresh-schema guard must refuse implicit data roles before DDL");
+  assert.match(privacySQL, /revoke all privileges on sequences from public/);
+  assert.match(schemaSQL, /revoke all privileges on sequences from public/);
+  assert.match(privacySQL, /revoke all privileges on sequence %I\.%I from public/);
+  assert.match(schemaSQL, /revoke all privileges on sequence %I\.%I from public/);
+  assert.match(privacySQL, /Browser-role sequence grants inherited through role membership/);
+  assert.match(schemaSQL, /Browser-role sequence grants inherited through role membership/);
+  assert.match(schemaSQL.slice(0, guardEnd), /defaclobjtype = 'S'/, "fresh-schema guard must refuse inherited sequence defaults before DDL");
   assert.doesNotMatch(privacySQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
   assert.doesNotMatch(schemaSQL, /pg_has_role\(browser\.oid, granted\.oid, 'USAGE'\)/);
   const repoRoot = new URL("../../", import.meta.url);
@@ -119,7 +126,7 @@ async function withFixture(run: (fixture: Fixture) => Promise<void>, options: { 
       }
       await db.query(`grant usage on schema ${schema} to public`);
       await db.query(`alter default privileges in schema ${schema} grant all on tables to public, anon, authenticated, service_role`);
-      await db.query(`alter default privileges in schema ${schema} grant all on sequences to service_role`);
+      await db.query(`alter default privileges in schema ${schema} grant all on sequences to public, anon, authenticated, service_role`);
       await db.query(`grant create on schema ${schema} to privacy_other_creator`);
       await db.query(`alter default privileges for role privacy_other_creator in schema ${schema} grant all on tables to public, anon, authenticated`);
     }
@@ -184,10 +191,77 @@ async function assertBrowserBoundary({ db, schema }: Fixture, tables = managedTa
     where relnamespace=$1::regnamespace and relname=any($2::text[])`, [schema, tables])).rows;
   assert.equal(rows.length, tables.length);
   assert.ok(rows.every(row => row.relrowsecurity && !row.relforcerowsecurity));
+  const sequences = (await db.query(`select distinct s.relname
+    from pg_class c
+    join pg_depend d on d.refobjid=c.oid and d.classid='pg_class'::regclass
+      and d.refclassid='pg_class'::regclass and d.deptype in ('a','i')
+    join pg_class s on s.oid=d.objid and s.relkind='S'
+    where c.relnamespace=$1::regnamespace and c.relname=any($2::text[])`, [schema, tables])).rows.map(row => row.relname);
+  for (const role of browserRoles) {
+    for (const seq of sequences) {
+      for (const privilege of ["USAGE", "SELECT", "UPDATE"]) {
+        assert.equal((await db.query("select has_sequence_privilege($1,$2,$3) as allowed", [role, seq, privilege])).rows[0].allowed, false, `${role}:${seq}:${privilege}`);
+      }
+    }
+  }
+}
+
+const serialTables = ["sendblue_saved_places", "sendblue_reviews", "sendblue_verified_visits"] as const;
+const sequencePrivileges = ["USAGE", "SELECT", "UPDATE"] as const;
+
+async function creatorSequenceDefaultsToAnon(db: pg.Pool): Promise<number> {
+  return (await db.query(`select count(*)::int as n
+    from pg_default_acl d
+    cross join lateral aclexplode(d.defaclacl) a
+    join pg_roles r on r.oid=a.grantee
+    where d.defaclrole=current_user::regrole and d.defaclobjtype='S' and r.rolname='anon'`)).rows[0].n;
+}
+
+async function assertAnonCannotTouchSequence(db: pg.Pool, seq: string): Promise<void> {
+  for (const privilege of sequencePrivileges) {
+    assert.equal((await db.query("select has_sequence_privilege('anon',$1,$2) as allowed", [seq, privilege])).rows[0].allowed, false, `anon ${seq} ${privilege}`);
+  }
+  const client = await db.connect();
+  try {
+    await client.query("begin");
+    await client.query("set local role anon");
+    await assert.rejects(client.query(`select last_value from ${seq}`), (error: unknown) => (error as { code: string }).code === "42501", `anon last_value ${seq}`);
+    await client.query("rollback");
+    await client.query("begin");
+    await client.query("set local role anon");
+    await assert.rejects(client.query(`select setval($1, 2147483647)`, [seq]), (error: unknown) => (error as { code: string }).code === "42501", `anon setval ${seq}`);
+  } finally {
+    await client.query("rollback");
+    client.release();
+  }
+}
+
+async function assertBackendSerialInsert(db: pg.Pool, table: string): Promise<void> {
+  const sql = table === "sendblue_saved_places"
+    ? `insert into ${table}(phone, name) values ('p','n') returning id`
+    : `insert into ${table}(phone, merchant) values ('p','m') returning id`;
+  const id = (await db.query(sql)).rows[0].id;
+  assert.equal(typeof id, "number");
+  assert.ok(id > 0 && id < 2147483647, `${table} backend insert must nextval after a refused setval`);
+}
+
+async function installRuntimeSerialTables(db: pg.Pool): Promise<void> {
+  await db.query(sendblueSavedPlacesTableSql);
+  await db.query(reviewsTableSql);
+  await db.query(verifiedVisitsTableSql);
+}
+
+async function assertQaSequenceBoundary(db: pg.Pool): Promise<void> {
+  assert.equal(await creatorSequenceDefaultsToAnon(db), 0, "current-creator sequence defaults must not grant anon");
+  for (const table of serialTables) {
+    await assertAnonCannotTouchSequence(db, `${table}_id_seq`);
+    await assertBackendSerialInsert(db, table);
+  }
 }
 
 async function assertUnrelatedAndDefaults(fixture: Fixture): Promise<void> {
   await fixture.db.query("create table privacy_future_sentinel(id int)");
+  await fixture.db.query("create table privacy_future_serial(id serial primary key, note text)");
   await rolePool(fixture, "privacy_other_creator", db => db.query("create table privacy_other_creator_sentinel(id int)").then(() => {}));
   for (const role of browserRoles) {
     await rolePool(fixture, role, async db => {
@@ -197,7 +271,11 @@ async function assertUnrelatedAndDefaults(fixture: Fixture): Promise<void> {
         assert.equal((await db.query("select has_table_privilege(current_user,$1,$2) as allowed", ["privacy_other_creator_sentinel", privilege])).rows[0].allowed, true, "other creators' defaults stay untouched");
         assert.equal((await db.query("select has_table_privilege(current_user,$1,$2) as allowed", ["privacy_future_sentinel", privilege])).rows[0].allowed, false, "later tables created by this schema owner start private");
       }
+      for (const privilege of sequencePrivileges) {
+        assert.equal((await db.query("select has_sequence_privilege(current_user,'privacy_future_serial_id_seq',$1) as allowed", [privilege])).rows[0].allowed, false, "later serial sequences start without browser grants");
+      }
       await assert.rejects(db.query("select * from privacy_future_sentinel"), (error: unknown) => (error as { code: string }).code === "42501");
+      await assert.rejects(db.query("select last_value from privacy_future_serial_id_seq"), (error: unknown) => (error as { code: string }).code === "42501");
       const client = await db.connect();
       try {
         await client.query("begin");
@@ -211,6 +289,7 @@ async function assertUnrelatedAndDefaults(fixture: Fixture): Promise<void> {
   await rolePool(fixture, "service_role", async db => {
     await db.query("insert into privacy_future_sentinel values(1)");
     assert.equal((await db.query("select * from privacy_future_sentinel")).rowCount, 1, "server-role defaults remain available");
+    assert.equal((await db.query("insert into privacy_future_serial(note) values('ok') returning id")).rows[0].id, 1, "server-role keeps sequence USAGE");
   });
 }
 
@@ -667,6 +746,74 @@ test("documented fresh-install psql fails atomically on unsafe global defaults",
       t.diagnostic(`psql exit=${result.status}; rejected global defaults; new managed tables=${created.length}`);
       assert.equal((await fixture.db.query("select private_note from privacy_unrelated_sentinel")).rows[0].private_note, "untouched sentinel");
     } finally { await fixture.db.query("alter default privileges revoke select on tables from public"); }
+  }, { browser: true, install: false });
+});
+
+test("fresh schema then runtime serial tables deny anon sequence read and setval", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("alter default privileges grant all on sequences to public, anon, authenticated");
+    try {
+      await fixture.db.query(schemaSQL);
+      await installRuntimeSerialTables(fixture.db);
+      await assertQaSequenceBoundary(fixture.db);
+      await fixture.db.query(privacySQL);
+      await assertQaSequenceBoundary(fixture.db);
+    } finally {
+      await fixture.db.query("alter default privileges revoke all on sequences from public, anon, authenticated");
+    }
+  }, { browser: true, install: false });
+});
+
+test("privacy re-run revokes leftover browser grants on existing serial sequences", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query("alter default privileges grant all on sequences to public, anon, authenticated");
+    await installRuntimeSerialTables(fixture.db);
+    assert.equal((await fixture.db.query("select has_sequence_privilege('anon','sendblue_saved_places_id_seq','SELECT') as allowed")).rows[0].allowed, true, "legacy fixture must reproduce browser sequence SELECT");
+    assert.equal((await fixture.db.query("select has_sequence_privilege('anon','sendblue_saved_places_id_seq','UPDATE') as allowed")).rows[0].allowed, true, "legacy fixture must reproduce browser sequence UPDATE");
+    try {
+      await fixture.db.query(schemaSQL);
+      await assertQaSequenceBoundary(fixture.db);
+      await fixture.db.query(privacySQL);
+      await fixture.db.query(privacySQL);
+      await assertQaSequenceBoundary(fixture.db);
+    } finally {
+      await fixture.db.query("alter default privileges revoke all on sequences from public, anon, authenticated");
+    }
+  }, { browser: true, install: false });
+});
+
+test("privacy migration refuses sequence grants inherited through browser-role membership", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await installRuntimeSerialTables(fixture.db);
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query("revoke all on sequence sendblue_saved_places_id_seq from public, anon, authenticated");
+      await fixture.db.query("grant all on sequence sendblue_saved_places_id_seq to privacy_browser_parent");
+      assert.equal((await fixture.db.query("select has_sequence_privilege('anon','sendblue_saved_places_id_seq','UPDATE') as allowed")).rows[0].allowed, true, "membership fixture must reproduce inherited sequence UPDATE");
+      const state = async () => (await fixture.db.query(`select jsonb_build_object(
+        'tables',(select jsonb_agg(jsonb_build_array(relname,relrowsecurity,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace),
+        'sequences',(select jsonb_agg(jsonb_build_array(relname,relacl::text) order by relname) from pg_class where relnamespace=current_schema()::regnamespace and relkind='S'),
+        'defaults',(select jsonb_agg(jsonb_build_array(defaclnamespace,defaclacl::text) order by defaclnamespace) from pg_default_acl where defaclrole=current_user::regrole),
+        'members',(select pg_has_role('anon','privacy_browser_parent','MEMBER')) ) as state`)).rows[0].state;
+      const before = await state();
+      await assert.rejects(fixture.db.query(privacySQL), /sequence/i);
+      assert.deepEqual(await state(), before, "inherited sequence refusal must leave existing access and defaults unchanged");
+    });
+  }, { browser: true, install: false });
+});
+
+test("fresh schema guard refuses inherited sequence grants before any DDL", { skip: !connectionString }, async () => {
+  await withFixture(async fixture => {
+    await fixture.db.query(sendblueSavedPlacesTableSql);
+    await withMembershipParent(fixture, async () => {
+      await fixture.db.query("grant privacy_browser_parent to anon, authenticated");
+      await fixture.db.query("revoke all on sequence sendblue_saved_places_id_seq from public, anon, authenticated");
+      await fixture.db.query("grant all on sequence sendblue_saved_places_id_seq to privacy_browser_parent");
+      await assert.rejects(fixture.db.query(schemaSQL), /sequence/i);
+      const names = (await fixture.db.query(`select relname from pg_class
+        where relnamespace=current_schema()::regnamespace and relkind='r' order by 1`)).rows.map(row => row.relname);
+      assert.deepEqual(names, ["privacy_unrelated_sentinel", "sendblue_saved_places", "sendblue_user_locations"], "refused re-apply must not create managed tables");
+    });
   }, { browser: true, install: false });
 });
 
