@@ -103,6 +103,7 @@ function validClaims(overrides: Record<string, unknown> = {}): Record<string, un
     originalTransactionId: "2000000900000001",
     transactionId: "2000000900000002",
     purchaseDate: 1_755_000_000_000,
+    signedDate: 1_755_000_000_001,
     expiresDate: 1_790_000_000_000,
     environment: "Sandbox",
     ...overrides,
@@ -255,7 +256,7 @@ test("tier resolution is time-based and defaults to free", () => {
   assert.equal(resolveTier({ status: "active", expires_at: "2026-08-18T00:00:00Z" }, now), "free");
 
   assert.equal(resolveTier({ status: "active", expires_at: "2026-09-19T00:00:00Z" }, now), "pro");
-  assert.equal(resolveTier({ status: "active", expires_at: null }, now), "pro");
+  assert.equal(resolveTier({ status: "active", expires_at: null }, now), "free");
 });
 
 test("status reflects revocation before expiry", () => {
@@ -263,9 +264,11 @@ test("status reflects revocation before expiry", () => {
   const base = {
     originalTransactionId: "1",
     transactionId: "2",
+    appAccountToken: null,
     productId: proEntitlementPolicy.productIDs[0],
     bundleId: proEntitlementPolicy.expectedBundleID,
     purchaseDateMs: 1_700_000_000_000,
+    signedDateMs: 1_700_000_000_001,
     environment: "Production",
   };
 
@@ -284,4 +287,53 @@ test("allowance is tier-dependent", () => {
   assert.equal(monthlyLimitUnits("free"), proEntitlementPolicy.freeMonthlyLimitUnits);
   assert.equal(monthlyLimitUnits("pro"), proEntitlementPolicy.proMonthlyLimitUnits);
   assert.ok(monthlyLimitUnits("pro") > monthlyLimitUnits("free"));
+});
+
+// Charge-readiness regressions: malformed signed subscription timestamps and
+// stored invalid expiry must never become perpetual paid access.
+test("invalid stored expiry fails closed", () => {
+  assert.equal(resolveTier({ status: "active", expires_at: "garbage" }), "free");
+});
+test("signed subscription dates are required, bounded integer milliseconds", async () => {
+  const pki = buildTestPKI();
+  try {
+    for (const overrides of [
+      { expiresDate: undefined }, { expiresDate: "bad" }, { expiresDate: 1e30 },
+      { expiresDate: -1 }, { expiresDate: 1.5 }, { purchaseDate: -1 },
+      { signedDate: undefined }, { signedDate: "bad" },
+      { revocationDate: "bad" }, { revocationDate: -1 },
+    ]) {
+      const token = await signTransaction(pki, validClaims({ signedDate: 1_755_000_000_001, ...overrides }));
+      assert.equal(await verifyAppleSignedTransaction(token, {
+        trustedRootFingerprints: [pki.rootFingerprint],
+      }), null, JSON.stringify(overrides));
+    }
+  } finally { rmSync(pki.dir, { recursive: true, force: true }); }
+});
+
+test("signed account tokens are preserved and malformed tokens rejected", async () => {
+  const pki = buildTestPKI();
+  try {
+    const accountToken = "01020304-0506-8708-890a-0b0c0d0e0f10";
+    const token = await signTransaction(pki, validClaims({ appAccountToken: accountToken.toUpperCase() }));
+    const verified = await verifyAppleSignedTransaction(token, { trustedRootFingerprints: [pki.rootFingerprint] });
+    assert.equal((verified as unknown as { appAccountToken: string }).appAccountToken, accountToken);
+    for (const appAccountToken of ["", "not-a-uuid", 42]) {
+      const malformed = await signTransaction(pki, validClaims({ appAccountToken }));
+      assert.equal(await verifyAppleSignedTransaction(malformed, { trustedRootFingerprints: [pki.rootFingerprint] }), null);
+    }
+  } finally { rmSync(pki.dir, { recursive: true, force: true }); }
+});
+
+test("changing a receipt's account token invalidates Apple's signature", async () => {
+  const pki = buildTestPKI();
+  try {
+    const claims = validClaims({ appAccountToken: "01020304-0506-8708-890a-0b0c0d0e0f10" });
+    const token = await signTransaction(pki, claims);
+    const [header, , signature] = token.split(".");
+    const modified = Buffer.from(JSON.stringify({ ...claims, appAccountToken: "11111111-2222-8333-8444-555555555555" })).toString("base64url");
+    assert.equal(await verifyAppleSignedTransaction(`${header}.${modified}.${signature}`, {
+      trustedRootFingerprints: [pki.rootFingerprint],
+    }), null);
+  } finally { rmSync(pki.dir, { recursive: true, force: true }); }
 });

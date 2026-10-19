@@ -1,3 +1,5 @@
+import Foundation
+#if !SAVE_ENTITLEMENT_HOST_CHECK
 import XCTest
 @testable import SAVE
 
@@ -48,7 +50,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
 
     @MainActor
     func testServerQuotaIsAuthoritativeWhenReachable() async {
-        let store = SaveEntitlementStore(loadQuota: { Self.quota(tier: "pro", used: 12) })
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "pro", used: 12) })
         await store.refresh()
 
         XCTAssertEqual(store.tier, .pro)
@@ -60,7 +62,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
     /// Otherwise a refunded or expired subscription would keep working.
     @MainActor
     func testServerFreeVerdictOverridesLocalSignal() async {
-        let store = SaveEntitlementStore(loadQuota: { Self.quota(tier: "free", used: 3) })
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "free", used: 3) })
         await store.refresh()
 
         XCTAssertEqual(store.tier, .free)
@@ -70,7 +72,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
     /// Network failure must not strand the user, and must not invent Pro.
     @MainActor
     func testUnreachableServerFailsOpenWithoutInventingPro() async {
-        let store = SaveEntitlementStore(loadQuota: { throw URLError(.notConnectedToInternet) })
+        let store = Self.makeStore(loadQuota: { throw URLError(.notConnectedToInternet) })
         await store.refresh()
 
         XCTAssertEqual(store.tier, .free, "an offline client must not grant itself Pro")
@@ -84,7 +86,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
     /// to pay for something they have not seen work.
     @MainActor
     func testPaywallNeverPresentsBeforeFirstMapStamp() {
-        let store = SaveEntitlementStore(loadQuota: { Self.quota(tier: "free", used: 0) })
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "free", used: 0) })
 
         XCTAssertFalse(
             store.shouldPresentPaywall(for: .refusedAllowanceExhausted, hasConfirmedMapStamp: false),
@@ -100,7 +102,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
     /// ProfileView); the store method remains the shared stamp-only check.
     @MainActor
     func testPassportPaywallRequiresConfirmedMapStamp() {
-        let store = SaveEntitlementStore(loadQuota: { Self.quota(tier: "free", used: 0) })
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "free", used: 0) })
 
         XCTAssertFalse(
             store.shouldPresentPaywallFromPassport(hasConfirmedMapStamp: false),
@@ -116,7 +118,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
     /// Only a refusal opens the reactive paywall. Warnings and allowances must not.
     @MainActor
     func testOnlyRefusalOpensThePaywall() {
-        let store = SaveEntitlementStore(loadQuota: { Self.quota(tier: "free", used: 0) })
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "free", used: 0) })
 
         for decision: SaveAIAssistDecision in [
             .allowed,
@@ -134,7 +136,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
     /// paywall cannot appear. This is the Slice 1 promise held at the seam.
     @MainActor
     func testExhaustedFreeUserIsServedWhileEnforcementIsOff() async {
-        let store = SaveEntitlementStore(loadQuota: { Self.quota(tier: "free", used: 20, limit: 20) })
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "free", used: 20, limit: 20) })
         await store.refresh()
 
         let decision = store.decideAIAssist()
@@ -146,7 +148,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
     /// A Pro user is unmetered regardless of how much they used.
     @MainActor
     func testProUserIsNeverGated() async {
-        let store = SaveEntitlementStore(loadQuota: { Self.quota(tier: "pro", used: 9_999, limit: 500) })
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "pro", used: 9_999, limit: 500) })
         await store.refresh()
 
         XCTAssertEqual(store.tier, .pro)
@@ -174,7 +176,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
         // A failed registration must not finish the transaction, so StoreKit
         // redelivers it rather than silently losing a paid purchase.
         XCTAssertTrue(storeKit.contains("jwsRepresentation"))
-        XCTAssertTrue(storeKit.contains("serverVerifiedTier = nil"))
+        XCTAssertTrue(storeKit.contains("registeredTier = nil"))
     }
 
     /// Passport Pro entry must reuse the shared stamp gate so a zero-Stamp
@@ -188,6 +190,19 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertFalse(profile.contains("SaveEntitlementStore"))
         XCTAssertTrue(policy.contains("shouldOfferProFromPassport"))
         XCTAssertTrue(policy.contains("purchasingIsAvailable && hasConfirmedMapStamp"))
+    }
+
+    @MainActor
+    func testPurchaseRestoreAndSessionIsolation() async throws {
+        let count = try await SaveEntitlementRegressionChecks.run()
+        XCTAssertGreaterThanOrEqual(count, 12)
+    }
+
+    @MainActor
+    private static func makeStore(loadQuota: @escaping () async throws -> SaveUsageQuotaPreview) -> SaveEntitlementStore {
+        let session = SaveEntitlementSession(generation: 1, owner: "fixture-owner")
+        let storeKit = SaveStoreKitService(currentSession: { session }, readEntitlements: { [] }, observeUpdates: false)
+        return SaveEntitlementStore(storeKit: storeKit, currentSession: { session }, loadQuota: loadQuota)
     }
 
     // MARK: - Helpers
@@ -215,5 +230,216 @@ final class SaveEntitlementWiringTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
         return try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+}
+
+#endif
+
+/// Shared behavioral cases run against the real service types in XCTest and in
+/// the host-only verifier. All StoreKit/network inputs are synthetic; neither
+/// route opens an Apple session or sends a provider/payment request.
+@MainActor
+enum SaveEntitlementRegressionChecks {
+    struct Failure: Error { let message: String }
+    @MainActor final class State {
+        var session = SaveEntitlementSession(generation: 1, owner: "owner-a")
+        var registrations = 0
+        var finished = 0
+        var now = Date()
+    }
+    @MainActor final class Gate<Value: Sendable> {
+        var continuation: CheckedContinuation<Value, Never>?
+        var waiting: CheckedContinuation<Void, Never>?
+        var started = false
+        func value() async -> Value {
+            await withCheckedContinuation { continuation in
+                self.continuation = continuation
+                started = true
+                waiting?.resume()
+                waiting = nil
+            }
+        }
+        func waitUntilStarted() async {
+            if started { return }
+            await withCheckedContinuation { waiting = $0 }
+        }
+        func resolve(_ value: Value) { continuation?.resume(returning: value); continuation = nil }
+    }
+    static func check(_ condition: Bool, _ message: String) throws {
+        if !condition { throw Failure(message: message) }
+    }
+    static func quota(_ tier: String) -> SaveUsageQuotaPreview {
+        SaveUsageQuotaPreview(policyVersion: "fixture", periodStart: "", periodEnd: "", limitUnits: 20,
+            warningThresholdUnits: 15, usedUnits: 0, remainingUnits: 20, state: "available", enforced: false,
+            meteringAvailable: true, betaAccessContinues: true, tier: tier)
+    }
+    static func run() async throws -> Int {
+        var cases = 0
+        let state = State()
+        let transaction = SaveStoreTransaction(productID: SAVEProAccessPolicy.ProductID.annual,
+            signedRepresentation: "synthetic-verified-jws", expirationDate: .distantFuture, revocationDate: nil,
+            finish: { await MainActor.run { state.finished += 1 } })
+        let pro = SaveEntitlementResponse(tier: "pro", status: "active", productID: transaction.productID,
+            expiresAt: "2999-01-01T00:00:00.000Z", environment: "Sandbox")
+        let service = SaveStoreKitService(registerTransaction: { jws in
+            try check(jws == transaction.signedRepresentation, "only the signed transaction may be posted")
+            state.registrations += 1; return pro
+        }, currentSession: { state.session }, readEntitlements: { [transaction] },
+            synchronizePurchases: {}, purchasingAvailable: { true }, observeUpdates: false)
+        let restored = await service.restorePurchases()
+        try check(restored == .success && state.registrations == 1 && state.finished == 1 && service.serverVerifiedTier == .pro,
+            "restore must reconcile with backend before success and finish")
+        cases += 1
+
+        let failed = SaveStoreKitService(registerTransaction: { _ in throw URLError(.notConnectedToInternet) },
+            currentSession: { state.session }, readEntitlements: { [transaction] }, synchronizePurchases: {},
+            purchasingAvailable: { true }, observeUpdates: false)
+        let finishBeforeFailure = state.finished
+        let outcome = await failed.activate(transaction, for: state.session)
+        try check(outcome != .success && state.finished == finishBeforeFailure && failed.serverVerifiedTier == nil,
+            "failed backend activation must not succeed, grant Pro or finish")
+        cases += 1
+        let failedRestore = await failed.restorePurchases()
+        try check(failedRestore != .success && state.finished == finishBeforeFailure,
+            "restore backend outage must remain retryable")
+        cases += 1
+        let offlineStore = SaveEntitlementStore(storeKit: failed, currentSession: { state.session },
+            loadQuota: { throw URLError(.notConnectedToInternet) })
+        await offlineStore.refresh()
+        try check(failed.locallyObservedTier == .pro && offlineStore.tier == .free && offlineStore.isFailingOpen,
+            "local Apple ownership must not become backend authorization offline")
+        cases += 1
+
+        for kind in ["empty", "expired", "revoked", "unknown"] {
+            let invalid = SaveStoreTransaction(productID: kind == "unknown" ? "not-savvy" : transaction.productID,
+                signedRepresentation: "invalid-fixture", expirationDate: kind == "expired" ? .distantPast : .distantFuture,
+                revocationDate: kind == "revoked" ? Date() : nil, finish: { fatalError("must not finish filtered transaction") })
+            let empty = SaveStoreKitService(registerTransaction: { _ in throw Failure(message: "must not register filtered transaction") },
+                currentSession: { state.session }, readEntitlements: { kind == "empty" ? [] : [invalid] },
+                synchronizePurchases: {}, purchasingAvailable: { true }, observeUpdates: false)
+            let result = await empty.restorePurchases()
+            try check(result != .success && empty.purchasedProductIDs.isEmpty, "\(kind) must not report restored")
+            cases += 1
+        }
+
+        let activationGate = Gate<SaveEntitlementResponse>()
+        let delayed = SaveStoreKitService(registerTransaction: { _ in await activationGate.value() },
+            currentSession: { state.session }, readEntitlements: { [] }, observeUpdates: false)
+        let oldSession = state.session
+        let pending = Task { await delayed.activate(transaction, for: oldSession) }
+        await activationGate.waitUntilStarted()
+        state.session = SaveEntitlementSession(generation: 2, owner: "owner-b")
+        delayed.resetForSessionChange()
+        activationGate.resolve(pro)
+        let stale = await pending.value
+        try check(stale != .success && delayed.serverVerifiedTier == nil && state.finished == finishBeforeFailure,
+            "old-account activation must not mutate the new account or finish its receipt")
+        try check(service.serverVerifiedTier == nil && service.locallyObservedTier == .free,
+            "cached account-a authorization must be invisible to account-b even before refresh")
+        cases += 1
+
+        let quotaGate = Gate<SaveUsageQuotaPreview>()
+        let local = SaveStoreKitService(currentSession: { state.session }, readEntitlements: { [] }, observeUpdates: false)
+        var calls = 0
+        let store = SaveEntitlementStore(storeKit: local, currentSession: { state.session }, loadQuota: {
+            calls += 1
+            if calls == 1 { return await quotaGate.value() }
+            return quota("free")
+        })
+        let oldRefresh = Task { await store.refresh() }
+        await quotaGate.waitUntilStarted()
+        state.session = SaveEntitlementSession(generation: 3, owner: "owner-c")
+        store.resetForSessionChange()
+        await store.refresh()
+        quotaGate.resolve(quota("pro"))
+        await oldRefresh.value
+        try check(calls == 2 && store.tier == .free && store.quota?.resolvedTier == .free && !store.isRefreshing,
+            "old quota response must not overwrite a completed new-account refresh")
+        cases += 1
+
+        let logoutGate = Gate<SaveEntitlementResponse>()
+        let signingOut = SaveStoreKitService(registerTransaction: { _ in await logoutGate.value() },
+            currentSession: { state.session }, readEntitlements: { [] }, observeUpdates: false)
+        let logoutSession = state.session
+        let logoutTask = Task { await signingOut.activate(transaction, for: logoutSession) }
+        await logoutGate.waitUntilStarted()
+        state.session = SaveEntitlementSession(generation: 4, owner: nil)
+        signingOut.resetForSessionChange()
+        logoutGate.resolve(pro)
+        let loggedOut = await logoutTask.value
+        try check(loggedOut != .success && signingOut.serverVerifiedTier == nil && signingOut.purchasedProductIDs.isEmpty,
+            "logout must discard pending subscription activation")
+        cases += 1
+
+        let signedOut = SaveStoreKitService(registerTransaction: { _ in throw Failure(message: "signed-out activation must not call backend") },
+            currentSession: { state.session }, readEntitlements: { [transaction] },
+            synchronizePurchases: { throw Failure(message: "signed-out restore must not open Apple sync") },
+            purchasingAvailable: { true }, observeUpdates: false)
+        let noSession = await signedOut.restorePurchases()
+        try check(noSession != .success, "restore requires a Savvy account")
+        cases += 1
+        state.session = SaveEntitlementSession(generation: 5, owner: "owner-a")
+        let tokenGate = Gate<UUID>()
+        let tokenService = SaveStoreKitService(currentSession: { state.session }, readEntitlements: { [] },
+            observeUpdates: false, loadAccountToken: { await tokenGate.value() })
+        let tokenSession = state.session
+        let tokenTask = Task { try await tokenService.purchaseAccountToken(for: tokenSession) }
+        await tokenGate.waitUntilStarted()
+        state.session = SaveEntitlementSession(generation: 6, owner: "owner-b")
+        tokenGate.resolve(UUID())
+        do {
+            _ = try await tokenTask.value
+            throw Failure(message: "account-a token must not open a purchase for account-b")
+        } catch is CancellationError { }
+        cases += 1
+        let expectedToken = UUID()
+        let boundService = SaveStoreKitService(currentSession: { state.session }, readEntitlements: { [] },
+            observeUpdates: false, loadAccountToken: { expectedToken })
+        let receivedToken = try await boundService.purchaseAccountToken(for: state.session)
+        try check(receivedToken == expectedToken, "use the backend-issued token without generating a different account identity")
+        cases += 1
+
+        for code in ["subscription_owner_conflict", "subscription_account_binding_required"] {
+            let error = SaveSubscriptionRegistrationError.from(status: 409, body: Data("{\"code\":\"\(code)\"}".utf8))
+            try check(error != nil, "known binding errors must map to actionable purchase outcomes")
+            let conflictService = SaveStoreKitService(registerTransaction: { _ in throw error! },
+                currentSession: { state.session }, readEntitlements: { [transaction] },
+                synchronizePurchases: {}, purchasingAvailable: { true }, observeUpdates: false)
+            let before = state.finished
+            let conflictResult = await conflictService.restorePurchases()
+            try check(conflictResult != .success && state.finished == before && conflictService.serverVerifiedTier == nil,
+                "wrong-account or unbound receipt must not finish or report restored")
+            cases += 1
+        }
+        try check(SaveSubscriptionRegistrationError.from(status: 409, body: Data("{\"code\":\"other\"}".utf8)) == nil,
+            "unrelated conflicts must not be mislabeled as purchase ownership")
+        cases += 1
+        let cached = SaveStoreKitService(registerTransaction: { _ in pro },
+            currentSession: { state.session }, readEntitlements: { [transaction] },
+            observeUpdates: false, now: { state.now })
+        let cachedStore = SaveEntitlementStore(storeKit: cached, currentSession: { state.session },
+            loadQuota: { throw URLError(.notConnectedToInternet) })
+        await cachedStore.refresh()
+        try check(cachedStore.tier == .pro, "recent backend verdict supports the offline store display")
+        try check(cached.serverVerifiedTier == .pro, "recent server confirmation can be displayed offline")
+        state.now = state.now.addingTimeInterval(301)
+        try check(cached.serverVerifiedTier == nil && cachedStore.tier == .free,
+            "neither service nor store may retain expired offline Pro")
+        cases += 1
+        let expiresSoon = SaveEntitlementResponse(tier: "pro", status: "active", productID: transaction.productID,
+            expiresAt: ISO8601DateFormatter.string(from: state.now.addingTimeInterval(30), timeZone: TimeZone(secondsFromGMT: 0)!, formatOptions: [.withInternetDateTime, .withFractionalSeconds]),
+            environment: "Sandbox")
+        let expiring = SaveStoreKitService(registerTransaction: { _ in expiresSoon },
+            currentSession: { state.session }, readEntitlements: { [transaction] },
+            observeUpdates: false, now: { state.now })
+        let expiringStore = SaveEntitlementStore(storeKit: expiring, currentSession: { state.session },
+            loadQuota: { throw URLError(.notConnectedToInternet) })
+        await expiringStore.refresh()
+        try check(expiringStore.tier == .pro, "offline store may use unexpired server verdict")
+        state.now = state.now.addingTimeInterval(31)
+        try check(expiring.serverVerifiedTier == nil && expiringStore.tier == .free,
+            "server expiry must bound offline Pro in the service and its consumer")
+        cases += 1
+        return cases
     }
 }

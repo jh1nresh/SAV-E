@@ -182,6 +182,28 @@ test("Instagram retry refetches a resolved empty shell instead of retaining it f
   assert.equal(calls, 2, "the recovered caption should still use the successful cache");
 });
 
+test("social platform retries refetch empty shells and cache only recovered captions", async () => {
+  for (const sourceURL of [
+    "https://xhslink.com/EmptyRetryFixture",
+    "https://v.douyin.com/EmptyRetryFixture/",
+    "https://www.tiktok.com/@fixture/video/123456789",
+    "https://www.threads.net/@fixture/post/EmptyRetryFixture",
+    "https://www.dianping.com/shop/EmptyRetryFixture",
+  ]) {
+    let calls = 0;
+    const fetcher = async () => new Response(++calls === 1
+      ? '<html><head><title>Public platform</title></head></html>'
+      : '<html><head><meta property="og:description" content="Fixture Cafe at 12 Main Street"></head></html>');
+    const first = await resolveSourceDocument(sourceURL, 512_000, fetcher);
+    assert.equal(first.resolution.caption, undefined);
+    const retry = await resolveSourceDocument(sourceURL, 512_000, fetcher);
+    assert.equal(retry.resolution.caption, "Fixture Cafe at 12 Main Street", sourceURL);
+    assert.equal(calls, 2, "empty public shell must not be cached for 24 hours");
+    assert.deepEqual(await resolveSourceDocument(sourceURL, 512_000, fetcher), retry);
+    assert.equal(calls, 2, "successful caption still reuses the bounded cache");
+  }
+});
+
 test("Instagram title-only and thumbnail-only responses cannot suppress a later source fetch", async () => {
   const shells = [
     '<title>Fixture creator on Instagram</title>',

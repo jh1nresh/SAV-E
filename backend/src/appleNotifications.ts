@@ -3,6 +3,8 @@ import { importX509, jwtVerify, decodeProtectedHeader, type JWTPayload } from "j
 import {
   APPLE_ROOT_CA_G3_SHA256,
   proEntitlementPolicy,
+  readAppleTransaction,
+  appleTimestamp,
   statusFor,
   verifyCertificateChain,
   type ProEntitlementStatus,
@@ -22,6 +24,7 @@ export type AppleNotificationType =
   | "DID_CHANGE_RENEWAL_STATUS"
   | "REVOKE"
   | "REFUND"
+  | "REFUND_REVERSED"
   | "GRACE_PERIOD_EXPIRED"
   | "SUBSCRIBED"
   | "DID_FAIL_TO_RENEW"
@@ -32,6 +35,7 @@ export type VerifiedAppleNotification = {
   subtype: string | null;
   notificationUUID: string | null;
   transaction: VerifiedAppleTransaction;
+  signedDateMs: number;
 };
 
 /// How a notification should change stored entitlement state.
@@ -39,7 +43,7 @@ export type VerifiedAppleNotification = {
 /// `ignore` is a first-class outcome: an unrecognized notification must be
 /// acknowledged and dropped, never retried forever and never guessed at.
 export type NotificationEffect =
-  | { kind: "update"; status: ProEntitlementStatus; expiresAt: string | null }
+  | { kind: "update"; status: ProEntitlementStatus; expiresAt: string | null; revocationReversed?: true }
   | { kind: "ignore"; reason: string };
 
 /// Decide the effect without touching the database, so the mapping is testable
@@ -56,7 +60,12 @@ export function notificationEffect(
   switch (notificationType) {
     case "DID_RENEW":
     case "SUBSCRIBED":
-      return { kind: "update", status: "active", expiresAt };
+      return { kind: "update", status: statusFor(transaction, now), expiresAt };
+
+    case "REFUND_REVERSED":
+      // Only this explicit signed Apple event may reverse a same-transaction
+      // refund. Persistence additionally requires a strictly newer event.
+      return { kind: "update", status: statusFor(transaction, now), expiresAt, revocationReversed: true };
 
     case "EXPIRED":
     case "GRACE_PERIOD_EXPIRED":
@@ -101,6 +110,8 @@ export async function verifyAppleNotification(
 
   const outer = await verifySignedJWS(signedPayload, trustedRoots, now);
   if (!outer) return null;
+  const signedDateMs = appleTimestamp(outer.signedDate);
+  if (signedDateMs === null) return null;
 
   const data = objectField(outer.responseBodyV2DecodedPayload ?? outer.data);
   const signedTransactionInfo = data && typeof data.signedTransactionInfo === "string"
@@ -111,17 +122,18 @@ export async function verifyAppleNotification(
   const inner = await verifySignedJWS(signedTransactionInfo, trustedRoots, now);
   if (!inner) return null;
 
-  const transaction = readTransaction(inner, {
+  const transaction = readAppleTransaction(inner, {
     expectedBundleID: options.expectedBundleID ?? proEntitlementPolicy.expectedBundleID,
     allowedProductIDs: options.allowedProductIDs ?? proEntitlementPolicy.productIDs,
   });
-  if (!transaction) return null;
+  if (!transaction || signedDateMs < transaction.signedDateMs) return null;
 
   return {
     notificationType: normalizeType(outer.notificationType),
     subtype: stringField(outer.subtype),
     notificationUUID: stringField(outer.notificationUUID),
     transaction,
+    signedDateMs,
   };
 }
 
@@ -152,40 +164,13 @@ async function verifySignedJWS(
   }
 }
 
-function readTransaction(
-  payload: JWTPayload,
-  limits: { expectedBundleID: string; allowedProductIDs: readonly string[] },
-): VerifiedAppleTransaction | null {
-  const bundleId = stringField(payload.bundleId);
-  const productId = stringField(payload.productId);
-  const originalTransactionId = stringField(payload.originalTransactionId);
-  const transactionId = stringField(payload.transactionId);
-
-  if (!bundleId || bundleId !== limits.expectedBundleID) return null;
-  if (!productId || !limits.allowedProductIDs.includes(productId)) return null;
-  if (!originalTransactionId || !transactionId) return null;
-
-  const purchaseDateMs = numberField(payload.purchaseDate);
-  if (purchaseDateMs === null) return null;
-
-  return {
-    originalTransactionId,
-    transactionId,
-    productId,
-    bundleId,
-    purchaseDateMs,
-    expiresDateMs: numberField(payload.expiresDate),
-    revocationDateMs: numberField(payload.revocationDate),
-    environment: stringField(payload.environment) ?? "Production",
-  };
-}
-
 const KNOWN_TYPES = new Set<AppleNotificationType>([
   "DID_RENEW",
   "EXPIRED",
   "DID_CHANGE_RENEWAL_STATUS",
   "REVOKE",
   "REFUND",
+  "REFUND_REVERSED",
   "GRACE_PERIOD_EXPIRED",
   "SUBSCRIBED",
   "DID_FAIL_TO_RENEW",
@@ -211,13 +196,4 @@ function derToPem(der: string): string {
 
 function stringField(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value : null;
-}
-
-function numberField(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return Math.trunc(value);
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return Math.trunc(parsed);
-  }
-  return null;
 }
