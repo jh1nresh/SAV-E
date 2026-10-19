@@ -1726,21 +1726,18 @@ final class MapViewModel: ObservableObject {
         }
 
         if let match = existingSavedPlace(matching: place) {
-            var existing = try await mergeSavedSources(place, into: match)
-            let resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
-                resolution: exactResolution,
-                candidateID: candidate.id,
-                to: existing
-            ).resolved
-            if resolvedExactSearch {
-                existing = await refreshedConfirmedPlace(existing)
-                mirrorToLocalVault(existing)
-                places = Place.consolidated(places.filter { $0.id != existing.id } + [existing])
+            if let exactResolution {
+                return try await completeExactSearchMergeOntoExistingStamp(
+                    incoming: place,
+                    match: match,
+                    resolution: exactResolution,
+                    candidateID: candidate.id
+                )
             }
+            var existing = try await mergeSavedSources(place, into: match)
             mapCandidates.removeAll { $0.id == candidate.id }
             selectedMapCandidate = nil
             focusSavedPlace(existing, showStampMoment: false)
-            if resolvedExactSearch { return existing }
             throw ReviewCandidateError.alreadySavedMapStamp(existing.name)
         }
 
@@ -1856,37 +1853,108 @@ final class MapViewModel: ObservableObject {
             places = Place.consolidated(places.filter { $0.id != associated.id } + [associated])
             return associated
         } catch {
-            if decisionCommitted {
-                exactSearchRollbackLockPlaceID = nil
-                correctionDrawerError = error.localizedDescription
-                throw error
+            try await restoreExactSearchAfterFailedMerge(
+                original: place,
+                merged: associated,
+                resolution: resolution,
+                persistedMerge: persistedMerge,
+                decisionCommitted: decisionCommitted,
+                error: error
+            )
+        }
+    }
+
+    /// Saving a returned map candidate that already matches a stamp must use
+    /// the same rollback/lock as choosing that stamp directly.
+    private func completeExactSearchMergeOntoExistingStamp(
+        incoming: Place,
+        match: Place,
+        resolution: ExactSearchResolution,
+        candidateID: String
+    ) async throws -> Place {
+        if isResolvingExactSearchClue {
+            throw ReviewCandidateError.correctionInFlight
+        }
+        if let locked = exactSearchRollbackLockPlaceID, locked != match.id {
+            correctionDrawerError = ReviewCandidateError.correctionLockedToPreviousStamp.errorDescription
+            throw ReviewCandidateError.correctionLockedToPreviousStamp
+        }
+        isResolvingExactSearchClue = true
+        defer { isResolvingExactSearchClue = false }
+        exactSearchResolution = nil
+        correctionDrawerError = nil
+        var persistedMerge = false
+        var decisionCommitted = false
+        var associated = match
+        do {
+            associated = try await mergeSavedSources(incoming, into: match)
+            persistedMerge = true
+            let resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
+                resolution: resolution,
+                candidateID: candidateID,
+                to: associated
+            )
+            decisionCommitted = resolvedExactSearch.committed
+            exactSearchRollbackLockPlaceID = nil
+            mapCandidates.removeAll { $0.id == candidateID }
+            selectedMapCandidate = nil
+            if resolvedExactSearch.resolved {
+                associated = await refreshedConfirmedPlace(associated)
             }
-            if persistedMerge {
-                var rollbackError: Error?
-                if usesRemotePersistence {
-                    do {
-                        try await rollBackRemoteStampMerge(original: place, merged: associated)
-                    } catch {
-                        rollbackError = error
-                    }
-                }
-                try? saveLocalVaultService.removeConfirmedPlace(place)
-                mirrorToLocalVault(place)
-                places = Place.consolidated(places.filter { $0.id != place.id } + [place])
-                if let rollbackError {
-                    exactSearchResolution = resolution
-                    exactSearchRollbackLockPlaceID = place.id
-                    correctionDrawerError = rollbackError.localizedDescription
-                    throw rollbackError
-                }
-                exactSearchResolution = resolution
-                exactSearchRollbackLockPlaceID = nil
-            } else {
-                exactSearchResolution = resolution
-            }
+            mirrorToLocalVault(associated)
+            places = Place.consolidated(places.filter { $0.id != associated.id } + [associated])
+            focusSavedPlace(associated, showStampMoment: false)
+            return associated
+        } catch {
+            try await restoreExactSearchAfterFailedMerge(
+                original: match,
+                merged: associated,
+                resolution: resolution,
+                persistedMerge: persistedMerge,
+                decisionCommitted: decisionCommitted,
+                error: error
+            )
+        }
+    }
+
+    private func restoreExactSearchAfterFailedMerge(
+        original: Place,
+        merged: Place,
+        resolution: ExactSearchResolution,
+        persistedMerge: Bool,
+        decisionCommitted: Bool,
+        error: Error
+    ) async throws -> Never {
+        if decisionCommitted {
+            exactSearchRollbackLockPlaceID = nil
             correctionDrawerError = error.localizedDescription
             throw error
         }
+        if persistedMerge {
+            var rollbackError: Error?
+            if usesRemotePersistence {
+                do {
+                    try await rollBackRemoteStampMerge(original: original, merged: merged)
+                } catch {
+                    rollbackError = error
+                }
+            }
+            try? saveLocalVaultService.removeConfirmedPlace(original)
+            mirrorToLocalVault(original)
+            places = Place.consolidated(places.filter { $0.id != original.id } + [original])
+            if let rollbackError {
+                exactSearchResolution = resolution
+                exactSearchRollbackLockPlaceID = original.id
+                correctionDrawerError = rollbackError.localizedDescription
+                throw rollbackError
+            }
+            exactSearchResolution = resolution
+            exactSearchRollbackLockPlaceID = nil
+        } else {
+            exactSearchResolution = resolution
+        }
+        correctionDrawerError = error.localizedDescription
+        throw error
     }
 
     private func rollBackRemoteStampMerge(original: Place, merged: Place) async throws {
@@ -2463,7 +2531,10 @@ final class MapViewModel: ObservableObject {
                 placeId: userFinalPlaceId
             )
         }
-        guard authService.currentUserId == userId, authService.sessionGeneration == generation else { throw CancellationError() }
+        // The remote decision already committed. Do not throw a session-change
+        // CancellationError here — callers would treat it as pre-commit and
+        // roll the stamp back. Skip local learning if the session moved.
+        guard authService.currentUserId == userId, authService.sessionGeneration == generation else { return }
         event.learningCommitted = true
         // A failed receipt update must not roll back an already committed user save.
         // The original pending event remains ineligible for learning.

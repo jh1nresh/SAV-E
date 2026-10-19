@@ -304,11 +304,9 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         if previous == nil {
             if let nextHandle { updates["recommender"] = nextHandle }
         } else if nextHandle != previousHandle {
-            if let nextHandle {
-                updates["recommender"] = nextHandle
-            } else if place.recommender == nil && place.sourceHandle == nil {
-                updates["recommender"] = NSNull()
-            }
+            // Displayable attribution changed. A leftover coordinate-shaped
+            // raw value must not block JSON null on rollback.
+            updates["recommender"] = nextHandle ?? NSNull()
         }
         if previous == nil || place.sourcePlatform != previous?.sourcePlatform {
             updates["source_platform"] = place.sourcePlatform.rawValue

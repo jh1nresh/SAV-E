@@ -1044,7 +1044,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         coordinateHandle.sourceHandle = "33.7405"
         AnalysisRequestURLProtocol.handler = { request in
             let body = try AnalysisRequestURLProtocol.body(request)
-            XCTAssertNil(body["recommender"], "Coordinate-looking handles must not be PATCHed")
+            XCTAssertTrue(body["recommender"] is NSNull, "Clearing a displayable handle must send JSON null even if the raw value is coordinate-shaped")
             XCTAssertNil(body["source_platform"], "Unchanged source_platform must not be PATCHed")
             return (200, "{}")
         }
@@ -1114,6 +1114,20 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         XCTAssertEqual(rolledBackBody["source_platform"] as? String, "other")
         XCTAssertTrue(rolledBackBody["recommender"] is NSNull)
         XCTAssertEqual(rolledBackBody["extracted_dishes"] as? [String], ["Cortado"])
+
+        var legacyOriginal = original
+        legacyOriginal.recommender = "33.7405"
+        legacyOriginal.sourceHandle = "33.7405"
+        var legacyRollbackBody: [String: Any] = [:]
+        AnalysisRequestURLProtocol.handler = { request in
+            legacyRollbackBody = try AnalysisRequestURLProtocol.body(request)
+            return (200, "{}")
+        }
+        try await service.updatePlace(legacyOriginal, previous: merged)
+        XCTAssertTrue(
+            legacyRollbackBody["recommender"] is NSNull,
+            "Rollback must clear a clue handle even when the original raw recommender is coordinate-shaped"
+        )
         XCTAssertFalse((rolledBackBody["note"] as? String ?? "").contains("Original source note"))
         let rolledBackMeta = try decodeMemoryMeta(rolledBackBody["memory_meta"])
         XCTAssertEqual(rolledBackMeta.recommended, [RecommendedItem(name: "Cortado", price: "$6")])

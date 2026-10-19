@@ -3002,6 +3002,105 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testExactSearchMapCandidateMergeLocksOnFailedRollback() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-map-merge-lock-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-map-merge-lock-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.recordDecisionError = NSError(domain: "test", code: 2)
+        supabase.failingUpdatePlaceCalls = [2, 3]
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let candidate = SaveMapCandidate(
+            id: "duplicate-stamp",
+            title: stamp.name,
+            subtitle: stamp.address,
+            latitude: stamp.latitude,
+            longitude: stamp.longitude,
+            category: .cafe
+        )
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.mapCandidates = [candidate]
+        map.beginExactSearchResolution(for: clue)
+
+        do {
+            _ = try await map.saveMapCandidateAsPlace(candidate)
+            XCTFail("A failed decision must reach the caller")
+        } catch {
+            XCTAssertEqual((error as NSError).domain, "test")
+        }
+        XCTAssertEqual(supabase.updatePlaceStarted, 3)
+        XCTAssertEqual(supabase.updatedPlaces.count, 1, "Rollback never succeeded, so only the merge PATCH was recorded")
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+
+        var other = Self.correctionStamp()
+        other.name = "Other Harbor Stamp"
+        let secondOpened = await map.chooseSavedStampFromExactSearch(other)
+        XCTAssertNil(secondOpened, "A failed map-candidate merge rollback must keep the correction claimed on the first stamp")
+        XCTAssertEqual(
+            map.correctionDrawerError,
+            ReviewCandidateError.correctionLockedToPreviousStamp.errorDescription
+        )
+        XCTAssertEqual(supabase.updatedPlaces.count, 1)
+    }
+
+    @MainActor
+    func testExactSearchResolutionDoesNotRollBackAfterSessionChangeOnCommittedDecision() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        auth.authState = .authenticated(userId: "owner")
+        defer { auth.authState = previousAuth }
+
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-session-commit-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-session-commit-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.onRecordDecision = {
+            auth.authState = .authenticated(userId: "other")
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
+        XCTAssertEqual(supabase.updatedPlaces.count, 1, "A committed decision must not PATCH the stamp back after a session change")
+        XCTAssertEqual(supabase.recoveryDecisions.count, 1)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
     func testExactSearchResolutionDoesNotRollBackAfterCommittedDecision() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("exact-search-committed-no-rollback-\(UUID().uuidString).json")
@@ -6108,6 +6207,7 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     var updatePlaceError: Error?
     var failingUpdatePlaceCalls: Set<Int> = []
     var recordDecisionError: Error?
+    var onRecordDecision: (() -> Void)?
     private var holdUpdatePlace = false
     private var resumeUpdatePlace: (() -> Void)?
 
@@ -6165,6 +6265,7 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
         throw SupabaseError.notConfigured
     }
     func recordPlaceRecoveryDecision(_ decision: PlaceRecoveryDecisionDraft, for runId: UUID) async throws -> PlaceRecoveryDecisionReceiptResponse {
+        onRecordDecision?()
         if let recordDecisionError { throw recordDecisionError }
         recoveryDecisions.append(decision)
         return PlaceRecoveryDecisionReceiptResponse(
