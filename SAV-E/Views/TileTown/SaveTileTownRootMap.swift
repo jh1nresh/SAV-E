@@ -106,8 +106,7 @@ struct SaveTileTownRootMap: View {
                     }
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: item.systemImage)
-                            .savePixelated(cellSize: 2)
+                        SavePixelChromeIcon(kind: .rootSymbol(item.systemImage), pointSize: 24)
                         Text(item.title(language: languageSettings.language))
                     }
                     .font(SaveAtlasType.strong(13))

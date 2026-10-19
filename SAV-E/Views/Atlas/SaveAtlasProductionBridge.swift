@@ -705,8 +705,7 @@ struct SaveAtlasMapCommandShelf: View {
         HStack(spacing: 10) {
             Button(action: onOpenAssistant) {
                 HStack(spacing: 10) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 17, weight: .semibold))
+                    SavePixelChromeIcon(kind: .search, pointSize: 24)
                         .foregroundStyle(SaveAtlasPalette.muted)
                         .frame(width: 22, height: 22)
                         .accessibilityHidden(true)

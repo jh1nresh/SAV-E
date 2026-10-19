@@ -395,7 +395,7 @@ enum SavePixelChromeIconKind {
     case trips
     case saves
     case more
-    case home, map, friends, passport, add
+    case home, map, friends, passport, add, pin, star, search
 
     static func rootSymbol(_ name: String) -> Self {
         switch name {
@@ -404,6 +404,10 @@ enum SavePixelChromeIconKind {
         case "person.2": .friends
         case "book.closed": .passport
         case "plus": .add
+        case "mappin": .pin
+        case "star": .star
+        case "leaf": .friends
+        case "magnifyingglass": .search
         default: .more
         }
     }
@@ -423,6 +427,12 @@ struct SavePixelChromeIcon: View {
 
     private static func bits(for kind: SavePixelChromeIconKind) -> [String] {
         switch kind {
+        case .pin:
+            return ["000011110000", "000110011000", "001100001100", "001100001100", "001100001100", "000110011000", "000011110000", "000011110000", "000001100000", "000001100000", "000000000000", "000000000000"]
+        case .star:
+            return ["000001100000", "000001100000", "000010010000", "011110011110", "001000000100", "000100001000", "000100001000", "001001100100", "001110011100", "011000000110", "000000000000", "000000000000"]
+        case .search:
+            return ["001111000000", "011001100000", "110000110000", "100000010000", "100000010000", "110000110000", "011001100000", "001111110000", "000000011000", "000000001100", "000000000110", "000000000010"]
         case .home:
             return ["000001100000", "000011110000", "000110011000", "001100001100", "011000000110", "110000000011", "001000000100", "001001100100", "001001100100", "001001100100", "001111111100", "000000000000"]
         case .map:

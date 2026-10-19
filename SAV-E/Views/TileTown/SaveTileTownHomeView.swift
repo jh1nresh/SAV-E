@@ -182,7 +182,7 @@ struct SaveTileTownHomeView: View {
 
     private var searchField: some View {
         HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass").savePixelated(cellSize: 1)
+            SavePixelChromeIcon(kind: .search, pointSize: 24)
                 .foregroundStyle(SaveAtlasPalette.muted)
                 .accessibilityHidden(true)
             TextField(localized("Search saved places", "搜尋已存地點"), text: $search.draft)
