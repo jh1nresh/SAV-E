@@ -2669,13 +2669,10 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(updated.vibeTags, ["quiet", "sunny"])
         XCTAssertEqual(updated.accessNotes, ["Walk-up", "No reservations"])
         let wire = try XCTUnwrap(updated.wireNoteForPersistence())
-        XCTAssertTrue(wire.hasPrefix("SavvyMemory/1"))
-        XCTAssertTrue(wire.contains("Single-origin pour-over"))
-        XCTAssertTrue(wire.contains("Egg tart"))
-        XCTAssertTrue(wire.contains("sunny"))
-        XCTAssertTrue(wire.contains("No reservations"))
-        XCTAssertTrue(wire.contains("Original source note"))
-        XCTAssertTrue(wire.contains("Must try the bun"))
+        XCTAssertEqual(wire, "Must try the bun")
+        XCTAssertFalse(wire.hasPrefix("SavvyMemory/"))
+        XCTAssertFalse(wire.contains("Single-origin pour-over"))
+        XCTAssertFalse(wire.contains("Original source note"))
         XCTAssertEqual(
             updated.sourceEvidence.filter { $0 == "Source URL: https://www.instagram.com/p/harborovenpizza/" }.count,
             1
@@ -2866,12 +2863,13 @@ final class SaveSearchControllerTests: XCTestCase {
         map.reviewCandidates = [clue]
         map.beginExactSearchResolution(for: clue)
 
-        do {
-            _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
-            XCTFail("Decision failure must surface after the stamp PATCH")
-        } catch {
-            XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
-        }
+        XCTAssertNil(
+            await map.chooseSavedStampFromExactSearch(stamp),
+            "Drawer tap must not open the stamp after a failed correction"
+        )
+        XCTAssertEqual(map.correctionDrawerError, supabase.recordDecisionError?.localizedDescription)
+        XCTAssertFalse(map.correctionDrawerError?.isEmpty == true)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
 
         let local = try XCTUnwrap(map.places.first { $0.id == stamp.id })
         XCTAssertEqual(local.note, "Must try the bun")
@@ -2883,10 +2881,14 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(supabase.updatedPlaces[0].sourceEvidence.contains("Original source note"))
         XCTAssertFalse(supabase.updatedPlaces[1].sourceEvidence.contains("Original source note"))
         XCTAssertEqual(supabase.updatedPlaces[1].note, "Must try the bun")
+        XCTAssertEqual(supabase.updatedPlaces[0].wireNoteForPersistence(), "Must try the bun")
+        XCTAssertEqual(supabase.updatedPlaces[1].wireNoteForPersistence(), "Must try the bun")
+        XCTAssertFalse((supabase.updatedPlaces[0].wireNoteForPersistence() ?? "").hasPrefix("SavvyMemory/"))
 
         supabase.recordDecisionError = nil
         let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
         XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
+        XCTAssertNil(map.correctionDrawerError)
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
     }
 
@@ -5758,8 +5760,8 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(content.contains("openExactSearchRefine"))
         XCTAssertTrue(content.contains("preservesExactSearchClue: true"))
         XCTAssertFalse(content.contains("openMapSearch(initialQuery: query)"))
-        XCTAssertTrue(content.contains("fullScreenRoute == nil && fullScreenActionError != nil"))
-        XCTAssertTrue(content.contains("Stay on the Map search/correction surface"))
+        XCTAssertTrue(content.contains("chooseSavedStampFromExactSearch"))
+        XCTAssertTrue(content.contains("mapDrawerPresentedActionError"))
     }
 
     func testTaipeiAndTaibeiMatchBothWaysWithoutRewriting() {

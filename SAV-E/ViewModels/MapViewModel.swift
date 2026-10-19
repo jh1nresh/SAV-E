@@ -619,6 +619,9 @@ final class MapViewModel: ObservableObject {
     /// Set when a place saved locally but failed to sync to the account —
     /// surfaced as an alert so the failure isn't console-only.
     @Published var syncFailedPlaceName: String?
+    /// Set when a saved-stamp correction fails so the Map drawer can show
+    /// the error without opening the stamp as if it succeeded.
+    @Published var correctionDrawerError: String?
     @Published var collaborativeLists: [SaveCollaborativeList] = []
     @Published var socialLens: SaveSocialLens = .forYou
     @Published var socialPlaces: [Place] = []
@@ -1765,6 +1768,16 @@ final class MapViewModel: ObservableObject {
         return resolution.clue.id == reviewCandidateID && resolution.includes(candidateID: candidate.id)
     }
 
+    /// Map-search saved-row tap during Review correction. On failure the
+    /// drawer stays open and `correctionDrawerError` is ready for the alert.
+    func chooseSavedStampFromExactSearch(_ place: Place) async -> Place? {
+        do {
+            return try await resolveExactSearchClue(toSavedPlace: place)
+        } catch {
+            return nil
+        }
+    }
+
     /// Review → Choose another place can surface an already-saved Map Stamp.
     /// Selecting it must retire the active clue and attach that evidence to
     /// the stamp, the same way saving a returned map candidate does.
@@ -1777,6 +1790,7 @@ final class MapViewModel: ObservableObject {
     func resolveExactSearchClue(toSavedPlace place: Place) async throws -> Place {
         guard let resolution = exactSearchResolution else { return place }
         exactSearchResolution = nil
+        correctionDrawerError = nil
         var persistedMerge = false
         var associated = place
         do {
@@ -1812,6 +1826,7 @@ final class MapViewModel: ObservableObject {
                 places = Place.consolidated(places.filter { $0.id != place.id } + [place])
             }
             exactSearchResolution = resolution
+            correctionDrawerError = error.localizedDescription
             throw error
         }
     }

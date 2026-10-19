@@ -724,15 +724,24 @@ struct ContentView: View {
             .alert(
                 languageSettings.localized(english: "Couldn’t finish that action", traditionalChinese: "無法完成這個動作"),
                 isPresented: Binding(
-                    get: { fullScreenRoute == nil && fullScreenActionError != nil },
-                    set: { if !$0 { fullScreenActionError = nil } }
+                    get: { fullScreenRoute == nil && mapDrawerPresentedActionError != nil },
+                    set: { if !$0 { clearMapDrawerActionError() } }
                 )
             ) {
-                Button(languageSettings.text(.ok)) { fullScreenActionError = nil }
+                Button(languageSettings.text(.ok)) { clearMapDrawerActionError() }
             } message: {
-                Text(fullScreenActionError ?? "")
+                Text(mapDrawerPresentedActionError ?? "")
             }
         }
+    }
+
+    private var mapDrawerPresentedActionError: String? {
+        fullScreenActionError ?? mapVM.correctionDrawerError
+    }
+
+    private func clearMapDrawerActionError() {
+        fullScreenActionError = nil
+        mapVM.correctionDrawerError = nil
     }
 
     private func collapseMapPanel() {
@@ -1370,13 +1379,11 @@ struct ContentView: View {
             return
         }
         Task {
-            do {
-                let resolved = try await mapVM.resolveExactSearchClue(toSavedPlace: place)
+            // Stay on the Map search/correction surface. The embedded drawer
+            // binds `mapVM.correctionDrawerError` so a failed decision does
+            // not open the stamp as if it were already corrected.
+            if let resolved = await mapVM.chooseSavedStampFromExactSearch(place) {
                 openMapDetail(.savedPlace(resolved))
-            } catch {
-                // Stay on the Map search/correction surface. The fullscreen
-                // alert is not visible from this embedded drawer.
-                fullScreenActionError = error.localizedDescription
             }
         }
     }

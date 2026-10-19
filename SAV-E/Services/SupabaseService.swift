@@ -301,31 +301,34 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         // enrichment PATCH cannot rewrite or invent one.
         let nextHandle = SaveSourceHandle.displayable(place.recommender ?? place.sourceHandle)
         let previousHandle = SaveSourceHandle.displayable(previous?.recommender ?? previous?.sourceHandle)
-        if let nextHandle, nextHandle != previousHandle {
-            updates["recommender"] = nextHandle
+        if previous == nil {
+            if let nextHandle { updates["recommender"] = nextHandle }
+        } else if nextHandle != previousHandle {
+            if let nextHandle {
+                updates["recommender"] = nextHandle
+            } else if place.recommender == nil && place.sourceHandle == nil {
+                updates["recommender"] = nil
+            }
         }
         if previous == nil || place.sourcePlatform != previous?.sourcePlatform {
             updates["source_platform"] = place.sourcePlatform.rawValue
         }
-        if let sourceUrl = place.sourceUrl {
-            updates["source_url"] = sourceUrl
+        if previous == nil {
+            if let sourceUrl = place.sourceUrl { updates["source_url"] = sourceUrl }
+        } else if place.sourceUrl != previous?.sourceUrl {
+            updates["source_url"] = place.sourceUrl
         }
-        // Structured clue fields have no dedicated columns. Encode them, plus
-        // extra URLs/text, into the wire `note` column only when a non-empty
-        // value actually changed. The in-memory user-facing note stays put so
-        // photo-enrichment / empty arrays cannot clobber saved evidence.
-        let nextHasStructured = !place.savedPlaceHighlights.isEmpty
-            || !place.savedVibeTags.isEmpty
-            || !place.savedAccessNotes.isEmpty
-            || !place.savedRecommendedItems.isEmpty
-        if nextHasStructured, place.hasStructuredDetails(unlike: previous) {
-            updates["note"] = place.wireNoteForPersistence()
-        } else if place.hasAdditionalEvidence(unlike: previous), !place.savedAdditionalSourceEvidence.isEmpty {
-            updates["note"] = place.wireNoteForPersistence()
-        } else if place.note != previous?.note {
-            updates["note"] = nextHasStructured || !place.savedAdditionalSourceEvidence.isEmpty
-                ? place.wireNoteForPersistence()
-                : place.note
+        // `places.note` is the user's plain memory. Extra clue evidence has
+        // no dedicated column (see `Place.wireNoteForPersistence`); never
+        // write a SavvyMemory envelope or labeled dump into this field.
+        // Rewrite the column with the same user text when extra evidence
+        // changes so leftover envelopes from earlier builds are healed.
+        // Photo enrichment (unchanged note and evidence) omits it.
+        if previous == nil
+            || place.userFacingNote != previous?.userFacingNote
+            || place.hasAdditionalEvidence(unlike: previous)
+            || place.hasStructuredDetails(unlike: previous) {
+            updates["note"] = place.userFacingNote
         }
         let nextDishes = place.savedRecommendedItems.map(\.name)
         let previousDishes = previous?.savedRecommendedItems.map(\.name) ?? []
@@ -2115,7 +2118,7 @@ private struct PlaceRow: Codable {
             category: place.category.rawValue,
             status: place.status.rawValue,
             rating: place.rating,
-            note: place.wireNoteForPersistence() ?? place.note,
+            note: place.userFacingNote,
             source_url: place.sourceUrl,
             source_platform: place.sourcePlatform.rawValue,
             coordinate_system: place.coordinateSystem?.rawValue,

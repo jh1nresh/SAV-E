@@ -127,6 +127,12 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertTrue(sanitized.photoURLs.isEmpty)
         XCTAssertLessThanOrEqual(sanitized.note?.utf16.count ?? 0, 180)
         XCTAssertNil(ShareRoutePayloadSanitizer.publicNote("Debug: private pipeline state"))
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote("Highlight: the bun was amazing"), "Highlight: the bun was amazing")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote("Vibe: casual counter seats"), "Vibe: casual counter seats")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote("Evidence: keep this as my memory"), "Evidence: keep this as my memory")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote("Access: walk up and wait"), "Access: walk up and wait")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote("Creator handle: @me.and.the.bun"), "Creator handle: @me.and.the.bun")
+        XCTAssertNil(ShareRoutePayloadSanitizer.publicNote("SavvyMemory/1\n{\"v\":1,\"note\":\"secret\"}"))
         XCTAssertLessThanOrEqual(
             ShareRoutePayloadSanitizer.publicNote(String(repeating: "🍜", count: 180))?.utf16.count ?? 0,
             180

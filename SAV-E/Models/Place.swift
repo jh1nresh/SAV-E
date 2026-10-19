@@ -118,34 +118,20 @@ struct Place: Identifiable, Codable, Hashable {
         savedAdditionalSourceEvidence != (previous?.savedAdditionalSourceEvidence ?? [])
     }
 
-    /// Backend `places` has `note` and `extracted_dishes` only. Encode extra
-    /// evidence and structured arrays into a versioned envelope in the wire
-    /// `note` column without mutating the in-memory user-facing note.
-    /// Unmarked notes (no extra evidence) stay verbatim so a user memory that
-    /// begins with `Highlight:` / `Vibe:` / `Evidence:` is not reclassified.
+    /// Wire value for `places.note`. That column is plain user memory
+    /// (`placeClaims` analysisSummary and save-rn `mapPlace` read it as text).
+    /// Extra clue evidence, highlights, vibe, and access have no dedicated
+    /// `places` column (`extracted_dishes` is recommended-item names only);
+    /// this PR does not add a migration. Those fields stay on the local
+    /// vault / in-memory stamp.
     func wireNoteForPersistence() -> String? {
-        let additional = savedAdditionalSourceEvidence.filter { !Self.isGeneratedEvidenceLine($0) }
-        let userNote = noteLines.isEmpty ? nil : noteLines.joined(separator: "\n")
-        let needsEnvelope = !additional.isEmpty
-            || !savedPlaceHighlights.isEmpty
-            || !savedVibeTags.isEmpty
-            || !savedAccessNotes.isEmpty
-            || !savedRecommendedItems.isEmpty
-        guard needsEnvelope else { return userNote }
-        let envelope = MemoryNoteEnvelope(
-            v: Self.memoryNoteEnvelopeVersion,
-            note: userNote,
-            evidence: additional.nilIfEmpty,
-            highlights: savedPlaceHighlights.nilIfEmpty,
-            recommended: savedRecommendedItems.nilIfEmpty,
-            vibe: savedVibeTags.nilIfEmpty,
-            access: savedAccessNotes.nilIfEmpty
-        )
-        guard let data = try? Self.memoryNoteEncoder.encode(envelope),
-              let json = String(data: data, encoding: .utf8) else {
-            return userNote
-        }
-        return "\(Self.memoryNoteEnvelopeMarker)\n\(json)"
+        userFacingNote
+    }
+
+    /// User-authored memory only. Leftover `SavvyMemory/1` envelopes written
+    /// by earlier builds are decoded so JSON never surfaces as the note.
+    var userFacingNote: String? {
+        Self.decodedWireNote(note).note
     }
 
     var durableStructuredEvidence: [String] {
@@ -263,15 +249,9 @@ struct Place: Identifiable, Codable, Hashable {
                 )
             )
         }
-        if isLegacyLabeledWireNote(trimmed) {
-            let lines = trimmed
-                .components(separatedBy: .newlines)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            let highlights = SocialPlaceStructuredHighlights.extracted(from: lines)
-            let classified = classifiedSourceLines(lines)
-            return (classified.note, classified.additional, highlights)
-        }
+        // Never reclassify a multi-line user note. Older labeled-wire
+        // dumps stay visible as the user's memory rather than stripping
+        // lines that begin with Highlight:/Vibe:/Evidence:/Access:.
         return (trimmed, [], .empty)
     }
 
@@ -315,24 +295,8 @@ struct Place: Identifiable, Codable, Hashable {
         return envelope
     }
 
-    private static func isLegacyLabeledWireNote(_ raw: String) -> Bool {
-        let lines = raw
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        guard lines.count > 1 else { return false }
-        return lines.contains { line in
-            isStructuredEvidenceLine(line) || isURLEvidenceLine(line) || labeledEvidenceValue(line) != nil
-        }
-    }
-
     private static let memoryNoteEnvelopeMarker = "SavvyMemory/1"
     private static let memoryNoteEnvelopeVersion = 1
-    private static let memoryNoteEncoder: JSONEncoder = {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        return encoder
-    }()
 
     /// Diagnostics that must never become saved memory or additional evidence.
     private static let generatedEvidencePrefixes = [

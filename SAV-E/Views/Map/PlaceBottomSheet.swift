@@ -165,7 +165,7 @@ extension Place {
     }
 
     var cleanMemoryNote: String? {
-        guard let note = note?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty else {
+        guard let note = userFacingNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty else {
             return nil
         }
         let cleanedLines = note
@@ -180,7 +180,7 @@ extension Place {
                 let metadataPrefixes = [
                     "source:", "category:", "rating:", "reviews:", "hours:", "address:",
                     "location clue:", "google places", "google maps", "coordinates:",
-                    "recommender:", "creator handle:", "analysis method:",
+                    "recommender:", "analysis method:",
                     "verified coordinates",
                 ]
                 return !line.localizedCaseInsensitiveContains("Source URL:") &&

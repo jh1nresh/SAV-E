@@ -992,7 +992,8 @@ final class SAVEAnalysisTransportTests: XCTestCase {
             let body = try AnalysisRequestURLProtocol.body(request)
             if expectsDate {
                 XCTAssertEqual(body["created_at"] as? String, "2020-01-02T03:04:05Z")
-                XCTAssertTrue((body["note"] as? String)?.contains("Earlier source evidence") == true)
+                XCTAssertFalse((body["note"] as? String)?.contains("Earlier source evidence") == true)
+                XCTAssertTrue(merged.savedAdditionalSourceEvidence.contains("Earlier source evidence"))
             } else { XCTAssertNil(body["created_at"]) }
             return (200, "{}")
         }
@@ -1061,6 +1062,56 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         try await service.updatePlace(renamed, previous: place)
     }
 
+    func testUpdatePlaceRollbackClearsMergedServerFieldsWithoutWritingEnvelope() async throws {
+        var original = Place.mock
+        original.note = "Must try the bun"
+        original.sourceUrl = nil
+        original.sourcePlatform = .other
+        original.recommender = nil
+        original.sourceHandle = nil
+        original.recommendedItems = [RecommendedItem(name: "Cortado", price: nil)]
+        original.extractedDishes = ["Cortado"]
+
+        var merged = original
+        merged.sourceUrl = "https://www.instagram.com/p/harborovenpizza/"
+        merged.sourcePlatform = .instagram
+        merged.recommender = "la.harbor.eats"
+        merged.sourceHandle = "la.harbor.eats"
+        merged.additionalSourceEvidence = ["Original source note"]
+        merged.placeHighlights = ["Window seats", "Single-origin pour-over"]
+        merged.recommendedItems = [
+            RecommendedItem(name: "Cortado", price: nil),
+            RecommendedItem(name: "Egg tart", price: nil),
+        ]
+        merged.extractedDishes = ["Cortado", "Egg tart"]
+
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertEqual(body["note"] as? String, "Must try the bun")
+            XCTAssertFalse((body["note"] as? String ?? "").hasPrefix("SavvyMemory/"))
+            XCTAssertEqual(body["source_url"] as? String, "https://www.instagram.com/p/harborovenpizza/")
+            XCTAssertEqual(body["source_platform"] as? String, "instagram")
+            XCTAssertEqual(body["recommender"] as? String, "la.harbor.eats")
+            XCTAssertEqual(body["extracted_dishes"] as? [String], ["Cortado", "Egg tart"])
+            return (200, "{}")
+        }
+        try await service.updatePlace(merged, previous: original)
+
+        AnalysisRequestURLProtocol.handler = { request in
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertEqual(body["note"] as? String, "Must try the bun")
+            XCTAssertFalse((body["note"] as? String ?? "").hasPrefix("SavvyMemory/"))
+            XCTAssertTrue(body["source_url"] is NSNull)
+            XCTAssertEqual(body["source_platform"] as? String, "other")
+            XCTAssertTrue(body["recommender"] is NSNull)
+            XCTAssertEqual(body["extracted_dishes"] as? [String], ["Cortado"])
+            XCTAssertFalse((body["note"] as? String ?? "").contains("Original source note"))
+            return (200, "{}")
+        }
+        try await service.updatePlace(original, previous: merged)
+    }
+
     func testUpdatePlacePersistsMergedStructuredFieldsAcrossRemoteReload() async throws {
         var previous = Place.mock
         previous.note = "Must try the bun"
@@ -1090,24 +1141,19 @@ final class SAVEAnalysisTransportTests: XCTestCase {
                 patched = try AnalysisRequestURLProtocol.body(request)
                 XCTAssertEqual(patched["extracted_dishes"] as? [String], ["Cortado", "Egg tart"])
                 let note = try XCTUnwrap(patched["note"] as? String)
-                XCTAssertTrue(note.hasPrefix("SavvyMemory/1"))
-                XCTAssertTrue(note.contains("Must try the bun"))
-                XCTAssertTrue(note.contains("Original source note"))
-                XCTAssertTrue(note.contains("https://www.xiaohongshu.com/explore/extra-clue"))
-                XCTAssertFalse(note.contains("Recommender:"))
-                XCTAssertFalse(note.contains("Verified coordinates"))
-                XCTAssertFalse(note.contains("Analysis method:"))
-                XCTAssertFalse(note.contains("Creator handle:"))
-                XCTAssertTrue(note.contains("Window seats"))
-                XCTAssertTrue(note.contains("Single-origin pour-over"))
-                XCTAssertTrue(note.contains("Cortado"))
-                XCTAssertTrue(note.contains("Egg tart"))
-                XCTAssertTrue(note.contains("sunny"))
-                XCTAssertTrue(note.contains("No reservations"))
+                XCTAssertEqual(note, "Must try the bun")
+                XCTAssertFalse(note.hasPrefix("SavvyMemory/"))
+                XCTAssertFalse(note.contains("Original source note"))
+                XCTAssertFalse(note.contains("https://www.xiaohongshu.com/explore/extra-clue"))
+                XCTAssertFalse(note.contains("Window seats"))
+                XCTAssertFalse(note.contains("Single-origin pour-over"))
+                XCTAssertFalse(note.contains("sunny"))
+                XCTAssertFalse(note.contains("No reservations"))
                 XCTAssertNil(patched["place_highlights"])
                 XCTAssertNil(patched["vibe_tags"])
                 XCTAssertNil(patched["access_notes"])
                 XCTAssertNil(patched["recommended_items"])
+                XCTAssertNil(patched["additional_source_evidence"])
                 return (200, "{}")
             }
             let payload: [String: Any] = [
@@ -1134,7 +1180,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         AnalysisRequestURLProtocol.handler = { request in
             let body = try AnalysisRequestURLProtocol.body(request)
             XCTAssertNil(body["extracted_dishes"], "Photo enrichment must not rewrite dishes")
-            XCTAssertNil(body["note"], "Photo enrichment must not rewrite labeled evidence")
+            XCTAssertNil(body["note"], "Photo enrichment must not rewrite the user note")
             XCTAssertEqual(body["business_photo_urls"] as? [String], ["https://photos.example/1.jpg"])
             return (200, "{}")
         }
@@ -1149,7 +1195,8 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         AnalysisRequestURLProtocol.handler = { request in
             let body = try AnalysisRequestURLProtocol.body(request)
             XCTAssertNil(body["extracted_dishes"], "Empty arrays must not clobber dishes already stored")
-            XCTAssertNil(body["note"], "Empty arrays must not rewrite note and drop labeled evidence")
+            XCTAssertEqual(body["note"] as? String, "Must try the bun")
+            XCTAssertFalse((body["note"] as? String ?? "").hasPrefix("SavvyMemory/"))
             return (200, "{}")
         }
         try await service.updatePlace(emptied, previous: merged)
@@ -1176,16 +1223,19 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         let reloaded = try XCTUnwrap(reloadedPlaces.first)
         XCTAssertEqual(reloaded.note, "Must try the bun")
         XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote(reloaded.note), "Must try the bun")
-        XCTAssertEqual(reloaded.placeHighlights, ["Window seats", "Single-origin pour-over"])
         XCTAssertEqual(reloaded.recommendedItems?.map(\.name), ["Cortado", "Egg tart"])
-        XCTAssertEqual(reloaded.vibeTags, ["quiet", "sunny"])
-        XCTAssertEqual(reloaded.accessNotes, ["Walk-up", "No reservations"])
-        XCTAssertTrue(reloaded.sourceEvidence.contains("Must try the bun"))
-        XCTAssertTrue(reloaded.sourceEvidence.contains("Original source note"))
-        XCTAssertTrue(reloaded.sourceEvidence.contains("Source URL: https://www.xiaohongshu.com/explore/extra-clue"))
+        // Flag: places has no column for extra URLs, highlights, vibe, or
+        // access. Those stay on the local stamp; a remote-only reload cannot
+        // reconstruct them from `note`.
+        XCTAssertEqual(reloaded.placeHighlights ?? [], [])
+        XCTAssertEqual(reloaded.vibeTags ?? [], [])
+        XCTAssertEqual(reloaded.accessNotes ?? [], [])
+        XCTAssertFalse(reloaded.sourceEvidence.contains("Original source note"))
+        XCTAssertFalse(reloaded.sourceEvidence.contains("Source URL: https://www.xiaohongshu.com/explore/extra-clue"))
         XCTAssertFalse((reloaded.note ?? "").contains("Highlight:"))
         XCTAssertFalse((reloaded.note ?? "").contains("Vibe:"))
         XCTAssertFalse((reloaded.note ?? "").contains("Evidence:"))
+        XCTAssertFalse((reloaded.note ?? "").hasPrefix("SavvyMemory/"))
     }
 
     func testDecodedWireNotePreservesUntaggedUserNotes() throws {
@@ -1209,25 +1259,44 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         place.additionalSourceEvidence = ["Original source note"]
         place.placeHighlights = ["Window seats"]
         let wire = try XCTUnwrap(place.wireNoteForPersistence())
-        XCTAssertTrue(wire.hasPrefix("SavvyMemory/1"))
+        XCTAssertEqual(wire, "Highlight: the bun was amazing")
+        XCTAssertFalse(wire.hasPrefix("SavvyMemory/"))
         let decoded = Place.decodedWireNote(wire)
         XCTAssertEqual(decoded.note, "Highlight: the bun was amazing")
-        XCTAssertEqual(decoded.additional, ["Original source note"])
-        XCTAssertEqual(decoded.highlights.placeHighlights, ["Window seats"])
-        XCTAssertNil(ShareRoutePayloadSanitizer.publicNote(wire))
+        XCTAssertTrue(decoded.additional.isEmpty)
+        XCTAssertTrue(decoded.highlights.placeHighlights.isEmpty)
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote(wire), "Highlight: the bun was amazing")
 
-        let legacy = Place.decodedWireNote("""
+        let leftoverEnvelope = """
+        SavvyMemory/1
+        {"v":1,"note":"Must try the bun","evidence":["Original source note"]}
+        """
+        let fromEnvelope = Place.decodedWireNote(leftoverEnvelope)
+        XCTAssertEqual(fromEnvelope.note, "Must try the bun")
+        XCTAssertEqual(fromEnvelope.additional, ["Original source note"])
+        XCTAssertNil(ShareRoutePayloadSanitizer.publicNote(leftoverEnvelope))
+
+        let multiline = Place.decodedWireNote("""
         Must try the bun
-        Evidence: Original source note
-        Highlight: Window seats
-        Vibe: sunny
-        Access: Walk-up
+        Evidence: keep this as my memory
+        Highlight: the seating was great
+        Vibe: loud in a good way
+        Access: walk up
         """)
-        XCTAssertEqual(legacy.note, "Must try the bun")
-        XCTAssertEqual(legacy.additional, ["Original source note"])
-        XCTAssertEqual(legacy.highlights.placeHighlights, ["Window seats"])
-        XCTAssertEqual(legacy.highlights.vibeTags, ["sunny"])
-        XCTAssertEqual(legacy.highlights.accessNotes, ["Walk-up"])
+        XCTAssertEqual(
+            multiline.note,
+            """
+            Must try the bun
+            Evidence: keep this as my memory
+            Highlight: the seating was great
+            Vibe: loud in a good way
+            Access: walk up
+            """
+        )
+        XCTAssertTrue(multiline.additional.isEmpty)
+        XCTAssertTrue(multiline.highlights.placeHighlights.isEmpty)
+        XCTAssertTrue(multiline.highlights.vibeTags.isEmpty)
+        XCTAssertTrue(multiline.highlights.accessNotes.isEmpty)
     }
 
     func testEmptyRetryDistinguishesExistingSuccessorsFromUnresolvedSource() async throws {
