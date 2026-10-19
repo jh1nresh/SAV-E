@@ -377,7 +377,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         launch(app)
         try signInViaReviewDemoRequired(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        let savedCount = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'confirmed places'")).firstMatch
+        let savedCount = app.descendants(matching: .any)["home.collected"]
         XCTAssertTrue(savedCount.waitForExistence(timeout: stepTimeout))
         let initialCount = savedCount.label
         openRootTab("Passport", app: app)
@@ -585,8 +585,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.place.\(taipeiParkID)"].waitForExistence(timeout: stepTimeout))
         tapReachable(app.descendants(matching: .any)["home.miniMap"])
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.buttons["map.go"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.buttons["map.go"].isSelected, "Mini-map must carry the Go lens")
+        let mapGo = app.descendants(matching: .any)["map.go"]
+        XCTAssertTrue(mapGo.waitForExistence(timeout: stepTimeout), "Mini-map must open Map with Eat/Go")
+        XCTAssertTrue(mapGo.isSelected, "Mini-map must carry the Go lens")
         XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.\(taipeiParkID)"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["map.tilePin.\(taipeiCafeID)"].exists)
 
@@ -595,8 +596,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.place.\(taipeiCafeID)"].waitForExistence(timeout: stepTimeout))
         tapReachable(app.descendants(matching: .any)["home.miniMap"])
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.buttons["map.eat"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.buttons["map.eat"].isSelected)
+        let mapEat = app.descendants(matching: .any)["map.eat"]
+        XCTAssertTrue(mapEat.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(mapEat.isSelected)
         XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.\(taipeiCafeID)"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["map.tilePin.\(tainanCafeID)"].exists)
 

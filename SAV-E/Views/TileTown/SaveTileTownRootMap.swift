@@ -194,7 +194,7 @@ struct SaveTileTownRootMap: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier(item.mapAccessibilityIdentifier)
-                .accessibilityAddTraits(selected ? .isSelected : [])
+                .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             }
         }
         .accessibilityIdentifier("map.eatGo")

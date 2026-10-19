@@ -244,8 +244,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(map.contains("map.eatGo"))
         XCTAssertTrue(map.contains("showsCityPicker = true"))
         XCTAssertTrue(map.contains("map.city.\\(group.id)"))
-        XCTAssertTrue(content.contains("doodleSession.mapFollowsHomeFilter = false"))
-        XCTAssertTrue(content.contains("doodleSession.mapFollowsHomeFilter = true"))
+        XCTAssertTrue(content.contains("selectRootTab(_ tab: SaveRootTab, mapFollowsHomeFilter: Bool = false)"))
+        XCTAssertTrue(content.contains("doodleSession.mapFollowsHomeFilter = mapFollowsHomeFilter"))
+        XCTAssertTrue(content.contains("selectRootTab(.map, mapFollowsHomeFilter: true)"))
         XCTAssertTrue(session.mapFollowsHomeFilter == false)
         session.mapFollowsHomeFilter = true
         XCTAssertTrue(session.mapFollowsHomeFilter)

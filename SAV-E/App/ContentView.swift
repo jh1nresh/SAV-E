@@ -467,13 +467,13 @@ struct ContentView: View {
     /// Tab bar selection. `.capture` is a control, not a destination: it opens
     /// the capture cover and leaves the current tab selected, so tapping it and
     /// cancelling returns the user exactly where they were.
-    private func selectRootTab(_ tab: SaveRootTab) {
+    private func selectRootTab(_ tab: SaveRootTab, mapFollowsHomeFilter: Bool = false) {
         guard !tab.isCaptureControl else {
             openDrawer(.addLink, tripID: nil)
             return
         }
         if tab == .map {
-            doodleSession.mapFollowsHomeFilter = false
+            doodleSession.mapFollowsHomeFilter = mapFollowsHomeFilter
         }
         // Root destinations must leave any pushed Saves, Trips, or Trip route.
         // The tab bar can remain in the accessibility tree behind those
@@ -539,8 +539,7 @@ struct ContentView: View {
                                 },
                                 onOpenPassport: openPassport,
                                 onOpenMap: {
-                                    selectRootTab(.map)
-                                    doodleSession.mapFollowsHomeFilter = true
+                                    selectRootTab(.map, mapFollowsHomeFilter: true)
                                 }
                             )
                         case .map:
