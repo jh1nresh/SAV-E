@@ -496,7 +496,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertTrue(post.label.hasPrefix("Open shared place, "), "Every illustrated post needs its own accessible action name.")
         }
         let invite = app.buttons["friends.connections"]
-        XCTAssertGreaterThanOrEqual(invite.frame.height, 44)
+        // Accessibility converts screen coordinates through floating-point
+        // transforms (44pt can arrive as 43.999999999999986). Keep the 44pt
+        // requirement; allow only numeric rounding, not a smaller hit target.
+        XCTAssertGreaterThanOrEqual(invite.frame.height + 1e-9, 44)
         XCTAssertTrue(invite.isHittable)
 
         openRootTab("Passport", app: app)
@@ -1988,20 +1991,24 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         let selectedName = app.staticTexts["map.peek.name"]
         XCTAssertTrue(selectedName.waitForExistence(timeout: stepTimeout),
-            "The tile-town selection should expose its real place name.")
+            "The geographic map selection should expose its real place name.")
         XCTAssertFalse(selectedName.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         XCTAssertTrue(app.staticTexts["map.peek.subtitle"].exists,
             "The selected Map Stamp should show its saved-date context.")
         let selectedPin = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.' AND label BEGINSWITH 'Selected Map Stamp, '")
+            NSPredicate(
+                format: "identifier BEGINSWITH 'map.pin.saved.' AND label == %@",
+                "\(selectedName.label) Map Stamp"
+            )
         ).firstMatch
-        XCTAssertTrue(selectedPin.exists)
-        XCTAssertEqual(selectedPin.label, "Selected Map Stamp, \(selectedName.label)")
+        XCTAssertTrue(selectedPin.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(selectedPin.isSelected, "The native pin must expose the same selection as the peek card.")
+        XCTAssertEqual(selectedPin.label, "\(selectedName.label) Map Stamp")
 
         let openMapDetails = app.buttons["map.peek.card"]
         XCTAssertTrue(openMapDetails.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(openMapDetails.label.contains(selectedName.label))
-        attach(app, name: "tile-town-selected-stamp")
+        attach(app, name: "native-map-selected-stamp")
         openMapDetails.tap()
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.scroll"].waitForExistence(timeout: stepTimeout))
 

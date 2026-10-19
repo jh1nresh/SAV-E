@@ -445,6 +445,7 @@ struct PlaceMapPin: View {
         .zIndex(isSelected ? 10 : 0)
         .accessibilityLabel(languageSettings.localized(english: "\(place.name) Map Stamp", traditionalChinese: "\(place.name) 地圖章"))
         .accessibilityIdentifier("map.pin.saved.\(place.id.uuidString)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
