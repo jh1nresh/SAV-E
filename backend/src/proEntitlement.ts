@@ -20,7 +20,7 @@ export const proEntitlementPolicy = {
   proMonthlyLimitUnits: 500,
   /// A transaction signed for a different app is not evidence about this user.
   expectedBundleID: "com.wanderly.app",
-  productIDs: ["com.wanderly.app.pro.annual", "com.wanderly.app.pro.monthly"],
+  productIDs: ["savvy.pro.annual", "savvy.pro.monthly"],
 } as const;
 
 export type ProEntitlementStatus = "active" | "expired" | "revoked" | "none";

@@ -36,7 +36,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.wanderly.app.pro.annual",
+          "productID" : "savvy.pro.annual",
           "recurringSubscriptionPeriod" : "P1Y",
           "referenceName" : "Savvy Pro Annual",
           "subscriptionGroupID" : "21500000",
@@ -57,7 +57,7 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.wanderly.app.pro.monthly",
+          "productID" : "savvy.pro.monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "Savvy Pro Monthly",
           "subscriptionGroupID" : "21500000",

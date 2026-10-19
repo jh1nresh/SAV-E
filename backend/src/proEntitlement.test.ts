@@ -206,7 +206,7 @@ test("a transaction for another app is rejected", async () => {
 test("a transaction for an unknown product is rejected", async () => {
   const pki = buildTestPKI();
   try {
-    const token = await signTransaction(pki, validClaims({ productId: "com.wanderly.app.pro.lifetime" }));
+    const token = await signTransaction(pki, validClaims({ productId: "savvy.pro.lifetime" }));
     const result = await verifyAppleSignedTransaction(token, {
       trustedRootFingerprints: [pki.rootFingerprint],
     });

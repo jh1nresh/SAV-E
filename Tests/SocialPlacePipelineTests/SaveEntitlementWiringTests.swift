@@ -17,7 +17,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
         {
           "tier": "pro",
           "status": "active",
-          "product_id": "com.wanderly.app.pro.annual",
+          "product_id": "savvy.pro.annual",
           "expires_at": "2027-08-19T00:00:00.000Z",
           "environment": "Sandbox"
         }
@@ -26,7 +26,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
         let response = try JSONDecoder().decode(SaveEntitlementResponse.self, from: json)
         XCTAssertEqual(response.resolvedTier, .pro)
         XCTAssertEqual(response.status, "active")
-        XCTAssertEqual(response.productID, "com.wanderly.app.pro.annual")
+        XCTAssertEqual(response.productID, "savvy.pro.annual")
         XCTAssertEqual(response.environment, "Sandbox")
     }
 
@@ -36,7 +36,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
         {
           "tier": "platinum",
           "status": "active",
-          "product_id": "com.wanderly.app.pro.annual",
+          "product_id": "savvy.pro.annual",
           "expires_at": null,
           "environment": "Production"
         }

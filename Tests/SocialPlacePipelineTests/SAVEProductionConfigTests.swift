@@ -177,8 +177,8 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(schemes, ["savvy", "wanderly"])
 
         XCTAssertTrue(projectSpec.contains("PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app"))
-        XCTAssertTrue(storeKit.contains("com.wanderly.app.pro.annual"))
-        XCTAssertTrue(storeKit.contains("com.wanderly.app.pro.monthly"))
+        XCTAssertTrue(storeKit.contains("savvy.pro.annual"))
+        XCTAssertTrue(storeKit.contains("savvy.pro.monthly"))
     }
 
     func testShareExtensionUsesAtlasStatesWithoutConfirmingUnverifiedCandidates() throws {

@@ -18,4 +18,4 @@ stale. No archive or upload of 110 is recorded in git. See
 
 The App Store Connect name save does not submit a version, select a build, upload a binary, change signing, or release the app. A future renamed build and refreshed screenshots must pass the normal review and release gates before users receive the binary rename.
 
-Compatibility identities remain unchanged: bundle IDs, App Group, App Clip association, StoreKit product IDs, associated-domain hosts, and legacy `wanderly://` routes. New branded custom links use `savvy://`, while the app continues accepting the legacy scheme.
+Compatibility identities remain unchanged: bundle IDs, App Group, App Clip association, associated-domain hosts, and legacy `wanderly://` routes. StoreKit product IDs are `savvy.pro.annual` and `savvy.pro.monthly`. New branded custom links use `savvy://`, while the app continues accepting the legacy scheme.

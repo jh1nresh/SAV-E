@@ -42,8 +42,8 @@ enum SAVEProAccessPolicy {
 
     /// Product identifiers, reserved ahead of App Store Connect creation.
     enum ProductID {
-        nonisolated static let annual = "com.wanderly.app.pro.annual"
-        nonisolated static let monthly = "com.wanderly.app.pro.monthly"
+        nonisolated static let annual = "savvy.pro.annual"
+        nonisolated static let monthly = "savvy.pro.monthly"
         nonisolated static let all = [annual, monthly]
     }
 
