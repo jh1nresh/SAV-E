@@ -609,6 +609,7 @@ enum ShareRoutePayloadSanitizer {
         "Google Places coordinates:",
         "Confidence:",
         "Analysis failed:",
+        "SavvyMemory/",
         "Debug:",
         "Diagnostic:",
         "Error:",
@@ -640,7 +641,9 @@ enum ShareRoutePayloadSanitizer {
     }
 
     static func publicNote(_ value: String?) -> String? {
-        let lines: [String] = value?
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmed.hasPrefix("SavvyMemory/") { return nil }
+        let lines: [String] = trimmed
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { line in
@@ -648,7 +651,7 @@ enum ShareRoutePayloadSanitizer {
                 return !diagnosticPrefixes.contains {
                     line.range(of: $0, options: [.caseInsensitive, .anchored]) != nil
                 }
-            } ?? []
+            }
         let text = lines.prefix(2).joined(separator: " · ").trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
         if text.utf16.count <= 180 { return text }

@@ -2668,11 +2668,14 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertEqual(updated.extractedDishes, ["Cortado", "Egg tart"])
         XCTAssertEqual(updated.vibeTags, ["quiet", "sunny"])
         XCTAssertEqual(updated.accessNotes, ["Walk-up", "No reservations"])
-        XCTAssertTrue(updated.wireNoteForPersistence()?.contains("Highlight: Single-origin pour-over") == true)
-        XCTAssertTrue(updated.wireNoteForPersistence()?.contains("Highlight: Recommended item: Egg tart") == true)
-        XCTAssertTrue(updated.wireNoteForPersistence()?.contains("Vibe: sunny") == true)
-        XCTAssertTrue(updated.wireNoteForPersistence()?.contains("Access: No reservations") == true)
-        XCTAssertTrue(updated.wireNoteForPersistence()?.contains("Evidence: Original source note") == true)
+        let wire = try XCTUnwrap(updated.wireNoteForPersistence())
+        XCTAssertTrue(wire.hasPrefix("SavvyMemory/1"))
+        XCTAssertTrue(wire.contains("Single-origin pour-over"))
+        XCTAssertTrue(wire.contains("Egg tart"))
+        XCTAssertTrue(wire.contains("sunny"))
+        XCTAssertTrue(wire.contains("No reservations"))
+        XCTAssertTrue(wire.contains("Original source note"))
+        XCTAssertTrue(wire.contains("Must try the bun"))
         XCTAssertEqual(
             updated.sourceEvidence.filter { $0 == "Source URL: https://www.instagram.com/p/harborovenpizza/" }.count,
             1
@@ -2683,6 +2686,156 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertNil(decision.finalPlace, "The stamp row already exists; resending final_place 409s")
         XCTAssertFalse(decision.body.keys.contains("final_place"))
         XCTAssertNil(decision.body["final_place"] as? [String: Any])
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionPreservesSecondaryCreatorHandle() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-secondary-handle-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        var stamp = Self.correctionStamp()
+        stamp.sourceHandle = "ichiran.official"
+        stamp.recommender = "ichiran.official"
+        _ = try vault.saveConfirmedPlace(stamp)
+        let clue = Self.correctionClue(overlappingStamp: true)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertEqual(resolved.sourceHandle, "ichiran.official")
+        XCTAssertEqual(resolved.recommender, "ichiran.official")
+        XCTAssertEqual(resolved.note, "Must try the bun")
+        XCTAssertTrue(resolved.sourceEvidence.contains("Creator handle: @la.harbor.eats"))
+        XCTAssertFalse((resolved.note ?? "").contains("Creator handle:"))
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+
+        var remoteStamp = Self.correctionStamp()
+        remoteStamp.sourceHandle = nil
+        remoteStamp.recommender = "ichiran.official"
+        let remoteMerged = remoteStamp.attachingReviewClue(clue)
+        XCTAssertNil(remoteMerged.sourceHandle)
+        XCTAssertEqual(remoteMerged.recommender, "ichiran.official")
+        XCTAssertEqual(remoteMerged.note, "Must try the bun")
+        XCTAssertTrue(remoteMerged.sourceEvidence.contains("Creator handle: @la.harbor.eats"))
+    }
+
+    @MainActor
+    func testExactSearchResolutionKeepsAddressClueAsEvidence() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-address-clue-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        var stamp = Self.correctionStamp()
+        stamp.address = "1-31-15 Nishiikebukuro, Toshima"
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.address = "LA Harbor"
+        clue.evidence.append("Address clue: 1111 S. Harbor Blvd, San Pedro")
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertEqual(resolved.address, stamp.address)
+        XCTAssertEqual(resolved.note, "Must try the bun")
+        XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote(resolved.note), "Must try the bun")
+        XCTAssertTrue(resolved.sourceEvidence.contains("Address clue: 1111 S. Harbor Blvd, San Pedro"))
+        XCTAssertFalse((resolved.note ?? "").contains("Address clue:"))
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionSerializesSavedResultTaps() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-serialize-taps-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-serialize-taps-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.holdNextUpdatePlace()
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stampA = Self.correctionStamp()
+        var stampB = Self.correctionStamp()
+        stampB.name = "Other Harbor Stamp"
+        _ = try vault.saveConfirmedPlace(stampA)
+        _ = try vault.saveConfirmedPlace(stampB)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stampA, stampB]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        let first = Task { try await map.resolveExactSearchClue(toSavedPlace: stampA) }
+        for _ in 0..<200 where supabase.updatePlaceStarted == 0 {
+            await Task.yield()
+        }
+        XCTAssertEqual(supabase.updatePlaceStarted, 1)
+
+        let second = try await map.resolveExactSearchClue(toSavedPlace: stampB)
+        XCTAssertEqual(second.id, stampB.id)
+        XCTAssertEqual(second.note, "Must try the bun")
+        XCTAssertFalse(second.sourceEvidence.contains("Original source note"))
+
+        supabase.resumeHeldUpdatePlace()
+        let resolved = try await first.value
+        XCTAssertEqual(resolved.id, stampA.id)
+        XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
+        XCTAssertEqual(supabase.updatedPlaces.map(\.id), [stampA.id])
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testExactSearchResolutionRestoresSessionWhenMergeWriteFails() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-restore-session-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-restore-session-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.updatePlaceError = NSError(domain: "test", code: 1)
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+
+        do {
+            _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+            XCTFail("Merge PATCH failure must surface")
+        } catch {
+            XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+        }
+
+        supabase.updatePlaceError = nil
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertEqual(resolved.note, "Must try the bun")
+        XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
     }
 
@@ -5654,6 +5807,19 @@ final class MapReviewLocationRepairTests: XCTestCase {
 private final class RecordingSupabaseService: SupabaseServiceProtocol {
     private(set) var updatedPlaces: [Place] = []
     private(set) var recoveryDecisions: [PlaceRecoveryDecisionDraft] = []
+    private(set) var updatePlaceStarted = 0
+    var updatePlaceError: Error?
+    private var holdUpdatePlace = false
+    private var resumeUpdatePlace: (() -> Void)?
+
+    func holdNextUpdatePlace() {
+        holdUpdatePlace = true
+    }
+
+    func resumeHeldUpdatePlace() {
+        resumeUpdatePlace?()
+        resumeUpdatePlace = nil
+    }
 
     func startAnalysis(id: UUID) async throws -> UUID? { nil }
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {}
@@ -5662,7 +5828,19 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult {
         throw SupabaseError.notConfigured
     }
-    func updatePlace(_ place: Place, previous: Place?) async throws { updatedPlaces.append(place) }
+    func updatePlace(_ place: Place, previous: Place?) async throws {
+        if holdUpdatePlace {
+            holdUpdatePlace = false
+            await withCheckedContinuation { continuation in
+                resumeUpdatePlace = { continuation.resume() }
+                updatePlaceStarted += 1
+            }
+        } else {
+            updatePlaceStarted += 1
+        }
+        if let updatePlaceError { throw updatePlaceError }
+        updatedPlaces.append(place)
+    }
     func deletePlace(_ placeId: UUID) async throws {}
     func createMemoryCapture(from candidate: PendingReviewCandidate, userId: String) async throws -> UUID {
         throw SupabaseError.notConfigured

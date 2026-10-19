@@ -1768,27 +1768,40 @@ final class MapViewModel: ObservableObject {
     /// Review → Choose another place can surface an already-saved Map Stamp.
     /// Selecting it must retire the active clue and attach that evidence to
     /// the stamp, the same way saving a returned map candidate does.
+    ///
+    /// Claim the active correction session before the first `await` so a
+    /// second saved-result tap cannot PATCH the same clue onto another stamp.
+    /// Restore the session only when nothing was written yet.
     @discardableResult
     func resolveExactSearchClue(toSavedPlace place: Place) async throws -> Place {
         guard let resolution = exactSearchResolution else { return place }
+        exactSearchResolution = nil
+        var persistedMerge = false
+        do {
+            var associated = place.attachingReviewClue(resolution.clue)
+            if associated != place {
+                if usesRemotePersistence { try await supabaseService.updatePlace(associated, previous: place) }
+                persistedMerge = true
+                mirrorToLocalVault(associated)
+                places = Place.consolidated(places.filter { $0.id != associated.id } + [associated])
+            }
 
-        var associated = place.attachingReviewClue(resolution.clue)
-        if associated != place {
-            if usesRemotePersistence { try await supabaseService.updatePlace(associated, previous: place) }
+            let resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
+                resolution: resolution,
+                candidateID: nil,
+                to: associated
+            )
+            guard resolvedExactSearch else { return associated }
+            associated = await refreshedConfirmedPlace(associated)
             mirrorToLocalVault(associated)
             places = Place.consolidated(places.filter { $0.id != associated.id } + [associated])
+            return associated
+        } catch {
+            if !persistedMerge {
+                exactSearchResolution = resolution
+            }
+            throw error
         }
-
-        let resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
-            resolution: resolution,
-            candidateID: nil,
-            to: associated
-        )
-        guard resolvedExactSearch else { return associated }
-        associated = await refreshedConfirmedPlace(associated)
-        mirrorToLocalVault(associated)
-        places = Place.consolidated(places.filter { $0.id != associated.id } + [associated])
-        return associated
     }
 
     /// After an exact-place search confirms a place, the originating Review

@@ -78,20 +78,32 @@ struct Place: Identifiable, Codable, Hashable {
 
     /// Attach a Review clue to an already-saved stamp. Evidence, extra URLs,
     /// and structured fields go through `mergingSources` so nothing is dropped
-    /// before the clue is deleted. Stamp order (`createdAt`) stays put, and
-    /// only a displayable handle is copied into `sourceHandle` / `recommender`.
-    /// The stamp's user-facing `note` is left unchanged.
+    /// before the clue is deleted. Stamp order (`createdAt`) stays put.
+    /// A stamp that already has a displayable handle keeps it; a different
+    /// clue handle is stored as durable `Creator handle:` evidence instead of
+    /// replacing the stamp's attribution. The stamp's user-facing `note` is
+    /// left unchanged.
     func attachingReviewClue(_ clue: PlaceReviewCandidate) -> Place {
         var incoming = Place.from(clue)
-        let handle = SaveSourceHandle.displayable(incoming.sourceHandle)
+        let clueHandle = SaveSourceHandle.displayable(incoming.sourceHandle)
             ?? SaveSourceHandle.displayable(incoming.recommender)
             ?? SaveSourceHandle.displayable(clue.sourceHandle)
-        incoming.sourceHandle = handle
-        incoming.recommender = handle
+        incoming.sourceHandle = clueHandle
+        incoming.recommender = clueHandle
         var merged = mergingSources(from: incoming)
         merged.createdAt = createdAt
-        merged.sourceHandle = SaveSourceHandle.displayable(merged.sourceHandle) ?? handle
-        merged.recommender = SaveSourceHandle.displayable(merged.recommender) ?? merged.sourceHandle
+        let stampHandle = SaveSourceHandle.displayable(sourceHandle)
+            ?? SaveSourceHandle.displayable(recommender)
+        if let stampHandle {
+            merged.sourceHandle = SaveSourceHandle.displayable(sourceHandle)
+            merged.recommender = SaveSourceHandle.displayable(recommender) ?? stampHandle
+            if let clueHandle, clueHandle.caseInsensitiveCompare(stampHandle) != .orderedSame {
+                merged = merged.appendingAdditionalEvidence("Creator handle: @\(clueHandle)")
+            }
+        } else {
+            merged.sourceHandle = clueHandle
+            merged.recommender = clueHandle
+        }
         return merged
     }
 
@@ -107,25 +119,33 @@ struct Place: Identifiable, Codable, Hashable {
     }
 
     /// Backend `places` has `note` and `extracted_dishes` only. Encode extra
-    /// evidence and structured arrays into the wire `note` column without
-    /// mutating the in-memory user-facing note.
+    /// evidence and structured arrays into a versioned envelope in the wire
+    /// `note` column without mutating the in-memory user-facing note.
+    /// Unmarked notes (no extra evidence) stay verbatim so a user memory that
+    /// begins with `Highlight:` / `Vibe:` / `Evidence:` is not reclassified.
     func wireNoteForPersistence() -> String? {
-        var lines: [String] = []
-        lines.append(contentsOf: noteLines)
-        for item in savedAdditionalSourceEvidence where !Self.isGeneratedEvidenceLine(item) {
-            if Self.isURLEvidenceLine(item) {
-                lines.append(item.hasPrefix("http") ? "Source URL: \(item)" : item)
-            } else if item.lowercased().hasPrefix("evidence:") {
-                lines.append(item)
-            } else {
-                lines.append("Evidence: \(item)")
-            }
+        let additional = savedAdditionalSourceEvidence.filter { !Self.isGeneratedEvidenceLine($0) }
+        let userNote = noteLines.isEmpty ? nil : noteLines.joined(separator: "\n")
+        let needsEnvelope = !additional.isEmpty
+            || !savedPlaceHighlights.isEmpty
+            || !savedVibeTags.isEmpty
+            || !savedAccessNotes.isEmpty
+            || !savedRecommendedItems.isEmpty
+        guard needsEnvelope else { return userNote }
+        let envelope = MemoryNoteEnvelope(
+            v: Self.memoryNoteEnvelopeVersion,
+            note: userNote,
+            evidence: additional.nilIfEmpty,
+            highlights: savedPlaceHighlights.nilIfEmpty,
+            recommended: savedRecommendedItems.nilIfEmpty,
+            vibe: savedVibeTags.nilIfEmpty,
+            access: savedAccessNotes.nilIfEmpty
+        )
+        guard let data = try? Self.memoryNoteEncoder.encode(envelope),
+              let json = String(data: data, encoding: .utf8) else {
+            return userNote
         }
-        lines.append(contentsOf: durableStructuredEvidence)
-        let unique = lines.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .removingDuplicates()
-        return unique.isEmpty ? nil : unique.joined(separator: "\n")
+        return "\(Self.memoryNoteEnvelopeMarker)\n\(json)"
     }
 
     var durableStructuredEvidence: [String] {
@@ -185,6 +205,19 @@ struct Place: Identifiable, Codable, Hashable {
             .removingDuplicates()
     }
 
+    func appendingAdditionalEvidence(_ line: String) -> Place {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return self }
+        var extra = savedAdditionalSourceEvidence
+        if extra.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+            return self
+        }
+        extra.append(trimmed)
+        var copy = self
+        copy.additionalSourceEvidence = extra.nilIfEmpty
+        return copy
+    }
+
     static func classifiedSourceLines(_ lines: [String]) -> (note: String?, additional: [String]) {
         var noteLines: [String] = []
         var additional: [String] = []
@@ -192,7 +225,7 @@ struct Place: Identifiable, Codable, Hashable {
             let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !line.isEmpty else { continue }
             if isGeneratedEvidenceLine(line) || isStructuredEvidenceLine(line) { continue }
-            if isURLEvidenceLine(line) {
+            if isURLEvidenceLine(line) || isDurableReceiptLine(line) {
                 additional.append(line)
                 continue
             }
@@ -213,13 +246,33 @@ struct Place: Identifiable, Codable, Hashable {
         additional: [String],
         highlights: SocialPlaceStructuredHighlights
     ) {
-        let lines = (raw ?? "")
-            .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        let highlights = SocialPlaceStructuredHighlights.extracted(from: lines)
-        let classified = classifiedSourceLines(lines)
-        return (classified.note, classified.additional, highlights)
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty else {
+            return (nil, [], .empty)
+        }
+        if let envelope = decodeMemoryNoteEnvelope(trimmed) {
+            let note = envelope.note?.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (
+                (note?.isEmpty == false) ? note : nil,
+                envelope.evidence ?? [],
+                SocialPlaceStructuredHighlights(
+                    placeHighlights: envelope.highlights ?? [],
+                    recommendedItems: envelope.recommended ?? [],
+                    vibeTags: envelope.vibe ?? [],
+                    accessNotes: envelope.access ?? []
+                )
+            )
+        }
+        if isLegacyLabeledWireNote(trimmed) {
+            let lines = trimmed
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            let highlights = SocialPlaceStructuredHighlights.extracted(from: lines)
+            let classified = classifiedSourceLines(lines)
+            return (classified.note, classified.additional, highlights)
+        }
+        return (trimmed, [], .empty)
     }
 
     static func isGeneratedEvidenceLine(_ line: String) -> Bool {
@@ -234,6 +287,12 @@ struct Place: Identifiable, Codable, Hashable {
         }
     }
 
+    static func isDurableReceiptLine(_ line: String) -> Bool {
+        receiptEvidencePrefixes.contains { prefix in
+            line.range(of: prefix, options: [.caseInsensitive, .anchored]) != nil
+        }
+    }
+
     static func isURLEvidenceLine(_ line: String) -> Bool {
         line.lowercased().hasPrefix("source url:") || line.hasPrefix("http://") || line.hasPrefix("https://")
     }
@@ -244,9 +303,39 @@ struct Place: Identifiable, Codable, Hashable {
         return value.isEmpty ? nil : value
     }
 
+    private static func decodeMemoryNoteEnvelope(_ raw: String) -> MemoryNoteEnvelope? {
+        guard raw.hasPrefix(memoryNoteEnvelopeMarker) else { return nil }
+        let json = raw.dropFirst(memoryNoteEnvelopeMarker.count)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let data = json.data(using: .utf8),
+              let envelope = try? JSONDecoder().decode(MemoryNoteEnvelope.self, from: data),
+              envelope.v == memoryNoteEnvelopeVersion else {
+            return nil
+        }
+        return envelope
+    }
+
+    private static func isLegacyLabeledWireNote(_ raw: String) -> Bool {
+        let lines = raw
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard lines.count > 1 else { return false }
+        return lines.contains { line in
+            isStructuredEvidenceLine(line) || isURLEvidenceLine(line) || labeledEvidenceValue(line) != nil
+        }
+    }
+
+    private static let memoryNoteEnvelopeMarker = "SavvyMemory/1"
+    private static let memoryNoteEnvelopeVersion = 1
+    private static let memoryNoteEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        return encoder
+    }()
+
+    /// Diagnostics that must never become saved memory or additional evidence.
     private static let generatedEvidencePrefixes = [
-        "Creator handle:",
-        "Source handle:",
         "Recommender:",
         "Verified coordinates",
         "Analysis method:",
@@ -255,11 +344,17 @@ struct Place: Identifiable, Codable, Hashable {
         "Location clue:",
         "Google Places",
         "Venue name:",
-        "Address clue:",
         "Category clue:",
         "Confidence:",
         "Debug:",
         "Diagnostic:",
+    ]
+
+    /// Evidence Receipt lines (DESIGN.md) kept in `additionalSourceEvidence`.
+    private static let receiptEvidencePrefixes = [
+        "Creator handle:",
+        "Source handle:",
+        "Address clue:",
     ]
 
     private static let structuredEvidencePrefixes = [
@@ -267,6 +362,16 @@ struct Place: Identifiable, Codable, Hashable {
         "Vibe:",
         "Access:",
     ]
+
+    private struct MemoryNoteEnvelope: Codable {
+        var v: Int
+        var note: String?
+        var evidence: [String]?
+        var highlights: [String]?
+        var recommended: [RecommendedItem]?
+        var vibe: [String]?
+        var access: [String]?
+    }
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)

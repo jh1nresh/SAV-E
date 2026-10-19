@@ -1090,19 +1090,20 @@ final class SAVEAnalysisTransportTests: XCTestCase {
                 patched = try AnalysisRequestURLProtocol.body(request)
                 XCTAssertEqual(patched["extracted_dishes"] as? [String], ["Cortado", "Egg tart"])
                 let note = try XCTUnwrap(patched["note"] as? String)
+                XCTAssertTrue(note.hasPrefix("SavvyMemory/1"))
                 XCTAssertTrue(note.contains("Must try the bun"))
-                XCTAssertTrue(note.contains("Evidence: Original source note"))
-                XCTAssertTrue(note.contains("Source URL: https://www.xiaohongshu.com/explore/extra-clue"))
+                XCTAssertTrue(note.contains("Original source note"))
+                XCTAssertTrue(note.contains("https://www.xiaohongshu.com/explore/extra-clue"))
                 XCTAssertFalse(note.contains("Recommender:"))
                 XCTAssertFalse(note.contains("Verified coordinates"))
                 XCTAssertFalse(note.contains("Analysis method:"))
                 XCTAssertFalse(note.contains("Creator handle:"))
-                XCTAssertTrue(note.contains("Highlight: Window seats"))
-                XCTAssertTrue(note.contains("Highlight: Single-origin pour-over"))
-                XCTAssertTrue(note.contains("Highlight: Recommended item: Cortado"))
-                XCTAssertTrue(note.contains("Highlight: Recommended item: Egg tart"))
-                XCTAssertTrue(note.contains("Vibe: sunny"))
-                XCTAssertTrue(note.contains("Access: No reservations"))
+                XCTAssertTrue(note.contains("Window seats"))
+                XCTAssertTrue(note.contains("Single-origin pour-over"))
+                XCTAssertTrue(note.contains("Cortado"))
+                XCTAssertTrue(note.contains("Egg tart"))
+                XCTAssertTrue(note.contains("sunny"))
+                XCTAssertTrue(note.contains("No reservations"))
                 XCTAssertNil(patched["place_highlights"])
                 XCTAssertNil(patched["vibe_tags"])
                 XCTAssertNil(patched["access_notes"])
@@ -1185,6 +1186,48 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         XCTAssertFalse((reloaded.note ?? "").contains("Highlight:"))
         XCTAssertFalse((reloaded.note ?? "").contains("Vibe:"))
         XCTAssertFalse((reloaded.note ?? "").contains("Evidence:"))
+    }
+
+    func testDecodedWireNotePreservesUntaggedUserNotes() throws {
+        for raw in [
+            "Highlight: the bun was amazing",
+            "Vibe: casual counter seats",
+            "Evidence: keep this as my memory",
+            "Creator handle: @me.and.the.bun",
+        ] {
+            let decoded = Place.decodedWireNote(raw)
+            XCTAssertEqual(decoded.note, raw)
+            XCTAssertTrue(decoded.additional.isEmpty)
+            XCTAssertTrue(decoded.highlights.placeHighlights.isEmpty)
+            XCTAssertTrue(decoded.highlights.vibeTags.isEmpty)
+            XCTAssertTrue(decoded.highlights.accessNotes.isEmpty)
+            XCTAssertTrue(decoded.highlights.recommendedItems.isEmpty)
+        }
+
+        var place = Place.mock
+        place.note = "Highlight: the bun was amazing"
+        place.additionalSourceEvidence = ["Original source note"]
+        place.placeHighlights = ["Window seats"]
+        let wire = try XCTUnwrap(place.wireNoteForPersistence())
+        XCTAssertTrue(wire.hasPrefix("SavvyMemory/1"))
+        let decoded = Place.decodedWireNote(wire)
+        XCTAssertEqual(decoded.note, "Highlight: the bun was amazing")
+        XCTAssertEqual(decoded.additional, ["Original source note"])
+        XCTAssertEqual(decoded.highlights.placeHighlights, ["Window seats"])
+        XCTAssertNil(ShareRoutePayloadSanitizer.publicNote(wire))
+
+        let legacy = Place.decodedWireNote("""
+        Must try the bun
+        Evidence: Original source note
+        Highlight: Window seats
+        Vibe: sunny
+        Access: Walk-up
+        """)
+        XCTAssertEqual(legacy.note, "Must try the bun")
+        XCTAssertEqual(legacy.additional, ["Original source note"])
+        XCTAssertEqual(legacy.highlights.placeHighlights, ["Window seats"])
+        XCTAssertEqual(legacy.highlights.vibeTags, ["sunny"])
+        XCTAssertEqual(legacy.highlights.accessNotes, ["Walk-up"])
     }
 
     func testEmptyRetryDistinguishesExistingSuccessorsFromUnresolvedSource() async throws {

@@ -121,13 +121,16 @@ struct SharedPlaceData: Codable {
             "Google Places coordinates:",
             "Confidence:",
             "Analysis failed:",
+            "SavvyMemory/",
             "Debug:",
             "Diagnostic:",
             "Error:",
             "Source recovery failed:",
             "Stack trace:",
         ]
-        let text = value?
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmed.hasPrefix("SavvyMemory/") { return nil }
+        let text = trimmed
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { line in
@@ -137,7 +140,7 @@ struct SharedPlaceData: Codable {
                 }
             }
             .prefix(2)
-            .joined(separator: " · ") ?? ""
+            .joined(separator: " · ")
         guard !text.isEmpty else { return nil }
         if text.utf16.count <= 180 { return text }
 
