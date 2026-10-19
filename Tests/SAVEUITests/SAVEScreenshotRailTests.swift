@@ -483,7 +483,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         XCTAssertTrue(app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["paywall.freePlaceLimit"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Save every place you love"].firstMatch.exists)
         XCTAssertTrue(app.staticTexts["Free: 50 places"].firstMatch.exists)
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.proBenefit"].exists)
+        XCTAssertTrue(app.staticTexts["Unlimited saved places"].firstMatch.exists)
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.keepGoing"].exists)
+        XCTAssertTrue(app.staticTexts["You've saved 50 places. Keep going."].firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["Always free"].exists)
         XCTAssertFalse(app.staticTexts["Always free: unlimited saved places"].exists)
         XCTAssertFalse(app.staticTexts["Unlimited saved places and Map Stamps"].exists)
         XCTAssertTrue(app.buttons["paywall.close"].exists)
