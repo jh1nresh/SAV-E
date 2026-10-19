@@ -196,6 +196,7 @@ enum ReviewDemoSeed {
                 ("Tainan Garden Cafe", "台南市中西區", PlaceCategory.cafe),
                 ("New Taipei Corner Cafe", "新北市板橋區", PlaceCategory.cafe),
                 ("Taipei Lunch", "台北市信義區", PlaceCategory.food),
+                ("Taipei Riverside Park", "台北市中山區", PlaceCategory.attraction),
             ].enumerated().map { index, value in
                 Place(id: UUID(uuidString: String(format: "10000000-0000-0000-0000-%012d", index + 1))!,
                       name: value.0, address: value.1, latitude: 25.04, longitude: 121.54,

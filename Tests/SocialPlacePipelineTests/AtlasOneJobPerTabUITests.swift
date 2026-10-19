@@ -379,8 +379,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(workflow.contains("run-visual-parity.sh"))
         XCTAssertTrue(workflow.contains("$RUNNER_TEMP/SAVE-UI.xcresult"))
         XCTAssertTrue(rail.contains("waitForHomeCoverImagery(app)"))
-        XCTAssertTrue(rail.contains("home.search"))
-        XCTAssertTrue(rail.contains("home.featuredName"))
+        XCTAssertTrue(rail.contains("home.miniMap"))
+        XCTAssertTrue(rail.contains("home.eat"))
         XCTAssertTrue(rail.contains("testHomeListProgressiveSearch"))
         XCTAssertTrue(selector.contains("testHomeListProgressiveSearch"))
     }

@@ -25,47 +25,53 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             try signInViaReviewDemoRequired(app: app)
             XCTAssertTrue(app.buttons["root.passport"].waitForExistence(timeout: stepTimeout))
             XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout))
-            XCTAssertTrue(app.staticTexts["home.featuredName"].waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(app.buttons["home.eat"].waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(app.buttons["home.go"].waitForExistence(timeout: stepTimeout))
             XCTAssertFalse(app.descendants(matching: .any)["home.memoryPile"].exists)
             XCTAssertFalse(app.buttons["home.viewAll"].exists)
-            let field = app.textFields["home.search"]
-            XCTAssertTrue(field.waitForExistence(timeout: stepTimeout))
+            XCTAssertFalse(app.textFields["home.search"].exists)
             attach(app, name: "home-list-browse-\(staticMode)")
-            field.tap()
-            field.typeText("cafe")
-            let count = app.staticTexts["home.search.count"]
-            XCTAssertTrue(count.waitForExistence(timeout: stepTimeout))
-            XCTAssertEqual(count.label, staticMode ? "找到 3 個地點" : "3 places found")
-            XCTAssertEqual(
-                app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.search.result.'")).count,
-                3
+            let cafe = app.buttons["home.place.10000000-0000-0000-0000-000000000001"]
+            XCTAssertTrue(cafe.waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(app.staticTexts["Taipei Window Cafe"].firstMatch.exists)
+            tapReachable(app.buttons["home.go"])
+            XCTAssertTrue(
+                app.buttons["home.place.10000000-0000-0000-0000-000000000005"].waitForExistence(timeout: stepTimeout)
             )
+            XCTAssertFalse(app.buttons["home.place.10000000-0000-0000-0000-000000000001"].exists)
             attach(app, name: "home-list-cafes-\(staticMode)")
-            app.buttons["home.search.clear"].tap()
-            XCTAssertTrue(app.staticTexts["home.featuredName"].waitForExistence(timeout: stepTimeout))
-            field.tap()
-            field.typeText(staticMode ? "台北咖啡店" : "Taipei cafe")
-            XCTAssertEqual(count.label, staticMode ? "找到 1 個地點" : "1 place found")
-            let taipei = app.buttons["home.search.result.10000000-0000-0000-0000-000000000001"]
-            XCTAssertTrue(taipei.waitForExistence(timeout: stepTimeout))
+            tapReachable(app.buttons["home.eat"])
+            XCTAssertTrue(cafe.waitForExistence(timeout: stepTimeout))
+            tapReachable(app.buttons["home.citySwitcher"])
+            let tainan = app.descendants(matching: .any)["home.city.tainan"]
+            XCTAssertTrue(tainan.waitForExistence(timeout: stepTimeout))
+            tapReachable(tainan)
+            let garden = app.buttons["home.place.10000000-0000-0000-0000-000000000002"]
+            XCTAssertTrue(garden.waitForExistence(timeout: stepTimeout))
             attach(app, name: "home-list-taipei-\(staticMode)")
-            app.buttons["home.search.clear"].tap()
-            field.tap()
-            field.typeText("no-such-place-xyz")
-            XCTAssertEqual(count.label, staticMode ? "找到 0 個地點" : "0 places found")
-            XCTAssertTrue(app.descendants(matching: .any)["home.search.empty"].exists)
+            tapReachable(app.buttons["home.citySwitcher"])
+            let taipeiCity = app.descendants(matching: .any)["home.city.taipei"]
+            XCTAssertTrue(taipeiCity.waitForExistence(timeout: stepTimeout))
+            tapReachable(taipeiCity)
+            XCTAssertTrue(cafe.waitForExistence(timeout: stepTimeout))
             attach(app, name: "home-list-no-match-\(staticMode)")
-            app.buttons["home.search.clear"].tap()
-            XCTAssertTrue(app.staticTexts["home.featuredName"].waitForExistence(timeout: stepTimeout))
-            field.tap()
-            field.typeText(staticMode ? "台北咖啡店" : "Taipei cafe")
-            XCTAssertTrue(taipei.waitForExistence(timeout: stepTimeout))
-            taipei.tap()
+            cafe.tap()
             XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
             XCTAssertTrue(app.staticTexts["Taipei Window Cafe"].firstMatch.exists)
             attach(app, name: "home-list-open-detail-\(staticMode)")
             app.terminate()
         }
+        let dark = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed", "--uitest-home-memory-fixture",
+            "-save.appLanguage", "en", "-AppleInterfaceStyle", "Dark",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(dark)
+        try signInViaReviewDemoRequired(app: dark)
+        XCTAssertTrue(dark.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout))
+        attach(dark, name: "doodle-home-dark")
+        dark.terminate()
     }
 
     @MainActor
@@ -226,19 +232,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     func testCaptureMultipleResultsExcludeOlderClues() throws {
         let app = makeApp(launchArguments: [
             "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-review-demo-offline",
+            "--uitest-location-denied",
             "--uitest-reset-review-demo-storage", "--uitest-repair-review-demo-seed", "-save.appLanguage", "en"
         ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
         launch(app)
         try signInViaReviewDemoRequired(app: app)
-        let savedCount = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'confirmed places'")).firstMatch
-        XCTAssertTrue(savedCount.waitForExistence(timeout: stepTimeout))
-        let count = savedCount.label
+        let collected = app.descendants(matching: .any)["home.collected"]
+        XCTAssertTrue(collected.waitForExistence(timeout: stepTimeout))
+        let count = collected.label
         let firstPlace = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'")).firstMatch
         XCTAssertTrue(firstPlace.waitForExistence(timeout: stepTimeout))
-        let featuredName = app.staticTexts["home.featuredName"]
-        XCTAssertTrue(featuredName.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(firstPlace.frame.contains(featuredName.frame), "The readable paper caption must remain within the saved-place row.")
-        XCTAssertTrue(app.textFields["home.search"].isHittable)
+        XCTAssertFalse(app.textFields["home.search"].exists)
         attach(app, name: "review-flow-home-no-photo")
         openSavesFromHome(app: app)
         let seededCandidate = app.buttons.matching(
@@ -293,8 +297,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         tapReachable(reject)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         app.navigationBars.buttons.firstMatch.tap()
-        XCTAssertTrue(savedCount.waitForExistence(timeout: stepTimeout))
-        XCTAssertEqual(savedCount.label, count)
+        XCTAssertTrue(collected.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(collected.label, count)
     }
 
     @MainActor
@@ -309,6 +313,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(start.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(start.isHittable)
         attach(app, name: "review-flow-home-empty")
+        attach(app, name: "doodle-home-empty")
         start.tap()
         typeText("https://www.instagram.com/reel/UnresolvedClue/", into: app.textViews["capture.input"])
         dismissKeyboard(app: app)
@@ -475,6 +480,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--skip-map-tour",
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-location-denied",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
@@ -488,7 +494,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Production Home should render confirmed saved places immediately."
         )
         waitForHomeCoverImagery(app)
-        XCTAssertTrue(app.textFields["home.search"].isHittable)
+        XCTAssertFalse(app.textFields["home.search"].exists)
         XCTAssertFalse(app.buttons["home.viewAll"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["home.memoryPile"].exists)
         let firstPlace = app.buttons.matching(
@@ -496,12 +502,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         ).firstMatch
         XCTAssertTrue(firstPlace.waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.buttons["home.hero.changeCover"].exists)
-        let featuredName = app.staticTexts["home.featuredName"]
-        XCTAssertTrue(featuredName.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(featuredName.isHittable)
-        XCTAssertTrue(firstPlace.frame.contains(featuredName.frame), "The readable paper caption must remain within the saved-place card.")
+        XCTAssertTrue(app.buttons["home.eat"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["home.citySwitcher"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["home.miniMap"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(app.state, .runningForeground)
-        XCTAssertTrue(app.buttons["home.more"].isHittable)
         XCTAssertTrue(rootTabButton("Save", app: app).isHittable)
         XCTAssertFalse(
             app.buttons["home.capture"].exists,
@@ -600,6 +604,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertEqual(leadingInset, trailingInset, accuracy: 2)
         waitForHomeCoverImagery(app)
         attach(app, name: "five-tab-home")
+        attach(app, name: "doodle-home-light")
 
         openRootTab("Friends", app: app)
         XCTAssertTrue(app.staticTexts["friends.empty"].waitForExistence(timeout: stepTimeout))
@@ -956,6 +961,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
                 "--uitest-repair-review-demo-seed",
+                "--uitest-location-denied",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
@@ -967,11 +973,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(rootTabButton("Save", app: app).exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].exists)
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'")).firstMatch.exists)
-        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["home.trips"].exists)
-        tapReachable(app.buttons["home.more"])
-        XCTAssertTrue(app.descendants(matching: .any)["home.more.sheet"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["home.reviewQueue"].exists)
+        XCTAssertTrue(app.buttons["home.eat"].exists)
+        XCTAssertTrue(app.buttons["home.citySwitcher"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["home.review"].exists)
 
         for tab in ["Home", "Map", "Save", "Passport"] {
             XCTAssertTrue(rootTabButton(tab, app: app).waitForExistence(timeout: stepTimeout), "Missing \(tab) root tab")
@@ -1254,43 +1258,35 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let app = makeApp(launchArguments: [
             "--uitest-complete-onboarding", "--skip-map-tour",
             "--uitest-repair-review-demo-seed", "--uitest-review-demo-offline",
-            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en",
+            "--uitest-reset-review-demo-storage", "--uitest-location-denied",
+            "-save.appLanguage", "en",
         ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
         launch(app)
         try signInViaReviewDemoRequired(app: app)
-        let search = app.textFields["home.search"]
-        XCTAssertTrue(search.waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: launchTimeout))
         attach(app, name: "home-search-pending-candidate")
-        search.tap()
-        search.typeText("zzzz-no-saved-match")
-        XCTAssertTrue(app.staticTexts["home.search.empty"].waitForExistence(timeout: stepTimeout))
-        app.buttons["Clear search"].tap()
-        search.tap()
-        search.typeText("ichiran")
-        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.search.result.'")).firstMatch
-        XCTAssertTrue(result.waitForExistence(timeout: stepTimeout))
-        result.tap()
+        tapReachable(app.buttons["home.citySwitcher"])
+        let tokyo = app.descendants(matching: .any)["home.city.tokyo"]
+        XCTAssertTrue(tokyo.waitForExistence(timeout: stepTimeout))
+        tapReachable(tokyo)
+        let ichiran = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'home.place.' AND label CONTAINS[c] %@", "Ichiran")
+        ).firstMatch
+        XCTAssertTrue(ichiran.waitForExistence(timeout: stepTimeout))
+        ichiran.tap()
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         app.buttons["drawer.place.close"].firstMatch.tap()
-        XCTAssertTrue(search.waitForExistence(timeout: stepTimeout))
-        app.buttons["Clear search"].tap()
-        tapReachable(app.buttons["home.more"])
-        XCTAssertTrue(app.descendants(matching: .any)["home.more.sheet"].waitForExistence(timeout: stepTimeout))
-        let review = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.reviewCandidate.'")).firstMatch
+        XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout))
+        tapReachable(app.descendants(matching: .any)["home.review"])
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        let review = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch
         XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
         review.tap()
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertFalse(app.descendants(matching: .any)["saves.root"].exists)
         attach(app, name: "home-real-candidate-detail")
         app.buttons["drawer.place.close"].firstMatch.tap()
-        XCTAssertTrue(app.buttons["home.more"].waitForExistence(timeout: stepTimeout))
-        tapReachable(app.buttons["home.more"])
-        XCTAssertTrue(
-            app.descendants(matching: .any)["home.more.sheet"].waitForExistence(timeout: stepTimeout),
-            "Reopening More after a review candidate must show the sheet before View all."
-        )
-        XCTAssertTrue(app.buttons["home.reviewAll"].waitForExistence(timeout: stepTimeout))
-        app.buttons["home.reviewAll"].tap()
+        openRootTab("Home", app: app)
+        tapReachable(app.descendants(matching: .any)["home.review"])
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         let firstCandidate = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch
         XCTAssertTrue(firstCandidate.label.contains("Harbor Oven Pizza"))
@@ -2858,14 +2854,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         if moreActions.waitForExistence(timeout: timeout(2)) {
             tapReachable(moreActions)
         }
-        // Live Home: Manage (`home.saves`). Parity-fixture Home still uses the
-        // locked One-Face stack, whose Saves entry is Review clues (`home.review`).
+        // Doodle Home: clues line (`home.review`). Parity-fixture Home still
+        // uses Review clues / More. Keep the older Manage labels as fallback.
         let candidates: [XCUIElement] = [
+            app.descendants(matching: .any)["home.review"],
+            app.buttons["Review"],
+            app.buttons["確認"],
             app.descendants(matching: .any)["home.saves"],
             app.buttons["Manage saved places"],
             app.buttons["管理已存地點"],
-            app.buttons["Manage"],
-            app.descendants(matching: .any)["home.review"],
             app.buttons["Review clues"],
         ]
         let entry = firstExisting(candidates, timeout: stepTimeout)
@@ -2890,6 +2887,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let moreActions = app.descendants(matching: .any)["home.more"]
         if moreActions.waitForExistence(timeout: timeout(2)) {
             tapReachable(moreActions)
+        }
+        let citySwitcher = app.buttons["home.citySwitcher"]
+        if citySwitcher.waitForExistence(timeout: timeout(2)) {
+            tapReachable(citySwitcher)
         }
         let candidates: [XCUIElement] = [
             app.descendants(matching: .any)["home.trips"],
@@ -2947,20 +2948,22 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         return elements.first(where: \.exists) ?? elements[0]
     }
 
-    /// Live Home paints hybrid / Look Around covers asynchronously. The Atlas
-    /// gate compares `five-tab-home` to `ProductionTargets/home.png`. Attaching
-    /// on `home.root` alone captured the pin fallback (CI #184 score 0.70);
-    /// the same target scores 0.93 once MapKit imagery lands.
+    /// Live Home is the Doodle Eat/Go list plus mini-map. The Atlas gate still
+    /// compares `five-tab-home` to `ProductionTargets/home.png` at 0.90. Do not
+    /// retune that gate here if the intentional Home redesign drops the score.
     @MainActor
     private func waitForHomeCoverImagery(_ app: XCUIApplication) {
         XCTAssertTrue(
             app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
             "Live Home should show the saved-place library before the parity raster."
         )
-        XCTAssertTrue(app.textFields["home.search"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.staticTexts["home.search.count"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.staticTexts["home.featuredName"].waitForExistence(timeout: stepTimeout))
-        waitForStableFrame(app.staticTexts["home.featuredName"])
+        XCTAssertTrue(app.buttons["home.eat"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["home.miniMap"].waitForExistence(timeout: stepTimeout))
+        let firstPlace = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
+        ).firstMatch
+        XCTAssertTrue(firstPlace.waitForExistence(timeout: stepTimeout))
+        waitForStableFrame(firstPlace)
     }
 
     @MainActor

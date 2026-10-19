@@ -10,6 +10,7 @@ struct SaveHomeView: View {
     let onOpenTrips: () -> Void
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
+    let onOpenMap: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject private var locationService = LocationService.shared
 
@@ -18,7 +19,10 @@ struct SaveHomeView: View {
             if SaveAtlasRuntime.usesParityFixture {
                 HomeAtlasScreen()
             } else {
-                SaveTileTownHomeView()
+                SaveDoodleHomeView(
+                    locationService: locationService,
+                    onOpenMap: onOpenMap
+                )
             }
         }
         .environment(\.atlasPresentation, atlasPresentation)

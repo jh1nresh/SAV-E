@@ -174,6 +174,7 @@ struct ContentView: View {
     @StateObject private var tripStore: TripPackStore
     @StateObject private var drawerVM = AIDrawerViewModel()
     @StateObject private var planConversation = SavePlanConversation()
+    @StateObject private var doodleSession = SaveDoodleSession()
     @Binding private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     @Binding private var pendingOnboardingClue: String
     private let storageScope: ContentStorageScope
@@ -522,7 +523,7 @@ struct ContentView: View {
                                     )
                                 },
                                 onOpenTrips: {
-                                    // Existing trips remain available through Home's More menu.
+                                    // Existing trips remain available from Home's city sheet in UI tests.
                                     rootPath = SaveChromeNavigation.pathByOpening(
                                         .trips,
                                         currently: rootPath
@@ -534,7 +535,8 @@ struct ContentView: View {
                                         currently: rootPath
                                     )
                                 },
-                                onOpenPassport: openPassport
+                                onOpenPassport: openPassport,
+                                onOpenMap: { selectRootTab(.map) }
                             )
                         case .map:
                             SaveMapRootView(
@@ -594,6 +596,7 @@ struct ContentView: View {
                 }
             }
             .tint(SaveAtlasPalette.forest)
+            .environmentObject(doodleSession)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: SaveRootRoute.self) { route in
                 switch route {

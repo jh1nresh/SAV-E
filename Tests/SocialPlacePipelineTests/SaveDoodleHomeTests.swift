@@ -1,0 +1,207 @@
+import CoreLocation
+import XCTest
+@testable import SAVE
+
+@MainActor
+final class SaveDoodleHomeTests: XCTestCase {
+    func testEatLensKeepsFoodCafeBarAndDropsGo() {
+        let food = place("Duck", "Beijing, China", .food, latitude: 39.88, longitude: 116.41)
+        let cafe = place("Grey", "Beijing, China", .cafe, latitude: 39.88, longitude: 116.40)
+        let park = place("Tiantan", "Beijing, China", .attraction, latitude: 39.88, longitude: 116.41)
+        let visible = SaveDoodleHomeCatalog.visiblePlaces(
+            from: [food, cafe, park],
+            lens: .eat,
+            selection: .city("beijing"),
+            location: nil,
+            locationDenied: true
+        )
+        XCTAssertEqual(visible.map(\.name), ["Duck", "Grey"])
+        XCTAssertEqual(SaveDoodleHomeCatalog.lens(for: .food), .eat)
+        XCTAssertEqual(SaveDoodleHomeCatalog.lens(for: .attraction), .go)
+    }
+
+    func testGoLensKeepsAttractionStayShopping() {
+        let park = place("Park", "Tokyo, Japan", .attraction)
+        let hotel = place("Hotel", "Tokyo, Japan", .stay)
+        let shop = place("Shop", "Tokyo, Japan", .shopping)
+        let ramen = place("Ramen", "Tokyo, Japan", .food)
+        let visible = SaveDoodleHomeCatalog.visiblePlaces(
+            from: [park, hotel, shop, ramen],
+            lens: .go,
+            selection: .city("tokyo"),
+            location: nil,
+            locationDenied: true
+        )
+        XCTAssertEqual(visible.map(\.name), ["Park", "Hotel", "Shop"])
+    }
+
+    func testCityGroupsUseMetroAliases() {
+        let ichiran = place(
+            "Ichiran",
+            "1-22-7 Jinnan, Shibuya City, Tokyo, Japan",
+            .food
+        )
+        let siam = place(
+            "The Siam Hotel",
+            "3/2 Thanon Khao, Vachiraphayaban, Dusit, Bangkok 10300",
+            .stay
+        )
+        let cafe = place("Fujin", "No. 353, Section 1, Fuxing S Rd, Da'an District, Taipei", .cafe)
+        let groups = SaveDoodleHomeCatalog.cityGroups(from: [ichiran, siam, cafe])
+        XCTAssertEqual(Set(groups.map(\.id)), ["tokyo", "bangkok", "taipei"])
+        XCTAssertEqual(SaveHomeSearch.metroName(in: siam.address, traditionalChinese: false), "Bangkok")
+        XCTAssertEqual(SaveHomeSearch.metroName(in: ichiran.address, traditionalChinese: true), "東京")
+    }
+
+    func testNearYouKeepsOnlyWalkingDistance() {
+        let here = CLLocation(latitude: 39.882, longitude: 116.407)
+        let near = place("Duck", "Beijing, China", .food, latitude: 39.883, longitude: 116.408)
+        let far = place("Noodles", "Beijing, China", .food, latitude: 40.01, longitude: 116.50)
+        let visible = SaveDoodleHomeCatalog.visiblePlaces(
+            from: [near, far],
+            lens: .eat,
+            selection: .nearYou,
+            location: here,
+            locationDenied: false
+        )
+        XCTAssertEqual(visible.map(\.name), ["Duck"])
+        XCTAssertTrue(
+            SaveDoodleHomeCatalog.isNearbyEmpty(
+                places: [far],
+                lens: .eat,
+                selection: .nearYou,
+                location: here,
+                locationDenied: false
+            )
+        )
+    }
+
+    func testLocationDeniedFallsBackToNewestSaveCity() {
+        let older = place(
+            "Ichiran",
+            "1-22-7 Jinnan, Shibuya City, Tokyo, Japan",
+            .food,
+            createdAt: Date().addingTimeInterval(-100)
+        )
+        let newer = place(
+            "Fujin",
+            "No. 353, Section 1, Fuxing S Rd, Da'an District, Taipei",
+            .cafe,
+            createdAt: Date()
+        )
+        let resolved = SaveDoodleHomeCatalog.resolvedSelection(
+            .nearYou,
+            places: [older, newer],
+            locationDenied: true
+        )
+        XCTAssertEqual(resolved, .city("taipei"))
+        let visible = SaveDoodleHomeCatalog.visiblePlaces(
+            from: [older, newer],
+            lens: .eat,
+            selection: .nearYou,
+            location: nil,
+            locationDenied: true
+        )
+        XCTAssertEqual(visible.map(\.name), ["Fujin"])
+    }
+
+    func testDistanceTextAndCollectedProgress() {
+        XCTAssertEqual(SaveDoodleHomeCatalog.distanceText(450), "450m")
+        XCTAssertEqual(SaveDoodleHomeCatalog.distanceText(1100), "1.1km")
+        let visited = place("Duck", "Beijing, China", .food, status: .visited)
+        let saved = place("Cafe", "Beijing, China", .cafe)
+        let progress = SaveDoodleHomeCatalog.collectedProgress(in: [visited, saved])
+        XCTAssertEqual(progress.visited, 1)
+        XCTAssertEqual(progress.saved, 2)
+        XCTAssertEqual(progress.goal, 12)
+        XCTAssertEqual(SaveDoodleHomeCatalog.collectedStamps(in: [visited, saved]).map(\.name), ["Duck"])
+    }
+
+    func testSessionDefaultsToEatAndNearYou() {
+        let suite = "save.doodle.tests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let session = SaveDoodleSession(defaults: defaults)
+        XCTAssertEqual(session.lens, .eat)
+        XCTAssertEqual(session.city, .nearYou)
+        session.lens = .go
+        session.city = .city("tokyo")
+        let restored = SaveDoodleSession(defaults: defaults)
+        XCTAssertEqual(restored.lens, .go)
+        XCTAssertEqual(restored.city, .city("tokyo"))
+    }
+
+    func testProductionHomeIsDoodleNotTileTown() throws {
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        XCTAssertTrue(root.contains("SaveDoodleHomeView("))
+        XCTAssertTrue(root.contains("onOpenMap: onOpenMap"))
+        XCTAssertFalse(root.contains("SaveTileTownHomeView()"))
+        XCTAssertTrue(home.contains("home.miniMap"))
+        XCTAssertTrue(home.contains("home.citySwitcher"))
+        XCTAssertTrue(home.contains("home.eat"))
+        XCTAssertTrue(home.contains("home.go"))
+        XCTAssertTrue(home.contains("home.collected"))
+        XCTAssertTrue(home.contains("home.empty.capture"))
+        XCTAssertTrue(home.contains("home.review"))
+        XCTAssertTrue(home.contains("SaveDisplayTitle(text: \"Savvy\", pointSize: 34"))
+        XCTAssertTrue(home.contains(".mapStyle(.standard(emphasis: .automatic))"))
+        XCTAssertTrue(home.contains("Marker("))
+        XCTAssertTrue(home.contains("SaveDoodle.stampRed"))
+        XCTAssertTrue(home.contains("SaveAtlasPalette.coral"))
+        XCTAssertTrue(home.contains("interactionModes: []"))
+        XCTAssertFalse(home.contains("SaveTileTownCanvas"))
+        XCTAssertFalse(home.contains("home.search"))
+        XCTAssertFalse(home.contains("home.tileTown"))
+        XCTAssertFalse(home.contains("map.lens.nearby"))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent(
+                "SAV-E/Views/TileTown/SaveTileTownHomeView.swift"
+            ).path
+        ))
+    }
+
+    private func place(
+        _ name: String,
+        _ address: String,
+        _ category: PlaceCategory,
+        status: PlaceStatus = .wantToGo,
+        latitude: Double = 25.033,
+        longitude: Double = 121.5654,
+        createdAt: Date = Date()
+    ) -> Place {
+        Place(
+            id: UUID(),
+            name: name,
+            address: address,
+            latitude: latitude,
+            longitude: longitude,
+            googlePlaceId: nil,
+            category: category,
+            status: status,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: createdAt
+        )
+    }
+
+    private func source(at relativePath: String) throws -> String {
+        try String(contentsOf: repositoryRoot.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    private var repositoryRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+}

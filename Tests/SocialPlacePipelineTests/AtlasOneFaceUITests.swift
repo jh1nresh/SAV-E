@@ -64,7 +64,7 @@ final class AtlasOneFaceUITests: XCTestCase {
         XCTAssertFalse(home.contains("assetName: \"SoftPixel"))
         XCTAssertFalse(home.contains("assetName: \"16-bit"))
         XCTAssertFalse(home.contains("assetName: \"pixel-art"))
-        XCTAssertTrue(mapRoot.contains("SaveTileTownHomeView()"))
+        XCTAssertTrue(mapRoot.contains("SaveDoodleHomeView("))
         XCTAssertTrue(mapRoot.contains("SaveTileTownRootMap("))
         XCTAssertFalse(mapRoot.contains("Image(\"SoftPixel"))
     }
