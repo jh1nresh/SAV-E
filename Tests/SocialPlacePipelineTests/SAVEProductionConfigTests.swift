@@ -1209,6 +1209,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         emptied.vibeTags = []
         emptied.accessNotes = []
         emptied.extractedDishes = []
+        emptied.additionalSourceEvidence = []
         var emptiedBody: [String: Any] = [:]
         AnalysisRequestURLProtocol.handler = { request in
             emptiedBody = try AnalysisRequestURLProtocol.body(request)

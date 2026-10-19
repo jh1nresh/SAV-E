@@ -307,7 +307,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             if let nextHandle {
                 updates["recommender"] = nextHandle
             } else if place.recommender == nil && place.sourceHandle == nil {
-                updates["recommender"] = nil
+                updates["recommender"] = NSNull()
             }
         }
         if previous == nil || place.sourcePlatform != previous?.sourcePlatform {
@@ -316,7 +316,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         if previous == nil {
             if let sourceUrl = place.sourceUrl { updates["source_url"] = sourceUrl }
         } else if place.sourceUrl != previous?.sourceUrl {
-            updates["source_url"] = place.sourceUrl
+            updates["source_url"] = place.sourceUrl ?? NSNull()
         }
         // `places.note` is the user's plain memory. Extra clue evidence,
         // highlights, vibe, access, and priced recommended items live in
@@ -339,7 +339,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         if previous == nil {
             if let nextMeta { updates["memory_meta"] = try nextMeta.jsonObject() }
         } else if nextMeta != previousMeta {
-            updates["memory_meta"] = try nextMeta?.jsonObject()
+            updates["memory_meta"] = try nextMeta?.jsonObject() ?? NSNull()
         }
         let nextDishes = place.savedRecommendedItems.map(\.name)
         let previousDishes = previous?.savedRecommendedItems.map(\.name) ?? []
