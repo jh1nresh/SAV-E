@@ -1086,46 +1086,50 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         merged.extractedDishes = ["Cortado", "Egg tart"]
 
         let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        var mergedBody: [String: Any] = [:]
         AnalysisRequestURLProtocol.handler = { request in
-            let body = try AnalysisRequestURLProtocol.body(request)
-            XCTAssertEqual(body["note"] as? String, "Must try the bun")
-            XCTAssertFalse((body["note"] as? String ?? "").hasPrefix("SavvyMemory/"))
-            XCTAssertEqual(body["source_url"] as? String, "https://www.instagram.com/p/harborovenpizza/")
-            XCTAssertEqual(body["source_platform"] as? String, "instagram")
-            XCTAssertEqual(body["recommender"] as? String, "la.harbor.eats")
-            XCTAssertEqual(body["extracted_dishes"] as? [String], ["Cortado", "Egg tart"])
-            XCTAssertNotNil(body["memory_meta"])
+            mergedBody = try AnalysisRequestURLProtocol.body(request)
             return (200, "{}")
         }
         try await service.updatePlace(merged, previous: original)
+        XCTAssertEqual(mergedBody["note"] as? String, "Must try the bun")
+        XCTAssertFalse((mergedBody["note"] as? String ?? "").hasPrefix("SavvyMemory/"))
+        XCTAssertEqual(mergedBody["source_url"] as? String, "https://www.instagram.com/p/harborovenpizza/")
+        XCTAssertEqual(mergedBody["source_platform"] as? String, "instagram")
+        XCTAssertEqual(mergedBody["recommender"] as? String, "la.harbor.eats")
+        XCTAssertEqual(mergedBody["extracted_dishes"] as? [String], ["Cortado", "Egg tart"])
+        let mergedMeta = try decodeMemoryMeta(mergedBody["memory_meta"])
+        XCTAssertEqual(mergedMeta.evidence, ["Original source note"])
+        XCTAssertEqual(mergedMeta.highlights, ["Window seats", "Single-origin pour-over"])
 
+        var rolledBackBody: [String: Any] = [:]
         AnalysisRequestURLProtocol.handler = { request in
-            let body = try AnalysisRequestURLProtocol.body(request)
-            XCTAssertEqual(body["note"] as? String, "Must try the bun")
-            XCTAssertFalse((body["note"] as? String ?? "").hasPrefix("SavvyMemory/"))
-            XCTAssertTrue(body["source_url"] is NSNull)
-            XCTAssertEqual(body["source_platform"] as? String, "other")
-            XCTAssertTrue(body["recommender"] is NSNull)
-            XCTAssertEqual(body["extracted_dishes"] as? [String], ["Cortado"])
-            XCTAssertFalse((body["note"] as? String ?? "").contains("Original source note"))
-            let rolledBackMeta = try XCTUnwrap(body["memory_meta"] as? [String: Any])
-            XCTAssertEqual((rolledBackMeta["recommended"] as? [[String: Any]])?.map { $0["name"] as? String }, ["Cortado"])
-            XCTAssertEqual((rolledBackMeta["recommended"] as? [[String: Any]])?.map { $0["price"] as? String }, ["$6"])
-            XCTAssertNil(rolledBackMeta["evidence"])
-            XCTAssertNil(rolledBackMeta["highlights"])
+            rolledBackBody = try AnalysisRequestURLProtocol.body(request)
             return (200, "{}")
         }
         try await service.updatePlace(original, previous: merged)
+        XCTAssertEqual(rolledBackBody["note"] as? String, "Must try the bun")
+        XCTAssertFalse((rolledBackBody["note"] as? String ?? "").hasPrefix("SavvyMemory/"))
+        XCTAssertTrue(rolledBackBody["source_url"] is NSNull)
+        XCTAssertEqual(rolledBackBody["source_platform"] as? String, "other")
+        XCTAssertTrue(rolledBackBody["recommender"] is NSNull)
+        XCTAssertEqual(rolledBackBody["extracted_dishes"] as? [String], ["Cortado"])
+        XCTAssertFalse((rolledBackBody["note"] as? String ?? "").contains("Original source note"))
+        let rolledBackMeta = try decodeMemoryMeta(rolledBackBody["memory_meta"])
+        XCTAssertEqual(rolledBackMeta.recommended, [RecommendedItem(name: "Cortado", price: "$6")])
+        XCTAssertNil(rolledBackMeta.evidence)
+        XCTAssertNil(rolledBackMeta.highlights)
 
         var emptyOriginal = original
         emptyOriginal.recommendedItems = []
         emptyOriginal.extractedDishes = []
+        var emptiedDishesBody: [String: Any] = [:]
         AnalysisRequestURLProtocol.handler = { request in
-            let body = try AnalysisRequestURLProtocol.body(request)
-            XCTAssertEqual(body["extracted_dishes"] as? [String], [])
+            emptiedDishesBody = try AnalysisRequestURLProtocol.body(request)
             return (200, "{}")
         }
         try await service.updatePlace(emptyOriginal, previous: merged)
+        XCTAssertEqual(emptiedDishesBody["extracted_dishes"] as? [String], [])
     }
 
     func testUpdatePlacePersistsMergedStructuredFieldsAcrossRemoteReload() async throws {
@@ -1153,68 +1157,51 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         var patched: [String: Any] = [:]
         let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
         AnalysisRequestURLProtocol.handler = { request in
-            if request.httpMethod == "PATCH" {
-                patched = try AnalysisRequestURLProtocol.body(request)
-                XCTAssertEqual(patched["extracted_dishes"] as? [String], ["Cortado", "Egg tart"])
-                let note = try XCTUnwrap(patched["note"] as? String)
-                XCTAssertEqual(note, "Must try the bun")
-                XCTAssertFalse(note.hasPrefix("SavvyMemory/"))
-                XCTAssertFalse(note.contains("Original source note"))
-                XCTAssertFalse(note.contains("https://www.xiaohongshu.com/explore/extra-clue"))
-                XCTAssertFalse(note.contains("Window seats"))
-                XCTAssertFalse(note.contains("Single-origin pour-over"))
-                XCTAssertFalse(note.contains("sunny"))
-                XCTAssertFalse(note.contains("No reservations"))
-                XCTAssertNil(patched["place_highlights"])
-                XCTAssertNil(patched["vibe_tags"])
-                XCTAssertNil(patched["access_notes"])
-                XCTAssertNil(patched["recommended_items"])
-                XCTAssertNil(patched["additional_source_evidence"])
-                let meta = try XCTUnwrap(patched["memory_meta"] as? [String: Any])
-                XCTAssertEqual((meta["v"] as? NSNumber)?.intValue, 1)
-                XCTAssertEqual(meta["evidence"] as? [String], [
-                    "Original source note",
-                    "Source URL: https://www.xiaohongshu.com/explore/extra-clue",
-                ])
-                XCTAssertEqual(meta["highlights"] as? [String], ["Window seats", "Single-origin pour-over"])
-                XCTAssertEqual(meta["vibe"] as? [String], ["quiet", "sunny"])
-                XCTAssertEqual(meta["access"] as? [String], ["Walk-up", "No reservations"])
-                let recommended = try XCTUnwrap(meta["recommended"] as? [[String: Any]])
-                XCTAssertEqual(recommended.map { $0["name"] as? String }, ["Cortado", "Egg tart"])
-                XCTAssertEqual(recommended.map { $0["price"] as? String }, ["$6", "NT$45"])
-                return (200, "{}")
-            }
-            let payload: [String: Any] = [
-                "id": merged.id.uuidString,
-                "user_id": "owner",
-                "name": merged.name,
-                "address": merged.address,
-                "latitude": merged.latitude,
-                "longitude": merged.longitude,
-                "category": merged.category.rawValue,
-                "status": merged.status.rawValue,
-                "source_platform": merged.sourcePlatform.rawValue,
-                "note": patched["note"] as? String ?? "",
-                "extracted_dishes": patched["extracted_dishes"] as? [String] ?? [],
-                "memory_meta": patched["memory_meta"] as Any,
-                "created_at": "2020-01-02T03:04:05Z",
-            ]
-            let data = try JSONSerialization.data(withJSONObject: [payload])
-            return (200, String(data: data, encoding: .utf8) ?? "[]")
+            patched = try AnalysisRequestURLProtocol.body(request)
+            return (200, "{}")
         }
         try await service.updatePlace(merged, previous: previous)
+        XCTAssertEqual(patched["extracted_dishes"] as? [String], ["Cortado", "Egg tart"])
+        let note = try XCTUnwrap(patched["note"] as? String)
+        XCTAssertEqual(note, "Must try the bun")
+        XCTAssertFalse(note.hasPrefix("SavvyMemory/"))
+        XCTAssertFalse(note.contains("Original source note"))
+        XCTAssertFalse(note.contains("https://www.xiaohongshu.com/explore/extra-clue"))
+        XCTAssertFalse(note.contains("Window seats"))
+        XCTAssertFalse(note.contains("Single-origin pour-over"))
+        XCTAssertFalse(note.contains("sunny"))
+        XCTAssertFalse(note.contains("No reservations"))
+        XCTAssertNil(patched["place_highlights"])
+        XCTAssertNil(patched["vibe_tags"])
+        XCTAssertNil(patched["access_notes"])
+        XCTAssertNil(patched["recommended_items"])
+        XCTAssertNil(patched["additional_source_evidence"])
+        let meta = try decodeMemoryMeta(patched["memory_meta"])
+        XCTAssertEqual(meta.v, 1)
+        XCTAssertEqual(meta.evidence, [
+            "Original source note",
+            "Source URL: https://www.xiaohongshu.com/explore/extra-clue",
+        ])
+        XCTAssertEqual(meta.highlights, ["Window seats", "Single-origin pour-over"])
+        XCTAssertEqual(meta.vibe, ["quiet", "sunny"])
+        XCTAssertEqual(meta.access, ["Walk-up", "No reservations"])
+        XCTAssertEqual(meta.recommended, [
+            RecommendedItem(name: "Cortado", price: "$6"),
+            RecommendedItem(name: "Egg tart", price: "NT$45"),
+        ])
 
         var enriched = merged
         enriched.businessPhotoUrls = ["https://photos.example/1.jpg"]
+        var enrichmentBody: [String: Any] = [:]
         AnalysisRequestURLProtocol.handler = { request in
-            let body = try AnalysisRequestURLProtocol.body(request)
-            XCTAssertNil(body["extracted_dishes"], "Photo enrichment must not rewrite dishes")
-            XCTAssertNil(body["note"], "Photo enrichment must not rewrite the user note")
-            XCTAssertNil(body["memory_meta"], "Photo enrichment must not rewrite stamp memory")
-            XCTAssertEqual(body["business_photo_urls"] as? [String], ["https://photos.example/1.jpg"])
+            enrichmentBody = try AnalysisRequestURLProtocol.body(request)
             return (200, "{}")
         }
         try await service.updatePlace(enriched, previous: merged)
+        XCTAssertNil(enrichmentBody["extracted_dishes"], "Photo enrichment must not rewrite dishes")
+        XCTAssertNil(enrichmentBody["note"], "Photo enrichment must not rewrite the user note")
+        XCTAssertNil(enrichmentBody["memory_meta"], "Photo enrichment must not rewrite stamp memory")
+        XCTAssertEqual(enrichmentBody["business_photo_urls"] as? [String], ["https://photos.example/1.jpg"])
 
         var emptied = merged
         emptied.placeHighlights = []
@@ -1222,15 +1209,16 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         emptied.vibeTags = []
         emptied.accessNotes = []
         emptied.extractedDishes = []
+        var emptiedBody: [String: Any] = [:]
         AnalysisRequestURLProtocol.handler = { request in
-            let body = try AnalysisRequestURLProtocol.body(request)
-            XCTAssertEqual(body["extracted_dishes"] as? [String], [])
-            XCTAssertEqual(body["note"] as? String, "Must try the bun")
-            XCTAssertFalse((body["note"] as? String ?? "").hasPrefix("SavvyMemory/"))
-            XCTAssertTrue(body["memory_meta"] is NSNull, "Empty structured memory must clear memory_meta")
+            emptiedBody = try AnalysisRequestURLProtocol.body(request)
             return (200, "{}")
         }
         try await service.updatePlace(emptied, previous: merged)
+        XCTAssertEqual(emptiedBody["extracted_dishes"] as? [String], [])
+        XCTAssertEqual(emptiedBody["note"] as? String, "Must try the bun")
+        XCTAssertFalse((emptiedBody["note"] as? String ?? "").hasPrefix("SavvyMemory/"))
+        XCTAssertTrue(emptiedBody["memory_meta"] is NSNull, "Empty structured memory must clear memory_meta")
 
         AnalysisRequestURLProtocol.handler = { request in
             let payload: [String: Any] = [
@@ -1372,6 +1360,13 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [AnalysisRequestURLProtocol.self]
         return URLSession(configuration: config)
+    }
+
+    private func decodeMemoryMeta(_ value: Any?) throws -> PlaceMemoryMeta {
+        let object = try XCTUnwrap(value)
+        XCTAssertFalse(object is NSNull)
+        let data = try JSONSerialization.data(withJSONObject: object)
+        return try JSONDecoder().decode(PlaceMemoryMeta.self, from: data)
     }
 
     private func gemini(session: URLSession) -> SAVEGeminiTransport {
