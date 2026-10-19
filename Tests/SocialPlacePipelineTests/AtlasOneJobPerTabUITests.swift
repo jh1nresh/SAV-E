@@ -469,8 +469,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(map.contains("Search places"))
         XCTAssertFalse(map.contains("mic.fill"))
         XCTAssertTrue(
-            map.contains("SaveAtlasPalette.canvas.opacity(0.7), in: Capsule()"),
-            "Rest-state Map search is a floating capsule, not a rounded paper card."
+            map.contains("SaveAtlasPalette.kraft.opacity(0.28), in: SaveKraftTicketShape()"),
+            "Rest-state Map search uses the pixel interface cut-corner kraft field."
         )
         XCTAssertTrue(map.contains("saved Map Stamps"))
         XCTAssertTrue(map.contains("map.command.passport"))
@@ -484,7 +484,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         )
         XCTAssertFalse(
             map.contains("slider.horizontal.3"),
-            "Collapsed Map search is a floating pill, not a filter rail."
+            "Collapsed Map search remains a search control, not a filter rail."
         )
         XCTAssertTrue(markers.contains("place.category.mapMarkerSymbol"))
         XCTAssertTrue(markers.contains("state == .review ? \"questionmark\""))
@@ -511,16 +511,17 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(panel.contains("alignment: .bottom"))
         XCTAssertTrue(
             panel.contains("AtlasPalette.canvas"),
-            "Expanded Map drawer stays notebook canvas; glass belongs on the search pill."
+            "Expanded Map content stays notebook canvas inside the paper drawer."
         )
-        XCTAssertTrue(panel.contains(".fill(SaveAtlasPalette.paper)"))
+        XCTAssertTrue(panel.contains(".background(SaveAtlasPalette.paper, in: SaveKraftTicketShape())"))
+        XCTAssertTrue(panel.contains(".clipShape(SaveKraftTicketShape())"))
         XCTAssertTrue(panel.contains("if stage == .collapsed"))
         XCTAssertTrue(shelf.contains("map.command.search"))
         XCTAssertTrue(shelf.contains("map.command.passport"))
-        XCTAssertTrue(shelf.contains("SaveAtlasPalette.canvas.opacity(0.7), in: Capsule()"))
+        XCTAssertTrue(shelf.contains("SaveAtlasPalette.kraft.opacity(0.28), in: SaveKraftTicketShape()"))
         XCTAssertTrue(
             shelf.contains("person.crop.circle.fill"),
-            "Search capsule carries Passport in the Apple Maps avatar slot."
+            "Search shelf keeps its adjacent Passport action."
         )
         XCTAssertFalse(
             shelf.contains("accessibilityIdentifier(\"map.stampCount\")"),
@@ -528,7 +529,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         )
         XCTAssertFalse(
             shelf.contains("frame(width: 36, height: 5)"),
-            "Collapsed search has no grabber; Apple Maps idle search is a single capsule."
+            "The search shelf does not duplicate the outer drawer resize handle."
         )
         XCTAssertFalse(shelf.contains(".glassEffect("))
         XCTAssertFalse(map.contains("TextField"))

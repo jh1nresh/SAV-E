@@ -120,14 +120,18 @@ final class AtlasFiveTabBarTests: XCTestCase {
     }
 
     @MainActor
-    func testAtlasVisualSystemUsesRoundedTypeAndOrderedSpacing() throws {
+    func testAtlasVisualSystemUsesPixelProductionTypeAndOrderedSpacing() throws {
         let theme = try source(at: "Prototypes/AtlasPostcard/Sources/Theme.swift")
         let productionTheme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
 
         XCTAssertTrue(theme.contains("design: .rounded"))
         XCTAssertFalse(theme.contains("AvenirNextCondensed"))
         XCTAssertFalse(theme.contains("Georgia-Italic"))
-        XCTAssertTrue(productionTheme.contains("fontDescriptor.withDesign(.rounded)"))
+        // The standalone Atlas prototype keeps rounded type; the production
+        // contract now uses bundled pixel type with Dynamic Type scaling.
+        XCTAssertTrue(productionTheme.contains("UIFont(name: pixelFontName, size: size)"))
+        XCTAssertTrue(productionTheme.contains("UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: font)"))
+        XCTAssertEqual(SaveAtlasType.pixelFontName, "Fusion-Pixel-12px-Prop-zh-Hant-Regular")
         XCTAssertFalse(productionTheme.contains("AvenirNextCondensed"))
         XCTAssertFalse(productionTheme.contains("Georgia-Italic"))
         XCTAssertEqual(
