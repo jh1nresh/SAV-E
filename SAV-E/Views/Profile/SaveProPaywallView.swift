@@ -1,7 +1,7 @@
 import StoreKit
 import SwiftUI
 
-/// Savvy Pro paywall — Doodle v1 full-screen modal (DESIGN 2026-10-20).
+/// Pro paywall — Doodle v2 full-screen modal (DESIGN eade369).
 ///
 /// Presented only as a reaction to a refused AI assist, or pulled up
 /// deliberately from Passport. Never automatic, never at launch, never before
@@ -38,27 +38,27 @@ struct SaveProPaywallView: View {
             SaveAtlasPalette.canvas
                 .ignoresSafeArea()
 
-            VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
                 topBar
-                stamp
-                    .padding(.top, SaveSpace.xl)
+                hero
+                    .padding(.top, SaveSpace.xs)
                 headline
                     .padding(.top, SaveSpace.md)
-                benefitCard
+                benefitRow
                     .padding(.top, SaveSpace.md)
                 savedNote
-                    .padding(.top, SaveSpace.md)
-                Spacer(minLength: SaveSpace.lg)
+                    .padding(.top, SaveSpace.xs)
+                Spacer(minLength: SaveSpace.md)
                     .overlay(alignment: .bottom) {
                         saleStateNotice
-                            .padding(.bottom, SaveSpace.sm)
+                            .padding(.bottom, SaveSpace.xs)
                     }
                 offers
                 legalFooter
                     .padding(.top, SaveSpace.sm)
             }
             .padding(.horizontal, SaveLayout.screenMargin)
-            .padding(.bottom, SaveSpace.sm)
+            .padding(.bottom, SaveSpace.xs)
         }
         .presentationBackground(SaveAtlasPalette.canvas)
         .interactiveDismissDisabled(isPurchasing)
@@ -76,44 +76,60 @@ struct SaveProPaywallView: View {
     }
 
     private var topBar: some View {
-        HStack {
-            Spacer(minLength: 0)
-            Button {
-                SaveHaptics.tap()
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                    .frame(width: SaveLayout.minTap, height: SaveLayout.minTap)
-                    .contentShape(Rectangle())
+        ZStack {
+            HStack(spacing: SaveSpace.xs) {
+                SaveDisplayTitle(text: "Savvy", pointSize: 34, relativeTo: .largeTitle)
+                SaveDoodleElephant(size: 28)
             }
-            .accessibilityIdentifier("paywall.close")
+            HStack {
+                Button {
+                    SaveHaptics.tap()
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .frame(width: SaveLayout.minTap, height: SaveLayout.minTap)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityIdentifier("paywall.close")
+                Spacer(minLength: 0)
+            }
         }
         .frame(height: SaveLayout.minTap)
     }
 
-    private var stamp: some View {
-        SaveDoodlePaywallStamp()
-            .frame(width: 120, height: 120)
+    private var hero: some View {
+        SaveDoodlePaywallHero()
             .frame(maxWidth: .infinity)
+            .frame(height: 200)
+            .clipShape(RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                    .stroke(SaveAtlasPalette.line, lineWidth: SaveAtlasPalette.strokeWidth)
+            }
             .accessibilityHidden(true)
     }
 
     private var headline: some View {
         SaveDisplayTitle(
-            text: "Savvy Pro",
-            pointSize: 34,
-            relativeTo: .largeTitle
+            text: languageSettings.localized(
+                english: "Save every place you love",
+                traditionalChinese: "想去的地方，全部存下"
+            ),
+            pointSize: 29,
+            relativeTo: .title
         )
-        .frame(maxWidth: .infinity)
-        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
         .accessibilityIdentifier("paywall.header")
     }
 
-    private var benefitCard: some View {
+    private var benefitRow: some View {
         HStack(spacing: SaveLayout.stickerToText) {
-            SaveDoodleForestCheck()
+            Image(systemName: "bookmark")
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(SaveAtlasPalette.ink)
                 .frame(width: 24, height: 24)
                 .accessibilityHidden(true)
             Text(languageSettings.localized(
@@ -124,17 +140,7 @@ struct SaveProPaywallView: View {
             .foregroundStyle(SaveAtlasPalette.ink)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, SaveSpace.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .frame(height: SaveLayout.rowMinHeight)
-        .background(
-            SaveAtlasPalette.paper,
-            in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
-                .stroke(SaveAtlasPalette.line, lineWidth: SaveAtlasPalette.strokeWidth)
-        }
+        .frame(height: 36)
         .accessibilityIdentifier("paywall.benefit.unlimited")
     }
 
@@ -145,31 +151,28 @@ struct SaveProPaywallView: View {
         ))
         .font(SaveAtlasType.body(15))
         .foregroundStyle(SaveAtlasPalette.muted)
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityIdentifier("paywall.savedNote")
     }
 
-    /// Sale-state copy sits in the spacer above the CTA so the 56pt coral
-    /// button stays on the DESIGN y594 lock when purchasing is off.
+    /// Sale-state copy sits in the spacer so Yearly / Monthly / Continue
+    /// stay on the DESIGN eade369 locks when purchasing is off.
     @ViewBuilder
     private var saleStateNotice: some View {
         if showsNotForSale || hasStatusNotice {
-            VStack(spacing: SaveSpace.xs) {
+            VStack(alignment: .leading, spacing: SaveSpace.tight) {
                 if showsNotForSale {
                     Text(notForSaleText)
                         .font(SaveAtlasType.body(13))
                         .foregroundStyle(SaveAtlasPalette.muted)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityIdentifier("paywall.notForSale")
                 }
                 if let statusMessage, statusMessage != notForSaleText {
                     Text(statusMessage)
                         .font(SaveAtlasType.body(13))
                         .foregroundStyle(SaveAtlasPalette.coral)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -194,20 +197,22 @@ struct SaveProPaywallView: View {
         } else if storeKit.products.isEmpty, !didFinishProductLoad {
             ProgressView()
                 .frame(maxWidth: .infinity)
-                .frame(height: 56)
+                .frame(height: 52)
         } else if storeKit.products.isEmpty {
             fallbackOffers(products: [])
         } else {
-            liveOffers(products: storeKit.products)
+            VStack(spacing: SaveSpace.sm) {
+                planCards(products: storeKit.products)
+                continueButton
+            }
         }
     }
 
     private func fallbackOffers(products: [Product]) -> some View {
-        continueButton(products: products)
-    }
-
-    private func liveOffers(products: [Product]) -> some View {
-        continueButton(products: products)
+        VStack(spacing: SaveSpace.sm) {
+            planCards(products: products)
+            continueButton
+        }
     }
 
     private var notForSaleText: String {
@@ -217,36 +222,92 @@ struct SaveProPaywallView: View {
         )
     }
 
-    private func continueButton(products: [Product]) -> some View {
-        let price = priceText(
-            for: SAVEProAccessPolicy.ProductID.annual,
-            products: products,
-            fallback: "$39.99"
-        )
-        return Button {
-            Task { await purchaseSelected() }
-        } label: {
-            Group {
-                if isPurchasing {
-                    ProgressView().tint(.white)
-                } else {
-                    Text(languageSettings.localized(
-                        english: "Continue — \(price) / year",
-                        traditionalChinese: "繼續 — \(price) / 年"
-                    ))
-                    .font(SaveAtlasType.strong(17))
-                    .foregroundStyle(.white)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 56)
-            .background(
-                SaveAtlasPalette.coral,
-                in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+    private func planCards(products: [Product]) -> some View {
+        VStack(spacing: SaveSpace.sm) {
+            planCard(
+                id: SAVEProAccessPolicy.ProductID.annual,
+                title: languageSettings.localized(english: "Yearly", traditionalChinese: "年費"),
+                price: priceText(
+                    for: SAVEProAccessPolicy.ProductID.annual,
+                    products: products,
+                    fallback: "$39.99"
+                ),
+                symbol: "takeoutbag.and.cup.and.straw",
+                showsBestValue: true
+            )
+            planCard(
+                id: SAVEProAccessPolicy.ProductID.monthly,
+                title: languageSettings.localized(english: "Monthly", traditionalChinese: "月費"),
+                price: priceText(
+                    for: SAVEProAccessPolicy.ProductID.monthly,
+                    products: products,
+                    fallback: "$6.99"
+                ),
+                symbol: "cup.and.saucer",
+                showsBestValue: false
             )
         }
-        .disabled(isPurchasing)
-        .accessibilityIdentifier("paywall.continue")
+    }
+
+    private func planCard(
+        id: String,
+        title: String,
+        price: String,
+        symbol: String,
+        showsBestValue: Bool
+    ) -> some View {
+        let isSelected = id == selectedProductID
+        return Button {
+            SaveHaptics.select()
+            selectedProductID = id
+        } label: {
+            HStack(spacing: SaveSpace.md) {
+                Image(systemName: symbol)
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .frame(width: 40, height: 40)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(title)
+                        .font(SaveAtlasType.strong(17))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                    Text(price)
+                        .font(SaveAtlasType.strong(17))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                }
+
+                Spacer(minLength: 0)
+
+                if showsBestValue {
+                    Text(languageSettings.localized(english: "Best value", traditionalChinese: "最划算"))
+                        .font(SaveAtlasType.body(13))
+                        .foregroundStyle(SaveAtlasPalette.coral)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .stroke(SaveAtlasPalette.coral, lineWidth: 1.2)
+                        }
+                }
+            }
+            .padding(.horizontal, SaveSpace.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: SaveLayout.rowMinHeight)
+            .background(
+                SaveAtlasPalette.paper,
+                in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                    .stroke(
+                        isSelected ? SaveAtlasPalette.coral : SaveAtlasPalette.line,
+                        lineWidth: isSelected ? 2 : SaveAtlasPalette.strokeWidth
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("paywall.offer.\(id)")
     }
 
     private func priceText(for id: String, products: [Product], fallback: String) -> String {
@@ -294,49 +355,72 @@ struct SaveProPaywallView: View {
         )
     }
 
-    private var legalFooter: some View {
-        VStack(spacing: SaveSpace.md) {
-            Text(legalText)
-                .font(SaveAtlasType.body(11))
-                .foregroundStyle(SaveAtlasPalette.muted)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
+    private var continueButton: some View {
+        Button {
+            Task { await purchaseSelected() }
+        } label: {
+            Group {
+                if isPurchasing {
+                    ProgressView().tint(.white)
+                } else {
+                    Text(languageSettings.localized(english: "Continue", traditionalChinese: "繼續"))
+                        .font(SaveAtlasType.strong(17))
+                        .foregroundStyle(.white)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(
+                SaveAtlasPalette.coral,
+                in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+            )
+        }
+        .disabled(isPurchasing)
+        .padding(.top, SaveSpace.sm)
+        .accessibilityIdentifier("paywall.continue")
+    }
 
-            HStack(spacing: SaveSpace.lg) {
+    private var legalFooter: some View {
+        VStack(spacing: SaveSpace.xs) {
+            Text(languageSettings.localized(
+                english: "Payment is charged to your Apple Account. Subscriptions renew automatically unless cancelled at least 24 hours before the period ends. Manage or cancel in Settings.",
+                traditionalChinese: "款項由你的 Apple 帳戶扣款。除非在到期前至少 24 小時取消，否則訂閱會自動續訂。可在「設定」中管理或取消。"
+            ))
+            .font(SaveAtlasType.body(11))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: SaveSpace.xs) {
                 Button {
                     Task { await restore() }
                 } label: {
-                    Text(languageSettings.localized(english: "Restore Purchases", traditionalChinese: "恢復購買"))
+                    Text(languageSettings.localized(english: "Restore", traditionalChinese: "恢復購買"))
                 }
                 .accessibilityIdentifier("paywall.restore")
 
+                footerDot
                 if let terms = URL(string: SAVEProAccessPolicy.Legal.termsURL) {
                     Link(languageSettings.localized(english: "Terms", traditionalChinese: "使用條款"), destination: terms)
                         .accessibilityIdentifier("paywall.terms")
                 }
+                footerDot
                 if let privacy = URL(string: SAVEProAccessPolicy.Legal.privacyURL) {
                     Link(languageSettings.localized(english: "Privacy", traditionalChinese: "隱私政策"), destination: privacy)
                         .accessibilityIdentifier("paywall.privacy")
                 }
             }
-            .font(SaveAtlasType.strong(13))
-            .foregroundStyle(SaveAtlasPalette.coral)
-            .tint(SaveAtlasPalette.coral)
-            .frame(minHeight: SaveLayout.minTap)
+            .font(SaveAtlasType.body(12))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .tint(SaveAtlasPalette.muted)
         }
         .frame(maxWidth: .infinity)
         .accessibilityIdentifier("paywall.legal")
     }
 
-    private var legalText: String {
-        let renewal = renewalDescription(
-            for: SAVEProAccessPolicy.ProductID.annual,
-            products: storeKit.products
-        )
-        return languageSettings.localized(
-            english: "\(renewal) Payment is charged to your Apple ID. Manage or cancel anytime in Settings › Apple ID › Subscriptions.",
-            traditionalChinese: "\(renewal) 款項由你的 Apple ID 扣款。可在「設定 › Apple ID › 訂閱項目」中管理或取消。"
-        )
+    private var footerDot: some View {
+        Text("·")
+            .foregroundStyle(SaveAtlasPalette.muted)
     }
 
     private func purchaseSelected() async {
@@ -393,50 +477,101 @@ struct SaveProPaywallView: View {
     }
 }
 
-private struct SaveDoodleForestCheck: View {
+/// Illustrated city map for the paywall hero. Outline stickers wait to be
+/// colored; one or two already have a stamp. Tiantan-shaped sample when the
+/// user has no saved city yet.
+struct SaveDoodlePaywallHero: View {
     var body: some View {
-        Path { path in
-            path.move(to: CGPoint(x: 4, y: 13))
-            path.addQuadCurve(to: CGPoint(x: 10, y: 19), control: CGPoint(x: 6, y: 19))
-            path.addQuadCurve(to: CGPoint(x: 21, y: 6), control: CGPoint(x: 14, y: 18))
+        ZStack {
+            SaveAtlasPalette.paper
+            SaveDoodlePaywallParkShape()
+                .fill(SaveDoodle.washGreen.opacity(0.55))
+            SaveDoodlePaywallPaths()
+                .stroke(SaveAtlasPalette.line, style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
+
+            sticker(system: "pencil", x: 0.18, y: 0.28, visited: false)
+            sticker(system: "takeoutbag.and.cup.and.straw", x: 0.48, y: 0.30, visited: false)
+            sticker(system: "cup.and.saucer", x: 0.78, y: 0.26, visited: false)
+            sticker(system: "bird", x: 0.16, y: 0.72, visited: false)
+            sticker(system: "lamp.desk", x: 0.74, y: 0.70, visited: true)
+
+            ForEach(Array(treeOffsets.enumerated()), id: \.offset) { _, point in
+                Image(systemName: "tree")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(SaveAtlasPalette.forest.opacity(0.55))
+                    .position(x: point.x, y: point.y)
+            }
         }
-        .stroke(SaveAtlasPalette.forest, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+        .background(SaveAtlasPalette.paper)
+    }
+
+    private var treeOffsets: [CGPoint] {
+        [
+            CGPoint(x: 36, y: 28),
+            CGPoint(x: 92, y: 22),
+            CGPoint(x: 168, y: 26),
+            CGPoint(x: 248, y: 24),
+            CGPoint(x: 310, y: 30),
+            CGPoint(x: 54, y: 168),
+            CGPoint(x: 300, y: 166),
+        ]
+    }
+
+    private func sticker(
+        system: String,
+        x: CGFloat,
+        y: CGFloat,
+        visited: Bool
+    ) -> some View {
+        GeometryReader { geo in
+            ZStack {
+                Circle()
+                    .fill(SaveAtlasPalette.paper)
+                    .overlay {
+                        Circle()
+                            .stroke(
+                                visited ? SaveDoodle.stampRed : SaveDoodle.pencil,
+                                lineWidth: visited ? 1.5 : 1
+                            )
+                    }
+                Image(systemName: system)
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(visited ? SaveAtlasPalette.ink : SaveDoodle.pencil)
+            }
+            .frame(width: 36, height: 36)
+            .rotationEffect(.degrees(visited ? -5 : 4))
+            .position(x: geo.size.width * x, y: geo.size.height * y)
+        }
     }
 }
 
-/// Bookmark stamp from the 2026-10-20 DESIGN paywall export (23cca55).
-/// Path is the 48×48 SVG (`M12 6h24v36l-12-8-12 8z` + stampRed rings)
-/// scaled into the 120pt lock.
-private struct SaveDoodlePaywallStamp: View {
-    var body: some View {
-        Canvas { context, size in
-            let sx = size.width / 48
-            let sy = size.height / 48
-            var bookmark = Path()
-            bookmark.move(to: CGPoint(x: 12 * sx, y: 6 * sy))
-            bookmark.addLine(to: CGPoint(x: 36 * sx, y: 6 * sy))
-            bookmark.addLine(to: CGPoint(x: 36 * sx, y: 42 * sy))
-            bookmark.addLine(to: CGPoint(x: 24 * sx, y: 34 * sy))
-            bookmark.addLine(to: CGPoint(x: 12 * sx, y: 42 * sy))
-            bookmark.closeSubpath()
-            context.fill(bookmark, with: .color(SaveAtlasPalette.kraft))
-            context.stroke(bookmark, with: .color(SaveAtlasPalette.ink), lineWidth: sx)
-            let outer = Path(ellipseIn: CGRect(
-                x: 17 * sx,
-                y: 13 * sy,
-                width: 14 * sx,
-                height: 14 * sy
-            ))
-            let inner = Path(ellipseIn: CGRect(
-                x: 19 * sx,
-                y: 15 * sy,
-                width: 10 * sx,
-                height: 10 * sy
-            ))
-            context.stroke(outer, with: .color(SaveDoodle.stampRed), lineWidth: 1.2 * sx)
-            context.stroke(inner, with: .color(SaveDoodle.stampRed), lineWidth: 1.2 * sx)
-        }
-        .accessibilityHidden(true)
+nonisolated struct SaveDoodlePaywallParkShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.addEllipse(in: CGRect(
+            x: rect.width * 0.28,
+            y: rect.height * 0.18,
+            width: rect.width * 0.46,
+            height: rect.height * 0.44
+        ))
+        return path
+    }
+}
+
+nonisolated struct SaveDoodlePaywallPaths: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.height * 0.62))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.height * 0.58),
+            control: CGPoint(x: rect.width * 0.5, y: rect.height * 0.42)
+        )
+        path.move(to: CGPoint(x: rect.width * 0.18, y: rect.maxY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.width * 0.72, y: rect.minY + 8),
+            control: CGPoint(x: rect.width * 0.46, y: rect.height * 0.55)
+        )
+        return path
     }
 }
 

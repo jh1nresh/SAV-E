@@ -31,9 +31,9 @@ prototype-only runs. Capture and paywall use five-tab-capture and
 five-tab-paywall. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
 and atlas-map XCTest attachments. The Doodle v1 Capture and paywall mocks are
 the locked targets at threshold 0.90. Paywall comparison passes
-`--ignore-rects` over the DESIGN ¥38 placeholder (CTA price + legal
-sentence) and the live-only sale-state line. The 23cca55 mock is already
-full-screen with one benefit row and no tab bar.
+`--ignore-rects` over the v2 cut-mock hero, the live-only sale-state
+line, and the legal sentence. DESIGN eade369 is full-screen, one
+benefit row, Yearly/Monthly, and no tab bar. v1 (23cca55) is retired.
 EOF
 }
 
@@ -366,12 +366,12 @@ for screen in home saves plan map capture paywall; do
 
     extra_args=()
     if [[ "$screen" == "paywall" ]]; then
-        # 402×874 DESIGN 23cca55 mock. Unlimited row (y354–417) stays scored.
-        # 24,548,354,44 = live-only "Pro isn't on sale yet" above the CTA.
-        # 48,610,306,24 = CTA price (¥38 placeholder vs StoreKit / $39.99).
-        # 24,662,354,64 = legal sentence (¥38 + DESIGN 24-hour copy vs
-        # renewalDescription). Mock is already full-screen, one benefit, no tab bar.
-        extra_args=(--ignore-rects "24,548,354,44;48,610,306,24;24,662,354,64")
+        # 402×874 DESIGN eade369 v2 mock. Unlimited row (y380–408) stays scored.
+        # 24,132,354,176 = cut-mock hero art vs SwiftUI doodle hero.
+        # 24,444,354,22 = live-only "Pro isn't on sale yet" above Yearly.
+        # 24,698,354,50 = legal sentence (DESIGN 24-hour copy vs
+        # renewalDescription). Mock is full-screen, one benefit, no tab bar.
+        extra_args=(--ignore-rects "24,132,354,176;24,444,354,22;24,698,354,50")
     fi
 
     if xcrun swift "$PARITY_SCRIPT" \
