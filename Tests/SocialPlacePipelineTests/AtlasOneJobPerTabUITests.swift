@@ -365,6 +365,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(script.contains("five-tab-home*)"))
         XCTAssertTrue(script.contains("five-tab-capture*)"))
         XCTAssertTrue(script.contains("five-tab-paywall*)"))
+        XCTAssertTrue(script.contains("five-tab-passport*)"))
         XCTAssertTrue(script.contains("priority=1"))
         XCTAssertTrue(script.contains("--ignore-rects"))
         XCTAssertTrue(script.contains("24,132,354,176;24,444,354,22;24,698,354,50"))
@@ -599,10 +600,15 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             < passport.range(of: "profile.controlsDisclosure")!.lowerBound)
     }
 
+    @MainActor
     func testPassportTodayOnSavvySitsBetweenStampLedgerAndControlPocket() throws {
         let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
 
+        XCTAssertFalse(SaveDoodlePassportFlags.showTodayMissions)
+        XCTAssertFalse(SaveDoodlePassportFlags.showFieldStreak)
+        XCTAssertFalse(SaveDoodlePassportFlags.showStampLedger)
         XCTAssertTrue(passport.contains("if !todayMissions.isEmpty"))
         XCTAssertTrue(passport.contains("PassportTodayOnSavvyStrip"))
         XCTAssertTrue(passport.contains("Your quests"))
@@ -612,6 +618,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passport.contains("profile.today.inviteFriend"))
         XCTAssertTrue(passport.contains("profile.connections"))
         XCTAssertTrue(passport.contains("opensConnections = true"))
+        XCTAssertTrue(passport.contains("opensCollected"))
         XCTAssertTrue(passport.contains("onReviewAll()"))
         XCTAssertTrue(content.contains("onReviewAll:"))
         XCTAssertTrue(content.contains("pathByOpening"))
@@ -621,15 +628,12 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passport.contains("PassportFieldStreakStrip"))
         XCTAssertTrue(passport.contains("profile.today.markVisitedStamp"))
         XCTAssertFalse(passport.contains("profile.activityDisclosure"))
-
-        XCTAssertTrue(passport.range(of: "profile.cover")!.lowerBound
-            < passport.range(of: "profile.fieldStreak")!.lowerBound)
-        XCTAssertTrue(passport.range(of: "profile.stampLedger")!.lowerBound
-            < passport.range(of: "profile.fieldStreak")!.lowerBound)
-        XCTAssertTrue(passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound
-            < passport.range(of: "SharedPostsGrid")!.lowerBound)
-        XCTAssertTrue(passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound
-            < passport.range(of: "profile.controlPocket")!.lowerBound)
+        XCTAssertTrue(page.contains("SaveDoodlePassportPage"))
+        XCTAssertTrue(passport.contains("SharedPostsGrid"))
+        XCTAssertTrue(passport.contains("profile.cover"))
+        XCTAssertTrue(passport.contains("profile.controlPocket"))
+        XCTAssertTrue(passport.contains("PassportCountingRulesPanel"))
+        XCTAssertTrue(passport.contains("PassportVisibilityPanel"))
         XCTAssertTrue(passport.range(of: "profile.controlPocket")!.lowerBound
             < passport.range(of: "PassportCountingRulesPanel")!.lowerBound)
         XCTAssertTrue(passport.range(of: "PassportCountingRulesPanel")!.lowerBound

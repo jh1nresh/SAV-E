@@ -25,15 +25,17 @@ Options:
   --threshold NUMBER    Gate threshold. Must be at least 0.90 (default 0.90).
 
 The screenshots directory must contain home.png, saves.png, plan.png,
-map.png, capture.png, and paywall.png. The result-bundle mode prefers the live
-five-tab-home attachment for Home and falls back to atlas-home for
-prototype-only runs. Capture and paywall use five-tab-capture and
-five-tab-paywall. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
-and atlas-map XCTest attachments. The Doodle v1 Capture and paywall mocks are
-the locked targets at threshold 0.90. Paywall comparison passes
-`--ignore-rects` over the v2 cut-mock hero, the live-only sale-state
+map.png, passport.png, capture.png, and paywall.png. The result-bundle
+mode prefers the live five-tab-home attachment for Home and falls back
+to atlas-home for prototype-only runs. Passport prefers five-tab-passport
+and falls back to atlas-passport. Capture and paywall use five-tab-capture
+and five-tab-paywall. Saves, Plan, and Map use the stable atlas-saves,
+atlas-plan, and atlas-map XCTest attachments. The Doodle v1 Capture and
+paywall mocks are the locked targets at threshold 0.90. Paywall comparison
+passes `--ignore-rects` over the v2 cut-mock hero, the live-only sale-state
 line, and the legal sentence. DESIGN eade369 is full-screen, one
-benefit row, Yearly/Monthly, and no tab bar. v1 (23cca55) is retired.
+benefit row, Yearly/Monthly, and no tab bar. The Passport gate is exactly
+0.90 against the Doodle Passport mock. v1 (23cca55) is retired.
 EOF
 }
 
@@ -204,7 +206,7 @@ mkdir -p \
     "$ARTIFACT_DIR/diff" \
     "$ARTIFACT_DIR/results"
 
-for screen in home saves plan map capture paywall; do
+for screen in home saves plan map passport capture paywall; do
     source="$REFERENCE_SOURCE/$screen.png"
     if [[ ! -f "$source" ]]; then
         echo "error: missing reference image: $source" >&2
@@ -320,6 +322,14 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                     screen="map"
                     priority=0
                     ;;
+                five-tab-passport*)
+                    screen="passport"
+                    priority=1
+                    ;;
+                atlas-passport*)
+                    screen="passport"
+                    priority=0
+                    ;;
                 five-tab-capture*)
                     screen="capture"
                     priority=1
@@ -348,7 +358,7 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
         ((test_index += 1))
     done
 
-    for screen in home saves plan map capture paywall; do
+    for screen in home saves plan map passport capture paywall; do
         newest="$(
             printf '%s' "$candidates" |
                 awk -F"$tab" -v want="$screen" '
@@ -391,7 +401,7 @@ else
         echo "error: screenshots directory not found: $SCREENSHOTS_DIR" >&2
         exit 2
     fi
-    for screen in home saves plan map capture paywall; do
+    for screen in home saves plan map passport capture paywall; do
         if [[ ! -f "$SCREENSHOTS_DIR/$screen.png" ]]; then
             echo "error: missing screenshot: $SCREENSHOTS_DIR/$screen.png" >&2
             exit 2
@@ -405,7 +415,7 @@ mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
 # DESIGN v2 map-mask.png: white = live Apple Maps (ignored). City strip,
 # place sheet, tab bar, and status bar count toward 0.90.
 MAP_MASK="$REFERENCE_SOURCE/map-mask.png"
-for screen in home saves plan map capture paywall; do
+for screen in home saves plan map passport capture paywall; do
     actual="$ARTIFACT_DIR/output/$screen.png"
     if [[ ! -f "$actual" ]]; then
         echo "error: missing exported attachment for $screen" >&2

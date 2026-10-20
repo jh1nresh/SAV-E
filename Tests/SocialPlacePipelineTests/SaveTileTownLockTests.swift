@@ -210,12 +210,13 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(stamp.contains("case locked"))
         XCTAssertTrue(stamp.contains("SaveSoftPixelAccentsLock.visibleStampText"))
         XCTAssertTrue(home.contains("SaveDoodleCollectedMark"))
-        XCTAssertTrue(passport.contains("SaveKraftStamp("))
-        XCTAssertTrue(passport.contains("face: .locked"))
-        XCTAssertTrue(passport.contains("profile.stampGrid"))
-        XCTAssertTrue(passport.contains("onOpenPlace(place)"))
-        XCTAssertTrue(passport.contains("rootTabScrollClearance"))
-        XCTAssertTrue(passport.contains("???"))
+        XCTAssertTrue(passport.contains("SaveDoodlePassportPage("))
+        XCTAssertFalse(passport.contains("PassportTileTownCollection"))
+        XCTAssertFalse(passport.contains("SaveKraftStamp("))
+        XCTAssertTrue(passport.contains("onOpenPlace: onOpenPlace"))
+        let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
+        XCTAssertTrue(page.contains("profile.stampGrid"))
+        XCTAssertTrue(page.contains("rootTabScrollClearance"))
     }
 
     func testFriendsIsPeopleFirstWithLastAt() throws {

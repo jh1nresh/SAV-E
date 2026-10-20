@@ -125,10 +125,10 @@ struct SharedPostsGrid: View {
             .pickerStyle(.segmented)
             .accessibilityIdentifier("posts.filter")
 
-            if store.isLoading && store.posts.isEmpty { ProgressView().padding() }
+            if store.isLoading && visiblePosts.isEmpty { ProgressView().padding() }
             if store.error != nil {
                 SocialLoadError()
-            } else if !store.isLoading && store.posts.isEmpty {
+            } else if !store.isLoading && visiblePosts.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "square.grid.3x3").font(.system(size: 30, weight: .light))
                     Text(language.localized(english: "No shared posts yet", traditionalChinese: "還沒有分享貼文"))
@@ -141,7 +141,7 @@ struct SharedPostsGrid: View {
                 .accessibilityIdentifier("posts.empty")
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5, alignment: .top), count: textSize.isAccessibilitySize ? 2 : 3), spacing: 14) {
-                ForEach(store.posts) { post in
+                ForEach(visiblePosts) { post in
                     Button { onSelect(post) } label: {
                         VStack(alignment: .leading, spacing: 6) {
                             SharedPostArtwork(post: post, compact: true)
@@ -169,6 +169,14 @@ struct SharedPostsGrid: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.posts")
+    }
+
+    private var visiblePosts: [SharedPlacePost] {
+        switch store.filter {
+        case .all: return store.posts
+        case .wantToGo: return store.posts.filter { $0.status == .wantToGo }
+        case .visited: return store.posts.filter { $0.status == .visited }
+        }
     }
 }
 
