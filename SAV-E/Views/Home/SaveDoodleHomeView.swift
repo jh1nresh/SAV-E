@@ -203,6 +203,7 @@ struct SaveDoodleHomeView: View {
                     .foregroundStyle(SaveAtlasPalette.muted)
                 Spacer(minLength: 0)
             }
+            .frame(minHeight: SaveLayout.minTap, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
