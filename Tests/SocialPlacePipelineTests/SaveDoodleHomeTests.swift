@@ -210,6 +210,11 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("home.collected"))
         XCTAssertTrue(home.contains("home.empty.capture"))
         XCTAssertTrue(home.contains("home.review"))
+        let cluesFn = try XCTUnwrap(home.range(of: "private var cluesLine"))
+        let locationFn = try XCTUnwrap(home.range(of: "private var locationPrompt"))
+        let cluesBody = home[cluesFn.lowerBound..<locationFn.lowerBound]
+        XCTAssertTrue(cluesBody.contains("minHeight: SaveLayout.minTap"))
+        XCTAssertTrue(cluesBody.contains(".contentShape(Rectangle())"))
         XCTAssertTrue(home.contains("home.openSaves"))
         XCTAssertFalse(home.contains("showsUITestSavesRoute"))
         XCTAssertFalse(home.contains("hiddenSavesRoute"))
