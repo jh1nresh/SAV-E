@@ -805,6 +805,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             appleInterfaceStyle: "Dark",
             forceArgument: "--uitest-force-dark",
             homeName: "dark-home",
+            friendsName: "dark-friends",
             passportName: "dark-passport",
             expectedRed: 0x1E,
             expectedGreen: 0x1C,
@@ -815,6 +816,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             appleInterfaceStyle: "Light",
             forceArgument: "--uitest-force-light",
             homeName: "light-home",
+            friendsName: "light-friends",
             passportName: "light-passport",
             expectedRed: 0xFF,
             expectedGreen: 0xF9,
@@ -828,6 +830,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         appleInterfaceStyle: String,
         forceArgument: String,
         homeName: String,
+        friendsName: String,
         passportName: String,
         expectedRed: Int,
         expectedGreen: Int,
@@ -866,7 +869,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Friends", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
-        let friendsName = homeName.replacingOccurrences(of: "home", with: "friends")
         let friendsShot = app.screenshot()
         attach(app, name: friendsName)
         assertScreenshotBackground(

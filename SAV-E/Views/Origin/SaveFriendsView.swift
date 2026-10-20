@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Doodle v1 Friends: people-first last-at list. Shared map is hidden (HoP).
+/// Doodle v1 Friends: people-first last-at list. HoP keeps the map strip off this tab.
 /// Reuses `SaveFriendLastAt` data; visual language matches spec §7.3.
 struct SaveFriendsView: View {
     var currentUserID: String?

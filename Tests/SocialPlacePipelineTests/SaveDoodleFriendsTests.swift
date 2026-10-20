@@ -88,6 +88,7 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertFalse(friends.contains("friends.mapStrip"))
         XCTAssertFalse(friends.contains("SaveTileTownCanvas"))
         XCTAssertFalse(friends.contains("Shared map"))
+        XCTAssertTrue(friends.contains("HoP keeps the map strip off this tab"))
         XCTAssertFalse(friends.contains("SaveTileTownPin"))
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: repositoryRoot.appendingPathComponent(
