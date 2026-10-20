@@ -5,8 +5,8 @@ on:
     branches: [main]
   pull_request:
     # Keep required checks on the existing PR stack rooted in the #279 UI.
-    # labeled + ready_for_review start the full ios-ui suite; ordinary
-    # synchronize/opened/reopened events stay on the units-only lane.
+    # labeled + ready_for_review start the required `ios` full suite;
+    # ordinary synchronize/opened/reopened events stay on ios-fast.
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches:
       - main
@@ -82,11 +82,12 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             build-for-testing
 
-  # Units-only lane for ordinary PR pushes (opened/synchronize/reopened
-  # without ready-for-merge). Target ~10 min on a warm DerivedData cache.
-  # Skipped when ios-ui runs so the merge gate does not occupy two macos-26
-  # runners for the same SAVETests.
-  ios-unit:
+  # Fast lane for ordinary PR pushes (opened/synchronize/reopened without
+  # ready-for-merge). Not a required check. Target ~10 min on a warm
+  # DerivedData cache. Skipped when the required `ios` suite runs so the
+  # merge gate does not occupy two macos-26 runners for the same SAVETests.
+  ios-fast:
+    name: ios-fast (build + units)
     if: >
       github.event_name == 'pull_request' &&
       github.event.action != 'ready_for_review' &&
@@ -180,11 +181,12 @@ jobs:
           fi
           exit "$cleanup_status"
 
-  # Full UI + snapshot + visual-parity suite (~63 min). Runs on main, manual
-  # dispatch, ready_for_review, and PRs labeled ready-for-merge. Skipped on
-  # ordinary PR pushes; the required `ios` check is filled by the reporter.
-  ios-ui:
-    name: ios (UI + visual parity)
+  # Required check name `ios` (ruleset 19331432). This job IS the full UI +
+  # snapshot + 0.90 parity suite (~63 min). It only runs — and can only
+  # succeed — on main, workflow_dispatch, ready_for_review, or a PR labeled
+  # ready-for-merge. On ordinary PR pushes it is skipped, so the required
+  # check stays pending rather than reporting success without UI/parity.
+  ios:
     if: >
       github.event_name != 'pull_request' ||
       github.event.action == 'ready_for_review' ||
@@ -475,44 +477,6 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             build
-
-  # Required check name `ios` (ruleset main-pr-and-ci). Always reports so a
-  # skipped ios-ui job cannot stay pending and block merge. Succeeds when the
-  # active iOS test lane succeeds; fails if that lane failed or none ran.
-  ios:
-    if: always()
-    needs: [ios-build, ios-unit, ios-ui]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Report required iOS check
-        env:
-          BUILD_RESULT: ${{ needs.ios-build.result }}
-          UNIT_RESULT: ${{ needs.ios-unit.result }}
-          UI_RESULT: ${{ needs.ios-ui.result }}
-        run: |
-          echo "ios-build=$BUILD_RESULT"
-          echo "ios-unit=$UNIT_RESULT"
-          echo "ios-ui=$UI_RESULT"
-          echo "Full suite: label a PR ready-for-merge, convert it to ready for review, or push to main."
-          fail=0
-          if [[ "$BUILD_RESULT" != "success" ]]; then
-            echo "ios-build did not succeed: $BUILD_RESULT" >&2
-            fail=1
-          fi
-          if [[ "$UNIT_RESULT" == "failure" || "$UNIT_RESULT" == "cancelled" ]]; then
-            echo "ios-unit did not succeed: $UNIT_RESULT" >&2
-            fail=1
-          fi
-          if [[ "$UI_RESULT" == "failure" || "$UI_RESULT" == "cancelled" ]]; then
-            echo "ios-ui did not succeed: $UI_RESULT" >&2
-            fail=1
-          fi
-          if [[ "$UNIT_RESULT" != "success" && "$UI_RESULT" != "success" ]]; then
-            echo "No iOS test lane ran." >&2
-            fail=1
-          fi
-          exit "$fail"
 
   backend:
     uses: jh1nresh/.github/.github/workflows/node-ci.yml@0cb6fd5b730ced897c767d1c9979aba4e49d201d
