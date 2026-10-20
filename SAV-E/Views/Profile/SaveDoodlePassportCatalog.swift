@@ -101,6 +101,55 @@ enum SaveDoodlePassportCatalog {
     static let panelPadding: CGFloat = SaveSpace.lg
     static let pageSize = 12
 
+    /// Isolated screenshot face for `five-tab-passport`. Production never
+    /// sets this argument, so live Passport still reads the user's places.
+    static var usesDoodleFace: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--uitest-doodle-passport-face")
+#else
+        false
+#endif
+    }
+
+    static let doodleFaceCityTitle = "Beijing"
+    static let doodleFaceVisitedLine = "4 of 12 visited"
+    static let doodleFaceCitiesLine = "Cities: Beijing 23 · Tokyo 9"
+
+    static func doodleFaceSlots() -> [SaveDoodlePassportSlot] {
+        let items: [(String, PlaceCategory, SaveDoodleStickerKind, SavePassportStampRank)] = [
+            ("Siji Minfu Roast Duck", .food, .duck, .single),
+            ("Fangzhuangchang Noodles", .food, .noodles, .single),
+            ("Temple of Heaven", .attraction, .temple, .double),
+            ("Lantern Alley", .attraction, .lantern, .gold),
+            ("Grey Cafe", .cafe, .coffee, .none),
+            ("Jingshan", .attraction, .hill, .none),
+            ("Houhai Bridge", .attraction, .bridge, .none),
+            ("Baozi Shop", .food, .baozi, .none),
+            ("Maliandao Tea", .cafe, .tea, .none),
+            ("Page One", .shopping, .bookstore, .none),
+            ("Houhai Bicycle", .attraction, .bicycle, .none),
+            ("Chaoyang Park Wheel", .attraction, .ferris, .none),
+        ]
+        return items.enumerated().map { index, item in
+            let id = UUID(uuidString: String(format: "20000000-0000-0000-0000-%012d", index + 1))!
+            let place = Place(
+                id: id,
+                name: item.0,
+                address: "Beijing, China",
+                latitude: 39.88,
+                longitude: 116.40,
+                category: item.1,
+                status: item.3 == .none ? .wantToGo : .visited,
+                sourcePlatform: .other,
+                createdAt: Date(timeIntervalSince1970: 1_724_000_000 - Double(index))
+            )
+            return SaveDoodlePassportSlot(
+                id: id.uuidString,
+                content: .place(place, item.2, item.3)
+            )
+        }
+    }
+
     static func goal(for savedCount: Int) -> Int {
         SaveTileTownProductLock.passportGoal(for: savedCount)
     }

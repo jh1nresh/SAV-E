@@ -293,7 +293,10 @@ struct SaveDoodlePassportPage: View {
     }
 
     private var slots: [SaveDoodlePassportSlot] {
-        SaveDoodlePassportCatalog.slots(
+        if SaveDoodlePassportCatalog.usesDoodleFace {
+            return SaveDoodlePassportCatalog.doodleFaceSlots()
+        }
+        return SaveDoodlePassportCatalog.slots(
             from: places,
             selection: session.city,
             locationDenied: locationService.isAuthorizationDenied,
@@ -306,6 +309,9 @@ struct SaveDoodlePassportPage: View {
     }
 
     private var cityTitle: String {
+        if SaveDoodlePassportCatalog.usesDoodleFace {
+            return SaveDoodlePassportCatalog.doodleFaceCityTitle
+        }
         switch resolvedSelection {
         case .nearYou:
             if let first = cityPlaces.first,
@@ -328,6 +334,9 @@ struct SaveDoodlePassportPage: View {
     }
 
     private var visitedLine: String {
+        if SaveDoodlePassportCatalog.usesDoodleFace {
+            return SaveDoodlePassportCatalog.doodleFaceVisitedLine
+        }
         let visited = SaveDoodlePassportCatalog.visitedCount(in: cityPlaces)
         let goal = SaveDoodlePassportCatalog.goal(for: max(cityPlaces.count, 1))
         return languageSettings.localized(
@@ -337,6 +346,9 @@ struct SaveDoodlePassportPage: View {
     }
 
     private var citiesLine: String {
+        if SaveDoodlePassportCatalog.usesDoodleFace {
+            return SaveDoodlePassportCatalog.doodleFaceCitiesLine
+        }
         let shown = cityGroups.prefix(2)
         let names = shown.map {
             "\($0.displayName(language: languageSettings.language)) \($0.count)"

@@ -49,6 +49,8 @@ struct SaveDoodlePassportSlotView: View {
         ZStack {
             switch slot.content {
             case let .place(_, kind, rank):
+                Circle()
+                    .fill(Color.white)
                 if rank == .none {
                     Circle()
                         .stroke(
@@ -110,7 +112,8 @@ private struct SaveDoodlePassportStickerArt: View {
         switch kind {
         case .duck: return Color(red: 0.72, green: 0.38, blue: 0.22)
         case .noodles: return Color(red: 0.93, green: 0.78, blue: 0.42)
-        case .coffee, .tea: return Color(red: 0.62, green: 0.42, blue: 0.28)
+        case .coffee: return Color(red: 0.62, green: 0.42, blue: 0.28)
+        case .tea: return SaveDoodle.washGreen
         case .baozi, .dessert: return Color(red: 0.96, green: 0.86, blue: 0.70)
         case .wine, .hotpot: return SaveDoodle.stampRed
         case .beer: return Color(red: 0.90, green: 0.72, blue: 0.28)
@@ -161,7 +164,8 @@ private struct SaveDoodlePassportStickerArt: View {
         switch kind {
         case .duck: return duck(in: rect)
         case .noodles: return bowl(in: rect)
-        case .coffee, .tea: return cup(in: rect, tea: kind == .tea)
+        case .coffee: return cup(in: rect, tea: false)
+        case .tea: return leaf(in: rect)
         case .baozi: return bun(in: rect)
         case .dessert: return cake(in: rect)
         case .wine: return wine(in: rect)
@@ -293,6 +297,22 @@ private struct SaveDoodlePassportStickerArt: View {
         var p = Path()
         p.addEllipse(in: CGRect(x: r.w(0.22), y: r.h(0.14), width: r.w(0.56), height: r.h(0.52)))
         p.addRect(CGRect(x: r.w(0.46), y: r.h(0.58), width: r.w(0.08), height: r.h(0.28)))
+        return p
+    }
+
+    private func leaf(in r: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: r.w(0.22), y: r.h(0.70)))
+        p.addQuadCurve(
+            to: CGPoint(x: r.w(0.78), y: r.h(0.22)),
+            control: CGPoint(x: r.w(0.18), y: r.h(0.18))
+        )
+        p.addQuadCurve(
+            to: CGPoint(x: r.w(0.22), y: r.h(0.70)),
+            control: CGPoint(x: r.w(0.88), y: r.h(0.78))
+        )
+        p.move(to: CGPoint(x: r.w(0.38), y: r.h(0.58)))
+        p.addLine(to: CGPoint(x: r.w(0.62), y: r.h(0.34)))
         return p
     }
 
