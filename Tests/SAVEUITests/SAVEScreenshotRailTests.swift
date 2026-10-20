@@ -687,9 +687,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             launchArguments: [
                 "--uitest-complete-onboarding",
                 "--skip-map-tour",
-                "--uitest-location-denied",
+                "--uitest-location-allowed",
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-face",
                 "--uitest-doodle-passport-face",
                 "--uitest-map-place-selected",
                 "--uitest-force-light",
@@ -721,8 +722,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertGreaterThan(trailingInset, 12, "Root tabs must not touch the trailing screen edge.")
         XCTAssertEqual(leadingInset, trailingInset, accuracy: 2)
         waitForHomeCoverImagery(app)
-        XCTAssertTrue(app.descendants(matching: .any)["home.locationPrompt"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.buttons["home.locationAllow"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["home.locationPrompt"].exists)
+        XCTAssertFalse(app.buttons["home.locationAllow"].exists)
+        XCTAssertTrue(app.staticTexts["Siji Minfu Roast Duck"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Fangzhuangchang Noodles"].exists)
+        XCTAssertTrue(app.staticTexts["Grey Cafe"].exists)
         attach(app, name: "five-tab-home")
         attach(app, name: "doodle-home-light")
 
@@ -755,6 +759,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["map.eat"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["map.go"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["map.placeSheet"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Temple of Heaven Park"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "five-tab-map")
         attach(app, name: "doodle-map-light")
         assertDoodleMapChrome(app)
@@ -904,7 +909,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
-                "--uitest-home-memory-fixture",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
@@ -913,6 +919,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         waitForHomeCoverImagery(app)
+        XCTAssertFalse(app.descendants(matching: .any)["home.locationPrompt"].exists)
         let capture = rootTabButton("Save", app: app)
         XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
         capture.tap()
@@ -944,7 +951,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
-                "--uitest-home-memory-fixture",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
                 "--uitest-force-dark",
                 "-AppleInterfaceStyle", "Dark",
                 "-save.appLanguage", "en",

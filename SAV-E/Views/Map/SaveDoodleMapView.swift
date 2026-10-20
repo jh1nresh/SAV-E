@@ -543,10 +543,12 @@ struct SaveDoodleMapView: View {
 #if DEBUG
         guard ProcessInfo.processInfo.arguments.contains("--uitest-map-place-selected") else { return }
         guard mapViewModel.selectedPlace == nil else { return }
-        let taipei = mapViewModel.places.first { place in
-            abs(place.latitude - 25.04) < 0.35 && abs(place.longitude - 121.56) < 0.35
+        guard let place = ReviewDemoSeed.paritySelectedPlace(from: mapViewModel.places) else { return }
+        mapViewModel.selectedPlace = place
+        if ReviewDemo.usesDoodleParityFace,
+           let id = SaveDoodleHomeCatalog.cityID(for: place) {
+            session.city = .city(id)
         }
-        mapViewModel.selectedPlace = taipei ?? mapViewModel.places.first
 #endif
     }
 

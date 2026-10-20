@@ -145,6 +145,10 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(design.contains("You've saved 50 places. Keep going."))
         XCTAssertTrue(design.contains("never a hardcoded $6.99"))
 
+        let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
+        XCTAssertTrue(rail.contains("func testDoodleCaptureParity"))
+        XCTAssertTrue(rail.contains("--uitest-doodle-parity-face"))
+        XCTAssertTrue(rail.contains("--uitest-location-allowed"))
         let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
         XCTAssertTrue(parity.contains("--ignore-rects"))
         XCTAssertTrue(parity.contains("24,132,354,176;24,444,354,22;24,698,354,50"))

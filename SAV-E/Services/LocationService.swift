@@ -16,11 +16,13 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     /// alerts are too flaky to drive the spec P4 recovery path.
     private let simulatesDeniedAuthorization = ProcessInfo.processInfo.arguments
         .contains("--uitest-location-denied")
-    /// Deterministic allowed-state with a Taipei fix so Home can show
-    /// Near you without a springboard permission alert.
+    /// Deterministic allowed-state so Home can show Near you without a
+    /// springboard permission alert. The parity face uses a Tiantan fix;
+    /// other UI tests keep the Taipei fix.
     private let simulatesAllowedAuthorization = ProcessInfo.processInfo.arguments
         .contains("--uitest-location-allowed")
     private static let uiTestTaipei = CLLocation(latitude: 25.0330, longitude: 121.5654)
+    private static let uiTestTiantan = CLLocation(latitude: 39.8822, longitude: 116.4066)
 #else
     private let simulatesDeniedAuthorization = false
     private let simulatesAllowedAuthorization = false
@@ -50,7 +52,9 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
 #if DEBUG
         if simulatesAllowedAuthorization {
-            currentLocation = Self.uiTestTaipei
+            currentLocation = ProcessInfo.processInfo.arguments.contains("--uitest-doodle-parity-face")
+                ? Self.uiTestTiantan
+                : Self.uiTestTaipei
         }
 #endif
     }

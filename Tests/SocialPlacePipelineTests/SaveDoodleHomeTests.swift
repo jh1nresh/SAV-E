@@ -406,6 +406,50 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(rail.contains("func testCaptureFiveTabLanding"))
         XCTAssertTrue(rail.contains("home.locationPrompt"))
         XCTAssertTrue(rail.contains("home.locationAllow"))
+        XCTAssertTrue(rail.contains("--uitest-doodle-parity-face"))
+        XCTAssertTrue(rail.contains("--uitest-location-allowed"))
+    }
+
+    func testDoodleParityFixtureListsThreeTiantanEatRowsAndTempleOfHeaven() throws {
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+        let places = ReviewDemoSeed.doodleParityPlaces(now: now)
+        XCTAssertEqual(
+            places.map(\.name),
+            [
+                "Siji Minfu Roast Duck",
+                "Fangzhuangchang Noodles",
+                "Grey Cafe",
+                "Temple of Heaven Park",
+            ]
+        )
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityDisplayName(for: places[0], language: .english), "Tiantan")
+        let location = CLLocation(latitude: 39.8822, longitude: 116.4066)
+        let listed = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .nearYou,
+            location: location,
+            locationDenied: false
+        )
+        XCTAssertEqual(
+            listed.map(\.place.name),
+            ["Siji Minfu Roast Duck", "Fangzhuangchang Noodles", "Grey Cafe"]
+        )
+        XCTAssertEqual(listed[0].distance ?? 0, 450, accuracy: 8)
+        XCTAssertEqual(listed[1].distance ?? 0, 800, accuracy: 8)
+        XCTAssertEqual(listed[2].distance ?? 0, 1_100, accuracy: 8)
+        XCTAssertEqual(places.first { $0.name.contains("Temple of Heaven") }?.name, "Temple of Heaven Park")
+        XCTAssertEqual(ReviewDemoSeed.doodleParityReviewCandidates(now: now).count, 2)
+        let seed = try source(at: "SAV-E/Services/ReviewDemoService.swift")
+        XCTAssertTrue(seed.contains("usesDoodleParityFace"))
+        XCTAssertTrue(seed.contains("Temple of Heaven"))
+        let locationSource = try source(at: "SAV-E/Services/LocationService.swift")
+        XCTAssertTrue(locationSource.contains("uiTestTiantan"))
+        XCTAssertTrue(locationSource.contains("39.8822"))
+        let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
+        XCTAssertTrue(rail.contains("XCTAssertFalse(app.descendants(matching: .any)[\"home.locationPrompt\"].exists)"))
+        XCTAssertTrue(rail.contains("Temple of Heaven Park"))
+        XCTAssertTrue(rail.contains("--uitest-doodle-parity-face"))
     }
 
     func testMapAppliesSharedDoodleSessionFilter() throws {
