@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 @testable import SAVE
 
@@ -87,11 +88,19 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(script.contains("five-tab-map*)"))
         XCTAssertTrue(script.contains("map-doodle-similarity"))
         XCTAssertTrue(script.contains("--ignore-rect"))
+        XCTAssertTrue(script.contains("MAP_IGNORE_RECT=\"0,168,402,392\""))
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: repositoryRoot.appendingPathComponent(
                 "SAV-E/Views/TileTown/SaveTileTownRootMap.swift"
             ).path
         ))
+        let target = repositoryRoot.appendingPathComponent(
+            "Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png"
+        )
+        let image = try XCTUnwrap(UIImage(contentsOfFile: target.path))
+        XCTAssertGreaterThan(image.pngData()?.count ?? 0, 50_000, "Map target should be the real mock, not the schematic")
+        XCTAssertEqual(Int(image.size.width), 402)
+        XCTAssertEqual(Int(image.size.height), 874)
     }
 
     private func source(at relativePath: String) throws -> String {

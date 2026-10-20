@@ -349,7 +349,8 @@ fi
 gate_failed=0
 mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
 # Live Apple MapKit canvas is excluded so the 0.90 gate scores Doodle chrome
-# (header chips, paper sheet, tab bar) against the Doodle v1 Map mock.
+# (header chips, paper sheet, tab bar) against the real Doodle v1 Map mock
+# at ProductionTargets/map.png (inner iPhone screen, 402x874).
 # Rect is 402x874 logical px: y 168..<560 is the full-bleed map surface.
 MAP_IGNORE_RECT="0,168,402,392"
 for screen in home saves plan map; do

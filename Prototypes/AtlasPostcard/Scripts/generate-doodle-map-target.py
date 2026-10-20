@@ -1,59 +1,62 @@
 #!/usr/bin/env python3
-"""402x874 Doodle Map parity target. Live MapKit canvas is later masked."""
+"""Crop the real Doodle Map mock to the 402x874 parity viewport.
 
+The source is a landscape device-in-frame PNG. Inner-screen crop (black
+bezel excluded) is resized to the VisualParity viewport. Live MapKit is
+later masked at 0,168,402,392; this script does not change that rect.
+
+Usage:
+  python3 Prototypes/AtlasPostcard/Scripts/generate-doodle-map-target.py \\
+    --source /path/to/2026-10-19-doodle-v1-map.png
+"""
+
+from __future__ import annotations
+
+import argparse
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
+import numpy as np
 
 WIDTH, HEIGHT = 402, 874
-CANVAS = (255, 249, 235)
-PAPER = (255, 249, 235)
-FOREST = (14, 74, 51)
-INK = (47, 46, 35)
-MUTED = (98, 89, 79)
-CORAL = (242, 107, 74)
-LINE = (220, 207, 185)
-KRAFT = (234, 221, 198)
-MAP_FILL = (210, 214, 208)
+# Inclusive inner-screen box on the 1280x720 device-in-frame mock.
+CROP = (354, 21, 923, 697)
+OUT = Path("Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png")
+
+
+def inpaint_bottom_bezel(image: Image.Image) -> Image.Image:
+    """Replace scored bottom-corner bezel pixels with tab-bar cream."""
+    pixels = np.array(image.convert("RGB"))
+    height, width, _ = pixels.shape
+    lum = pixels.mean(axis=2)
+    yy, xx = np.ogrid[:height, :width]
+    radius = 42
+    dark = lum < 200
+    bottom = yy >= height - 48
+    bottom_left = ((xx - 0) ** 2 + (yy - (height - 1)) ** 2 <= radius * radius) & dark & bottom
+    bottom_right = ((xx - (width - 1)) ** 2 + (yy - (height - 1)) ** 2 <= radius * radius) & dark & bottom
+    band = pixels[height - 40 : height - 8, 40 : width - 40]
+    band_lum = lum[height - 40 : height - 8, 40 : width - 40]
+    cream = band[band_lum > 200]
+    fill = (
+        np.median(cream, axis=0).astype(np.uint8)
+        if len(cream)
+        else np.array([255, 249, 237], dtype=np.uint8)
+    )
+    pixels[bottom_left | bottom_right] = fill
+    return Image.fromarray(pixels)
 
 
 def main() -> None:
-    image = Image.new("RGB", (WIDTH, HEIGHT), CANVAS)
-    draw = ImageDraw.Draw(image)
-    font = ImageFont.load_default()
-
-    # Full-bleed map area (masked at 0,168,402,392 during the 0.90 compare).
-    draw.rectangle((0, 48, WIDTH, 791), fill=MAP_FILL)
-
-    # Header: city + Eat/Go.
-    draw.rounded_rectangle((24, 62, 170, 104), radius=8, fill=CANVAS)
-    draw.text((28, 70), "Taipei", fill=FOREST, font=font)
-    draw.rectangle((28, 100, 86, 102), fill=CORAL)
-    draw.rounded_rectangle((214, 70, 286, 102), radius=16, fill=CORAL)
-    draw.text((236, 78), "Eat", fill=(255, 255, 255), font=font)
-    draw.rounded_rectangle((294, 70, 378, 102), radius=16, outline=INK, width=1)
-    draw.text((318, 78), "Go", fill=INK, font=font)
-
-    # Paper place sheet.
-    sheet_top = 560
-    draw.rounded_rectangle((24, sheet_top, 378, 775), radius=12, fill=PAPER, outline=LINE, width=1)
-    draw.rounded_rectangle((183, sheet_top + 8, 219, sheet_top + 13), radius=3, fill=LINE)
-    draw.rounded_rectangle((48, sheet_top + 28, 112, sheet_top + 92), radius=8, outline=INK, width=1)
-    draw.text((128, sheet_top + 36), "Saved place", fill=INK, font=font)
-    draw.text((128, sheet_top + 58), "Eat · nearby", fill=MUTED, font=font)
-    draw.rounded_rectangle((48, sheet_top + 116, 201, sheet_top + 164), radius=12, fill=CORAL)
-    draw.text((86, sheet_top + 134), "Directions", fill=(255, 255, 255), font=font)
-    draw.rounded_rectangle((213, sheet_top + 116, 354, sheet_top + 164), radius=12, outline=INK, width=1)
-    draw.text((232, sheet_top + 134), "I've been here", fill=INK, font=font)
-
-    # Tab bar.
-    draw.rectangle((0, 791, WIDTH, HEIGHT), fill=PAPER)
-    draw.line((0, 791, WIDTH, 791), fill=LINE, width=1)
-    draw.ellipse((175, 800, 227, 852), fill=CORAL)
-
-    out = Path("Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png")
-    image.save(out, "PNG")
-    print(f"wrote {out} {image.size}")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source", type=Path, required=True)
+    args = parser.parse_args()
+    source = Image.open(args.source).convert("RGB")
+    target = source.crop(CROP).resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+    target = inpaint_bottom_bezel(target)
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    target.save(OUT, "PNG", optimize=True)
+    print(f"wrote {OUT} {target.size}")
 
 
 if __name__ == "__main__":

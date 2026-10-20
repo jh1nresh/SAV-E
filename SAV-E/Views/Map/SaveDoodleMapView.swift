@@ -46,11 +46,13 @@ struct SaveDoodleMapView: View {
         .overlay(alignment: .bottom) {
             VStack(spacing: SaveSpace.md) {
                 Spacer(minLength: 0)
-                HStack {
-                    Spacer(minLength: 0)
-                    locateButton
+                if mapViewModel.selectedPlace == nil {
+                    HStack {
+                        Spacer(minLength: 0)
+                        locateButton
+                    }
+                    .padding(.horizontal, SaveLayout.screenMargin)
                 }
-                .padding(.horizontal, SaveLayout.screenMargin)
 
                 if let place = mapViewModel.selectedPlace {
                     placeSheet(place)
@@ -165,13 +167,13 @@ struct SaveDoodleMapView: View {
 
     @ViewBuilder
     private func header(followsHomeFilter: Bool) -> some View {
-        HStack(alignment: .center, spacing: SaveSpace.xs) {
+        VStack(alignment: .leading, spacing: SaveSpace.sm) {
             Button { showsCityPicker = true } label: {
                 HStack(alignment: .firstTextBaseline, spacing: SaveSpace.tight) {
                     VStack(alignment: .leading, spacing: 0) {
                         SaveDisplayTitle(
                             text: cityTitle,
-                            pointSize: 28,
+                            pointSize: 32,
                             relativeTo: .title
                         )
                         Capsule()
@@ -181,7 +183,7 @@ struct SaveDoodleMapView: View {
                     }
                     .fixedSize(horizontal: true, vertical: false)
                     Text("▾")
-                        .font(SaveAtlasType.body(13))
+                        .font(SaveAtlasType.body(16))
                         .foregroundStyle(SaveAtlasPalette.forest)
                 }
                 .frame(minHeight: SaveLayout.minTap, alignment: .leading)
@@ -194,11 +196,13 @@ struct SaveDoodleMapView: View {
             )
             .accessibilityIdentifier("map.city")
 
-            Spacer(minLength: SaveSpace.xs)
-
-            eatGoRail
+            HStack {
+                Spacer(minLength: 0)
+                eatGoRail
+                Spacer(minLength: 0)
+            }
         }
-        .frame(minHeight: SaveLayout.minTap)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityValue(followsHomeFilter ? "filtered" : "all")
     }
 
@@ -505,8 +509,9 @@ struct SaveDoodleMapView: View {
     }
 
     private var sheetBottomClearance: CGFloat {
-        // Tab bar + collapsed search shelf. Place sheet sits above both.
-        160
+        // Selected-place parity hides the search shelf. Sit the paper sheet
+        // just above the 62pt tab bar, matching the Doodle Map mock.
+        AtlasTabBarMetrics.height + SaveSpace.md
     }
 
     private func metaText(for place: Place, listed: SaveDoodleListedPlace?) -> String {
