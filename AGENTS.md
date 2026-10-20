@@ -131,7 +131,9 @@ CI remains the canonical full checker for the native app, backend, web contracts
 and evidence rubric; local checks do not waive required CI coverage.
 
 For ordinary iOS edits, compile without booting a simulator. Check disk space and
-set `SAVE_DERIVED_DATA` to a task-specific absolute path first. Reuse an existing
+export `SAVE_DERIVED_DATA_PATH` as a task-specific absolute path first, following
+`docs/verification.md`. This also configures the social regression helper.
+Reuse an existing
 cache only with exclusive ownership enforced by a lock or one serialized build
 owner; an idle process snapshot is insufficient.
 
@@ -141,7 +143,7 @@ scripts/xcodebuild-clean.sh \
   -scheme SAV-E \
   -configuration Debug \
   -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath "${SAVE_DERIVED_DATA:?Set a task-owned DerivedData path}" \
+  -derivedDataPath "${SAVE_DERIVED_DATA_PATH:?Export a task-owned DerivedData path}" \
   CODE_SIGNING_ALLOWED=NO \
   COMPILER_INDEX_STORE_ENABLE=NO \
   build

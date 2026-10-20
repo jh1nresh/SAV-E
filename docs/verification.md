@@ -6,9 +6,19 @@ Run commands from the repository root unless a command explicitly changes direct
 
 ## Local verification
 
+Before iOS checks, export `SAVE_DERIVED_DATA_PATH` as an absolute directory owned
+by this task. Use a unique path for concurrent tasks. Reuse an existing cache only
+with exclusive ownership enforced by a lock or a single serialized build owner.
+Check free disk space first; below 10 GiB, stop new Xcode/runtime work unless
+cleanup or that task's storage risk has been explicitly authorized.
+
+The exported variable configures both the commands below and
+`scripts/run-social-place-regression.sh`. That helper has a legacy shared-cache
+fallback when the variable is unset; set it explicitly before running the helper.
+
 ### iOS compile (default)
 
-Compile against the generic simulator destination without booting a runtime. Reuse the repository's canonical DerivedData directory:
+Compile against the generic simulator destination without booting a runtime:
 
 ```bash
 scripts/xcodebuild-clean.sh \
@@ -16,7 +26,7 @@ scripts/xcodebuild-clean.sh \
   -scheme SAV-E \
   -configuration Debug \
   -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/SAVE-Codex" \
+  -derivedDataPath "${SAVE_DERIVED_DATA_PATH:?Export a task-owned DerivedData path}" \
   CODE_SIGNING_ALLOWED=NO \
   COMPILER_INDEX_STORE_ENABLE=NO \
   build
@@ -31,7 +41,7 @@ scripts/xcodebuild-clean.sh \
   -project SAV-E.xcodeproj \
   -scheme SAV-E \
   -destination 'platform=iOS Simulator,name=iPhone 16' \
-  -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/SAVE-Codex" \
+  -derivedDataPath "${SAVE_DERIVED_DATA_PATH:?Export a task-owned DerivedData path}" \
   CODE_SIGNING_ALLOWED=NO \
   COMPILER_INDEX_STORE_ENABLE=NO \
   test
@@ -58,13 +68,14 @@ npm run export:web
 ### Focused parser / fixture scripts
 
 ```bash
+: "${SAVE_DERIVED_DATA_PATH:?Export a task-owned DerivedData path}"
 swift scripts/social_place_regression.swift
 swift scripts/check-social-link-parser.swift
 swift scripts/check-social-ocr-fixtures.swift
 swift scripts/check-social-places-refine-fixtures.swift
 ```
 
-The social place regression command reuses the canonical DerivedData path. It
+The social place regression command reuses the exported task-owned DerivedData path. It
 uses the caller-owned `SAVE_TEST_SIMULATOR_UDID` when supplied; otherwise it
 creates one temporary headless simulator, then shuts it down and deletes it
 after the focused XCTest. It requires at least 10 GiB of free disk space.
