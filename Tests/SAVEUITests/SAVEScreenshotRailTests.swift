@@ -33,6 +33,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertFalse(app.buttons["home.viewAll"].exists)
             XCTAssertFalse(app.textFields["home.search"].exists)
             attach(app, name: "home-list-browse-\(staticMode)")
+            if !staticMode {
+                attach(app, name: "doodle-home-multirow")
+            }
             let cafe = app.buttons["home.place.10000000-0000-0000-0000-000000000001"]
             XCTAssertTrue(cafe.waitForExistence(timeout: stepTimeout))
             XCTAssertTrue(app.staticTexts["Taipei Window Cafe"].firstMatch.exists)
@@ -63,6 +66,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             attach(app, name: "home-list-open-detail-\(staticMode)")
             app.terminate()
         }
+
+        let allowed = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-allowed",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed", "--uitest-home-memory-fixture",
+            "-save.appLanguage", "en"
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(allowed)
+        try signInViaReviewDemoRequired(app: allowed)
+        XCTAssertTrue(allowed.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(allowed.descendants(matching: .any)["home.locationPrompt"].exists)
+        attach(allowed, name: "doodle-home-allowed")
+        allowed.terminate()
     }
 
     @MainActor
@@ -303,7 +319,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let start = app.descendants(matching: .any)["home.empty.capture"]
         XCTAssertTrue(start.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(start.isHittable)
-        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["home.saves"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
         attach(app, name: "review-flow-home-empty")
         attach(app, name: "doodle-home-empty")
@@ -498,7 +514,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.eat"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["home.citySwitcher"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["home.miniMap"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["home.saves"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.locationPrompt"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["home.locationAllow"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
@@ -1157,7 +1173,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.eat"].exists)
         XCTAssertTrue(app.buttons["home.citySwitcher"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.review"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["home.saves"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.locationPrompt"].exists)
         XCTAssertTrue(app.buttons["home.locationAllow"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
@@ -3072,9 +3088,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        // HoP: quiet always-on `home.saves` below the list. Review stays N>0.
-        let entry = app.descendants(matching: .any)["home.saves"]
-        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing Home Saves entry")
+        // DESIGN visual diff removed See all saves. Review (N>0) still opens Saves.
+        let entry = app.descendants(matching: .any)["home.review"]
+        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing Home Review entry")
         _ = scrollUntilHittable(entry, in: app.scrollViews.firstMatch)
         tapReachable(entry)
         let saves = app.descendants(matching: .any)["saves.root"]
@@ -3086,7 +3102,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         // rail step (CI 32778736280, exit 64).
         XCTAssertTrue(
             saves.waitForExistence(timeout: stepTimeout),
-            "Home Saves entry did not open Saves"
+            "Home Review entry did not open Saves"
         )
     }
 
