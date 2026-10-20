@@ -98,7 +98,11 @@ final class SaveDoodleMapTests: XCTestCase {
             "Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png"
         )
         let image = try XCTUnwrap(UIImage(contentsOfFile: target.path))
-        XCTAssertGreaterThan(image.pngData()?.count ?? 0, 50_000, "Map target should be the real mock, not the schematic")
+        XCTAssertGreaterThan(
+            image.pngData()?.count ?? 0,
+            50_000,
+            "Map target must be a copy of the design mock, not a generated composite"
+        )
         XCTAssertEqual(Int(image.size.width), 402)
         XCTAssertEqual(Int(image.size.height), 874)
     }
