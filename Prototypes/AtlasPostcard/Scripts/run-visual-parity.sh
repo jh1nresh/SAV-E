@@ -30,7 +30,9 @@ five-tab-home attachment for Home and falls back to atlas-home for
 prototype-only runs. Capture and paywall use five-tab-capture and
 five-tab-paywall. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
 and atlas-map XCTest attachments. The Doodle v1 Capture and paywall mocks are
-the locked targets at threshold 0.90.
+the locked targets at threshold 0.90. Paywall comparison passes
+`--ignore-rects` over mock-only regions we do not ship: extra Pro
+benefits (Plan trips / Share maps / Bonus sticker packs) and the tab bar.
 EOF
 }
 
@@ -361,11 +363,20 @@ for screen in home saves plan map capture paywall; do
         exit 2
     fi
 
+    extra_args=()
+    if [[ "$screen" == "paywall" ]]; then
+        # 402×874 mock space. Unlimited saved places (y≈400–430) stays scored.
+        # 0,432,402,104 = Plan trips / Share maps / Bonus sticker packs.
+        # 0,728,402,146 = mock tab bar. Production is a full-screen modal.
+        extra_args=(--ignore-rects "0,432,402,104;0,728,402,146")
+    fi
+
     if xcrun swift "$PARITY_SCRIPT" \
         --target "$ARTIFACT_DIR/reference/$screen.png" \
         --actual "$actual" \
         --diff "$ARTIFACT_DIR/diff/$screen.png" \
         --threshold "$THRESHOLD" \
+        "${extra_args[@]}" \
         >"$ARTIFACT_DIR/results/$screen.json"
     then
         status="PASS"

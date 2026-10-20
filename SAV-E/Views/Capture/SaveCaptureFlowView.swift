@@ -101,6 +101,12 @@ struct SaveCaptureFlowView: View {
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $isGoogleTakeoutPresented) {
+                GoogleTakeoutImportView(
+                    existingPlaces: existingPlaces,
+                    onSave: onSaveGoogleTakeoutImport
+                )
+            }
         }
         .interactiveDismissDisabled(isAnalyzing)
         .presentationDetents([.medium, .large], selection: $detent)
@@ -114,12 +120,6 @@ struct SaveCaptureFlowView: View {
         }
         .onChange(of: sharedText) { _, draft in
             onDraftChange(draft)
-        }
-        .sheet(isPresented: $isGoogleTakeoutPresented) {
-            GoogleTakeoutImportView(
-                existingPlaces: existingPlaces,
-                onSave: onSaveGoogleTakeoutImport
-            )
         }
     }
 
@@ -196,6 +196,7 @@ struct SaveCaptureFlowView: View {
                 identifier: "capture.importGoogleTakeout"
             ) {
                 isInputFocused = false
+                detent = .large
                 isGoogleTakeoutPresented = true
             }
             .disabled(isAnalyzing)

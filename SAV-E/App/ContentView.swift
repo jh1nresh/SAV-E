@@ -266,12 +266,6 @@ struct ContentView: View {
                 await DebugLegacyMigrator.run()
             }
         }
-        .fullScreenCover(isPresented: .constant(
-            ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall")
-        )) {
-            SaveProPaywallView(trigger: .passport)
-                .environment(\.appLanguageSettings, languageSettings)
-        }
 #endif
     }
 
@@ -364,6 +358,16 @@ struct ContentView: View {
         .task {
             await loadInitialContent()
         }
+#if DEBUG
+        // Same outermost fullScreenCover as production Passport. A cover on
+        // `rootScaffold` leaves AtlasTabBar in the tree (`root.tab.home`).
+        .fullScreenCover(isPresented: .constant(
+            ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall")
+        )) {
+            SaveProPaywallView(trigger: .passport)
+                .environment(\.appLanguageSettings, languageSettings)
+        }
+#endif
     }
 
     @MainActor

@@ -18,68 +18,66 @@ struct GoogleTakeoutImportView: View {
     private let importService = GoogleTakeoutImportService.shared
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                SaveDottedBackground().ignoresSafeArea()
+        ZStack {
+            SaveDottedBackground().ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 18) {
-                            postalHeader
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        postalHeader
 
-                            if let result {
-                                preview(result)
-                            } else {
-                                emptyState
-                            }
+                        if let result {
+                            preview(result)
+                        } else {
+                            emptyState
                         }
-                        .padding(.horizontal, 18)
-                        .padding(.top, 18)
-                        .padding(.bottom, result == nil ? 36 : 18)
                     }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 18)
+                    .padding(.bottom, result == nil ? 36 : 18)
+                }
 
-                    if let result {
-                        saveBar(result)
-                    }
+                if let result {
+                    saveBar(result)
                 }
             }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") {
-                        SaveHaptics.tap()
-                        dismiss()
-                    }
-                    .font(SaveAtlasType.strong(15))
-                    .foregroundStyle(SaveAtlasPalette.forest)
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Close") {
+                    SaveHaptics.tap()
+                    dismiss()
                 }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        SaveHaptics.tap()
-                        isFileImporterPresented = true
-                    } label: {
-                        Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(SaveAtlasPalette.ink)
-                            .frame(width: 38, height: 38)
-                            .background(SaveAtlasPalette.mint, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                    .stroke(SaveAtlasPalette.forest.opacity(0.26), lineWidth: 1)
-                            }
-                    }
-                    .disabled(isParsing || isSaving)
-                    .accessibilityIdentifier("takeout.import.folder")
+                .font(SaveAtlasType.strong(15))
+                .foregroundStyle(SaveAtlasPalette.forest)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    SaveHaptics.tap()
+                    isFileImporterPresented = true
+                } label: {
+                    Image(systemName: "folder.badge.plus")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .frame(width: 38, height: 38)
+                        .background(SaveAtlasPalette.mint, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                .stroke(SaveAtlasPalette.forest.opacity(0.26), lineWidth: 1)
+                        }
                 }
+                .disabled(isParsing || isSaving)
+                .accessibilityIdentifier("takeout.import.folder")
             }
-            .toolbarBackground(SaveAtlasPalette.canvas.opacity(0.96), for: .navigationBar)
-            .fileImporter(
-                isPresented: $isFileImporterPresented,
-                allowedContentTypes: allowedContentTypes,
-                allowsMultipleSelection: false
-            ) { response in
-                Task { await handleFileImporter(response) }
-            }
+        }
+        .toolbarBackground(SaveAtlasPalette.canvas.opacity(0.96), for: .navigationBar)
+        .fileImporter(
+            isPresented: $isFileImporterPresented,
+            allowedContentTypes: allowedContentTypes,
+            allowsMultipleSelection: false
+        ) { response in
+            Task { await handleFileImporter(response) }
         }
         .accessibilityIdentifier("takeout.import.root")
     }

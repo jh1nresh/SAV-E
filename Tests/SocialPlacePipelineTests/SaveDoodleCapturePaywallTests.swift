@@ -21,6 +21,8 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(capture.contains("capture.keyboardDone"))
         XCTAssertTrue(capture.contains("capture.flow"))
         XCTAssertTrue(capture.contains("Close capture"))
+        XCTAssertTrue(capture.contains(".navigationDestination(isPresented: $isGoogleTakeoutPresented)"))
+        XCTAssertFalse(capture.contains(".sheet(isPresented: $isGoogleTakeoutPresented)"))
         XCTAssertTrue(capture.contains("Saved \\(count) / 50"))
         XCTAssertTrue(capture.contains("已存 \\(count) / 50"))
         XCTAssertFalse(capture.contains("SaveTileTown"))
@@ -56,6 +58,9 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(paywall.contains("Cancel anytime."))
         XCTAssertTrue(paywall.contains("自動續訂"))
         XCTAssertTrue(paywall.contains("可隨時取消"))
+        XCTAssertTrue(paywall.contains("Pro isn't on sale yet"))
+        XCTAssertTrue(paywall.contains("paywall.notForSale"))
+        XCTAssertTrue(paywall.contains("fallbackOffers(products:"))
         XCTAssertTrue(profile.contains(".fullScreenCover(isPresented: $showProPaywall)"))
         XCTAssertFalse(profile.contains(".sheet(isPresented: $showProPaywall)"))
         XCTAssertFalse(paywall.contains("presentationDetents"))
@@ -73,6 +78,17 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertFalse(paywall.contains("SaveTileTown"))
         XCTAssertFalse(paywall.contains("SavePixel"))
         XCTAssertFalse(paywall.contains("TabView"))
+
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+        XCTAssertTrue(content.contains("--uitest-show-paywall"))
+        XCTAssertTrue(content.contains(".fullScreenCover(isPresented: .constant("))
+        XCTAssertTrue(content.contains("Same outermost fullScreenCover as production Passport"))
+
+        let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
+        XCTAssertTrue(parity.contains("--ignore-rects"))
+        XCTAssertTrue(parity.contains("0,432,402,104;0,728,402,146"))
+        let visualParity = try source(at: "Prototypes/AtlasPostcard/Scripts/VisualParity.swift")
+        XCTAssertTrue(visualParity.contains("--ignore-rects"))
     }
 
     func testProductIdentifiersComeFromTheSharedPolicy() {

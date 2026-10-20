@@ -7,11 +7,23 @@ private let width = 402
 private let height = 874
 private let ignoredTopRows = 48
 
+private struct IgnoreRect {
+    let x: Int
+    let y: Int
+    let width: Int
+    let height: Int
+
+    func contains(x: Int, y: Int) -> Bool {
+        x >= self.x && x < self.x + width && y >= self.y && y < self.y + height
+    }
+}
+
 private struct Options {
     let target: URL
     let actual: URL
     let diff: URL
     let threshold: Double
+    let ignoreRects: [IgnoreRect]
 }
 
 private enum ParityError: Error, CustomStringConvertible {
@@ -24,7 +36,7 @@ private enum ParityError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            return "usage: VisualParity.swift --target target.png --actual actual.png --diff diff.png [--threshold 0.90]"
+            return "usage: VisualParity.swift --target target.png --actual actual.png --diff diff.png [--threshold 0.90] [--ignore-rects x,y,w,h;x,y,w,h]"
         case let .unreadableImage(url):
             return "could not read image: \(url.path)"
         case let .unexpectedDimensions(url, actualWidth, actualHeight, expectation):
@@ -34,6 +46,24 @@ private enum ParityError: Error, CustomStringConvertible {
         case let .cannotWriteDiff(url):
             return "could not write diff: \(url.path)"
         }
+    }
+}
+
+private func parseIgnoreRects(_ raw: String?) throws -> [IgnoreRect] {
+    guard let raw, !raw.isEmpty else { return [] }
+    return try raw.split(separator: ";", omittingEmptySubsequences: true).map { token in
+        let parts = token.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        guard parts.count == 4,
+              let x = Int(parts[0]),
+              let y = Int(parts[1]),
+              let w = Int(parts[2]),
+              let h = Int(parts[3]),
+              w > 0,
+              h > 0
+        else {
+            throw ParityError.usage
+        }
+        return IgnoreRect(x: x, y: y, width: w, height: h)
     }
 }
 
@@ -57,7 +87,8 @@ private func parseOptions() throws -> Options {
         target: URL(fileURLWithPath: target),
         actual: URL(fileURLWithPath: actual),
         diff: URL(fileURLWithPath: diff),
-        threshold: Double(values["--threshold"] ?? "0.90") ?? 0.90
+        threshold: Double(values["--threshold"] ?? "0.90") ?? 0.90,
+        ignoreRects: try parseIgnoreRects(values["--ignore-rects"])
     )
 }
 
@@ -158,9 +189,14 @@ private func hasEdge(
     return false
 }
 
+private func isIgnored(_ ignored: [IgnoreRect], x: Int, y: Int) -> Bool {
+    ignored.contains { $0.contains(x: x, y: y) }
+}
+
 private func writeDiff(
     target: [UInt8],
     actual: [UInt8],
+    ignoreRects: [IgnoreRect],
     to url: URL
 ) throws {
     guard let bitmap = NSBitmapImageRep(
@@ -183,6 +219,15 @@ private func writeDiff(
     }
     for pixel in 0..<(width * height) {
         let offset = pixel * 4
+        let x = pixel % width
+        let y = pixel / width
+        if isIgnored(ignoreRects, x: x, y: y) {
+            destination[offset] = 196
+            destination[offset + 1] = 196
+            destination[offset + 2] = 196
+            destination[offset + 3] = 255
+            continue
+        }
         let difference = (
             abs(Int(target[offset]) - Int(actual[offset]))
                 + abs(Int(target[offset + 1]) - Int(actual[offset + 1]))
@@ -203,13 +248,18 @@ private func writeDiff(
     }
 }
 
-private func score(target: [UInt8], actual: [UInt8]) -> (Double, Double, Double) {
+private func score(
+    target: [UInt8],
+    actual: [UInt8],
+    ignoreRects: [IgnoreRect]
+) -> (Double, Double, Double) {
     let edgeThreshold = 18.0
     var targetEdges = [Bool](repeating: false, count: width * height)
     var actualEdges = [Bool](repeating: false, count: width * height)
 
     for y in ignoredTopRows..<height {
         for x in 0..<width {
+            if isIgnored(ignoreRects, x: x, y: y) { continue }
             let index = y * width + x
             targetEdges[index] = gradient(target, x: x, y: y) >= edgeThreshold
             actualEdges[index] = gradient(actual, x: x, y: y) >= edgeThreshold
@@ -225,6 +275,7 @@ private func score(target: [UInt8], actual: [UInt8]) -> (Double, Double, Double)
 
     for y in ignoredTopRows..<height {
         for x in 0..<width {
+            if isIgnored(ignoreRects, x: x, y: y) { continue }
             let pixel = y * width + x
             let offset = pixel * 4
 
@@ -255,7 +306,9 @@ private func score(target: [UInt8], actual: [UInt8]) -> (Double, Double, Double)
     let recall = targetEdgeCount == 0 ? 1 : Double(matchedTargetEdges) / Double(targetEdgeCount)
     let precision = actualEdgeCount == 0 ? 1 : Double(matchedActualEdges) / Double(actualEdgeCount)
     let edgeF1 = recall + precision == 0 ? 0 : 2 * recall * precision / (recall + precision)
-    let appearanceSimilarity = 1 - totalDifference / Double(comparedPixelCount)
+    let appearanceSimilarity = comparedPixelCount == 0
+        ? 1
+        : 1 - totalDifference / Double(comparedPixelCount)
     let composite = 0.35 * edgeF1 + 0.65 * appearanceSimilarity
     return (composite, edgeF1, appearanceSimilarity)
 }
@@ -264,8 +317,13 @@ do {
     let options = try parseOptions()
     let target = try strictRGBA(from: options.target, allowedPixelScales: 1...1)
     let actual = try strictRGBA(from: options.actual, allowedPixelScales: 1...4)
-    let result = score(target: target, actual: actual)
-    try writeDiff(target: target, actual: actual, to: options.diff)
+    let result = score(target: target, actual: actual, ignoreRects: options.ignoreRects)
+    try writeDiff(
+        target: target,
+        actual: actual,
+        ignoreRects: options.ignoreRects,
+        to: options.diff
+    )
 
     let payload: [String: Any] = [
         "target": options.target.path,
@@ -275,6 +333,7 @@ do {
         "edgeF1": result.1,
         "appearanceSimilarity": result.2,
         "threshold": options.threshold,
+        "ignoreRects": options.ignoreRects.map { "\($0.x),\($0.y),\($0.width),\($0.height)" },
         "passed": result.0 >= options.threshold
     ]
     let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])

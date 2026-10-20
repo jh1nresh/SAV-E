@@ -31,6 +31,7 @@ struct SaveProPaywallView: View {
     @State private var selectedProductID: String = SAVEProAccessPolicy.ProductID.annual
     @State private var isPurchasing = false
     @State private var statusMessage: String?
+    @State private var didFinishProductLoad = false
 
     var body: some View {
         ZStack {
@@ -59,7 +60,10 @@ struct SaveProPaywallView: View {
         .interactiveDismissDisabled(isPurchasing)
         .accessibilityIdentifier("paywall.root")
         .accessibilityValue(trigger == .passport ? "passport" : "aiAssist")
-        .task { await storeKit.loadProducts() }
+        .task {
+            await storeKit.loadProducts()
+            didFinishProductLoad = true
+        }
     }
 
     private var topBar: some View {
@@ -143,22 +147,13 @@ struct SaveProPaywallView: View {
     @ViewBuilder
     private var offers: some View {
         if !SAVEProAccessPolicy.purchasingIsAvailable {
-            VStack(spacing: SaveSpace.sm) {
-                planCards(products: [])
-                renewalLines(products: [])
-                if let statusMessage {
-                    Text(statusMessage)
-                        .font(SaveAtlasType.body(13))
-                        .foregroundStyle(SaveAtlasPalette.coral)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityIdentifier("paywall.notForSale")
-                }
-                continueButton
-            }
-        } else if storeKit.products.isEmpty {
+            fallbackOffers(products: [])
+        } else if storeKit.products.isEmpty, !didFinishProductLoad {
             ProgressView()
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, SaveSpace.xl)
+        } else if storeKit.products.isEmpty {
+            fallbackOffers(products: [])
         } else {
             VStack(spacing: SaveSpace.sm) {
                 planCards(products: storeKit.products)
@@ -171,6 +166,32 @@ struct SaveProPaywallView: View {
                 continueButton
             }
         }
+    }
+
+    private func fallbackOffers(products: [Product]) -> some View {
+        VStack(spacing: SaveSpace.sm) {
+            planCards(products: products)
+            renewalLines(products: products)
+            Text(notForSaleText)
+                .font(SaveAtlasType.body(13))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("paywall.notForSale")
+            if let statusMessage, statusMessage != notForSaleText {
+                Text(statusMessage)
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.coral)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            continueButton
+        }
+    }
+
+    private var notForSaleText: String {
+        languageSettings.localized(
+            english: "Pro isn't on sale yet",
+            traditionalChinese: "Pro 尚未開賣"
+        )
     }
 
     private func planCards(products: [Product]) -> some View {
@@ -380,10 +401,7 @@ struct SaveProPaywallView: View {
 
     private func purchaseSelected() async {
         guard SAVEProAccessPolicy.purchasingIsAvailable else {
-            statusMessage = languageSettings.localized(
-                english: "Pro isn't on sale yet",
-                traditionalChinese: "Pro 尚未開賣"
-            )
+            statusMessage = notForSaleText
             return
         }
         guard let product = storeKit.products.first(where: { $0.id == selectedProductID }) else { return }
