@@ -43,7 +43,7 @@ struct SaveProPaywallView: View {
                 hero
                     .padding(.top, SaveSpace.xs)
                 headline
-                    .padding(.top, SaveSpace.md)
+                    .padding(.top, SaveSpace.lg)
                 benefitRow
                     .padding(.top, SaveSpace.md)
                 savedNote
@@ -117,7 +117,7 @@ struct SaveProPaywallView: View {
                 english: "Save every place you love",
                 traditionalChinese: "想去的地方，全部存下"
             ),
-            pointSize: 29,
+            pointSize: 34,
             relativeTo: .title
         )
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -489,11 +489,11 @@ struct SaveDoodlePaywallHero: View {
             SaveDoodlePaywallPaths()
                 .stroke(SaveAtlasPalette.line, style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
 
-            sticker(system: "pencil", x: 0.18, y: 0.28, visited: false)
-            sticker(system: "takeoutbag.and.cup.and.straw", x: 0.48, y: 0.30, visited: false)
-            sticker(system: "cup.and.saucer", x: 0.78, y: 0.26, visited: false)
-            sticker(system: "bird", x: 0.16, y: 0.72, visited: false)
-            sticker(system: "lamp.desk", x: 0.74, y: 0.70, visited: true)
+            sticker(.temple, x: 0.18, y: 0.28, visited: false)
+            sticker(.noodle, x: 0.48, y: 0.30, visited: false)
+            sticker(.coffee, x: 0.78, y: 0.26, visited: false)
+            sticker(.duck, x: 0.16, y: 0.72, visited: false)
+            sticker(.lantern, x: 0.74, y: 0.70, visited: true)
 
             ForEach(Array(treeOffsets.enumerated()), id: \.offset) { _, point in
                 Image(systemName: "tree")
@@ -518,27 +518,26 @@ struct SaveDoodlePaywallHero: View {
     }
 
     private func sticker(
-        system: String,
+        _ kind: SaveDoodleOfficialSticker,
         x: CGFloat,
         y: CGFloat,
         visited: Bool
     ) -> some View {
         GeometryReader { geo in
             ZStack {
-                Circle()
-                    .fill(SaveAtlasPalette.paper)
-                    .overlay {
-                        Circle()
-                            .stroke(
-                                visited ? SaveDoodle.stampRed : SaveDoodle.pencil,
-                                lineWidth: visited ? 1.5 : 1
-                            )
-                    }
-                Image(systemName: system)
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundStyle(visited ? SaveAtlasPalette.ink : SaveDoodle.pencil)
+                Image(kind.imageName(visited: visited, pointSize: 48))
+                    .resizable()
+                    .interpolation(.high)
+                    .renderingMode(.original)
+                    .scaledToFit()
+                    .frame(width: 40, height: 40)
+                if visited {
+                    Circle()
+                        .stroke(SaveDoodle.stampRed, lineWidth: 1.5)
+                        .frame(width: 44, height: 44)
+                }
             }
-            .frame(width: 36, height: 36)
+            .frame(width: 44, height: 44)
             .rotationEffect(.degrees(visited ? -5 : 4))
             .position(x: geo.size.width * x, y: geo.size.height * y)
         }
