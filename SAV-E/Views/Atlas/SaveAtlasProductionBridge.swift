@@ -10,20 +10,22 @@ enum SaveAtlasRuntime {
 /// Soft Pixel accent lock (DESIGN.md).
 ///
 /// Founder lock 2026-10-14 supersedes the 2026-10-13 H1/M1 *map-base* rule:
-/// product Map and Home peek use a full-pixel tile-town base, not MapKit /
-/// Atlas paper with Soft Pixel accents only. Soft Pixel remains the accent
-/// language for pins, Map Stamp seals, and Memo *on* that town.
+/// product Map uses a full-pixel tile-town base, not MapKit / Atlas paper
+/// with Soft Pixel accents only. Home is `SaveDoodleHomeView` (founder
+/// 2026-10-20 abandoned tile-town on Home). Soft Pixel remains the accent
+/// language for pins, Map Stamp seals, and Memo *on* remaining town surfaces.
 ///
 /// M1 is unchanged: seals never show raw hex, debug IDs, or pipeline tokens.
 ///
 /// Random `SoftPixel` / `16-bit` *asset names* stay forbidden so a one-off
 /// city PNG cannot silently replace the owned tile-town renderer.
 nonisolated enum SaveSoftPixelAccentsLock: Sendable {
-    /// Live Home uses the tile-town peek composition, not the One-Face
-    /// illustrated-atlas fixture. Only `--uitest-atlas-parity-fixture` opts in.
+    /// Live Home is `SaveDoodleHomeView`, not the One-Face illustrated-atlas
+    /// fixture. Only `--uitest-atlas-parity-fixture` opts in.
     static let productionLocksOneFaceHomeComposition = false
 
-    /// Product Map / Home peek / Friends strip use `SaveTileTownCanvas`.
+    /// Product Map / Friends strip still use `SaveTileTownCanvas` until those
+    /// Doodle PRs. Home no longer mounts the town.
     static let productMapBaseIsTileTown = true
 
     static let illustratedCityAtlasAssets: Set<String> = [
@@ -139,8 +141,9 @@ enum SaveAtlasPresentationFactory {
         } else {
             // Fixture Home is SaveDoodleHomeView. Attach live Place objects so
             // the gate measures the real Eat/Go list, not an empty plate.
+            // Keep the reference reviewCount (3) so the mock clues line and
+            // `home.review` stay on the parity Home.
             presentation.savedPlaces = orderedHomePlaces(mapViewModel.places, location: homeLocation).map(placePresentation)
-            presentation.reviewCount = mapViewModel.reviewCandidates.count
         }
 
         presentation.onCapture = onCapture
