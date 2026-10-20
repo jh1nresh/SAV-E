@@ -582,6 +582,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             < passport.range(of: "profile.controlsDisclosure")!.lowerBound)
     }
 
+    @MainActor
     func testPassportTodayOnSavvySitsBetweenStampLedgerAndControlPocket() throws {
         let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
