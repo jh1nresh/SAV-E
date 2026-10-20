@@ -212,6 +212,9 @@ for screen in home saves plan map capture paywall; do
     fi
     cp "$source" "$ARTIFACT_DIR/reference/$screen.png"
 done
+if [[ -f "$REFERENCE_SOURCE/home-mask.png" ]]; then
+    cp "$REFERENCE_SOURCE/home-mask.png" "$ARTIFACT_DIR/reference/home-mask.png"
+fi
 
 if [[ -n "$DESTINATION" ]]; then
     capture_booted_simulators
@@ -373,11 +376,15 @@ for screen in home saves plan map capture paywall; do
         # renewalDescription). Mock is full-screen, one benefit, no tab bar.
         extra_args=(--ignore-rects "24,132,354,176;24,444,354,22;24,698,354,50")
     fi
-
+    mask_args=()
+    if [[ "$screen" == home && -f "$ARTIFACT_DIR/reference/home-mask.png" ]]; then
+        mask_args+=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
+    fi
     if xcrun swift "$PARITY_SCRIPT" \
         --target "$ARTIFACT_DIR/reference/$screen.png" \
         --actual "$actual" \
         --diff "$ARTIFACT_DIR/diff/$screen.png" \
+        "${mask_args[@]}" \
         --threshold "$THRESHOLD" \
         "${extra_args[@]}" \
         >"$ARTIFACT_DIR/results/$screen.json"
