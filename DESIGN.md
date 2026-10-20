@@ -4,7 +4,8 @@
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** still governs paper, type, kraft, and coral
 > chrome, with the 2026-10-19 v5 cream/ink/stroke lock below. **Tile-town** is
-> the product Map / Home peek / Friends strip base (founder lock 2026-10-14).
+> the product Map base until the Doodle Map PR (founder lock 2026-10-14).
+> Friends no longer uses a tile-town strip.
 > The 2026-10-19 founder decision replaces the Home hero and Map tab with a
 > full-pixel **isometric** tile town; that renderer is a follow-up PR. **Soft
 > Pixel** is accents-only *on* tile-town (pins / seals / Memo). **Cream-notebook**
@@ -117,7 +118,8 @@ Rules:
 
 - Product Map tab (`SaveTileTownRootMap`) still renders `SaveTileTownCanvas`.
   Home (`SaveDoodleHomeView`) is the Doodle nearby list + mini-map, not a
-  tile-town peek. Friends may still show a small peek strip of the town.
+  tile-town peek. Friends (`SaveFriendsView`) is a doodle people list; the
+  shared map stays hidden.
 - Tile-town is a memory map. Pins hash to village lots. It does not silently
   confirm places and it does not invent GPS truth. Navigate / Trip maps may
   still hand off to MapKit or Apple Maps.
@@ -383,7 +385,7 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | Onboarding | Atlas |
 | Google Takeout import | Atlas (some legacy tokens remain inline) |
 | Passport (`ProfileView`, `StatsView`, pet companion card chrome) | Atlas |
-| Friends (`SaveFriendsView`) | Atlas |
+| Friends (`SaveFriendsView`) | Doodle people list (shared map hidden) |
 | `CategoryPill`, `EmptyStateView`, `RelatedPlaceSourcesPanel` | Atlas |
 | Brand accents: pet preset colors (Spark = honey), stamp moment ripple, `SaveMemoryBadge` stamp palette, `MemoMascotMark` | Intentional — do not recolor in migrations |
 | App Clip shared place, trip, and list previews | Atlas |
@@ -879,10 +881,12 @@ source clues or visit timestamps appear in post projections.
 ### Friends
 
 Home / Map / + / Friends / Passport remains the root bar. Friends is
-people-first: postage-seal avatars, author name, and “Last at …” for the
-latest explicit post. A small tile-town strip may sit under the list; it
-must not duplicate the full Map tab. An author opens a read-only passport
-under the same live follower audience gate.
+people-first doodle: Caveat / Iansui “Friends” / 「朋友」 title, outline
+Invite, 48pt ink-ring avatars (initial or photo), author name, and
+“last at … · 2d” for the latest explicit post, with a 32pt outline sticker.
+The shared map stays hidden (HoP). Parity target is the Doodle Friends mock
+at exactly 0.90. An author opens a read-only passport under the same live
+follower audience gate.
 Loading, retry, empty and withdrawn states are explicit; sample activity exists
 only in isolated UI fixtures. A follow or private memory update never publishes.
 

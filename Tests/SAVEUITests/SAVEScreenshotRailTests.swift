@@ -651,8 +651,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "atlas-map")
 
         openRootTab("Friends", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["friends.mapStrip"].waitForExistence(timeout: stepTimeout))
-        attach(app, name: "atlas-friends-town")
+        XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["friends.list"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["friends.mapStrip"].exists)
+        attach(app, name: "five-tab-friends")
+        attach(app, name: "atlas-friends")
     }
 
     /// Root navigation includes Friends and keeps Plan as a child route.
@@ -703,6 +706,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.staticTexts["friends.empty"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(app.staticTexts["friends.empty"].label, "Their next place could be yours")
         XCTAssertFalse(app.textFields["friends.invite"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["friends.mapStrip"].exists)
         attach(app, name: "five-tab-friends-coming-soon")
 
         openRootTab("Map", app: app)
@@ -858,6 +862,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             green: expectedGreen,
             blue: expectedBlue,
             name: homeName
+        )
+
+        openRootTab("Friends", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
+        let friendsName = homeName.replacingOccurrences(of: "home", with: "friends")
+        let friendsShot = app.screenshot()
+        attach(app, name: friendsName)
+        assertScreenshotBackground(
+            friendsShot,
+            nearRed: expectedRed,
+            green: expectedGreen,
+            blue: expectedBlue,
+            name: friendsName
         )
 
         openRootTab("Passport", app: app)
@@ -3143,6 +3160,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// Live Home is the Doodle Eat/Go list plus mini-map. The Atlas gate still
     /// compares `five-tab-home` to `ProductionTargets/home.png` at 0.90. Do not
     /// retune that gate here if the intentional Home redesign drops the score.
+    /// Friends compares `five-tab-friends` to `ProductionTargets/friends.png`
+    /// at exactly 0.90 (Doodle Friends mock; shared map hidden).
     @MainActor
     private func waitForHomeCoverImagery(_ app: XCUIApplication) {
         XCTAssertTrue(

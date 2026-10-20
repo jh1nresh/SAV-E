@@ -213,9 +213,11 @@ final class SaveTileTownLockTests: XCTestCase {
 
     func testFriendsIsPeopleFirstWithLastAt() throws {
         let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
-        XCTAssertTrue(friends.contains("SavePostageSealAvatar"))
-        XCTAssertTrue(friends.contains("Last at"))
-        XCTAssertTrue(friends.contains("friends.mapStrip"))
+        XCTAssertTrue(friends.contains("SaveDoodleFriendAvatar"))
+        XCTAssertTrue(friends.contains("last at"))
+        XCTAssertFalse(friends.contains("SavePostageSealAvatar"))
+        XCTAssertFalse(friends.contains("friends.mapStrip"))
+        XCTAssertFalse(friends.contains("SaveTileTownCanvas"))
         XCTAssertTrue(friends.contains("friends.empty"))
         XCTAssertTrue(friends.contains("friends.findFriends"))
         XCTAssertTrue(friends.contains("friends.author."))
@@ -355,6 +357,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(rail.contains("0x1E"))
         XCTAssertTrue(rail.contains("0xFF"))
         XCTAssertTrue(rail.contains("dark-home"))
+        XCTAssertTrue(rail.contains("dark-friends"))
         XCTAssertTrue(rail.contains("dark-passport"))
         let app = try source(at: "SAV-E/App/SaveApp.swift")
         XCTAssertTrue(app.contains("--uitest-force-dark"))

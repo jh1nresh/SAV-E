@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// Doodle v1 Friends: people-first last-at list. Shared map is hidden (HoP).
+/// Reuses `SaveFriendLastAt` data; visual language matches spec §7.3.
 struct SaveFriendsView: View {
     var currentUserID: String?
     var onSaved: () async -> Void = {}
@@ -11,49 +13,42 @@ struct SaveFriendsView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                SaveDisplayTitle(text: "Savvy", pointSize: 28)
+        VStack(alignment: .leading, spacing: 0) {
+            header
+                .padding(.horizontal, SaveLayout.screenMargin)
+                .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.xs)
+                .frame(minHeight: SaveLayout.minTap)
 
-                HStack {
-                    SaveDisplayTitle(
-                        text: language.localized(english: "Friends", traditionalChinese: "朋友"),
-                        pointSize: 22
-                    )
-                    Spacer(minLength: 4)
-                    Button(action: onConnections) {
-                        Text(language.localized(english: "Invite", traditionalChinese: "邀請"))
-                            .font(SaveAtlasType.strong(13))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 14)
-                            .frame(minHeight: 36)
-                            .background(SaveAtlasPalette.coral, in: Capsule())
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    if store.isLoading && store.posts.isEmpty {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, SaveSpace.xl)
                     }
-                    .accessibilityLabel(language.localized(english: "Manage following", traditionalChinese: "管理追蹤"))
-                    .accessibilityIdentifier("friends.connections")
+                    if store.error != nil { SocialLoadError().padding(.top, SaveSpace.md) }
+                    if !store.isLoading && store.error == nil && store.posts.isEmpty {
+                        emptyState
+                    }
+                    peopleList
+                    if store.nextCursor != nil {
+                        Button(language.localized(english: "Load more", traditionalChinese: "載入更多")) {
+                            Task { await store.loadMore() }
+                        }
+                        .disabled(store.isLoading)
+                        .font(SaveAtlasType.strong(17))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .frame(maxWidth: .infinity, minHeight: SaveLayout.minTap)
+                        .padding(.top, SaveSpace.md)
+                    }
                 }
-
-                if store.isLoading && store.posts.isEmpty { ProgressView().frame(maxWidth: .infinity).padding(50) }
-                if store.error != nil { SocialLoadError() }
-                if !store.isLoading && store.error == nil && store.posts.isEmpty {
-                    emptyState
-                }
-                peopleList
-                if store.nextCursor != nil {
-                    Button(language.localized(english: "Load more", traditionalChinese: "載入更多")) { Task { await store.loadMore() } }
-                        .disabled(store.isLoading).frame(maxWidth: .infinity, minHeight: 44)
-                }
-                if !store.posts.isEmpty {
-                    SaveTileTownCanvas(pins: friendPins, showsPins: true, clipsToPaper: true)
-                        .frame(height: 88)
-                        .accessibilityIdentifier("friends.mapStrip")
-                }
+                .padding(.horizontal, SaveLayout.screenMargin)
+                .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, AtlasMetrics.statusBarHeight + 12)
-            .padding(.bottom, AtlasMetrics.height - 786 + 24)
         }
-        .background(SaveAtlasPalette.canvas).foregroundStyle(SaveAtlasPalette.forest)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(SaveDottedBackground())
+        .foregroundStyle(SaveAtlasPalette.ink)
         .accessibilityIdentifier("friends.root")
         .task(id: currentUserID) { await store.refresh(.feed) }
         .refreshable { await store.refresh(.feed) }
@@ -62,74 +57,314 @@ struct SaveFriendsView: View {
         .sheet(item: $author) { SharedAuthorPassport(authorID: $0.author_id, onSaved: onSaved) }
     }
 
+    private var header: some View {
+        HStack(spacing: SaveSpace.xs) {
+            SaveDisplayTitle(
+                text: language.localized(english: "Friends", traditionalChinese: "朋友"),
+                pointSize: 34,
+                relativeTo: .largeTitle
+            )
+            .accessibilityIdentifier("friends.title")
+
+            Spacer(minLength: SaveSpace.xs)
+
+            Button(action: onConnections) {
+                Text(language.localized(english: "Invite", traditionalChinese: "邀請"))
+                    .font(SaveAtlasType.strong(15))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .padding(.horizontal, SaveSpace.md)
+                    .frame(minHeight: SaveLayout.chipHeight)
+                    .overlay {
+                        Capsule()
+                            .stroke(SaveAtlasPalette.ink, lineWidth: SaveAtlasPalette.strokeWidth)
+                    }
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .frame(minHeight: SaveLayout.minTap)
+            .accessibilityLabel(language.localized(english: "Manage following", traditionalChinese: "管理追蹤"))
+            .accessibilityIdentifier("friends.connections")
+        }
+        .frame(minHeight: SaveLayout.minTap)
+    }
+
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "person.2").font(.system(size: 46, weight: .light))
-            Text(language.localized(english: "Their next place could be yours", traditionalChinese: "下一個想去的地方，從朋友開始"))
-                .font(SaveAtlasType.strong(21)).multilineTextAlignment(.center)
-                .accessibilityIdentifier("friends.empty")
-            Text(language.localized(english: "Follow someone with their Savvy link. Their shared places will appear here.", traditionalChinese: "透過 Savvy 連結追蹤朋友，他們主動分享的地點就會出現在這裡。"))
-                .font(SaveAtlasType.body(14)).foregroundStyle(SaveAtlasPalette.muted).multilineTextAlignment(.center)
+        VStack(spacing: SaveSpace.md) {
+            SaveDoodleFriendsMark(size: 64)
+                .padding(.top, SaveSpace.xxl)
+                .accessibilityHidden(true)
+
+            Text(language.localized(
+                english: "Their next place could be yours",
+                traditionalChinese: "下一個想去的地方，從朋友開始"
+            ))
+            .font(SaveDisplayType.display(24, relativeTo: .title2))
+            .foregroundStyle(SaveAtlasPalette.forest)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .accessibilityIdentifier("friends.empty")
+
+            Text(language.localized(
+                english: "Follow someone with their Savvy link. Their shared places will appear here.",
+                traditionalChinese: "透過 Savvy 連結追蹤朋友，他們主動分享的地點就會出現在這裡。"
+            ))
+            .font(SaveAtlasType.body(13))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .multilineTextAlignment(.center)
+
             Button(action: onConnections) {
                 Text(language.localized(english: "Find friends", traditionalChinese: "追蹤朋友"))
-                    .foregroundStyle(SaveAtlasPalette.paper)
+                    .font(SaveAtlasType.strong(17))
+                    .foregroundStyle(Color.white)
+                    .frame(maxWidth: .infinity, minHeight: SaveLayout.buttonHeight)
+                    .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous))
             }
-            .buttonStyle(.borderedProminent).tint(SaveAtlasPalette.forest)
+            .buttonStyle(.plain)
             .accessibilityIdentifier("friends.findFriends")
-        }.padding(.horizontal, 16).padding(.vertical, 60)
+        }
+        .padding(.bottom, SaveSpace.xxl)
+        .frame(maxWidth: .infinity)
     }
 
     private var peopleList: some View {
-        LazyVStack(spacing: 14) {
-            ForEach(SaveFriendLastAt.rows(from: store.posts)) { row in
-                HStack(spacing: 12) {
-                    Button { author = row.lastPost } label: {
-                        HStack(spacing: 12) {
-                            SavePostageSealAvatar(name: row.authorName)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(row.authorName)
-                                    .font(SaveAtlasType.strong(16))
-                                    .foregroundStyle(SaveAtlasPalette.forest)
-                                Text(lastAtText(row.lastPost))
-                                    .font(SaveAtlasType.body(13))
-                                    .foregroundStyle(SaveAtlasPalette.muted)
-                                    .lineLimit(1)
-                            }
-                            Spacer(minLength: 4)
-                        }
-                        .frame(minHeight: 44)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("friends.author.\(row.authorID)")
-
-                    Button { selected = row.lastPost } label: {
-                        SharedPostArtwork(post: row.lastPost, compact: true)
-                            .frame(width: 72, height: 56)
-                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("friends.post.\(row.lastPost.id.uuidString)")
-                }
-                .padding(12)
-                .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
+        let rows = SaveFriendLastAt.rows(from: store.posts)
+        return VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                friendRow(row)
+                if index < rows.count - 1 {
+                    SaveDoodleDashedDivider()
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("friends.list")
     }
 
-    private var friendPins: [SaveTileTownPin] {
-        store.posts.prefix(6).map { post in
-            SaveTileTownPin(id: post.id, name: post.name, isSelected: false)
+    private func friendRow(_ row: SaveFriendLastAt.Row) -> some View {
+        HStack(alignment: .center, spacing: 0) {
+            Button { author = row.lastPost } label: {
+                HStack(alignment: .center, spacing: 0) {
+                    SaveDoodleFriendAvatar(name: row.authorName, imageURL: row.lastPost.author_avatar_url)
+                        .padding(.trailing, SaveLayout.stickerToText)
+
+                    VStack(alignment: .leading, spacing: SaveLayout.titleToMeta) {
+                        Text(row.authorName)
+                            .font(SaveAtlasType.strong(17))
+                            .foregroundStyle(SaveAtlasPalette.ink)
+                            .lineLimit(1)
+                        Text(SaveFriendLastAt.lastAtText(row.lastPost, language: language.language))
+                            .font(SaveAtlasType.body(13))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("friends.author.\(row.authorID)")
+
+            Button { selected = row.lastPost } label: {
+                SaveDoodleFriendSticker(category: row.lastPost.category)
+                    .frame(width: 32, height: 32)
+                    .frame(width: SaveLayout.minTap, height: SaveLayout.minTap)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("friends.post.\(row.lastPost.id.uuidString)")
+        }
+        .padding(.vertical, SaveLayout.rowVerticalPadding)
+        .frame(minHeight: SaveLayout.rowMinHeight, alignment: .leading)
+    }
+}
+
+/// Hand-drawn initial (or photo) in a 48pt ink ring. Replaces the postage-seal avatar.
+struct SaveDoodleFriendAvatar: View {
+    let name: String
+    var imageURL: String? = nil
+    var size: CGFloat = 48
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(SaveAtlasPalette.paper)
+            if let imageURL, let url = URL(string: imageURL) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        initial
+                    }
+                }
+                .clipShape(Circle())
+            } else {
+                initial
+            }
+            SaveDoodleInkRing()
+                .stroke(SaveAtlasPalette.ink, lineWidth: 1.5)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+        .accessibilityLabel(name)
+    }
+
+    private var initial: some View {
+        Text(SaveDoodleFriendAvatar.initial(from: name))
+            .font(SaveDisplayType.display(22, relativeTo: .title2))
+            .foregroundStyle(SaveAtlasPalette.forest)
+    }
+
+    static func initial(from name: String) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmed.first else { return "?" }
+        return String(first).uppercased()
+    }
+}
+
+/// Slightly imperfect ring so the avatar reads as ink, not a system chrome circle.
+nonisolated struct SaveDoodleInkRing: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let inset = rect.insetBy(dx: 1.5, dy: 1.5)
+        path.addEllipse(in: CGRect(
+            x: inset.minX + 0.6,
+            y: inset.minY - 0.4,
+            width: inset.width - 0.8,
+            height: inset.height + 0.6
+        ))
+        return path
+    }
+}
+
+/// Outline sticker, 32pt. Always pencil — Friends does not color visited stickers.
+struct SaveDoodleFriendSticker: View {
+    let category: String
+
+    var body: some View {
+        let resolved = PlaceCategory(rawValue: category)
+        ZStack {
+            RoundedRectangle(cornerRadius: SaveSpace.tight, style: .continuous)
+                .stroke(SaveDoodle.pencil, lineWidth: SaveAtlasPalette.strokeWidth)
+            Image(systemName: Self.symbolName(for: resolved))
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(SaveDoodle.pencil)
+        }
+        .accessibilityHidden(true)
+    }
+
+    static func symbolName(for category: PlaceCategory?) -> String {
+        switch category {
+        case .food: return "fork.knife"
+        case .cafe: return "cup.and.saucer"
+        case .bar: return "wineglass"
+        case .attraction: return "leaf"
+        case .stay: return "bed.double"
+        case .shopping: return "bag"
+        case nil: return "mappin"
+        }
+    }
+}
+
+/// One decorative doodle for the empty Friends page (spec §8).
+struct SaveDoodleFriendsMark: View {
+    var size: CGFloat = 64
+
+    var body: some View {
+        ZStack {
+            SaveDoodleInkRing()
+                .stroke(SaveDoodle.pencil, lineWidth: 1.5)
+                .frame(width: size * 0.62, height: size * 0.62)
+                .offset(x: -size * 0.16)
+            SaveDoodleInkRing()
+                .stroke(SaveDoodle.pencil, lineWidth: 1.5)
+                .frame(width: size * 0.62, height: size * 0.62)
+                .offset(x: size * 0.16)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Latest explicit post per author. Lives with Friends (was TileTown-adjacent).
+enum SaveFriendLastAt {
+    struct Row: Identifiable, Equatable {
+        var id: String { authorID }
+        let authorID: String
+        let authorName: String
+        let lastPost: SharedPlacePost
+    }
+
+    static func rows(from posts: [SharedPlacePost]) -> [Row] {
+        var latest: [String: SharedPlacePost] = [:]
+        for post in posts {
+            if let existing = latest[post.author_id] {
+                if post.shared_at > existing.shared_at {
+                    latest[post.author_id] = post
+                }
+            } else {
+                latest[post.author_id] = post
+            }
+        }
+        return latest.values
+            .sorted { lhs, rhs in
+                if lhs.shared_at != rhs.shared_at { return lhs.shared_at > rhs.shared_at }
+                return lhs.author_name.localizedCaseInsensitiveCompare(rhs.author_name) == .orderedAscending
+            }
+            .map { post in
+                Row(authorID: post.author_id, authorName: post.author_name, lastPost: post)
+            }
+    }
+
+    static func lastAtText(_ post: SharedPlacePost, language: AppLanguage, now: Date = Date()) -> String {
+        let age = relativeAge(from: post.shared_at, now: now, language: language)
+        switch language {
+        case .traditionalChinese:
+            return "最近在 \(post.name) · \(age)"
+        case .english:
+            return "last at \(post.name) · \(age)"
         }
     }
 
-    private func lastAtText(_ post: SharedPlacePost) -> String {
-        language.localized(
-            english: "Last at \(post.name)",
-            traditionalChinese: "最近在 \(post.name)"
-        )
+    static func relativeAge(from sharedAt: String, now: Date = Date(), language: AppLanguage = .english) -> String {
+        guard let date = date(from: sharedAt) else {
+            return language == .traditionalChinese ? "剛剛" : "now"
+        }
+        let seconds = max(0, now.timeIntervalSince(date))
+        let chinese = language == .traditionalChinese
+        if seconds < 3600 {
+            return chinese ? "剛剛" : "now"
+        }
+        let hours = Int(seconds / 3600)
+        if hours < 24 {
+            return chinese ? "\(hours)小時" : "\(hours)h"
+        }
+        let days = Int(seconds / 86_400)
+        if days < 7 {
+            return chinese ? "\(days)天" : "\(days)d"
+        }
+        let weeks = days / 7
+        if weeks < 5 {
+            return chinese ? "\(weeks)週" : "\(weeks)w"
+        }
+        let months = max(1, days / 30)
+        return chinese ? "\(months)個月" : "\(months)mo"
+    }
+
+    static func date(from sharedAt: String) -> Date? {
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractional.date(from: sharedAt) ?? ISO8601DateFormatter().date(from: sharedAt)
     }
 }
+
+#if DEBUG
+#Preview("Friends") {
+    SaveFriendsView()
+}
+
+#Preview("Friends dark") {
+    SaveFriendsView()
+        .preferredColorScheme(.dark)
+}
+#endif

@@ -45,9 +45,9 @@ Scripts/run-visual-parity.sh \
   --artifacts /absolute/path/to/new-empty-artifact-directory
 ```
 
-The runner captures Home, Saves, Plan, and Map, then writes matching
-`reference/`, `output/`, `diff/`, and `results/` directories. All four pages
-must score at least `0.90`. XCTest locks the application window to 402 × 874
+The runner captures Home, Saves, Plan, Map, and Friends, then writes matching
+`reference/`, `output/`, `diff/`, and `results/` directories. All five pages
+must score at least `0.90`. Friends uses the Doodle Friends mock. XCTest locks the application window to 402 × 874
 points; the comparator accepts only exact, uniform Retina pixel multiples of
 that viewport and rejects other dimensions.
 
