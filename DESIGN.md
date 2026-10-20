@@ -716,6 +716,9 @@ in Capture. Before analysis, Capture shows no invented suggestion from old
 saves. Its saved count is the actual count, without a fabricated 50-place cap.
 Pro retains the current modal layout and unavailable-purchase boundary. Its
 note must not claim the user has saved 50 places when opened from Passport.
+The 200pt hero uses official DESIGN outline stickers as the primary marks,
+with at most one color die-cut plus a stamp ring. Do not use SF Symbols
+inside filled circles as place stickers.
 
 ### Sign-In
 
