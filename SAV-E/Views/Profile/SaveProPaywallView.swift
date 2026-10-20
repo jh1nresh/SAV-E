@@ -146,8 +146,8 @@ struct SaveProPaywallView: View {
 
     private var savedNote: some View {
         Text(languageSettings.localized(
-            english: "You've saved 50 places. Keep going.",
-            traditionalChinese: "已存 50 個地點，繼續存下去"
+            english: "Keep saving the places you love.",
+            traditionalChinese: "繼續收藏你喜歡的地方。"
         ))
         .font(SaveAtlasType.body(15))
         .foregroundStyle(SaveAtlasPalette.muted)

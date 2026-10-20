@@ -1,5 +1,8 @@
 import SwiftUI
 import UIKit
+import PhotosUI
+import Vision
+import ImageIO
 
 /// Doodle v1 Capture sheet (spec §7.5). Same import / analyze pipeline as
 /// before; only the paper, handwriting, and spacing change. Sheet detents are
@@ -14,8 +17,12 @@ struct SaveCaptureFlowView: View {
     let onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary
     let onComplete: ([UUID]) -> Void
     let onCancel: () -> Void
+    let onSearchNearby: () -> Void
     @State private var sharedText = ""
     @State private var isAnalyzing = false
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var isPhotoPickerPresented = false
+    @State private var isReadingPhoto = false
     @State private var errorMessage: String?
     @State private var isGoogleTakeoutPresented = false
     @FocusState private var isInputFocused: Bool
@@ -35,9 +42,11 @@ struct SaveCaptureFlowView: View {
                         optionRows
                             .padding(.top, SaveSpace.md)
 
-                        if let suggestion {
-                            suggestionCard(suggestion)
+                        if isReadingPhoto {
+                            ProgressView(localized("Reading photo…", "讀取照片中…"))
+                                .font(SaveAtlasType.body(13))
                                 .padding(.top, SaveSpace.md)
+                                .accessibilityIdentifier("capture.readingPhoto")
                         }
 
                         if let errorMessage {
@@ -73,8 +82,8 @@ struct SaveCaptureFlowView: View {
                             in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
                         )
                     }
-                    .disabled(trimmedText.isEmpty || isAnalyzing)
-                    .opacity(trimmedText.isEmpty || isAnalyzing ? 0.48 : 1)
+                    .disabled(trimmedText.isEmpty || isBusy)
+                    .opacity(trimmedText.isEmpty || isBusy ? 0.48 : 1)
                     .accessibilityIdentifier("capture.analyze")
 
                     Text(savedCountText)
@@ -118,6 +127,10 @@ struct SaveCaptureFlowView: View {
                 sharedText = initialText
             }
         }
+        .photosPicker(isPresented: $isPhotoPickerPresented, selection: $selectedPhoto, matching: .images)
+        .task(id: selectedPhoto) {
+            await readSelectedPhoto()
+        }
         .onChange(of: sharedText) { _, draft in
             onDraftChange(draft)
         }
@@ -156,6 +169,7 @@ struct SaveCaptureFlowView: View {
                 .padding(.horizontal, SaveSpace.sm)
                 .padding(.vertical, SaveSpace.tight)
                 .focused($isInputFocused)
+                .disabled(isBusy)
                 .accessibilityLabel(localized("Link or note", "連結或筆記"))
                 .accessibilityIdentifier("capture.input")
                 .toolbar {
@@ -182,13 +196,16 @@ struct SaveCaptureFlowView: View {
                 identifier: "capture.fromPhoto"
             ) {
                 isInputFocused = false
+                selectedPhoto = nil
+                isPhotoPickerPresented = true
             }
             optionRow(
                 systemImage: "magnifyingglass",
                 title: localized("Search nearby", "搜尋附近"),
                 identifier: "capture.searchNearby"
             ) {
-                isInputFocused = true
+                isInputFocused = false
+                onSearchNearby()
             }
             optionRow(
                 systemImage: "square.and.arrow.down",
@@ -202,6 +219,7 @@ struct SaveCaptureFlowView: View {
             .disabled(isAnalyzing)
             .accessibilityLabel(localized("Import Google Takeout", "匯入 Google Takeout"))
         }
+        .disabled(isBusy)
     }
 
     private var pasteRow: some View {
@@ -233,72 +251,63 @@ struct SaveCaptureFlowView: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: SaveLayout.stickerToText) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 24, weight: .regular))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                    .frame(width: 24, height: 24)
-                    .accessibilityHidden(true)
-                Text(title)
-                    .font(SaveAtlasType.body(17))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: SaveLayout.buttonHeight)
-            .contentShape(Rectangle())
+            optionLabel(systemImage: systemImage, title: title)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
     }
 
-    private func suggestionCard(_ place: Place) -> some View {
+    private func optionLabel(systemImage: String, title: String) -> some View {
         HStack(spacing: SaveLayout.stickerToText) {
-            SaveDoodleSticker(category: place.category, visited: false)
-                .frame(width: SaveLayout.stickerBox, height: SaveLayout.stickerBox)
-            VStack(alignment: .leading, spacing: SaveLayout.titleToMeta) {
-                Text(place.name)
-                    .font(SaveAtlasType.strong(17))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                    .lineLimit(1)
-                Text(suggestionMeta(place))
-                    .font(SaveAtlasType.body(13))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-            }
+            Image(systemName: systemImage)
+                .font(.system(size: 24, weight: .regular))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .frame(width: 24, height: 24)
+                .accessibilityHidden(true)
+            Text(title)
+                .font(SaveAtlasType.body(17))
+                .foregroundStyle(SaveAtlasPalette.ink)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, SaveSpace.md)
-        .frame(minHeight: SaveLayout.rowMinHeight)
-        .background(
-            SaveAtlasPalette.paper,
-            in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
-                .stroke(SaveAtlasPalette.line, lineWidth: SaveAtlasPalette.strokeWidth)
-        }
-        .accessibilityIdentifier("capture.suggestion")
-    }
-
-    private var suggestion: Place? {
-        existingPlaces.first
-    }
-
-    private func suggestionMeta(_ place: Place) -> String {
-        let lens = SaveDoodleHomeCatalog.lens(for: place.category)
-            .title(language: languageSettings.language)
-        if let area = SaveDoodleHomeCatalog.cityDisplayName(
-            for: place,
-            language: languageSettings.language
-        ) {
-            return "\(lens) · \(area)"
-        }
-        return lens
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: SaveLayout.buttonHeight)
+        .contentShape(Rectangle())
     }
 
     private var savedCountText: String {
-        let count = min(existingPlaces.count, 50)
-        return localized("Saved \(count) / 50", "已存 \(count) / 50")
+        let count = existingPlaces.count
+        return localized("\(count) places saved", "已收藏 \(count) 個地點")
+    }
+
+    private var isBusy: Bool { isAnalyzing || isReadingPhoto }
+
+    private func readSelectedPhoto() async {
+        guard let photo = selectedPhoto else { return }
+        isReadingPhoto = true
+        isInputFocused = false
+        errorMessage = nil
+        defer { isReadingPhoto = false }
+        do {
+            guard let data = try await photo.loadTransferable(type: Data.self) else {
+                throw SaveCapturePhotoText.Failure.invalidImage
+            }
+            try Task.checkCancellation()
+            let text = try await Task.detached(priority: .userInitiated) {
+                try SaveCapturePhotoText.recognize(data)
+            }.value
+            try Task.checkCancellation()
+            sharedText = trimmedText.isEmpty ? text : sharedText + "\n" + text
+            detent = .large
+            isInputFocused = true
+        } catch is CancellationError {
+            // Dismissing Capture must not write a late OCR result into the draft.
+        } catch {
+            guard !Task.isCancelled else { return }
+            errorMessage = localized(
+                "Could not read place text in this photo. Choose a clear sign or screenshot, or type the place name.",
+                "無法辨識照片中的地點文字。請選擇清晰的招牌或截圖，或輸入地點名稱。"
+            )
+        }
     }
 
     private var trimmedText: String {
@@ -306,7 +315,7 @@ struct SaveCaptureFlowView: View {
     }
 
     private func analyze() {
-        guard !trimmedText.isEmpty, !isAnalyzing else { return }
+        guard !trimmedText.isEmpty, !isBusy else { return }
         isAnalyzing = true
         errorMessage = nil
         Task {
@@ -337,6 +346,32 @@ struct SaveCaptureFlowView: View {
     }
 }
 
+/// Reads only the user-selected image on device. The caller presents editable
+/// text; only the explicit Save action invokes the existing candidate pipeline.
+enum SaveCapturePhotoText {
+    enum Failure: Error { case invalidImage, noText }
+
+    nonisolated static func recognize(_ data: Data) throws -> String {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 2048
+              ] as CFDictionary) else {
+            throw Failure.invalidImage
+        }
+        let request = VNRecognizeTextRequest()
+        request.recognitionLevel = .accurate
+        request.usesLanguageCorrection = true
+        request.automaticallyDetectsLanguage = true
+        try VNImageRequestHandler(cgImage: image).perform([request])
+        let text = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
+            .joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw Failure.noText }
+        return text
+    }
+}
+
 #Preview("Capture light") {
     SaveCaptureFlowView(
         tripName: nil,
@@ -348,7 +383,8 @@ struct SaveCaptureFlowView: View {
             GoogleTakeoutSaveSummary(saved: 0, skippedDuplicates: 0, reviewDrafts: 0)
         },
         onComplete: { _ in },
-        onCancel: {}
+        onCancel: {},
+        onSearchNearby: {}
     )
     .preferredColorScheme(.light)
 }
@@ -364,7 +400,8 @@ struct SaveCaptureFlowView: View {
             GoogleTakeoutSaveSummary(saved: 0, skippedDuplicates: 0, reviewDrafts: 0)
         },
         onComplete: { _ in },
-        onCancel: {}
+        onCancel: {},
+        onSearchNearby: {}
     )
     .preferredColorScheme(.dark)
 }

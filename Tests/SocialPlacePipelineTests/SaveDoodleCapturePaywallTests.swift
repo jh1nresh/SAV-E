@@ -1,8 +1,9 @@
 import XCTest
+import UIKit
 @testable import SAVE
 
 /// Doodle v1 Capture + paywall visual lock. Logic, product IDs, and the
-/// 50-place copy stay; AI / itinerary / collectible extras stay off the wall.
+/// purchase boundary stay; AI / itinerary / collectible extras stay off the wall.
 final class SaveDoodleCapturePaywallTests: XCTestCase {
     func testCaptureSheetUsesDoodleTokensAndKeepsAnalyzePipeline() throws {
         let capture = try source(at: "SAV-E/Views/Capture/SaveCaptureFlowView.swift")
@@ -23,8 +24,10 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(capture.contains("Close capture"))
         XCTAssertTrue(capture.contains(".navigationDestination(isPresented: $isGoogleTakeoutPresented)"))
         XCTAssertFalse(capture.contains(".sheet(isPresented: $isGoogleTakeoutPresented)"))
-        XCTAssertTrue(capture.contains("Saved \\(count) / 50"))
-        XCTAssertTrue(capture.contains("已存 \\(count) / 50"))
+        XCTAssertTrue(capture.contains("\\(count) places saved"))
+        XCTAssertTrue(capture.contains("已收藏 \\(count) 個地點"))
+        XCTAssertFalse(capture.contains("existingPlaces.first"))
+        XCTAssertFalse(capture.contains("min(existingPlaces.count, 50)"))
         XCTAssertFalse(capture.contains("SaveTileTown"))
         XCTAssertFalse(capture.contains("SavePixel"))
         XCTAssertFalse(capture.contains("Find the place"))
@@ -49,8 +52,10 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(paywall.contains("Best value"))
         XCTAssertTrue(paywall.contains("Unlimited saved places"))
         XCTAssertTrue(paywall.contains("收藏地點不設限"))
-        XCTAssertTrue(paywall.contains("You've saved 50 places. Keep going."))
-        XCTAssertTrue(paywall.contains("已存 50 個地點，繼續存下去"))
+        XCTAssertTrue(paywall.contains("Keep saving the places you love."))
+        XCTAssertTrue(paywall.contains("繼續收藏你喜歡的地方。"))
+        XCTAssertFalse(paywall.contains("You've saved 50 places. Keep going."))
+        XCTAssertFalse(paywall.contains("已存 50 個地點，繼續存下去"))
         XCTAssertFalse(paywall.contains("Free: 50 places"))
         XCTAssertFalse(paywall.contains("免費：50 個地點"))
         XCTAssertFalse(paywall.contains("Savvy Pro"))
@@ -122,6 +127,40 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
             [SAVEProAccessPolicy.ProductID.annual, SAVEProAccessPolicy.ProductID.monthly]
         )
         XCTAssertFalse(SAVEProAccessPolicy.purchasingIsAvailable)
+    }
+
+    func testPhotoTextRejectsInvalidImage() {
+        XCTAssertThrowsError(try SaveCapturePhotoText.recognize(Data("not an image".utf8))) {
+            XCTAssertTrue($0 is SaveCapturePhotoText.Failure)
+        }
+    }
+
+    @MainActor
+    func testPhotoTextReadsUserSelectedImageWithoutSavingAPlace() throws {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1000, height: 250))
+        let image = renderer.image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 1000, height: 250))
+            ("Grey Cafe Taipei" as NSString).draw(
+                at: CGPoint(x: 50, y: 80),
+                withAttributes: [.font: UIFont.systemFont(ofSize: 60), .foregroundColor: UIColor.black]
+            )
+        }
+        let text = try SaveCapturePhotoText.recognize(XCTUnwrap(image.pngData())).lowercased()
+        for word in ["grey", "cafe", "taipei"] { XCTAssertTrue(text.contains(word), text) }
+    }
+
+    @MainActor
+    func testPhotoWithoutTextDoesNotInventAClue() throws {
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 300, height: 300)).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 300, height: 300))
+        }
+        XCTAssertThrowsError(try SaveCapturePhotoText.recognize(XCTUnwrap(image.pngData()))) {
+            guard case SaveCapturePhotoText.Failure.noText = $0 else {
+                return XCTFail("Expected noText, got \($0)")
+            }
+        }
     }
 
     private func source(at relativePath: String) throws -> String {
