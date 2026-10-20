@@ -92,8 +92,9 @@ final class SaveEntitlementWiringTests: XCTestCase {
             store.shouldPresentPaywall(for: .refusedAllowanceExhausted, hasConfirmedMapStamp: false),
             "a refusal must not surface a paywall until the user has seen the product work"
         )
-        XCTAssertTrue(
-            store.shouldPresentPaywall(for: .refusedAllowanceExhausted, hasConfirmedMapStamp: true)
+        XCTAssertFalse(
+            store.shouldPresentPaywall(for: .refusedAllowanceExhausted, hasConfirmedMapStamp: true),
+            "AI quota exhaustion must never open the places-only paywall"
         )
     }
 

@@ -720,8 +720,14 @@ photos show an actionable error. Existing draft text is preserved.
 Search nearby opens the Map search drawer. It does not leave the user typing
 in Capture. Before analysis, Capture shows no invented suggestion from old
 saves. Its saved count is the actual count, without a fabricated 50-place cap.
-Pro retains the current modal layout and unavailable-purchase boundary. Its
-note must not claim the user has saved 50 places when opened from Passport.
+Pro retains the current modal layout and unavailable-purchase boundary.
+Opened from Settings / Passport, the supporting note is neutral
+("Upgrade to Savvy Pro" / "升級 Savvy Pro") and must not claim a save
+count. The 51st-save trigger uses "You've saved 50 places. Keep going."
+/ "已存 50 個地點，繼續存下去". StoreKit prices appear only after products
+load; a failed load shows retry, never a hardcoded $6.99. An exhausted
+AI assist never opens this wall. Product navigation does not mount
+TileTown Home, RootMap, or Canvas.
 The 200pt hero uses official DESIGN outline stickers as the primary marks,
 with at most one color die-cut plus a stamp ring. Do not use SF Symbols
 inside filled circles as place stickers.

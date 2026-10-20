@@ -3,6 +3,56 @@ import XCTest
 
 @MainActor
 final class SaveTileTownLockTests: XCTestCase {
+    func testTileTownHasNoReachableProductPath() throws {
+        let productFiles = [
+            "SAV-E/App/ContentView.swift",
+            "SAV-E/Views/Home/SaveRootViews.swift",
+            "SAV-E/Views/Home/SaveDoodleHomeView.swift",
+            "SAV-E/Views/Map/SaveDoodleMapView.swift",
+            "SAV-E/Views/Profile/ProfileView.swift",
+            "SAV-E/Views/Profile/SaveDoodlePassportView.swift",
+            "SAV-E/Views/Capture/SaveCaptureFlowView.swift",
+            "SAV-E/Views/Profile/SaveProPaywallView.swift",
+            "SAV-E/Views/Origin/SaveFriendsView.swift",
+            "SAV-E/Views/Onboarding/OnboardingView.swift",
+        ]
+        let forbidden = [
+            "SaveTileTownCanvas(",
+            "SaveTileTownRootMap(",
+            "SaveTileTownHomeView(",
+            "SavePixelChromeIcon(",
+            "SaveKraftStamp(",
+            "SaveKraftStampPixelArt(",
+            "interpolationQuality = .none",
+        ]
+        for file in productFiles {
+            let text = try source(at: file)
+            for token in forbidden {
+                XCTAssertFalse(text.contains(token), "\(file) must not reach \(token)")
+            }
+        }
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent(
+                "SAV-E/Views/TileTown/SaveTileTownHomeView.swift"
+            ).path
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent(
+                "SAV-E/Views/TileTown/SaveTileTownRootMap.swift"
+            ).path
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent("SAV-E/Resources/PixelFont").path
+        ))
+        let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
+        XCTAssertTrue(friends.contains("friends.mapStrip"))
+        XCTAssertFalse(friends.contains("SaveTileTownCanvas"))
+        XCTAssertFalse(friends.contains("SaveTileTownPin"))
+        let design = try source(at: "DESIGN.md")
+        XCTAssertTrue(design.contains("Product navigation does not mount"))
+        XCTAssertTrue(design.contains("TileTown Home, RootMap, or Canvas"))
+    }
+
     func testFounderLockSupersedesMapKitSoftPixelBase() {
         XCTAssertTrue(SaveTileTownProductLock.productMapBaseIsTileTown)
         XCTAssertFalse(SaveTileTownProductLock.homeShowsMapFilterChips)
@@ -195,6 +245,9 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(root.contains("SaveDoodleMapView("))
         XCTAssertFalse(root.contains("SaveTileTownRootMap("))
         XCTAssertFalse(root.contains("SaveAtlasInteractiveRootMap("))
+        let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
+        XCTAssertFalse(friends.contains("SaveTileTownCanvas("))
+        XCTAssertTrue(friends.contains("friends.mapStrip"))
     }
 
     func testStampLanguageIsOneSystem() throws {

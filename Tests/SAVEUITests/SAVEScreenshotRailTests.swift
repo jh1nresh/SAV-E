@@ -480,6 +480,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.buttons["profile.proPreview"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["paywall.root"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.benefit.unlimited"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.savedNote"].exists)
         XCTAssertFalse(app.staticTexts["Memo Pro preview"].exists)
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'subscribe'")).firstMatch.exists)
         XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'trial'")).firstMatch.exists)
@@ -859,10 +861,37 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.descendants(matching: .any)["paywall.benefit.unlimited"].waitForExistence(timeout: stepTimeout),
             "The one benefit row must stay queryable after official noodle/coffee plan stickers."
         )
+        XCTAssertEqual(app.descendants(matching: .any)["paywall.root"].value as? String, "settings")
+        XCTAssertTrue(app.staticTexts["Upgrade to Savvy Pro"].exists)
+        XCTAssertFalse(app.staticTexts["You've saved 50 places. Keep going."].exists)
         XCTAssertFalse(app.staticTexts["Plan trips from your saves"].exists)
         XCTAssertFalse(app.staticTexts["Bonus sticker packs"].exists)
         attach(app, name: "five-tab-paywall")
         attach(app, name: "doodle-paywall-light")
+
+        let capApp = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(capApp)
+        try signInViaReviewDemoRequired(app: capApp)
+        XCTAssertTrue(
+            capApp.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout),
+            "The 51st-save entry must open the same places-only wall."
+        )
+        XCTAssertEqual(capApp.descendants(matching: .any)["paywall.root"].value as? String, "savedPlacesCap")
+        XCTAssertTrue(capApp.staticTexts["You've saved 50 places. Keep going."].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(capApp.staticTexts["Upgrade to Savvy Pro"].exists)
+        XCTAssertFalse(rootTabButton("Home", app: capApp).exists)
     }
 
     /// Capture sheet over the Doodle Home map, matching the DESIGN mock.

@@ -24,8 +24,8 @@ nonisolated enum SaveSoftPixelAccentsLock: Sendable {
     /// fixture. Only `--uitest-atlas-parity-fixture` opts in.
     static let productionLocksOneFaceHomeComposition = false
 
-    /// Product Map / Friends strip still use `SaveTileTownCanvas` until those
-    /// Doodle PRs. Home no longer mounts the town.
+    /// Product Map, Home, Friends, Capture, and Pro no longer mount
+    /// `SaveTileTownCanvas`. The lock flag stays for Passport goal math.
     static let productMapBaseIsTileTown = true
 
     static let illustratedCityAtlasAssets: Set<String> = [

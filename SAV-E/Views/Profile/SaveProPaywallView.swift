@@ -3,10 +3,9 @@ import SwiftUI
 
 /// Pro paywall — Doodle v2 full-screen modal (DESIGN eade369).
 ///
-/// Presented only as a reaction to a refused AI assist, or pulled up
-/// deliberately from Passport. Never automatic, never at launch, never before
-/// the first confirmed Map Stamp — `SaveEntitlementStore.shouldPresentPaywall`
-/// enforces that and this view does not second-guess it.
+/// Opened from Settings / Passport, or from the 51st-save gate. Never
+/// automatic, never at launch, never for an exhausted AI assist.
+/// `SaveEntitlementStore.shouldPresentPaywall` stays false for AI refusals.
 ///
 /// Pro v1 names one benefit: unlimited saved places. Quota headlines,
 /// itinerary planning, and collectible extras stay off this screen.
@@ -16,10 +15,10 @@ import SwiftUI
 /// Purchases, EULA link, privacy policy link, renewal period, cancellation path.
 struct SaveProPaywallView: View {
     enum Trigger: Equatable {
-        /// The user asked for an AI assist and had none left.
-        case aiAssistExhausted
-        /// The user opened Pro from Passport.
-        case passport
+        /// Settings / Passport Pro row. Neutral copy, no save count.
+        case settings
+        /// The 51st save. Names the free 50-place allowance.
+        case savedPlacesCap
     }
 
     let trigger: Trigger
@@ -64,15 +63,9 @@ struct SaveProPaywallView: View {
         .interactiveDismissDisabled(isPurchasing)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("paywall.root")
-        .accessibilityValue(trigger == .passport ? "passport" : "aiAssist")
+        .accessibilityValue(trigger == .savedPlacesCap ? "savedPlacesCap" : "settings")
         .task {
-            await storeKit.loadProducts()
-            didFinishProductLoad = true
-            if storeKit.products.contains(where: { $0.id == SAVEProAccessPolicy.ProductID.annual }) {
-                selectedProductID = SAVEProAccessPolicy.ProductID.annual
-            } else if storeKit.products.contains(where: { $0.id == SAVEProAccessPolicy.ProductID.monthly }) {
-                selectedProductID = SAVEProAccessPolicy.ProductID.monthly
-            }
+            await refreshProducts()
         }
     }
 
@@ -150,8 +143,8 @@ struct SaveProPaywallView: View {
 
     private var savedNote: some View {
         Text(languageSettings.localized(
-            english: "Keep saving the places you love.",
-            traditionalChinese: "繼續收藏你喜歡的地方。"
+            english: SaveProPaywallCopy.savedNote(for: trigger, english: true),
+            traditionalChinese: SaveProPaywallCopy.savedNote(for: trigger, english: false)
         ))
         .font(SaveAtlasType.body(15))
         .foregroundStyle(SaveAtlasPalette.muted)
@@ -184,7 +177,6 @@ struct SaveProPaywallView: View {
 
     private var showsNotForSale: Bool {
         !SAVEProAccessPolicy.purchasingIsAvailable
-            || (didFinishProductLoad && storeKit.products.isEmpty)
     }
 
     private var hasStatusNotice: Bool {
@@ -196,14 +188,13 @@ struct SaveProPaywallView: View {
 
     @ViewBuilder
     private var offers: some View {
-        if !SAVEProAccessPolicy.purchasingIsAvailable {
-            fallbackOffers(products: [])
-        } else if storeKit.products.isEmpty, !didFinishProductLoad {
+        if storeKit.products.isEmpty, !didFinishProductLoad {
             ProgressView()
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
+                .accessibilityIdentifier("paywall.loading")
         } else if storeKit.products.isEmpty {
-            fallbackOffers(products: [])
+            unavailableRetry
         } else {
             VStack(spacing: SaveSpace.sm) {
                 planCards(products: storeKit.products)
@@ -212,10 +203,43 @@ struct SaveProPaywallView: View {
         }
     }
 
-    private func fallbackOffers(products: [Product]) -> some View {
-        VStack(spacing: SaveSpace.sm) {
-            planCards(products: products)
-            continueButton
+    private var unavailableRetry: some View {
+        VStack(alignment: .leading, spacing: SaveSpace.sm) {
+            Text(languageSettings.localized(
+                english: "Plans are unavailable right now.",
+                traditionalChinese: "目前無法載入方案"
+            ))
+            .font(SaveAtlasType.body(15))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("paywall.unavailable")
+
+            Button {
+                Task { await refreshProducts() }
+            } label: {
+                Text(languageSettings.localized(english: "Retry", traditionalChinese: "再試一次"))
+                    .font(SaveAtlasType.strong(17))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(
+                        SaveAtlasPalette.coral,
+                        in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("paywall.retry")
+        }
+    }
+
+    private func refreshProducts() async {
+        didFinishProductLoad = false
+        await storeKit.loadProducts()
+        didFinishProductLoad = true
+        if storeKit.products.contains(where: { $0.id == SAVEProAccessPolicy.ProductID.annual }) {
+            selectedProductID = SAVEProAccessPolicy.ProductID.annual
+        } else if storeKit.products.contains(where: { $0.id == SAVEProAccessPolicy.ProductID.monthly }) {
+            selectedProductID = SAVEProAccessPolicy.ProductID.monthly
         }
     }
 
@@ -233,8 +257,7 @@ struct SaveProPaywallView: View {
                 title: languageSettings.localized(english: "Yearly", traditionalChinese: "年費"),
                 price: priceText(
                     for: SAVEProAccessPolicy.ProductID.annual,
-                    products: products,
-                    fallback: "$39.99"
+                    products: products
                 ),
                 sticker: .noodle,
                 showsBestValue: true
@@ -244,8 +267,7 @@ struct SaveProPaywallView: View {
                 title: languageSettings.localized(english: "Monthly", traditionalChinese: "月費"),
                 price: priceText(
                     for: SAVEProAccessPolicy.ProductID.monthly,
-                    products: products,
-                    fallback: "$6.99"
+                    products: products
                 ),
                 sticker: .coffee,
                 showsBestValue: false
@@ -316,8 +338,8 @@ struct SaveProPaywallView: View {
         .accessibilityIdentifier("paywall.offer.\(id)")
     }
 
-    private func priceText(for id: String, products: [Product], fallback: String) -> String {
-        products.first(where: { $0.id == id })?.displayPrice ?? fallback
+    private func priceText(for id: String, products: [Product]) -> String {
+        products.first(where: { $0.id == id })?.displayPrice ?? ""
     }
 
     private func renewalDescription(for productID: String, products: [Product]) -> String {
@@ -583,11 +605,27 @@ nonisolated struct SaveDoodlePaywallPaths: Shape {
 }
 
 #Preview("Paywall light") {
-    SaveProPaywallView(trigger: .passport)
+    SaveProPaywallView(trigger: .settings)
         .preferredColorScheme(.light)
 }
 
 #Preview("Paywall dark") {
-    SaveProPaywallView(trigger: .passport)
+    SaveProPaywallView(trigger: .settings)
         .preferredColorScheme(.dark)
+}
+
+/// Supporting note only. Headline and benefit stay the same on both entries.
+nonisolated enum SaveProPaywallCopy {
+    static func savedNote(for trigger: SaveProPaywallView.Trigger, english: Bool) -> String {
+        switch trigger {
+        case .savedPlacesCap:
+            return english
+                ? "You've saved 50 places. Keep going."
+                : "已存 50 個地點，繼續存下去"
+        case .settings:
+            return english
+                ? "Upgrade to Savvy Pro"
+                : "升級 Savvy Pro"
+        }
+    }
 }

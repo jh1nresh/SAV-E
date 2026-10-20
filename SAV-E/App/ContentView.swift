@@ -366,8 +366,13 @@ struct ContentView: View {
         // `rootScaffold` leaves AtlasTabBar in the tree (`root.tab.home`).
         .fullScreenCover(isPresented: .constant(
             ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall")
+                || ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall-cap")
         )) {
-            SaveProPaywallView(trigger: .passport)
+            SaveProPaywallView(
+                trigger: ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall-cap")
+                    ? .savedPlacesCap
+                    : .settings
+            )
                 .environment(\.appLanguageSettings, languageSettings)
         }
 #endif

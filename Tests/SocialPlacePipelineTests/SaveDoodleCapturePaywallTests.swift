@@ -52,13 +52,35 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(paywall.contains("Best value"))
         XCTAssertTrue(paywall.contains("Unlimited saved places"))
         XCTAssertTrue(paywall.contains("收藏地點不設限"))
-        XCTAssertTrue(paywall.contains("Keep saving the places you love."))
-        XCTAssertTrue(paywall.contains("繼續收藏你喜歡的地方。"))
-        XCTAssertFalse(paywall.contains("You've saved 50 places. Keep going."))
-        XCTAssertFalse(paywall.contains("已存 50 個地點，繼續存下去"))
+        XCTAssertTrue(paywall.contains("You've saved 50 places. Keep going."))
+        XCTAssertTrue(paywall.contains("已存 50 個地點，繼續存下去"))
+        XCTAssertTrue(paywall.contains("Upgrade to Savvy Pro"))
+        XCTAssertTrue(paywall.contains("升級 Savvy Pro"))
+        XCTAssertEqual(
+            SaveProPaywallCopy.savedNote(for: .savedPlacesCap, english: true),
+            "You've saved 50 places. Keep going."
+        )
+        XCTAssertEqual(
+            SaveProPaywallCopy.savedNote(for: .savedPlacesCap, english: false),
+            "已存 50 個地點，繼續存下去"
+        )
+        XCTAssertEqual(
+            SaveProPaywallCopy.savedNote(for: .settings, english: true),
+            "Upgrade to Savvy Pro"
+        )
+        XCTAssertEqual(
+            SaveProPaywallCopy.savedNote(for: .settings, english: false),
+            "升級 Savvy Pro"
+        )
+        XCTAssertFalse(paywall.contains("Keep saving the places you love."))
+        XCTAssertFalse(paywall.contains("繼續收藏你喜歡的地方。"))
         XCTAssertFalse(paywall.contains("Free: 50 places"))
         XCTAssertFalse(paywall.contains("免費：50 個地點"))
-        XCTAssertFalse(paywall.contains("Savvy Pro"))
+        XCTAssertFalse(paywall.contains("aiAssistExhausted"))
+        XCTAssertFalse(paywall.contains("$6.99"))
+        XCTAssertFalse(paywall.contains("$39.99"))
+        XCTAssertFalse(paywall.contains("fallback:"))
+        XCTAssertFalse(paywall.contains("fallbackOffers"))
         XCTAssertTrue(paywall.contains("SaveDisplayTitle"))
         XCTAssertTrue(paywall.contains("pointSize: 34"))
         XCTAssertTrue(paywall.contains("frame(height: 200)"))
@@ -79,8 +101,11 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(paywall.contains("可隨時取消"))
         XCTAssertTrue(paywall.contains("Pro isn't on sale yet"))
         XCTAssertTrue(paywall.contains("paywall.notForSale"))
-        XCTAssertTrue(paywall.contains("fallbackOffers(products:"))
+        XCTAssertTrue(paywall.contains("paywall.unavailable"))
+        XCTAssertTrue(paywall.contains("paywall.retry"))
+        XCTAssertTrue(paywall.contains("Plans are unavailable right now."))
         XCTAssertTrue(profile.contains(".fullScreenCover(isPresented: $showProPaywall)"))
+        XCTAssertTrue(profile.contains("SaveProPaywallView(trigger: .settings)"))
         XCTAssertFalse(profile.contains(".sheet(isPresented: $showProPaywall)"))
         XCTAssertFalse(paywall.contains("presentationDetents"))
         XCTAssertTrue(paywall.contains("SaveAtlasPalette.coral"))
@@ -100,10 +125,25 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
 
         let content = try source(at: "SAV-E/App/ContentView.swift")
         XCTAssertTrue(content.contains("--uitest-show-paywall"))
+        XCTAssertTrue(content.contains("--uitest-show-paywall-cap"))
+        XCTAssertTrue(content.contains(".savedPlacesCap"))
+        XCTAssertTrue(content.contains(".settings"))
+        XCTAssertFalse(content.contains("aiAssistExhausted"))
         XCTAssertTrue(content.contains(".fullScreenCover(isPresented: .constant("))
         XCTAssertTrue(content.contains("Same outermost fullScreenCover as production Passport"))
         XCTAssertTrue(content.contains("showsRootTabBar"))
         XCTAssertTrue(content.contains("if showsRootTabBar"))
+
+        let storeKit = try source(at: "SAV-E/Services/SaveStoreKitService.swift")
+        XCTAssertTrue(storeKit.contains("Product.products(for: SAVEProAccessPolicy.ProductID.all)"))
+        XCTAssertFalse(storeKit.contains("Products do not exist in App Store Connect yet"))
+        let entitlement = try source(at: "SAV-E/Services/SaveEntitlementStore.swift")
+        XCTAssertTrue(entitlement.contains("AI quota never opens the places paywall"))
+        XCTAssertTrue(entitlement.contains("return false"))
+        let design = try source(at: "DESIGN.md")
+        XCTAssertTrue(design.contains("Upgrade to Savvy Pro"))
+        XCTAssertTrue(design.contains("You've saved 50 places. Keep going."))
+        XCTAssertTrue(design.contains("never a hardcoded $6.99"))
 
         let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
         XCTAssertTrue(parity.contains("--ignore-rects"))

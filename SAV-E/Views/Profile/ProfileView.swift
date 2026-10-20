@@ -483,7 +483,7 @@ struct ProfileView: View {
             LanguageSettingsSheet()
         }
         .fullScreenCover(isPresented: $showProPaywall) {
-            SaveProPaywallView(trigger: .passport)
+            SaveProPaywallView(trigger: .settings)
         }
         .confirmationDialog(
             languageSettings.localized(
