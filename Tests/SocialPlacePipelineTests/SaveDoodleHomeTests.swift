@@ -254,6 +254,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(map.contains("mapAccessibilityIdentifier"))
         XCTAssertTrue(map.contains("map.city"))
         XCTAssertTrue(map.contains("map.eatGo"))
+        XCTAssertTrue(map.contains("accessibilityElement(children: .contain)"))
         XCTAssertTrue(map.contains("showsCityPicker = true"))
         XCTAssertTrue(map.contains("map.city.\\(group.id)"))
         XCTAssertTrue(content.contains("selectRootTab(_ tab: SaveRootTab, mapFollowsHomeFilter: Bool = false)"))

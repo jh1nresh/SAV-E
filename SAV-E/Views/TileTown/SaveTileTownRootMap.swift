@@ -214,6 +214,8 @@ struct SaveTileTownRootMap: View {
                 .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             }
         }
+        // Parent id without contain overwrote each chip as map.eatGo (Q5 CI tree).
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.eatGo")
     }
 
