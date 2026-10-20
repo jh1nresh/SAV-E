@@ -22,14 +22,9 @@ struct SaveDoodleHomeView: View {
                 .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.xs)
                 .zIndex(2)
 
-            ZStack(alignment: .trailing) {
-                citySwitcher
-                if showsUITestSavesRoute {
-                    hiddenSavesRoute
-                }
-            }
-            .padding(.horizontal, SaveLayout.screenMargin)
-            .padding(.top, SaveSpace.tight)
+            citySwitcher
+                .padding(.horizontal, SaveLayout.screenMargin)
+                .padding(.top, SaveSpace.tight)
 
             eatGoRow
                 .padding(.horizontal, SaveLayout.screenMargin)
@@ -75,22 +70,17 @@ struct SaveDoodleHomeView: View {
         }
     }
 
-    /// UITest-only Home → Saves handoff. Review (`home.review`) is the visible
-    /// entry when N>0. This 44pt trailing control keeps Saves reachable when
-    /// the clues line is omitted. Identifier is `home.openSaves`.
-    private var showsUITestSavesRoute: Bool {
-        ProcessInfo.processInfo.arguments.contains("--uitest-complete-onboarding")
-    }
-
-    private var hiddenSavesRoute: some View {
+    /// A visible production route, also available when there are no waiting clues.
+    private var savesButton: some View {
         Button(action: presentation.onReviewAll) {
-            Color.clear
-                .frame(width: SaveLayout.minTap)
-                .frame(height: SaveLayout.minTap)
+            Label(localized("Saves", "收藏"), systemImage: "bookmark")
+                .font(SaveAtlasType.body(15))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .padding(.horizontal, SaveSpace.xs)
+                .frame(minWidth: SaveLayout.minTap, minHeight: SaveLayout.minTap)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .fixedSize()
         .accessibilityIdentifier("home.openSaves")
         .accessibilityLabel(localized("Open Saves", "開啟收藏"))
     }
@@ -114,6 +104,7 @@ struct SaveDoodleHomeView: View {
             .accessibilityIdentifier("home.passport")
 
             Spacer(minLength: SaveSpace.xs)
+            savesButton
         }
         .frame(minHeight: SaveLayout.minTap)
     }
@@ -699,14 +690,30 @@ struct SaveDoodleSticker: View {
     let visited: Bool
 
     var body: some View {
-        SaveDoodleStickerShape(category: category)
-            .stroke(
-                visited ? SaveAtlasPalette.ink : SaveDoodle.pencil,
-                style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)
-            )
-            .frame(width: 40, height: 40)
-            .frame(width: SaveLayout.stickerBox, height: SaveLayout.stickerBox)
-            .accessibilityHidden(true)
+        ZStack {
+            if visited {
+                SaveDoodleStickerShape(category: category)
+                    .fill(visitedFill)
+            }
+            SaveDoodleStickerShape(category: category)
+                .stroke(
+                    visited ? SaveAtlasPalette.ink : SaveDoodle.pencil,
+                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)
+                )
+        }
+        .frame(width: 40, height: 40)
+        .frame(width: SaveLayout.stickerBox, height: SaveLayout.stickerBox)
+        .accessibilityHidden(true)
+    }
+
+    private var visitedFill: Color {
+        switch category {
+        case .food, .cafe: SaveAtlasPalette.kraft
+        case .bar: SaveDoodle.stampRed
+        case .attraction: SaveDoodle.washGreen
+        case .stay: SaveDoodle.washBlue
+        case .shopping: SaveDoodle.stampGold
+        }
     }
 
     static func symbolName(for category: PlaceCategory) -> String {

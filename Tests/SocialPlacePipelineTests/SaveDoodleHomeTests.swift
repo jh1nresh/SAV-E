@@ -4,6 +4,44 @@ import XCTest
 
 @MainActor
 final class SaveDoodleHomeTests: XCTestCase {
+    func testVisitHistoryIsSharedAcrossSurfacesAndSurvivesUndoAndRelaunch() {
+        let suite = "save.doodle.shared-visits.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var day = Date(timeIntervalSince1970: 1_760_000_000)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let map = SaveDoodleVisitStore(defaults: defaults, calendar: calendar, now: { day })
+        let passport = SaveDoodleVisitStore(defaults: defaults, calendar: calendar, now: { day })
+        let id = UUID()
+        for expected in 1...5 {
+            XCTAssertTrue(map.recordVisit(for: id))
+            XCTAssertFalse(passport.recordVisit(for: id), "No duplicate same-day visit from another surface")
+            XCTAssertEqual(passport.count(for: id), expected)
+            if expected < 5 { day = day.addingTimeInterval(86_400) }
+        }
+        XCTAssertTrue(passport.undoToday(for: id))
+        XCTAssertEqual(map.count(for: id), 4)
+        XCTAssertFalse(map.hasVisitedToday(id))
+        XCTAssertTrue(map.recordVisit(for: id))
+        XCTAssertEqual(SaveDoodleVisitStore(defaults: defaults).count(for: id), 5)
+    }
+
+    func testVisitHistoryPreservesLegacyCountsWithoutDoubleCounting() {
+        let suite = "save.doodle.legacy-visits.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let id = UUID()
+        defaults.set(5, forKey: SaveDoodleVisitStore.countKey(id))
+        defaults.set([id.uuidString: [1_600_000_000.0]], forKey: SaveDoodleVisitStore.datesKey)
+        let store = SaveDoodleVisitStore(defaults: defaults)
+        XCTAssertEqual(store.count(for: id), 5)
+        XCTAssertTrue(store.recordVisit(for: id))
+        XCTAssertEqual(store.count(for: id), 6)
+        XCTAssertTrue(store.undoToday(for: id))
+        XCTAssertEqual(store.count(for: id), 5)
+    }
+
     func testEatLensKeepsFoodCafeBarAndDropsGo() {
         let now = Date()
         let food = place("Duck", "Beijing, China", .food, latitude: 39.88, longitude: 116.41, createdAt: now.addingTimeInterval(-2))
@@ -174,7 +212,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("home.empty.capture"))
         XCTAssertTrue(home.contains("home.review"))
         XCTAssertTrue(home.contains("home.openSaves"))
-        XCTAssertTrue(home.contains("showsUITestSavesRoute"))
+        XCTAssertFalse(home.contains("showsUITestSavesRoute"))
+        XCTAssertFalse(home.contains("hiddenSavesRoute"))
         XCTAssertTrue(home.contains("SaveLayout.minTap"))
         XCTAssertFalse(home.contains("\"home.saves\""))
         XCTAssertFalse(home.contains("See all saves"))
