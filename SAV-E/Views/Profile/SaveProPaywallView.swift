@@ -62,6 +62,7 @@ struct SaveProPaywallView: View {
         }
         .presentationBackground(SaveAtlasPalette.canvas)
         .interactiveDismissDisabled(isPurchasing)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("paywall.root")
         .accessibilityValue(trigger == .passport ? "passport" : "aiAssist")
         .task {
@@ -126,22 +127,25 @@ struct SaveProPaywallView: View {
     }
 
     private var benefitRow: some View {
-        HStack(spacing: SaveLayout.stickerToText) {
+        let title = languageSettings.localized(
+            english: "Unlimited saved places",
+            traditionalChinese: "收藏地點不設限"
+        )
+        return HStack(spacing: SaveLayout.stickerToText) {
             Image(systemName: "bookmark")
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(SaveAtlasPalette.ink)
                 .frame(width: 24, height: 24)
                 .accessibilityHidden(true)
-            Text(languageSettings.localized(
-                english: "Unlimited saved places",
-                traditionalChinese: "收藏地點不設限"
-            ))
-            .font(SaveAtlasType.strong(17))
-            .foregroundStyle(SaveAtlasPalette.ink)
+            Text(title)
+                .font(SaveAtlasType.strong(17))
+                .foregroundStyle(SaveAtlasPalette.ink)
             Spacer(minLength: 0)
         }
         .frame(height: 36)
+        .accessibilityElement(children: .combine)
         .accessibilityIdentifier("paywall.benefit.unlimited")
+        .accessibilityLabel(title)
     }
 
     private var savedNote: some View {
@@ -502,6 +506,7 @@ struct SaveDoodlePaywallHero: View {
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(SaveAtlasPalette.forest.opacity(0.55))
                     .position(x: point.x, y: point.y)
+                    .accessibilityHidden(true)
             }
         }
         .background(SaveAtlasPalette.paper)
@@ -542,6 +547,7 @@ struct SaveDoodlePaywallHero: View {
             .frame(width: 44, height: 44)
             .rotationEffect(.degrees(visited ? -5 : 4))
             .position(x: geo.size.width * x, y: geo.size.height * y)
+            .accessibilityHidden(true)
         }
     }
 }

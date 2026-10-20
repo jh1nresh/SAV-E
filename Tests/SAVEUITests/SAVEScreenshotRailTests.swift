@@ -842,7 +842,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Doodle paywall must present as a full-screen modal for the 0.90 gate."
         )
         XCTAssertFalse(rootTabButton("Home", app: app).exists, "Paywall is a full-screen modal with no tab bar")
-        XCTAssertTrue(app.descendants(matching: .any)["paywall.benefit.unlimited"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["paywall.benefit.unlimited"].waitForExistence(timeout: stepTimeout),
+            "The one benefit row must stay queryable after official noodle/coffee plan stickers."
+        )
         XCTAssertFalse(app.staticTexts["Plan trips from your saves"].exists)
         XCTAssertFalse(app.staticTexts["Bonus sticker packs"].exists)
         attach(app, name: "five-tab-paywall")
