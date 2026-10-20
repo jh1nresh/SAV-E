@@ -222,8 +222,8 @@ final class SaveTileTownLockTests: XCTestCase {
     func testFriendsIsPeopleFirstWithLastAt() throws {
         let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
         XCTAssertTrue(friends.contains("SaveDoodleFriendAvatar"))
-        XCTAssertTrue(friends.contains("saved"))
-        XCTAssertTrue(friends.contains("visited"))
+        XCTAssertTrue(friends.contains("last at"))
+        XCTAssertTrue(friends.contains("SaveDoodleFriendSticker"))
         XCTAssertFalse(friends.contains("SavePostageSealAvatar"))
         XCTAssertFalse(friends.contains("friends.mapStrip"))
         XCTAssertFalse(friends.contains("SaveTileTownCanvas"))

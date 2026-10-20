@@ -896,12 +896,12 @@ source clues or visit timestamps appear in post projections.
 ### Friends
 
 Home / Map / + / Friends / Passport remains the root bar. Friends is
-people-first doodle: Caveat / Iansui “Friends” / 「朋友」 title, coral
-outline “＋ Invite”, 最近動態 Recent, 48pt kraft-light avatars (initial or
-photo), author name, and “saved/visited … · 2h” (or “N places in city”)
-for the latest explicit posts. No right-side stickers. The shared map
-stays hidden (HoP). Parity target is DESIGN 2026-10-20 `friends-light.png`
-at exactly 0.90 (402×874, no shared-map strip, no `--ignore-rect`). An
+people-first doodle: Caveat / Iansui “Friends” / 「朋友」 title, ink
+outline “Invite”, forest-ring avatars (initial or photo), author name,
+“last at Place · 2d”, and right-side coffee / noodles / lantern / hill
+stickers. The shared map stays hidden (HoP; cut in DESIGN v1 and kept in v2).
+Parity target is DESIGN v2 `friends-light.png` at exactly 0.90 (402×874,
+no `--ignore-rect`). Dark companion is `friends-dark.png`. An
 author opens a read-only passport under the same live follower audience gate.
 Loading, retry, empty and withdrawn states are explicit; sample activity exists
 only in isolated UI fixtures. A follow or private memory update never publishes.

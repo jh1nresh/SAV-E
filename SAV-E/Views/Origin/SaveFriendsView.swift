@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Doodle v1 Friends: people-first activity list. HoP keeps the map strip off this tab.
-/// Parity target is DESIGN 2026-10-20 `friends-light.png` (402×874, no shared-map).
+/// Doodle v1 Friends: people-first last-at list. HoP keeps the map strip off this tab.
+/// Parity target is DESIGN v2 `friends-light.png` (402×874, no shared-map).
 struct SaveFriendsView: View {
     var currentUserID: String?
     var onSaved: () async -> Void = {}
@@ -17,7 +17,7 @@ struct SaveFriendsView: View {
             header
                 .padding(.horizontal, SaveLayout.screenMargin)
                 .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.xs)
-                .frame(minHeight: 44)
+                .frame(minHeight: SaveLayout.minTap)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -69,14 +69,14 @@ struct SaveFriendsView: View {
             Spacer(minLength: SaveSpace.xs)
 
             Button(action: onConnections) {
-                Text(language.localized(english: "＋ Invite", traditionalChinese: "＋ 邀請"))
-                    .font(SaveAtlasType.strong(15))
-                    .foregroundStyle(SaveAtlasPalette.coral)
+                Text(language.localized(english: "Invite", traditionalChinese: "邀請"))
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.ink)
                     .padding(.horizontal, SaveSpace.md)
                     .frame(height: SaveLayout.chipHeight)
                     .overlay {
                         Capsule()
-                            .stroke(SaveAtlasPalette.coral, lineWidth: 1)
+                            .stroke(SaveAtlasPalette.ink, lineWidth: 1.5)
                     }
                     .contentShape(Capsule())
             }
@@ -85,6 +85,7 @@ struct SaveFriendsView: View {
             .accessibilityLabel(language.localized(english: "Manage following", traditionalChinese: "管理追蹤"))
             .accessibilityIdentifier("friends.connections")
         }
+        .frame(minHeight: SaveLayout.minTap)
     }
 
     private var emptyState: some View {
@@ -135,17 +136,12 @@ struct SaveFriendsView: View {
 
     private var peopleList: some View {
         let rows = SaveFriendLastAt.rows(from: store.posts)
-        return VStack(alignment: .leading, spacing: 0) {
-            if !rows.isEmpty {
-                Text(language.localized(english: "最近動態 Recent", traditionalChinese: "最近動態 Recent"))
-                    .font(SaveDisplayType.display(20, relativeTo: .title3))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .padding(.top, SaveSpace.sm)
-                    .padding(.bottom, SaveSpace.xs)
-            }
-            ForEach(rows) { row in
+        return VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                 friendRow(row)
-                SaveDoodleDashedDivider()
+                if index < rows.count - 1 {
+                    SaveDoodleDashedDivider()
+                }
             }
         }
         .accessibilityElement(children: .contain)
@@ -153,42 +149,50 @@ struct SaveFriendsView: View {
     }
 
     private func friendRow(_ row: SaveFriendLastAt.Row) -> some View {
-        HStack(alignment: .center, spacing: SaveLayout.stickerToText) {
+        HStack(alignment: .center, spacing: 0) {
             Button { author = row.lastPost } label: {
-                SaveDoodleFriendAvatar(name: row.authorName, imageURL: row.lastPost.author_avatar_url)
+                HStack(alignment: .center, spacing: 0) {
+                    SaveDoodleFriendAvatar(name: row.authorName, imageURL: row.lastPost.author_avatar_url)
+                        .padding(.trailing, SaveLayout.stickerToText)
+
+                    VStack(alignment: .leading, spacing: SaveLayout.titleToMeta) {
+                        Text(row.authorName)
+                            .font(SaveAtlasType.strong(17))
+                            .foregroundStyle(SaveAtlasPalette.ink)
+                            .lineLimit(1)
+                        Text(
+                            SaveFriendLastAt.lastAtText(
+                                row.lastPost,
+                                language: language.language,
+                                now: SaveFriendLastAt.clock
+                            )
+                        )
+                            .font(SaveAtlasType.body(13))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("friends.author.\(row.authorID)")
 
             Button { selected = row.lastPost } label: {
-                VStack(alignment: .leading, spacing: SaveLayout.titleToMeta) {
-                    Text(row.authorName)
-                        .font(SaveAtlasType.strong(17))
-                        .foregroundStyle(SaveAtlasPalette.ink)
-                        .lineLimit(1)
-                    Text(
-                        SaveFriendLastAt.lastAtText(
-                            row.lastPost,
-                            postCount: row.postCount,
-                            language: language.language,
-                            now: SaveFriendLastAt.clock
-                        )
-                    )
-                    .font(SaveAtlasType.body(13))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                    .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+                SaveDoodleFriendSticker(name: row.lastPost.name, category: row.lastPost.category)
+                    .frame(width: SaveLayout.stickerBox, height: SaveLayout.stickerBox)
+                    .frame(width: SaveLayout.minTap, height: SaveLayout.minTap)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("friends.post.\(row.lastPost.id.uuidString)")
         }
+        .padding(.vertical, SaveLayout.rowVerticalPadding)
         .frame(minHeight: SaveLayout.rowMinHeight, alignment: .leading)
     }
 }
 
-/// 48pt kraft-light fill with a hairline. Initials are SF rounded, not Caveat.
+/// Hand-drawn initial (or photo) in a 48pt ink ring. Replaces the postage-seal avatar.
 struct SaveDoodleFriendAvatar: View {
     let name: String
     var imageURL: String? = nil
@@ -197,7 +201,7 @@ struct SaveDoodleFriendAvatar: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(SaveAtlasPalette.kraftLight)
+                .fill(SaveAtlasPalette.paper)
             if let imageURL, let url = URL(string: imageURL) {
                 AsyncImage(url: url) { phase in
                     switch phase {
@@ -211,8 +215,8 @@ struct SaveDoodleFriendAvatar: View {
             } else {
                 initial
             }
-            Circle()
-                .stroke(SaveAtlasPalette.line, lineWidth: 1)
+            SaveDoodleInkRing()
+                .stroke(SaveAtlasPalette.forest, lineWidth: 2.4)
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
@@ -221,34 +225,220 @@ struct SaveDoodleFriendAvatar: View {
 
     private var initial: some View {
         Text(SaveDoodleFriendAvatar.initial(from: name))
-            .font(SaveAtlasType.strong(17))
+            .font(SaveDisplayType.display(24, relativeTo: .title2))
             .foregroundStyle(SaveAtlasPalette.forest)
     }
 
     static func initial(from name: String) -> String {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let latin = trimmed.first(where: { $0.isLetter && $0.isASCII }) {
-            return String(latin).uppercased()
-        }
-        if let last = trimmed.last(where: { !$0.isWhitespace }) {
-            return String(last)
-        }
-        return "?"
+        guard let first = trimmed.first else { return "?" }
+        return String(first).uppercased()
     }
 }
 
-/// Slightly imperfect ring so the empty-state mark reads as ink.
+/// Slightly imperfect ring so the avatar reads as ink, not a system chrome circle.
 nonisolated struct SaveDoodleInkRing: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let inset = rect.insetBy(dx: 1.5, dy: 1.5)
+        let inset = rect.insetBy(dx: 2.2, dy: 2.2)
         path.addEllipse(in: CGRect(
-            x: inset.minX + 0.6,
-            y: inset.minY - 0.4,
-            width: inset.width - 0.8,
-            height: inset.height + 0.6
+            x: inset.minX + 0.8,
+            y: inset.minY - 0.6,
+            width: inset.width - 1.0,
+            height: inset.height + 0.9
         ))
         return path
+    }
+}
+
+/// 32pt doodle sticker. Coffee / noodles / lantern / mountain match the Friends mock.
+struct SaveDoodleFriendSticker: View {
+    let name: String
+    let category: String
+
+    enum Kind: String, Equatable {
+        case coffee, noodles, lantern, mountain
+        var tilt: Double {
+            switch self {
+            case .coffee: return -8
+            case .noodles: return 6
+            case .lantern: return -10
+            case .mountain: return 4
+            }
+        }
+    }
+
+    var body: some View {
+        let resolved = Self.kind(name: name, category: category)
+        ZStack {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(SaveAtlasPalette.paper)
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(SaveAtlasPalette.ink, lineWidth: 1.5)
+            SaveDoodleFriendStickerArt(kind: resolved)
+                .padding(4)
+        }
+        .rotationEffect(.degrees(resolved.tilt))
+        .accessibilityHidden(true)
+    }
+
+    static func kind(name: String, category: String) -> Kind {
+        let hay = name.lowercased()
+        if hay.contains("cafe") || hay.contains("coffee") || category == "cafe" { return .coffee }
+        if hay.contains("noodle") || hay.contains("ramen") { return .noodles }
+        if hay.contains("temple") || hay.contains("lantern") { return .lantern }
+        if hay.contains("hill") || hay.contains("mountain") { return .mountain }
+        switch PlaceCategory(rawValue: category) {
+        case .cafe: return .coffee
+        case .food, .bar: return .noodles
+        case .attraction, .stay, .shopping, nil: return .mountain
+        }
+    }
+
+    static func symbolName(for category: PlaceCategory?) -> String {
+        switch category {
+        case .food: return "fork.knife"
+        case .cafe: return "cup.and.saucer"
+        case .bar: return "wineglass"
+        case .attraction: return "leaf"
+        case .stay: return "bed.double"
+        case .shopping: return "bag"
+        case nil: return "mappin"
+        }
+    }
+}
+
+private struct SaveDoodleFriendStickerArt: View {
+    let kind: SaveDoodleFriendSticker.Kind
+
+    var body: some View {
+        Canvas { context, size in
+            switch kind {
+            case .coffee: drawCoffee(context: &context, size: size)
+            case .noodles: drawNoodles(context: &context, size: size)
+            case .lantern: drawLantern(context: &context, size: size)
+            case .mountain: drawMountain(context: &context, size: size)
+            }
+        }
+    }
+
+    private func drawCoffee(context: inout GraphicsContext, size: CGSize) {
+        let w = size.width
+        let h = size.height
+        var saucer = Path()
+        saucer.addEllipse(in: CGRect(x: w * 0.10, y: h * 0.72, width: w * 0.72, height: h * 0.18))
+        context.stroke(saucer, with: .color(SaveAtlasPalette.ink), lineWidth: 1.2)
+        let cup = Path(
+            roundedRect: CGRect(x: w * 0.20, y: h * 0.22, width: w * 0.50, height: h * 0.52),
+            cornerRadius: 5
+        )
+        context.fill(cup, with: .color(SaveAtlasPalette.kraft))
+        context.stroke(cup, with: .color(SaveAtlasPalette.ink), lineWidth: 1.2)
+        var coffee = Path()
+        coffee.addEllipse(in: CGRect(x: w * 0.26, y: h * 0.26, width: w * 0.38, height: h * 0.16))
+        context.fill(coffee, with: .color(SaveAtlasPalette.ink))
+        var handle = Path()
+        handle.addArc(
+            center: CGPoint(x: w * 0.76, y: h * 0.46),
+            radius: w * 0.14,
+            startAngle: .degrees(-80),
+            endAngle: .degrees(80),
+            clockwise: false
+        )
+        context.stroke(handle, with: .color(SaveAtlasPalette.ink), lineWidth: 1.6)
+    }
+
+    private func drawNoodles(context: inout GraphicsContext, size: CGSize) {
+        let w = size.width
+        let h = size.height
+        var bowl = Path()
+        bowl.move(to: CGPoint(x: w * 0.10, y: h * 0.40))
+        bowl.addQuadCurve(
+            to: CGPoint(x: w * 0.90, y: h * 0.40),
+            control: CGPoint(x: w * 0.50, y: h * 1.12)
+        )
+        bowl.closeSubpath()
+        context.fill(bowl, with: .color(SaveDoodle.stampGold))
+        context.stroke(bowl, with: .color(SaveAtlasPalette.ink), lineWidth: 1.2)
+        for index in 0..<3 {
+            var noodle = Path()
+            let y = h * (0.30 + CGFloat(index) * 0.08)
+            noodle.move(to: CGPoint(x: w * 0.26, y: y))
+            noodle.addQuadCurve(
+                to: CGPoint(x: w * 0.74, y: y + 1),
+                control: CGPoint(x: w * 0.50, y: y - 7)
+            )
+            context.stroke(noodle, with: .color(SaveAtlasPalette.ink), lineWidth: 1.1)
+        }
+        var stickA = Path()
+        stickA.move(to: CGPoint(x: w * 0.58, y: h * 0.06))
+        stickA.addLine(to: CGPoint(x: w * 0.90, y: h * 0.38))
+        var stickB = Path()
+        stickB.move(to: CGPoint(x: w * 0.68, y: h * 0.02))
+        stickB.addLine(to: CGPoint(x: w * 0.98, y: h * 0.32))
+        context.stroke(stickA, with: .color(SaveAtlasPalette.ink), lineWidth: 1.3)
+        context.stroke(stickB, with: .color(SaveAtlasPalette.ink), lineWidth: 1.3)
+    }
+
+    private func drawLantern(context: inout GraphicsContext, size: CGSize) {
+        let w = size.width
+        let h = size.height
+        let cap = Path(
+            roundedRect: CGRect(x: w * 0.28, y: h * 0.10, width: w * 0.44, height: h * 0.12),
+            cornerRadius: 2
+        )
+        context.fill(cap, with: .color(SaveDoodle.stampGold))
+        context.stroke(cap, with: .color(SaveAtlasPalette.ink), lineWidth: 1)
+        var body = Path()
+        body.addRoundedRect(
+            in: CGRect(x: w * 0.22, y: h * 0.20, width: w * 0.56, height: h * 0.50),
+            cornerSize: CGSize(width: 10, height: 12)
+        )
+        context.fill(body, with: .color(SaveDoodle.stampRed))
+        context.stroke(body, with: .color(SaveAtlasPalette.ink), lineWidth: 1.2)
+        for xMul in [0.38, 0.50, 0.62] {
+            var rib = Path()
+            rib.move(to: CGPoint(x: w * xMul, y: h * 0.24))
+            rib.addLine(to: CGPoint(x: w * xMul, y: h * 0.66))
+            context.stroke(rib, with: .color(SaveAtlasPalette.ink.opacity(0.45)), lineWidth: 0.8)
+        }
+        let bottom = Path(
+            roundedRect: CGRect(x: w * 0.30, y: h * 0.66, width: w * 0.40, height: h * 0.10),
+            cornerRadius: 2
+        )
+        context.fill(bottom, with: .color(SaveDoodle.stampGold))
+        context.stroke(bottom, with: .color(SaveAtlasPalette.ink), lineWidth: 1)
+        for xMul in [0.38, 0.50, 0.62] {
+            var tassel = Path()
+            tassel.move(to: CGPoint(x: w * xMul, y: h * 0.76))
+            tassel.addLine(to: CGPoint(x: w * xMul, y: h * 0.92))
+            context.stroke(tassel, with: .color(SaveDoodle.stampGold), lineWidth: 1.1)
+            context.fill(
+                Path(ellipseIn: CGRect(x: w * xMul - 1.6, y: h * 0.90, width: 3.2, height: 3.2)),
+                with: .color(SaveDoodle.stampRed)
+            )
+        }
+    }
+
+    private func drawMountain(context: inout GraphicsContext, size: CGSize) {
+        let w = size.width
+        let h = size.height
+        var mountain = Path()
+        mountain.move(to: CGPoint(x: w * 0.06, y: h * 0.82))
+        mountain.addLine(to: CGPoint(x: w * 0.40, y: h * 0.16))
+        mountain.addLine(to: CGPoint(x: w * 0.58, y: h * 0.42))
+        mountain.addLine(to: CGPoint(x: w * 0.72, y: h * 0.26))
+        mountain.addLine(to: CGPoint(x: w * 0.96, y: h * 0.82))
+        mountain.closeSubpath()
+        context.fill(mountain, with: .color(SaveDoodle.washGreen))
+        context.stroke(mountain, with: .color(SaveAtlasPalette.forest), lineWidth: 1.3)
+        var face = Path()
+        face.move(to: CGPoint(x: w * 0.40, y: h * 0.16))
+        face.addLine(to: CGPoint(x: w * 0.58, y: h * 0.42))
+        face.addLine(to: CGPoint(x: w * 0.48, y: h * 0.82))
+        face.addLine(to: CGPoint(x: w * 0.06, y: h * 0.82))
+        face.closeSubpath()
+        context.fill(face, with: .color(SaveAtlasPalette.forest.opacity(0.45)))
     }
 }
 
@@ -279,7 +469,6 @@ enum SaveFriendLastAt {
         let authorID: String
         let authorName: String
         let lastPost: SharedPlacePost
-        let postCount: Int
     }
 
     static var clock: Date {
@@ -293,9 +482,7 @@ enum SaveFriendLastAt {
 
     static func rows(from posts: [SharedPlacePost]) -> [Row] {
         var latest: [String: SharedPlacePost] = [:]
-        var counts: [String: Int] = [:]
         for post in posts {
-            counts[post.author_id, default: 0] += 1
             if let existing = latest[post.author_id] {
                 if post.shared_at > existing.shared_at {
                     latest[post.author_id] = post
@@ -310,40 +497,17 @@ enum SaveFriendLastAt {
                 return lhs.author_name.localizedCaseInsensitiveCompare(rhs.author_name) == .orderedAscending
             }
             .map { post in
-                Row(
-                    authorID: post.author_id,
-                    authorName: post.author_name,
-                    lastPost: post,
-                    postCount: counts[post.author_id] ?? 1
-                )
+                Row(authorID: post.author_id, authorName: post.author_name, lastPost: post)
             }
     }
 
-    static func lastAtText(
-        _ post: SharedPlacePost,
-        postCount: Int = 1,
-        language: AppLanguage,
-        now: Date = Date()
-    ) -> String {
+    static func lastAtText(_ post: SharedPlacePost, language: AppLanguage, now: Date = Date()) -> String {
         let age = relativeAge(from: post.shared_at, now: now, language: language)
-        if postCount > 1 {
-            let city = post.address
-            switch language {
-            case .traditionalChinese:
-                return "在\(city)有 \(postCount) 個地點 · \(age)"
-            case .english:
-                return "\(postCount) places in \(city) · \(age)"
-            }
-        }
-        switch (post.status, language) {
-        case (.visited, .traditionalChinese):
-            return "去過 \(post.name) · \(age)"
-        case (.visited, .english):
-            return "visited \(post.name) · \(age)"
-        case (_, .traditionalChinese):
-            return "收藏了 \(post.name) · \(age)"
-        case (_, .english):
-            return "saved \(post.name) · \(age)"
+        switch language {
+        case .traditionalChinese:
+            return "最近在 \(post.name) · \(age)"
+        case .english:
+            return "last at \(post.name) · \(age)"
         }
     }
 
@@ -361,13 +525,15 @@ enum SaveFriendLastAt {
             return chinese ? "\(hours)小時" : "\(hours)h"
         }
         let days = Int(seconds / 86_400)
-        if days < 2 {
-            return chinese ? "昨天" : "yesterday"
+        if days < 7 {
+            return chinese ? "\(days)天" : "\(days)d"
         }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: chinese ? "zh_Hant" : "en_US_POSIX")
-        formatter.dateFormat = chinese ? "M月d日" : "MMM d"
-        return formatter.string(from: date)
+        let weeks = days / 7
+        if weeks < 5 {
+            return chinese ? "\(weeks)週" : "\(weeks)w"
+        }
+        let months = max(1, days / 30)
+        return chinese ? "\(months)個月" : "\(months)mo"
     }
 
     static func date(from sharedAt: String) -> Date? {

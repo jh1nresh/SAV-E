@@ -47,7 +47,7 @@ Scripts/run-visual-parity.sh \
 
 The runner captures Home, Saves, Plan, Map, and Friends, then writes matching
 `reference/`, `output/`, `diff/`, and `results/` directories. All five pages
-must score at least `0.90`. Friends uses DESIGN 2026-10-20
+must score at least `0.90`. Friends uses DESIGN v2 (eade369)
 `friends-light.png` (exact 402 × 874, no device frame, no shared-map
 strip). The dark companion is `friends-dark.png`. XCTest
 locks the application window to 402 × 874 points; the comparator accepts

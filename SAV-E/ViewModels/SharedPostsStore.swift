@@ -160,16 +160,14 @@ final class SharedPostsStore: ObservableObject {
         }
     }
 
-    /// DESIGN 2026-10-20 Friends people (Mia 林 / 阿哲 / Leo / 小雨). Clock is frozen
-    /// to 2026-10-20T10:00:00Z so ages stay 2h / yesterday / Oct 18 / Oct 16.
+    /// DESIGN v2 Friends people (Mia / Leo / Kai / Ana). Clock is frozen
+    /// to 2026-10-20T10:00:00Z so ages stay 2d / 5d / 1w / 2w.
     private static var friendsTownPosts: [SharedPlacePost] {
         [
-            ("a1111111-1111-4111-8111-111111111111", "紅橋市場", "北京", "shopping", PlaceStatus.wantToGo, "mia", "Mia 林", true, "2026-10-20T08:00:00Z"),
-            ("a2222222-2222-4222-8222-222222222222", "天壇公園", "北京", "attraction", .visited, "zhe", "阿哲", true, "2026-10-19T10:00:00Z"),
-            ("a3333333-3333-4333-8333-333333333333", "錦芳小吃", "北京", "food", .wantToGo, "leo", "Leo", true, "2026-10-18T10:00:00Z"),
-            ("a4444444-4444-4444-8444-444444444441", "天壇公園", "北京", "attraction", .wantToGo, "yu", "小雨", true, "2026-10-16T10:00:00Z"),
-            ("a4444444-4444-4444-8444-444444444442", "紅橋市場", "北京", "shopping", .wantToGo, "yu", "小雨", true, "2026-10-15T10:00:00Z"),
-            ("a4444444-4444-4444-8444-444444444443", "錦芳小吃", "北京", "food", .visited, "yu", "小雨", true, "2026-10-14T10:00:00Z"),
+            ("a1111111-1111-4111-8111-111111111111", "Grey Cafe", "Beijing", "cafe", PlaceStatus.wantToGo, "mia", "Mia", true, "2026-10-18T10:00:00Z"),
+            ("a2222222-2222-4222-8222-222222222222", "Fangzhuanchang Noodles", "Beijing", "food", .visited, "leo", "Leo", true, "2026-10-15T10:00:00Z"),
+            ("a3333333-3333-4333-8333-333333333333", "Temple of Heaven Park", "Beijing", "attraction", .visited, "kai", "Kai", true, "2026-10-13T10:00:00Z"),
+            ("a4444444-4444-4444-8444-444444444444", "Jingshan Hill", "Beijing", "attraction", .wantToGo, "ana", "Ana", true, "2026-10-06T10:00:00Z"),
         ].map { id, name, address, category, status, authorID, authorName, visible, sharedAt in
             post(
                 id: id,
