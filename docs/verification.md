@@ -36,11 +36,17 @@ scripts/xcodebuild-clean.sh \
 
 Boot one headless simulator only when the changed behavior requires UIKit/SwiftUI runtime evidence, gestures, screenshots, accessibility, or an iOS XCTest bundle. Reuse one device and the same DerivedData directory, then shut the device down after the focused test.
 
+Before runtime checks, reserve one simulator exclusively using a device lock or
+a single serialized owner, and export its UDID as `SAVE_TEST_SIMULATOR_UDID`.
+A UDID identifies the device but does not itself establish ownership; do not
+borrow a device currently owned by another task. The regression helper also
+honors this exported UDID and does not delete the caller-owned device.
+
 ```bash
 scripts/xcodebuild-clean.sh \
   -project SAV-E.xcodeproj \
   -scheme SAV-E \
-  -destination 'platform=iOS Simulator,name=iPhone 16' \
+  -destination "platform=iOS Simulator,id=${SAVE_TEST_SIMULATOR_UDID:?Export an exclusively owned simulator UDID}" \
   -derivedDataPath "${SAVE_DERIVED_DATA_PATH:?Export a task-owned DerivedData path}" \
   CODE_SIGNING_ALLOWED=NO \
   COMPILER_INDEX_STORE_ENABLE=NO \
