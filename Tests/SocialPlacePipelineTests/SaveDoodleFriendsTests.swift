@@ -118,10 +118,27 @@ final class SaveDoodleFriendsTests: XCTestCase {
                 "Prototypes/AtlasPostcard/Reference/ProductionTargets/friends.png"
             ).path
         ))
+        let friendsPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
+            "Prototypes/AtlasPostcard/Reference/ProductionTargets/friends.png"
+        ))
+        XCTAssertEqual([UInt8](friendsPNG.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
+        XCTAssertEqual(pngDimension(friendsPNG, at: 16), 402)
+        XCTAssertEqual(pngDimension(friendsPNG, at: 20), 874)
+        let readme = try source(at: "Prototypes/AtlasPostcard/README.md")
+        XCTAssertTrue(readme.contains("2026-10-19-doodle-v1-friends.png"))
+        XCTAssertTrue(readme.contains("cropped to the phone screen"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("attach(app, name: \"five-tab-friends\")"))
         XCTAssertTrue(rail.contains("ProductionTargets/friends.png"))
         XCTAssertTrue(rail.contains("at exactly 0.90"))
+    }
+
+    private func pngDimension(_ data: Data, at offset: Int) -> UInt32 {
+        let bytes = [UInt8](data.subdata(in: offset..<(offset + 4)))
+        return UInt32(bytes[0]) << 24
+            | UInt32(bytes[1]) << 16
+            | UInt32(bytes[2]) << 8
+            | UInt32(bytes[3])
     }
 
     private func source(at relativePath: String) throws -> String {
