@@ -61,8 +61,14 @@ The Home production target is DESIGN's Doodle v1 Home mock
 to the phone screen and resampled to the 402 × 874 target size. The locked
 face is Savvy + Eat/Go + city + clues + mini-map + nearby list + Collected
 + the five-tab rail. Saves, Plan, and Map targets stay on their current
-locks until those Doodle PRs. The comparator and `0.90` threshold remain
-unchanged.
+locks until those Doodle PRs.
+
+The Passport production target is DESIGN's Doodle v1 Passport mock
+(`2026-10-19-doodle-v1-passport.png`). The attached landscape mock was cropped
+to the phone screen and resampled to the 402 × 874 target size. The locked
+face is Passport + Beijing · 4 of 12 visited, the kraft sticker grid, cities,
+and the five-tab rail with Passport selected. The comparator and `0.90`
+threshold remain unchanged.
 
 ## Boundaries
 
