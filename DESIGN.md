@@ -669,8 +669,15 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 
 ### Home (Doodle v1)
 
-Resting Home is Savvy + Eat/Go + city switcher + clues line + native
-mini-map + nearby own-saves list + Collected. It is not the Map tab.
+Home exposes a visible 44pt-minimum Saves control in the header in production,
+including when no clues are waiting. Test-only or invisible navigation controls
+are not valid user routes. Visited Home/Map stickers use color fill plus ink;
+unvisited stickers keep their pencil outline.
+
+
+Resting Home is Savvy, then the city, Eat/Go, native mini-map, clues
+line, nearby own-saves rows, then Collected. Eat/Go is not in the
+header. Clues sit below the mini-map. It is not the Map tab.
 Nearby / Saved / Friends chips must not appear here.
 
 HoP locked D2 (city switcher) and D3 (Eat/Go + nearby own-saves) on

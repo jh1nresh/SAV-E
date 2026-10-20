@@ -3069,25 +3069,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        // DESIGN: Review (`home.review`) is the visible Home → Saves entry
-        // when N>0. The retired library row stays gone. When the clues line
-        // is omitted, `home.openSaves` is the always-on handoff.
-        let review = app.descendants(matching: .any)["home.review"]
-        let fallback = app.descendants(matching: .any)["home.openSaves"]
-        XCTAssertTrue(
-            review.waitForExistence(timeout: timeout(2))
-                || fallback.waitForExistence(timeout: stepTimeout),
-            "Missing Home Saves entry"
-        )
-        let entry = review.exists ? review : fallback
-        tapReachable(entry)
+        let entry = app.buttons["home.openSaves"]
+        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing visible Home Saves entry")
+        XCTAssertTrue(entry.isHittable, "Home Saves must be usable without a hidden test-only route")
+        XCTAssertGreaterThanOrEqual(entry.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(entry.frame.width, 44)
+        entry.tap()
         let saves = app.descendants(matching: .any)["saves.root"]
-        if !saves.waitForExistence(timeout: timeout(5)) {
-            if fallback.exists { tapReachable(fallback) }
-            if !saves.waitForExistence(timeout: timeout(3)), review.exists {
-                tapReachable(review)
-            }
-        }
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to
         // burn 120s per attempt; four flakes × 3 retries blew the 35-minute
         // rail step (CI 32778736280, exit 64).

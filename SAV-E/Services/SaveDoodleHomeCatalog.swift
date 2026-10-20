@@ -364,3 +364,77 @@ enum SaveDoodleHomeCatalog {
         return moreRecent(lhs, rhs)
     }
 }
+
+/// Shared manual-visit history for Map and Passport. Reuses both pre-existing
+/// keys so adopting the common store never discards either surface's history.
+/// Read through defaults on every operation: separate view instances see writes
+/// made by the other surface without retaining stale snapshots.
+@MainActor
+final class SaveDoodleVisitStore {
+    private let defaults: UserDefaults
+    private let calendar: Calendar
+    private let now: () -> Date
+
+    init(
+        defaults: UserDefaults = .standard,
+        calendar: Calendar = .current,
+        now: @escaping () -> Date = { Date() }
+    ) {
+        self.defaults = defaults
+        self.calendar = calendar
+        self.now = now
+    }
+
+    func count(for id: UUID) -> Int {
+        max(defaults.integer(forKey: Self.countKey(id)), dates(for: id).count)
+    }
+
+    func hasVisitedToday(_ id: UUID) -> Bool {
+        let today = now()
+        return dates(for: id).contains { calendar.isDate($0, inSameDayAs: today) }
+    }
+
+    @discardableResult
+    func recordVisit(for id: UUID) -> Bool {
+        guard !hasVisitedToday(id) else { return false }
+        let total = count(for: id) + 1
+        var payload = visitPayload
+        payload[id.uuidString, default: []].append(now().timeIntervalSince1970)
+        defaults.set(payload, forKey: Self.datesKey)
+        defaults.set(total, forKey: Self.countKey(id))
+        return true
+    }
+
+    @discardableResult
+    func undoToday(for id: UUID) -> Bool {
+        let today = now()
+        let dates = dates(for: id)
+        let remaining = dates.filter { !calendar.isDate($0, inSameDayAs: today) }
+        let removed = dates.count - remaining.count
+        guard removed > 0 else { return false }
+        let total = max(0, count(for: id) - removed)
+        var payload = visitPayload
+        payload[id.uuidString] = remaining.isEmpty ? nil : remaining.map(\.timeIntervalSince1970)
+        defaults.set(payload, forKey: Self.datesKey)
+        defaults.set(total, forKey: Self.countKey(id))
+        return true
+    }
+
+    private func dates(for id: UUID) -> [Date] {
+        (visitPayload[id.uuidString] ?? []).map(Date.init(timeIntervalSince1970:))
+    }
+
+    private var visitPayload: [String: [Double]] {
+        defaults.dictionary(forKey: Self.datesKey) as? [String: [Double]] ?? [:]
+    }
+
+    private static var suiteSuffix: String {
+        ProcessInfo.processInfo.environment["SAVE_UI_TEST_STORAGE_ID"] ?? "default"
+    }
+
+    static var datesKey: String { "save.doodle.checkins.\(suiteSuffix)" }
+
+    static func countKey(_ id: UUID) -> String {
+        "save.doodle.passport.visits.\(suiteSuffix).\(id.uuidString)"
+    }
+}
