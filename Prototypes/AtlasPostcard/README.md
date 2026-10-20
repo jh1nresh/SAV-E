@@ -58,10 +58,15 @@ Production parity uses `Reference/ProductionTargets`. The original
 `Reference/Targets` remain the immutable inputs for deterministic illustration
 extraction, so approving a UI refresh cannot silently alter generated assets.
 
-The Home production target is DESIGN's Doodle v1 Home mock
-(`2026-10-19-doodle-v1-home.png`). Founder sign-off 2026-10-20:
-「改成跟手繪稿比對，門檻維持 0.90」. `VisualParity.swift` accepts only a
-1× 402 × 874 target. The landscape mock is cut to the phone screen and scaled uniformly to fill 402×874 (crop along the long axis so the frame is not a non-uniform stretch and has no paper margins). The locked face is the founder-signed Doodle Home mock. Saves, Plan, and Map targets stay on their current locks until those Doodle PRs. The comparator and `0.90` threshold remain unchanged.
+The Home production target is DESIGN's 2026-10-20 exact 402×874
+`home-light.png` from `design/doodle-targets-2026-10-20` at `23cca55`.
+`home-dark.png` sits next to it for DESIGN comparison. Those rasters
+are rendered at 1× 402×874, not a crop. Body text and icons are
+stand-ins; compare layout boxes. `VisualParity.swift` still accepts
+only a 1× 402 × 874 target. Founder sign-off 2026-10-20:
+「改成跟手繪稿比對，門檻維持 0.90」. Saves, Plan, and Map targets stay
+on their current locks until those Doodle PRs. The comparator and
+`0.90` threshold remain unchanged.
 
 ## Boundaries
 

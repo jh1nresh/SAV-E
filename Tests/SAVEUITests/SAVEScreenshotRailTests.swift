@@ -1004,6 +1004,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-review-demo-offline",
                 "--uitest-review-map-results",
                 "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
@@ -1265,6 +1266,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--skip-map-tour",
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
@@ -2555,6 +2557,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--skip-map-tour",
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
@@ -2724,6 +2727,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--skip-map-tour",
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
@@ -3074,24 +3078,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        // DESIGN: Review (`home.review`) is the visible Home → Saves entry
-        // when N>0. The retired library row stays gone. When the clues line
-        // is omitted, `home.openSaves` is the always-on handoff. Do not scroll
-        // to `home.openSaves` — it sits in a root overlay, not the list.
-        let review = app.descendants(matching: .any)["home.review"]
-        let fallback = app.descendants(matching: .any)["home.openSaves"]
+        let entry = app.buttons["home.openSaves"]
+        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing visible Home Saves entry")
+        XCTAssertTrue(entry.isHittable, "Home Saves must be usable without a hidden test-only route")
+        XCTAssertGreaterThanOrEqual(entry.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(entry.frame.width, 44)
+        entry.tap()
         let saves = app.descendants(matching: .any)["saves.root"]
-        if review.waitForExistence(timeout: timeout(2)) {
-            _ = scrollUntilHittable(review, in: app.scrollViews.firstMatch)
-            tapReachable(review)
-        }
-        if !saves.waitForExistence(timeout: timeout(3)) {
-            XCTAssertTrue(
-                fallback.waitForExistence(timeout: stepTimeout),
-                "Missing Home Saves entry"
-            )
-            tapReachable(fallback)
-        }
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to
         // burn 120s per attempt; four flakes × 3 retries blew the 35-minute
         // rail step (CI 32778736280, exit 64).
@@ -3153,10 +3146,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     /// Live Home is the Doodle Eat/Go list plus mini-map. The Atlas gate still
     /// compares `five-tab-home` to `ProductionTargets/home.png` at 0.90 against
-    /// the Doodle v1 Home mock. Do not retune that gate here.
+    /// DESIGN's 2026-10-20 `home-light.png`. Do not retune that gate here.
     /// Friends compares `five-tab-friends` to `ProductionTargets/friends.png`
-    /// at exactly 0.90 (DESIGN 2026-10-20 friends-light.png, 402×874, no
-    /// shared-map strip).
+    /// at exactly 0.90 (DESIGN v2 friends-light.png, 402×874, no shared-map).
     @MainActor
     private func waitForHomeCoverImagery(_ app: XCUIApplication) {
         XCTAssertTrue(

@@ -665,8 +665,15 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 
 ### Home (Doodle v1)
 
-Resting Home is Savvy + Eat/Go + city switcher + clues line + native
-mini-map + nearby own-saves list + Collected. It is not the Map tab.
+Home exposes a visible 44pt-minimum Saves control in the header in production,
+including when no clues are waiting. Test-only or invisible navigation controls
+are not valid user routes. Visited Home/Map stickers use color fill plus ink;
+unvisited stickers keep their pencil outline.
+
+
+Resting Home is Savvy, then the city, Eat/Go, native mini-map, clues
+line, nearby own-saves rows, then Collected. Eat/Go is not in the
+header. Clues sit below the mini-map. It is not the Map tab.
 Nearby / Saved / Friends chips must not appear here.
 
 HoP locked D2 (city switcher) and D3 (Eat/Go + nearby own-saves) on
@@ -691,7 +698,10 @@ screen when N>0. Saves reaches Trips from its header as `Trips ›`
 (`saves.trips`). Do not add a second Home Trips row. Collected opens
 Passport. Wordmark is Caveat SemiBold 34; the city line is Caveat 20 with
 a 2pt coral underline under the city word only. Body copy stays
-`SaveAtlasType`.
+`SaveAtlasType`. The locked parity face is
+`design/doodle-targets-2026-10-20/home-light.png` at `23cca55`
+(exact 402×874; `home-dark.png` for DESIGN comparison). Body text
+and icons in those rasters are stand-ins; compare layout boxes.
 
 ### Sign-In
 
