@@ -612,7 +612,7 @@ struct ContentView: View {
                         hidesTitle: { $0.isCaptureControl },
                         iconView: { item in
                             AnyView(
-                                SavePixelChromeIcon(
+                                SaveDoodleTabIcon(
                                     kind: .tab(iconName: item.atlasIcon),
                                     pointSize: 24
                                 )

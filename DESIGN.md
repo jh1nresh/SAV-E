@@ -324,7 +324,7 @@ accept `relativeTo:`, and editorial scales relative to headline.
 | Role | Token | Face | Use |
 | --- | --- | --- | --- |
 | Pixel display | `SavePixelDisplayText` / `SavePixelType` | Pixelify Sans + Fusion Pixel CJK | Savvy wordmark and page titles. OFL. Zpix is not bundled (commercial). Stamp names wait for the shared stamp PR. |
-| Pixel chrome | `SavePixelChromeIcon` | 8×8 nearest-neighbor | 24px root tab icons. Home header icons are gone in Doodle v1. |
+| Pixel chrome | `SavePixelChromeIcon` | 8×8 nearest-neighbor | Retired on the root tab bar. Doodle v1 uses 24pt hand-drawn template icons (`SaveDoodleTabIcon`). |
 | Display | `SaveAtlasType.display(_:)` | System Rounded Semibold (SF) | Hero numerals, action labels, display moments |
 | Strong | `SaveAtlasType.strong(_:)` | System Rounded Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
 | Body | `SaveAtlasType.body(_:)` | System Rounded Medium | Body and detail copy |
@@ -644,19 +644,19 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 
 - Root controls are Home / Map / + / Friends / Passport, in that order.
 - Tab bible: flat full-width cream bar (`canvas`) with a hard 2px `stroke`
-  top rule; 24px pixel line icons (`SavePixelChromeIcon`: house, map, plus,
-  people, booklet); coral on the active destination only; the center `+` is
-  a coral (`#F26B4A`) circle with no visible "Save" label, but VoiceOver and
-  `root.tab.save` keep the capture name. **DESIGN question:** the 2026-10-19
-  packet asked for a red `+` circle; this PR keeps production coral until
-  that token is decided. Do not use a mint selection pill or a floating
-  rounded capsule.
+  top rule; 24pt hand-drawn template icons (`SaveDoodleTabIcon`: house,
+  folded map, plus, people, booklet); coral on the active destination only,
+  muted when idle; the center `+` is a coral (`#F26B4A`) circle with no visible "Save" label, but VoiceOver and `root.tab.save` keep the capture
+  name. **DESIGN question:** the 2026-10-19 packet asked for a red `+`
+  circle; this PR keeps production coral until that token is decided. Do
+  not use a mint selection pill or a floating glass capsule.
 - Home owns waiting clues and the nearby Eat/Go list. The mini-map is an
   index; tapping it opens Map with the same city and Eat/Go filter. Review
   clues stay on the one-line `N clues waiting · Review` entry when N>0.
-  "See all saves" is a quiet always-on row into the existing Saves screen.
-  Collected opens Passport. Do not add a duplicate Saves tab. Trips stay a
-  production child reached from Saves as `Trips ›`.
+  Collected opens Passport. Saves remains a child of Review / existing
+  library routes — Home no longer shows a See all saves row. Do not add a
+  duplicate Saves tab. Trips stay a production child reached from Saves as
+  `Trips ›`.
 - + opens capture and leaves the previous destination selected when dismissed.
 - Plan is a secondary route while planning demand remains unvalidated.
 - Trips remain a child route. Home no longer shows a More menu.
@@ -685,12 +685,13 @@ Location denied: hide "Near you", show the last city sorted by most
 recent save, and prompt to allow location. Empty nearby: Caveat title,
 coral + Save link, and a latest-save jump when another city has saves.
 
-Clues stay on the one-line Review entry when N>0. Below the list, a quiet
-always-visible `See all saves ›` / `看全部收藏 ›` row (`home.saves`) opens
-the existing Saves screen. Saves reaches Trips from its header as
-`Trips ›` (`saves.trips`). Do not add a second Home Trips row. Collected
-opens Passport. Wordmark titles use `SaveDisplayTitle` (Caveat / Iansui);
-body copy stays `SaveAtlasType`.
+Clues stay on the one-line Review entry when N>0. Home no longer shows
+`See all saves`. Review (`home.review`) still opens the existing Saves
+screen when N>0. Saves reaches Trips from its header as `Trips ›`
+(`saves.trips`). Do not add a second Home Trips row. Collected opens
+Passport. Wordmark is Caveat SemiBold 34; the city line is Caveat 20 with
+a 2pt coral underline under the city word only. Body copy stays
+`SaveAtlasType`.
 
 ### Sign-In
 

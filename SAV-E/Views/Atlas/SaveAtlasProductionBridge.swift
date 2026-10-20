@@ -141,8 +141,9 @@ enum SaveAtlasPresentationFactory {
         } else {
             // Fixture Home is SaveDoodleHomeView. Attach live Place objects so
             // the gate measures the real Eat/Go list, not an empty plate.
+            // Keep the reference reviewCount (3) so the mock clues line and
+            // `home.review` stay on the parity Home.
             presentation.savedPlaces = orderedHomePlaces(mapViewModel.places, location: homeLocation).map(placePresentation)
-            presentation.reviewCount = mapViewModel.reviewCandidates.count
         }
 
         presentation.onCapture = onCapture

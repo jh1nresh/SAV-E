@@ -384,18 +384,123 @@ struct SavePixelChromeIcon: View {
     }
 }
 
+/// Hand-drawn 24pt template tab icons. Coral when selected, muted when idle.
+/// Stroke is 1.5pt; the tab bar supplies the template color.
+enum SaveDoodleTabIconKind: Equatable {
+    case home
+    case map
+    case plus
+    case friends
+    case passport
+
+    static func tab(iconName: String) -> SaveDoodleTabIconKind {
+        switch iconName {
+        case "house": return .home
+        case "map": return .map
+        case "plus": return .plus
+        case "person.2": return .friends
+        case "book.closed": return .passport
+        default: return .home
+        }
+    }
+}
+
+struct SaveDoodleTabIcon: View {
+    let kind: SaveDoodleTabIconKind
+    var pointSize: CGFloat = 24
+
+    var body: some View {
+        SaveDoodleTabIconShape(kind: kind)
+            .stroke(style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            .frame(width: pointSize, height: pointSize)
+            .accessibilityHidden(true)
+    }
+}
+
+nonisolated struct SaveDoodleTabIconShape: Shape {
+    let kind: SaveDoodleTabIconKind
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+        switch kind {
+        case .home:
+            path.move(to: CGPoint(x: w * 0.12, y: h * 0.48))
+            path.addLine(to: CGPoint(x: w * 0.50, y: h * 0.14))
+            path.addLine(to: CGPoint(x: w * 0.88, y: h * 0.48))
+            path.move(to: CGPoint(x: w * 0.22, y: h * 0.42))
+            path.addLine(to: CGPoint(x: w * 0.22, y: h * 0.86))
+            path.addLine(to: CGPoint(x: w * 0.78, y: h * 0.86))
+            path.addLine(to: CGPoint(x: w * 0.78, y: h * 0.42))
+            path.move(to: CGPoint(x: w * 0.42, y: h * 0.86))
+            path.addLine(to: CGPoint(x: w * 0.42, y: h * 0.62))
+            path.addLine(to: CGPoint(x: w * 0.58, y: h * 0.62))
+            path.addLine(to: CGPoint(x: w * 0.58, y: h * 0.86))
+        case .map:
+            path.move(to: CGPoint(x: w * 0.14, y: h * 0.28))
+            path.addLine(to: CGPoint(x: w * 0.38, y: h * 0.18))
+            path.addLine(to: CGPoint(x: w * 0.62, y: h * 0.30))
+            path.addLine(to: CGPoint(x: w * 0.86, y: h * 0.20))
+            path.addLine(to: CGPoint(x: w * 0.86, y: h * 0.72))
+            path.addLine(to: CGPoint(x: w * 0.62, y: h * 0.82))
+            path.addLine(to: CGPoint(x: w * 0.38, y: h * 0.70))
+            path.addLine(to: CGPoint(x: w * 0.14, y: h * 0.80))
+            path.closeSubpath()
+            path.move(to: CGPoint(x: w * 0.38, y: h * 0.18))
+            path.addLine(to: CGPoint(x: w * 0.38, y: h * 0.70))
+            path.move(to: CGPoint(x: w * 0.62, y: h * 0.30))
+            path.addLine(to: CGPoint(x: w * 0.62, y: h * 0.82))
+        case .plus:
+            path.move(to: CGPoint(x: w * 0.50, y: h * 0.16))
+            path.addLine(to: CGPoint(x: w * 0.50, y: h * 0.84))
+            path.move(to: CGPoint(x: w * 0.16, y: h * 0.50))
+            path.addLine(to: CGPoint(x: w * 0.84, y: h * 0.50))
+        case .friends:
+            path.addEllipse(in: CGRect(x: w * 0.16, y: h * 0.12, width: w * 0.28, height: h * 0.28))
+            path.addEllipse(in: CGRect(x: w * 0.52, y: h * 0.16, width: w * 0.26, height: h * 0.26))
+            path.move(to: CGPoint(x: w * 0.10, y: h * 0.82))
+            path.addQuadCurve(
+                to: CGPoint(x: w * 0.50, y: h * 0.82),
+                control: CGPoint(x: w * 0.30, y: h * 0.46)
+            )
+            path.move(to: CGPoint(x: w * 0.46, y: h * 0.86))
+            path.addQuadCurve(
+                to: CGPoint(x: w * 0.90, y: h * 0.86),
+                control: CGPoint(x: w * 0.70, y: h * 0.52)
+            )
+        case .passport:
+            path.addRoundedRect(
+                in: CGRect(x: w * 0.22, y: h * 0.10, width: w * 0.56, height: h * 0.80),
+                cornerSize: CGSize(width: w * 0.08, height: h * 0.08)
+            )
+            path.move(to: CGPoint(x: w * 0.34, y: h * 0.10))
+            path.addLine(to: CGPoint(x: w * 0.34, y: h * 0.90))
+            path.addEllipse(in: CGRect(x: w * 0.46, y: h * 0.36, width: w * 0.22, height: h * 0.22))
+        }
+        return path
+    }
+}
+
 /// Caveat (Latin) + Iansui (CJK subset) for Savvy and page titles.
 /// Stamp names stay `SaveAtlasType` until the shared stamp PR. Body copy stays SF.
 struct SaveDisplayTitle: View {
     let text: String
     var pointSize: CGFloat = 22
     var relativeTo: Font.TextStyle = .title
+    /// Home wordmark (34) and city (20) lock the spec point size.
+    var locksPointSize: Bool = false
 
     var body: some View {
         Text(text)
-            .font(SaveDisplayType.display(pointSize, relativeTo: relativeTo))
+            .font(
+                locksPointSize
+                    ? SaveDisplayType.fixed(pointSize)
+                    : SaveDisplayType.display(pointSize, relativeTo: relativeTo)
+            )
             .foregroundStyle(SaveAtlasPalette.forest)
             .lineLimit(2)
-            .minimumScaleFactor(0.75)
+            .minimumScaleFactor(locksPointSize ? 1 : 0.75)
+            .fixedSize(horizontal: locksPointSize, vertical: locksPointSize)
     }
 }
