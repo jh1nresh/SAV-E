@@ -236,7 +236,7 @@ jobs:
             test
 
       - name: Enforce Atlas production visual parity
-        if: steps.scope.outputs.ui == 'true'
+        if: always() && (steps.scope.outputs.ui == 'true')
         run: |
           Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh \
             --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
