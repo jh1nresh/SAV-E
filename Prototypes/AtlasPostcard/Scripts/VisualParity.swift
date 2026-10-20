@@ -14,6 +14,7 @@ private struct Options {
     let diff: URL
     let threshold: Double
     let ignoreRects: [CGRect]
+    let ignoreMask: URL?
 }
 
 private enum ParityError: Error, CustomStringConvertible {
@@ -26,7 +27,7 @@ private enum ParityError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            return "usage: VisualParity.swift --target target.png --actual actual.png --diff diff.png [--threshold 0.90] [--ignore-rect x,y,w,h]"
+            return "usage: VisualParity.swift --target target.png --actual actual.png --diff diff.png [--threshold 0.90] [--ignore-rect x,y,w,h] [--ignore-mask mask.png]"
         case let .unreadableImage(url):
             return "could not read image: \(url.path)"
         case let .unexpectedDimensions(url, actualWidth, actualHeight, expectation):
@@ -42,6 +43,7 @@ private enum ParityError: Error, CustomStringConvertible {
 private func parseOptions() throws -> Options {
     var values: [String: String] = [:]
     var ignoreRects: [CGRect] = []
+    var ignoreMask: URL?
     var index = 1
     while index + 1 < CommandLine.arguments.count {
         let key = CommandLine.arguments[index]
@@ -50,6 +52,8 @@ private func parseOptions() throws -> Options {
             let parts = value.split(separator: ",").compactMap { Double($0) }
             guard parts.count == 4 else { throw ParityError.usage }
             ignoreRects.append(CGRect(x: parts[0], y: parts[1], width: parts[2], height: parts[3]))
+        } else if key == "--ignore-mask" {
+            ignoreMask = URL(fileURLWithPath: value)
         } else {
             values[key] = value
         }
@@ -69,11 +73,29 @@ private func parseOptions() throws -> Options {
         actual: URL(fileURLWithPath: actual),
         diff: URL(fileURLWithPath: diff),
         threshold: Double(values["--threshold"] ?? "0.90") ?? 0.90,
-        ignoreRects: ignoreRects
+        ignoreRects: ignoreRects,
+        ignoreMask: ignoreMask
     )
 }
 
-private func isIgnored(x: Int, y: Int, rects: [CGRect]) -> Bool {
+private func loadIgnoreMask(_ url: URL) throws -> [Bool] {
+    let pixels = try strictRGBA(from: url, allowedPixelScales: 1...1)
+    var mask = [Bool](repeating: false, count: width * height)
+    for y in 0..<height {
+        for x in 0..<width {
+            let offset = (y * width + x) * 4
+            // DESIGN map-mask.png: white marks the live Apple Maps area.
+            let isWhite = pixels[offset] >= 240 && pixels[offset + 1] >= 240 && pixels[offset + 2] >= 240
+            mask[y * width + x] = isWhite
+        }
+    }
+    return mask
+}
+
+private func isIgnored(x: Int, y: Int, rects: [CGRect], mask: [Bool]?) -> Bool {
+    if let mask {
+        return mask[y * width + x] || rects.contains { $0.contains(CGPoint(x: x, y: y)) }
+    }
     if y < ignoredTopRows { return true }
     let point = CGPoint(x: x, y: y)
     return rects.contains { $0.contains(point) }
@@ -180,6 +202,7 @@ private func writeDiff(
     target: [UInt8],
     actual: [UInt8],
     ignoreRects: [CGRect],
+    mask: [Bool]?,
     to url: URL
 ) throws {
     guard let bitmap = NSBitmapImageRep(
@@ -204,7 +227,7 @@ private func writeDiff(
         let offset = pixel * 4
         let x = pixel % width
         let y = pixel / width
-        if isIgnored(x: x, y: y, rects: ignoreRects) {
+        if isIgnored(x: x, y: y, rects: ignoreRects, mask: mask) {
             destination[offset] = 36
             destination[offset + 1] = 36
             destination[offset + 2] = 40
@@ -231,14 +254,14 @@ private func writeDiff(
     }
 }
 
-private func score(target: [UInt8], actual: [UInt8], ignoreRects: [CGRect]) -> (Double, Double, Double) {
+private func score(target: [UInt8], actual: [UInt8], ignoreRects: [CGRect], mask: [Bool]?) -> (Double, Double, Double) {
     let edgeThreshold = 18.0
     var targetEdges = [Bool](repeating: false, count: width * height)
     var actualEdges = [Bool](repeating: false, count: width * height)
 
     for y in 0..<height {
         for x in 0..<width {
-            if isIgnored(x: x, y: y, rects: ignoreRects) { continue }
+            if isIgnored(x: x, y: y, rects: ignoreRects, mask: mask) { continue }
             let index = y * width + x
             targetEdges[index] = gradient(target, x: x, y: y) >= edgeThreshold
             actualEdges[index] = gradient(actual, x: x, y: y) >= edgeThreshold
@@ -254,7 +277,7 @@ private func score(target: [UInt8], actual: [UInt8], ignoreRects: [CGRect]) -> (
 
     for y in 0..<height {
         for x in 0..<width {
-            if isIgnored(x: x, y: y, rects: ignoreRects) { continue }
+            if isIgnored(x: x, y: y, rects: ignoreRects, mask: mask) { continue }
             let pixel = y * width + x
             let offset = pixel * 4
 
@@ -296,8 +319,14 @@ do {
     let options = try parseOptions()
     let target = try strictRGBA(from: options.target, allowedPixelScales: 1...1)
     let actual = try strictRGBA(from: options.actual, allowedPixelScales: 1...4)
-    let result = score(target: target, actual: actual, ignoreRects: options.ignoreRects)
-    try writeDiff(target: target, actual: actual, ignoreRects: options.ignoreRects, to: options.diff)
+    let mask: [Bool]?
+    if let url = options.ignoreMask {
+        mask = try loadIgnoreMask(url)
+    } else {
+        mask = nil
+    }
+    let result = score(target: target, actual: actual, ignoreRects: options.ignoreRects, mask: mask)
+    try writeDiff(target: target, actual: actual, ignoreRects: options.ignoreRects, mask: mask, to: options.diff)
 
     let payload: [String: Any] = [
         "target": options.target.path,
@@ -308,8 +337,9 @@ do {
         "appearanceSimilarity": result.2,
         "threshold": options.threshold,
         "passed": result.0 >= options.threshold,
-        "ignoredTopRows": ignoredTopRows,
-        "ignoreRects": options.ignoreRects.map { ["x": $0.origin.x, "y": $0.origin.y, "width": $0.size.width, "height": $0.size.height] }
+        "ignoredTopRows": options.ignoreMask == nil ? ignoredTopRows : 0,
+        "ignoreRects": options.ignoreRects.map { ["x": $0.origin.x, "y": $0.origin.y, "width": $0.size.width, "height": $0.size.height] },
+        "ignoreMask": options.ignoreMask?.path ?? NSNull()
     ]
     let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
     print(String(decoding: data, as: UTF8.self))

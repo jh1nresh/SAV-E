@@ -97,12 +97,17 @@ final class SaveDoodleMapTests: XCTestCase {
     func testParityMaskLeavesThePointNineGateAndPrefersLiveMap() throws {
         let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/VisualParity.swift")
         let script = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
         XCTAssertTrue(parity.contains("ignoreRects"))
+        XCTAssertTrue(parity.contains("--ignore-mask"))
         XCTAssertTrue(script.contains("--threshold 0.90") || script.contains("THRESHOLD=\"0.90\""))
         XCTAssertTrue(script.contains("five-tab-map*)"))
         XCTAssertTrue(script.contains("map-doodle-similarity"))
-        XCTAssertTrue(script.contains("--ignore-rect"))
-        XCTAssertTrue(script.contains("MAP_IGNORE_RECT=\"0,48,402,642\""))
+        XCTAssertTrue(script.contains("--ignore-mask"))
+        XCTAssertTrue(script.contains("map-mask.png"))
+        XCTAssertTrue(map.contains("cityOpeningPins()"))
+        XCTAssertTrue(map.contains("min(max((maxLat - minLat) * 1.6, 0.012), 0.45)"))
+        XCTAssertFalse(map.contains("taipei.isEmpty ? coordinates : taipei"))
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: repositoryRoot.appendingPathComponent(
                 "SAV-E/Views/TileTown/SaveTileTownRootMap.swift"
@@ -115,17 +120,20 @@ final class SaveDoodleMapTests: XCTestCase {
                 "Prototypes/AtlasPostcard/Scripts/generate-doodle-map-target.py"
             ).path
         ))
-        let target = repositoryRoot.appendingPathComponent(
-            "Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png"
+        let targets = repositoryRoot.appendingPathComponent(
+            "Prototypes/AtlasPostcard/Reference/ProductionTargets"
         )
-        let image = try XCTUnwrap(UIImage(contentsOfFile: target.path))
+        for name in ["map.png", "map-light.png", "map-dark.png", "map-mask.png"] {
+            let image = try XCTUnwrap(UIImage(contentsOfFile: targets.appendingPathComponent(name).path))
+            XCTAssertEqual(Int(image.size.width), 402, name)
+            XCTAssertEqual(Int(image.size.height), 874, name)
+        }
+        let light = try XCTUnwrap(UIImage(contentsOfFile: targets.appendingPathComponent("map.png").path))
         XCTAssertGreaterThan(
-            image.pngData()?.count ?? 0,
+            light.pngData()?.count ?? 0,
             50_000,
-            "Map target must be a copy of the design mock, not a generated composite"
+            "Map target must be DESIGN v2 map-light.png, not a generated composite"
         )
-        XCTAssertEqual(Int(image.size.width), 402)
-        XCTAssertEqual(Int(image.size.height), 874)
     }
 
     private func source(at relativePath: String) throws -> String {

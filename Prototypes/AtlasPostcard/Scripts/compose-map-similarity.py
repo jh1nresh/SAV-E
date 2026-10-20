@@ -36,6 +36,7 @@ def main() -> None:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
     parser.add_argument("--mask", required=True, type=parse_rect)
+    parser.add_argument("--mask-image", type=Path)
     parser.add_argument("--status", required=True)
     parser.add_argument("--threshold", required=True)
     parser.add_argument("--light", type=Path)
@@ -47,10 +48,15 @@ def main() -> None:
     target = fit(load(args.target), (402, 874))
     actual = fit(load(args.actual), (402, 874))
     diff = fit(load(args.diff), (402, 874))
-    x, y, w, h = args.mask
     overlay = Image.new("RGBA", actual.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
-    draw.rectangle((x, y, x + w, y + h), fill=(20, 20, 24, 90))
+    if args.mask_image and args.mask_image.exists():
+        mask = fit(load(args.mask_image), (402, 874)).convert("L")
+        shade = Image.new("RGBA", actual.size, (20, 20, 24, 90))
+        overlay.paste(shade, (0, 0), mask.point(lambda v: 255 if v >= 240 else 0))
+    else:
+        x, y, w, h = args.mask
+        draw.rectangle((x, y, x + w, y + h), fill=(20, 20, 24, 90))
     actual_masked = Image.alpha_composite(actual.convert("RGBA"), overlay).convert("RGB")
     target_masked = Image.alpha_composite(target.convert("RGBA"), overlay).convert("RGB")
 

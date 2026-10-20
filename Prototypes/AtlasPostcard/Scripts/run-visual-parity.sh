@@ -382,13 +382,9 @@ fi
 
 gate_failed=0
 mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
-# Partial bottom-region pixel score only; never report this as full-page fidelity.
-# City, filters, selected sheet and actions additionally require the unmasked
-# assertDoodleMapChrome geometry/hit-testing checks in the light AND dark UI rail.
-# Status y<48 is already ignored. Live MapKit shows through the overlay
-# header (y 48..<168) and above the sheet (y 560..<690); cover that full
-# map band in both the capture and the uniformly-scaled mock.
-MAP_IGNORE_RECT="0,48,402,642"
+# DESIGN v2 map-mask.png: white = live Apple Maps (ignored). City strip,
+# place sheet, tab bar, and status bar count toward 0.90.
+MAP_MASK="$REFERENCE_SOURCE/map-mask.png"
 for screen in home saves plan map; do
     actual="$ARTIFACT_DIR/output/$screen.png"
     if [[ ! -f "$actual" ]]; then
@@ -398,8 +394,12 @@ for screen in home saves plan map; do
 
     extra_args=()
     if [[ "$screen" == "map" ]]; then
-        echo "Map pixel coverage: rows 690..<874 only; full chrome requires light/dark UI geometry checks." >&2
-        extra_args=(--ignore-rect "$MAP_IGNORE_RECT")
+        if [[ ! -f "$MAP_MASK" ]]; then
+            echo "error: missing DESIGN map mask: $MAP_MASK" >&2
+            exit 2
+        fi
+        echo "Map pixel coverage: DESIGN map-mask.png (white = Apple Maps)." >&2
+        extra_args=(--ignore-mask "$MAP_MASK")
     fi
 
     if xcrun swift "$PARITY_SCRIPT" \
@@ -438,7 +438,8 @@ for screen in home saves plan map; do
             --result "$ARTIFACT_DIR/results/map.json"
             --output "$ARTIFACT_DIR/map-doodle-similarity/side-by-side.png"
             --report "$ARTIFACT_DIR/map-doodle-similarity/report.json"
-            --mask "$MAP_IGNORE_RECT"
+            --mask "0,160,402,618"
+            --mask-image "$MAP_MASK"
             --status "$status"
             --threshold "$THRESHOLD"
             --modes-output "$ARTIFACT_DIR/map-doodle-similarity/mock-light-dark.png"

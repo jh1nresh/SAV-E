@@ -598,16 +598,78 @@ struct SaveDoodleMapView: View {
             )
             return
         }
-        let coordinates = displayedListedPlaces.compactMap { item -> CLLocationCoordinate2D? in
-            guard item.place.isMapKitMappable else { return nil }
-            return item.place.coordinate
+        let pins = cityOpeningPins()
+        if !pins.isEmpty {
+            mapViewModel.cameraPosition = .region(Self.region(fitting: pins))
+            return
         }
-        let taipei = coordinates.filter { coordinate in
-            abs(coordinate.latitude - 25.04) < 0.35 && abs(coordinate.longitude - 121.56) < 0.35
+        if let fallback = cityOpeningFallback() {
+            mapViewModel.cameraPosition = .region(
+                MKCoordinateRegion(
+                    center: fallback,
+                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                )
+            )
         }
-        let fitting = taipei.isEmpty ? coordinates : taipei
-        guard !fitting.isEmpty else { return }
-        mapViewModel.cameraPosition = .region(Self.region(fitting: fitting))
+    }
+
+    /// Pins in the current city (or nearby, when Near you has a fix).
+    /// Never fits the worldwide set — that opens over Europe/Africa.
+    private func cityOpeningPins() -> [CLLocationCoordinate2D] {
+        let denied = locationService.isAuthorizationDenied
+        let location = denied ? nil : locationService.currentLocation
+        var selection = SaveDoodleHomeCatalog.resolvedSelection(
+            session.city,
+            places: mapViewModel.places,
+            locationDenied: denied
+        )
+        if case .nearYou = selection, location == nil {
+            let newest = mapViewModel.places.sorted(by: SaveDoodleHomeCatalog.moreRecent).first
+            if let newest, let id = SaveDoodleHomeCatalog.cityID(for: newest) {
+                selection = .city(id)
+            }
+        }
+        let lenses: [SaveDoodleLens] = session.mapFollowsHomeFilter
+            ? [session.lens]
+            : Array(SaveDoodleLens.allCases)
+        var coords: [CLLocationCoordinate2D] = []
+        for lens in lenses {
+            for place in SaveDoodleHomeCatalog.visiblePlaces(
+                from: mapViewModel.places,
+                lens: lens,
+                selection: selection,
+                location: location,
+                locationDenied: denied
+            ) where place.isMapKitMappable {
+                coords.append(place.coordinate)
+            }
+        }
+        return coords
+    }
+
+    private func cityOpeningFallback() -> CLLocationCoordinate2D? {
+        let denied = locationService.isAuthorizationDenied
+        let selection = SaveDoodleHomeCatalog.resolvedSelection(
+            session.city,
+            places: mapViewModel.places,
+            locationDenied: denied
+        )
+        let cityID: String?
+        switch selection {
+        case .city(let id):
+            cityID = id
+        case .nearYou:
+            cityID = mapViewModel.places.compactMap { SaveDoodleHomeCatalog.cityID(for: $0) }.first
+        }
+        if let cityID {
+            let inCity = mapViewModel.places.first {
+                SaveDoodleHomeCatalog.cityID(for: $0) == cityID && $0.isMapKitMappable
+            }
+            if let inCity {
+                return inCity.coordinate
+            }
+        }
+        return locationService.currentLocation?.coordinate
     }
 
     private static func region(fitting coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
@@ -626,8 +688,8 @@ struct SaveDoodleMapView: View {
             longitude: (minLon + maxLon) / 2
         )
         let span = MKCoordinateSpan(
-            latitudeDelta: max((maxLat - minLat) * 1.6, 0.012),
-            longitudeDelta: max((maxLon - minLon) * 1.6, 0.012)
+            latitudeDelta: min(max((maxLat - minLat) * 1.6, 0.012), 0.45),
+            longitudeDelta: min(max((maxLon - minLon) * 1.6, 0.012), 0.45)
         )
         return MKCoordinateRegion(center: center, span: span)
     }
