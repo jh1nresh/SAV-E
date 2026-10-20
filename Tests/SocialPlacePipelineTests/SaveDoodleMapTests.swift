@@ -115,6 +115,8 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(script.contains("map-doodle-similarity"))
         XCTAssertTrue(script.contains("--ignore-mask"))
         XCTAssertTrue(script.contains("map-mask.png"))
+        XCTAssertTrue(script.contains("${#extra_args[@]} -gt 0"))
+        XCTAssertTrue(script.contains("${#mask_args[@]} -gt 0"))
         XCTAssertTrue(map.contains("cityOpeningPins()"))
         XCTAssertTrue(map.contains("min(max((maxLat - minLat) * 1.6, 0.012), 0.45)"))
         XCTAssertFalse(map.contains("taipei.isEmpty ? coordinates : taipei"))

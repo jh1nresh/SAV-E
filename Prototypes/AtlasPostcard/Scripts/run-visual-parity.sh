@@ -422,13 +422,22 @@ for screen in home saves plan map passport; do
         echo "Map pixel coverage: DESIGN map-mask.png (white = Apple Maps)." >&2
         extra_args=(--ignore-mask "$MAP_MASK")
     fi
-    if xcrun swift "$PARITY_SCRIPT" \
-        --target "$ARTIFACT_DIR/reference/$screen.png" \
-        --actual "$actual" \
-        --diff "$ARTIFACT_DIR/diff/$screen.png" \
-        "${mask_args[@]}" \
-        --threshold "$THRESHOLD" \
-        "${extra_args[@]}" \
+    # macOS CI bash + set -u treats "${empty[@]}" as unbound. Only expand
+    # when the arrays have values (home mask / map ignore-mask).
+    parity_cmd=(
+        xcrun swift "$PARITY_SCRIPT"
+        --target "$ARTIFACT_DIR/reference/$screen.png"
+        --actual "$actual"
+        --diff "$ARTIFACT_DIR/diff/$screen.png"
+    )
+    if [[ ${#mask_args[@]} -gt 0 ]]; then
+        parity_cmd+=("${mask_args[@]}")
+    fi
+    parity_cmd+=(--threshold "$THRESHOLD")
+    if [[ ${#extra_args[@]} -gt 0 ]]; then
+        parity_cmd+=("${extra_args[@]}")
+    fi
+    if "${parity_cmd[@]}" \
         >"$ARTIFACT_DIR/results/$screen.json"
     then
         status="PASS"
