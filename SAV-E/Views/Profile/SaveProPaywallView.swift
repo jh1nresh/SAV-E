@@ -232,7 +232,7 @@ struct SaveProPaywallView: View {
                     products: products,
                     fallback: "$39.99"
                 ),
-                symbol: "takeoutbag.and.cup.and.straw",
+                sticker: .noodle,
                 showsBestValue: true
             )
             planCard(
@@ -243,7 +243,7 @@ struct SaveProPaywallView: View {
                     products: products,
                     fallback: "$6.99"
                 ),
-                symbol: "cup.and.saucer",
+                sticker: .coffee,
                 showsBestValue: false
             )
         }
@@ -253,7 +253,7 @@ struct SaveProPaywallView: View {
         id: String,
         title: String,
         price: String,
-        symbol: String,
+        sticker: SaveDoodleOfficialSticker,
         showsBestValue: Bool
     ) -> some View {
         let isSelected = id == selectedProductID
@@ -262,9 +262,11 @@ struct SaveProPaywallView: View {
             selectedProductID = id
         } label: {
             HStack(spacing: SaveSpace.md) {
-                Image(systemName: symbol)
-                    .font(.system(size: 22, weight: .regular))
-                    .foregroundStyle(SaveAtlasPalette.ink)
+                Image(sticker.imageName(visited: true, pointSize: 48))
+                    .resizable()
+                    .interpolation(.high)
+                    .renderingMode(.original)
+                    .scaledToFit()
                     .frame(width: 40, height: 40)
                     .accessibilityHidden(true)
 
