@@ -47,12 +47,9 @@ Scripts/run-visual-parity.sh \
 
 The runner captures Home, Saves, Plan, Map, and Friends, then writes matching
 `reference/`, `output/`, `diff/`, and `results/` directories. All five pages
-must score at least `0.90`. Friends uses the DESIGN Doodle Friends mock
-(`2026-10-19-doodle-v1-friends.png`). The mock's ~603 × 705 phone screen
-is copied at one uniform scale (scale by width, never stretched) and
-padded top/bottom with paper (`FFF9EB`) to 402 × 874. Live Friends hides
-the mock's Shared map strip (HoP); `run-visual-parity.sh` passes
-`--ignore-rect` for that kraft row, the same mechanism Map uses. XCTest
+must score at least `0.90`. Friends uses DESIGN 2026-10-20
+`friends-light.png` (exact 402 × 874, no device frame, no shared-map
+strip). The dark companion is `friends-dark.png`. XCTest
 locks the application window to 402 × 874 points; the comparator accepts
 only exact, uniform Retina pixel multiples of that viewport and rejects
 other dimensions.

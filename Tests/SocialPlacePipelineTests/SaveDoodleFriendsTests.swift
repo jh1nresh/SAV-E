@@ -58,22 +58,32 @@ final class SaveDoodleFriendsTests: XCTestCase {
         let rows = SaveFriendLastAt.rows(from: posts)
         XCTAssertEqual(rows.map(\.authorID), ["alex", "kai"])
         XCTAssertEqual(rows[0].lastPost.name, "Grey Cafe")
+        XCTAssertEqual(rows[0].postCount, 2)
         let now = ISO8601DateFormatter().date(from: "2026-10-20T10:00:00Z")!
         XCTAssertEqual(
             SaveFriendLastAt.lastAtText(rows[0].lastPost, language: .english, now: now),
-            "last at Grey Cafe · 2d"
+            "saved Grey Cafe · Oct 18"
         )
         XCTAssertEqual(
-            SaveFriendLastAt.lastAtText(rows[1].lastPost, language: .traditionalChinese, now: now),
-            "最近在 Temple of Heaven Park · 1週"
+            SaveFriendLastAt.lastAtText(rows[0].lastPost, postCount: 2, language: .english, now: now),
+            "2 places in Town · Oct 18"
         )
-        XCTAssertEqual(SaveDoodleFriendAvatar.initial(from: "Mia"), "M")
+        XCTAssertEqual(
+            SaveFriendLastAt.lastAtText(rows[1].lastPost, language: .english, now: now),
+            "visited Temple of Heaven Park · Oct 13"
+        )
+        XCTAssertEqual(
+            SaveFriendLastAt.relativeAge(from: "2026-10-20T08:00:00Z", now: now),
+            "2h"
+        )
+        XCTAssertEqual(
+            SaveFriendLastAt.relativeAge(from: "2026-10-19T10:00:00Z", now: now),
+            "yesterday"
+        )
+        XCTAssertEqual(SaveDoodleFriendAvatar.initial(from: "Mia 林"), "M")
         XCTAssertEqual(SaveDoodleFriendAvatar.initial(from: "Leo"), "L")
-        XCTAssertEqual(SaveDoodleFriendSticker.symbolName(for: .cafe), "cup.and.saucer")
-        XCTAssertEqual(SaveDoodleFriendSticker.kind(name: "Grey Cafe", category: "cafe"), .coffee)
-        XCTAssertEqual(SaveDoodleFriendSticker.kind(name: "Fangzhuanchang Noodles", category: "food"), .noodles)
-        XCTAssertEqual(SaveDoodleFriendSticker.kind(name: "Temple of Heaven Park", category: "attraction"), .lantern)
-        XCTAssertEqual(SaveDoodleFriendSticker.kind(name: "Jingshan Hill", category: "attraction"), .mountain)
+        XCTAssertEqual(SaveDoodleFriendAvatar.initial(from: "阿哲"), "哲")
+        XCTAssertEqual(SaveDoodleFriendAvatar.initial(from: "小雨"), "雨")
     }
 
     func testProductionFriendsIsDoodleNotTileTown() throws {
@@ -82,25 +92,26 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertTrue(friends.contains("pointSize: 34"))
         XCTAssertTrue(friends.contains("traditionalChinese: \"朋友\""))
         XCTAssertTrue(friends.contains("SaveDoodleFriendAvatar"))
-        XCTAssertTrue(friends.contains("SaveDoodleFriendSticker"))
         XCTAssertTrue(friends.contains("SaveDoodleDashedDivider"))
         XCTAssertTrue(friends.contains("SaveDottedBackground()"))
         XCTAssertTrue(friends.contains("SaveLayout.screenMargin"))
         XCTAssertTrue(friends.contains("friends.connections"))
-        XCTAssertTrue(friends.contains("Invite"))
-        XCTAssertTrue(friends.contains("SaveAtlasPalette.muted"))
+        XCTAssertTrue(friends.contains("＋ Invite"))
+        XCTAssertTrue(friends.contains("最近動態 Recent"))
+        XCTAssertTrue(friends.contains("SaveAtlasPalette.kraftLight"))
+        XCTAssertTrue(friends.contains("SaveAtlasPalette.coral"))
         XCTAssertTrue(friends.contains("SaveAtlasPalette.forest"))
-        XCTAssertTrue(friends.contains("lineWidth: 2.4"))
-        XCTAssertTrue(friends.contains("SaveDoodleFriendStickerArt"))
+        XCTAssertFalse(friends.contains("SaveDoodleFriendSticker"))
         XCTAssertTrue(friends.contains("friends.findFriends"))
         XCTAssertFalse(friends.contains("foregroundStyle(Color.white)"))
         let store = try source(at: "SAV-E/ViewModels/SharedPostsStore.swift")
         XCTAssertTrue(store.contains("friendsTownPosts"))
-        XCTAssertTrue(store.contains("Grey Cafe"))
-        XCTAssertTrue(store.contains("Fangzhuanchang Noodles"))
-        XCTAssertTrue(store.contains("Temple of Heaven Park"))
-        XCTAssertTrue(store.contains("Jingshan Hill"))
-        XCTAssertTrue(store.contains("\"Mia\""))
+        XCTAssertTrue(store.contains("紅橋市場"))
+        XCTAssertTrue(store.contains("天壇公園"))
+        XCTAssertTrue(store.contains("錦芳小吃"))
+        XCTAssertTrue(store.contains("Mia 林"))
+        XCTAssertTrue(store.contains("阿哲"))
+        XCTAssertTrue(store.contains("小雨"))
         XCTAssertTrue(store.contains("Harbor Town"))
         XCTAssertTrue(friends.contains("SaveFriendLastAt.lastAtText"))
         XCTAssertFalse(friends.contains("SavePostageSealAvatar"))
@@ -134,27 +145,27 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertTrue(script.contains("five-tab-friends*)"))
         XCTAssertTrue(script.contains("screen=\"friends\""))
         XCTAssertTrue(script.contains("for screen in home saves plan map friends; do"))
-        XCTAssertTrue(script.contains("FRIENDS_IGNORE_RECT"))
-        XCTAssertTrue(script.contains("--ignore-rect"))
-        XCTAssertTrue(script.contains("0,565,402,48"))
+        XCTAssertFalse(script.contains("FRIENDS_IGNORE_RECT"))
+        XCTAssertFalse(script.contains("0,565,402,48"))
         let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/VisualParity.swift")
         XCTAssertTrue(parity.contains("ignoreRects"))
         XCTAssertTrue(parity.contains("[--ignore-rect x,y,w,h]"))
-        XCTAssertTrue(FileManager.default.fileExists(
-            atPath: repositoryRoot.appendingPathComponent(
-                "Prototypes/AtlasPostcard/Reference/ProductionTargets/friends.png"
-            ).path
-        ))
         let friendsPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets/friends.png"
         ))
         XCTAssertEqual([UInt8](friendsPNG.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
         XCTAssertEqual(pngDimension(friendsPNG, at: 16), 402)
         XCTAssertEqual(pngDimension(friendsPNG, at: 20), 874)
+        let friendsDarkPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
+            "Prototypes/AtlasPostcard/Reference/ProductionTargets/friends-dark.png"
+        ))
+        XCTAssertEqual(pngDimension(friendsDarkPNG, at: 16), 402)
+        XCTAssertEqual(pngDimension(friendsDarkPNG, at: 20), 874)
         let readme = try source(at: "Prototypes/AtlasPostcard/README.md")
-        XCTAssertTrue(readme.contains("2026-10-19-doodle-v1-friends.png"))
-        XCTAssertTrue(readme.contains("uniform scale"))
-        XCTAssertTrue(readme.contains("--ignore-rect"))
+        XCTAssertTrue(readme.contains("friends-light.png"))
+        XCTAssertTrue(readme.contains("2026-10-20"))
+        XCTAssertFalse(readme.contains("2026-10-19-doodle-v1-friends.png"))
+        XCTAssertFalse(readme.contains("Shared map strip"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("attach(app, name: \"five-tab-friends\")"))
         XCTAssertTrue(rail.contains("ProductionTargets/friends.png"))

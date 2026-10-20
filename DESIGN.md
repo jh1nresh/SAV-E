@@ -886,14 +886,13 @@ source clues or visit timestamps appear in post projections.
 ### Friends
 
 Home / Map / + / Friends / Passport remains the root bar. Friends is
-people-first doodle: Caveat / Iansui “Friends” / 「朋友」 title, outline
-Invite, 48pt forest-ring avatars (initial or photo), author name, and
-“last at … · 2d” for the latest explicit post, with a 32pt doodle sticker
-(coffee, noodles, lantern, mountain — matching the Friends mock).
-The shared map stays hidden (HoP). Parity target is the Doodle Friends mock
-at exactly 0.90; the mock's Shared map strip is an `--ignore-rect` on that
-call (same mechanism Map uses). An author opens a read-only passport under
-the same live follower audience gate.
+people-first doodle: Caveat / Iansui “Friends” / 「朋友」 title, coral
+outline “＋ Invite”, 最近動態 Recent, 48pt kraft-light avatars (initial or
+photo), author name, and “saved/visited … · 2h” (or “N places in city”)
+for the latest explicit posts. No right-side stickers. The shared map
+stays hidden (HoP). Parity target is DESIGN 2026-10-20 `friends-light.png`
+at exactly 0.90 (402×874, no shared-map strip, no `--ignore-rect`). An
+author opens a read-only passport under the same live follower audience gate.
 Loading, retry, empty and withdrawn states are explicit; sample activity exists
 only in isolated UI fixtures. A follow or private memory update never publishes.
 

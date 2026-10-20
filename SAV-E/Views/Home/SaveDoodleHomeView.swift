@@ -70,11 +70,12 @@ struct SaveDoodleHomeView: View {
     /// Always-on Home → Saves handoff. Review (`home.review`) is the visible
     /// entry when N>0; this keeps Saves reachable when the clues line is
     /// omitted. Identifier is `home.openSaves`, not the retired library row.
+    /// 44pt in the status-bar corner so UI tests can tap it; Color.clear is
+    /// not hittable, so the fill is paper at vanishing opacity.
     private var hiddenSavesRoute: some View {
         Button(action: presentation.onReviewAll) {
-            Color.clear
-                .frame(width: 1)
-                .frame(height: 1)
+            SaveAtlasPalette.paper.opacity(0.01)
+                .frame(width: SaveLayout.minTap, height: SaveLayout.minTap)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("home.openSaves")

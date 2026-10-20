@@ -3076,24 +3076,21 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Home", app: app)
         // DESIGN: Review (`home.review`) is the visible Home → Saves entry
         // when N>0. The retired library row stays gone. When the clues line
-        // is omitted, `home.openSaves` is the always-on handoff.
+        // is omitted, `home.openSaves` is the always-on handoff. Do not scroll
+        // to `home.openSaves` — it sits in a root overlay, not the list.
         let review = app.descendants(matching: .any)["home.review"]
         let fallback = app.descendants(matching: .any)["home.openSaves"]
-        let entry: XCUIElement
+        let saves = app.descendants(matching: .any)["saves.root"]
         if review.waitForExistence(timeout: timeout(2)) {
-            entry = review
-        } else {
+            _ = scrollUntilHittable(review, in: app.scrollViews.firstMatch)
+            tapReachable(review)
+        }
+        if !saves.waitForExistence(timeout: timeout(3)) {
             XCTAssertTrue(
                 fallback.waitForExistence(timeout: stepTimeout),
                 "Missing Home Saves entry"
             )
-            entry = fallback
-        }
-        _ = scrollUntilHittable(entry, in: app.scrollViews.firstMatch)
-        tapReachable(entry)
-        let saves = app.descendants(matching: .any)["saves.root"]
-        if !saves.waitForExistence(timeout: timeout(5)) {
-            tapReachable(entry)
+            tapReachable(fallback)
         }
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to
         // burn 120s per attempt; four flakes × 3 retries blew the 35-minute
@@ -3158,8 +3155,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// compares `five-tab-home` to `ProductionTargets/home.png` at 0.90 against
     /// the Doodle v1 Home mock. Do not retune that gate here.
     /// Friends compares `five-tab-friends` to `ProductionTargets/friends.png`
-    /// at exactly 0.90 (Doodle Friends mock, uniform-scale pad; shared map
-    /// strip is `--ignore-rect` because live UI hides it).
+    /// at exactly 0.90 (DESIGN 2026-10-20 friends-light.png, 402×874, no
+    /// shared-map strip).
     @MainActor
     private func waitForHomeCoverImagery(_ app: XCUIApplication) {
         XCTAssertTrue(

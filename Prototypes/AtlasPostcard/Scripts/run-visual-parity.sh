@@ -30,9 +30,7 @@ five-tab-home attachment for Home and falls back to atlas-home for
 prototype-only runs. Friends prefers five-tab-friends and falls back to
 atlas-friends. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
 and atlas-map XCTest attachments. The Friends gate is exactly 0.90 against
-the Doodle Friends mock. Live Friends hides the mock's Shared map strip
-(HoP); that kraft row is passed as --ignore-rect, the same mechanism Map
-uses.
+DESIGN 2026-10-20 friends-light.png (402×874, no shared-map strip).
 EOF
 }
 
@@ -359,12 +357,6 @@ else
 fi
 
 gate_failed=0
-# Live Friends hides the mock's "Shared map: Beijing eats · 12 places"
-# kraft strip (HoP). Exclude that row so 0.90 scores the doodle list and
-# chrome. Same --ignore-rect mechanism Map uses for the MapKit canvas.
-# Rect is 402x874 logical px: y 565..<613 is the kraft strip after the
-# uniform-scale pad of the ~603x705 phone screen.
-FRIENDS_IGNORE_RECT="0,565,402,48"
 for screen in home saves plan map friends; do
     actual="$ARTIFACT_DIR/output/$screen.png"
     if [[ ! -f "$actual" ]]; then
@@ -372,17 +364,11 @@ for screen in home saves plan map friends; do
         exit 2
     fi
 
-    extra_args=()
-    if [[ "$screen" == "friends" ]]; then
-        extra_args=(--ignore-rect "$FRIENDS_IGNORE_RECT")
-    fi
-
     if xcrun swift "$PARITY_SCRIPT" \
         --target "$ARTIFACT_DIR/reference/$screen.png" \
         --actual "$actual" \
         --diff "$ARTIFACT_DIR/diff/$screen.png" \
         --threshold "$THRESHOLD" \
-        "${extra_args[@]}" \
         >"$ARTIFACT_DIR/results/$screen.json"
     then
         status="PASS"
