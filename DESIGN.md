@@ -1,16 +1,17 @@
 # Savvy Design System
 
-> Last updated: 2026-10-19
+> Last updated: 2026-10-20
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** still governs paper, type, kraft, and coral
-> chrome, with the 2026-10-19 v5 cream/ink/stroke lock below. **Tile-town** is
-> the product Map base until the Doodle Map PR (founder lock 2026-10-14).
-> Friends no longer uses a tile-town strip.
-> The 2026-10-19 founder decision replaces the Home hero and Map tab with a
-> full-pixel **isometric** tile town; that renderer is a follow-up PR. **Soft
-> Pixel** is accents-only *on* tile-town (pins / seals / Memo). **Cream-notebook**
-> tokens are legacy-surface-only. See "Tile Town", "Atlas Postcard Tokens",
-> and "Legacy Cream-Notebook Tokens" below.
+> chrome, with the 2026-10-19 v5 cream/ink/stroke lock below. **Tile-town**
+> remains the product Map base until the Doodle Map PR
+> (founder lock 2026-10-14). Home and Friends no longer use it. Founder 2026-10-20:
+> 「像素小鎮已經不要了」 — tile-town is abandoned; this stack keeps only
+> shared leftovers for a later cleanup. The 2026-10-19 isometric Home hero
+> is withdrawn. **Soft Pixel** is accents-only on remaining town surfaces
+> (pins / seals / Memo). **Cream-notebook** tokens are legacy-surface-only.
+> See "Tile Town", "Atlas Postcard Tokens", and "Legacy Cream-Notebook
+> Tokens" below.
 
 ## Product Frame
 
@@ -109,10 +110,12 @@ Rules:
 
 ### Tile Town (product map base)
 
-**Lock (2026-10-14 founder, via CEO):** product Map and Home peek use a
+**Lock (2026-10-14 founder, via CEO):** product Map uses a
 full-pixel tile-town base. Soft Pixel accents-only on MapKit (H1/M1 from
 2026-10-13 / PRs #277–#278) is **superseded for the map base**. Do not
 silent-partial Soft Pixel: a MapKit atlas with pixel pins is not the lock.
+Founder 2026-10-20 abandoned tile-town on Home; Map files stay for the
+Map agent.
 
 Rules:
 
@@ -130,9 +133,9 @@ Rules:
 - Tile-town is nearest-neighbor integer tiles (`SaveTileTownRaster`): buildings,
   roofs, trees, water, and roads are crisp cells. No anti-aliased vector houses
   or curved roads. Do not blurry-upscale pixel art.
-- **2026-10-19:** Home hero and Map become a full-pixel isometric tile town
-  (place-memory, not navigation). Pins and saved stamps stay tappable. The
-  isometric renderer is sequenced after this chrome/token PR.
+- **2026-10-19/20:** The isometric tile-town Home hero is withdrawn.
+  Map stays on the current town renderer until the Doodle Map PR. Pins
+  and saved stamps stay tappable on Map.
 - App Store frames and product UI share this town. In-app **titles** (Savvy
   wordmark, page titles) use `SavePixelDisplayText` / `SavePixelType`
   (Pixelify Sans Latin + Fusion Pixel CJK). Stamp names stay SF Rounded until
@@ -669,8 +672,9 @@ Nearby / Saved / Friends chips must not appear here.
 HoP locked D2 (city switcher) and D3 (Eat/Go + nearby own-saves) on
 2026-10-19. The 2026-10-14 tile-town Home chrome (quiet search, Trips /
 Saves / More header icons, tile-town peek, recent stamps) is superseded
-on Home only. Map and Passport keep their current tile-town lock until
-their Doodle PRs.
+on Home only. Founder 2026-10-20: tile-town is abandoned; Home ships
+Doodle only. Map and Passport keep their current town lock until their
+Doodle PRs.
 
 Eat shows only Eat (food, cafe, bar). Go shows only Go (attraction, stay,
 shopping). The list is the user's own saves near the selected city or
