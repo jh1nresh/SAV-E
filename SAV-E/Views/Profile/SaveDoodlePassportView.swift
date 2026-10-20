@@ -1,3 +1,4 @@
+import CoreLocation
 import SwiftUI
 
 /// Doodle v1 Passport: sticker grid, city list, and Collected (spec §7.4).
@@ -332,6 +333,7 @@ struct SaveDoodlePassportPage: View {
         SaveDoodlePassportCatalog.cityPlaces(
             from: places,
             selection: session.city,
+            location: passportLocation,
             locationDenied: locationService.isAuthorizationDenied
         )
     }
@@ -344,9 +346,14 @@ struct SaveDoodlePassportPage: View {
         return SaveDoodlePassportCatalog.slots(
             from: places,
             selection: session.city,
+            location: passportLocation,
             locationDenied: locationService.isAuthorizationDenied,
             visitStore: visitStore
         )
+    }
+
+    private var passportLocation: CLLocation? {
+        locationService.isAuthorizationDenied ? nil : locationService.currentLocation
     }
 
     private var cityGroups: [SaveDoodleCityGroup] {
@@ -382,11 +389,10 @@ struct SaveDoodlePassportPage: View {
         if SaveDoodlePassportCatalog.usesDoodleFace {
             return SaveDoodlePassportCatalog.doodleFaceVisitedLine
         }
-        let visited = SaveDoodlePassportCatalog.visitedCount(in: cityPlaces)
-        let goal = SaveDoodlePassportCatalog.goal(for: max(cityPlaces.count, 1))
+        let count = SaveDoodleHomeCatalog.cityCollectedCount(in: cityPlaces)
         return languageSettings.localized(
-            english: "\(visited) of \(goal) visited",
-            traditionalChinese: "已拜訪 \(visited) / \(goal)"
+            english: "\(count.visited) of \(count.saved) visited",
+            traditionalChinese: "已拜訪 \(count.visited) / \(count.saved)"
         )
     }
 

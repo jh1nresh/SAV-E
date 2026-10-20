@@ -331,17 +331,31 @@ enum ReviewDemoSeed {
 
     /// Temple of Heaven (天壇) Eat rows plus the Map sheet park. Distances
     /// match the DESIGN v2 Home mock from a Tiantan fix: 450m / 800m / 1.1km.
+    /// Twelve Tiantan saves, four visited (2 Eat + 2 Go). Only the three
+    /// nearby Eat rows are mappable on Home; extra city saves stay off the
+    /// map so the 0.90 Home/Map faces keep the same pins.
     static func doodleParityPlaces(now: Date = Date()) -> [Place] {
-        [
-            (0, "Siji Minfu Roast Duck", "Tiantan", PlaceCategory.food, PlaceStatus.visited, 39.886242, 116.4066),
-            (1, "Fangzhuangchang Noodles", "Tiantan", PlaceCategory.food, PlaceStatus.visited, 39.889387, 116.4066),
-            (2, "Grey Cafe", "Tiantan", PlaceCategory.cafe, PlaceStatus.wantToGo, 39.892082, 116.4066),
-            (3, "Temple of Heaven Park", "Beijing, China", PlaceCategory.attraction, PlaceStatus.visited, 39.884895, 116.4066),
-        ].map { index, name, address, category, status, latitude, longitude in
+        let nearby: [(Int, String, PlaceCategory, PlaceStatus, Double, Double)] = [
+            (0, "Siji Minfu Roast Duck", .food, .visited, 39.886242, 116.4066),
+            (1, "Fangzhuangchang Noodles", .food, .visited, 39.889387, 116.4066),
+            (2, "Grey Cafe", .cafe, .wantToGo, 39.892082, 116.4066),
+            (3, "Temple of Heaven Park", .attraction, .visited, 39.884895, 116.4066),
+        ]
+        let cityOnly: [(Int, String, PlaceCategory, PlaceStatus)] = [
+            (4, "Lantern Alley", .attraction, .visited),
+            (5, "Jingshan", .attraction, .wantToGo),
+            (6, "Houhai Bridge", .attraction, .wantToGo),
+            (7, "Page One", .shopping, .wantToGo),
+            (8, "Houhai Bicycle", .attraction, .wantToGo),
+            (9, "Chaoyang Park Wheel", .attraction, .wantToGo),
+            (10, "Summer Palace", .attraction, .wantToGo),
+            (11, "Beihai Park", .attraction, .wantToGo),
+        ]
+        let mapped = nearby.map { index, name, category, status, latitude, longitude in
             Place(
                 id: UUID(uuidString: String(format: "30000000-0000-0000-0000-%012d", index + 1))!,
                 name: name,
-                address: address,
+                address: "Tiantan",
                 latitude: latitude,
                 longitude: longitude,
                 category: category,
@@ -350,6 +364,20 @@ enum ReviewDemoSeed {
                 createdAt: now.addingTimeInterval(Double(-index))
             )
         }
+        let extras = cityOnly.map { index, name, category, status in
+            Place(
+                id: UUID(uuidString: String(format: "30000000-0000-0000-0000-%012d", index + 1))!,
+                name: name,
+                address: "Tiantan",
+                latitude: 0,
+                longitude: 0,
+                category: category,
+                status: status,
+                sourcePlatform: .other,
+                createdAt: now.addingTimeInterval(Double(-index))
+            )
+        }
+        return mapped + extras
     }
 
     /// Prefer the DESIGN Map sheet place when the parity face is on; otherwise

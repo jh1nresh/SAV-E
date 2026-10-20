@@ -154,8 +154,190 @@ final class SaveDoodleHomeTests: XCTestCase {
         let progress = SaveDoodleHomeCatalog.collectedProgress(in: [visited, saved])
         XCTAssertEqual(progress.visited, 1)
         XCTAssertEqual(progress.saved, 2)
-        XCTAssertEqual(progress.goal, 12)
+        XCTAssertEqual(progress.goal, 2)
         XCTAssertEqual(SaveDoodleHomeCatalog.collectedStamps(in: [visited, saved]).map(\.name), ["Duck"])
+    }
+
+    /// T1: city A has 12 saves and 4 visited across Eat and Go. Home reads
+    /// Collected 4/12 while the Eat list still shows three nearby rows.
+    func testT1HomeCollectedFourOfTwelveWithThreeEatRows() {
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+        let places = ReviewDemoSeed.doodleParityPlaces(now: now)
+        let listed = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .nearYou,
+            location: tiantanFix,
+            locationDenied: false
+        )
+        XCTAssertEqual(listed.count, 3)
+        XCTAssertEqual(
+            listed.map(\.place.name),
+            ["Siji Minfu Roast Duck", "Fangzhuangchang Noodles", "Grey Cafe"]
+        )
+        let scope = SaveDoodleHomeCatalog.collectedScopePlaces(
+            from: places,
+            selection: .nearYou,
+            location: tiantanFix,
+            locationDenied: false
+        )
+        let count = SaveDoodleHomeCatalog.cityCollectedCount(in: scope)
+        XCTAssertEqual(count.visited, 4)
+        XCTAssertEqual(count.saved, 12)
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.collectedProgress(in: scope).goal,
+            12
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.cityDisplayName(for: listed[0].place, language: .english),
+            "Tiantan"
+        )
+    }
+
+    /// T2: switching Eat → Go must not change Collected X/Y.
+    func testT2HomeCollectedUnchangedWhenSwitchingToGo() {
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+        let places = ReviewDemoSeed.doodleParityPlaces(now: now)
+        let eat = SaveDoodleHomeCatalog.cityCollectedCount(
+            in: SaveDoodleHomeCatalog.collectedScopePlaces(
+                from: places,
+                selection: .nearYou,
+                location: tiantanFix,
+                locationDenied: false
+            )
+        )
+        let goListed = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .go,
+            selection: .nearYou,
+            location: tiantanFix,
+            locationDenied: false
+        )
+        let go = SaveDoodleHomeCatalog.cityCollectedCount(
+            in: SaveDoodleHomeCatalog.collectedScopePlaces(
+                from: places,
+                selection: .nearYou,
+                location: tiantanFix,
+                locationDenied: false
+            )
+        )
+        XCTAssertNotEqual(goListed.count, 12)
+        XCTAssertEqual(eat.visited, 4)
+        XCTAssertEqual(eat.saved, 12)
+        XCTAssertEqual(go.visited, eat.visited)
+        XCTAssertEqual(go.saved, eat.saved)
+    }
+
+    /// T3: marking one saved place visited increments X and leaves Y at 12.
+    func testT3HomeCollectedIncreasesAfterMarkVisited() {
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+        let places = ReviewDemoSeed.doodleParityPlaces(now: now).map { place -> Place in
+            guard place.name == "Grey Cafe" else { return place }
+            var updated = place
+            updated.status = .visited
+            return updated
+        }
+        let count = SaveDoodleHomeCatalog.cityCollectedCount(
+            in: SaveDoodleHomeCatalog.collectedScopePlaces(
+                from: places,
+                selection: .nearYou,
+                location: tiantanFix,
+                locationDenied: false
+            )
+        )
+        XCTAssertEqual(count.visited, 5)
+        XCTAssertEqual(count.saved, 12)
+    }
+
+    /// T4: switching to city B (3 saved, 1 visited) reads 1/3, not the
+    /// passport-goal 12.
+    func testT4HomeCollectedFollowsCitySwitch() {
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+        let cityA = ReviewDemoSeed.doodleParityPlaces(now: now)
+        let tokyo = "1-22-7 Jinnan, Shibuya City, Tokyo, Japan"
+        let cityB = [
+            place("Ichiran", tokyo, .food, status: .visited, createdAt: now),
+            place("Hotel", tokyo, .stay, createdAt: now.addingTimeInterval(-1)),
+            place("Shop", tokyo, .shopping, createdAt: now.addingTimeInterval(-2)),
+        ]
+        let all = cityA + cityB
+        let tiantan = SaveDoodleHomeCatalog.cityCollectedCount(
+            in: SaveDoodleHomeCatalog.collectedScopePlaces(
+                from: all,
+                selection: .nearYou,
+                location: tiantanFix,
+                locationDenied: false
+            )
+        )
+        XCTAssertEqual(tiantan.visited, 4)
+        XCTAssertEqual(tiantan.saved, 12)
+        let tokyoCount = SaveDoodleHomeCatalog.cityCollectedCount(
+            in: SaveDoodleHomeCatalog.collectedScopePlaces(
+                from: all,
+                selection: .city("tokyo"),
+                location: nil,
+                locationDenied: true
+            )
+        )
+        XCTAssertEqual(tokyoCount.visited, 1)
+        XCTAssertEqual(tokyoCount.saved, 3)
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.collectedProgress(in: cityB).goal,
+            3
+        )
+    }
+
+    /// T5: a city with no saves hides the strip (or would be 0/0) and
+    /// does not crash.
+    func testT5HomeCollectedHiddenWhenCityHasNoSaves() throws {
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+        let places = ReviewDemoSeed.doodleParityPlaces(now: now)
+        let scope = SaveDoodleHomeCatalog.collectedScopePlaces(
+            from: places,
+            selection: .city("osaka"),
+            location: nil,
+            locationDenied: true
+        )
+        XCTAssertTrue(scope.isEmpty)
+        let count = SaveDoodleHomeCatalog.cityCollectedCount(in: scope)
+        XCTAssertEqual(count.visited, 0)
+        XCTAssertEqual(count.saved, 0)
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        XCTAssertTrue(home.contains("if !collectedPlaces.isEmpty"))
+        XCTAssertTrue(home.contains("collectedStrip"))
+    }
+
+    /// T6: the Collected strip opens Passport with the same city numbers.
+    func testT6HomeCollectedOpensPassportWithSameCount() throws {
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+        let places = ReviewDemoSeed.doodleParityPlaces(now: now)
+        let homeScope = SaveDoodleHomeCatalog.collectedScopePlaces(
+            from: places,
+            selection: .nearYou,
+            location: tiantanFix,
+            locationDenied: false
+        )
+        let homeCount = SaveDoodleHomeCatalog.cityCollectedCount(in: homeScope)
+        let passportPlaces = SaveDoodlePassportCatalog.cityPlaces(
+            from: places,
+            selection: .nearYou,
+            location: tiantanFix,
+            locationDenied: false
+        )
+        XCTAssertEqual(homeCount.visited, 4)
+        XCTAssertEqual(homeCount.saved, 12)
+        XCTAssertEqual(SaveDoodlePassportCatalog.visitedCount(in: passportPlaces), homeCount.visited)
+        XCTAssertEqual(passportPlaces.count, homeCount.saved)
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        let strip = try XCTUnwrap(home.range(of: "private var collectedStrip"))
+        let empty = try XCTUnwrap(home.range(of: "private var emptyHome"))
+        XCTAssertTrue(home[strip.lowerBound..<empty.lowerBound].contains("presentation.onOpenPassport"))
+        XCTAssertTrue(home.contains("Collected \\(progress.visited)/\\(progress.saved)"))
+        let passport = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
+        XCTAssertTrue(passport.contains("cityCollectedCount(in: cityPlaces)"))
+        XCTAssertTrue(passport.contains("\\(count.visited) of \\(count.saved) visited"))
+        let catalog = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportCatalog.swift")
+        XCTAssertTrue(catalog.contains("collectedScopePlaces"))
     }
 
     func testSessionDefaultsToEatAndNearYou() {
@@ -209,6 +391,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(catalog.contains("case go"))
         XCTAssertTrue(catalog.contains("var accessibilityIdentifier: String { \"home.\\(rawValue)\" }"))
         XCTAssertTrue(home.contains("home.collected"))
+        XCTAssertTrue(home.contains("collectedScopePlaces"))
+        XCTAssertTrue(home.contains("if !collectedPlaces.isEmpty"))
         XCTAssertTrue(home.contains("home.empty.capture"))
         XCTAssertTrue(home.contains("home.review"))
         let cluesFn = try XCTUnwrap(home.range(of: "private var cluesLine"))
@@ -282,6 +466,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("SaveDoodleElephant"))
         XCTAssertTrue(home.contains("SaveDoodleEmptyPlate"))
         XCTAssertTrue(design.contains("then the city, clues"))
+        XCTAssertTrue(design.contains("HoP 2026-10-21"))
+        XCTAssertTrue(design.contains("every category"))
         XCTAssertTrue(design.contains("eade369"))
         XCTAssertTrue(design.contains("home-mask.png"))
         XCTAssertTrue(design.contains("Grade position, size, color"))
@@ -420,9 +606,21 @@ final class SaveDoodleHomeTests: XCTestCase {
                 "Fangzhuangchang Noodles",
                 "Grey Cafe",
                 "Temple of Heaven Park",
+                "Lantern Alley",
+                "Jingshan",
+                "Houhai Bridge",
+                "Page One",
+                "Houhai Bicycle",
+                "Chaoyang Park Wheel",
+                "Summer Palace",
+                "Beihai Park",
             ]
         )
+        XCTAssertEqual(places.count, 12)
+        XCTAssertEqual(places.filter { $0.status == .visited }.count, 4)
         XCTAssertEqual(SaveDoodleHomeCatalog.cityDisplayName(for: places[0], language: .english), "Tiantan")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: places[3]), SaveDoodleHomeCatalog.cityID(for: places[0]))
+        XCTAssertEqual(places[3].address, "Tiantan")
         let location = CLLocation(latitude: 39.8822, longitude: 116.4066)
         let listed = SaveDoodleHomeCatalog.listedPlaces(
             from: places,
@@ -450,6 +648,11 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(rail.contains("XCTAssertFalse(app.descendants(matching: .any)[\"home.locationPrompt\"].exists)"))
         XCTAssertTrue(rail.contains("Temple of Heaven Park"))
         XCTAssertTrue(rail.contains("--uitest-doodle-parity-face"))
+        XCTAssertTrue(rail.contains("Collected 4/12"))
+        XCTAssertTrue(rail.contains("doodle-home-go"))
+        let count = SaveDoodleHomeCatalog.cityCollectedCount(in: places)
+        XCTAssertEqual(count.visited, 4)
+        XCTAssertEqual(count.saved, 12)
     }
 
     func testMapAppliesSharedDoodleSessionFilter() throws {
@@ -644,6 +847,10 @@ final class SaveDoodleHomeTests: XCTestCase {
         let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
         XCTAssertTrue(map.contains("showsCityPicker = false"))
         XCTAssertTrue(map.contains(".id(visitResidue)"))
+    }
+
+    private var tiantanFix: CLLocation {
+        CLLocation(latitude: 39.8822, longitude: 116.4066)
     }
 
     private func place(

@@ -53,8 +53,10 @@ struct SaveDoodleHomeView: View {
                             .padding(.top, SaveSpace.md)
                         placeList
                             .padding(.top, SaveSpace.md)
-                        collectedStrip
-                            .padding(.top, SaveSpace.md)
+                        if !collectedPlaces.isEmpty {
+                            collectedStrip
+                                .padding(.top, SaveSpace.md)
+                        }
                     }
                 }
                 .padding(.horizontal, SaveLayout.screenMargin)
@@ -546,12 +548,12 @@ struct SaveDoodleHomeView: View {
     }
 
     private var collectedPlaces: [Place] {
-        switch resolvedSelection {
-        case .nearYou:
-            return listedPlaces.map(\.place)
-        case .city(let id):
-            return allPlaces.filter { SaveDoodleHomeCatalog.cityID(for: $0) == id }
-        }
+        SaveDoodleHomeCatalog.collectedScopePlaces(
+            from: allPlaces,
+            selection: session.city,
+            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
+            locationDenied: locationService.isAuthorizationDenied
+        )
     }
 
     private var collectedProgress: (visited: Int, saved: Int, goal: Int) {
@@ -565,8 +567,8 @@ struct SaveDoodleHomeView: View {
     private var collectedText: String {
         let progress = collectedProgress
         return localized(
-            "Collected \(progress.visited)/\(progress.goal)",
-            "已收集 \(progress.visited)/\(progress.goal)"
+            "Collected \(progress.visited)/\(progress.saved)",
+            "已收集 \(progress.visited)/\(progress.saved)"
         )
     }
 

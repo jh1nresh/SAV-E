@@ -694,6 +694,10 @@ Eat shows only Eat (food, cafe, bar). Go shows only Go (attraction, stay,
 shopping). The list is the user's own saves near the selected city or
 current location, sorted by distance. No discovery feed. Tapping the
 mini-map opens Map with the same filter and city.
+Collected X/Y is visited / all saved places in the current city scope,
+every category. Eat/Go and the listed row count do not change it;
+switching city does. The strip opens Passport with the same city
+numbers (HoP 2026-10-21).
 
 Location denied: hide "Near you", show the last city sorted by most
 recent save, and prompt to allow location. Empty nearby: Caveat title,

@@ -727,8 +727,24 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.staticTexts["Siji Minfu Roast Duck"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.staticTexts["Fangzhuangchang Noodles"].exists)
         XCTAssertTrue(app.staticTexts["Grey Cafe"].exists)
+        let citySwitcher = app.buttons["home.citySwitcher"]
+        XCTAssertTrue(citySwitcher.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(citySwitcher.label.contains("Near you"))
+        XCTAssertTrue(citySwitcher.label.contains("Tiantan"))
+        let collected = app.descendants(matching: .any)["home.collected"]
+        XCTAssertTrue(collected.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(collected.label, "Collected 4/12")
         attach(app, name: "five-tab-home")
         attach(app, name: "doodle-home-light")
+        let go = app.buttons["home.go"]
+        XCTAssertTrue(go.waitForExistence(timeout: stepTimeout))
+        go.tap()
+        XCTAssertEqual(app.descendants(matching: .any)["home.collected"].label, "Collected 4/12")
+        attach(app, name: "doodle-home-go")
+        let eat = app.buttons["home.eat"]
+        XCTAssertTrue(eat.waitForExistence(timeout: stepTimeout))
+        eat.tap()
+        XCTAssertEqual(app.descendants(matching: .any)["home.collected"].label, "Collected 4/12")
 
         let homeCapture = rootTabButton("Save", app: app)
         XCTAssertTrue(homeCapture.waitForExistence(timeout: stepTimeout))
