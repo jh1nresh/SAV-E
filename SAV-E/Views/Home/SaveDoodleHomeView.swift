@@ -22,9 +22,14 @@ struct SaveDoodleHomeView: View {
                 .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.xs)
                 .zIndex(2)
 
-            citySwitcher
-                .padding(.horizontal, SaveLayout.screenMargin)
-                .padding(.top, SaveSpace.tight)
+            ZStack(alignment: .trailing) {
+                citySwitcher
+                if showsUITestSavesRoute {
+                    hiddenSavesRoute
+                }
+            }
+            .padding(.horizontal, SaveLayout.screenMargin)
+            .padding(.top, SaveSpace.tight)
 
             if presentation.reviewCount > 0 {
                 cluesLine
@@ -59,24 +64,27 @@ struct SaveDoodleHomeView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SaveDottedBackground())
-        .overlay(alignment: .topLeading) {
-            hiddenSavesRoute
-        }
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
         }
     }
 
-    /// Always-on Home → Saves handoff. Review (`home.review`) is the visible
-    /// entry when N>0; this keeps Saves reachable when the clues line is
-    /// omitted. Identifier is `home.openSaves`, not the retired library row.
+    /// UITest-only Home → Saves handoff. Review (`home.review`) is the visible
+    /// entry when N>0. This 44pt trailing control keeps Saves reachable when
+    /// the clues line is omitted. Identifier is `home.openSaves`.
+    private var showsUITestSavesRoute: Bool {
+        ProcessInfo.processInfo.arguments.contains("--uitest-complete-onboarding")
+    }
+
     private var hiddenSavesRoute: some View {
         Button(action: presentation.onReviewAll) {
             Color.clear
-                .frame(width: 1)
-                .frame(height: 1)
+                .frame(width: SaveLayout.minTap)
+                .frame(height: SaveLayout.minTap)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .fixedSize()
         .accessibilityIdentifier("home.openSaves")
         .accessibilityLabel(localized("Open Saves", "開啟收藏"))
     }

@@ -162,6 +162,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("home.empty.capture"))
         XCTAssertTrue(home.contains("home.review"))
         XCTAssertTrue(home.contains("home.openSaves"))
+        XCTAssertTrue(home.contains("showsUITestSavesRoute"))
+        XCTAssertTrue(home.contains("SaveLayout.minTap"))
         XCTAssertFalse(home.contains("\"home.saves\""))
         XCTAssertFalse(home.contains("See all saves"))
         XCTAssertFalse(home.contains("看全部收藏"))
@@ -208,11 +210,11 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(bridge.contains("Home is `SaveDoodleHomeView`"))
         XCTAssertFalse(bridge.contains("Live Home uses the tile-town peek"))
         let readme = try source(at: "Prototypes/AtlasPostcard/README.md")
-        XCTAssertTrue(readme.contains("2026-10-19-doodle-v1-home.png"))
+        XCTAssertTrue(readme.contains("home-light.png"))
+        XCTAssertTrue(readme.contains("23cca55"))
+        XCTAssertTrue(readme.contains("layout boxes"))
         XCTAssertTrue(readme.contains("0.90"))
-        XCTAssertTrue(readme.contains("scaled uniformly"))
-        XCTAssertTrue(readme.contains("to fill 402"))
-        XCTAssertTrue(readme.contains("not a non-uniform stretch"))
+        XCTAssertTrue(readme.contains("402×874") || readme.contains("402 x 874") || readme.contains("402 × 874"))
         XCTAssertFalse(readme.contains("padded with paper"))
         XCTAssertFalse(readme.contains("nearest-neighbor tile-town peek"))
         let homeTarget = repositoryRoot.appendingPathComponent(
@@ -222,6 +224,11 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual([UInt8](homePNG.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
         XCTAssertEqual(pngDimension(homePNG, at: 16), 402)
         XCTAssertEqual(pngDimension(homePNG, at: 20), 874)
+        let homeDarkPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
+            "Prototypes/AtlasPostcard/Reference/ProductionTargets/home-dark.png"
+        ))
+        XCTAssertEqual(pngDimension(homeDarkPNG, at: 16), 402)
+        XCTAssertEqual(pngDimension(homeDarkPNG, at: 20), 874)
         let mapPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png"
         ))

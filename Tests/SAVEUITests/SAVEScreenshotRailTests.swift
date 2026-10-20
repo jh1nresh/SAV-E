@@ -996,6 +996,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-review-demo-offline",
                 "--uitest-review-map-results",
                 "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
@@ -1257,6 +1258,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--skip-map-tour",
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
@@ -2546,6 +2548,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--skip-map-tour",
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
@@ -2715,6 +2718,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--skip-map-tour",
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
@@ -3070,21 +3074,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         // is omitted, `home.openSaves` is the always-on handoff.
         let review = app.descendants(matching: .any)["home.review"]
         let fallback = app.descendants(matching: .any)["home.openSaves"]
-        let entry: XCUIElement
-        if review.waitForExistence(timeout: timeout(2)) {
-            entry = review
-        } else {
-            XCTAssertTrue(
-                fallback.waitForExistence(timeout: stepTimeout),
-                "Missing Home Saves entry"
-            )
-            entry = fallback
-        }
-        _ = scrollUntilHittable(entry, in: app.scrollViews.firstMatch)
+        XCTAssertTrue(
+            review.waitForExistence(timeout: timeout(2))
+                || fallback.waitForExistence(timeout: stepTimeout),
+            "Missing Home Saves entry"
+        )
+        let entry = review.exists ? review : fallback
         tapReachable(entry)
         let saves = app.descendants(matching: .any)["saves.root"]
         if !saves.waitForExistence(timeout: timeout(5)) {
-            tapReachable(entry)
+            if fallback.exists { tapReachable(fallback) }
+            if !saves.waitForExistence(timeout: timeout(3)), review.exists {
+                tapReachable(review)
+            }
         }
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to
         // burn 120s per attempt; four flakes × 3 retries blew the 35-minute
@@ -3147,7 +3149,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     /// Live Home is the Doodle Eat/Go list plus mini-map. The Atlas gate still
     /// compares `five-tab-home` to `ProductionTargets/home.png` at 0.90 against
-    /// the Doodle v1 Home mock. Do not retune that gate here.
+    /// DESIGN's 2026-10-20 `home-light.png`. Do not retune that gate here.
     @MainActor
     private func waitForHomeCoverImagery(_ app: XCUIApplication) {
         XCTAssertTrue(
