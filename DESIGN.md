@@ -949,3 +949,10 @@ Rules:
 - If a screen needs a new state, update the State Model first.
 
 <!-- ci: pull_request required-check tip 20260922T184802Z -->
+
+### Doodle Passport narrow layouts
+
+The sticker grid uses up to four 64pt columns with 16pt gaps. It reflows to
+three columns on 375/390pt phones after the 24pt screen and panel insets.
+The rank legend stacks when its full text cannot fit, including larger text
+sizes. Map and Passport share manual visit history and the same daily deduplication.

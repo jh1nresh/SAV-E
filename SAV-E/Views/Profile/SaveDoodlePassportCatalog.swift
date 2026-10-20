@@ -34,36 +34,29 @@ enum SavePassportStampRank: Int, Comparable, CaseIterable {
 final class SavePassportVisitStore {
     static let shared = SavePassportVisitStore()
 
-    private let defaults: UserDefaults
+    private let history: SaveDoodleVisitStore
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(
+        defaults: UserDefaults = .standard,
+        calendar: Calendar = .current,
+        now: @escaping () -> Date = { Date() }
+    ) {
+        history = SaveDoodleVisitStore(defaults: defaults, calendar: calendar, now: now)
     }
 
-    func count(for id: UUID) -> Int {
-        defaults.integer(forKey: Self.key(id))
-    }
+    func count(for id: UUID) -> Int { history.count(for: id) }
 
     @discardableResult
     func recordVisit(for id: UUID) -> Int {
-        let next = max(count(for: id), 0) + 1
-        defaults.set(next, forKey: Self.key(id))
-        return next
+        history.recordVisit(for: id)
+        return count(for: id)
     }
 
     func rank(for id: UUID, visited: Bool) -> SavePassportStampRank {
-        let stored = count(for: id)
-        let effective = max(stored, visited ? 1 : 0)
-        return SavePassportStampRank.from(visitCount: effective)
+        SavePassportStampRank.from(visitCount: max(count(for: id), visited ? 1 : 0))
     }
 
-    private static var suiteSuffix: String {
-        ProcessInfo.processInfo.environment["SAVE_UI_TEST_STORAGE_ID"] ?? "default"
-    }
-
-    static func key(_ id: UUID) -> String {
-        "save.doodle.passport.visits.\(suiteSuffix).\(id.uuidString)"
-    }
+    static func key(_ id: UUID) -> String { SaveDoodleVisitStore.countKey(id) }
 }
 
 enum SaveDoodleStickerKind: String, CaseIterable, Equatable {

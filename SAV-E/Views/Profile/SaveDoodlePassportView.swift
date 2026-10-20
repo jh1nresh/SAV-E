@@ -15,6 +15,7 @@ struct SaveDoodlePassportPage: View {
 
     @State private var showsCityPicker = false
     @State private var stampingID: String?
+    @State private var visitRevision = 0
     private let visitStore = SavePassportVisitStore.shared
 
     var body: some View {
@@ -37,6 +38,7 @@ struct SaveDoodlePassportPage: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SaveDottedBackground().ignoresSafeArea())
+        .onAppear { visitRevision += 1 }
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
         }
@@ -133,18 +135,20 @@ struct SaveDoodlePassportPage: View {
     }
 
     private var stickerGrid: some View {
-        let columns = Array(
-            repeating: GridItem(
-                .flexible(minimum: SaveDoodlePassportCatalog.slotSize),
-                spacing: SaveDoodlePassportCatalog.minColumnGap
-            ),
-            count: SaveDoodlePassportCatalog.columnCount
-        )
+        let columns = [GridItem(
+            .adaptive(minimum: SaveDoodlePassportCatalog.slotSize),
+            spacing: SaveDoodlePassportCatalog.minColumnGap
+        )]
         return LazyVGrid(columns: columns, spacing: SaveDoodlePassportCatalog.rowGap) {
             ForEach(slots) { slot in
                 slotButton(slot)
             }
         }
+        // Four columns on wider phones; naturally reflow to three on 375/390pt.
+        .frame(maxWidth: CGFloat(SaveDoodlePassportCatalog.columnCount)
+            * SaveDoodlePassportCatalog.slotSize
+            + CGFloat(SaveDoodlePassportCatalog.columnCount - 1)
+            * SaveDoodlePassportCatalog.minColumnGap)
     }
 
     private func slotButton(_ slot: SaveDoodlePassportSlot) -> some View {
@@ -170,20 +174,34 @@ struct SaveDoodlePassportPage: View {
     }
 
     private var legend: some View {
-        HStack(spacing: SaveSpace.xs) {
-            legendSwatch(rank: .single)
-            Text(languageSettings.localized(english: "single ring  1", traditionalChinese: "單圈  1"))
-            Text("·")
-            legendSwatch(rank: .double)
-            Text(languageSettings.localized(english: "double ring  3", traditionalChinese: "雙圈  3"))
-            Text("·")
-            legendSwatch(rank: .gold)
-            Text(languageSettings.localized(english: "gold  5", traditionalChinese: "金  5"))
-            Spacer(minLength: 0)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: SaveSpace.xs) {
+                legendItems
+            }
+            .fixedSize(horizontal: true, vertical: false)
+            VStack(alignment: .leading, spacing: SaveSpace.xs) {
+                legendItems
+            }
         }
         .font(SaveAtlasType.body(13))
         .foregroundStyle(SaveAtlasPalette.muted)
         .accessibilityIdentifier("passport.legend")
+    }
+
+    @ViewBuilder
+    private var legendItems: some View {
+        HStack(spacing: SaveSpace.tight) {
+            legendSwatch(rank: .single)
+            Text(languageSettings.localized(english: "single ring  1", traditionalChinese: "單圈  1"))
+        }
+        HStack(spacing: SaveSpace.tight) {
+            legendSwatch(rank: .double)
+            Text(languageSettings.localized(english: "double ring  3", traditionalChinese: "雙圈  3"))
+        }
+        HStack(spacing: SaveSpace.tight) {
+            legendSwatch(rank: .gold)
+            Text(languageSettings.localized(english: "gold  5", traditionalChinese: "金  5"))
+        }
     }
 
     private func legendSwatch(rank: SavePassportStampRank) -> some View {
@@ -284,6 +302,7 @@ struct SaveDoodlePassportPage: View {
     }
 
     private var slots: [SaveDoodlePassportSlot] {
+        _ = visitRevision
         if SaveDoodlePassportCatalog.usesDoodleFace {
             return SaveDoodlePassportCatalog.doodleFaceSlots()
         }

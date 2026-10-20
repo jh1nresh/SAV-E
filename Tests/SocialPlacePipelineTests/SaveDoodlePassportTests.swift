@@ -65,17 +65,28 @@ final class SaveDoodlePassportTests: XCTestCase {
         let suite = "save.doodle.passport.visit.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defaults.removePersistentDomain(forName: suite)
-        let store = SavePassportVisitStore(defaults: defaults)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        var day = Date(timeIntervalSince1970: 1_760_000_000)
+        let store = SavePassportVisitStore(defaults: defaults, now: { day })
+        let mapHistory = SaveDoodleVisitStore(defaults: defaults, now: { day })
         let id = UUID()
         XCTAssertEqual(store.rank(for: id, visited: false), .none)
         XCTAssertEqual(store.recordVisit(for: id), 1)
+        XCTAssertEqual(store.recordVisit(for: id), 1, "The second surface cannot double-count the same day")
         XCTAssertEqual(store.rank(for: id, visited: true), .single)
-        store.recordVisit(for: id)
-        store.recordVisit(for: id)
+        for _ in 2...3 {
+            day = day.addingTimeInterval(86_400)
+            XCTAssertTrue(mapHistory.recordVisit(for: id))
+        }
         XCTAssertEqual(store.rank(for: id, visited: true), .double)
-        store.recordVisit(for: id)
-        store.recordVisit(for: id)
+        for _ in 4...5 {
+            day = day.addingTimeInterval(86_400)
+            XCTAssertTrue(mapHistory.recordVisit(for: id))
+        }
         XCTAssertEqual(store.rank(for: id, visited: true), .gold)
+        XCTAssertTrue(mapHistory.undoToday(for: id))
+        XCTAssertEqual(store.rank(for: id, visited: true), .double)
+        XCTAssertEqual(SavePassportVisitStore(defaults: defaults).count(for: id), 4)
     }
 
     func testRootIsDoodleGridAndFlagsOffTileTownMissions() throws {
