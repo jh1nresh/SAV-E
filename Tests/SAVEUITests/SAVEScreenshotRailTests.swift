@@ -999,6 +999,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-review-demo-offline",
                 "--uitest-review-map-results",
                 "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
@@ -1260,6 +1261,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--skip-map-tour",
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
@@ -1496,7 +1498,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         app.buttons["drawer.place.close"].firstMatch.tap()
         XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout))
-        tapReachable(app.descendants(matching: .any)["home.review"])
+        openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         let review = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch
         XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
@@ -1504,8 +1506,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "home-real-candidate-detail")
         app.buttons["drawer.place.close"].firstMatch.tap()
-        openRootTab("Home", app: app)
-        tapReachable(app.descendants(matching: .any)["home.review"])
+        openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         let firstCandidate = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch
         XCTAssertTrue(firstCandidate.label.contains("Harbor Oven Pizza"))
@@ -2537,6 +2538,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--skip-map-tour",
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
@@ -2712,6 +2714,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--skip-map-tour",
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": storageID]
@@ -3062,21 +3065,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        // DESIGN visual diff removed See all saves. Review (N>0) still opens Saves.
-        let entry = app.descendants(matching: .any)["home.review"]
-        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing Home Review entry")
-        _ = scrollUntilHittable(entry, in: app.scrollViews.firstMatch)
-        tapReachable(entry)
+        let entry = app.buttons["home.openSaves"]
+        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing visible Home Saves entry")
+        XCTAssertTrue(entry.isHittable, "Home Saves must be usable without a hidden test-only route")
+        XCTAssertGreaterThanOrEqual(entry.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(entry.frame.width, 44)
+        entry.tap()
         let saves = app.descendants(matching: .any)["saves.root"]
-        if !saves.waitForExistence(timeout: timeout(5)) {
-            tapReachable(entry)
-        }
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to
         // burn 120s per attempt; four flakes × 3 retries blew the 35-minute
         // rail step (CI 32778736280, exit 64).
         XCTAssertTrue(
             saves.waitForExistence(timeout: stepTimeout),
-            "Home Review entry did not open Saves"
+            "Home Saves entry did not open Saves"
         )
     }
 
@@ -3146,7 +3147,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     /// Live Home is the Doodle Eat/Go list plus mini-map. The Atlas gate still
     /// compares `five-tab-home` to `ProductionTargets/home.png` at 0.90 against
-    /// the Doodle v1 Home mock. Do not retune that gate here.
+    /// DESIGN's 2026-10-20 `home-light.png`. Do not retune that gate here.
     /// Passport compares `five-tab-passport` to `ProductionTargets/passport.png`
     /// at exactly 0.90 (Doodle Passport mock).
     @MainActor

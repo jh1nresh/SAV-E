@@ -206,7 +206,9 @@ jobs:
         if: steps.scope.outputs.ui == 'true'
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-UI-tests.log
+          SAVE_SCREENSHOT_DIR: ${{ runner.temp }}/SAVE-First-Run
         run: |
+          mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
           ui_args=()
           while IFS= read -r argument; do
             ui_args+=("$argument")
@@ -244,11 +246,26 @@ jobs:
             --threshold 0.90
 
       - name: Export first-run visual evidence
-        if: always() && (steps.ui_tests.outcome == 'success' || steps.ui_tests.outcome == 'failure')
+        if: always()
         run: |
-          xcrun xcresulttool export attachments \
-            --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
-            --output-path "$RUNNER_TEMP/SAVE-First-Run"
+          mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
+          if [[ -f "$RUNNER_TEMP/SAVE-UI.xcresult/Info.plist" ]]; then
+            xcrun xcresulttool export attachments \
+              --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
+              --output-path "$RUNNER_TEMP/SAVE-First-Run" \
+              || echo "xcresulttool export failed; keep SAVE_SCREENSHOT_DIR rasters."
+          else
+            echo "No readable UI result bundle; keep SAVE_SCREENSHOT_DIR rasters."
+          fi
+          echo "DESIGN Home rasters in SAVE-First-Run:"
+          for name in five-tab-home light-home dark-home; do
+            path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
+            if [[ -f "$path" ]]; then
+              wc -c "$path"
+            else
+              echo "missing $name.png"
+            fi
+          done
 
       - name: Reset focused simulator before Trip sheet UI test
         if: steps.scope.outputs.trip == 'true'

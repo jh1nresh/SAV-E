@@ -26,11 +26,9 @@ struct SaveDoodleHomeView: View {
                 .padding(.horizontal, SaveLayout.screenMargin)
                 .padding(.top, SaveSpace.tight)
 
-            if presentation.reviewCount > 0 {
-                cluesLine
-                    .padding(.horizontal, SaveLayout.screenMargin)
-                    .padding(.top, SaveSpace.xs)
-            }
+            eatGoRow
+                .padding(.horizontal, SaveLayout.screenMargin)
+                .padding(.top, SaveSpace.xs)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -45,6 +43,14 @@ struct SaveDoodleHomeView: View {
                     } else {
                         miniMap
                             .padding(.top, SaveSpace.md)
+                    }
+
+                    if presentation.reviewCount > 0 {
+                        cluesLine
+                            .padding(.top, SaveSpace.xs)
+                    }
+
+                    if !showsEmptyHome {
                         placeList
                             .padding(.top, SaveSpace.md)
                         collectedStrip
@@ -62,6 +68,21 @@ struct SaveDoodleHomeView: View {
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
         }
+    }
+
+    /// A visible production route, also available when there are no waiting clues.
+    private var savesButton: some View {
+        Button(action: presentation.onReviewAll) {
+            Label(localized("Saves", "收藏"), systemImage: "bookmark")
+                .font(SaveAtlasType.body(15))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .padding(.horizontal, SaveSpace.xs)
+                .frame(minWidth: SaveLayout.minTap, minHeight: SaveLayout.minTap)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.openSaves")
+        .accessibilityLabel(localized("Open Saves", "開啟收藏"))
     }
 
     private var header: some View {
@@ -83,14 +104,19 @@ struct SaveDoodleHomeView: View {
             .accessibilityIdentifier("home.passport")
 
             Spacer(minLength: SaveSpace.xs)
-
-            HStack(spacing: SaveSpace.xs) {
-                ForEach(SaveDoodleLens.allCases) { lens in
-                    eatGoChip(lens)
-                }
-            }
+            savesButton
         }
         .frame(minHeight: SaveLayout.minTap)
+    }
+
+    private var eatGoRow: some View {
+        HStack(spacing: SaveSpace.xs) {
+            ForEach(SaveDoodleLens.allCases) { lens in
+                eatGoChip(lens)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: SaveLayout.chipHeight)
     }
 
     private func eatGoChip(_ lens: SaveDoodleLens) -> some View {
@@ -664,14 +690,30 @@ struct SaveDoodleSticker: View {
     let visited: Bool
 
     var body: some View {
-        SaveDoodleStickerShape(category: category)
-            .stroke(
-                visited ? SaveAtlasPalette.ink : SaveDoodle.pencil,
-                style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)
-            )
-            .frame(width: 40, height: 40)
-            .frame(width: SaveLayout.stickerBox, height: SaveLayout.stickerBox)
-            .accessibilityHidden(true)
+        ZStack {
+            if visited {
+                SaveDoodleStickerShape(category: category)
+                    .fill(visitedFill)
+            }
+            SaveDoodleStickerShape(category: category)
+                .stroke(
+                    visited ? SaveAtlasPalette.ink : SaveDoodle.pencil,
+                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)
+                )
+        }
+        .frame(width: 40, height: 40)
+        .frame(width: SaveLayout.stickerBox, height: SaveLayout.stickerBox)
+        .accessibilityHidden(true)
+    }
+
+    private var visitedFill: Color {
+        switch category {
+        case .food, .cafe: SaveAtlasPalette.kraft
+        case .bar: SaveDoodle.stampRed
+        case .attraction: SaveDoodle.washGreen
+        case .stay: SaveDoodle.washBlue
+        case .shopping: SaveDoodle.stampGold
+        }
     }
 
     static func symbolName(for category: PlaceCategory) -> String {
