@@ -302,7 +302,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         let attach = try source(at: "Tests/SAVEUITests/SAVEUITestCase.swift")
         XCTAssertTrue(attach.contains("SAVE_SCREENSHOT_DIR"))
         XCTAssertTrue(attach.contains("pngRepresentation"))
-        let workflow = try source(at: ".github/workflows/ci.yml")
+        let workflow = try source(at: ".github/workflows/ios.yml")
         XCTAssertTrue(workflow.contains("SAVE_SCREENSHOT_DIR"))
         XCTAssertTrue(workflow.contains("five-tab-home"))
         XCTAssertTrue(workflow.contains("light-home"))
