@@ -276,7 +276,7 @@ jobs:
             test
 
       - name: Enforce Atlas production visual parity
-        if: steps.scope.outputs.ui == 'true'
+        if: always() && (steps.scope.outputs.ui == 'true')
         run: |
           Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh \
             --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
@@ -295,8 +295,8 @@ jobs:
           else
             echo "No readable UI result bundle; keep SAVE_SCREENSHOT_DIR rasters."
           fi
-          echo "DESIGN Home/Passport rasters in SAVE-First-Run:"
-          for name in five-tab-home light-home dark-home five-tab-passport doodle-passport-light doodle-passport-dark light-passport dark-passport; do
+          echo "DESIGN Home/Passport/Map rasters in SAVE-First-Run:"
+          for name in five-tab-home light-home dark-home five-tab-passport doodle-passport-light doodle-passport-dark light-passport dark-passport five-tab-map doodle-map-light light-map dark-map; do
             path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
             if [[ -f "$path" ]]; then
               wc -c "$path"

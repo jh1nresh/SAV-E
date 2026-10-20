@@ -78,6 +78,7 @@ struct SaveDoodleHomeView: View {
                 .foregroundStyle(SaveAtlasPalette.ink)
                 .padding(.horizontal, SaveSpace.xs)
                 .frame(minWidth: SaveLayout.minTap, minHeight: SaveLayout.minTap)
+                .padding(.vertical, 1)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -203,7 +204,8 @@ struct SaveDoodleHomeView: View {
                     .foregroundStyle(SaveAtlasPalette.muted)
                 Spacer(minLength: 0)
             }
-            .frame(minHeight: SaveLayout.minTap, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: SaveLayout.minTap, alignment: .leading)
+            .padding(.vertical, 1)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

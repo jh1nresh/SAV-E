@@ -63,9 +63,11 @@ The Home production target is DESIGN v2's exact 402×874
 size, color and font style. v1 is retired. Those rasters are rendered
 at 1× 402×874, not a crop. `VisualParity.swift` still accepts only a
 1× 402 × 874 target. Founder sign-off 2026-10-20:
-「改成跟手繪稿比對，門檻維持 0.90」. Saves, Plan, and Map targets stay
-on their current locks until those Doodle PRs. The `0.90` threshold
-remains unchanged.
+「改成跟手繪稿比對，門檻維持 0.90」. The Map production target is DESIGN
+v2's exact 402×874 `map-light.png` from the same commit, with
+`map-dark.png` for DESIGN comparison and `map-mask.png` (white =
+ignore the live Apple Maps area). Saves and Plan stay on their current
+locks until those Doodle PRs. The `0.90` threshold remains unchanged.
 
 The Passport production target is DESIGN v2's exact 402×874
 `passport-light.png` from `design/doodle-targets-2026-10-20` at `eade369`.
