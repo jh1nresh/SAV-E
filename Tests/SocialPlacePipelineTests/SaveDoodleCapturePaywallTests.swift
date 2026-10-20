@@ -148,6 +148,8 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
         XCTAssertTrue(parity.contains("--ignore-rects"))
         XCTAssertTrue(parity.contains("24,132,354,176;24,444,354,22;24,698,354,50"))
+        XCTAssertTrue(parity.contains("${#extra_args[@]} -gt 0"))
+        XCTAssertTrue(parity.contains("${#mask_args[@]} -gt 0"))
         XCTAssertFalse(parity.contains("0,432,402,104"))
         XCTAssertFalse(parity.contains("0,728,402,146"))
         XCTAssertFalse(parity.contains("24,548,354,44;48,610,306,24;24,662,354,64"))

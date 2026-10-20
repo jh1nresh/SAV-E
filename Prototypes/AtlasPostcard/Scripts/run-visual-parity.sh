@@ -444,7 +444,7 @@ for screen in home saves plan map passport capture paywall; do
         extra_args=(--ignore-mask "$MAP_MASK")
     fi
     # macOS CI bash + set -u treats "${empty[@]}" as unbound. Only expand
-    # when the arrays have values (home mask / map ignore-mask).
+    # when the arrays have values (home mask / map mask / paywall rects).
     parity_cmd=(
         xcrun swift "$PARITY_SCRIPT"
         --target "$ARTIFACT_DIR/reference/$screen.png"
