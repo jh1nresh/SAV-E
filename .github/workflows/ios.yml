@@ -36,9 +36,40 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Cheap ubuntu gate so drafts without ready-for-merge fail before the
+  # duplicate macOS ios-build. The required `ios` job still always runs
+  # and fails when this gate or ios-build did not succeed.
+  ios-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require full iOS suite
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus }}
+        run: |
+          if [[ "$EVENT_NAME" == 'workflow_dispatch' && -n "${UI_TEST_FOCUS:-}" ]]; then
+            echo '::error::workflow_dispatch ui_test_focus cannot satisfy the required ios check. Leave the input empty to run the full suite.'
+            exit 1
+          fi
+          if [[ "$EVENT_NAME" != 'pull_request' ]]; then
+            exit 0
+          fi
+          if [[ "$PR_DRAFT" != 'true' ]]; then
+            exit 0
+          fi
+          case ",$PR_LABELS," in
+            *,ready-for-merge,*) exit 0 ;;
+          esac
+          echo '::error::add ready-for-merge to run full suite (or mark the PR ready for review).'
+          exit 1
+
   # Compile-only gate so an iOS compile error fails in ~10 min instead of
   # waiting on the 75-minute unit+UI job. No tests and no simulator boot.
   ios-build:
+    needs: [ios-gate]
     runs-on: macos-26
     timeout-minutes: 20
 
@@ -97,29 +128,6 @@ jobs:
     steps:
       - name: Require ios-build
         run: '[[ "${{ needs.ios-build.result }}" == success ]] || exit 1'
-
-      - name: Require full iOS suite
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_DRAFT: ${{ github.event.pull_request.draft }}
-          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-          UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus }}
-        run: |
-          if [[ "$EVENT_NAME" == 'workflow_dispatch' && -n "${UI_TEST_FOCUS:-}" ]]; then
-            echo '::error::workflow_dispatch ui_test_focus cannot satisfy the required ios check. Leave the input empty to run the full suite.'
-            exit 1
-          fi
-          if [[ "$EVENT_NAME" != 'pull_request' ]]; then
-            exit 0
-          fi
-          if [[ "$PR_DRAFT" != 'true' ]]; then
-            exit 0
-          fi
-          case ",$PR_LABELS," in
-            *,ready-for-merge,*) exit 0 ;;
-          esac
-          echo '::error::add ready-for-merge to run full suite (or mark the PR ready for review).'
-          exit 1
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
