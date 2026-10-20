@@ -173,6 +173,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("pointSize: 20"))
         XCTAssertTrue(home.contains(".frame(height: 2)"))
         XCTAssertTrue(home.contains("height: SaveLayout.chipHeight"))
+        XCTAssertFalse(home.contains("minWidth: SaveLayout.minTap, height:"))
         XCTAssertTrue(home.contains(".frame(height: 160)"))
         XCTAssertTrue(home.contains("SaveLayout.screenMargin"))
         XCTAssertTrue(home.contains("SaveLayout.stickerBox"))
@@ -207,8 +208,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(readme.contains("2026-10-19-doodle-v1-home.png"))
         XCTAssertTrue(readme.contains("0.90"))
         XCTAssertTrue(readme.contains("scaled uniformly"))
-        XCTAssertTrue(readme.contains("padded with paper"))
+        XCTAssertTrue(readme.contains("to fill 402"))
         XCTAssertTrue(readme.contains("not a non-uniform stretch"))
+        XCTAssertFalse(readme.contains("padded with paper"))
         XCTAssertFalse(readme.contains("nearest-neighbor tile-town peek"))
         let homeTarget = repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets/home.png"
@@ -343,9 +345,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(rail.contains("func testMiniMapOpensMapWithCarriedFilterAndCityChange"))
         XCTAssertTrue(rail.contains("app.buttons[\"map.go\"]"))
         XCTAssertTrue(rail.contains("app.buttons[\"map.eat\"]"))
-        XCTAssertTrue(rail.contains("recordQ5ReusedMapTree"))
-        XCTAssertTrue(rail.contains("q5-reused-map-debugDescription"))
-        XCTAssertTrue(rail.contains("lifetime = .keepAlways"))
+        XCTAssertFalse(rail.contains("recordQ5ReusedMapTree"))
+        XCTAssertFalse(rail.contains("q5-reused-map-debugDescription"))
+        XCTAssertFalse(rail.contains("q5-reused-map"))
         XCTAssertEqual(
             content.components(separatedBy: "selectedRootTab = .map").count - 1,
             1,

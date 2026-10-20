@@ -103,7 +103,8 @@ struct SaveDoodleHomeView: View {
                 .font(SaveAtlasType.strong(15))
                 .foregroundStyle(selected ? Color.white : SaveAtlasPalette.ink)
                 .padding(.horizontal, SaveSpace.md)
-                .frame(minWidth: SaveLayout.minTap, height: SaveLayout.chipHeight)
+                .frame(minWidth: SaveLayout.minTap)
+                .frame(height: SaveLayout.chipHeight)
                 .background(
                     selected ? SaveAtlasPalette.coral : Color.clear,
                     in: Capsule()

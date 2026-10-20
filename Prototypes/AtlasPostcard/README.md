@@ -58,7 +58,7 @@ extraction, so approving a UI refresh cannot silently alter generated assets.
 The Home production target is DESIGN's Doodle v1 Home mock
 (`2026-10-19-doodle-v1-home.png`). Founder sign-off 2026-10-20:
 「改成跟手繪稿比對，門檻維持 0.90」. `VisualParity.swift` accepts only a
-1× 402 × 874 target. The landscape mock is cut to the phone, scaled uniformly, and padded with paper (`#FFF9EB`) so the 402:874 frame is not a non-uniform stretch. The locked face is the founder-signed Doodle Home mock. Saves, Plan, and Map targets stay on their current locks until those Doodle PRs. The comparator and `0.90` threshold remain unchanged.
+1× 402 × 874 target. The landscape mock is cut to the phone screen and scaled uniformly to fill 402×874 (crop along the long axis so the frame is not a non-uniform stretch and has no paper margins). The locked face is the founder-signed Doodle Home mock. Saves, Plan, and Map targets stay on their current locks until those Doodle PRs. The comparator and `0.90` threshold remain unchanged.
 
 ## Boundaries
 
