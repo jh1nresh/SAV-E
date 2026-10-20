@@ -17,22 +17,23 @@ struct SaveDoodleHomeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+                .frame(height: SaveLayout.minTap)
                 .padding(.horizontal, SaveLayout.screenMargin)
                 .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.xs)
-                .frame(minHeight: SaveLayout.minTap)
                 .zIndex(2)
 
             citySwitcher
                 .padding(.horizontal, SaveLayout.screenMargin)
                 .padding(.top, SaveSpace.tight)
 
+            if presentation.reviewCount > 0 {
+                cluesLine
+                    .padding(.horizontal, SaveLayout.screenMargin)
+                    .padding(.top, SaveSpace.xs)
+            }
+
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
-                    if presentation.reviewCount > 0 {
-                        cluesLine
-                            .padding(.top, SaveSpace.xs)
-                    }
-
                     if showsLocationPrompt {
                         locationPrompt
                             .padding(.top, SaveSpace.md)
@@ -46,18 +47,12 @@ struct SaveDoodleHomeView: View {
                             .padding(.top, SaveSpace.md)
                         placeList
                             .padding(.top, SaveSpace.md)
-                    }
-
-                    seeAllSaves
-                        .padding(.top, showsEmptyHome ? SaveSpace.xs : SaveSpace.tight)
-
-                    if !showsEmptyHome {
                         collectedStrip
                             .padding(.top, SaveSpace.md)
                     }
                 }
                 .padding(.horizontal, SaveLayout.screenMargin)
-                .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
+                .padding(.bottom, AtlasTabBarMetrics.height)
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("home.savedPlaces")
             }
@@ -73,7 +68,12 @@ struct SaveDoodleHomeView: View {
         HStack(spacing: SaveSpace.xs) {
             Button(action: presentation.onOpenPassport) {
                 HStack(alignment: .center, spacing: SaveSpace.xs) {
-                    SaveDisplayTitle(text: "Savvy", pointSize: 34, relativeTo: .largeTitle)
+                    SaveDisplayTitle(
+                        text: "Savvy",
+                        pointSize: 34,
+                        relativeTo: .largeTitle,
+                        locksPointSize: true
+                    )
                     SaveDoodleElephant(size: 28)
                 }
                 .contentShape(Rectangle())
@@ -102,8 +102,9 @@ struct SaveDoodleHomeView: View {
             Text(lens.title(language: languageSettings.language))
                 .font(SaveAtlasType.strong(15))
                 .foregroundStyle(selected ? Color.white : SaveAtlasPalette.ink)
-                .frame(minWidth: SaveLayout.minTap, minHeight: SaveLayout.chipHeight)
                 .padding(.horizontal, SaveSpace.md)
+                .frame(minWidth: SaveLayout.minTap)
+                .frame(height: SaveLayout.chipHeight)
                 .background(
                     selected ? SaveAtlasPalette.coral : Color.clear,
                     in: Capsule()
@@ -115,7 +116,6 @@ struct SaveDoodleHomeView: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .frame(minHeight: SaveLayout.minTap)
         .accessibilityLabel(lens.title(language: languageSettings.language))
         .accessibilityIdentifier(lens.accessibilityIdentifier)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -128,7 +128,8 @@ struct SaveDoodleHomeView: View {
                     SaveDisplayTitle(
                         text: localized("Near you", "附近"),
                         pointSize: 20,
-                        relativeTo: .title3
+                        relativeTo: .title3,
+                        locksPointSize: true
                     )
                     Text("·")
                         .font(SaveAtlasType.body(17))
@@ -138,7 +139,8 @@ struct SaveDoodleHomeView: View {
                     SaveDisplayTitle(
                         text: cityTitle,
                         pointSize: 20,
-                        relativeTo: .title3
+                        relativeTo: .title3,
+                        locksPointSize: true
                     )
                     Capsule()
                         .fill(SaveAtlasPalette.coral)
@@ -150,7 +152,7 @@ struct SaveDoodleHomeView: View {
                     .font(SaveAtlasType.body(13))
                     .foregroundStyle(SaveAtlasPalette.forest)
             }
-            .frame(maxWidth: .infinity, minHeight: SaveLayout.minTap, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -175,32 +177,11 @@ struct SaveDoodleHomeView: View {
                     .foregroundStyle(SaveAtlasPalette.muted)
                 Spacer(minLength: 0)
             }
-            .frame(minHeight: SaveLayout.minTap, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(cluesText)
         .accessibilityIdentifier("home.review")
-        .accessibilityAddTraits(.isButton)
-    }
-
-    private var seeAllSaves: some View {
-        Button(action: presentation.onOpenSaves) {
-            HStack(spacing: SaveSpace.tight) {
-                Text(localized("See all saves", "看全部收藏"))
-                    .font(SaveAtlasType.body(13))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                Text("›")
-                    .font(SaveAtlasType.body(13))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                Spacer(minLength: 0)
-            }
-            .frame(minHeight: SaveLayout.minTap, alignment: .leading)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(localized("See all saves", "看全部收藏"))
-        .accessibilityIdentifier("home.saves")
         .accessibilityAddTraits(.isButton)
     }
 
@@ -683,18 +664,14 @@ struct SaveDoodleSticker: View {
     let visited: Bool
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: SaveSpace.xs, style: .continuous)
-                .stroke(visited ? SaveAtlasPalette.ink : SaveDoodle.pencil, lineWidth: SaveAtlasPalette.strokeWidth)
-                .background(
-                    (visited ? SaveAtlasPalette.kraftLight : Color.clear),
-                    in: RoundedRectangle(cornerRadius: SaveSpace.xs, style: .continuous)
-                )
-            Image(systemName: Self.symbolName(for: category))
-                .font(.system(size: 22, weight: .regular))
-                .foregroundStyle(visited ? SaveAtlasPalette.ink : SaveDoodle.pencil)
-        }
-        .accessibilityHidden(true)
+        SaveDoodleStickerShape(category: category)
+            .stroke(
+                visited ? SaveAtlasPalette.ink : SaveDoodle.pencil,
+                style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)
+            )
+            .frame(width: 40, height: 40)
+            .frame(width: SaveLayout.stickerBox, height: SaveLayout.stickerBox)
+            .accessibilityHidden(true)
     }
 
     static func symbolName(for category: PlaceCategory) -> String {
@@ -706,6 +683,114 @@ struct SaveDoodleSticker: View {
         case .stay: return "bed.double"
         case .shopping: return "bag"
         }
+    }
+}
+
+nonisolated struct SaveDoodleStickerShape: Shape {
+    let category: PlaceCategory
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let w = rect.width
+        let h = rect.height
+        switch category {
+        case .food:
+            path.addEllipse(in: CGRect(x: w * 0.08, y: h * 0.62, width: w * 0.84, height: h * 0.28))
+            path.move(to: CGPoint(x: w * 0.22, y: h * 0.58))
+            path.addQuadCurve(
+                to: CGPoint(x: w * 0.78, y: h * 0.52),
+                control: CGPoint(x: w * 0.48, y: h * 0.18)
+            )
+            path.addQuadCurve(
+                to: CGPoint(x: w * 0.28, y: h * 0.58),
+                control: CGPoint(x: w * 0.86, y: h * 0.78)
+            )
+            path.move(to: CGPoint(x: w * 0.70, y: h * 0.30))
+            path.addQuadCurve(
+                to: CGPoint(x: w * 0.88, y: h * 0.22),
+                control: CGPoint(x: w * 0.82, y: h * 0.38)
+            )
+        case .cafe:
+            path.addRoundedRect(
+                in: CGRect(x: w * 0.22, y: h * 0.32, width: w * 0.46, height: h * 0.40),
+                cornerSize: CGSize(width: w * 0.08, height: h * 0.08)
+            )
+            path.move(to: CGPoint(x: w * 0.68, y: h * 0.40))
+            path.addQuadCurve(
+                to: CGPoint(x: w * 0.68, y: h * 0.62),
+                control: CGPoint(x: w * 0.86, y: h * 0.51)
+            )
+            path.addEllipse(in: CGRect(x: w * 0.16, y: h * 0.70, width: w * 0.60, height: h * 0.16))
+            path.move(to: CGPoint(x: w * 0.34, y: h * 0.12))
+            path.addQuadCurve(
+                to: CGPoint(x: w * 0.38, y: h * 0.28),
+                control: CGPoint(x: w * 0.22, y: h * 0.20)
+            )
+            path.move(to: CGPoint(x: w * 0.48, y: h * 0.10))
+            path.addQuadCurve(
+                to: CGPoint(x: w * 0.52, y: h * 0.28),
+                control: CGPoint(x: w * 0.38, y: h * 0.18)
+            )
+        case .bar:
+            path.move(to: CGPoint(x: w * 0.30, y: h * 0.12))
+            path.addLine(to: CGPoint(x: w * 0.70, y: h * 0.12))
+            path.addLine(to: CGPoint(x: w * 0.58, y: h * 0.42))
+            path.addQuadCurve(
+                to: CGPoint(x: w * 0.42, y: h * 0.42),
+                control: CGPoint(x: w * 0.50, y: h * 0.58)
+            )
+            path.closeSubpath()
+            path.move(to: CGPoint(x: w * 0.50, y: h * 0.50))
+            path.addLine(to: CGPoint(x: w * 0.50, y: h * 0.78))
+            path.move(to: CGPoint(x: w * 0.32, y: h * 0.88))
+            path.addLine(to: CGPoint(x: w * 0.68, y: h * 0.88))
+        case .attraction:
+            path.move(to: CGPoint(x: w * 0.50, y: h * 0.90))
+            path.addLine(to: CGPoint(x: w * 0.50, y: h * 0.42))
+            path.move(to: CGPoint(x: w * 0.50, y: h * 0.48))
+            path.addQuadCurve(
+                to: CGPoint(x: w * 0.16, y: h * 0.62),
+                control: CGPoint(x: w * 0.22, y: h * 0.22)
+            )
+            path.move(to: CGPoint(x: w * 0.50, y: h * 0.42))
+            path.addQuadCurve(
+                to: CGPoint(x: w * 0.86, y: h * 0.58),
+                control: CGPoint(x: w * 0.78, y: h * 0.16)
+            )
+            path.move(to: CGPoint(x: w * 0.50, y: h * 0.28))
+            path.addQuadCurve(
+                to: CGPoint(x: w * 0.28, y: h * 0.18),
+                control: CGPoint(x: w * 0.42, y: h * 0.06)
+            )
+        case .stay:
+            path.move(to: CGPoint(x: w * 0.14, y: h * 0.62))
+            path.addLine(to: CGPoint(x: w * 0.14, y: h * 0.38))
+            path.addQuadCurve(
+                to: CGPoint(x: w * 0.38, y: h * 0.22),
+                control: CGPoint(x: w * 0.16, y: h * 0.18)
+            )
+            path.addLine(to: CGPoint(x: w * 0.86, y: h * 0.22))
+            path.addLine(to: CGPoint(x: w * 0.86, y: h * 0.62))
+            path.addLine(to: CGPoint(x: w * 0.14, y: h * 0.62))
+            path.move(to: CGPoint(x: w * 0.14, y: h * 0.62))
+            path.addLine(to: CGPoint(x: w * 0.14, y: h * 0.82))
+            path.move(to: CGPoint(x: w * 0.86, y: h * 0.62))
+            path.addLine(to: CGPoint(x: w * 0.86, y: h * 0.82))
+            path.move(to: CGPoint(x: w * 0.10, y: h * 0.82))
+            path.addLine(to: CGPoint(x: w * 0.90, y: h * 0.82))
+        case .shopping:
+            path.move(to: CGPoint(x: w * 0.22, y: h * 0.36))
+            path.addLine(to: CGPoint(x: w * 0.28, y: h * 0.88))
+            path.addLine(to: CGPoint(x: w * 0.72, y: h * 0.88))
+            path.addLine(to: CGPoint(x: w * 0.78, y: h * 0.36))
+            path.closeSubpath()
+            path.move(to: CGPoint(x: w * 0.34, y: h * 0.36))
+            path.addQuadCurve(
+                to: CGPoint(x: w * 0.66, y: h * 0.36),
+                control: CGPoint(x: w * 0.50, y: h * 0.08)
+            )
+        }
+        return path
     }
 }
 
