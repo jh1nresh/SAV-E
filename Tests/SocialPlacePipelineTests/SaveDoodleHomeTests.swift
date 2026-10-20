@@ -237,8 +237,24 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains(".frame(height: 160)"))
         XCTAssertTrue(home.contains("SaveLayout.screenMargin"))
         XCTAssertTrue(home.contains("SaveLayout.stickerBox"))
+        XCTAssertTrue(home.contains("SaveLayout.stickerArt"))
         XCTAssertTrue(home.contains("SaveLayout.rowMinHeight"))
-        XCTAssertTrue(home.contains("SaveDoodleStickerShape"))
+        XCTAssertTrue(home.contains("SaveDoodleOfficialSticker"))
+        XCTAssertTrue(home.contains("DoodleSticker"))
+        XCTAssertFalse(home.contains("SaveDoodleStickerShape"))
+        XCTAssertFalse(home.contains("SaveDoodleElephantShape"))
+        for name in ["Duck", "Noodle", "Coffee", "Temple", "Lantern", "Elephant"] {
+            for suffix in ["Color", "Color48", "Outline"] {
+                XCTAssertTrue(
+                    FileManager.default.fileExists(
+                        atPath: repositoryRoot.appendingPathComponent(
+                            "SAV-E/Resources/Assets.xcassets/DoodleSticker\(name)\(suffix).imageset/Contents.json"
+                        ).path
+                    ),
+                    "Missing official sticker imageset DoodleSticker\(name)\(suffix)"
+                )
+            }
+        }
         XCTAssertTrue(home.contains(".frame(height: 44)"))
         XCTAssertTrue(home.contains("SaveDoodle.stampRed"))
         XCTAssertTrue(home.contains("AtlasTabBarMetrics.height"))
@@ -259,6 +275,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         ))
         let design = try source(at: "DESIGN.md")
         XCTAssertTrue(design.contains("Savvy + Eat/Go in the header"))
+        XCTAssertTrue(design.contains("official DESIGN color die-cut"))
         XCTAssertTrue(design.contains("then the city, clues"))
         XCTAssertTrue(design.contains("eade369"))
         XCTAssertTrue(design.contains("home-mask.png"))
