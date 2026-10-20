@@ -357,7 +357,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
 
     func testVisualParityPrefersTheLiveFiveTabHome() throws {
         let script = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
-        let workflow = try source(at: ".github/workflows/ci.yml")
+        let workflow = try source(at: ".github/workflows/ios.yml")
         let selector = try source(at: "scripts/select-ios-tests.py")
         let baseline = try source(at: "Tests/ci/full-ui-baseline.json")
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
@@ -366,7 +366,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(script.contains("five-tab-friends*)"))
         XCTAssertTrue(script.contains("priority=1"))
         // Failure fixture: PR #220 moved UI selectors out of ci.yml into
-        // select-ios-tests.py. The live five-tab Home capture must stay in
+        // select-ios-tests.py. The required `ios` job (now in ios.yml) must
+        // keep that wiring. The live five-tab Home capture must stay in
         // BASELINE (every UI route) and the frozen full list, or visual
         // parity falls back to the older atlas-home attachment.
         XCTAssertTrue(selector.contains("\"testCaptureFiveTabLanding\""))
