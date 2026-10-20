@@ -4,7 +4,7 @@ import SwiftUI
 /// HoP 2026-10-19: Passport v1 is the sticker grid, city list, and Collected.
 /// Today missions, field streak, and the stamp ledger stay compiled but off
 /// the root. Connections and posts live on the Collected sub-page.
-enum SaveDoodlePassportFlags {
+nonisolated enum SaveDoodlePassportFlags: Sendable {
     static let showTodayMissions = false
     static let showFieldStreak = false
     static let showStampLedger = false
