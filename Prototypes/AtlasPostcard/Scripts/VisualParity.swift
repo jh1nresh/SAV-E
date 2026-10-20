@@ -6,6 +6,7 @@ import Foundation
 private let width = 402
 private let height = 874
 private let ignoredTopRows = 48
+/// Mask luminance at or above this value (white = ignore) skips grading.
 private let maskIgnoreLuminance = 240.0
 private let inkLuminance = 200.0
 
