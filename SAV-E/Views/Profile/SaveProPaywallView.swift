@@ -8,9 +8,9 @@ import SwiftUI
 /// the first confirmed Map Stamp — `SaveEntitlementStore.shouldPresentPaywall`
 /// enforces that and this view does not second-guess it.
 ///
-/// Pro v1 names one benefit: unlimited saved places. AI copy, Plan trips, and
-/// sticker packs stay off this screen. Product IDs and purchase / restore
-/// logic are unchanged.
+/// Pro v1 names one benefit: unlimited saved places. Quota headlines,
+/// itinerary planning, and collectible extras stay off this screen.
+/// Product IDs and purchase / restore logic are unchanged.
 ///
 /// App Store review requirements that must stay on this screen: Restore
 /// Purchases, EULA link, privacy policy link, renewal period, cancellation path.
