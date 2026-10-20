@@ -252,6 +252,10 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
     # this gate only runs once the test step has succeeded, so the final attempt
     # is the one that passed and its screenshots are the ones worth comparing.
     candidates=""
+    map_dark_file=""
+    map_dark_ts=-1
+    map_light_file=""
+    map_light_ts=-1
     tab="$(printf '\t')"
     while attachment_count="$(
         plutil -extract "$test_index.attachments" raw -o - "$manifest" 2>/dev/null
@@ -288,12 +292,33 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                     screen="map"
                     priority=1
                     ;;
+                doodle-map-light*|light-map*)
+                    screen="map"
+                    priority=1
+                    ;;
+                dark-map*|doodle-map-dark*)
+                    if awk -v ts="$timestamp" -v best="$map_dark_ts" 'BEGIN { exit !(ts+0 >= best+0) }'
+                    then
+                        map_dark_file="$exported_name"
+                        map_dark_ts="$timestamp"
+                    fi
+                    continue
+                    ;;
                 atlas-map*)
                     screen="map"
                     priority=0
                     ;;
                 *)
                     continue
+                    ;;
+            esac
+            case "$human_name" in
+                five-tab-map*|doodle-map-light*|light-map*)
+                    if awk -v ts="$timestamp" -v best="$map_light_ts" 'BEGIN { exit !(ts+0 >= best+0) }'
+                    then
+                        map_light_file="$exported_name"
+                        map_light_ts="$timestamp"
+                    fi
                     ;;
             esac
 
@@ -331,6 +356,15 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
 
         cp "$export_dir/$newest" "$ARTIFACT_DIR/output/$screen.png"
     done
+    mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
+    if [[ -n "$map_light_file" && -f "$export_dir/$map_light_file" ]]; then
+        cp "$export_dir/$map_light_file" "$ARTIFACT_DIR/map-doodle-similarity/light.png"
+    else
+        cp "$ARTIFACT_DIR/output/map.png" "$ARTIFACT_DIR/map-doodle-similarity/light.png"
+    fi
+    if [[ -n "$map_dark_file" && -f "$export_dir/$map_dark_file" ]]; then
+        cp "$export_dir/$map_dark_file" "$ARTIFACT_DIR/map-doodle-similarity/dark.png"
+    fi
     rm -rf "$export_dir"
 else
     if [[ ! -d "$SCREENSHOTS_DIR" ]]; then
@@ -349,10 +383,11 @@ fi
 gate_failed=0
 mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
 # Live Apple MapKit canvas is excluded so the 0.90 gate scores Doodle chrome
-# (header chips, paper sheet, tab bar) against ProductionTargets/map.png,
-# a copy of the Doodle Map design mock resized to 402x874 when required.
-# Rect is 402x874 logical px: y 168..<560 is the full-bleed map surface.
-MAP_IGNORE_RECT="0,168,402,392"
+# (paper sheet + tab bar) against ProductionTargets/map.png.
+# Status y<48 is already ignored. Live MapKit shows through the overlay
+# header (y 48..<168) and above the sheet (y 560..<690); cover that full
+# map band in both the capture and the uniformly-scaled mock.
+MAP_IGNORE_RECT="0,48,402,642"
 for screen in home saves plan map; do
     actual="$ARTIFACT_DIR/output/$screen.png"
     if [[ ! -f "$actual" ]]; then
@@ -394,16 +429,27 @@ for screen in home saves plan map; do
         cp "$ARTIFACT_DIR/reference/map.png" "$ARTIFACT_DIR/map-doodle-similarity/mock.png"
         cp "$actual" "$ARTIFACT_DIR/map-doodle-similarity/live.png"
         cp "$ARTIFACT_DIR/diff/map.png" "$ARTIFACT_DIR/map-doodle-similarity/diff.png"
-        if ! python3 "$SCRIPT_DIR/compose-map-similarity.py" \
-            --target "$ARTIFACT_DIR/reference/map.png" \
-            --actual "$actual" \
-            --diff "$ARTIFACT_DIR/diff/map.png" \
-            --result "$ARTIFACT_DIR/results/map.json" \
-            --output "$ARTIFACT_DIR/map-doodle-similarity/side-by-side.png" \
-            --report "$ARTIFACT_DIR/map-doodle-similarity/report.json" \
-            --mask "$MAP_IGNORE_RECT" \
-            --status "$status" \
+        compose_args=(
+            --target "$ARTIFACT_DIR/reference/map.png"
+            --actual "$actual"
+            --diff "$ARTIFACT_DIR/diff/map.png"
+            --result "$ARTIFACT_DIR/results/map.json"
+            --output "$ARTIFACT_DIR/map-doodle-similarity/side-by-side.png"
+            --report "$ARTIFACT_DIR/map-doodle-similarity/report.json"
+            --mask "$MAP_IGNORE_RECT"
+            --status "$status"
             --threshold "$THRESHOLD"
+            --modes-output "$ARTIFACT_DIR/map-doodle-similarity/mock-light-dark.png"
+        )
+        if [[ -f "$ARTIFACT_DIR/map-doodle-similarity/light.png" ]]; then
+            compose_args+=(--light "$ARTIFACT_DIR/map-doodle-similarity/light.png")
+        else
+            compose_args+=(--light "$actual")
+        fi
+        if [[ -f "$ARTIFACT_DIR/map-doodle-similarity/dark.png" ]]; then
+            compose_args+=(--dark "$ARTIFACT_DIR/map-doodle-similarity/dark.png")
+        fi
+        if ! python3 "$SCRIPT_DIR/compose-map-similarity.py" "${compose_args[@]}"
         then
             echo "note: map side-by-side compose skipped; score JSON is in results/map.json"
             cp "$ARTIFACT_DIR/results/map.json" "$ARTIFACT_DIR/map-doodle-similarity/report.json"

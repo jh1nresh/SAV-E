@@ -508,7 +508,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let mapGo = app.buttons["map.go"]
         XCTAssertTrue(mapGo.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(mapGo.isSelected, "Mini-map must open Map with the same Eat/Go lens")
-        XCTAssertTrue(app.descendants(matching: .any)["map.city"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["map.city"].waitForExistence(timeout: stepTimeout))
         openRootTab("Home", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout))
         openRootTab("Map", app: app)
@@ -517,7 +517,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.buttons["map.go"].waitForExistence(timeout: stepTimeout),
             "Map always shows Eat/Go chrome; mini-map handoff still owns the carried filter"
         )
-        XCTAssertTrue(app.descendants(matching: .any)["map.city"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["map.city"].waitForExistence(timeout: stepTimeout))
         openRootTab("Home", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(app.state, .runningForeground)
@@ -714,8 +714,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             locationNoticeDismiss.tap()
         }
         XCTAssertTrue(app.buttons["map.eat"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.buttons["map.go"].exists)
-        _ = app.descendants(matching: .any)["map.placeSheet"].waitForExistence(timeout: timeout(4))
+        XCTAssertTrue(app.buttons["map.go"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["map.placeSheet"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "five-tab-map")
         attach(app, name: "doodle-map-light")
 
@@ -846,6 +846,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "-save.appLanguage", "en",
                 "-AppleInterfaceStyle", appleInterfaceStyle,
                 forceArgument,
+                "--uitest-map-place-selected",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
         )
@@ -881,6 +882,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        let locationNoticeDismiss = app.buttons["map.locationNotice.dismiss"]
+        if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
+            locationNoticeDismiss.tap()
+        }
+        XCTAssertTrue(app.descendants(matching: .any)["map.placeSheet"].waitForExistence(timeout: stepTimeout))
         attach(app, name: homeName.replacingOccurrences(of: "home", with: "map"))
         terminate(app)
     }
@@ -2157,8 +2163,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         app.buttons["map.peek.card"].tap()
         XCTAssertTrue(
             app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout)
-                || app.descendants(matching: .any)["place.detail.scroll"].waitForExistence(timeout: stepTimeout)
         )
+        XCTAssertEqual(
+            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
+            1,
+            "Opening the place sheet should present exactly one drawer surface."
+        )
+        XCTAssertTrue(card.waitForNonExistence(timeout: stepTimeout))
     }
 
     @MainActor

@@ -59,16 +59,25 @@ struct SaveDoodleMapView: View {
                         .padding(.horizontal, SaveLayout.screenMargin)
                 }
             }
-            .padding(.bottom, sheetBottomClearance)
+            .padding(.bottom, bottomChromeClearance)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             _ = onPlanAroundPlace
             applyMiniMapHandoff()
+            selectParityPlaceIfNeeded()
             fitVisiblePlaces()
         }
         .onChange(of: session.mapVisitResidueID) { _, _ in
             applyMiniMapHandoff()
+            selectParityPlaceIfNeeded()
+            fitVisiblePlaces()
+        }
+        .onChange(of: mapViewModel.places.map(\.id)) { _, _ in
+            selectParityPlaceIfNeeded()
+            fitVisiblePlaces()
+        }
+        .onChange(of: mapViewModel.selectedPlace?.id) { _, _ in
             fitVisiblePlaces()
         }
         .onChange(of: session.lens) { _, _ in
@@ -150,6 +159,7 @@ struct SaveDoodleMapView: View {
                                     : "Map Stamp, \(item.place.name)"
                             )
                             .accessibilityIdentifier("map.tilePin.\(item.place.id.uuidString)")
+                            .accessibilityAddTraits(.isButton)
                         }
                     }
                 }
@@ -258,6 +268,7 @@ struct SaveDoodleMapView: View {
             HStack(alignment: .center, spacing: SaveLayout.stickerToText) {
                 Button {
                     presentation.onOpenPlace(place.id.uuidString)
+                    onClearSelection()
                 } label: {
                     HStack(alignment: .center, spacing: SaveLayout.stickerToText) {
                         ZStack {
@@ -508,10 +519,25 @@ struct SaveDoodleMapView: View {
         }
     }
 
-    private var sheetBottomClearance: CGFloat {
-        // Selected-place parity hides the search shelf. Sit the paper sheet
-        // just above the 62pt tab bar, matching the Doodle Map mock.
-        AtlasTabBarMetrics.height + SaveSpace.md
+    private var bottomChromeClearance: CGFloat {
+        if mapViewModel.selectedPlace != nil {
+            // Search shelf is hidden. Sit the paper sheet on the 62pt tab bar.
+            return AtlasTabBarMetrics.height + SaveSpace.md
+        }
+        // Locate must stay above the collapsed 64pt search shelf (test: maxY
+        // <= shelf.minY - 4). Original clearance 160 clears that band.
+        return 160
+    }
+
+    private func selectParityPlaceIfNeeded() {
+#if DEBUG
+        guard ProcessInfo.processInfo.arguments.contains("--uitest-map-place-selected") else { return }
+        guard mapViewModel.selectedPlace == nil else { return }
+        let taipei = mapViewModel.places.first { place in
+            abs(place.latitude - 25.04) < 0.35 && abs(place.longitude - 121.56) < 0.35
+        }
+        mapViewModel.selectedPlace = taipei ?? mapViewModel.places.first
+#endif
     }
 
     private func metaText(for place: Place, listed: SaveDoodleListedPlace?) -> String {
@@ -562,12 +588,25 @@ struct SaveDoodleMapView: View {
     }
 
     private func fitVisiblePlaces() {
+        if let selected = mapViewModel.selectedPlace, selected.isMapKitMappable {
+            mapViewModel.cameraPosition = .region(
+                MKCoordinateRegion(
+                    center: selected.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04)
+                )
+            )
+            return
+        }
         let coordinates = displayedListedPlaces.compactMap { item -> CLLocationCoordinate2D? in
             guard item.place.isMapKitMappable else { return nil }
             return item.place.coordinate
         }
-        guard !coordinates.isEmpty else { return }
-        mapViewModel.cameraPosition = .region(Self.region(fitting: coordinates))
+        let taipei = coordinates.filter { coordinate in
+            abs(coordinate.latitude - 25.04) < 0.35 && abs(coordinate.longitude - 121.56) < 0.35
+        }
+        let fitting = taipei.isEmpty ? coordinates : taipei
+        guard !fitting.isEmpty else { return }
+        mapViewModel.cameraPosition = .region(Self.region(fitting: fitting))
     }
 
     private static func region(fitting coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion {

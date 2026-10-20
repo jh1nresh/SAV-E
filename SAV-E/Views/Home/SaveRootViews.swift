@@ -512,9 +512,11 @@ struct SaveMapRootView: View {
             session.consumeMiniMapHandoff()
 #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--uitest-map-place-selected"),
-               mapViewModel.selectedPlace == nil,
-               let firstPlace = mapViewModel.places.first {
-                mapViewModel.selectedPlace = firstPlace
+               mapViewModel.selectedPlace == nil {
+                let taipei = mapViewModel.places.first { place in
+                    abs(place.latitude - 25.04) < 0.35 && abs(place.longitude - 121.56) < 0.35
+                }
+                mapViewModel.selectedPlace = taipei ?? mapViewModel.places.first
             }
 #endif
         }

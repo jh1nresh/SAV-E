@@ -88,10 +88,17 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(script.contains("five-tab-map*)"))
         XCTAssertTrue(script.contains("map-doodle-similarity"))
         XCTAssertTrue(script.contains("--ignore-rect"))
-        XCTAssertTrue(script.contains("MAP_IGNORE_RECT=\"0,168,402,392\""))
+        XCTAssertTrue(script.contains("MAP_IGNORE_RECT=\"0,48,402,642\""))
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: repositoryRoot.appendingPathComponent(
                 "SAV-E/Views/TileTown/SaveTileTownRootMap.swift"
+            ).path
+        ))
+        let design = try source(at: "DESIGN.md")
+        XCTAssertFalse(design.contains("SaveTileTownRootMap"))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent(
+                "Prototypes/AtlasPostcard/Scripts/generate-doodle-map-target.py"
             ).path
         ))
         let target = repositoryRoot.appendingPathComponent(

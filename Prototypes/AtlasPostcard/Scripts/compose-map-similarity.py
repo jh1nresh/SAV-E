@@ -38,6 +38,9 @@ def main() -> None:
     parser.add_argument("--mask", required=True, type=parse_rect)
     parser.add_argument("--status", required=True)
     parser.add_argument("--threshold", required=True)
+    parser.add_argument("--light", type=Path)
+    parser.add_argument("--dark", type=Path)
+    parser.add_argument("--modes-output", type=Path)
     args = parser.parse_args()
 
     payload = json.loads(args.result.read_text())
@@ -71,6 +74,20 @@ def main() -> None:
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(args.output, "PNG")
+
+    if args.modes_output and args.light:
+        light = fit(load(args.light), (402, 874))
+        dark = fit(load(args.dark), (402, 874)) if args.dark else Image.new("RGB", (402, 874), (31, 28, 25))
+        modes = Image.new("RGB", (402 * 3 + gap * 4, 874 + header + gap * 2), (31, 28, 25))
+        modes.paste(target, (gap, header + gap))
+        modes.paste(light, (gap * 2 + 402, header + gap))
+        modes.paste(dark, (gap * 3 + 402 * 2, header + gap))
+        labels = ImageDraw.Draw(modes)
+        labels.text((gap, 16), "DESIGN mock", fill=(244, 241, 228), font=font)
+        labels.text((gap * 2 + 402, 16), "Light sim", fill=(244, 241, 228), font=font)
+        labels.text((gap * 3 + 402 * 2, 16), "Dark sim", fill=(244, 241, 228), font=font)
+        args.modes_output.parent.mkdir(parents=True, exist_ok=True)
+        modes.save(args.modes_output, "PNG")
     report = {
         "status": args.status,
         "threshold": float(args.threshold),
@@ -80,8 +97,8 @@ def main() -> None:
         "mask": {"x": x, "y": y, "width": w, "height": h},
         "maskReason": (
             "Founder lock: default Apple MapKit surface is excluded. "
-            "The 0.90 gate scores Doodle chrome (header chips, paper sheet, tab bar) "
-            "and layout against the Doodle v1 Map mock."
+            "Ignore 0,48,402,642 covers live MapKit at y 48..<690 "
+            "(header overlay + gap above the sheet) in both capture and mock."
         ),
         "sideBySide": str(args.output),
         "passed": payload.get("passed"),

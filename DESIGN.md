@@ -115,7 +115,7 @@ silent-partial Soft Pixel: a MapKit atlas with pixel pins is not the lock.
 
 Rules:
 
-- Product Map tab (`SaveTileTownRootMap`) still renders `SaveTileTownCanvas`.
+- Product Map tab (`SaveDoodleMapView`) renders default Apple MapKit with Doodle chrome.
   Home (`SaveDoodleHomeView`) is the Doodle nearby list + mini-map, not a
   tile-town peek. Friends may still show a small peek strip of the town.
 - Tile-town is a memory map. Pins hash to village lots. It does not silently
@@ -378,7 +378,7 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | Saves drawer + search results | Atlas |
 | Plan (`SavePlanView`) | Atlas |
 | Trips (`TripPackViews`) | Atlas |
-| Map shell and drawer panel (`SaveTileTownRootMap`, `SaveMapDrawerPanel`) | Tile-town base + Atlas chrome |
+| Map shell and drawer panel (`SaveDoodleMapView`, `SaveMapDrawerPanel`) | Default Apple MapKit + Doodle chrome |
 | Ask drawer (`AIDrawerView`) | Atlas |
 | Onboarding | Atlas |
 | Google Takeout import | Atlas (some legacy tokens remain inline) |
