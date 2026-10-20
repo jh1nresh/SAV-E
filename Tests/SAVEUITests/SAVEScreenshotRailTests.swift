@@ -733,6 +733,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["map.placeSheet"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "five-tab-map")
         attach(app, name: "doodle-map-light")
+        assertDoodleMapChrome(app)
 
         openTripsFromHome(app: app)
         let existingTrip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")).firstMatch
@@ -903,6 +904,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         }
         XCTAssertTrue(app.descendants(matching: .any)["map.placeSheet"].waitForExistence(timeout: stepTimeout))
         attach(app, name: homeName.replacingOccurrences(of: "home", with: "map"))
+        assertDoodleMapChrome(app)
         terminate(app)
     }
 
@@ -3064,6 +3066,31 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         case "Passport": return "profile.root"
         default: return nil
         }
+    }
+
+    /// MapKit pixels vary, but product chrome is never exempt from layout checks.
+    @MainActor
+    private func assertDoodleMapChrome(_ app: XCUIApplication) {
+        let city = app.buttons["map.city"]
+        let eat = app.buttons["map.eat"]
+        let go = app.buttons["map.go"]
+        let sheet = app.descendants(matching: .any)["map.placeSheet"]
+        let directions = app.buttons["map.directions"]
+        let visit = app.buttons["map.checkIn"].exists
+            ? app.buttons["map.checkIn"] : app.buttons["map.checkIn.undo"]
+        for control in [city, eat, go, directions, visit] {
+            XCTAssertTrue(control.waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(control.isHittable, "Map control must be accessible: \(control.identifier)")
+            XCTAssertGreaterThanOrEqual(control.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(control.frame.width, 44)
+            XCTAssertGreaterThanOrEqual(control.frame.minX, app.frame.minX)
+            XCTAssertLessThanOrEqual(control.frame.maxX, app.frame.maxX)
+        }
+        XCTAssertTrue(sheet.exists)
+        XCTAssertLessThanOrEqual(city.frame.maxY, eat.frame.minY)
+        XCTAssertLessThanOrEqual(eat.frame.maxY, sheet.frame.minY)
+        XCTAssertLessThanOrEqual(directions.frame.maxX, visit.frame.minX)
+        XCTAssertLessThanOrEqual(sheet.frame.maxY, rootTabButton("Map", app: app).frame.minY)
     }
 
     @MainActor

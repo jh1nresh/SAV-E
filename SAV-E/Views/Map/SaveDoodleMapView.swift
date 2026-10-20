@@ -147,6 +147,7 @@ struct SaveDoodleMapView: View {
                             SaveDoodleCoralPin(
                                 index: item.index,
                                 title: item.place.name,
+                                visited: item.place.status == .visited,
                                 isSelected: mapViewModel.selectedPlace?.id == item.place.id,
                                 dimmed: mapViewModel.selectedPlace != nil
                                     && mapViewModel.selectedPlace?.id != item.place.id
@@ -156,7 +157,7 @@ struct SaveDoodleMapView: View {
                             .accessibilityLabel(
                                 mapViewModel.selectedPlace?.id == item.place.id
                                     ? "Selected Map Stamp, \(item.place.name)"
-                                    : "Map Stamp, \(item.place.name)"
+                                    : "\(item.place.status == .visited ? "Visited Map Stamp" : "Map Stamp"), \(item.place.name)"
                             )
                             .accessibilityIdentifier("map.tilePin.\(item.place.id.uuidString)")
                             .accessibilityAddTraits(.isButton)
@@ -635,6 +636,7 @@ struct SaveDoodleMapView: View {
 struct SaveDoodleCoralPin: View {
     let index: Int
     let title: String
+    let visited: Bool
     let isSelected: Bool
     let dimmed: Bool
     let onTap: () -> Void
@@ -644,7 +646,7 @@ struct SaveDoodleCoralPin: View {
             VStack(spacing: SaveSpace.tight) {
                 ZStack {
                     Circle()
-                        .fill(SaveAtlasPalette.coral)
+                        .fill(visited ? SaveDoodle.stampRed : SaveAtlasPalette.coral)
                         .frame(width: diameter, height: diameter)
                     Text("\(index)")
                         .font(SaveAtlasType.strong(13))

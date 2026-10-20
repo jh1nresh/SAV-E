@@ -382,8 +382,9 @@ fi
 
 gate_failed=0
 mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
-# Live Apple MapKit canvas is excluded so the 0.90 gate scores Doodle chrome
-# (paper sheet + tab bar) against ProductionTargets/map.png.
+# Partial bottom-region pixel score only; never report this as full-page fidelity.
+# City, filters, selected sheet and actions additionally require the unmasked
+# assertDoodleMapChrome geometry/hit-testing checks in the light AND dark UI rail.
 # Status y<48 is already ignored. Live MapKit shows through the overlay
 # header (y 48..<168) and above the sheet (y 560..<690); cover that full
 # map band in both the capture and the uniformly-scaled mock.
@@ -397,6 +398,7 @@ for screen in home saves plan map; do
 
     extra_args=()
     if [[ "$screen" == "map" ]]; then
+        echo "Map pixel coverage: rows 690..<874 only; full chrome requires light/dark UI geometry checks." >&2
         extra_args=(--ignore-rect "$MAP_IGNORE_RECT")
     fi
 

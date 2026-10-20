@@ -954,3 +954,11 @@ Rules:
 - If a screen needs a new state, update the State Model first.
 
 <!-- ci: pull_request required-check tip 20260922T184802Z -->
+
+### Doodle Map verification boundary
+
+The current Map pixel score compares only rows 690..<874 of the 402×874 target.
+It is not a whole-screen similarity claim. Light and dark screenshot rails must
+also pass the city/filter/place-sheet/action geometry and hit-target assertions;
+the unmasked screenshots remain required for human visual review. Manual visit
+counts use the shared `SaveDoodleVisitStore` read by Map and Passport.

@@ -80,6 +80,20 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertFalse(store.undoTodaysCheckIn(placeID: placeID))
     }
 
+    func testMapWritesAreVisibleToSharedPassportHistory() {
+        let suite = "save.doodle.cross-surface.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let map = SaveDoodleCheckInStore(defaults: defaults)
+        let passportHistory = SaveDoodleVisitStore(defaults: defaults)
+        let id = UUID()
+        XCTAssertTrue(map.checkIn(placeID: id))
+        XCTAssertEqual(passportHistory.count(for: id), 1)
+        XCTAssertTrue(passportHistory.undoToday(for: id))
+        XCTAssertEqual(map.visitCount(for: id), 0)
+        XCTAssertTrue(map.canCheckIn(placeID: id))
+    }
+
     func testParityMaskLeavesThePointNineGateAndPrefersLiveMap() throws {
         let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/VisualParity.swift")
         let script = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
