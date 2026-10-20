@@ -31,11 +31,9 @@ struct SaveDoodleHomeView: View {
             .padding(.horizontal, SaveLayout.screenMargin)
             .padding(.top, SaveSpace.tight)
 
-            if presentation.reviewCount > 0 {
-                cluesLine
-                    .padding(.horizontal, SaveLayout.screenMargin)
-                    .padding(.top, SaveSpace.xs)
-            }
+            eatGoRow
+                .padding(.horizontal, SaveLayout.screenMargin)
+                .padding(.top, SaveSpace.xs)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -50,6 +48,14 @@ struct SaveDoodleHomeView: View {
                     } else {
                         miniMap
                             .padding(.top, SaveSpace.md)
+                    }
+
+                    if presentation.reviewCount > 0 {
+                        cluesLine
+                            .padding(.top, SaveSpace.xs)
+                    }
+
+                    if !showsEmptyHome {
                         placeList
                             .padding(.top, SaveSpace.md)
                         collectedStrip
@@ -108,14 +114,18 @@ struct SaveDoodleHomeView: View {
             .accessibilityIdentifier("home.passport")
 
             Spacer(minLength: SaveSpace.xs)
-
-            HStack(spacing: SaveSpace.xs) {
-                ForEach(SaveDoodleLens.allCases) { lens in
-                    eatGoChip(lens)
-                }
-            }
         }
         .frame(minHeight: SaveLayout.minTap)
+    }
+
+    private var eatGoRow: some View {
+        HStack(spacing: SaveSpace.xs) {
+            ForEach(SaveDoodleLens.allCases) { lens in
+                eatGoChip(lens)
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: SaveLayout.chipHeight)
     }
 
     private func eatGoChip(_ lens: SaveDoodleLens) -> some View {

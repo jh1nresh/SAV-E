@@ -3065,6 +3065,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Missing Home Saves entry"
         )
         let entry = review.exists ? review : fallback
+        _ = scrollUntilHittable(entry, in: app.scrollViews.firstMatch)
         tapReachable(entry)
         let saves = app.descendants(matching: .any)["saves.root"]
         if !saves.waitForExistence(timeout: timeout(5)) {
