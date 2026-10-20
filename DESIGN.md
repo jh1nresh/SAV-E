@@ -668,9 +668,10 @@ Home exposes a visible 44pt-minimum Saves control when no clues are
 waiting. Test-only or invisible navigation controls are not valid user
 routes. When clues wait, Review is that route. Visited Home/Map stickers
 use the official DESIGN color die-cut (duck, noodle, coffee, temple,
-lantern, elephant); unvisited stickers use the matching pencil outline.
-Code-drawn geometry is not a place sticker. Art sits in a 48pt box at
-≤40pt.
+lantern); unvisited stickers use the matching pencil outline.
+The elephant is brand-only — wordmark and the empty Home plate — and
+is never a place sticker. Code-drawn geometry is not a place sticker.
+Art sits in a 48pt box at ≤40pt.
 
 Resting Home is Savvy + Eat/Go in the header, then the city, clues,
 native mini-map, nearby own-saves rows, then Collected. It is not the
