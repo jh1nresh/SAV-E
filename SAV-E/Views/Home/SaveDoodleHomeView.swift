@@ -59,9 +59,26 @@ struct SaveDoodleHomeView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SaveDottedBackground())
+        .overlay(alignment: .topLeading) {
+            hiddenSavesRoute
+        }
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
         }
+    }
+
+    /// Always-on Home → Saves handoff. Review (`home.review`) is the visible
+    /// entry when N>0; this keeps Saves reachable when the clues line is
+    /// omitted. Identifier is `home.openSaves`, not the retired library row.
+    private var hiddenSavesRoute: some View {
+        Button(action: presentation.onReviewAll) {
+            Color.clear
+                .frame(width: 1)
+                .frame(height: 1)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("home.openSaves")
+        .accessibilityLabel(localized("Open Saves", "開啟收藏"))
     }
 
     private var header: some View {

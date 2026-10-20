@@ -1477,7 +1477,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         app.buttons["drawer.place.close"].firstMatch.tap()
         XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout))
-        tapReachable(app.descendants(matching: .any)["home.review"])
+        openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         let review = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch
         XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
@@ -1485,8 +1485,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "home-real-candidate-detail")
         app.buttons["drawer.place.close"].firstMatch.tap()
-        openRootTab("Home", app: app)
-        tapReachable(app.descendants(matching: .any)["home.review"])
+        openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         let firstCandidate = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch
         XCTAssertTrue(firstCandidate.label.contains("Harbor Oven Pizza"))
@@ -3051,9 +3050,21 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        // DESIGN visual diff removed See all saves. Review (N>0) still opens Saves.
-        let entry = app.descendants(matching: .any)["home.review"]
-        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing Home Review entry")
+        // DESIGN: Review (`home.review`) is the visible Home → Saves entry
+        // when N>0. The retired library row stays gone. When the clues line
+        // is omitted, `home.openSaves` is the always-on handoff.
+        let review = app.descendants(matching: .any)["home.review"]
+        let fallback = app.descendants(matching: .any)["home.openSaves"]
+        let entry: XCUIElement
+        if review.waitForExistence(timeout: timeout(2)) {
+            entry = review
+        } else {
+            XCTAssertTrue(
+                fallback.waitForExistence(timeout: stepTimeout),
+                "Missing Home Saves entry"
+            )
+            entry = fallback
+        }
         _ = scrollUntilHittable(entry, in: app.scrollViews.firstMatch)
         tapReachable(entry)
         let saves = app.descendants(matching: .any)["saves.root"]
@@ -3065,7 +3076,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         // rail step (CI 32778736280, exit 64).
         XCTAssertTrue(
             saves.waitForExistence(timeout: stepTimeout),
-            "Home Review entry did not open Saves"
+            "Home Saves entry did not open Saves"
         )
     }
 

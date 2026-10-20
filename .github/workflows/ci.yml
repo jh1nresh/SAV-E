@@ -243,11 +243,17 @@ jobs:
             --threshold 0.90
 
       - name: Export first-run visual evidence
-        if: always() && (steps.ui_tests.outcome == 'success' || steps.ui_tests.outcome == 'failure')
+        if: always()
         run: |
+          mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
+          if [[ ! -d "$RUNNER_TEMP/SAVE-UI.xcresult" ]]; then
+            echo "No UI result bundle; skip attachment export."
+            exit 0
+          fi
           xcrun xcresulttool export attachments \
             --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
-            --output-path "$RUNNER_TEMP/SAVE-First-Run"
+            --output-path "$RUNNER_TEMP/SAVE-First-Run" \
+            || echo "xcresulttool export failed; continue so DESIGN captures still upload."
 
       - name: Reset focused simulator before Trip sheet UI test
         if: steps.scope.outputs.trip == 'true'
