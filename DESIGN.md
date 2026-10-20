@@ -678,8 +678,8 @@ HoP locked D2 (city switcher) and D3 (Eat/Go + nearby own-saves) on
 2026-10-19. The 2026-10-14 tile-town Home chrome (quiet search, Trips /
 Saves / More header icons, tile-town peek, recent stamps) is superseded
 on Home only. Founder 2026-10-20: tile-town is abandoned; Home ships
-Doodle only. Map and Passport keep their current town lock until their
-Doodle PRs.
+Doodle only. Passport ships the sticker-grid doodle face in this PR.
+Map keeps its current town lock until its Doodle PR.
 
 Eat shows only Eat (food, cafe, bar). Go shows only Go (attraction, stay,
 shopping). The list is the user's own saves near the selected city or
@@ -701,6 +701,28 @@ a 2pt coral underline under the city word only. Body copy stays
 (exact 402×874; `home-dark.png` for DESIGN comparison;
 `home-mask.png` white = ignore). Grade position, size, color and
 font style. v1 is retired.
+
+### Passport (Doodle v1)
+
+Root Passport shows stickers and cities. Collected is the posts
+sub-page. Missions, streak, and the stamp ledger stay flagged off.
+Settings live on Collected. Wordmark is Caveat SemiBold 34 locked;
+the city line is Caveat 20 with a 2pt coral underline under the city
+word only. Body copy stays `SaveAtlasType`.
+
+The locked parity face is DESIGN v2
+`design/doodle-targets-2026-10-20/passport-light.png` at `eade369`
+(exact 402×874; `passport-dark.png` for DESIGN comparison). Grade
+position, size, color and font style. v1 is retired. The face is
+Passport + Beijing · 4 of 12, the kraft sticker grid, cities, and the
+five-tab rail with Passport selected. It is not the profile header,
+quests, or shared-post grid.
+
+The sticker grid uses up to four 64pt columns with 16pt gaps. It reflows
+to three columns on 375/390pt phones after the 24pt screen and panel
+insets. The rank legend stacks when its full text cannot fit, including
+larger text sizes. Map and Passport share manual visit history and the
+same daily deduplication.
 
 ### Sign-In
 
@@ -949,10 +971,3 @@ Rules:
 - If a screen needs a new state, update the State Model first.
 
 <!-- ci: pull_request required-check tip 20260922T184802Z -->
-
-### Doodle Passport narrow layouts
-
-The sticker grid uses up to four 64pt columns with 16pt gaps. It reflows to
-three columns on 375/390pt phones after the 24pt screen and panel insets.
-The rank legend stacks when its full text cannot fit, including larger text
-sizes. Map and Passport share manual visit history and the same daily deduplication.

@@ -47,7 +47,8 @@ Scripts/run-visual-parity.sh \
 
 The runner captures Home, Saves, Plan, Map, and Passport, then writes matching
 `reference/`, `output/`, `diff/`, and `results/` directories. All five pages
-must score at least `0.90`. Passport uses the Doodle Passport mock. XCTest locks the application window to 402 × 874
+must score at least `0.90`. Passport uses DESIGN v2 `passport-light.png`.
+XCTest locks the application window to 402 × 874
 points; the comparator accepts only exact, uniform Retina pixel multiples of
 that viewport and rejects other dimensions.
 
@@ -66,13 +67,14 @@ at 1× 402×874, not a crop. `VisualParity.swift` still accepts only a
 on their current locks until those Doodle PRs. The `0.90` threshold
 remains unchanged.
 
-The Passport production target is DESIGN's Doodle v1 Passport mock
-(`2026-10-19-doodle-v1-passport.png`). The phone screen from the attached
-landscape mock is scaled uniformly into 402 × 874 (no axis stretch).
-Spare canvas uses the mock's paper colour. The locked face is
-Passport + Beijing · 4 of 12 visited, the kraft sticker grid, cities, and
-the five-tab rail with Passport selected. The comparator and `0.90`
-threshold remain unchanged.
+The Passport production target is DESIGN v2's exact 402×874
+`passport-light.png` from `design/doodle-targets-2026-10-20` at `eade369`.
+`passport-dark.png` sits next to it for DESIGN comparison.
+Those rasters are rendered at 1× 402×874, not a crop. The locked
+face is stickers and cities: Passport + Beijing · 4 of 12, the kraft
+sticker grid, the city list, and the five-tab rail with Passport
+selected. `VisualParity.swift` still accepts only a 1× 402 × 874
+target. The `0.90` threshold remains unchanged.
 
 ## Boundaries
 
