@@ -31,8 +31,9 @@ prototype-only runs. Capture and paywall use five-tab-capture and
 five-tab-paywall. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
 and atlas-map XCTest attachments. The Doodle v1 Capture and paywall mocks are
 the locked targets at threshold 0.90. Paywall comparison passes
-`--ignore-rects` over mock-only regions we do not ship: extra Pro
-benefits (Plan trips / Share maps / Bonus sticker packs) and the tab bar.
+`--ignore-rects` over the DESIGN ¥38 placeholder (CTA price + legal
+sentence) and the live-only sale-state line. The 23cca55 mock is already
+full-screen with one benefit row and no tab bar.
 EOF
 }
 
@@ -365,10 +366,12 @@ for screen in home saves plan map capture paywall; do
 
     extra_args=()
     if [[ "$screen" == "paywall" ]]; then
-        # 402×874 mock space. Unlimited saved places (y≈400–430) stays scored.
-        # 0,432,402,104 = Plan trips / Share maps / Bonus sticker packs.
-        # 0,728,402,146 = mock tab bar. Production is a full-screen modal.
-        extra_args=(--ignore-rects "0,432,402,104;0,728,402,146")
+        # 402×874 DESIGN 23cca55 mock. Unlimited row (y354–417) stays scored.
+        # 24,548,354,44 = live-only "Pro isn't on sale yet" above the CTA.
+        # 48,610,306,24 = CTA price (¥38 placeholder vs StoreKit / $39.99).
+        # 24,662,354,64 = legal sentence (¥38 + DESIGN 24-hour copy vs
+        # renewalDescription). Mock is already full-screen, one benefit, no tab bar.
+        extra_args=(--ignore-rects "24,548,354,44;48,610,306,24;24,662,354,64")
     fi
 
     if xcrun swift "$PARITY_SCRIPT" \

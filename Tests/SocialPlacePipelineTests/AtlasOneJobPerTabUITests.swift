@@ -367,7 +367,9 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(script.contains("five-tab-paywall*)"))
         XCTAssertTrue(script.contains("priority=1"))
         XCTAssertTrue(script.contains("--ignore-rects"))
-        XCTAssertTrue(script.contains("0,432,402,104;0,728,402,146"))
+        XCTAssertTrue(script.contains("24,548,354,44;48,610,306,24;24,662,354,64"))
+        XCTAssertFalse(script.contains("0,432,402,104"))
+        XCTAssertFalse(script.contains("0,728,402,146"))
         XCTAssertTrue(selector.contains("\"testDoodlePaywallParity\""))
         XCTAssertTrue(
             baseline.contains(
