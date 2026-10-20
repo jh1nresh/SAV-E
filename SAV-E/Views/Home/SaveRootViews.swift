@@ -451,6 +451,12 @@ struct SaveLibraryView: View {
             SaveAtlasMapStampTicket(place: place)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(SaveAtlasMapStampTicket.label(for: place, language: languageSettings))
+        .accessibilityHint(localized(
+            "Open the lifted saved postcard",
+            "打開收藏明信片詳情"
+        ))
+        .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("saves.place.\(place.id.uuidString)")
     }
 
@@ -672,39 +678,35 @@ private struct SaveAtlasMapStampTicket: View {
 
     var body: some View {
         SavePostcardTicket(
-            eyebrow: localized("Confirmed Map Stamp", "已確認地圖章"),
+            eyebrow: languageSettings.localized(
+                english: "Confirmed Map Stamp",
+                traditionalChinese: "已確認地圖章"
+            ),
             title: place.name,
-            detail: detail,
-            actionTitle: localized("Open", "打開"),
+            detail: Self.detail(for: place, language: languageSettings),
+            actionTitle: languageSettings.localized(english: "Open", traditionalChinese: "打開"),
             style: .confirmed
         )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(place.name), \(detail)")
-        .accessibilityHint(localized(
-            "Open the lifted saved postcard",
-            "打開收藏明信片詳情"
-        ))
-        .accessibilityIdentifier("saves.mapStamp.postcard")
     }
 
-    private var detail: String {
+    static func label(for place: Place, language: AppLanguageSettings) -> String {
+        "\(place.name), \(detail(for: place, language: language))"
+    }
+
+    static func detail(for place: Place, language: AppLanguageSettings) -> String {
         let area = place.shareAreaLabel.trimmingCharacters(in: .whitespacesAndNewlines)
         let location = area.isEmpty
             ? place.address.trimmingCharacters(in: .whitespacesAndNewlines)
             : area
         let source = place.sourcePlatform == .other
-            ? localized("Saved memory", "已保存記憶")
-            : localized(
-                "From \(place.sourcePlatform.displayName)",
-                "來自 \(place.sourcePlatform.displayName)"
+            ? language.localized(english: "Saved memory", traditionalChinese: "已保存記憶")
+            : language.localized(
+                english: "From \(place.sourcePlatform.displayName)",
+                traditionalChinese: "來自 \(place.sourcePlatform.displayName)"
             )
         let date = place.createdAt.formatted(date: .abbreviated, time: .omitted)
-        let saved = localized("Saved \(date)", "收藏於 \(date)")
+        let saved = language.localized(english: "Saved \(date)", traditionalChinese: "收藏於 \(date)")
         return [saved, location, source].filter { !$0.isEmpty }.joined(separator: " · ")
-    }
-
-    private func localized(_ english: String, _ traditionalChinese: String) -> String {
-        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
     }
 }
 

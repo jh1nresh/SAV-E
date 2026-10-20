@@ -430,6 +430,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(saves.contains("saves.pocket.reviewFooter"))
         XCTAssertTrue(saves.contains("saves.review.list"))
         XCTAssertTrue(saves.contains("saves.pocket.mapStampFooter"))
+        XCTAssertTrue(saves.contains("saves.place.\\(place.id.uuidString)"))
+        XCTAssertFalse(
+            saves.contains("saves.mapStamp.postcard"),
+            "A generic postcard identifier must not steal saves.place.<uuid> from the Map Stamp ticket."
+        )
     }
 
     func testPushedSavesDropsRootTabInsetsAndKeepsSystemBackChrome() throws {

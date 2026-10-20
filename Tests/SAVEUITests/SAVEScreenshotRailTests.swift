@@ -3106,8 +3106,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let entry = review.exists ? review : fallback
         _ = scrollUntilHittable(entry, in: app.scrollViews.firstMatch)
         XCTAssertTrue(entry.isHittable, "Home Saves must be usable without a hidden test-only route")
-        XCTAssertGreaterThanOrEqual(entry.frame.height, 44)
-        XCTAssertGreaterThanOrEqual(entry.frame.width, 44)
+        // Simulator accessibility frames can report 43.999... for a true 44pt
+        // control. Keep the 44pt bar; only absorb float noise.
+        XCTAssertGreaterThanOrEqual(entry.frame.height + 0.01, 44)
+        XCTAssertGreaterThanOrEqual(entry.frame.width + 0.01, 44)
         tapReachable(entry)
         let saves = app.descendants(matching: .any)["saves.root"]
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to
@@ -3296,7 +3298,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     ) throws {
         openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
-        let savedPlace = app.buttons.matching(
+        let mapStamps = app.buttons["saves.segment.mapStamps"]
+        if mapStamps.waitForExistence(timeout: timeout(2)) {
+            tapReachable(mapStamps)
+        }
+        let savedPlace = app.descendants(matching: .any).matching(
             NSPredicate(
                 format: "identifier BEGINSWITH 'saves.place.' AND label CONTAINS[c] %@",
                 placeName

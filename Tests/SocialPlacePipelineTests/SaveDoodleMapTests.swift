@@ -36,6 +36,7 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("我來過了"))
         XCTAssertTrue(map.contains("I've been here"))
         XCTAssertTrue(map.contains("map.peek.card"))
+        XCTAssertTrue(map.contains(".accessibilityHidden(true)"))
         XCTAssertTrue(map.contains("map.tilePin."))
         XCTAssertTrue(root.contains(".accessibilityIdentifier(\"map.root\")"))
         XCTAssertTrue(root.contains("accessibilityElement(children: .contain)"))
