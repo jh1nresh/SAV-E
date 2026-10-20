@@ -4,12 +4,14 @@
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** still governs paper, type, kraft, and coral
 > chrome, with the 2026-10-19 v5 cream/ink/stroke lock below. **Tile-town**
-> remains the product Map / Friends strip base until those Doodle PRs land
-> (founder lock 2026-10-14). Home no longer uses it. Founder 2026-10-20:
-> 「像素小鎮已經不要了」 — tile-town is abandoned; this Home PR keeps only
-> shared leftovers for a later cleanup. The 2026-10-19 isometric Home hero
-> is withdrawn. **Soft Pixel** is accents-only on remaining town surfaces
-> (pins / seals / Memo). **Cream-notebook** tokens are legacy-surface-only.
+> remains the Friends strip / Passport leftover until those Doodle PRs land
+> (founder lock 2026-10-14). Home and product Map no longer use it. Founder
+> 2026-10-20: 「像素小鎮已經不要了」 — tile-town is abandoned; this stack
+> keeps only shared leftovers for a later cleanup. The 2026-10-19 isometric
+> Home hero is withdrawn. Product Map is default Apple MapKit with Doodle
+> chrome (`SaveDoodleMapView`). **Soft Pixel** is accents-only on remaining
+> town surfaces (pins / seals / Memo). **Cream-notebook** tokens are
+> legacy-surface-only.
 > See "Tile Town", "Atlas Postcard Tokens", and "Legacy Cream-Notebook
 > Tokens" below.
 
@@ -26,9 +28,10 @@ for place memory, evidence, and review.
 Assumptions locked by current code:
 
 - Native app is SwiftUI. Product Home is `SaveDoodleHomeView`: a nearby
-  Eat/Go list plus a native MapKit mini-map. Product Map still uses
-  `SaveTileTownCanvas` until the Doodle Map PR. MapKit also remains for Trip
-  maps and Apple Maps handoff.
+  Eat/Go list plus a native MapKit mini-map. Product Map is
+  `SaveDoodleMapView`: default Apple MapKit with Doodle chrome (city, Eat/Go,
+  paper sheet + 我來過了). MapKit also remains for Trip maps and Apple Maps
+  handoff.
 - `Color+Theme.swift` owns the current palette tokens, including
   `SaveTileTownPalette`.
 - `MemoMascotMark` owns the Memo elephant mark.
@@ -110,12 +113,13 @@ Rules:
 
 ### Tile Town (product map base)
 
-**Lock (2026-10-14 founder, via CEO):** product Map uses a
-full-pixel tile-town base. Soft Pixel accents-only on MapKit (H1/M1 from
-2026-10-13 / PRs #277–#278) is **superseded for the map base**. Do not
-silent-partial Soft Pixel: a MapKit atlas with pixel pins is not the lock.
-Founder 2026-10-20 abandoned tile-town on Home; Map files stay for the
-Map agent.
+**Lock (2026-10-14 founder, via CEO; Map Doodle PR supersedes the base):**
+product Map used a full-pixel tile-town base. Soft Pixel accents-only on
+MapKit (H1/M1 from 2026-10-13 / PRs #277–#278) is **superseded for the map base**.
+Do not silent-partial Soft Pixel: a MapKit atlas with pixel pins is not the lock.
+Founder 2026-10-20 abandoned tile-town on Home; product Map now ships
+`SaveDoodleMapView` (default Apple MapKit + Doodle chrome). Friends may
+still show a leftover town peek.
 
 Rules:
 
@@ -527,8 +531,9 @@ Source: `SAV-E/Extensions/Color+Theme.swift`.
 
 ### Map Pins
 
-Source: product Map uses `SaveTileTownPinMark` on `SaveTileTownCanvas`.
-Trip / Navigate MapKit still uses `SAV-E/Views/Map/MapView.swift`.
+Source: product Map uses coral numbered pins via `SaveDoodleMapPinStyle`
+on `SaveDoodleMapView`. Trip / Navigate MapKit still uses
+`SAV-E/Views/Map/MapView.swift`.
 
 Rules:
 
@@ -672,8 +677,8 @@ HoP locked D2 (city switcher) and D3 (Eat/Go + nearby own-saves) on
 2026-10-19. The 2026-10-14 tile-town Home chrome (quiet search, Trips /
 Saves / More header icons, tile-town peek, recent stamps) is superseded
 on Home only. Founder 2026-10-20: tile-town is abandoned; Home ships
-Doodle only. Map and Passport keep their current town lock until their
-Doodle PRs.
+Doodle only. Product Map ships `SaveDoodleMapView`. Passport keeps its
+current town lock until that Doodle PR.
 
 Eat shows only Eat (food, cafe, bar). Go shows only Go (attraction, stay,
 shopping). The list is the user's own saves near the selected city or
