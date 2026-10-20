@@ -2638,6 +2638,33 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testExactSearchResolutionRetiresSameNameSeedAndCapturedClues() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-same-name-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var seed = Self.correctionClue(overlappingStamp: true)
+        seed.name = "Harbor Oven Pizza"
+        var captured = seed
+        captured.id = UUID()
+        captured.evidence = ["Source URL: https://www.google.com/maps/place/Harbor+Oven+Pizza"]
+        _ = try vault.saveReviewCandidate(seed)
+        _ = try vault.saveReviewCandidate(captured)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        map.reviewCandidates = [seed, captured]
+        map.beginExactSearchResolution(for: captured)
+
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertEqual(resolved.id, stamp.id)
+        XCTAssertTrue(map.reviewCandidates.isEmpty, "Seed and captured Harbor Oven cards must both retire.")
+        let reloaded = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        XCTAssertTrue(try reloaded.reviewCandidates().isEmpty)
+    }
+
+    @MainActor
     func testExactSearchResolutionPersistsHandleAndDedupesEvidenceRemotely() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("exact-search-saved-remote-\(UUID().uuidString).json")
@@ -6229,6 +6256,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
     func testReviewHeroAndExactSearchWiringStaySplit() throws {
         let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
+        let mapModel = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
         XCTAssertTrue(drawer.contains("if candidate.hasReliableCoordinates"))
         XCTAssertTrue(drawer.contains("onFocusOnMap ?? onFindExactPlace"))
         XCTAssertTrue(drawer.contains("Investigate"))
@@ -6240,6 +6268,11 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(content.contains("chooseSavedStampFromExactSearch"))
         XCTAssertTrue(content.contains("openSavedPlaceFromMapSearch($0)"))
         XCTAssertTrue(content.contains("hasActiveExactSearchResolution"))
+        XCTAssertTrue(content.contains("activateExactSearchSession"))
+        XCTAssertTrue(content.contains("restoreExactSearchResolutionIfNeeded"))
+        XCTAssertTrue(content.contains("preserveExactSearchClue"))
+        XCTAssertTrue(content.contains("exactSearchClueID"))
+        XCTAssertTrue(mapModel.contains("retireSameNameReviewClues"))
         XCTAssertTrue(content.contains("mapDrawerPresentedActionError"))
         XCTAssertTrue(content.contains("MapDrawerActionErrorAlert"))
         XCTAssertTrue(content.contains("map.drawer.actionError"))

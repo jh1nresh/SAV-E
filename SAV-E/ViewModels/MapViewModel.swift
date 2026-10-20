@@ -2085,15 +2085,34 @@ final class MapViewModel: ObservableObject {
         } else {
             try saveLocalVaultService.removeReviewCandidate(clue.id)
         }
-        reviewCandidates.removeAll { $0.id == clue.id }
-        if selectedReviewCandidate?.id == clue.id {
+        retireSameNameReviewClues(as: clue)
+        if usesRemotePersistence { await refreshReviewCandidatesLoggingFailures() }
+        return (true, committed)
+    }
+
+    /// Seed Harbor Oven plus a captured Maps clue are two rows. Choosing a
+    /// saved stamp for that name must clear every same-name Review card.
+    private func retireSameNameReviewClues(as clue: PlaceReviewCandidate) {
+        let leftovers = reviewCandidates.filter { candidate in
+            candidate.id != clue.id
+                && candidate.name.localizedCaseInsensitiveCompare(clue.name) == .orderedSame
+        }
+        for leftover in leftovers {
+            try? saveLocalVaultService.removeReviewCandidate(leftover.id)
+        }
+        reviewCandidates.removeAll { candidate in
+            candidate.id == clue.id
+                || candidate.name.localizedCaseInsensitiveCompare(clue.name) == .orderedSame
+        }
+        if selectedReviewCandidate.map({
+            $0.id == clue.id
+                || $0.name.localizedCaseInsensitiveCompare(clue.name) == .orderedSame
+        }) == true {
             selectedReviewCandidate = nil
         }
         if exactSearchResolution?.clue.id == clue.id {
             exactSearchResolution = nil
         }
-        if usesRemotePersistence { await refreshReviewCandidatesLoggingFailures() }
-        return (true, committed)
     }
 
     /// Terminal actions for this clue (reject / archive / source-only / confirm)
