@@ -22,13 +22,14 @@ struct SaveDoodleHomeView: View {
                 .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.xs)
                 .zIndex(2)
 
-            citySwitcher
-                .padding(.horizontal, SaveLayout.screenMargin)
-                .padding(.top, SaveSpace.tight)
-
-            eatGoRow
-                .padding(.horizontal, SaveLayout.screenMargin)
-                .padding(.top, SaveSpace.xs)
+            ZStack(alignment: .trailing) {
+                citySwitcher
+                if presentation.reviewCount == 0 {
+                    savesButton
+                }
+            }
+            .padding(.horizontal, SaveLayout.screenMargin)
+            .padding(.top, SaveSpace.tight)
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -40,9 +41,6 @@ struct SaveDoodleHomeView: View {
                     if showsEmptyHome {
                         emptyHome
                             .padding(.top, SaveSpace.md)
-                    } else {
-                        miniMap
-                            .padding(.top, SaveSpace.md)
                     }
 
                     if presentation.reviewCount > 0 {
@@ -51,6 +49,8 @@ struct SaveDoodleHomeView: View {
                     }
 
                     if !showsEmptyHome {
+                        miniMap
+                            .padding(.top, SaveSpace.md)
                         placeList
                             .padding(.top, SaveSpace.md)
                         collectedStrip
@@ -104,7 +104,8 @@ struct SaveDoodleHomeView: View {
             .accessibilityIdentifier("home.passport")
 
             Spacer(minLength: SaveSpace.xs)
-            savesButton
+
+            eatGoRow
         }
         .frame(minHeight: SaveLayout.minTap)
     }
@@ -114,7 +115,6 @@ struct SaveDoodleHomeView: View {
             ForEach(SaveDoodleLens.allCases) { lens in
                 eatGoChip(lens)
             }
-            Spacer(minLength: 0)
         }
         .frame(minHeight: SaveLayout.chipHeight)
     }

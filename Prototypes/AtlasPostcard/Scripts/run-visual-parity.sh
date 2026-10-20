@@ -206,6 +206,12 @@ for screen in home saves plan map; do
     fi
     cp "$source" "$ARTIFACT_DIR/reference/$screen.png"
 done
+if [[ -f "$REFERENCE_SOURCE/home-mask.png" ]]; then
+    cp "$REFERENCE_SOURCE/home-mask.png" "$ARTIFACT_DIR/reference/home-mask.png"
+fi
+if [[ -f "$REFERENCE_SOURCE/map-mask.png" ]]; then
+    cp "$REFERENCE_SOURCE/map-mask.png" "$ARTIFACT_DIR/reference/map-mask.png"
+fi
 
 if [[ -n "$DESTINATION" ]]; then
     capture_booted_simulators
@@ -393,6 +399,10 @@ for screen in home saves plan map; do
     fi
 
     extra_args=()
+    mask_args=()
+    if [[ "$screen" == home && -f "$ARTIFACT_DIR/reference/home-mask.png" ]]; then
+        mask_args+=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
+    fi
     if [[ "$screen" == "map" ]]; then
         if [[ ! -f "$MAP_MASK" ]]; then
             echo "error: missing DESIGN map mask: $MAP_MASK" >&2
@@ -401,11 +411,11 @@ for screen in home saves plan map; do
         echo "Map pixel coverage: DESIGN map-mask.png (white = Apple Maps)." >&2
         extra_args=(--ignore-mask "$MAP_MASK")
     fi
-
     if xcrun swift "$PARITY_SCRIPT" \
         --target "$ARTIFACT_DIR/reference/$screen.png" \
         --actual "$actual" \
         --diff "$ARTIFACT_DIR/diff/$screen.png" \
+        "${mask_args[@]}" \
         --threshold "$THRESHOLD" \
         "${extra_args[@]}" \
         >"$ARTIFACT_DIR/results/$screen.json"
