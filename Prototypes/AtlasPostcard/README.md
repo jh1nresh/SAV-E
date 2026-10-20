@@ -55,15 +55,10 @@ Production parity uses `Reference/ProductionTargets`. The original
 `Reference/Targets` remain the immutable inputs for deterministic illustration
 extraction, so approving a UI refresh cannot silently alter generated assets.
 
-The Home production target was refreshed for the 2026-10-14 v5 tile-town lock
-from CI run `38694512939`, head
-`b98b3ef63d275ecce199c8516dbe29a9149f1287` (`five-tab-home` attachment).
-The capture is uniformly downsampled from 3× to the 402 × 874 target size,
-with no content edits. The locked face is SAVVY, quiet header controls, the
-nearest-neighbor tile-town peek, clues, recent kraft stamps, and the five-tab
-rail. Predecessor run `38672287517` / `bc89b9a` remains the earlier tile-town
-Home before the v5 mock pass. The comparator, other targets, and `0.90`
-threshold remain unchanged.
+The Home production target is DESIGN's Doodle v1 Home mock
+(`2026-10-19-doodle-v1-home.png`). Founder sign-off 2026-10-20:
+「改成跟手繪稿比對，門檻維持 0.90」. `VisualParity.swift` accepts only a
+1× 402 × 874 target. The landscape mock is cut to the phone screen and scaled uniformly to fill 402×874 (crop along the long axis so the frame is not a non-uniform stretch and has no paper margins). The locked face is the founder-signed Doodle Home mock. Saves, Plan, and Map targets stay on their current locks until those Doodle PRs. The comparator and `0.90` threshold remain unchanged.
 
 ## Boundaries
 

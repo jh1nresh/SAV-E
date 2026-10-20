@@ -16,14 +16,21 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     /// alerts are too flaky to drive the spec P4 recovery path.
     private let simulatesDeniedAuthorization = ProcessInfo.processInfo.arguments
         .contains("--uitest-location-denied")
+    /// Deterministic allowed-state with a Taipei fix so Home can show
+    /// Near you without a springboard permission alert.
+    private let simulatesAllowedAuthorization = ProcessInfo.processInfo.arguments
+        .contains("--uitest-location-allowed")
+    private static let uiTestTaipei = CLLocation(latitude: 25.0330, longitude: 121.5654)
 #else
     private let simulatesDeniedAuthorization = false
+    private let simulatesAllowedAuthorization = false
 #endif
 
     /// Spec P4: a denied/restricted locate tap must surface a recovery
     /// affordance instead of failing silently.
     var isAuthorizationDenied: Bool {
         if simulatesDeniedAuthorization { return true }
+        if simulatesAllowedAuthorization { return false }
         switch manager.authorizationStatus {
         case .denied, .restricted: return true
         default: return false
@@ -31,15 +38,29 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     }
 
     override init() {
-        authorizationStatus = manager.authorizationStatus
+        if simulatesDeniedAuthorization {
+            authorizationStatus = .denied
+        } else if simulatesAllowedAuthorization {
+            authorizationStatus = .authorizedWhenInUse
+        } else {
+            authorizationStatus = manager.authorizationStatus
+        }
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+#if DEBUG
+        if simulatesAllowedAuthorization {
+            currentLocation = Self.uiTestTaipei
+        }
+#endif
     }
 
     func requestCurrentLocation() async -> CLLocation? {
         if simulatesDeniedAuthorization {
             return nil
+        }
+        if simulatesAllowedAuthorization {
+            return currentLocation
         }
         if let currentLocation {
             return currentLocation
@@ -66,6 +87,7 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        if simulatesDeniedAuthorization || simulatesAllowedAuthorization { return }
         authorizationStatus = manager.authorizationStatus
 
         guard pendingContinuation != nil else { return }

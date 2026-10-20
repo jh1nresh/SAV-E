@@ -318,11 +318,23 @@ enum SaveDisplayType {
         Font(scaledFont(size: size, name: latinName, relativeTo: style))
     }
 
+    /// Spec-locked wordmark and city sizes. Dynamic Type must not shrink
+    /// Caveat 34 / 20 down to the visual 22 / 12 the Home mock measured.
+    static func fixed(_ size: CGFloat) -> Font {
+        Font(cascadeFont(size: size, name: latinName))
+    }
+
     private static func scaledFont(
         size: CGFloat,
         name: String,
         relativeTo style: Font.TextStyle
     ) -> UIFont {
+        UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(
+            for: cascadeFont(size: size, name: name)
+        )
+    }
+
+    private static func cascadeFont(size: CGFloat, name: String) -> UIFont {
         _ = register
         let latin = UIFont(name: name, size: size)
             ?? UIFont.systemFont(ofSize: size, weight: .semibold)
@@ -333,16 +345,11 @@ enum SaveDisplayType {
         if let pingFang = UIFont(name: "PingFangTC-Regular", size: size) {
             cascade.append(pingFang.fontDescriptor)
         }
-        let font: UIFont
-        if cascade.isEmpty {
-            font = latin
-        } else {
-            let descriptor = latin.fontDescriptor.addingAttributes([
-                UIFontDescriptor.AttributeName(rawValue: kCTFontCascadeListAttribute as String): cascade,
-            ])
-            font = UIFont(descriptor: descriptor, size: size)
-        }
-        return UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: font)
+        guard !cascade.isEmpty else { return latin }
+        let descriptor = latin.fontDescriptor.addingAttributes([
+            UIFontDescriptor.AttributeName(rawValue: kCTFontCascadeListAttribute as String): cascade,
+        ])
+        return UIFont(descriptor: descriptor, size: size)
     }
 }
 

@@ -1,15 +1,17 @@
 # Savvy Design System
 
-> Last updated: 2026-10-19
+> Last updated: 2026-10-20
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** still governs paper, type, kraft, and coral
-> chrome, with the 2026-10-19 v5 cream/ink/stroke lock below. **Tile-town** is
-> the product Map / Home peek / Friends strip base (founder lock 2026-10-14).
-> The 2026-10-19 founder decision replaces the Home hero and Map tab with a
-> full-pixel **isometric** tile town; that renderer is a follow-up PR. **Soft
-> Pixel** is accents-only *on* tile-town (pins / seals / Memo). **Cream-notebook**
-> tokens are legacy-surface-only. See "Tile Town", "Atlas Postcard Tokens",
-> and "Legacy Cream-Notebook Tokens" below.
+> chrome, with the 2026-10-19 v5 cream/ink/stroke lock below. **Tile-town**
+> remains the product Map / Friends strip base until those Doodle PRs land
+> (founder lock 2026-10-14). Home no longer uses it. Founder 2026-10-20:
+> 「像素小鎮已經不要了」 — tile-town is abandoned; this Home PR keeps only
+> shared leftovers for a later cleanup. The 2026-10-19 isometric Home hero
+> is withdrawn. **Soft Pixel** is accents-only on remaining town surfaces
+> (pins / seals / Memo). **Cream-notebook** tokens are legacy-surface-only.
+> See "Tile Town", "Atlas Postcard Tokens", and "Legacy Cream-Notebook
+> Tokens" below.
 
 ## Product Frame
 
@@ -108,10 +110,12 @@ Rules:
 
 ### Tile Town (product map base)
 
-**Lock (2026-10-14 founder, via CEO):** product Map and Home peek use a
+**Lock (2026-10-14 founder, via CEO):** product Map uses a
 full-pixel tile-town base. Soft Pixel accents-only on MapKit (H1/M1 from
 2026-10-13 / PRs #277–#278) is **superseded for the map base**. Do not
 silent-partial Soft Pixel: a MapKit atlas with pixel pins is not the lock.
+Founder 2026-10-20 abandoned tile-town on Home; Map files stay for the
+Map agent.
 
 Rules:
 
@@ -128,9 +132,9 @@ Rules:
 - Tile-town is nearest-neighbor integer tiles (`SaveTileTownRaster`): buildings,
   roofs, trees, water, and roads are crisp cells. No anti-aliased vector houses
   or curved roads. Do not blurry-upscale pixel art.
-- **2026-10-19:** Home hero and Map become a full-pixel isometric tile town
-  (place-memory, not navigation). Pins and saved stamps stay tappable. The
-  isometric renderer is sequenced after this chrome/token PR.
+- **2026-10-19/20:** The isometric tile-town Home hero is withdrawn.
+  Map stays on the current town renderer until the Doodle Map PR. Pins
+  and saved stamps stay tappable on Map.
 - App Store frames and product UI share this town. In-app **titles** (Savvy
   wordmark, page titles) use `SavePixelDisplayText` / `SavePixelType`
   (Pixelify Sans Latin + Fusion Pixel CJK). Stamp names stay SF Rounded until
@@ -319,7 +323,7 @@ accept `relativeTo:`, and editorial scales relative to headline.
 | Role | Token | Face | Use |
 | --- | --- | --- | --- |
 | Pixel display | `SavePixelDisplayText` / `SavePixelType` | Pixelify Sans + Fusion Pixel CJK | Savvy wordmark and page titles. OFL. Zpix is not bundled (commercial). Stamp names wait for the shared stamp PR. |
-| Pixel chrome | `SavePixelChromeIcon` | 8×8 nearest-neighbor | 24px root tab icons. Home header icons are gone in Doodle v1. |
+| Pixel chrome | `SavePixelChromeIcon` | 8×8 nearest-neighbor | Retired on the root tab bar. Doodle v1 uses 24pt hand-drawn template icons (`SaveDoodleTabIcon`). |
 | Display | `SaveAtlasType.display(_:)` | System Rounded Semibold (SF) | Hero numerals, action labels, display moments |
 | Strong | `SaveAtlasType.strong(_:)` | System Rounded Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
 | Body | `SaveAtlasType.body(_:)` | System Rounded Medium | Body and detail copy |
@@ -639,19 +643,19 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 
 - Root controls are Home / Map / + / Friends / Passport, in that order.
 - Tab bible: flat full-width cream bar (`canvas`) with a hard 2px `stroke`
-  top rule; 24px pixel line icons (`SavePixelChromeIcon`: house, map, plus,
-  people, booklet); coral on the active destination only; the center `+` is
-  a coral (`#F26B4A`) circle with no visible "Save" label, but VoiceOver and
-  `root.tab.save` keep the capture name. **DESIGN question:** the 2026-10-19
-  packet asked for a red `+` circle; this PR keeps production coral until
-  that token is decided. Do not use a mint selection pill or a floating
-  rounded capsule.
+  top rule; 24pt hand-drawn template icons (`SaveDoodleTabIcon`: house,
+  folded map, plus, people, booklet); coral on the active destination only,
+  muted when idle; the center `+` is a coral (`#F26B4A`) circle with no visible "Save" label, but VoiceOver and `root.tab.save` keep the capture
+  name. **DESIGN question:** the 2026-10-19 packet asked for a red `+`
+  circle; this PR keeps production coral until that token is decided. Do
+  not use a mint selection pill or a floating glass capsule.
 - Home owns waiting clues and the nearby Eat/Go list. The mini-map is an
   index; tapping it opens Map with the same city and Eat/Go filter. Review
   clues stay on the one-line `N clues waiting · Review` entry when N>0.
-  "See all saves" is a quiet always-on row into the existing Saves screen.
-  Collected opens Passport. Do not add a duplicate Saves tab. Trips stay a
-  production child reached from Saves as `Trips ›`.
+  Collected opens Passport. Saves remains a child of Review / existing
+  library routes — Home no longer shows a See all saves row. Do not add a
+  duplicate Saves tab. Trips stay a production child reached from Saves as
+  `Trips ›`.
 - + opens capture and leaves the previous destination selected when dismissed.
 - Plan is a secondary route while planning demand remains unvalidated.
 - Trips remain a child route. Home no longer shows a More menu.
@@ -667,8 +671,9 @@ Nearby / Saved / Friends chips must not appear here.
 HoP locked D2 (city switcher) and D3 (Eat/Go + nearby own-saves) on
 2026-10-19. The 2026-10-14 tile-town Home chrome (quiet search, Trips /
 Saves / More header icons, tile-town peek, recent stamps) is superseded
-on Home only. Map and Passport keep their current tile-town lock until
-their Doodle PRs.
+on Home only. Founder 2026-10-20: tile-town is abandoned; Home ships
+Doodle only. Map and Passport keep their current town lock until their
+Doodle PRs.
 
 Eat shows only Eat (food, cafe, bar). Go shows only Go (attraction, stay,
 shopping). The list is the user's own saves near the selected city or
@@ -679,12 +684,13 @@ Location denied: hide "Near you", show the last city sorted by most
 recent save, and prompt to allow location. Empty nearby: Caveat title,
 coral + Save link, and a latest-save jump when another city has saves.
 
-Clues stay on the one-line Review entry when N>0. Below the list, a quiet
-always-visible `See all saves ›` / `看全部收藏 ›` row (`home.saves`) opens
-the existing Saves screen. Saves reaches Trips from its header as
-`Trips ›` (`saves.trips`). Do not add a second Home Trips row. Collected
-opens Passport. Wordmark titles use `SaveDisplayTitle` (Caveat / Iansui);
-body copy stays `SaveAtlasType`.
+Clues stay on the one-line Review entry when N>0. Home no longer shows
+`See all saves`. Review (`home.review`) still opens the existing Saves
+screen when N>0. Saves reaches Trips from its header as `Trips ›`
+(`saves.trips`). Do not add a second Home Trips row. Collected opens
+Passport. Wordmark is Caveat SemiBold 34; the city line is Caveat 20 with
+a 2pt coral underline under the city word only. Body copy stays
+`SaveAtlasType`.
 
 ### Sign-In
 

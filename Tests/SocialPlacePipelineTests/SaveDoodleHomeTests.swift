@@ -161,12 +161,31 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("home.collected"))
         XCTAssertTrue(home.contains("home.empty.capture"))
         XCTAssertTrue(home.contains("home.review"))
-        XCTAssertTrue(home.contains("home.saves"))
-        XCTAssertTrue(home.contains("See all saves"))
-        XCTAssertTrue(home.contains("看全部收藏"))
+        XCTAssertTrue(home.contains("home.openSaves"))
+        XCTAssertFalse(home.contains("\"home.saves\""))
+        XCTAssertFalse(home.contains("See all saves"))
+        XCTAssertFalse(home.contains("看全部收藏"))
         XCTAssertTrue(home.contains("presentation.reviewCount > 0"))
+        let factory = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        XCTAssertFalse(factory.contains("presentation.reviewCount = mapViewModel.reviewCandidates.count"))
         XCTAssertFalse(home.contains("accessibilityIdentifier(\"home.trips\")"))
-        XCTAssertTrue(home.contains("SaveDisplayTitle(text: \"Savvy\", pointSize: 34"))
+        XCTAssertTrue(home.contains("SaveDisplayTitle("))
+        XCTAssertTrue(home.contains("text: \"Savvy\""))
+        XCTAssertTrue(home.contains("pointSize: 34"))
+        XCTAssertTrue(home.contains("locksPointSize: true"))
+        XCTAssertTrue(home.contains("pointSize: 20"))
+        XCTAssertTrue(home.contains(".frame(height: 2)"))
+        XCTAssertTrue(home.contains("height: SaveLayout.chipHeight"))
+        XCTAssertFalse(home.contains("minWidth: SaveLayout.minTap, height:"))
+        XCTAssertTrue(home.contains(".frame(height: 160)"))
+        XCTAssertTrue(home.contains("SaveLayout.screenMargin"))
+        XCTAssertTrue(home.contains("SaveLayout.stickerBox"))
+        XCTAssertTrue(home.contains("SaveLayout.rowMinHeight"))
+        XCTAssertTrue(home.contains("SaveDoodleStickerShape"))
+        XCTAssertTrue(home.contains(".frame(height: 44)"))
+        XCTAssertTrue(home.contains("SaveDoodle.stampRed"))
+        XCTAssertTrue(home.contains("AtlasTabBarMetrics.height"))
+        XCTAssertFalse(home.contains("rootTabScrollClearance"))
         XCTAssertTrue(home.contains(".mapStyle(.standard(emphasis: .automatic))"))
         XCTAssertTrue(home.contains("Marker("))
         XCTAssertTrue(home.contains("SaveDoodle.stampRed"))
@@ -181,6 +200,33 @@ final class SaveDoodleHomeTests: XCTestCase {
                 "SAV-E/Views/TileTown/SaveTileTownHomeView.swift"
             ).path
         ))
+        let design = try source(at: "DESIGN.md")
+        XCTAssertTrue(design.contains("像素小鎮已經不要了"))
+        XCTAssertTrue(design.contains("tile-town is abandoned"))
+        XCTAssertFalse(design.contains("Home hero and Map become a full-pixel isometric"))
+        let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        XCTAssertTrue(bridge.contains("Home is `SaveDoodleHomeView`"))
+        XCTAssertFalse(bridge.contains("Live Home uses the tile-town peek"))
+        let readme = try source(at: "Prototypes/AtlasPostcard/README.md")
+        XCTAssertTrue(readme.contains("2026-10-19-doodle-v1-home.png"))
+        XCTAssertTrue(readme.contains("0.90"))
+        XCTAssertTrue(readme.contains("scaled uniformly"))
+        XCTAssertTrue(readme.contains("to fill 402"))
+        XCTAssertTrue(readme.contains("not a non-uniform stretch"))
+        XCTAssertFalse(readme.contains("padded with paper"))
+        XCTAssertFalse(readme.contains("nearest-neighbor tile-town peek"))
+        let homeTarget = repositoryRoot.appendingPathComponent(
+            "Prototypes/AtlasPostcard/Reference/ProductionTargets/home.png"
+        )
+        let homePNG = try Data(contentsOf: homeTarget)
+        XCTAssertEqual([UInt8](homePNG.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
+        XCTAssertEqual(pngDimension(homePNG, at: 16), 402)
+        XCTAssertEqual(pngDimension(homePNG, at: 20), 874)
+        let mapPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
+            "Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png"
+        ))
+        XCTAssertEqual(pngDimension(mapPNG, at: 16), 402)
+        XCTAssertEqual(pngDimension(mapPNG, at: 20), 874)
         XCTAssertTrue(root.contains("SaveDoodleHomeView("))
         XCTAssertFalse(root.contains("HomeAtlasScreen()"))
         XCTAssertTrue(root.contains("saves.trips"))
@@ -193,8 +239,15 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(rail.contains("home.locationPrompt"))
         XCTAssertTrue(rail.contains("home.locationAllow"))
         XCTAssertTrue(rail.contains("home.collected"))
+        XCTAssertTrue(rail.contains("doodle-home-empty"))
+        XCTAssertTrue(rail.contains("doodle-home-allowed"))
+        XCTAssertTrue(rail.contains("doodle-home-multirow"))
+        XCTAssertTrue(rail.contains("--uitest-location-allowed"))
         XCTAssertFalse(rail.contains("doodle-home-dark"))
         XCTAssertFalse(rail.contains("confirmed places"))
+        let location = try source(at: "SAV-E/Services/LocationService.swift")
+        XCTAssertTrue(location.contains("--uitest-location-allowed"))
+        XCTAssertTrue(location.contains("simulatesAllowedAuthorization"))
     }
 
     func testHomeShowsLocationDeniedPromptIdentifiers() throws {
@@ -267,6 +320,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(content.contains("resetMapVisitResidue()"))
         XCTAssertTrue(content.contains("clearSelectedMapObject()"))
         XCTAssertTrue(content.contains("onSelect: { selectRootTab($0) }"))
+        XCTAssertTrue(content.contains("SaveDoodleTabIcon("))
+        XCTAssertFalse(content.contains("SavePixelChromeIcon("))
         XCTAssertTrue(content.contains("private func showMapTab()"))
         XCTAssertTrue(content.contains("abandonMiniMapHandoff()"))
         XCTAssertTrue(map.contains("consumeMiniMapHandoff()"))
@@ -293,9 +348,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(rail.contains("func testMiniMapOpensMapWithCarriedFilterAndCityChange"))
         XCTAssertTrue(rail.contains("app.buttons[\"map.go\"]"))
         XCTAssertTrue(rail.contains("app.buttons[\"map.eat\"]"))
-        XCTAssertTrue(rail.contains("recordQ5ReusedMapTree"))
-        XCTAssertTrue(rail.contains("q5-reused-map-debugDescription"))
-        XCTAssertTrue(rail.contains("lifetime = .keepAlways"))
+        XCTAssertFalse(rail.contains("recordQ5ReusedMapTree"))
+        XCTAssertFalse(rail.contains("q5-reused-map-debugDescription"))
+        XCTAssertFalse(rail.contains("q5-reused-map"))
         XCTAssertEqual(
             content.components(separatedBy: "selectedRootTab = .map").count - 1,
             1,
@@ -435,6 +490,14 @@ final class SaveDoodleHomeTests: XCTestCase {
             openingHours: nil,
             createdAt: createdAt
         )
+    }
+
+    private func pngDimension(_ data: Data, at offset: Int) -> UInt32 {
+        let bytes = [UInt8](data.subdata(in: offset..<(offset + 4)))
+        return UInt32(bytes[0]) << 24
+            | UInt32(bytes[1]) << 16
+            | UInt32(bytes[2]) << 8
+            | UInt32(bytes[3])
     }
 
     private func source(at relativePath: String) throws -> String {

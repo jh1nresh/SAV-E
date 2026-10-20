@@ -33,6 +33,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertFalse(app.buttons["home.viewAll"].exists)
             XCTAssertFalse(app.textFields["home.search"].exists)
             attach(app, name: "home-list-browse-\(staticMode)")
+            if !staticMode {
+                attach(app, name: "doodle-home-multirow")
+            }
             let cafe = app.buttons["home.place.10000000-0000-0000-0000-000000000001"]
             XCTAssertTrue(cafe.waitForExistence(timeout: stepTimeout))
             XCTAssertTrue(app.staticTexts["Taipei Window Cafe"].firstMatch.exists)
@@ -63,6 +66,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             attach(app, name: "home-list-open-detail-\(staticMode)")
             app.terminate()
         }
+
+        let allowed = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-allowed",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed", "--uitest-home-memory-fixture",
+            "-save.appLanguage", "en"
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(allowed)
+        try signInViaReviewDemoRequired(app: allowed)
+        XCTAssertTrue(allowed.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(allowed.descendants(matching: .any)["home.locationPrompt"].exists)
+        attach(allowed, name: "doodle-home-allowed")
+        allowed.terminate()
     }
 
     @MainActor
@@ -303,7 +319,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let start = app.descendants(matching: .any)["home.empty.capture"]
         XCTAssertTrue(start.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(start.isHittable)
-        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["home.saves"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
         attach(app, name: "review-flow-home-empty")
         attach(app, name: "doodle-home-empty")
@@ -498,7 +514,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.eat"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["home.citySwitcher"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["home.miniMap"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["home.saves"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.locationPrompt"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["home.locationAllow"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
@@ -574,7 +590,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.place.\(taipeiParkID)"].waitForExistence(timeout: stepTimeout))
         tapReachable(app.descendants(matching: .any)["home.miniMap"])
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-        recordQ5ReusedMapTree(app)
         let mapGo = app.buttons["map.go"]
         XCTAssertTrue(mapGo.waitForExistence(timeout: stepTimeout), "Mini-map must open Map with Eat/Go")
         XCTAssertTrue(mapGo.isSelected, "Mini-map must carry the Go lens")
@@ -1277,7 +1292,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.eat"].exists)
         XCTAssertTrue(app.buttons["home.citySwitcher"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.review"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["home.saves"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["home.saves"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.locationPrompt"].exists)
         XCTAssertTrue(app.buttons["home.locationAllow"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
@@ -1582,7 +1597,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         app.buttons["drawer.place.close"].firstMatch.tap()
         XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout))
-        tapReachable(app.descendants(matching: .any)["home.review"])
+        openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         let review = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch
         XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
@@ -1590,8 +1605,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "home-real-candidate-detail")
         app.buttons["drawer.place.close"].firstMatch.tap()
-        openRootTab("Home", app: app)
-        tapReachable(app.descendants(matching: .any)["home.review"])
+        openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         let firstCandidate = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'saves.reviewCandidate.'")).firstMatch
         XCTAssertTrue(firstCandidate.label.contains("Harbor Oven Pizza"))
@@ -3128,42 +3142,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     // MARK: - Helpers
 
-    /// Q5 diagnostic: dump the reused-Map tree before waiting for `map.go`.
-    @MainActor
-    private func recordQ5ReusedMapTree(_ app: XCUIApplication) {
-        let tree = app.debugDescription
-        print(tree)
-        let treeAttachment = XCTAttachment(string: tree)
-        treeAttachment.name = "q5-reused-map-debugDescription"
-        treeAttachment.lifetime = .keepAlways
-        add(treeAttachment)
-        attach(app, name: "q5-reused-map")
-
-        guard !app.buttons["map.go"].exists else { return }
-        let matches = app.descendants(matching: .any).matching(
-            NSPredicate(
-                format: "identifier CONTAINS[c] %@ OR identifier CONTAINS[c] %@ OR identifier CONTAINS[c] %@",
-                "map.",
-                "eat",
-                "go"
-            )
-        )
-        let count = matches.count
-        var lines: [String] = ["map.go Button missing. identifier matches=\(count)"]
-        for index in 0..<min(count, 80) {
-            let element = matches.element(boundBy: index)
-            lines.append(
-                "id=\(element.identifier) type=\(element.elementType) label=\(element.label) hittable=\(element.isHittable) frame=\(NSCoder.string(for: element.frame))"
-            )
-        }
-        let summary = lines.joined(separator: "\n")
-        print(summary)
-        let note = XCTAttachment(string: summary)
-        note.name = "q5-reused-map-eat-go-ids"
-        note.lifetime = .keepAlways
-        add(note)
-    }
-
     @MainActor
     private func openRootTab(_ title: String, app: XCUIApplication) {
         if !rootTabButton(title, app: app).isHittable {
@@ -3192,9 +3170,21 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        // HoP: quiet always-on `home.saves` below the list. Review stays N>0.
-        let entry = app.descendants(matching: .any)["home.saves"]
-        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing Home Saves entry")
+        // DESIGN: Review (`home.review`) is the visible Home → Saves entry
+        // when N>0. The retired library row stays gone. When the clues line
+        // is omitted, `home.openSaves` is the always-on handoff.
+        let review = app.descendants(matching: .any)["home.review"]
+        let fallback = app.descendants(matching: .any)["home.openSaves"]
+        let entry: XCUIElement
+        if review.waitForExistence(timeout: timeout(2)) {
+            entry = review
+        } else {
+            XCTAssertTrue(
+                fallback.waitForExistence(timeout: stepTimeout),
+                "Missing Home Saves entry"
+            )
+            entry = fallback
+        }
         _ = scrollUntilHittable(entry, in: app.scrollViews.firstMatch)
         tapReachable(entry)
         let saves = app.descendants(matching: .any)["saves.root"]
@@ -3261,8 +3251,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     /// Live Home is the Doodle Eat/Go list plus mini-map. The Atlas gate still
-    /// compares `five-tab-home` to `ProductionTargets/home.png` at 0.90. Do not
-    /// retune that gate here if the intentional Home redesign drops the score.
+    /// compares `five-tab-home` to `ProductionTargets/home.png` at 0.90 against
+    /// the Doodle v1 Home mock. Do not retune that gate here.
     @MainActor
     private func waitForHomeCoverImagery(_ app: XCUIApplication) {
         XCTAssertTrue(
