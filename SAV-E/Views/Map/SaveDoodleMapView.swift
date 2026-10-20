@@ -242,7 +242,8 @@ struct SaveDoodleMapView: View {
                                     lineWidth: SaveAtlasPalette.strokeWidth
                                 )
                         }
-                        .contentShape(Capsule())
+                        .frame(minHeight: SaveLayout.minTap)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .frame(minHeight: SaveLayout.minTap)

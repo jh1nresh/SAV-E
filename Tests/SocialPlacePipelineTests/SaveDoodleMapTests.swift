@@ -20,6 +20,12 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("static var current: Kind = .coralNumbered"))
         XCTAssertTrue(map.contains("SaveAtlasPalette.coral"))
         XCTAssertTrue(map.contains("map.eatGo"))
+        let eatGoAt = try XCTUnwrap(map.range(of: "private var eatGoRail"))
+        let sheetAt = try XCTUnwrap(map.range(of: "private func placeSheet"))
+        let eatGo = map[eatGoAt.lowerBound..<sheetAt.lowerBound]
+        XCTAssertTrue(eatGo.contains("minHeight: SaveLayout.chipHeight"))
+        XCTAssertTrue(eatGo.contains("minHeight: SaveLayout.minTap"))
+        XCTAssertTrue(eatGo.contains(".contentShape(Rectangle())"))
         XCTAssertTrue(map.contains("mapAccessibilityIdentifier"))
         XCTAssertTrue(map.contains("map.city"))
         XCTAssertTrue(map.contains("map.liveSurface"))
