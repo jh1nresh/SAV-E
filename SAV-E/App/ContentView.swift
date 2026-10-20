@@ -600,7 +600,7 @@ struct ContentView: View {
                                 // the canvas never draws its own copy.
                                 hidesCommandShelf: true,
                                 onOpenSearch: { openMapSearch() },
-                                onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                onOpenSavedPlace: { openSavedPlaceFromMapSearch($0) },
                                 onPlanAroundPlace: openPlanAround,
                                 onOpenPassport: openPassport
                             )
@@ -1440,8 +1440,13 @@ struct ContentView: View {
 
     /// Saved-row taps in ordinary map search just open the stamp. During
     /// Review correction they must also resolve the active clue onto it.
+    /// Peek-card taps use this same path so a selected 64pt sticker cannot
+    /// open the stamp while leaving the correction session unresolved.
     private func openSavedPlaceFromMapSearch(_ place: Place) {
-        guard drawerLaunchRequest.preservesExactSearchClue else {
+        let shouldResolveClue = drawerLaunchRequest.preservesExactSearchClue
+            || isExactSearchSessionActive
+            || mapVM.hasActiveExactSearchResolution
+        guard shouldResolveClue else {
             openMapDetail(.savedPlace(place))
             return
         }

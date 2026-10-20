@@ -78,6 +78,7 @@ struct SaveDoodleHomeView: View {
                 .foregroundStyle(SaveAtlasPalette.ink)
                 .padding(.horizontal, SaveSpace.xs)
                 .frame(minWidth: SaveLayout.minTap, minHeight: SaveLayout.minTap)
+                .padding(.vertical, 1)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -203,7 +204,8 @@ struct SaveDoodleHomeView: View {
                     .foregroundStyle(SaveAtlasPalette.muted)
                 Spacer(minLength: 0)
             }
-            .frame(minHeight: SaveLayout.minTap, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: SaveLayout.minTap, alignment: .leading)
+            .padding(.vertical, 1)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -695,6 +697,11 @@ enum SaveDoodleOfficialSticker: String, CaseIterable {
 
     var title: String { rawValue.capitalized }
 
+    /// Place marks only. `.elephant` is brand-only (wordmark / empty Home).
+    static let placeCases: [SaveDoodleOfficialSticker] = [
+        .duck, .noodle, .coffee, .temple, .lantern
+    ]
+
     func imageName(visited: Bool, pointSize: CGFloat = 64) -> String {
         if visited {
             return pointSize <= 48
@@ -704,29 +711,36 @@ enum SaveDoodleOfficialSticker: String, CaseIterable {
         return "DoodleSticker\(title)Outline"
     }
 
+    /// Never returns `.elephant`. Place names that mention an elephant still
+    /// use the category mark.
     static func named(
         for category: PlaceCategory,
         placeName: String = ""
     ) -> SaveDoodleOfficialSticker {
         let hint = placeName.lowercased()
-        if hint.contains("duck") || hint.contains("烤鴨") || hint.contains("烤鸭") { return .duck }
-        if hint.contains("noodle") || hint.contains("ramen") || hint.contains("麵")
+        let mapped: SaveDoodleOfficialSticker
+        if hint.contains("duck") || hint.contains("烤鴨") || hint.contains("烤鸭") {
+            mapped = .duck
+        } else if hint.contains("noodle") || hint.contains("ramen") || hint.contains("麵")
             || hint.contains("拉面") || hint.contains("面条") {
-            return .noodle
+            mapped = .noodle
+        } else if hint.contains("coffee") || hint.contains("cafe") || hint.contains("咖啡") {
+            mapped = .coffee
+        } else if hint.contains("temple") || hint.contains("寺") || hint.contains("天壇") || hint.contains("天坛") {
+            mapped = .temple
+        } else if hint.contains("lantern") || hint.contains("燈") || hint.contains("灯") {
+            mapped = .lantern
+        } else {
+            switch category {
+            case .food: mapped = .duck
+            case .cafe: mapped = .coffee
+            case .bar: mapped = .lantern
+            case .attraction: mapped = .temple
+            case .stay: mapped = .temple
+            case .shopping: mapped = .lantern
+            }
         }
-        if hint.contains("coffee") || hint.contains("cafe") || hint.contains("咖啡") { return .coffee }
-        if hint.contains("temple") || hint.contains("寺") || hint.contains("天壇") || hint.contains("天坛") {
-            return .temple
-        }
-        if hint.contains("lantern") || hint.contains("燈") || hint.contains("灯") { return .lantern }
-        switch category {
-        case .food: return .duck
-        case .cafe: return .coffee
-        case .bar: return .lantern
-        case .attraction: return .temple
-        case .stay: return .temple
-        case .shopping: return .lantern
-        }
+        return placeCases.contains(mapped) ? mapped : .temple
     }
 }
 
@@ -787,6 +801,7 @@ struct SaveDoodleDashedDivider: View {
     }
 }
 
+/// Brand elephant. Not a place sticker — wordmark and empty Home only.
 struct SaveDoodleElephant: View {
     var size: CGFloat = 28
 

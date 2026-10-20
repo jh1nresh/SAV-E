@@ -1,4 +1,5 @@
 import CoreLocation
+import UIKit
 import XCTest
 @testable import SAVE
 
@@ -276,6 +277,10 @@ final class SaveDoodleHomeTests: XCTestCase {
         let design = try source(at: "DESIGN.md")
         XCTAssertTrue(design.contains("Savvy + Eat/Go in the header"))
         XCTAssertTrue(design.contains("official DESIGN color die-cut"))
+        XCTAssertTrue(design.contains("brand-only"))
+        XCTAssertTrue(home.contains("placeCases"))
+        XCTAssertTrue(home.contains("SaveDoodleElephant"))
+        XCTAssertTrue(home.contains("SaveDoodleEmptyPlate"))
         XCTAssertTrue(design.contains("then the city, clues"))
         XCTAssertTrue(design.contains("eade369"))
         XCTAssertTrue(design.contains("home-mask.png"))
@@ -362,6 +367,33 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(location.contains("simulatesAllowedAuthorization"))
     }
 
+    func testElephantStickerExistsLoadsAndIsNeverAPlaceMark() throws {
+        let color = repositoryRoot.appendingPathComponent(
+            "SAV-E/Resources/Assets.xcassets/DoodleStickerElephantColor48.imageset/elephant-color-48.png"
+        )
+        let outline = repositoryRoot.appendingPathComponent(
+            "SAV-E/Resources/Assets.xcassets/DoodleStickerElephantOutline.imageset/elephant-outline.pdf"
+        )
+        XCTAssertTrue(FileManager.default.fileExists(atPath: color.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outline.path))
+        let png = try Data(contentsOf: color)
+        XCTAssertEqual([UInt8](png.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
+        let image = try XCTUnwrap(UIImage(data: png))
+        XCTAssertGreaterThan(image.size.width, 0)
+        XCTAssertGreaterThan(image.size.height, 0)
+        XCTAssertFalse(SaveDoodleOfficialSticker.placeCases.contains(.elephant))
+        let elephantNames = ["Elephant Cafe", "White Elephant", "小象", ""]
+        for category in PlaceCategory.allCases {
+            for name in elephantNames {
+                XCTAssertNotEqual(
+                    SaveDoodleOfficialSticker.named(for: category, placeName: name),
+                    .elephant,
+                    "\(category.rawValue) / \(name) must not map to the brand elephant"
+                )
+            }
+        }
+    }
+
     func testHomeShowsLocationDeniedPromptIdentifiers() throws {
         let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
@@ -406,14 +438,14 @@ final class SaveDoodleHomeTests: XCTestCase {
         ).map(\.id)
         XCTAssertEqual(homeIDs, [tokyoGo.id])
 
-        let map = try source(at: "SAV-E/Views/TileTown/SaveTileTownRootMap.swift")
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
         XCTAssertTrue(map.contains("@EnvironmentObject private var session: SaveDoodleSession"))
         XCTAssertTrue(map.contains("header(followsHomeFilter: followsHomeFilter)"))
         XCTAssertTrue(map.contains("onChange(of: session.mapVisitResidueID)"))
         XCTAssertTrue(map.contains("applyMiniMapHandoff()"))
-        XCTAssertTrue(map.contains("guard session.mapFollowsHomeFilter else { return places }"))
-        XCTAssertTrue(map.contains("SaveDoodleHomeCatalog.visiblePlaces("))
+        XCTAssertTrue(map.contains("if session.mapFollowsHomeFilter"))
+        XCTAssertTrue(map.contains("SaveDoodleHomeCatalog.listedPlaces("))
         XCTAssertTrue(map.contains("session.lens"))
         XCTAssertTrue(map.contains("session.city"))
         XCTAssertTrue(map.contains("mapAccessibilityIdentifier"))
@@ -565,8 +597,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(content.contains("mapVM.clearSelectedMapObject()"))
         XCTAssertTrue(content.contains("isMapPanelExpanded = false"))
         XCTAssertTrue(content.contains("drawerVM.returnToCommands()"))
-        let map = try source(at: "SAV-E/Views/TileTown/SaveTileTownRootMap.swift")
-        XCTAssertTrue(map.contains("lens = .saved"))
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
         XCTAssertTrue(map.contains("showsCityPicker = false"))
         XCTAssertTrue(map.contains(".id(visitResidue)"))
     }
