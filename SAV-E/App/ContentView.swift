@@ -533,6 +533,16 @@ struct ContentView: View {
         )
     }
 
+    private var showsRootTabBar: Bool {
+#if DEBUG
+        // AtlasTabBar is a sibling of the tab pages. A fullScreenCover still
+        // leaves `root.tab.home` in the XCTest tree unless the bar is omitted.
+        !ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall")
+#else
+        true
+#endif
+    }
+
     private var detailPresentation: Binding<SaveFullScreenRoute?> {
         Binding(
             get: { if case .placeDetail = fullScreenRoute { return fullScreenRoute }; return nil },
@@ -611,33 +621,35 @@ struct ContentView: View {
                         }
                     }
 
-                    AtlasTabBar(
-                        items: SaveRootTab.allCases,
-                        selection: selectedRootTab,
-                        title: \.atlasTitle,
-                        icon: \.atlasIcon,
-                        accessibilityPrefix: "root.tab",
-                        displayTitle: { $0.title(language: languageSettings.language) },
-                        isRaisedControl: { $0.isCaptureControl },
-                        hidesTitle: { $0.isCaptureControl },
-                        iconView: { item in
-                            AnyView(
-                                SaveDoodleTabIcon(
-                                    kind: .tab(iconName: item.atlasIcon),
-                                    pointSize: 24
+                    if showsRootTabBar {
+                        AtlasTabBar(
+                            items: SaveRootTab.allCases,
+                            selection: selectedRootTab,
+                            title: \.atlasTitle,
+                            icon: \.atlasIcon,
+                            accessibilityPrefix: "root.tab",
+                            displayTitle: { $0.title(language: languageSettings.language) },
+                            isRaisedControl: { $0.isCaptureControl },
+                            hidesTitle: { $0.isCaptureControl },
+                            iconView: { item in
+                                AnyView(
+                                    SaveDoodleTabIcon(
+                                        kind: .tab(iconName: item.atlasIcon),
+                                        pointSize: 24
+                                    )
                                 )
-                            )
-                        },
-                        onSelect: { selectRootTab($0) }
-                    )
-                    .placed(
-                        x: AtlasTabBarMetrics.leadingInset,
-                        y: selectedRootTab == .map
-                            ? AtlasTabBarMetrics.mapY
-                            : AtlasTabBarMetrics.standardY,
-                        width: AtlasTabBarMetrics.width,
-                        height: AtlasTabBarMetrics.height
-                    )
+                            },
+                            onSelect: { selectRootTab($0) }
+                        )
+                        .placed(
+                            x: AtlasTabBarMetrics.leadingInset,
+                            y: selectedRootTab == .map
+                                ? AtlasTabBarMetrics.mapY
+                                : AtlasTabBarMetrics.standardY,
+                            width: AtlasTabBarMetrics.width,
+                            height: AtlasTabBarMetrics.height
+                        )
+                    }
                 }
             }
             .tint(SaveAtlasPalette.forest)

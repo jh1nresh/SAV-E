@@ -83,6 +83,8 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(content.contains("--uitest-show-paywall"))
         XCTAssertTrue(content.contains(".fullScreenCover(isPresented: .constant("))
         XCTAssertTrue(content.contains("Same outermost fullScreenCover as production Passport"))
+        XCTAssertTrue(content.contains("showsRootTabBar"))
+        XCTAssertTrue(content.contains("if showsRootTabBar"))
 
         let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
         XCTAssertTrue(parity.contains("--ignore-rects"))
