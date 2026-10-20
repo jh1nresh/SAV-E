@@ -690,7 +690,10 @@ screen when N>0. Saves reaches Trips from its header as `Trips ›`
 (`saves.trips`). Do not add a second Home Trips row. Collected opens
 Passport. Wordmark is Caveat SemiBold 34; the city line is Caveat 20 with
 a 2pt coral underline under the city word only. Body copy stays
-`SaveAtlasType`.
+`SaveAtlasType`. The locked parity face is
+`design/doodle-targets-2026-10-20/home-light.png` at `23cca55`
+(exact 402×874; `home-dark.png` for DESIGN comparison). Body text
+and icons in those rasters are stand-ins; compare layout boxes.
 
 ### Sign-In
 
