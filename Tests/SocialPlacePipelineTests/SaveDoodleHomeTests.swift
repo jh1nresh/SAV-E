@@ -292,6 +292,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(rail.contains("func testMiniMapOpensMapWithCarriedFilterAndCityChange"))
         XCTAssertTrue(rail.contains("app.buttons[\"map.go\"]"))
         XCTAssertTrue(rail.contains("app.buttons[\"map.eat\"]"))
+        XCTAssertTrue(rail.contains("recordQ5ReusedMapTree"))
+        XCTAssertTrue(rail.contains("q5-reused-map-debugDescription"))
+        XCTAssertTrue(rail.contains("lifetime = .keepAlways"))
         XCTAssertEqual(
             content.components(separatedBy: "selectedRootTab = .map").count - 1,
             1,

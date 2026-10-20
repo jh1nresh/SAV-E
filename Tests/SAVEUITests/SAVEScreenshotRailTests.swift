@@ -574,6 +574,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.place.\(taipeiParkID)"].waitForExistence(timeout: stepTimeout))
         tapReachable(app.descendants(matching: .any)["home.miniMap"])
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        recordQ5ReusedMapTree(app)
         let mapGo = app.buttons["map.go"]
         XCTAssertTrue(mapGo.waitForExistence(timeout: stepTimeout), "Mini-map must open Map with Eat/Go")
         XCTAssertTrue(mapGo.isSelected, "Mini-map must carry the Go lens")
@@ -3006,6 +3007,42 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     // MARK: - Helpers
+
+    /// Q5 diagnostic: dump the reused-Map tree before waiting for `map.go`.
+    @MainActor
+    private func recordQ5ReusedMapTree(_ app: XCUIApplication) {
+        let tree = app.debugDescription
+        print(tree)
+        let treeAttachment = XCTAttachment(string: tree)
+        treeAttachment.name = "q5-reused-map-debugDescription"
+        treeAttachment.lifetime = .keepAlways
+        add(treeAttachment)
+        attach(app, name: "q5-reused-map")
+
+        guard !app.buttons["map.go"].exists else { return }
+        let matches = app.descendants(matching: .any).matching(
+            NSPredicate(
+                format: "identifier CONTAINS[c] %@ OR identifier CONTAINS[c] %@ OR identifier CONTAINS[c] %@",
+                "map.",
+                "eat",
+                "go"
+            )
+        )
+        let count = matches.count
+        var lines: [String] = ["map.go Button missing. identifier matches=\(count)"]
+        for index in 0..<min(count, 80) {
+            let element = matches.element(boundBy: index)
+            lines.append(
+                "id=\(element.identifier) type=\(element.elementType) label=\(element.label) hittable=\(element.isHittable) frame=\(NSCoder.string(for: element.frame))"
+            )
+        }
+        let summary = lines.joined(separator: "\n")
+        print(summary)
+        let note = XCTAttachment(string: summary)
+        note.name = "q5-reused-map-eat-go-ids"
+        note.lifetime = .keepAlways
+        add(note)
+    }
 
     @MainActor
     private func openRootTab(_ title: String, app: XCUIApplication) {
