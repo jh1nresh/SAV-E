@@ -181,6 +181,29 @@ final class SaveDoodleHomeTests: XCTestCase {
                 "SAV-E/Views/TileTown/SaveTileTownHomeView.swift"
             ).path
         ))
+        let design = try source(at: "DESIGN.md")
+        XCTAssertTrue(design.contains("像素小鎮已經不要了"))
+        XCTAssertTrue(design.contains("tile-town is abandoned"))
+        XCTAssertFalse(design.contains("Home hero and Map become a full-pixel isometric"))
+        let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        XCTAssertTrue(bridge.contains("Home is `SaveDoodleHomeView`"))
+        XCTAssertFalse(bridge.contains("Live Home uses the tile-town peek"))
+        let readme = try source(at: "Prototypes/AtlasPostcard/README.md")
+        XCTAssertTrue(readme.contains("2026-10-19-doodle-v1-home.png"))
+        XCTAssertTrue(readme.contains("0.90"))
+        XCTAssertFalse(readme.contains("nearest-neighbor tile-town peek"))
+        let homeTarget = repositoryRoot.appendingPathComponent(
+            "Prototypes/AtlasPostcard/Reference/ProductionTargets/home.png"
+        )
+        let homePNG = try Data(contentsOf: homeTarget)
+        XCTAssertEqual([UInt8](homePNG.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
+        XCTAssertEqual(pngDimension(homePNG, at: 16), 402)
+        XCTAssertEqual(pngDimension(homePNG, at: 20), 874)
+        let mapPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
+            "Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png"
+        ))
+        XCTAssertEqual(pngDimension(mapPNG, at: 16), 402)
+        XCTAssertEqual(pngDimension(mapPNG, at: 20), 874)
         XCTAssertTrue(root.contains("SaveDoodleHomeView("))
         XCTAssertFalse(root.contains("HomeAtlasScreen()"))
         XCTAssertTrue(root.contains("saves.trips"))
@@ -435,6 +458,14 @@ final class SaveDoodleHomeTests: XCTestCase {
             openingHours: nil,
             createdAt: createdAt
         )
+    }
+
+    private func pngDimension(_ data: Data, at offset: Int) -> UInt32 {
+        let bytes = [UInt8](data.subdata(in: offset..<(offset + 4)))
+        return UInt32(bytes[0]) << 24
+            | UInt32(bytes[1]) << 16
+            | UInt32(bytes[2]) << 8
+            | UInt32(bytes[3])
     }
 
     private func source(at relativePath: String) throws -> String {
