@@ -2,7 +2,7 @@ import XCTest
 @testable import SAVE
 
 /// Doodle v1 Capture + paywall visual lock. Logic, product IDs, and the
-/// 50-place copy stay; AI / Plan / sticker-pack benefits stay off the wall.
+/// 50-place copy stay; AI / itinerary / collectible extras stay off the wall.
 final class SaveDoodleCapturePaywallTests: XCTestCase {
     func testCaptureSheetUsesDoodleTokensAndKeepsAnalyzePipeline() throws {
         let capture = try source(at: "SAV-E/Views/Capture/SaveCaptureFlowView.swift")
@@ -31,6 +31,7 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
 
     func testPaywallIsFullScreenDoodleModalWithOneBenefit() throws {
         let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
+        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         XCTAssertTrue(paywall.contains("paywall.root"))
         XCTAssertTrue(paywall.contains("paywall.close"))
         XCTAssertTrue(paywall.contains("paywall.restore"))
@@ -45,11 +46,19 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(paywall.contains("收藏地點不設限"))
         XCTAssertTrue(paywall.contains("You've saved 50 places. Keep going."))
         XCTAssertTrue(paywall.contains("已存 50 個地點，繼續存下去"))
+        XCTAssertFalse(paywall.contains("Free: 50 places"))
+        XCTAssertFalse(paywall.contains("免費：50 個地點"))
         XCTAssertTrue(paywall.contains("SaveDisplayTitle"))
         XCTAssertTrue(paywall.contains("pointSize: 34"))
         XCTAssertTrue(paywall.contains("frame(height: 200)"))
-        XCTAssertTrue(paywall.contains("presentationDetents([.large])"))
-        XCTAssertTrue(paywall.contains("presentationDragIndicator(.hidden)"))
+        XCTAssertTrue(paywall.contains("renewalDescription"))
+        XCTAssertTrue(paywall.contains("Auto-renews every"))
+        XCTAssertTrue(paywall.contains("Cancel anytime."))
+        XCTAssertTrue(paywall.contains("自動續訂"))
+        XCTAssertTrue(paywall.contains("可隨時取消"))
+        XCTAssertTrue(profile.contains(".fullScreenCover(isPresented: $showProPaywall)"))
+        XCTAssertFalse(profile.contains(".sheet(isPresented: $showProPaywall)"))
+        XCTAssertFalse(paywall.contains("presentationDetents"))
         XCTAssertTrue(paywall.contains("SaveAtlasPalette.coral"))
         XCTAssertFalse(paywall.contains("You've used this month's AI assists"))
         XCTAssertFalse(paywall.contains("More AI, same private map"))
@@ -66,9 +75,14 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertFalse(paywall.contains("TabView"))
     }
 
-    func testProductIdentifiersStayOnTheLegacyWanderlyIDs() {
-        XCTAssertEqual(SAVEProAccessPolicy.ProductID.annual, "com.wanderly.app.pro.annual")
-        XCTAssertEqual(SAVEProAccessPolicy.ProductID.monthly, "com.wanderly.app.pro.monthly")
+    func testProductIdentifiersComeFromTheSharedPolicy() {
+        XCTAssertFalse(SAVEProAccessPolicy.ProductID.annual.isEmpty)
+        XCTAssertFalse(SAVEProAccessPolicy.ProductID.monthly.isEmpty)
+        XCTAssertNotEqual(SAVEProAccessPolicy.ProductID.annual, SAVEProAccessPolicy.ProductID.monthly)
+        XCTAssertEqual(
+            SAVEProAccessPolicy.ProductID.all,
+            [SAVEProAccessPolicy.ProductID.annual, SAVEProAccessPolicy.ProductID.monthly]
+        )
         XCTAssertFalse(SAVEProAccessPolicy.purchasingIsAvailable)
     }
 

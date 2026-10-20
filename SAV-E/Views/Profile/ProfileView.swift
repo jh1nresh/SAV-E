@@ -447,7 +447,7 @@ struct ProfileView: View {
         .sheet(isPresented: $showLanguageSettings) {
             LanguageSettingsSheet()
         }
-        .sheet(isPresented: $showProPaywall) {
+        .fullScreenCover(isPresented: $showProPaywall) {
             SaveProPaywallView(trigger: .passport)
         }
         .confirmationDialog(

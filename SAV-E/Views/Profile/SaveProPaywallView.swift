@@ -34,7 +34,7 @@ struct SaveProPaywallView: View {
 
     var body: some View {
         ZStack {
-            SaveDottedBackground()
+            SaveAtlasPalette.canvas
                 .ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 0) {
@@ -55,8 +55,6 @@ struct SaveProPaywallView: View {
             .padding(.horizontal, SaveLayout.screenMargin)
             .padding(.bottom, SaveSpace.xs)
         }
-        .presentationDetents([.large])
-        .presentationDragIndicator(.hidden)
         .presentationBackground(SaveAtlasPalette.canvas)
         .interactiveDismissDisabled(isPurchasing)
         .accessibilityIdentifier("paywall.root")
@@ -221,13 +219,21 @@ struct SaveProPaywallView: View {
                     .frame(width: 28, height: 28)
                     .accessibilityHidden(true)
 
-                Text(title)
-                    .font(SaveAtlasType.strong(17))
-                    .foregroundStyle(SaveAtlasPalette.ink)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: SaveSpace.md) {
+                        Text(title)
+                            .font(SaveAtlasType.strong(17))
+                            .foregroundStyle(SaveAtlasPalette.ink)
 
-                Text(price)
-                    .font(SaveAtlasType.strong(17))
-                    .foregroundStyle(SaveAtlasPalette.ink)
+                        Text(price)
+                            .font(SaveAtlasType.strong(17))
+                            .foregroundStyle(SaveAtlasPalette.ink)
+                    }
+                    Text(renewalDescription(for: id, products: storeKit.products))
+                        .font(SaveAtlasType.body(12))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 Spacer(minLength: 0)
 
@@ -238,8 +244,9 @@ struct SaveProPaywallView: View {
                 }
             }
             .padding(.horizontal, SaveSpace.md)
+            .padding(.vertical, SaveSpace.xs)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: SaveLayout.rowMinHeight)
+            .frame(minHeight: SaveLayout.rowMinHeight)
             .background(
                 SaveAtlasPalette.paper,
                 in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
@@ -258,6 +265,47 @@ struct SaveProPaywallView: View {
 
     private func priceText(for id: String, products: [Product], fallback: String) -> String {
         products.first(where: { $0.id == id })?.displayPrice ?? fallback
+    }
+
+    private func renewalDescription(for productID: String, products: [Product]) -> String {
+        if let product = products.first(where: { $0.id == productID }) {
+            return renewalDescription(for: product)
+        }
+        if productID == SAVEProAccessPolicy.ProductID.annual {
+            return languageSettings.localized(
+                english: "Auto-renews every 1 year. Cancel anytime.",
+                traditionalChinese: "每 1 年自動續訂，可隨時取消。"
+            )
+        }
+        return languageSettings.localized(
+            english: "Auto-renews every 1 month. Cancel anytime.",
+            traditionalChinese: "每 1 個月自動續訂，可隨時取消。"
+        )
+    }
+
+    private func renewalDescription(for product: Product) -> String {
+        guard let subscription = product.subscription else {
+            return languageSettings.localized(english: "One-time", traditionalChinese: "一次性")
+        }
+        let period = subscription.subscriptionPeriod
+        let unit: String
+        switch period.unit {
+        case .day:
+            unit = languageSettings.localized(english: "day", traditionalChinese: "天")
+        case .week:
+            unit = languageSettings.localized(english: "week", traditionalChinese: "週")
+        case .month:
+            unit = languageSettings.localized(english: "month", traditionalChinese: "個月")
+        case .year:
+            unit = languageSettings.localized(english: "year", traditionalChinese: "年")
+        @unknown default:
+            unit = languageSettings.localized(english: "period", traditionalChinese: "期")
+        }
+        let count = period.value
+        return languageSettings.localized(
+            english: "Auto-renews every \(count) \(unit). Cancel anytime.",
+            traditionalChinese: "每 \(count) \(unit)自動續訂，可隨時取消。"
+        )
     }
 
     private var continueButton: some View {
@@ -286,28 +334,39 @@ struct SaveProPaywallView: View {
     }
 
     private var legalFooter: some View {
-        HStack(spacing: SaveSpace.xs) {
-            Button {
-                Task { await restore() }
-            } label: {
-                Text(languageSettings.localized(english: "Restore", traditionalChinese: "恢復購買"))
-            }
-            .accessibilityIdentifier("paywall.restore")
+        VStack(spacing: SaveSpace.xs) {
+            Text(languageSettings.localized(
+                english: "Payment is charged to your Apple Account. Subscriptions renew automatically unless cancelled at least 24 hours before the period ends. Manage or cancel in Settings.",
+                traditionalChinese: "款項由你的 Apple 帳戶扣款。除非在到期前至少 24 小時取消，否則訂閱會自動續訂。可在「設定」中管理或取消。"
+            ))
+            .font(SaveAtlasType.body(11))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
 
-            footerDot
-            if let terms = URL(string: SAVEProAccessPolicy.Legal.termsURL) {
-                Link(languageSettings.localized(english: "Terms", traditionalChinese: "使用條款"), destination: terms)
-                    .accessibilityIdentifier("paywall.terms")
+            HStack(spacing: SaveSpace.xs) {
+                Button {
+                    Task { await restore() }
+                } label: {
+                    Text(languageSettings.localized(english: "Restore", traditionalChinese: "恢復購買"))
+                }
+                .accessibilityIdentifier("paywall.restore")
+
+                footerDot
+                if let terms = URL(string: SAVEProAccessPolicy.Legal.termsURL) {
+                    Link(languageSettings.localized(english: "Terms", traditionalChinese: "使用條款"), destination: terms)
+                        .accessibilityIdentifier("paywall.terms")
+                }
+                footerDot
+                if let privacy = URL(string: SAVEProAccessPolicy.Legal.privacyURL) {
+                    Link(languageSettings.localized(english: "Privacy", traditionalChinese: "隱私政策"), destination: privacy)
+                        .accessibilityIdentifier("paywall.privacy")
+                }
             }
-            footerDot
-            if let privacy = URL(string: SAVEProAccessPolicy.Legal.privacyURL) {
-                Link(languageSettings.localized(english: "Privacy", traditionalChinese: "隱私政策"), destination: privacy)
-                    .accessibilityIdentifier("paywall.privacy")
-            }
+            .font(SaveAtlasType.body(12))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .tint(SaveAtlasPalette.muted)
         }
-        .font(SaveAtlasType.body(12))
-        .foregroundStyle(SaveAtlasPalette.muted)
-        .tint(SaveAtlasPalette.muted)
         .frame(maxWidth: .infinity)
         .accessibilityIdentifier("paywall.legal")
     }
