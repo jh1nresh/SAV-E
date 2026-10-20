@@ -83,6 +83,7 @@ jobs:
   # is the full UI + snapshot + 0.90 parity suite and can succeed only when
   # that suite actually ran.
   ios:
+    if: always()
     needs: [ios-build]
     runs-on: macos-26
     # The UI suite is ~10 minutes on a healthy runner but has been observed at
@@ -94,6 +95,9 @@ jobs:
       SAVE_UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus || (github.head_ref == 'cursor/tile-town-product-lock-4894' && 'tile-town-home') || '' }}
 
     steps:
+      - name: Require ios-build
+        run: '[[ "${{ needs.ios-build.result }}" == success ]] || exit 1'
+
       - name: Require full iOS suite
         env:
           EVENT_NAME: ${{ github.event_name }}
