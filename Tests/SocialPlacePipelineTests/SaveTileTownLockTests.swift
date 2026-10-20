@@ -232,7 +232,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(friends.contains("SharedAuthorPassport"))
         XCTAssertFalse(friends.contains(".disabled(store.isDemo)"))
         let store = try source(at: "SAV-E/ViewModels/SharedPostsStore.swift")
-        XCTAssertTrue(store.contains("applyDemoFixture()"))
+        XCTAssertTrue(store.contains("applyDemoFixture(items:"))
         XCTAssertTrue(store.contains("case .author(let id):"))
         XCTAssertFalse(friends.contains("friends.invite"))
         let posts = try JSONDecoder().decode([SharedPlacePost].self, from: Data(

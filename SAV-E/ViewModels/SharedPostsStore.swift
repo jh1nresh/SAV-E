@@ -35,12 +35,14 @@ final class SharedPostsStore: ObservableObject {
         isLoading = true; error = nil
         defer { if ticket == requestID { isLoading = false } }
         if isDemo {
-            // Offline demo stays empty unless the dedicated screenshot fixture
+            // Offline demo stays empty unless a dedicated screenshot fixture
             // is requested. It never reads or publishes real social records.
-            if ProcessInfo.processInfo.arguments.contains("--uitest-social-posts")
-                || ProcessInfo.processInfo.arguments.contains("--uitest-friends-town")
-            {
-                applyDemoFixture()
+            // Friends-town is the Doodle mock people list (Mia / Leo / Kai / Ana).
+            // Social-posts keeps the Harbor Town UUID lock for passport tests.
+            if ProcessInfo.processInfo.arguments.contains("--uitest-friends-town") {
+                applyDemoFixture(items: Self.friendsTownPosts)
+            } else if ProcessInfo.processInfo.arguments.contains("--uitest-social-posts") {
+                applyDemoFixture(items: Self.fixturePosts)
             } else {
                 posts = []
                 counts = SocialProfileCounts(postCount: 0, followingCount: 0, followerCount: 0)
@@ -77,8 +79,7 @@ final class SharedPostsStore: ObservableObject {
         }
     }
 
-    private func applyDemoFixture() {
-        let items = Self.fixturePosts
+    private func applyDemoFixture(items: [SharedPlacePost]) {
         let currentFilter = filter
         switch route {
         case .mine, .feed:
@@ -145,21 +146,75 @@ final class SharedPostsStore: ObservableObject {
             ("33333333-3333-4333-8333-333333333333", "Old Maple Cafe", "Town", "cafe", .wantToGo, "taylor", "Taylor Last", true),
             ("55555555-5555-4555-8555-555555555555", "Pine View", "Forest", "attraction", .wantToGo, "jordan", "Jordan Last", true),
         ].map { id, name, address, category, status, authorID, authorName, visible in
-            SharedPlacePost(
-                id: UUID(uuidString: id)!,
+            post(
+                id: id,
                 name: name,
                 address: address,
                 category: category,
                 status: status,
-                stars: nil,
-                caption: nil,
-                shared_at: "2026-10-12T10:00:00Z",
-                author_id: authorID,
-                author_name: authorName,
-                author_handle: authorID,
-                author_avatar_url: nil,
-                visible_to_followers: visible
+                authorID: authorID,
+                authorName: authorName,
+                visible: visible,
+                sharedAt: "2026-10-12T10:00:00Z"
             )
         }
+    }
+
+    /// Doodle Friends mock people (Mia / Leo / Kai / Ana) with ages 2d / 5d / 1w / 2w.
+    private static var friendsTownPosts: [SharedPlacePost] {
+        [
+            ("a1111111-1111-4111-8111-111111111111", "Grey Cafe", "Beijing", "cafe", PlaceStatus.wantToGo, "mia", "Mia", true, 2),
+            ("a2222222-2222-4222-8222-222222222222", "Fangzhuanchang Noodles", "Beijing", "food", .visited, "leo", "Leo", true, 5),
+            ("a3333333-3333-4333-8333-333333333333", "Temple of Heaven Park", "Beijing", "attraction", .visited, "kai", "Kai", true, 7),
+            ("a4444444-4444-4444-8444-444444444444", "Jingshan Hill", "Beijing", "attraction", .wantToGo, "ana", "Ana", true, 14),
+        ].map { id, name, address, category, status, authorID, authorName, visible, daysAgo in
+            post(
+                id: id,
+                name: name,
+                address: address,
+                category: category,
+                status: status,
+                authorID: authorID,
+                authorName: authorName,
+                visible: visible,
+                sharedAt: isoSharedAt(daysAgo: daysAgo)
+            )
+        }
+    }
+
+    private static func post(
+        id: String,
+        name: String,
+        address: String,
+        category: String,
+        status: PlaceStatus,
+        authorID: String,
+        authorName: String,
+        visible: Bool,
+        sharedAt: String
+    ) -> SharedPlacePost {
+        SharedPlacePost(
+            id: UUID(uuidString: id)!,
+            name: name,
+            address: address,
+            category: category,
+            status: status,
+            stars: nil,
+            caption: nil,
+            shared_at: sharedAt,
+            author_id: authorID,
+            author_name: authorName,
+            author_handle: authorID,
+            author_avatar_url: nil,
+            visible_to_followers: visible
+        )
+    }
+
+    private static func isoSharedAt(daysAgo: Int) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.string(
+            from: Date().addingTimeInterval(-TimeInterval(daysAgo) * 86_400 - 3_600)
+        )
     }
 }

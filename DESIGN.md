@@ -887,8 +887,9 @@ source clues or visit timestamps appear in post projections.
 
 Home / Map / + / Friends / Passport remains the root bar. Friends is
 people-first doodle: Caveat / Iansui “Friends” / 「朋友」 title, outline
-Invite, 48pt ink-ring avatars (initial or photo), author name, and
-“last at … · 2d” for the latest explicit post, with a 32pt outline sticker.
+Invite, 48pt forest-ring avatars (initial or photo), author name, and
+“last at … · 2d” for the latest explicit post, with a 32pt doodle sticker
+(coffee, noodles, lantern, mountain — matching the Friends mock).
 The shared map stays hidden (HoP). Parity target is the Doodle Friends mock
 at exactly 0.90; the mock's Shared map strip is an `--ignore-rect` on that
 call (same mechanism Map uses). An author opens a read-only passport under

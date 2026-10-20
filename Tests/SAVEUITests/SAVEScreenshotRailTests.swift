@@ -643,6 +643,16 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         attach(app, name: "atlas-home")
 
+        // Capture Friends before Saves so a Home handoff failure still yields
+        // the Doodle mock comparison shots.
+        openRootTab("Friends", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["friends.list"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["friends.author.mia"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["friends.mapStrip"].exists)
+        attach(app, name: "five-tab-friends")
+        attach(app, name: "atlas-friends")
+
         openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-saves")
@@ -664,13 +674,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "atlas-map")
-
-        openRootTab("Friends", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["friends.list"].waitForExistence(timeout: stepTimeout))
-        XCTAssertFalse(app.descendants(matching: .any)["friends.mapStrip"].exists)
-        attach(app, name: "five-tab-friends")
-        attach(app, name: "atlas-friends")
     }
 
     /// Root navigation includes Friends and keeps Plan as a child route.
@@ -859,6 +862,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-location-denied",
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-friends-town",
                 "-save.appLanguage", "en",
                 "-AppleInterfaceStyle", appleInterfaceStyle,
                 forceArgument,
@@ -884,6 +888,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Friends", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["friends.author.mia"].waitForExistence(timeout: stepTimeout))
         let friendsShot = app.screenshot()
         attach(app, name: friendsName)
         assertScreenshotBackground(

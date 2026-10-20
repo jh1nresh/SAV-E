@@ -70,13 +70,13 @@ struct SaveFriendsView: View {
 
             Button(action: onConnections) {
                 Text(language.localized(english: "Invite", traditionalChinese: "邀請"))
-                    .font(SaveAtlasType.strong(15))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                    .padding(.horizontal, SaveSpace.md)
-                    .frame(minHeight: SaveLayout.chipHeight)
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .padding(.horizontal, SaveSpace.sm)
+                    .padding(.vertical, SaveSpace.tight)
                     .overlay {
                         Capsule()
-                            .stroke(SaveAtlasPalette.ink, lineWidth: SaveAtlasPalette.strokeWidth)
+                            .stroke(SaveAtlasPalette.muted, lineWidth: 1)
                     }
                     .contentShape(Capsule())
             }
@@ -173,7 +173,7 @@ struct SaveFriendsView: View {
             .accessibilityIdentifier("friends.author.\(row.authorID)")
 
             Button { selected = row.lastPost } label: {
-                SaveDoodleFriendSticker(category: row.lastPost.category)
+                SaveDoodleFriendSticker(name: row.lastPost.name, category: row.lastPost.category)
                     .frame(width: 32, height: 32)
                     .frame(width: SaveLayout.minTap, height: SaveLayout.minTap)
                     .contentShape(Rectangle())
@@ -210,7 +210,7 @@ struct SaveDoodleFriendAvatar: View {
                 initial
             }
             SaveDoodleInkRing()
-                .stroke(SaveAtlasPalette.ink, lineWidth: 1.5)
+                .stroke(SaveAtlasPalette.forest, lineWidth: 2.4)
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
@@ -219,7 +219,7 @@ struct SaveDoodleFriendAvatar: View {
 
     private var initial: some View {
         Text(SaveDoodleFriendAvatar.initial(from: name))
-            .font(SaveDisplayType.display(22, relativeTo: .title2))
+            .font(SaveDisplayType.display(24, relativeTo: .title2))
             .foregroundStyle(SaveAtlasPalette.forest)
     }
 
@@ -234,31 +234,59 @@ struct SaveDoodleFriendAvatar: View {
 nonisolated struct SaveDoodleInkRing: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let inset = rect.insetBy(dx: 1.5, dy: 1.5)
+        let inset = rect.insetBy(dx: 2.2, dy: 2.2)
         path.addEllipse(in: CGRect(
-            x: inset.minX + 0.6,
-            y: inset.minY - 0.4,
-            width: inset.width - 0.8,
-            height: inset.height + 0.6
+            x: inset.minX + 0.8,
+            y: inset.minY - 0.6,
+            width: inset.width - 1.0,
+            height: inset.height + 0.9
         ))
         return path
     }
 }
 
-/// Outline sticker, 32pt. Always pencil — Friends does not color visited stickers.
+/// 32pt doodle sticker. Coffee / noodles / lantern / mountain match the Friends mock.
 struct SaveDoodleFriendSticker: View {
+    let name: String
     let category: String
 
-    var body: some View {
-        let resolved = PlaceCategory(rawValue: category)
-        ZStack {
-            RoundedRectangle(cornerRadius: SaveSpace.tight, style: .continuous)
-                .stroke(SaveDoodle.pencil, lineWidth: SaveAtlasPalette.strokeWidth)
-            Image(systemName: Self.symbolName(for: resolved))
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(SaveDoodle.pencil)
+    enum Kind: String, Equatable {
+        case coffee, noodles, lantern, mountain
+        var tilt: Double {
+            switch self {
+            case .coffee: return -8
+            case .noodles: return 6
+            case .lantern: return -10
+            case .mountain: return 4
+            }
         }
+    }
+
+    var body: some View {
+        let resolved = Self.kind(name: name, category: category)
+        ZStack {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(SaveAtlasPalette.paper)
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(SaveAtlasPalette.ink, lineWidth: 1.5)
+            SaveDoodleFriendStickerArt(kind: resolved)
+                .padding(4)
+        }
+        .rotationEffect(.degrees(resolved.tilt))
         .accessibilityHidden(true)
+    }
+
+    static func kind(name: String, category: String) -> Kind {
+        let hay = name.lowercased()
+        if hay.contains("cafe") || hay.contains("coffee") || category == "cafe" { return .coffee }
+        if hay.contains("noodle") || hay.contains("ramen") { return .noodles }
+        if hay.contains("temple") || hay.contains("lantern") { return .lantern }
+        if hay.contains("hill") || hay.contains("mountain") { return .mountain }
+        switch PlaceCategory(rawValue: category) {
+        case .cafe: return .coffee
+        case .food, .bar: return .noodles
+        case .attraction, .stay, .shopping, nil: return .mountain
+        }
     }
 
     static func symbolName(for category: PlaceCategory?) -> String {
@@ -271,6 +299,140 @@ struct SaveDoodleFriendSticker: View {
         case .shopping: return "bag"
         case nil: return "mappin"
         }
+    }
+}
+
+private struct SaveDoodleFriendStickerArt: View {
+    let kind: SaveDoodleFriendSticker.Kind
+
+    var body: some View {
+        Canvas { context, size in
+            switch kind {
+            case .coffee: drawCoffee(context: &context, size: size)
+            case .noodles: drawNoodles(context: &context, size: size)
+            case .lantern: drawLantern(context: &context, size: size)
+            case .mountain: drawMountain(context: &context, size: size)
+            }
+        }
+    }
+
+    private func drawCoffee(context: inout GraphicsContext, size: CGSize) {
+        let w = size.width
+        let h = size.height
+        var saucer = Path()
+        saucer.addEllipse(in: CGRect(x: w * 0.10, y: h * 0.72, width: w * 0.72, height: h * 0.18))
+        context.stroke(saucer, with: .color(SaveAtlasPalette.ink), lineWidth: 1.2)
+        let cup = Path(
+            roundedRect: CGRect(x: w * 0.20, y: h * 0.22, width: w * 0.50, height: h * 0.52),
+            cornerRadius: 5
+        )
+        context.fill(cup, with: .color(SaveAtlasPalette.kraft))
+        context.stroke(cup, with: .color(SaveAtlasPalette.ink), lineWidth: 1.2)
+        var coffee = Path()
+        coffee.addEllipse(in: CGRect(x: w * 0.26, y: h * 0.26, width: w * 0.38, height: h * 0.16))
+        context.fill(coffee, with: .color(SaveAtlasPalette.ink))
+        var handle = Path()
+        handle.addArc(
+            center: CGPoint(x: w * 0.76, y: h * 0.46),
+            radius: w * 0.14,
+            startAngle: .degrees(-80),
+            endAngle: .degrees(80),
+            clockwise: false
+        )
+        context.stroke(handle, with: .color(SaveAtlasPalette.ink), lineWidth: 1.6)
+    }
+
+    private func drawNoodles(context: inout GraphicsContext, size: CGSize) {
+        let w = size.width
+        let h = size.height
+        var bowl = Path()
+        bowl.move(to: CGPoint(x: w * 0.10, y: h * 0.40))
+        bowl.addQuadCurve(
+            to: CGPoint(x: w * 0.90, y: h * 0.40),
+            control: CGPoint(x: w * 0.50, y: h * 1.12)
+        )
+        bowl.closeSubpath()
+        context.fill(bowl, with: .color(SaveDoodle.stampGold))
+        context.stroke(bowl, with: .color(SaveAtlasPalette.ink), lineWidth: 1.2)
+        for index in 0..<3 {
+            var noodle = Path()
+            let y = h * (0.30 + CGFloat(index) * 0.08)
+            noodle.move(to: CGPoint(x: w * 0.26, y: y))
+            noodle.addQuadCurve(
+                to: CGPoint(x: w * 0.74, y: y + 1),
+                control: CGPoint(x: w * 0.50, y: y - 7)
+            )
+            context.stroke(noodle, with: .color(SaveAtlasPalette.ink), lineWidth: 1.1)
+        }
+        var stickA = Path()
+        stickA.move(to: CGPoint(x: w * 0.58, y: h * 0.06))
+        stickA.addLine(to: CGPoint(x: w * 0.90, y: h * 0.38))
+        var stickB = Path()
+        stickB.move(to: CGPoint(x: w * 0.68, y: h * 0.02))
+        stickB.addLine(to: CGPoint(x: w * 0.98, y: h * 0.32))
+        context.stroke(stickA, with: .color(SaveAtlasPalette.ink), lineWidth: 1.3)
+        context.stroke(stickB, with: .color(SaveAtlasPalette.ink), lineWidth: 1.3)
+    }
+
+    private func drawLantern(context: inout GraphicsContext, size: CGSize) {
+        let w = size.width
+        let h = size.height
+        let cap = Path(
+            roundedRect: CGRect(x: w * 0.28, y: h * 0.10, width: w * 0.44, height: h * 0.12),
+            cornerRadius: 2
+        )
+        context.fill(cap, with: .color(SaveDoodle.stampGold))
+        context.stroke(cap, with: .color(SaveAtlasPalette.ink), lineWidth: 1)
+        var body = Path()
+        body.addRoundedRect(
+            in: CGRect(x: w * 0.22, y: h * 0.20, width: w * 0.56, height: h * 0.50),
+            cornerSize: CGSize(width: 10, height: 12)
+        )
+        context.fill(body, with: .color(SaveDoodle.stampRed))
+        context.stroke(body, with: .color(SaveAtlasPalette.ink), lineWidth: 1.2)
+        for xMul in [0.38, 0.50, 0.62] {
+            var rib = Path()
+            rib.move(to: CGPoint(x: w * xMul, y: h * 0.24))
+            rib.addLine(to: CGPoint(x: w * xMul, y: h * 0.66))
+            context.stroke(rib, with: .color(SaveAtlasPalette.ink.opacity(0.45)), lineWidth: 0.8)
+        }
+        let bottom = Path(
+            roundedRect: CGRect(x: w * 0.30, y: h * 0.66, width: w * 0.40, height: h * 0.10),
+            cornerRadius: 2
+        )
+        context.fill(bottom, with: .color(SaveDoodle.stampGold))
+        context.stroke(bottom, with: .color(SaveAtlasPalette.ink), lineWidth: 1)
+        for xMul in [0.38, 0.50, 0.62] {
+            var tassel = Path()
+            tassel.move(to: CGPoint(x: w * xMul, y: h * 0.76))
+            tassel.addLine(to: CGPoint(x: w * xMul, y: h * 0.92))
+            context.stroke(tassel, with: .color(SaveDoodle.stampGold), lineWidth: 1.1)
+            context.fill(
+                Path(ellipseIn: CGRect(x: w * xMul - 1.6, y: h * 0.90, width: 3.2, height: 3.2)),
+                with: .color(SaveDoodle.stampRed)
+            )
+        }
+    }
+
+    private func drawMountain(context: inout GraphicsContext, size: CGSize) {
+        let w = size.width
+        let h = size.height
+        var mountain = Path()
+        mountain.move(to: CGPoint(x: w * 0.06, y: h * 0.82))
+        mountain.addLine(to: CGPoint(x: w * 0.40, y: h * 0.16))
+        mountain.addLine(to: CGPoint(x: w * 0.58, y: h * 0.42))
+        mountain.addLine(to: CGPoint(x: w * 0.72, y: h * 0.26))
+        mountain.addLine(to: CGPoint(x: w * 0.96, y: h * 0.82))
+        mountain.closeSubpath()
+        context.fill(mountain, with: .color(SaveDoodle.washGreen))
+        context.stroke(mountain, with: .color(SaveAtlasPalette.forest), lineWidth: 1.3)
+        var face = Path()
+        face.move(to: CGPoint(x: w * 0.40, y: h * 0.16))
+        face.addLine(to: CGPoint(x: w * 0.58, y: h * 0.42))
+        face.addLine(to: CGPoint(x: w * 0.48, y: h * 0.82))
+        face.addLine(to: CGPoint(x: w * 0.06, y: h * 0.82))
+        face.closeSubpath()
+        context.fill(face, with: .color(SaveAtlasPalette.forest.opacity(0.45)))
     }
 }
 
