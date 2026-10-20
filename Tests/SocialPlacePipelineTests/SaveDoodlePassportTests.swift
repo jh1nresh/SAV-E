@@ -93,7 +93,9 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(page.contains("profile.stampGrid"))
         XCTAssertTrue(page.contains("SaveLayout.screenMargin"))
         XCTAssertTrue(page.contains("SaveDisplayTitle("))
+        XCTAssertTrue(page.contains("locksPointSize: true"))
         XCTAssertTrue(page.contains("traditionalChinese: \"護照\""))
+        XCTAssertFalse(page.contains("profile.settings"))
         XCTAssertTrue(page.contains("onOpenCollected"))
         XCTAssertTrue(passport.contains("opensCollected"))
         XCTAssertTrue(passport.contains("profile.collected.root"))
@@ -124,6 +126,8 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(rail.contains("ProductionTargets/passport.png"))
         XCTAssertTrue(rail.contains("at exactly 0.90"))
         XCTAssertTrue(rail.contains("--uitest-doodle-passport-face"))
+        XCTAssertTrue(rail.contains("doodle-passport-light"))
+        XCTAssertTrue(rail.contains("doodle-passport-dark"))
     }
 
     private func place(

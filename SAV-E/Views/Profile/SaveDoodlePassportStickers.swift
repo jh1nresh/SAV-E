@@ -2,6 +2,11 @@ import SwiftUI
 
 /// Hand-drawn Passport stickers. Outline (pencil) for saved-not-visited;
 /// color + ink for a visit. Rank rings overlay in `SaveDoodlePassportStamp`.
+private enum SaveDoodlePassportStickers {
+    /// Spec paper `#FFF9EB`, always light so die-cut stickers stay readable
+    /// on kraft in both color schemes.
+    static let dieCut = Color(red: 1, green: 249 / 255, blue: 235 / 255)
+}
 struct SaveDoodlePassportSticker: View {
     let kind: SaveDoodleStickerKind
     let visited: Bool
@@ -50,22 +55,23 @@ struct SaveDoodlePassportSlotView: View {
             switch slot.content {
             case let .place(_, kind, rank):
                 Circle()
-                    .fill(Color.white)
+                    .fill(SaveDoodlePassportStickers.dieCut)
                 if rank == .none {
                     Circle()
                         .stroke(
                             SaveDoodle.pencil,
-                            style: StrokeStyle(lineWidth: 1, dash: [5, 4])
+                            style: StrokeStyle(lineWidth: 1, dash: [4, 4])
                         )
                 }
                 SaveDoodlePassportSticker(kind: kind, visited: rank != .none)
-                    .padding(SaveSpace.tight)
+                    .padding(SaveSpace.xs)
                 SaveDoodlePassportStamp(rank: rank, seed: slot.id)
+                    .padding(SaveSpace.tight)
             case .empty:
                 Circle()
                     .stroke(
                         SaveDoodle.pencil,
-                        style: StrokeStyle(lineWidth: 1, dash: [5, 4])
+                        style: StrokeStyle(lineWidth: 1, dash: [4, 4])
                     )
             }
         }
@@ -136,6 +142,13 @@ private struct SaveDoodlePassportStickerArt: View {
     private func extraColor(in size: CGSize) -> [Extra] {
         let rect = CGRect(origin: .zero, size: size)
         switch kind {
+        case .duck:
+            var beak = Path()
+            beak.move(to: CGPoint(x: rect.w(0.82), y: rect.h(0.30)))
+            beak.addLine(to: CGPoint(x: rect.w(0.98), y: rect.h(0.36)))
+            beak.addLine(to: CGPoint(x: rect.w(0.82), y: rect.h(0.42)))
+            beak.closeSubpath()
+            return [Extra(path: beak, color: Color(red: 0.92, green: 0.58, blue: 0.22))]
         case .noodles:
             var waves = Path()
             waves.move(to: CGPoint(x: rect.w(0.32), y: rect.h(0.42)))
@@ -149,6 +162,13 @@ private struct SaveDoodlePassportStickerArt: View {
                 control: CGPoint(x: rect.w(0.50), y: rect.h(0.60))
             )
             return [Extra(path: waves, color: Color(red: 0.93, green: 0.82, blue: 0.42))]
+        case .temple:
+            var roof = Path()
+            roof.move(to: CGPoint(x: rect.w(0.08), y: rect.h(0.42)))
+            roof.addLine(to: CGPoint(x: rect.w(0.50), y: rect.h(0.12)))
+            roof.addLine(to: CGPoint(x: rect.w(0.92), y: rect.h(0.42)))
+            roof.closeSubpath()
+            return [Extra(path: roof, color: SaveDoodle.washGreen)]
         case .lantern:
             var tassel = Path()
             tassel.addEllipse(in: CGRect(
@@ -189,27 +209,45 @@ private struct SaveDoodlePassportStickerArt: View {
 
     private func duck(in r: CGRect) -> Path {
         var p = Path()
-        p.addEllipse(in: CGRect(x: r.w(0.18), y: r.h(0.38), width: r.w(0.58), height: r.h(0.40)))
-        p.addEllipse(in: CGRect(x: r.w(0.52), y: r.h(0.18), width: r.w(0.30), height: r.h(0.28)))
-        p.move(to: CGPoint(x: r.w(0.80), y: r.h(0.30)))
-        p.addLine(to: CGPoint(x: r.w(0.96), y: r.h(0.34)))
-        p.addLine(to: CGPoint(x: r.w(0.80), y: r.h(0.40)))
-        p.move(to: CGPoint(x: r.w(0.32), y: r.h(0.74)))
-        p.addLine(to: CGPoint(x: r.w(0.28), y: r.h(0.88)))
-        p.move(to: CGPoint(x: r.w(0.50), y: r.h(0.76)))
-        p.addLine(to: CGPoint(x: r.w(0.52), y: r.h(0.90)))
+        p.move(to: CGPoint(x: r.w(0.16), y: r.h(0.62)))
+        p.addQuadCurve(
+            to: CGPoint(x: r.w(0.72), y: r.h(0.58)),
+            control: CGPoint(x: r.w(0.38), y: r.h(0.30))
+        )
+        p.addQuadCurve(
+            to: CGPoint(x: r.w(0.78), y: r.h(0.78)),
+            control: CGPoint(x: r.w(0.88), y: r.h(0.66))
+        )
+        p.addQuadCurve(
+            to: CGPoint(x: r.w(0.16), y: r.h(0.62)),
+            control: CGPoint(x: r.w(0.36), y: r.h(0.92))
+        )
+        p.addEllipse(in: CGRect(x: r.w(0.58), y: r.h(0.18), width: r.w(0.26), height: r.h(0.28)))
+        p.move(to: CGPoint(x: r.w(0.82), y: r.h(0.30)))
+        p.addLine(to: CGPoint(x: r.w(0.98), y: r.h(0.36)))
+        p.addLine(to: CGPoint(x: r.w(0.82), y: r.h(0.42)))
+        p.closeSubpath()
+        p.move(to: CGPoint(x: r.w(0.28), y: r.h(0.78)))
+        p.addLine(to: CGPoint(x: r.w(0.22), y: r.h(0.94)))
+        p.move(to: CGPoint(x: r.w(0.48), y: r.h(0.82)))
+        p.addLine(to: CGPoint(x: r.w(0.50), y: r.h(0.96)))
         return p
     }
 
     private func bowl(in r: CGRect) -> Path {
         var p = Path()
-        p.move(to: CGPoint(x: r.w(0.16), y: r.h(0.42)))
-        p.addQuadCurve(to: CGPoint(x: r.w(0.84), y: r.h(0.42)), control: CGPoint(x: r.w(0.50), y: r.h(0.18)))
-        p.addQuadCurve(to: CGPoint(x: r.w(0.16), y: r.h(0.42)), control: CGPoint(x: r.w(0.50), y: r.h(0.92)))
-        p.move(to: CGPoint(x: r.w(0.28), y: r.h(0.38)))
-        p.addQuadCurve(to: CGPoint(x: r.w(0.48), y: r.h(0.22)), control: CGPoint(x: r.w(0.30), y: r.h(0.18)))
-        p.move(to: CGPoint(x: r.w(0.40), y: r.h(0.40)))
-        p.addQuadCurve(to: CGPoint(x: r.w(0.66), y: r.h(0.20)), control: CGPoint(x: r.w(0.58), y: r.h(0.14)))
+        p.move(to: CGPoint(x: r.w(0.14), y: r.h(0.48)))
+        p.addLine(to: CGPoint(x: r.w(0.86), y: r.h(0.48)))
+        p.addQuadCurve(
+            to: CGPoint(x: r.w(0.14), y: r.h(0.48)),
+            control: CGPoint(x: r.w(0.50), y: r.h(0.98))
+        )
+        p.move(to: CGPoint(x: r.w(0.30), y: r.h(0.46)))
+        p.addQuadCurve(to: CGPoint(x: r.w(0.42), y: r.h(0.16)), control: CGPoint(x: r.w(0.22), y: r.h(0.22)))
+        p.move(to: CGPoint(x: r.w(0.46), y: r.h(0.46)))
+        p.addQuadCurve(to: CGPoint(x: r.w(0.62), y: r.h(0.12)), control: CGPoint(x: r.w(0.52), y: r.h(0.18)))
+        p.move(to: CGPoint(x: r.w(0.58), y: r.h(0.46)))
+        p.addQuadCurve(to: CGPoint(x: r.w(0.74), y: r.h(0.18)), control: CGPoint(x: r.w(0.78), y: r.h(0.30)))
         return p
     }
 

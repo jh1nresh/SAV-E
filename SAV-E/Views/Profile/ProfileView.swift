@@ -89,7 +89,6 @@ struct ProfileView: View {
                     await markPlaceVisited(place)
                 },
                 onOpenCollected: { opensCollected = true },
-                onOpenSettings: { showSettings = true },
                 showsCloseButton: !isRootTab,
                 onClose: { dismiss() }
             )

@@ -127,7 +127,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertTrue(title.waitForExistence(timeout: stepTimeout))
             XCTAssertEqual(title.label, expectedTitle)
             openRootTab("Passport", app: app)
-            app.buttons["profile.settings"].tap()
+            openPassportSettings(app)
             let sharedRatings = app.buttons["profile.sharedRatings"]
             XCTAssertTrue(scrollUntilHittable(sharedRatings, in: app.scrollViews.firstMatch, maxSwipes: 10))
             sharedRatings.tap()
@@ -392,7 +392,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let initialCount = savedCount.label
         openRootTab("Passport", app: app)
 
-        app.buttons["profile.settings"].tap()
+        openPassportSettings(app)
         let tutorial = app.buttons["profile.tutorial"]
         for _ in 0..<6 where !tutorial.isHittable { app.swipeUp() }
         XCTAssertTrue(waitUntilHittable(tutorial))
@@ -688,6 +688,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
                 "--uitest-doodle-passport-face",
+                "--uitest-force-light",
+                "-AppleInterfaceStyle", "Light",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
@@ -828,6 +830,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             forceArgument: "--uitest-force-dark",
             homeName: "dark-home",
             passportName: "dark-passport",
+            extraLaunchArguments: ["--uitest-doodle-passport-face"],
             expectedRed: 0x1E,
             expectedGreen: 0x1C,
             expectedBlue: 0x19
@@ -840,7 +843,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             passportName: "light-passport",
             expectedRed: 0xFF,
             expectedGreen: 0xF9,
-            expectedBlue: 0xEB
+            expectedBlue: 0xEB,
+            extraLaunchArguments: ["--uitest-doodle-passport-face"]
         )
     }
 
@@ -853,7 +857,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         passportName: String,
         expectedRed: Int,
         expectedGreen: Int,
-        expectedBlue: Int
+        expectedBlue: Int,
+        extraLaunchArguments: [String] = []
     ) throws {
         XCUIDevice.shared.appearance = appearance
         let app = makeApp(
@@ -866,7 +871,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "-save.appLanguage", "en",
                 "-AppleInterfaceStyle", appleInterfaceStyle,
                 forceArgument,
-            ],
+            ] + extraLaunchArguments,
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
         )
         launch(app)
@@ -891,6 +896,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected)
         let passportShot = app.screenshot()
         attach(app, name: passportName)
+        if appearance == .dark {
+            attach(app, name: "doodle-passport-dark")
+        }
         assertScreenshotBackground(
             passportShot,
             nearRed: expectedRed,
@@ -2462,7 +2470,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "passport-current-avatar")
-        app.buttons["profile.settings"].tap()
+        openPassportSettings(app)
         let lists = app.buttons["profile.lists"]
         XCTAssertTrue(scrollUntilHittable(lists, in: app.scrollViews.firstMatch, maxSwipes: 6))
         for _ in 0..<3 {
@@ -3070,6 +3078,20 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             saves.waitForExistence(timeout: stepTimeout),
             "Home Review entry did not open Saves"
         )
+    }
+
+    @MainActor
+    private func openPassportSettings(_ app: XCUIApplication) {
+        XCTAssertTrue(
+            app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout)
+        )
+        app.buttons["profile.stampProgress"].tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["profile.collected.root"].waitForExistence(timeout: stepTimeout)
+        )
+        let settings = app.buttons["profile.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: stepTimeout))
+        tapReachable(settings)
     }
 
     @MainActor

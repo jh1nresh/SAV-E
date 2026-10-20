@@ -10,7 +10,6 @@ struct SaveDoodlePassportPage: View {
     var onOpenPlace: (Place) -> Void = { _ in }
     var onMarkVisited: (Place) async -> Bool = { _ in true }
     var onOpenCollected: () -> Void = {}
-    var onOpenSettings: () -> Void = {}
     var showsCloseButton = false
     var onClose: () -> Void = {}
 
@@ -61,24 +60,14 @@ struct SaveDoodlePassportPage: View {
             SaveDisplayTitle(
                 text: languageSettings.localized(english: "Passport", traditionalChinese: "護照"),
                 pointSize: 34,
-                relativeTo: .largeTitle
+                relativeTo: .largeTitle,
+                locksPointSize: true
             )
             .accessibilityIdentifier("profile.brandLogo")
 
-            Spacer(minLength: SaveSpace.xs)
-
-            Button(action: onOpenSettings) {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                    .frame(width: SaveLayout.minTap, height: SaveLayout.minTap)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(languageSettings.localized(english: "Settings", traditionalChinese: "設定"))
-            .accessibilityIdentifier("profile.settings")
+            Spacer(minLength: 0)
         }
-        .frame(minHeight: SaveLayout.minTap)
+        .frame(maxWidth: .infinity, minHeight: SaveLayout.minTap, alignment: .leading)
     }
 
     private var subtitle: some View {
@@ -89,7 +78,8 @@ struct SaveDoodlePassportPage: View {
                         SaveDisplayTitle(
                             text: cityTitle,
                             pointSize: 20,
-                            relativeTo: .title3
+                            relativeTo: .title3,
+                            locksPointSize: true
                         )
                         Capsule()
                             .fill(SaveAtlasPalette.coral)
@@ -197,8 +187,9 @@ struct SaveDoodlePassportPage: View {
     }
 
     private func legendSwatch(rank: SavePassportStampRank) -> some View {
-        SaveDoodlePassportStamp(rank: rank, seed: "legend.\(rank.rawValue)")
-            .frame(width: 12, height: 12)
+        RoundedRectangle(cornerRadius: 2, style: .continuous)
+            .fill(rank == .gold ? SaveDoodle.stampGold : SaveDoodle.stampRed)
+            .frame(width: 8, height: 8)
     }
 
     private var citiesRow: some View {
