@@ -667,14 +667,15 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     func testPassportActionsSharePlacesAndKeepBulkImportInCapture() throws {
         let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
+        let capture = try source(at: "SAV-E/Views/Capture/SaveCaptureFlowView.swift")
 
         XCTAssertTrue(passport.contains("SavePlaceShareButton(content: .place(place))"))
         XCTAssertTrue(passport.contains("profile.share.\\(place.id)"))
         XCTAssertTrue(passport.contains(".contentShape(Rectangle())"))
         XCTAssertFalse(passport.contains("profile.importGoogleTakeout"))
 
-        XCTAssertTrue(content.contains("capture.importGoogleTakeout"))
-        XCTAssertTrue(content.contains("GoogleTakeoutImportView("))
+        XCTAssertTrue(capture.contains("capture.importGoogleTakeout"))
+        XCTAssertTrue(capture.contains("GoogleTakeoutImportView("))
         XCTAssertTrue(content.contains("onSaveGoogleTakeoutImport: { drafts in"))
     }
 
