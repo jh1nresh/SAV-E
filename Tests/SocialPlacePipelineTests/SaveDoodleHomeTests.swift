@@ -158,6 +158,36 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(SaveDoodleHomeCatalog.collectedStamps(in: [visited, saved]).map(\.name), ["Duck"])
     }
 
+    /// T1 extras use 0,0 so they stay off the map. The vault must still
+    /// reload them or Home Collected collapses to the four nearby pins (3/4).
+    func testDoodleParityExtrasSurviveVaultRoundTrip() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(
+            overrideVaultURL: directory.appendingPathComponent("vault.json")
+        )
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+        let seeded = ReviewDemoSeed.doodleParityPlaces(now: now)
+        XCTAssertEqual(seeded.filter { !$0.isMapKitMappable }.count, 8)
+        for place in seeded {
+            _ = try vault.saveConfirmedPlace(place)
+        }
+        let reloaded = try SaveLocalVaultService(
+            overrideVaultURL: directory.appendingPathComponent("vault.json")
+        ).confirmedPlaces()
+        XCTAssertEqual(reloaded.count, 12)
+        let location = CLLocation(latitude: 39.8822, longitude: 116.4066)
+        let scope = SaveDoodleHomeCatalog.collectedScopePlaces(
+            from: reloaded,
+            selection: .nearYou,
+            location: location,
+            locationDenied: false
+        )
+        let count = SaveDoodleHomeCatalog.cityCollectedCount(in: scope)
+        XCTAssertEqual(count.visited, 4)
+        XCTAssertEqual(count.saved, 12)
+    }
+
     /// T1: city A has 12 saves and 4 visited across Eat and Go. Home reads
     /// Collected 4/12 while the Eat list still shows three nearby rows.
     func testT1HomeCollectedFourOfTwelveWithThreeEatRows() {

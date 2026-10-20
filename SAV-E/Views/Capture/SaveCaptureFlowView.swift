@@ -110,7 +110,9 @@ struct SaveCaptureFlowView: View {
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
-            .navigationDestination(isPresented: $isGoogleTakeoutPresented) {
+        }
+        .fullScreenCover(isPresented: $isGoogleTakeoutPresented) {
+            NavigationStack {
                 GoogleTakeoutImportView(
                     existingPlaces: existingPlaces,
                     onSave: onSaveGoogleTakeoutImport

@@ -278,11 +278,15 @@ jobs:
       - name: Enforce Atlas production visual parity
         if: always() && (steps.scope.outputs.ui == 'true')
         run: |
-          python3 -m pip install --user Pillow
-          Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh \
-            --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
-            --artifacts "$RUNNER_TEMP/SAVE-Atlas-Parity" \
-            --threshold 0.90
+          # macOS runners ship a PEP 668 Homebrew Python. Install Pillow in a
+          # throwaway venv so we never need --break-system-packages.
+          python3 -m venv "$RUNNER_TEMP/save-parity-venv"
+          "$RUNNER_TEMP/save-parity-venv/bin/python" -m pip install Pillow
+          PATH="$RUNNER_TEMP/save-parity-venv/bin:$PATH" \
+            Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh \
+              --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
+              --artifacts "$RUNNER_TEMP/SAVE-Atlas-Parity" \
+              --threshold 0.90
 
       - name: Export first-run visual evidence
         if: always()

@@ -8,7 +8,6 @@ struct ProfileView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @StateObject private var viewModel = ProfileViewModel()
     @StateObject private var posts = SharedPostsStore()
-    @State private var showSettings = false
     @State private var showNewPost = false
     @State private var showFollowers = false
     @State private var selectedPost: SharedPlacePost?
@@ -50,8 +49,12 @@ struct ProfileView: View {
     var onOpenPlace: (Place) -> Void = { _ in }
     var isRootTab = false
     @Binding var requestsConnections: Bool
-    @State private var opensConnections = false
-    @State private var opensCollected = false
+    private enum PassportRoute: Hashable {
+        case collected
+        case settings
+        case connections
+    }
+    @State private var passportPath: [PassportRoute] = []
     @State private var opensListsDirectly = false
     @State private var shareFocusPlace: Place?
     @State private var hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
@@ -81,6 +84,21 @@ struct ProfileView: View {
         )
     }
 
+    private var opensCollected: Bool { passportPath.contains(.collected) }
+    private var opensConnections: Bool { passportPath.contains(.connections) }
+
+    private func openPassportRoute(_ route: PassportRoute) {
+        guard !passportPath.contains(route) else { return }
+        passportPath.append(route)
+    }
+
+    private func closeCollected() {
+        guard opensCollected else { return }
+        if let index = passportPath.firstIndex(of: .collected) {
+            passportPath.removeSubrange(index...)
+        }
+    }
+
     private var passportContent: some View {
             SaveDoodlePassportPage(
                 places: passportPlaces,
@@ -88,7 +106,7 @@ struct ProfileView: View {
                 onMarkVisited: { place in
                     await markPlaceVisited(place)
                 },
-                onOpenCollected: { opensCollected = true },
+                onOpenCollected: { openPassportRoute(.collected) },
                 showsCloseButton: !isRootTab,
                 onClose: { dismiss() }
             )
@@ -100,29 +118,34 @@ struct ProfileView: View {
             .toolbar(.hidden, for: .navigationBar)
             .accessibilityIdentifier("profile.root")
             .refreshable { await posts.refresh(.mine) }
-            .navigationDestination(isPresented: $opensCollected) {
-                collectedPage
-            }
-            .navigationDestination(isPresented: $showSettings) {
-                ScrollView {
-                    VStack(spacing: 20) {
-                        if SaveDoodlePassportFlags.showStampLedger {
-                            PassportStampSection(stats: passportStats).accessibilityIdentifier("profile.stampLedger")
-                        }
-                        if SaveDoodlePassportFlags.showFieldStreak {
-                            PassportFieldStreakStrip(streak: fieldStreak, hasActionToday: hasFieldActionToday, recentActivity: recentFieldActivity)
-                                .accessibilityIdentifier("profile.fieldStreak")
-                        }
-                        settingsContent
-                    }.padding(.vertical, 20)
+            .navigationDestination(for: PassportRoute.self) { route in
+                switch route {
+                case .collected:
+                    collectedPage
+                case .settings:
+                    settingsDestination
+                case .connections:
+                    connectionsDestination
                 }
-                .background(SaveAtlasPalette.canvas)
-                .navigationTitle(languageSettings.localized(english: "Passport settings", traditionalChinese: "護照設定"))
-                .toolbar(.visible, for: .navigationBar)
             }
-            .navigationDestination(isPresented: $opensConnections) {
-                connectionsDestination
-            }
+    }
+
+    private var settingsDestination: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                if SaveDoodlePassportFlags.showStampLedger {
+                    PassportStampSection(stats: passportStats).accessibilityIdentifier("profile.stampLedger")
+                }
+                if SaveDoodlePassportFlags.showFieldStreak {
+                    PassportFieldStreakStrip(streak: fieldStreak, hasActionToday: hasFieldActionToday, recentActivity: recentFieldActivity)
+                        .accessibilityIdentifier("profile.fieldStreak")
+                }
+                settingsContent
+            }.padding(.vertical, 20)
+        }
+        .background(SaveAtlasPalette.canvas)
+        .navigationTitle(languageSettings.localized(english: "Passport settings", traditionalChinese: "護照設定"))
+        .toolbar(.visible, for: .navigationBar)
     }
 
     @ViewBuilder
@@ -143,8 +166,8 @@ struct ProfileView: View {
                     waitingClues: waitingClues,
                     allowsEditing: true,
                     showsCloseButton: true,
-                    onClose: { opensCollected = false },
-                    onEdit: { showSettings = true }
+                    onClose: { closeCollected() },
+                    onEdit: { openPassportRoute(.settings) }
                 )
                 .padding(.horizontal)
 
@@ -181,7 +204,7 @@ struct ProfileView: View {
                 Button {
                     SaveHaptics.tap()
                     opensListsDirectly = false
-                    opensConnections = true
+                    openPassportRoute(.connections)
                 } label: {
                     SettingsRow(
                         icon: "person.2.fill",
@@ -280,7 +303,7 @@ struct ProfileView: View {
                 Button {
                     SaveHaptics.tap()
                     opensListsDirectly = false
-                    opensConnections = true
+                    openPassportRoute(.connections)
                 } label: {
                     SettingsRow(
                         icon: "person.2.fill",
@@ -307,7 +330,7 @@ struct ProfileView: View {
                 ) {
                     SaveHaptics.tap()
                     opensListsDirectly = true
-                    opensConnections = true
+                    openPassportRoute(.connections)
                 }
 
                 SettingsRow(
@@ -371,7 +394,7 @@ struct ProfileView: View {
                 .accessibilityIdentifier("profile.editAvatar")
                 HStack(spacing: 8) {
                     profileCount(posts.counts?.postCount, title: languageSettings.localized(english: "Posts", traditionalChinese: "分享"))
-                    Button { opensConnections = true } label: {
+                    Button { openPassportRoute(.connections) } label: {
                         profileCount(posts.counts?.followingCount, title: languageSettings.localized(english: "Following", traditionalChinese: "追蹤"))
                     }.buttonStyle(.plain).accessibilityIdentifier("profile.following")
                     Button { showFollowers = true } label: {
@@ -412,12 +435,14 @@ struct ProfileView: View {
         // Collected / settings / connections must push inside Passport.
         // Using the root NavigationStack replaces the five-tab scaffold
         // and drops `root.tab.home` from the tree.
-        NavigationStack { passportContent }
+        // Typed path stays on this inner stack. `isPresented` destinations
+        // leak to ContentView's root NavigationStack and drop AtlasTabBar.
+        NavigationStack(path: $passportPath) { passportContent }
         .onChange(of: requestsConnections) { _, requested in
-            if requested { opensConnections = true; requestsConnections = false }
+            if requested { openPassportRoute(.connections); requestsConnections = false }
         }
         .onAppear {
-            if requestsConnections { opensConnections = true; requestsConnections = false }
+            if requestsConnections { openPassportRoute(.connections); requestsConnections = false }
         }
         .task(id: posts.filter) { await posts.refresh(.mine) }
         .task(id: currentUserID) {
@@ -441,8 +466,8 @@ struct ProfileView: View {
             localSavedPlaces = places
             refreshFieldStreak()
         }
-        .onChange(of: opensConnections) { _, isOpen in
-            guard !isOpen else { return }
+        .onChange(of: passportPath) { _, _ in
+            guard !opensConnections else { return }
             hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
             opensListsDirectly = false
             Task { await posts.refresh(.mine) }
@@ -570,7 +595,7 @@ struct ProfileView: View {
                 scrollProxy?.scrollTo("profile.posts", anchor: .top)
             }
         case .inviteOrFollowFriend:
-            opensConnections = true
+            openPassportRoute(.connections)
         }
     }
 

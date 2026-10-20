@@ -545,11 +545,19 @@ struct ContentView: View {
 #if DEBUG
         // AtlasTabBar is a sibling of the tab pages. A fullScreenCover still
         // leaves `root.tab.home` in the XCTest tree unless the bar is omitted.
-        !ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall")
+        !hidesRootTabBarForPaywallUITest
 #else
         true
 #endif
     }
+
+#if DEBUG
+    private var hidesRootTabBarForPaywallUITest: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("--uitest-show-paywall")
+            || arguments.contains("--uitest-show-paywall-cap")
+    }
+#endif
 
     private var detailPresentation: Binding<SaveFullScreenRoute?> {
         Binding(
