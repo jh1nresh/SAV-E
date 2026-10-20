@@ -274,12 +274,20 @@ struct SaveDoodleMapView: View {
                 } label: {
                     HStack(alignment: .center, spacing: SaveLayout.stickerToText) {
                         ZStack {
-                            SaveDoodleSticker(category: place.category, visited: visited)
-                                .frame(width: 64, height: 64)
+                            SaveDoodleSticker(
+                                category: place.category,
+                                placeName: place.name,
+                                visited: visited,
+                                pointSize: SaveLayout.passportSlot,
+                                boxSize: SaveLayout.passportSlot
+                            )
                             if visited {
                                 Circle()
                                     .stroke(SaveDoodle.stampRed, lineWidth: 2)
-                                    .frame(width: 64, height: 64)
+                                    .frame(
+                                        width: SaveLayout.passportSlot,
+                                        height: SaveLayout.passportSlot
+                                    )
                                     .rotationEffect(.degrees(stampAngle(for: place.id)))
                                     .scaleEffect(stampPulse ? 1 : 0.82)
                             }
