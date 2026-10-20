@@ -23,8 +23,9 @@ non-trivial implementation.
   findings are resolved, and the diff contains only authorized changes. Report it
   as ready for human review/merge; creating a PR alone is not completion.
 - Merge, release and cleanup are separate authorized actions. Do not continue to
-  them merely because implementation is complete. Reuse approval already given
-  for the same action and target.
+  them merely because implementation is complete. Reuse approval only for the
+  exact still-pending operation and specified PR, build or resource. Approval
+  for a completed operation does not authorize another operation or artifact.
 
 ## Required Brief
 
@@ -165,5 +166,5 @@ a synthetic non-secret Google key and emits a release-readiness receipt only
 after every required job passes. The binary is not uploaded as an artifact.
 That receipt is evidence of code readiness, not a signed archive or deployment.
 Before `railway up`, `vercel --prod`, archive/upload or TestFlight publication,
-verify that explicit approval covers the action and target; reuse approval
-already given for that same action and target.
+verify that explicit approval covers the exact pending operation, artifact and
+target. Do not reuse a completed operation's approval for a later release.
