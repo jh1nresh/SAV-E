@@ -163,7 +163,7 @@ private func isIgnored(_ mask: [UInt8]?, x: Int, y: Int) -> Bool {
     guard let mask else {
         return false
     }
-    // White = ignore (Apple Maps surface). Black = graded chrome and pins.
+    // white = ignore (Apple Maps surface). Black = graded chrome and pins.
     return luminance(mask, x: x, y: y) >= maskIgnoreLuminance
 }
 
