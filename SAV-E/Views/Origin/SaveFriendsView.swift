@@ -115,9 +115,17 @@ struct SaveFriendsView: View {
             Button(action: onConnections) {
                 Text(language.localized(english: "Find friends", traditionalChinese: "追蹤朋友"))
                     .font(SaveAtlasType.strong(17))
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(SaveAtlasPalette.ink)
                     .frame(maxWidth: .infinity, minHeight: SaveLayout.buttonHeight)
-                    .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous))
+                    .background(
+                        SaveAtlasPalette.paper,
+                        in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                            .stroke(SaveAtlasPalette.coral, lineWidth: SaveAtlasPalette.strokeWidth)
+                    }
+                    .contentShape(RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous))
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("friends.findFriends")

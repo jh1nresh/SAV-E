@@ -83,6 +83,8 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertTrue(friends.contains("SaveLayout.screenMargin"))
         XCTAssertTrue(friends.contains("friends.connections"))
         XCTAssertTrue(friends.contains("Invite"))
+        XCTAssertTrue(friends.contains("friends.findFriends"))
+        XCTAssertFalse(friends.contains("foregroundStyle(Color.white)"))
         XCTAssertTrue(friends.contains("SaveFriendLastAt.lastAtText"))
         XCTAssertFalse(friends.contains("SavePostageSealAvatar"))
         XCTAssertFalse(friends.contains("friends.mapStrip"))
