@@ -18,6 +18,8 @@ enum SaveLayout {
     static let rowMinHeight: CGFloat = 64
     static let rowVerticalPadding: CGFloat = 12
     static let stickerBox: CGFloat = 48
+    static let stickerArt: CGFloat = 40
+    static let passportSlot: CGFloat = 64
     static let stickerToText: CGFloat = 12
     static let numberBadge: CGFloat = 24
     static let titleToMeta: CGFloat = 4
