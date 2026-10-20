@@ -15,6 +15,8 @@ BASELINE = [RAIL + name for name in (
     "testCaptureAtlasProductionParity",
     "testCaptureFiveTabLanding",
     "testDoodlePaywallParity",
+    "testDoodleCaptureParity",
+    "testDoodleCapturePaywallDarkParity",
     "testHomeAndPassportWarmDarkMode",
     "testAtlasHomeAndSavesRenderPersistedPlaceData",
     "testHomeSearchAndPendingCandidateOpenDirectly",

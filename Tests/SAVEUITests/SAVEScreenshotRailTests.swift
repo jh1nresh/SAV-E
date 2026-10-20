@@ -824,6 +824,87 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.staticTexts["Plan trips from your saves"].exists)
         XCTAssertFalse(app.staticTexts["Bonus sticker packs"].exists)
         attach(app, name: "five-tab-paywall")
+        attach(app, name: "doodle-paywall-light")
+    }
+
+    /// Capture sheet over the Doodle Home map, matching the DESIGN mock.
+    @MainActor
+    func testDoodleCaptureParity() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-home-memory-fixture",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        let capture = rootTabButton("Save", app: app)
+        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
+        capture.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "five-tab-capture")
+        attach(app, name: "doodle-capture-light")
+    }
+
+    /// Warm-dark Capture sheet and Pro paywall for the founder compare rail.
+    @MainActor
+    func testDoodleCapturePaywallDarkParity() throws {
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        XCUIDevice.shared.appearance = .dark
+        let captureApp = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-home-memory-fixture",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(captureApp)
+        try signInViaReviewDemoRequired(app: captureApp)
+        XCTAssertTrue(captureApp.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let capture = rootTabButton("Save", app: captureApp)
+        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
+        capture.tap()
+        XCTAssertTrue(captureApp.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(captureApp, name: "doodle-capture-dark")
+        captureApp.buttons["Close capture"].tap()
+
+        let paywallApp = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(paywallApp)
+        try signInViaReviewDemoRequired(app: paywallApp)
+        XCTAssertTrue(
+            paywallApp.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout)
+        )
+        attach(paywallApp, name: "doodle-paywall-dark")
     }
 
     /// Warm dark tokens from spec §1 must paint Home and Passport once Light is unlocked.

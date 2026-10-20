@@ -42,7 +42,7 @@ struct SaveProPaywallView: View {
                 hero
                     .padding(.top, SaveSpace.xs)
                 headline
-                    .padding(.top, SaveSpace.lg)
+                    .padding(.top, SaveSpace.md)
                 benefitRow
                     .padding(.top, SaveSpace.md)
                 savedNote
@@ -65,8 +65,8 @@ struct SaveProPaywallView: View {
     private var topBar: some View {
         ZStack {
             HStack(spacing: SaveSpace.xs) {
-                SaveDisplayTitle(text: "Savvy", pointSize: 28, relativeTo: .title2)
-                SaveDoodleElephant(size: 24)
+                SaveDisplayTitle(text: "Savvy", pointSize: 34, relativeTo: .largeTitle)
+                SaveDoodleElephant(size: 28)
             }
             HStack {
                 Button {
@@ -126,7 +126,6 @@ struct SaveProPaywallView: View {
             Spacer(minLength: 0)
         }
         .frame(height: 36)
-        .frame(minHeight: SaveLayout.minTap, alignment: .center)
         .accessibilityIdentifier("paywall.benefit.unlimited")
     }
 
@@ -146,14 +145,14 @@ struct SaveProPaywallView: View {
         if !SAVEProAccessPolicy.purchasingIsAvailable {
             VStack(spacing: SaveSpace.sm) {
                 planCards(products: [])
-                Text(languageSettings.localized(
-                    english: "Pro isn't on sale yet",
-                    traditionalChinese: "Pro 尚未開賣"
-                ))
-                .font(SaveAtlasType.body(13))
-                .foregroundStyle(SaveAtlasPalette.muted)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityIdentifier("paywall.notForSale")
+                renewalLines(products: [])
+                if let statusMessage {
+                    Text(statusMessage)
+                        .font(SaveAtlasType.body(13))
+                        .foregroundStyle(SaveAtlasPalette.coral)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("paywall.notForSale")
+                }
                 continueButton
             }
         } else if storeKit.products.isEmpty {
@@ -163,6 +162,7 @@ struct SaveProPaywallView: View {
         } else {
             VStack(spacing: SaveSpace.sm) {
                 planCards(products: storeKit.products)
+                renewalLines(products: storeKit.products)
                 if let statusMessage {
                     Text(statusMessage)
                         .font(SaveTheme.Typography.supporting)
@@ -219,21 +219,13 @@ struct SaveProPaywallView: View {
                     .frame(width: 28, height: 28)
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: SaveSpace.md) {
-                        Text(title)
-                            .font(SaveAtlasType.strong(17))
-                            .foregroundStyle(SaveAtlasPalette.ink)
+                Text(title)
+                    .font(SaveAtlasType.strong(17))
+                    .foregroundStyle(SaveAtlasPalette.ink)
 
-                        Text(price)
-                            .font(SaveAtlasType.strong(17))
-                            .foregroundStyle(SaveAtlasPalette.ink)
-                    }
-                    Text(renewalDescription(for: id, products: storeKit.products))
-                        .font(SaveAtlasType.body(12))
-                        .foregroundStyle(SaveAtlasPalette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(price)
+                    .font(SaveAtlasType.strong(17))
+                    .foregroundStyle(SaveAtlasPalette.ink)
 
                 Spacer(minLength: 0)
 
@@ -244,9 +236,8 @@ struct SaveProPaywallView: View {
                 }
             }
             .padding(.horizontal, SaveSpace.md)
-            .padding(.vertical, SaveSpace.xs)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(minHeight: SaveLayout.rowMinHeight)
+            .frame(height: SaveLayout.rowMinHeight)
             .background(
                 SaveAtlasPalette.paper,
                 in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
@@ -261,6 +252,17 @@ struct SaveProPaywallView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("paywall.offer.\(id)")
+    }
+
+    private func renewalLines(products: [Product]) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(renewalDescription(for: SAVEProAccessPolicy.ProductID.annual, products: products))
+            Text(renewalDescription(for: SAVEProAccessPolicy.ProductID.monthly, products: products))
+        }
+        .font(SaveAtlasType.body(12))
+        .foregroundStyle(SaveAtlasPalette.muted)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("paywall.renewal")
     }
 
     private func priceText(for id: String, products: [Product], fallback: String) -> String {
@@ -450,14 +452,14 @@ private struct SaveDoodleCoralCheck: View {
 struct SaveDoodlePaywallHero: View {
     var body: some View {
         ZStack {
-            SaveDoodle.washGreen.opacity(0.55)
+            SaveAtlasPalette.paper
             SaveDoodlePaywallParkShape()
-                .fill(SaveDoodle.washGreen)
+                .fill(SaveDoodle.washGreen.opacity(0.55))
             SaveDoodlePaywallPaths()
                 .stroke(SaveAtlasPalette.line, style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
 
             sticker(system: "pencil", x: 0.18, y: 0.28, visited: false)
-            sticker(system: "fork.knife", x: 0.48, y: 0.30, visited: true)
+            sticker(system: "takeoutbag.and.cup.and.straw", x: 0.48, y: 0.30, visited: false)
             sticker(system: "cup.and.saucer", x: 0.78, y: 0.26, visited: false)
             sticker(system: "bird", x: 0.16, y: 0.72, visited: false)
             sticker(system: "lamp.desk", x: 0.74, y: 0.70, visited: true)
@@ -469,7 +471,7 @@ struct SaveDoodlePaywallHero: View {
                     .position(x: point.x, y: point.y)
             }
         }
-        .background(SaveAtlasPalette.kraftLight)
+        .background(SaveAtlasPalette.paper)
     }
 
     private var treeOffsets: [CGPoint] {

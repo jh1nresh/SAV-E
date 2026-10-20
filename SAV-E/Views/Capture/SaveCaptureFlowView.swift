@@ -206,7 +206,7 @@ struct SaveCaptureFlowView: View {
     private var pasteRow: some View {
         ZStack {
             optionRow(
-                systemImage: "paperclip",
+                systemImage: "clipboard",
                 title: localized("Paste link", "貼上連結"),
                 identifier: "capture.paste"
             ) {
