@@ -245,9 +245,11 @@ Reject the prototype if three or more are true:
   scalloped ticket silhouette, overlap, contextual Memo, and postal detail
   disappear, the implementation has left Postcard Pocket.
 - Every review run exports `reference/`, `output/`, `diff/`, and `results/`.
-  `Scripts/VisualParity.swift` ignores only the system-owned top 48 rows and
-  combines tolerant edge overlap (35%) with per-pixel appearance similarity
-  (65%). The four raster-approved pages must score at least 0.90. Trips uses
+  `Scripts/VisualParity.swift` ignores the system-owned top 48 rows. Home
+  also applies `home-mask.png` (white = ignore) and grades position, size,
+  color, and font style. Other pages keep tolerant edge overlap (35%) with
+  per-pixel appearance similarity (65%). The four raster-approved pages
+  must score at least 0.90. Trips uses
   the same production component and structural UI gate until its own approved
   raster is locked.
 

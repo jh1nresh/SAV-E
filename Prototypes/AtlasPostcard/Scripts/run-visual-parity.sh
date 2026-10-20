@@ -209,6 +209,9 @@ for screen in home saves plan map passport; do
     fi
     cp "$source" "$ARTIFACT_DIR/reference/$screen.png"
 done
+if [[ -f "$REFERENCE_SOURCE/home-mask.png" ]]; then
+    cp "$REFERENCE_SOURCE/home-mask.png" "$ARTIFACT_DIR/reference/home-mask.png"
+fi
 
 if [[ -n "$DESTINATION" ]]; then
     capture_booted_simulators
@@ -361,10 +364,15 @@ for screen in home saves plan map passport; do
         exit 2
     fi
 
+    mask_args=()
+    if [[ "$screen" == home && -f "$ARTIFACT_DIR/reference/home-mask.png" ]]; then
+        mask_args+=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
+    fi
     if xcrun swift "$PARITY_SCRIPT" \
         --target "$ARTIFACT_DIR/reference/$screen.png" \
         --actual "$actual" \
         --diff "$ARTIFACT_DIR/diff/$screen.png" \
+        "${mask_args[@]}" \
         --threshold "$THRESHOLD" \
         >"$ARTIFACT_DIR/results/$screen.json"
     then

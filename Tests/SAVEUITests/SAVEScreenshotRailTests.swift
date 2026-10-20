@@ -3065,12 +3065,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        let entry = app.buttons["home.openSaves"]
-        XCTAssertTrue(entry.waitForExistence(timeout: stepTimeout), "Missing visible Home Saves entry")
+        let review = app.descendants(matching: .any)["home.review"]
+        let fallback = app.buttons["home.openSaves"]
+        XCTAssertTrue(
+            review.waitForExistence(timeout: timeout(2))
+                || fallback.waitForExistence(timeout: stepTimeout),
+            "Missing visible Home Saves entry"
+        )
+        let entry = review.exists ? review : fallback
+        _ = scrollUntilHittable(entry, in: app.scrollViews.firstMatch)
         XCTAssertTrue(entry.isHittable, "Home Saves must be usable without a hidden test-only route")
         XCTAssertGreaterThanOrEqual(entry.frame.height, 44)
         XCTAssertGreaterThanOrEqual(entry.frame.width, 44)
-        entry.tap()
+        tapReachable(entry)
         let saves = app.descendants(matching: .any)["saves.root"]
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to
         // burn 120s per attempt; four flakes × 3 retries blew the 35-minute
@@ -3146,10 +3153,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     /// Live Home is the Doodle Eat/Go list plus mini-map. The Atlas gate still
-    /// compares `five-tab-home` to `ProductionTargets/home.png` at 0.90 against
-    /// DESIGN's 2026-10-20 `home-light.png`. Do not retune that gate here.
+    /// compares `five-tab-home` to DESIGN v2 `ProductionTargets/home.png` at
+    /// 0.90 with `home-mask.png`. Do not retune that gate here.
     /// Passport compares `five-tab-passport` to `ProductionTargets/passport.png`
-    /// at exactly 0.90 (Doodle Passport mock).
+    /// at exactly 0.90 (DESIGN v2 stickers and cities).
     @MainActor
     private func waitForHomeCoverImagery(_ app: XCUIApplication) {
         XCTAssertTrue(
