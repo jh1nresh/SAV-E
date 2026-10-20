@@ -188,8 +188,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "social-passport-post-grid")
         filter.buttons["去過"].tap()
         let visited = app.buttons["posts.item.22222222-2222-4222-8222-222222222222"]
+        let wantToGo = app.buttons["posts.item.11111111-1111-4111-8111-111111111111"]
         XCTAssertTrue(visited.waitForExistence(timeout: stepTimeout))
-        XCTAssertFalse(app.buttons["posts.item.11111111-1111-4111-8111-111111111111"].exists)
+        XCTAssertTrue(wantToGo.waitForNonExistence(timeout: stepTimeout))
         visited.tap()
         XCTAssertTrue(app.buttons["posts.edit"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(app.staticTexts["posts.audience"].label, "分享已暫停，目前只有你能查看")
