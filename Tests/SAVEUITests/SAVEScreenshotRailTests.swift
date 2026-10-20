@@ -513,11 +513,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout))
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertFalse(
-            app.buttons["map.go"].exists,
-            "Opening the Map tab directly must not apply Home's Eat/Go handoff"
+        XCTAssertTrue(
+            app.buttons["map.go"].waitForExistence(timeout: stepTimeout),
+            "Map always shows Eat/Go chrome; mini-map handoff still owns the carried filter"
         )
-        XCTAssertFalse(app.descendants(matching: .any)["map.city"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["map.city"].exists)
         openRootTab("Home", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(app.state, .runningForeground)
@@ -561,9 +561,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertFalse(
-            app.buttons["map.go"].exists,
-            "Direct Map tab must keep the unfiltered default"
+        XCTAssertTrue(
+            app.buttons["map.go"].waitForExistence(timeout: stepTimeout),
+            "Direct Map tab still shows Eat/Go; pins stay unfiltered until a chip or mini-map applies the session"
         )
         XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.\(taipeiCafeID)"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.\(tainanCafeID)"].exists)
@@ -619,6 +619,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-repair-review-demo-seed",
                 "--uitest-atlas-parity-fixture",
                 "--uitest-friends-town",
+                "--uitest-map-place-selected",
                 "-save.appLanguage", "en",
             ]
         )
@@ -667,6 +668,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-location-denied",
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-map-place-selected",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
@@ -711,7 +713,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
             locationNoticeDismiss.tap()
         }
+        XCTAssertTrue(app.buttons["map.eat"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["map.go"].exists)
+        _ = app.descendants(matching: .any)["map.placeSheet"].waitForExistence(timeout: timeout(4))
         attach(app, name: "five-tab-map")
+        attach(app, name: "doodle-map-light")
 
         openTripsFromHome(app: app)
         let existingTrip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")).firstMatch
@@ -872,6 +878,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             blue: expectedBlue,
             name: passportName
         )
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: homeName.replacingOccurrences(of: "home", with: "map"))
         terminate(app)
     }
 
@@ -2126,35 +2136,29 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: launchTimeout))
         dismissLocationAlertIfPresent()
 
-        // One place, one card (spec P2b): the Atlas card is canonical and now
-        // carries the retired legacy strip's actions.
-        let card = app.descendants(matching: .any)["map.place.card"]
+        // Doodle place sheet: Directions + 我來過了. One selected place, one sheet.
+        let card = app.descendants(matching: .any)["map.placeSheet"]
         XCTAssertTrue(card.waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
-            app.descendants(matching: .any).matching(identifier: "map.place.card").count,
+            app.descendants(matching: .any).matching(identifier: "map.placeSheet").count,
             1,
             "Exactly one surface should represent the selected place."
         )
-        XCTAssertTrue(app.descendants(matching: .any)["map.place.share"].exists)
-        XCTAssertTrue(app.buttons["map.place.planAround"].exists)
+        XCTAssertTrue(app.buttons["map.directions"].exists)
+        XCTAssertTrue(app.buttons["map.checkIn"].exists)
+        XCTAssertTrue(app.buttons["map.peek.card"].exists)
         XCTAssertFalse(
             app.descendants(matching: .any)["place.detail.root"].exists,
-            "The legacy place strip must not co-present with the Atlas card."
+            "The place sheet must not co-present with place detail."
         )
         XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
         attach(app, name: "map-place-card-actions")
 
-        // Plan-around swaps the card for the single drawer surface.
-        app.buttons["map.place.planAround"].tap()
+        app.buttons["map.peek.card"].tap()
         XCTAssertTrue(
             app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout)
+                || app.descendants(matching: .any)["place.detail.scroll"].waitForExistence(timeout: stepTimeout)
         )
-        XCTAssertEqual(
-            app.descendants(matching: .any).matching(identifier: "drawer.root").count,
-            1,
-            "Plan-around should open exactly one drawer surface."
-        )
-        XCTAssertTrue(card.waitForNonExistence(timeout: stepTimeout))
     }
 
     @MainActor

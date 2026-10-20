@@ -284,6 +284,10 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                     screen="plan"
                     priority=0
                     ;;
+                five-tab-map*)
+                    screen="map"
+                    priority=1
+                    ;;
                 atlas-map*)
                     screen="map"
                     priority=0
@@ -343,6 +347,11 @@ else
 fi
 
 gate_failed=0
+mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
+# Live Apple MapKit canvas is excluded so the 0.90 gate scores Doodle chrome
+# (header chips, paper sheet, tab bar) against the Doodle v1 Map mock.
+# Rect is 402x874 logical px: y 168..<560 is the full-bleed map surface.
+MAP_IGNORE_RECT="0,168,402,392"
 for screen in home saves plan map; do
     actual="$ARTIFACT_DIR/output/$screen.png"
     if [[ ! -f "$actual" ]]; then
@@ -350,11 +359,17 @@ for screen in home saves plan map; do
         exit 2
     fi
 
+    extra_args=()
+    if [[ "$screen" == "map" ]]; then
+        extra_args=(--ignore-rect "$MAP_IGNORE_RECT")
+    fi
+
     if xcrun swift "$PARITY_SCRIPT" \
         --target "$ARTIFACT_DIR/reference/$screen.png" \
         --actual "$actual" \
         --diff "$ARTIFACT_DIR/diff/$screen.png" \
         --threshold "$THRESHOLD" \
+        "${extra_args[@]}" \
         >"$ARTIFACT_DIR/results/$screen.json"
     then
         status="PASS"
@@ -374,6 +389,25 @@ for screen in home saves plan map; do
         plutil -extract composite raw -o - "$ARTIFACT_DIR/results/$screen.json"
     )"
     printf '%-5s %-5s score=%s threshold=%s\n' "$status" "$screen" "$score" "$THRESHOLD"
+    if [[ "$screen" == "map" ]]; then
+        cp "$ARTIFACT_DIR/reference/map.png" "$ARTIFACT_DIR/map-doodle-similarity/mock.png"
+        cp "$actual" "$ARTIFACT_DIR/map-doodle-similarity/live.png"
+        cp "$ARTIFACT_DIR/diff/map.png" "$ARTIFACT_DIR/map-doodle-similarity/diff.png"
+        if ! python3 "$SCRIPT_DIR/compose-map-similarity.py" \
+            --target "$ARTIFACT_DIR/reference/map.png" \
+            --actual "$actual" \
+            --diff "$ARTIFACT_DIR/diff/map.png" \
+            --result "$ARTIFACT_DIR/results/map.json" \
+            --output "$ARTIFACT_DIR/map-doodle-similarity/side-by-side.png" \
+            --report "$ARTIFACT_DIR/map-doodle-similarity/report.json" \
+            --mask "$MAP_IGNORE_RECT" \
+            --status "$status" \
+            --threshold "$THRESHOLD"
+        then
+            echo "note: map side-by-side compose skipped; score JSON is in results/map.json"
+            cp "$ARTIFACT_DIR/results/map.json" "$ARTIFACT_DIR/map-doodle-similarity/report.json"
+        fi
+    fi
 done
 
 echo "reference: $ARTIFACT_DIR/reference"
