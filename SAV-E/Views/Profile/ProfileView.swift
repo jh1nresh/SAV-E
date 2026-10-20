@@ -409,13 +409,10 @@ struct ProfileView: View {
     }
 
     var body: some View {
-        Group {
-            if isRootTab {
-                passportContent
-            } else {
-                NavigationStack { passportContent }
-            }
-        }
+        // Collected / settings / connections must push inside Passport.
+        // Using the root NavigationStack replaces the five-tab scaffold
+        // and drops `root.tab.home` from the tree.
+        NavigationStack { passportContent }
         .onChange(of: requestsConnections) { _, requested in
             if requested { opensConnections = true; requestsConnections = false }
         }

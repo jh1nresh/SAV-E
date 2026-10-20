@@ -125,6 +125,8 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(passport.contains("opensCollected"))
         XCTAssertTrue(passport.contains("profile.collected.root"))
         XCTAssertTrue(passport.contains("SharedPostsGrid"))
+        XCTAssertTrue(passport.contains("NavigationStack { passportContent }"))
+        XCTAssertFalse(passport.contains("if isRootTab {\n                passportContent"))
         XCTAssertTrue(page.contains("SaveHaptics.stamp()"))
         let stickers = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportStickers.swift")
         XCTAssertTrue(stickers.contains("SaveDoodleOfficialSticker"))
@@ -190,10 +192,18 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(rail.contains("--uitest-doodle-passport-face"))
         XCTAssertTrue(rail.contains("doodle-passport-light"))
         XCTAssertTrue(rail.contains("doodle-passport-dark"))
+        XCTAssertTrue(rail.contains("4 of 12 visited"))
+        XCTAssertTrue(rail.contains("passport.citySwitcher"))
+        XCTAssertTrue(rail.contains("profile.close"))
+        XCTAssertTrue(rail.contains("Collected is a Passport child; root.tab.home must stay in the five-tab bar"))
         let workflow = try source(at: ".github/workflows/ios.yml")
         XCTAssertTrue(workflow.contains("five-tab-passport"))
         XCTAssertTrue(workflow.contains("doodle-passport-light"))
         XCTAssertTrue(workflow.contains("doodle-passport-dark"))
+        XCTAssertTrue(workflow.contains("python3 -m pip install --user Pillow"))
+        let compose = try source(at: "Prototypes/AtlasPostcard/Scripts/compose-map-similarity.py")
+        XCTAssertTrue(compose.contains("from PIL import Image, ImageDraw, ImageFont"))
+        XCTAssertTrue(compose.contains("python3 -m pip install Pillow"))
     }
 
     private func place(

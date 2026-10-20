@@ -7,7 +7,13 @@ import argparse
 import json
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except ImportError as exc:
+    raise SystemExit(
+        "Pillow is required for compose-map-similarity.py. "
+        "Install with: python3 -m pip install Pillow"
+    ) from exc
 
 
 def parse_rect(value: str) -> tuple[int, int, int, int]:

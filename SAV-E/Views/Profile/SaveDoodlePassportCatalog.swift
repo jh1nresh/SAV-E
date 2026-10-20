@@ -122,7 +122,7 @@ enum SaveDoodlePassportCatalog {
         let items: [(String, PlaceCategory, SaveDoodleStickerKind, SavePassportStampRank)] = [
             ("Siji Minfu Roast Duck", .food, .duck, .single),
             ("Fangzhuangchang Noodles", .food, .noodles, .single),
-            ("Temple of Heaven", .attraction, .temple, .double),
+            ("Temple of Heaven Park", .attraction, .temple, .double),
             ("Lantern Alley", .attraction, .lantern, .gold),
             ("Grey Cafe", .cafe, .coffee, .none),
             ("Jingshan", .attraction, .hill, .none),

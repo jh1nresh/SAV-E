@@ -183,6 +183,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.descendants(matching: .any)["profile.today"].exists)
         app.buttons["profile.stampProgress"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.collected.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            rootTabButton("Home", app: app).waitForExistence(timeout: stepTimeout),
+            "Collected is a Passport child; root.tab.home must stay in the five-tab bar"
+        )
         let filter = app.segmentedControls["posts.filter"]
         XCTAssertTrue(scrollUntilHittable(filter, in: app.scrollViews.firstMatch, maxSwipes: 4))
         attach(app, name: "social-passport-post-grid")
@@ -757,6 +761,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["passport.citySwitcher"].waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(app.buttons["passport.citySwitcher"].label, "Beijing")
+        XCTAssertTrue(app.buttons["profile.stampProgress"].waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(app.buttons["profile.stampProgress"].label, "4 of 12 visited")
         attach(app, name: "five-tab-passport")
         attach(app, name: "doodle-passport-light")
 
@@ -1057,7 +1065,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             launchArguments: [
                 "--uitest-complete-onboarding",
                 "--skip-map-tour",
-                "--uitest-location-denied",
+                "--uitest-location-allowed",
+                "--uitest-doodle-parity-face",
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
                 "-save.appLanguage", "en",
@@ -1086,7 +1095,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected)
+        XCTAssertEqual(app.buttons["passport.citySwitcher"].label, "Beijing")
+        XCTAssertEqual(app.buttons["profile.stampProgress"].label, "4 of 12 visited")
         let passportShot = app.screenshot()
         attach(app, name: passportName)
         if appearance == .dark {
@@ -3442,6 +3454,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         // then pop the child route back to the root bar.
         for _ in 0..<12 {
             if rootTabButton("Home", app: app).exists { return }
+
+            let collectedClose = app.buttons["profile.close"]
+            if collectedClose.exists, collectedClose.isHittable {
+                collectedClose.tap()
+                continue
+            }
 
             let placeDetailClose = app.buttons["drawer.place.close"]
             if placeDetailClose.exists, placeDetailClose.isHittable {

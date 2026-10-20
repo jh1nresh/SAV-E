@@ -278,6 +278,7 @@ jobs:
       - name: Enforce Atlas production visual parity
         if: always() && (steps.scope.outputs.ui == 'true')
         run: |
+          python3 -m pip install --user Pillow
           Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh \
             --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
             --artifacts "$RUNNER_TEMP/SAVE-Atlas-Parity" \
