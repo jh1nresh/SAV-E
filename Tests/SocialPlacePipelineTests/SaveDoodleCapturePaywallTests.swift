@@ -12,7 +12,7 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(capture.contains("pointSize: 28"))
         XCTAssertTrue(capture.contains("SaveLayout.screenMargin"))
         XCTAssertTrue(capture.contains("SaveAtlasPalette.paper"))
-        XCTAssertTrue(capture.contains("presentationDetents([.medium, .large])"))
+        XCTAssertTrue(capture.contains("presentationDetents([.medium, .large], selection: $detent)"))
         XCTAssertFalse(capture.contains("SaveDottedBackground"))
         XCTAssertTrue(capture.contains("capture.input"))
         XCTAssertTrue(capture.contains("capture.paste"))

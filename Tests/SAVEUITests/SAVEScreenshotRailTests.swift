@@ -699,6 +699,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "five-tab-home")
         attach(app, name: "doodle-home-light")
 
+        let homeCapture = rootTabButton("Save", app: app)
+        XCTAssertTrue(homeCapture.waitForExistence(timeout: stepTimeout))
+        homeCapture.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "five-tab-capture")
+        app.buttons["Close capture"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForNonExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Home", app: app).isSelected)
+
         openRootTab("Friends", app: app)
         XCTAssertTrue(app.staticTexts["friends.empty"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(app.staticTexts["friends.empty"].label, "Their next place could be yours")
@@ -780,11 +789,41 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
         capture.tap()
         XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
-        attach(app, name: "five-tab-capture")
+        attach(app, name: "five-tab-capture-passport")
         app.buttons["Close capture"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForNonExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected, "Capture cancellation returns to Passport")
+    }
+
+    /// Founder lock: paywall parity target is the Doodle v1 mock at 0.90.
+    /// Purchasing is off, so the wall is forced with `--uitest-show-paywall`.
+    @MainActor
+    func testDoodlePaywallParity() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout),
+            "Doodle paywall must present as a full-screen modal for the 0.90 gate."
+        )
+        XCTAssertFalse(rootTabButton("Home", app: app).exists, "Paywall is a full-screen modal with no tab bar")
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.benefit.unlimited"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.staticTexts["Plan trips from your saves"].exists)
+        XCTAssertFalse(app.staticTexts["Bonus sticker packs"].exists)
+        attach(app, name: "five-tab-paywall")
     }
 
     /// Warm dark tokens from spec §1 must paint Home and Passport once Light is unlocked.

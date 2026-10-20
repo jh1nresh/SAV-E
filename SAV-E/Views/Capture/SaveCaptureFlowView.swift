@@ -19,6 +19,7 @@ struct SaveCaptureFlowView: View {
     @State private var errorMessage: String?
     @State private var isGoogleTakeoutPresented = false
     @FocusState private var isInputFocused: Bool
+    @State private var detent: PresentationDetent = .medium
 
     var body: some View {
         NavigationStack {
@@ -102,7 +103,7 @@ struct SaveCaptureFlowView: View {
             .toolbarBackground(.hidden, for: .navigationBar)
         }
         .interactiveDismissDisabled(isAnalyzing)
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.medium, .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationBackground(SaveAtlasPalette.paper)
         .accessibilityIdentifier("capture.flow")
