@@ -58,7 +58,6 @@ struct SaveProPaywallView: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
         .presentationBackground(SaveAtlasPalette.canvas)
-        .presentationCompactAdaptation(.fullScreen)
         .interactiveDismissDisabled(isPurchasing)
         .accessibilityIdentifier("paywall.root")
         .accessibilityValue(trigger == .passport ? "passport" : "aiAssist")
