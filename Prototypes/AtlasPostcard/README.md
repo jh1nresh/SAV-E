@@ -57,15 +57,15 @@ extraction, so approving a UI refresh cannot silently alter generated assets.
 
 The Home production target is DESIGN's Doodle v1 Home mock
 (`2026-10-19-doodle-v1-home.png`). Founder sign-off 2026-10-20:
-「改成跟手繪稿比對，門檻維持 0.90」. The attached landscape mock was cropped
-to the phone screen and resampled to the 402 × 874 target size. The locked
-face is Savvy + Eat/Go + city + clues + mini-map + nearby list + Collected
-+ the five-tab rail. Saves, Plan, and Map targets stay on their current
+「改成跟手繪稿比對，門檻維持 0.90」. `VisualParity.swift` accepts only a
+1× 402 × 874 target, so the attached mock is resized to that size with
+no crop, redraw, or screenshot. The locked face is the founder-signed
+Doodle Home mock. Saves, Plan, and Map targets stay on their current
 locks until those Doodle PRs.
 
 The Passport production target is DESIGN's Doodle v1 Passport mock
-(`2026-10-19-doodle-v1-passport.png`). The attached landscape mock is cropped
-to the phone screen and scaled uniformly into 402 × 874 (no axis stretch).
+(`2026-10-19-doodle-v1-passport.png`). The phone screen from the attached
+landscape mock is scaled uniformly into 402 × 874 (no axis stretch).
 Spare canvas is padded with the mock's paper colour. The locked face is
 Passport + Beijing · 4 of 12 visited, the kraft sticker grid, cities, and
 the five-tab rail with Passport selected. The comparator and `0.90`
