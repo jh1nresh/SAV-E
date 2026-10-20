@@ -191,7 +191,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         let readme = try source(at: "Prototypes/AtlasPostcard/README.md")
         XCTAssertTrue(readme.contains("2026-10-19-doodle-v1-home.png"))
         XCTAssertTrue(readme.contains("0.90"))
+        XCTAssertTrue(readme.contains("resized to that size"))
         XCTAssertFalse(readme.contains("nearest-neighbor tile-town peek"))
+        XCTAssertFalse(readme.contains("cropped"))
         let homeTarget = repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets/home.png"
         )
