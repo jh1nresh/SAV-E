@@ -830,10 +830,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             forceArgument: "--uitest-force-dark",
             homeName: "dark-home",
             passportName: "dark-passport",
-            extraLaunchArguments: ["--uitest-doodle-passport-face"],
             expectedRed: 0x1E,
             expectedGreen: 0x1C,
-            expectedBlue: 0x19
+            expectedBlue: 0x19,
+            extraLaunchArguments: ["--uitest-doodle-passport-face"]
         )
         try captureHomeAndPassportCanvas(
             appearance: .light,
