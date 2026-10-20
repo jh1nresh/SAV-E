@@ -13,6 +13,10 @@
 		D2E100000000000000000001 /* SaveDoodleHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E100000000000000000002 /* SaveDoodleHomeView.swift */; };
 		D2E100000000000000000003 /* SaveDoodleHomeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E100000000000000000004 /* SaveDoodleHomeCatalog.swift */; };
 		D2E100000000000000000005 /* SaveDoodleHomeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E100000000000000000006 /* SaveDoodleHomeTests.swift */; };
+		D2E200000000000000000001 /* SaveDoodlePassportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E200000000000000000002 /* SaveDoodlePassportView.swift */; };
+		D2E200000000000000000003 /* SaveDoodlePassportCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E200000000000000000004 /* SaveDoodlePassportCatalog.swift */; };
+		D2E200000000000000000005 /* SaveDoodlePassportStickers.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E200000000000000000006 /* SaveDoodlePassportStickers.swift */; };
+		D2E200000000000000000007 /* SaveDoodlePassportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E200000000000000000008 /* SaveDoodlePassportTests.swift */; };
 		T7A100000000000000000007 /* SaveTileTownRootMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000008 /* SaveTileTownRootMap.swift */; };
 		T7A100000000000000000009 /* SaveTileTownLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A10000000000000000000A /* SaveTileTownLockTests.swift */; };
 		C91900000000000000000001 /* DisplayFont in Resources */ = {isa = PBXBuildFile; fileRef = C91900000000000000000002 /* DisplayFont */; };
@@ -313,6 +317,10 @@
 		D2E100000000000000000002 /* SaveDoodleHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleHomeView.swift; sourceTree = "<group>"; };
 		D2E100000000000000000004 /* SaveDoodleHomeCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleHomeCatalog.swift; sourceTree = "<group>"; };
 		D2E100000000000000000006 /* SaveDoodleHomeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleHomeTests.swift; sourceTree = "<group>"; };
+		D2E200000000000000000002 /* SaveDoodlePassportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodlePassportView.swift; sourceTree = "<group>"; };
+		D2E200000000000000000004 /* SaveDoodlePassportCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodlePassportCatalog.swift; sourceTree = "<group>"; };
+		D2E200000000000000000006 /* SaveDoodlePassportStickers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodlePassportStickers.swift; sourceTree = "<group>"; };
+		D2E200000000000000000008 /* SaveDoodlePassportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodlePassportTests.swift; sourceTree = "<group>"; };
 		T7A100000000000000000008 /* SaveTileTownRootMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownRootMap.swift; sourceTree = "<group>"; };
 		T7A10000000000000000000A /* SaveTileTownLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownLockTests.swift; sourceTree = "<group>"; };
 		C91900000000000000000002 /* DisplayFont */ = {isa = PBXFileReference; lastKnownFileType = folder; path = DisplayFont; sourceTree = "<group>"; };
@@ -926,6 +934,7 @@
 				6F3BF7069E799A11086D07F7 /* AtlasOneFaceUITests.swift */,
 				T7A10000000000000000000A /* SaveTileTownLockTests.swift */,
 				D2E100000000000000000006 /* SaveDoodleHomeTests.swift */,
+				D2E200000000000000000008 /* SaveDoodlePassportTests.swift */,
 				A5629446727F6C92D09FD7BE /* AtlasOneJobPerTabUITests.swift */,
 				396D972F2C07BCC409ADBEC7 /* DebugLegacyMigratorTests.swift */,
 				8B41297E1503EE02BE975D45 /* DeterministicTripPlannerTests.swift */,
@@ -1004,6 +1013,9 @@
 			isa = PBXGroup;
 			children = (
 				5E1CAB36A11288E7007AEBF7 /* ProfileView.swift */,
+				D2E200000000000000000002 /* SaveDoodlePassportView.swift */,
+				D2E200000000000000000004 /* SaveDoodlePassportCatalog.swift */,
+				D2E200000000000000000006 /* SaveDoodlePassportStickers.swift */,
 				E6BCBA8DC934BBB3AEEACF81 /* SaveMemoryDebugView.swift */,
 				FF357924A8D4048E256F214E /* SaveProPaywallView.swift */,
 				54876D21CED56B8E43591F6E /* StatsView.swift */,
@@ -1474,6 +1486,7 @@
 				3A214817A2A61AB5299EEC7E /* AtlasOneFaceUITests.swift in Sources */,
 				T7A100000000000000000009 /* SaveTileTownLockTests.swift in Sources */,
 				D2E100000000000000000005 /* SaveDoodleHomeTests.swift in Sources */,
+				D2E200000000000000000007 /* SaveDoodlePassportTests.swift in Sources */,
 				44FE5138EF536EBF57B0EA3A /* AtlasOneJobPerTabUITests.swift in Sources */,
 				94AF43877A54FD0C34CD7217 /* DebugLegacyMigratorTests.swift in Sources */,
 				793EB5D582636871FD6FA8CE /* DeterministicTripPlannerTests.swift in Sources */,
@@ -1601,6 +1614,9 @@
 				3886D3525DDF070971BCFFC4 /* Presentation.swift in Sources */,
 				C0E9F65DE2C65F3F28DE1A6A /* PrivyAuthService.swift in Sources */,
 				283787AE9627CB588A26B5A1 /* ProfileView.swift in Sources */,
+				D2E200000000000000000001 /* SaveDoodlePassportView.swift in Sources */,
+				D2E200000000000000000003 /* SaveDoodlePassportCatalog.swift in Sources */,
+				D2E200000000000000000005 /* SaveDoodlePassportStickers.swift in Sources */,
 				CCA908BE75D42562E30A5CE9 /* ProfileViewModel.swift in Sources */,
 				A10100000000000000000012 /* SharedPostsStore.swift in Sources */,
 				8CD63C6946186279A955FAF5 /* RelatedPlaceSources.swift in Sources */,

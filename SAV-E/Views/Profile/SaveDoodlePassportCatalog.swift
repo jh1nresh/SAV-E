@@ -1,0 +1,215 @@
+import Foundation
+import SwiftUI
+
+/// HoP 2026-10-19: Passport v1 is the sticker grid, city list, and Collected.
+/// Today missions, field streak, and the stamp ledger stay compiled but off
+/// the root. Connections and posts live on the Collected sub-page.
+enum SaveDoodlePassportFlags {
+    static let showTodayMissions = false
+    static let showFieldStreak = false
+    static let showStampLedger = false
+}
+
+enum SavePassportStampRank: Int, Comparable, CaseIterable {
+    case none = 0
+    case single = 1
+    case double = 3
+    case gold = 5
+
+    static func < (lhs: Self, rhs: Self) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+
+    static func from(visitCount: Int) -> SavePassportStampRank {
+        if visitCount >= 5 { return .gold }
+        if visitCount >= 3 { return .double }
+        if visitCount >= 1 { return .single }
+        return .none
+    }
+}
+
+/// Local visit counts so a «我來過了» tap can climb 1 → 3 → 5 without a
+/// new Place field. Shared leftovers keep `Place.status == .visited`.
+@MainActor
+final class SavePassportVisitStore {
+    static let shared = SavePassportVisitStore()
+
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func count(for id: UUID) -> Int {
+        defaults.integer(forKey: Self.key(id))
+    }
+
+    @discardableResult
+    func recordVisit(for id: UUID) -> Int {
+        let next = max(count(for: id), 0) + 1
+        defaults.set(next, forKey: Self.key(id))
+        return next
+    }
+
+    func rank(for id: UUID, visited: Bool) -> SavePassportStampRank {
+        let stored = count(for: id)
+        let effective = max(stored, visited ? 1 : 0)
+        return SavePassportStampRank.from(visitCount: effective)
+    }
+
+    private static var suiteSuffix: String {
+        ProcessInfo.processInfo.environment["SAVE_UI_TEST_STORAGE_ID"] ?? "default"
+    }
+
+    static func key(_ id: UUID) -> String {
+        "save.doodle.passport.visits.\(suiteSuffix).\(id.uuidString)"
+    }
+}
+
+enum SaveDoodleStickerKind: String, CaseIterable, Equatable {
+    case duck, noodles, coffee, tea, baozi, dessert
+    case wine, beer, temple, tree, hill, lantern
+    case museum, bag, bookstore, beach, bridge, camera, hotpot, pin
+    case bicycle, ferris
+}
+
+struct SaveDoodlePassportSlot: Identifiable, Equatable {
+    enum Content: Equatable {
+        case place(Place, SaveDoodleStickerKind, SavePassportStampRank)
+        case empty(index: Int)
+    }
+
+    let id: String
+    let content: Content
+
+    var place: Place? {
+        if case let .place(place, _, _) = content { return place }
+        return nil
+    }
+
+    var isVisited: Bool {
+        if case let .place(_, _, rank) = content { return rank != .none }
+        return false
+    }
+}
+
+enum SaveDoodlePassportCatalog {
+    static let columnCount = 4
+    static let slotSize: CGFloat = 64
+    static let rowGap: CGFloat = SaveSpace.md
+    static let minColumnGap: CGFloat = SaveSpace.md
+    static let panelPadding: CGFloat = SaveSpace.lg
+    static let pageSize = 12
+
+    static func goal(for savedCount: Int) -> Int {
+        SaveTileTownProductLock.passportGoal(for: savedCount)
+    }
+
+    static func cityPlaces(
+        from places: [Place],
+        selection: SaveDoodleCitySelection,
+        locationDenied: Bool
+    ) -> [Place] {
+        switch SaveDoodleHomeCatalog.resolvedSelection(
+            selection,
+            places: places,
+            locationDenied: locationDenied
+        ) {
+        case .nearYou:
+            return places.sorted(by: moreRecent)
+        case .city(let id):
+            return places
+                .filter { SaveDoodleHomeCatalog.cityID(for: $0) == id }
+                .sorted(by: moreRecent)
+        }
+    }
+
+    static func visitedCount(in places: [Place]) -> Int {
+        places.filter { $0.status == .visited }.count
+    }
+
+    static func slots(
+        from places: [Place],
+        selection: SaveDoodleCitySelection,
+        locationDenied: Bool,
+        visitStore: SavePassportVisitStore
+    ) -> [SaveDoodlePassportSlot] {
+        let city = cityPlaces(from: places, selection: selection, locationDenied: locationDenied)
+        let goal = Self.goal(for: max(city.count, 1))
+        let visible = Array(city.prefix(goal))
+        var result: [SaveDoodlePassportSlot] = visible.enumerated().map { index, place in
+            let kind = stickerKind(for: place, index: index)
+            let rank = visitStore.rank(for: place.id, visited: place.status == .visited)
+            return SaveDoodlePassportSlot(
+                id: place.id.uuidString,
+                content: .place(place, kind, rank)
+            )
+        }
+        if result.count < goal {
+            for index in result.count..<goal {
+                result.append(
+                    SaveDoodlePassportSlot(id: "empty.\(index)", content: .empty(index: index))
+                )
+            }
+        }
+        return result
+    }
+
+    static func stickerKind(for place: Place, index: Int = 0) -> SaveDoodleStickerKind {
+        if let hinted = kindHinted(by: place.name) {
+            return hinted
+        }
+        let options: [SaveDoodleStickerKind]
+        switch place.category {
+        case .food:
+            options = [.duck, .noodles, .baozi, .hotpot, .dessert]
+        case .cafe:
+            options = [.coffee, .tea]
+        case .bar:
+            options = [.wine, .beer]
+        case .attraction:
+            options = [.temple, .tree, .hill, .lantern, .bridge, .museum, .camera, .bicycle, .ferris, .beach]
+        case .stay:
+            options = [.temple, .pin, .hill]
+        case .shopping:
+            options = [.bag, .bookstore]
+        }
+        var hasher = Hasher()
+        hasher.combine(place.id)
+        hasher.combine(place.name)
+        hasher.combine(index)
+        let value = hasher.finalize() & 0x7fffffff
+        return options[value % options.count]
+    }
+
+    static func kindHinted(by name: String) -> SaveDoodleStickerKind? {
+        let lowered = name.lowercased()
+        if lowered.contains("duck") || name.contains("鴨") { return .duck }
+        if lowered.contains("noodle") || lowered.contains("ramen") || name.contains("麵") { return .noodles }
+        if lowered.contains("bao") || name.contains("包") { return .baozi }
+        if lowered.contains("hotpot") || name.contains("火鍋") { return .hotpot }
+        if lowered.contains("coffee") || lowered.contains("cafe") { return .coffee }
+        if lowered.contains("tea") || name.contains("茶") { return .tea }
+        if lowered.contains("temple") || name.contains("寺") { return .temple }
+        if lowered.contains("lantern") || name.contains("燈") { return .lantern }
+        if lowered.contains("bridge") || name.contains("橋") { return .bridge }
+        if lowered.contains("book") || name.contains("書") { return .bookstore }
+        if lowered.contains("bike") || lowered.contains("bicycle") { return .bicycle }
+        if lowered.contains("ferris") || lowered.contains("wheel") { return .ferris }
+        if lowered.contains("park") || lowered.contains("tree") { return .tree }
+        if lowered.contains("hill") || lowered.contains("mountain") { return .hill }
+        return nil
+    }
+
+    static func rotationDegrees(for id: String) -> Double {
+        var hasher = Hasher()
+        hasher.combine(id)
+        let value = hasher.finalize()
+        return Double(abs(value) % 13) - 6
+    }
+
+    private static func moreRecent(_ lhs: Place, _ rhs: Place) -> Bool {
+        if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
+        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+    }
+}
