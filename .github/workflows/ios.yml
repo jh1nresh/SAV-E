@@ -1,13 +1,13 @@
 name: iOS
 
-# Full UI + snapshot + 0.90 parity suite. Separate from CI so draft
-# pull_request synchronize/opened/reopened events never create a check
-# named `ios` (GitHub treats skipped required checks as green).
+# Full UI + snapshot + 0.90 parity suite. The job named `ios` never skips:
+# a skipped required check counts as passed. Drafts without ready-for-merge
+# fail the first step; ready PRs and labeled merge-gate runs execute the suite.
 on:
   push:
     branches: [main]
   pull_request:
-    types: [labeled, ready_for_review]
+    types: [labeled, ready_for_review, synchronize, reopened]
     branches:
       - main
       - cursor/tile-town-product-lock-4894
@@ -79,16 +79,10 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             build-for-testing
 
-  # Required check name `ios` (ruleset 19331432). This workflow does not
-  # run on draft opened/synchronize/reopened, so those SHAs never get an
-  # `ios` check run (pending, not skipped-success). The job is the full
-  # UI + snapshot + 0.90 parity suite and succeeds only when that suite
-  # actually ran.
+  # Required check name `ios` (ruleset 19331432). Never skipped. This job
+  # is the full UI + snapshot + 0.90 parity suite and can succeed only when
+  # that suite actually ran.
   ios:
-    if: >
-      github.event_name != 'pull_request' ||
-      github.event.action == 'ready_for_review' ||
-      github.event.label.name == 'ready-for-merge'
     needs: [ios-build]
     runs-on: macos-26
     # The UI suite is ~10 minutes on a healthy runner but has been observed at
@@ -100,6 +94,29 @@ jobs:
       SAVE_UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus || (github.head_ref == 'cursor/tile-town-product-lock-4894' && 'tile-town-home') || '' }}
 
     steps:
+      - name: Require full iOS suite
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus }}
+        run: |
+          if [[ "$EVENT_NAME" == 'workflow_dispatch' && -n "${UI_TEST_FOCUS:-}" ]]; then
+            echo '::error::workflow_dispatch ui_test_focus cannot satisfy the required ios check. Leave the input empty to run the full suite.'
+            exit 1
+          fi
+          if [[ "$EVENT_NAME" != 'pull_request' ]]; then
+            exit 0
+          fi
+          if [[ "$PR_DRAFT" != 'true' ]]; then
+            exit 0
+          fi
+          case ",$PR_LABELS," in
+            *,ready-for-merge,*) exit 0 ;;
+          esac
+          echo '::error::add ready-for-merge to run full suite (or mark the PR ready for review).'
+          exit 1
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
