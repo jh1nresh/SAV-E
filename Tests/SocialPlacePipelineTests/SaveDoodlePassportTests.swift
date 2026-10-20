@@ -77,6 +77,22 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(page.contains("SaveHaptics.stamp()"))
     }
 
+    func testPassportParityTargetIsTheDoodleMockAtExactly90() throws {
+        let script = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
+        XCTAssertTrue(script.contains("five-tab-passport*)"))
+        XCTAssertTrue(script.contains("screen=\"passport\""))
+        XCTAssertTrue(script.contains("for screen in home saves plan map passport; do"))
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent(
+                "Prototypes/AtlasPostcard/Reference/ProductionTargets/passport.png"
+            ).path
+        ))
+        let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
+        XCTAssertTrue(rail.contains("attach(app, name: \"five-tab-passport\")"))
+        XCTAssertTrue(rail.contains("ProductionTargets/passport.png"))
+        XCTAssertTrue(rail.contains("at exactly 0.90"))
+    }
+
     private func place(
         _ name: String,
         _ address: String,

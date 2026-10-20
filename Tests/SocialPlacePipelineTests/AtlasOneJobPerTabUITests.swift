@@ -363,6 +363,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
 
         XCTAssertTrue(script.contains("five-tab-home*)"))
+        XCTAssertTrue(script.contains("five-tab-passport*)"))
         XCTAssertTrue(script.contains("priority=1"))
         // Failure fixture: PR #220 moved UI selectors out of ci.yml into
         // select-ios-tests.py. The live five-tab Home capture must stay in

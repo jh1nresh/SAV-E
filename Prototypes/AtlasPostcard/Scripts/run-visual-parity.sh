@@ -24,10 +24,13 @@ Options:
   --artifacts DIR       Write reference/output/diff/results under DIR.
   --threshold NUMBER    Gate threshold. Must be at least 0.90 (default 0.90).
 
-The screenshots directory must contain home.png, saves.png, plan.png, and
-map.png. The result-bundle mode prefers the live five-tab-home attachment for
-Home and falls back to atlas-home for prototype-only runs. Saves, Plan, and Map
-use the stable atlas-saves, atlas-plan, and atlas-map XCTest attachments.
+The screenshots directory must contain home.png, saves.png, plan.png,
+map.png, and passport.png. The result-bundle mode prefers the live
+five-tab-home attachment for Home and falls back to atlas-home for
+prototype-only runs. Passport prefers five-tab-passport and falls back to
+atlas-passport. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
+and atlas-map XCTest attachments. The Passport gate is exactly 0.90 against
+the Doodle Passport mock.
 EOF
 }
 
@@ -198,7 +201,7 @@ mkdir -p \
     "$ARTIFACT_DIR/diff" \
     "$ARTIFACT_DIR/results"
 
-for screen in home saves plan map; do
+for screen in home saves plan map passport; do
     source="$REFERENCE_SOURCE/$screen.png"
     if [[ ! -f "$source" ]]; then
         echo "error: missing reference image: $source" >&2
@@ -288,6 +291,14 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                     screen="map"
                     priority=0
                     ;;
+                five-tab-passport*)
+                    screen="passport"
+                    priority=1
+                    ;;
+                atlas-passport*)
+                    screen="passport"
+                    priority=0
+                    ;;
                 *)
                     continue
                     ;;
@@ -299,7 +310,7 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
         ((test_index += 1))
     done
 
-    for screen in home saves plan map; do
+    for screen in home saves plan map passport; do
         newest="$(
             printf '%s' "$candidates" |
                 awk -F"$tab" -v want="$screen" '
@@ -333,7 +344,7 @@ else
         echo "error: screenshots directory not found: $SCREENSHOTS_DIR" >&2
         exit 2
     fi
-    for screen in home saves plan map; do
+    for screen in home saves plan map passport; do
         if [[ ! -f "$SCREENSHOTS_DIR/$screen.png" ]]; then
             echo "error: missing screenshot: $SCREENSHOTS_DIR/$screen.png" >&2
             exit 2
@@ -343,7 +354,7 @@ else
 fi
 
 gate_failed=0
-for screen in home saves plan map; do
+for screen in home saves plan map passport; do
     actual="$ARTIFACT_DIR/output/$screen.png"
     if [[ ! -f "$actual" ]]; then
         echo "error: missing exported attachment for $screen" >&2

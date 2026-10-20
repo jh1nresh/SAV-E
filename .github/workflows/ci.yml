@@ -7,6 +7,7 @@ on:
     # Keep required checks on the existing PR stack rooted in the #279 UI.
     branches:
       - main
+      - cursor/doodle-v1-home-eef3
       - cursor/tile-town-product-lock-4894
       - codex/share-analysis-recovery
       - codex/p0-provider-status
