@@ -101,6 +101,10 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(passport.contains("profile.collected.root"))
         XCTAssertTrue(passport.contains("SharedPostsGrid"))
         XCTAssertTrue(page.contains("SaveHaptics.stamp()"))
+        let stickers = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportStickers.swift")
+        XCTAssertTrue(stickers.contains("dieCut"))
+        XCTAssertTrue(stickers.contains("249 / 255"))
+        XCTAssertTrue(page.contains(".frame(width: 8, height: 8)"))
     }
 
     func testPassportParityTargetIsTheDoodleMockAtExactly90() throws {
