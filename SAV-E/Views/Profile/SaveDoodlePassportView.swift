@@ -136,9 +136,7 @@ struct SaveDoodlePassportPage: View {
     }
 
     private var stickerGrid: some View {
-        let columns = SaveDoodlePassportCatalog.columnCount(
-            availableGridWidth: gridWidth > 0 ? gridWidth : 306
-        )
+        let columns = SaveDoodlePassportCatalog.columnCount(availableGridWidth: gridWidth > 0 ? gridWidth : 306)
         let items = Array(
             repeating: GridItem(
                 .fixed(SaveDoodlePassportCatalog.slotSize),
