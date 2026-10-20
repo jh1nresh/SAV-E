@@ -702,6 +702,18 @@ a 2pt coral underline under the city word only. Body copy stays
 (exact 402×874; `home-dark.png` for DESIGN comparison). Body text
 and icons in those rasters are stand-ins; compare layout boxes.
 
+### Capture and Pro factual state
+
+Capture's photo action opens the system photo picker and reads text locally.
+The extracted text is editable and is only analyzed after the user taps Save;
+a photo never creates a confirmed Map Stamp directly. Empty or unreadable
+photos show an actionable error. Existing draft text is preserved.
+Search nearby opens the Map search drawer. It does not leave the user typing
+in Capture. Before analysis, Capture shows no invented suggestion from old
+saves. Its saved count is the actual count, without a fabricated 50-place cap.
+Pro retains the current modal layout and unavailable-purchase boundary. Its
+note must not claim the user has saved 50 places when opened from Passport.
+
 ### Sign-In
 
 First impression:

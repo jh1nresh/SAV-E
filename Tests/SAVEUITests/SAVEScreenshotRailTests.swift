@@ -867,6 +867,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "five-tab-capture")
         attach(app, name: "doodle-capture-light")
+        XCTAssertFalse(app.descendants(matching: .any)["capture.suggestion"].exists)
+        let nearby = app.buttons["capture.searchNearby"]
+        XCTAssertTrue(nearby.isHittable)
+        XCTAssertGreaterThanOrEqual(nearby.frame.height, 44)
+        nearby.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForNonExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.textFields["map.search.input"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
+        attach(app, name: "doodle-capture-nearby-search")
     }
 
     /// Warm-dark Capture sheet and Pro paywall for the founder compare rail.

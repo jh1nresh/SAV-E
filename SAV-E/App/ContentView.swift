@@ -858,6 +858,10 @@ struct ContentView: View {
                     // the user in an immediately re-presented cover.
                     suppressPendingOnboardingCaptureResume = true
                     fullScreenRoute = nil
+                },
+                onSearchNearby: {
+                    suppressPendingOnboardingCaptureResume = true
+                    openMapSearch()
                 }
             )
             .environment(\.appLanguageSettings, languageSettings)
