@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     # Keep required checks on the existing PR stack rooted in the #279 UI.
+    # labeled + ready_for_review start the full ios-ui suite; ordinary
+    # synchronize/opened/reopened events stay on the units-only lane.
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches:
       - main
       - cursor/tile-town-product-lock-4894
@@ -12,6 +15,7 @@ on:
       - codex/p0-provider-status
       - codex/p1-share-keep-working
       - codex/p1-analysis-cost-efficiency
+      - cursor/doodle-v1-home-eef3
   workflow_dispatch:
     inputs:
       ui_test_focus:
@@ -78,7 +82,113 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             build-for-testing
 
-  ios:
+  # Units-only lane for ordinary PR pushes (opened/synchronize/reopened
+  # without ready-for-merge). Target ~10 min on a warm DerivedData cache.
+  # Skipped when ios-ui runs so the merge gate does not occupy two macos-26
+  # runners for the same SAVETests.
+  ios-unit:
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.action != 'ready_for_review' &&
+      !contains(github.event.pull_request.labels.*.name, 'ready-for-merge')
+    needs: [ios-build]
+    runs-on: macos-26
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+
+      - name: Verify toolchain
+        run: xcodebuild -version
+
+      - name: Check secrets packaging
+        run: scripts/test-package-google-places-secrets.sh
+
+      - name: Cache SwiftPM packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/SAVE-DerivedData/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - name: Cache DerivedData
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/SAVE-DerivedData/Build
+          key: deriveddata-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved', 'SAV-E.xcodeproj/project.pbxproj', 'project.yml') }}
+          restore-keys: |
+            deriveddata-${{ runner.os }}-
+
+      - name: Build without booting a simulator
+        run: |
+          scripts/xcodebuild-clean.sh \
+            -project SAV-E.xcodeproj \
+            -scheme SAV-E \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build
+
+      - name: Create focused test simulator
+        id: simulator
+        run: |
+          udid="$(xcrun simctl create \
+            'SAV-E CI' \
+            'com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro' \
+            'com.apple.CoreSimulator.SimRuntime.iOS-26-5')"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          # Boot now and block until the device reports ready, so first-boot
+          # work never lands inside a test's launch budget.
+          xcrun simctl bootstatus "$udid" -b
+
+      - name: Run unit tests
+        run: |
+          scripts/xcodebuild-clean.sh \
+            -project SAV-E.xcodeproj \
+            -scheme SAV-E \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
+            -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
+            -only-testing:SAVETests \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            test
+
+      - name: Tear down simulator
+        if: always() && steps.simulator.outputs.udid != ''
+        run: |
+          cleanup_status=0
+          xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
+          if ! xcrun simctl list devices |
+            grep -F '${{ steps.simulator.outputs.udid }}' |
+            grep -Fq '(Shutdown)'; then
+            echo 'Simulator shutdown could not be verified.' >&2
+            cleanup_status=1
+          fi
+          if ! xcrun simctl delete '${{ steps.simulator.outputs.udid }}'; then
+            echo 'Simulator deletion failed.' >&2
+            cleanup_status=1
+          elif xcrun simctl list devices | grep -Fq '${{ steps.simulator.outputs.udid }}'; then
+            echo 'Simulator deletion could not be verified.' >&2
+            cleanup_status=1
+          fi
+          exit "$cleanup_status"
+
+  # Full UI + snapshot + visual-parity suite (~63 min). Runs on main, manual
+  # dispatch, ready_for_review, and PRs labeled ready-for-merge. Skipped on
+  # ordinary PR pushes; the required `ios` check is filled by the reporter.
+  ios-ui:
+    name: ios (UI + visual parity)
+    if: >
+      github.event_name != 'pull_request' ||
+      github.event.action == 'ready_for_review' ||
+      contains(github.event.pull_request.labels.*.name, 'ready-for-merge')
     needs: [ios-build]
     runs-on: macos-26
     # The UI suite is ~10 minutes on a healthy runner but has been observed at
@@ -365,6 +475,44 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             build
+
+  # Required check name `ios` (ruleset main-pr-and-ci). Always reports so a
+  # skipped ios-ui job cannot stay pending and block merge. Succeeds when the
+  # active iOS test lane succeeds; fails if that lane failed or none ran.
+  ios:
+    if: always()
+    needs: [ios-build, ios-unit, ios-ui]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report required iOS check
+        env:
+          BUILD_RESULT: ${{ needs.ios-build.result }}
+          UNIT_RESULT: ${{ needs.ios-unit.result }}
+          UI_RESULT: ${{ needs.ios-ui.result }}
+        run: |
+          echo "ios-build=$BUILD_RESULT"
+          echo "ios-unit=$UNIT_RESULT"
+          echo "ios-ui=$UI_RESULT"
+          echo "Full suite: label a PR ready-for-merge, convert it to ready for review, or push to main."
+          fail=0
+          if [[ "$BUILD_RESULT" != "success" ]]; then
+            echo "ios-build did not succeed: $BUILD_RESULT" >&2
+            fail=1
+          fi
+          if [[ "$UNIT_RESULT" == "failure" || "$UNIT_RESULT" == "cancelled" ]]; then
+            echo "ios-unit did not succeed: $UNIT_RESULT" >&2
+            fail=1
+          fi
+          if [[ "$UI_RESULT" == "failure" || "$UI_RESULT" == "cancelled" ]]; then
+            echo "ios-ui did not succeed: $UI_RESULT" >&2
+            fail=1
+          fi
+          if [[ "$UNIT_RESULT" != "success" && "$UI_RESULT" != "success" ]]; then
+            echo "No iOS test lane ran." >&2
+            fail=1
+          fi
+          exit "$fail"
 
   backend:
     uses: jh1nresh/.github/.github/workflows/node-ci.yml@0cb6fd5b730ced897c767d1c9979aba4e49d201d
