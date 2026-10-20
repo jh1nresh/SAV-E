@@ -41,6 +41,13 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertEqual(SaveDoodlePassportCatalog.visitedCount(in: [duck, cafe, park]), 1)
         XCTAssertEqual(SaveDoodlePassportCatalog.stickerKind(for: duck), .duck)
         XCTAssertEqual(SaveDoodlePassportCatalog.stickerKind(for: cafe), .coffee)
+        XCTAssertEqual(SaveDoodleStickerKind.duck.officialSticker, .duck)
+        XCTAssertEqual(SaveDoodleStickerKind.noodles.officialSticker, .noodle)
+        XCTAssertEqual(SaveDoodlePassportCatalog.columnCount(availableGridWidth: 279), 3)
+        XCTAssertEqual(SaveDoodlePassportCatalog.columnCount(availableGridWidth: 294), 3)
+        XCTAssertEqual(SaveDoodlePassportCatalog.columnCount(availableGridWidth: 306), 4)
+        XCTAssertEqual(SaveDoodlePassportCatalog.columnCount(availableGridWidth: 334), 4)
+        XCTAssertEqual(SaveDoodlePassportCatalog.columnCount(availableGridWidth: 0), 1)
     }
 
     func testDoodleFaceSlotsMatchThePassportMockGrid() {
@@ -113,8 +120,14 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(passport.contains("SharedPostsGrid"))
         XCTAssertTrue(page.contains("SaveHaptics.stamp()"))
         let stickers = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportStickers.swift")
-        XCTAssertTrue(stickers.contains("dieCut"))
-        XCTAssertTrue(stickers.contains("249 / 255"))
+        XCTAssertTrue(stickers.contains("SaveDoodleOfficialSticker"))
+        XCTAssertTrue(stickers.contains("SaveLayout.passportSlot"))
+        XCTAssertTrue(stickers.contains("officialSticker"))
+        XCTAssertFalse(stickers.contains("dieCut"))
+        XCTAssertFalse(stickers.contains("249 / 255"))
+        XCTAssertFalse(stickers.contains("SaveDoodlePassportStickerArt"))
+        XCTAssertFalse(stickers.contains(".fill("))
+        XCTAssertTrue(page.contains("columnCount(availableGridWidth:"))
         XCTAssertTrue(page.contains(".frame(width: 8, height: 8)"))
     }
 
@@ -156,6 +169,8 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(design.contains("passport-light.png"))
         XCTAssertTrue(design.contains("passport-dark.png"))
         XCTAssertTrue(design.contains("Passport (Doodle v1)"))
+        XCTAssertTrue(design.contains("Do not wrap a shrunken icon in a filled circle"))
+        XCTAssertTrue(design.contains("floor((availableGridWidth + 16) / 80)"))
         XCTAssertFalse(design.contains("23cca55"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("attach(app, name: \"five-tab-passport\")"))

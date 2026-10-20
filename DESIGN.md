@@ -723,9 +723,12 @@ quests, or shared-post grid.
 
 The sticker grid uses up to four 64pt columns with 16pt gaps. It reflows
 to three columns on 375/390pt phones after the 24pt screen and panel
-insets. The rank legend stacks when its full text cannot fit, including
-larger text sizes. Map and Passport share manual visit history and the
-same daily deduplication.
+insets. Columns = floor((availableGridWidth + 16) / 80), min 1 max 4.
+Official DESIGN stickers (duck, noodle, coffee, temple, lantern,
+elephant) fill the 64pt slot; stamp rings are secondary. Do not wrap a
+shrunken icon in a filled circle. The rank legend stacks when its full
+text cannot fit, including larger text sizes. Map and Passport share
+manual visit history and the same daily deduplication.
 
 ### Sign-In
 

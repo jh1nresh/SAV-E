@@ -87,12 +87,21 @@ struct SaveDoodlePassportSlot: Identifiable, Equatable {
 }
 
 enum SaveDoodlePassportCatalog {
-    static let columnCount = 4
-    static let slotSize: CGFloat = 64
+    static let maxColumnCount = 4
+    static let minColumnCount = 1
+    static let slotSize: CGFloat = SaveLayout.passportSlot
+    static let columnStride: CGFloat = 80
     static let rowGap: CGFloat = SaveSpace.md
     static let minColumnGap: CGFloat = SaveSpace.md
     static let panelPadding: CGFloat = SaveSpace.lg
     static let pageSize = 12
+
+    /// Spec §7.3: `columns = floor((availableGridWidth + 16) / 80)`,
+    /// clamped to 1...4. 375/390pt → 3; 402/430pt → 4.
+    static func columnCount(availableGridWidth: CGFloat) -> Int {
+        let raw = Int(floor((availableGridWidth + minColumnGap) / columnStride))
+        return min(maxColumnCount, max(minColumnCount, raw))
+    }
 
     /// Isolated screenshot face for `five-tab-passport`. Production never
     /// sets this argument, so live Passport still reads the user's places.

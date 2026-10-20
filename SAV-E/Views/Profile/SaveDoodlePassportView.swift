@@ -16,6 +16,7 @@ struct SaveDoodlePassportPage: View {
     @State private var showsCityPicker = false
     @State private var stampingID: String?
     @State private var visitRevision = 0
+    @State private var gridWidth: CGFloat = 0
     private let visitStore = SavePassportVisitStore.shared
 
     var body: some View {
@@ -135,20 +136,30 @@ struct SaveDoodlePassportPage: View {
     }
 
     private var stickerGrid: some View {
-        let columns = [GridItem(
-            .adaptive(minimum: SaveDoodlePassportCatalog.slotSize),
-            spacing: SaveDoodlePassportCatalog.minColumnGap
-        )]
-        return LazyVGrid(columns: columns, spacing: SaveDoodlePassportCatalog.rowGap) {
+        let columns = SaveDoodlePassportCatalog.columnCount(
+            availableGridWidth: gridWidth > 0 ? gridWidth : 306
+        )
+        let items = Array(
+            repeating: GridItem(
+                .fixed(SaveDoodlePassportCatalog.slotSize),
+                spacing: SaveDoodlePassportCatalog.minColumnGap
+            ),
+            count: columns
+        )
+        return LazyVGrid(columns: items, alignment: .leading, spacing: SaveDoodlePassportCatalog.rowGap) {
             ForEach(slots) { slot in
                 slotButton(slot)
             }
         }
-        // Four columns on wider phones; naturally reflow to three on 375/390pt.
-        .frame(maxWidth: CGFloat(SaveDoodlePassportCatalog.columnCount)
-            * SaveDoodlePassportCatalog.slotSize
-            + CGFloat(SaveDoodlePassportCatalog.columnCount - 1)
-            * SaveDoodlePassportCatalog.minColumnGap)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: SaveDoodlePassportGridWidthKey.self,
+                    value: proxy.size.width
+                )
+            }
+        )
+        .onPreferenceChange(SaveDoodlePassportGridWidthKey.self) { gridWidth = $0 }
     }
 
     private func slotButton(_ slot: SaveDoodlePassportSlot) -> some View {
@@ -417,6 +428,13 @@ struct SaveDoodlePassportPage: View {
         case .empty:
             return languageSettings.localized(english: "Empty sticker", traditionalChinese: "空貼紙格")
         }
+    }
+}
+
+private struct SaveDoodlePassportGridWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
