@@ -889,8 +889,9 @@ people-first doodle: Caveat / Iansui “Friends” / 「朋友」 title, outline
 Invite, 48pt ink-ring avatars (initial or photo), author name, and
 “last at … · 2d” for the latest explicit post, with a 32pt outline sticker.
 The shared map stays hidden (HoP). Parity target is the Doodle Friends mock
-at exactly 0.90. An author opens a read-only passport under the same live
-follower audience gate.
+at exactly 0.90; the mock's Shared map strip is an `--ignore-rect` on that
+call (same mechanism Map uses). An author opens a read-only passport under
+the same live follower audience gate.
 Loading, retry, empty and withdrawn states are explicit; sample activity exists
 only in isolated UI fixtures. A follow or private memory update never publishes.
 

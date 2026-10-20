@@ -1,6 +1,7 @@
 #!/usr/bin/env swift
 
 import AppKit
+import CoreGraphics
 import Foundation
 
 private let width = 402
@@ -12,6 +13,7 @@ private struct Options {
     let actual: URL
     let diff: URL
     let threshold: Double
+    let ignoreRects: [CGRect]
 }
 
 private enum ParityError: Error, CustomStringConvertible {
@@ -24,7 +26,7 @@ private enum ParityError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            return "usage: VisualParity.swift --target target.png --actual actual.png --diff diff.png [--threshold 0.90]"
+            return "usage: VisualParity.swift --target target.png --actual actual.png --diff diff.png [--threshold 0.90] [--ignore-rect x,y,w,h]"
         case let .unreadableImage(url):
             return "could not read image: \(url.path)"
         case let .unexpectedDimensions(url, actualWidth, actualHeight, expectation):
@@ -39,9 +41,18 @@ private enum ParityError: Error, CustomStringConvertible {
 
 private func parseOptions() throws -> Options {
     var values: [String: String] = [:]
+    var ignoreRects: [CGRect] = []
     var index = 1
     while index + 1 < CommandLine.arguments.count {
-        values[CommandLine.arguments[index]] = CommandLine.arguments[index + 1]
+        let key = CommandLine.arguments[index]
+        let value = CommandLine.arguments[index + 1]
+        if key == "--ignore-rect" {
+            let parts = value.split(separator: ",").compactMap { Double($0) }
+            guard parts.count == 4 else { throw ParityError.usage }
+            ignoreRects.append(CGRect(x: parts[0], y: parts[1], width: parts[2], height: parts[3]))
+        } else {
+            values[key] = value
+        }
         index += 2
     }
 
@@ -57,8 +68,15 @@ private func parseOptions() throws -> Options {
         target: URL(fileURLWithPath: target),
         actual: URL(fileURLWithPath: actual),
         diff: URL(fileURLWithPath: diff),
-        threshold: Double(values["--threshold"] ?? "0.90") ?? 0.90
+        threshold: Double(values["--threshold"] ?? "0.90") ?? 0.90,
+        ignoreRects: ignoreRects
     )
+}
+
+private func isIgnored(x: Int, y: Int, rects: [CGRect]) -> Bool {
+    if y < ignoredTopRows { return true }
+    let point = CGPoint(x: x, y: y)
+    return rects.contains { $0.contains(point) }
 }
 
 private func strictRGBA(
@@ -161,6 +179,7 @@ private func hasEdge(
 private func writeDiff(
     target: [UInt8],
     actual: [UInt8],
+    ignoreRects: [CGRect],
     to url: URL
 ) throws {
     guard let bitmap = NSBitmapImageRep(
@@ -183,6 +202,15 @@ private func writeDiff(
     }
     for pixel in 0..<(width * height) {
         let offset = pixel * 4
+        let x = pixel % width
+        let y = pixel / width
+        if isIgnored(x: x, y: y, rects: ignoreRects) {
+            destination[offset] = 36
+            destination[offset + 1] = 36
+            destination[offset + 2] = 40
+            destination[offset + 3] = 255
+            continue
+        }
         let difference = (
             abs(Int(target[offset]) - Int(actual[offset]))
                 + abs(Int(target[offset + 1]) - Int(actual[offset + 1]))
@@ -203,13 +231,14 @@ private func writeDiff(
     }
 }
 
-private func score(target: [UInt8], actual: [UInt8]) -> (Double, Double, Double) {
+private func score(target: [UInt8], actual: [UInt8], ignoreRects: [CGRect]) -> (Double, Double, Double) {
     let edgeThreshold = 18.0
     var targetEdges = [Bool](repeating: false, count: width * height)
     var actualEdges = [Bool](repeating: false, count: width * height)
 
-    for y in ignoredTopRows..<height {
+    for y in 0..<height {
         for x in 0..<width {
+            if isIgnored(x: x, y: y, rects: ignoreRects) { continue }
             let index = y * width + x
             targetEdges[index] = gradient(target, x: x, y: y) >= edgeThreshold
             actualEdges[index] = gradient(actual, x: x, y: y) >= edgeThreshold
@@ -223,8 +252,9 @@ private func score(target: [UInt8], actual: [UInt8]) -> (Double, Double, Double)
     var totalDifference = 0.0
     var comparedPixelCount = 0
 
-    for y in ignoredTopRows..<height {
+    for y in 0..<height {
         for x in 0..<width {
+            if isIgnored(x: x, y: y, rects: ignoreRects) { continue }
             let pixel = y * width + x
             let offset = pixel * 4
 
@@ -255,7 +285,9 @@ private func score(target: [UInt8], actual: [UInt8]) -> (Double, Double, Double)
     let recall = targetEdgeCount == 0 ? 1 : Double(matchedTargetEdges) / Double(targetEdgeCount)
     let precision = actualEdgeCount == 0 ? 1 : Double(matchedActualEdges) / Double(actualEdgeCount)
     let edgeF1 = recall + precision == 0 ? 0 : 2 * recall * precision / (recall + precision)
-    let appearanceSimilarity = 1 - totalDifference / Double(comparedPixelCount)
+    let appearanceSimilarity = comparedPixelCount == 0
+        ? 0
+        : 1 - totalDifference / Double(comparedPixelCount)
     let composite = 0.35 * edgeF1 + 0.65 * appearanceSimilarity
     return (composite, edgeF1, appearanceSimilarity)
 }
@@ -264,8 +296,8 @@ do {
     let options = try parseOptions()
     let target = try strictRGBA(from: options.target, allowedPixelScales: 1...1)
     let actual = try strictRGBA(from: options.actual, allowedPixelScales: 1...4)
-    let result = score(target: target, actual: actual)
-    try writeDiff(target: target, actual: actual, to: options.diff)
+    let result = score(target: target, actual: actual, ignoreRects: options.ignoreRects)
+    try writeDiff(target: target, actual: actual, ignoreRects: options.ignoreRects, to: options.diff)
 
     let payload: [String: Any] = [
         "target": options.target.path,
@@ -275,7 +307,9 @@ do {
         "edgeF1": result.1,
         "appearanceSimilarity": result.2,
         "threshold": options.threshold,
-        "passed": result.0 >= options.threshold
+        "passed": result.0 >= options.threshold,
+        "ignoredTopRows": ignoredTopRows,
+        "ignoreRects": options.ignoreRects.map { ["x": $0.origin.x, "y": $0.origin.y, "width": $0.size.width, "height": $0.size.height] }
     ]
     let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
     print(String(decoding: data, as: UTF8.self))

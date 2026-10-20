@@ -3163,7 +3163,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// compares `five-tab-home` to `ProductionTargets/home.png` at 0.90 against
     /// the Doodle v1 Home mock. Do not retune that gate here.
     /// Friends compares `five-tab-friends` to `ProductionTargets/friends.png`
-    /// at exactly 0.90 (Doodle Friends mock; shared map hidden).
+    /// at exactly 0.90 (Doodle Friends mock, uniform-scale pad; shared map
+    /// strip is `--ignore-rect` because live UI hides it).
     @MainActor
     private func waitForHomeCoverImagery(_ app: XCUIApplication) {
         XCTAssertTrue(

@@ -113,6 +113,12 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertTrue(script.contains("five-tab-friends*)"))
         XCTAssertTrue(script.contains("screen=\"friends\""))
         XCTAssertTrue(script.contains("for screen in home saves plan map friends; do"))
+        XCTAssertTrue(script.contains("FRIENDS_IGNORE_RECT"))
+        XCTAssertTrue(script.contains("--ignore-rect"))
+        XCTAssertTrue(script.contains("0,565,402,48"))
+        let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/VisualParity.swift")
+        XCTAssertTrue(parity.contains("ignoreRects"))
+        XCTAssertTrue(parity.contains("[--ignore-rect x,y,w,h]"))
         XCTAssertTrue(FileManager.default.fileExists(
             atPath: repositoryRoot.appendingPathComponent(
                 "Prototypes/AtlasPostcard/Reference/ProductionTargets/friends.png"
@@ -126,7 +132,8 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertEqual(pngDimension(friendsPNG, at: 20), 874)
         let readme = try source(at: "Prototypes/AtlasPostcard/README.md")
         XCTAssertTrue(readme.contains("2026-10-19-doodle-v1-friends.png"))
-        XCTAssertTrue(readme.contains("cropped to the phone screen"))
+        XCTAssertTrue(readme.contains("uniform scale"))
+        XCTAssertTrue(readme.contains("--ignore-rect"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("attach(app, name: \"five-tab-friends\")"))
         XCTAssertTrue(rail.contains("ProductionTargets/friends.png"))
