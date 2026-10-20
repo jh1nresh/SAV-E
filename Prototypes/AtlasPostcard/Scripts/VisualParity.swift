@@ -1,19 +1,30 @@
 #!/usr/bin/env swift
 
 import AppKit
-import CoreGraphics
 import Foundation
 
 private let width = 402
 private let height = 874
 private let ignoredTopRows = 48
+private let maskIgnoreLuminance = 240.0
+private let inkLuminance = 200.0
 
 private struct Options {
     let target: URL
     let actual: URL
     let diff: URL
+    let mask: URL?
     let threshold: Double
-    let ignoreRects: [CGRect]
+}
+
+private struct Scores {
+    let composite: Double
+    let position: Double
+    let size: Double
+    let color: Double
+    let fontStyle: Double
+    let edgeF1: Double
+    let appearanceSimilarity: Double
 }
 
 private enum ParityError: Error, CustomStringConvertible {
@@ -26,7 +37,7 @@ private enum ParityError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            return "usage: VisualParity.swift --target target.png --actual actual.png --diff diff.png [--threshold 0.90] [--ignore-rect x,y,w,h]"
+            return "usage: VisualParity.swift --target target.png --actual actual.png --diff diff.png [--mask mask.png] [--threshold 0.90]"
         case let .unreadableImage(url):
             return "could not read image: \(url.path)"
         case let .unexpectedDimensions(url, actualWidth, actualHeight, expectation):
@@ -41,18 +52,9 @@ private enum ParityError: Error, CustomStringConvertible {
 
 private func parseOptions() throws -> Options {
     var values: [String: String] = [:]
-    var ignoreRects: [CGRect] = []
     var index = 1
     while index + 1 < CommandLine.arguments.count {
-        let key = CommandLine.arguments[index]
-        let value = CommandLine.arguments[index + 1]
-        if key == "--ignore-rect" {
-            let parts = value.split(separator: ",").compactMap { Double($0) }
-            guard parts.count == 4 else { throw ParityError.usage }
-            ignoreRects.append(CGRect(x: parts[0], y: parts[1], width: parts[2], height: parts[3]))
-        } else {
-            values[key] = value
-        }
+        values[CommandLine.arguments[index]] = CommandLine.arguments[index + 1]
         index += 2
     }
 
@@ -68,15 +70,9 @@ private func parseOptions() throws -> Options {
         target: URL(fileURLWithPath: target),
         actual: URL(fileURLWithPath: actual),
         diff: URL(fileURLWithPath: diff),
-        threshold: Double(values["--threshold"] ?? "0.90") ?? 0.90,
-        ignoreRects: ignoreRects
+        mask: values["--mask"].map(URL.init(fileURLWithPath:)),
+        threshold: Double(values["--threshold"] ?? "0.90") ?? 0.90
     )
-}
-
-private func isIgnored(x: Int, y: Int, rects: [CGRect]) -> Bool {
-    if y < ignoredTopRows { return true }
-    let point = CGPoint(x: x, y: y)
-    return rects.contains { $0.contains(point) }
 }
 
 private func strictRGBA(
@@ -160,6 +156,17 @@ private func gradient(_ pixels: [UInt8], x: Int, y: Int) -> Double {
     return hypot(horizontal, vertical)
 }
 
+private func isIgnored(_ mask: [UInt8]?, x: Int, y: Int) -> Bool {
+    if y < ignoredTopRows {
+        return true
+    }
+    guard let mask else {
+        return false
+    }
+    // White = ignore (Apple Maps surface). Black = graded chrome and pins.
+    return luminance(mask, x: x, y: y) >= maskIgnoreLuminance
+}
+
 private func hasEdge(
     _ edgeMap: [Bool],
     nearX x: Int,
@@ -176,10 +183,18 @@ private func hasEdge(
     return false
 }
 
+private func profileDistance(_ left: [Double], _ right: [Double]) -> Double {
+    var total = 0.0
+    for index in 0..<left.count {
+        total += abs(left[index] - right[index])
+    }
+    return min(1, total / 2)
+}
+
 private func writeDiff(
     target: [UInt8],
     actual: [UInt8],
-    ignoreRects: [CGRect],
+    mask: [UInt8]?,
     to url: URL
 ) throws {
     guard let bitmap = NSBitmapImageRep(
@@ -200,27 +215,28 @@ private func writeDiff(
     guard let destination = bitmap.bitmapData else {
         throw ParityError.cannotCreateBitmap
     }
-    for pixel in 0..<(width * height) {
-        let offset = pixel * 4
-        let x = pixel % width
-        let y = pixel / width
-        if isIgnored(x: x, y: y, rects: ignoreRects) {
-            destination[offset] = 36
-            destination[offset + 1] = 36
-            destination[offset + 2] = 40
-            destination[offset + 3] = 255
-            continue
-        }
-        let difference = (
-            abs(Int(target[offset]) - Int(actual[offset]))
-                + abs(Int(target[offset + 1]) - Int(actual[offset + 1]))
-                + abs(Int(target[offset + 2]) - Int(actual[offset + 2]))
-        ) / 3
+    for y in 0..<height {
+        for x in 0..<width {
+            let pixel = y * width + x
+            let offset = pixel * 4
+            if isIgnored(mask, x: x, y: y) {
+                destination[offset] = 210
+                destination[offset + 1] = 210
+                destination[offset + 2] = 210
+                destination[offset + 3] = 255
+                continue
+            }
+            let difference = (
+                abs(Int(target[offset]) - Int(actual[offset]))
+                    + abs(Int(target[offset + 1]) - Int(actual[offset + 1]))
+                    + abs(Int(target[offset + 2]) - Int(actual[offset + 2]))
+            ) / 3
 
-        destination[offset] = UInt8(clamping: difference * 3)
-        destination[offset + 1] = UInt8(clamping: 30 + difference / 3)
-        destination[offset + 2] = UInt8(clamping: 255 - min(220, difference * 2))
-        destination[offset + 3] = 255
+            destination[offset] = UInt8(clamping: difference * 3)
+            destination[offset + 1] = UInt8(clamping: 30 + difference / 3)
+            destination[offset + 2] = UInt8(clamping: 255 - min(220, difference * 2))
+            destination[offset + 3] = 255
+        }
     }
 
     guard
@@ -231,14 +247,22 @@ private func writeDiff(
     }
 }
 
-private func score(target: [UInt8], actual: [UInt8], ignoreRects: [CGRect]) -> (Double, Double, Double) {
+private func score(target: [UInt8], actual: [UInt8], mask: [UInt8]?) -> Scores {
     let edgeThreshold = 18.0
     var targetEdges = [Bool](repeating: false, count: width * height)
     var actualEdges = [Bool](repeating: false, count: width * height)
+    var targetRows = [Double](repeating: 0, count: height)
+    var actualRows = [Double](repeating: 0, count: height)
+    var targetCols = [Double](repeating: 0, count: width)
+    var actualCols = [Double](repeating: 0, count: width)
+    var targetBins = [Double](repeating: 0, count: 8)
+    var actualBins = [Double](repeating: 0, count: 8)
 
     for y in 0..<height {
         for x in 0..<width {
-            if isIgnored(x: x, y: y, rects: ignoreRects) { continue }
+            if isIgnored(mask, x: x, y: y) {
+                continue
+            }
             let index = y * width + x
             targetEdges[index] = gradient(target, x: x, y: y) >= edgeThreshold
             actualEdges[index] = gradient(actual, x: x, y: y) >= edgeThreshold
@@ -251,10 +275,14 @@ private func score(target: [UInt8], actual: [UInt8], ignoreRects: [CGRect]) -> (
     var matchedActualEdges = 0
     var totalDifference = 0.0
     var comparedPixelCount = 0
+    var targetInk = 0.0
+    var actualInk = 0.0
 
     for y in 0..<height {
         for x in 0..<width {
-            if isIgnored(x: x, y: y, rects: ignoreRects) { continue }
+            if isIgnored(mask, x: x, y: y) {
+                continue
+            }
             let pixel = y * width + x
             let offset = pixel * 4
 
@@ -279,41 +307,90 @@ private func score(target: [UInt8], actual: [UInt8], ignoreRects: [CGRect]) -> (
 
             totalDifference += difference
             comparedPixelCount += 1
+
+            let targetInkPixel = luminance(target, x: x, y: y) < inkLuminance
+            let actualInkPixel = luminance(actual, x: x, y: y) < inkLuminance
+            if targetInkPixel {
+                targetRows[y] += 1
+                targetCols[x] += 1
+                targetInk += 1
+                let bin = min(7, Int(gradient(target, x: x, y: y) / 32))
+                targetBins[bin] += 1
+            }
+            if actualInkPixel {
+                actualRows[y] += 1
+                actualCols[x] += 1
+                actualInk += 1
+                let bin = min(7, Int(gradient(actual, x: x, y: y) / 32))
+                actualBins[bin] += 1
+            }
         }
+    }
+
+    if targetInk > 0 {
+        for index in 0..<height { targetRows[index] /= targetInk }
+        for index in 0..<width { targetCols[index] /= targetInk }
+        for index in 0..<8 { targetBins[index] /= targetInk }
+    }
+    if actualInk > 0 {
+        for index in 0..<height { actualRows[index] /= actualInk }
+        for index in 0..<width { actualCols[index] /= actualInk }
+        for index in 0..<8 { actualBins[index] /= actualInk }
     }
 
     let recall = targetEdgeCount == 0 ? 1 : Double(matchedTargetEdges) / Double(targetEdgeCount)
     let precision = actualEdgeCount == 0 ? 1 : Double(matchedActualEdges) / Double(actualEdgeCount)
     let edgeF1 = recall + precision == 0 ? 0 : 2 * recall * precision / (recall + precision)
     let appearanceSimilarity = comparedPixelCount == 0
-        ? 0
+        ? 1
         : 1 - totalDifference / Double(comparedPixelCount)
-    let composite = 0.35 * edgeF1 + 0.65 * appearanceSimilarity
-    return (composite, edgeF1, appearanceSimilarity)
+    let position = edgeF1
+    let size = 1 - (
+        profileDistance(targetRows, actualRows) + profileDistance(targetCols, actualCols)
+    ) / 2
+    let color = appearanceSimilarity
+    let fontStyle = 1 - profileDistance(targetBins, actualBins)
+    let gradedComposite = (position + size + color + fontStyle) / 4
+    let legacyComposite = 0.35 * edgeF1 + 0.65 * appearanceSimilarity
+    let composite = mask == nil ? legacyComposite : gradedComposite
+
+    return Scores(
+        composite: composite,
+        position: position,
+        size: size,
+        color: color,
+        fontStyle: fontStyle,
+        edgeF1: edgeF1,
+        appearanceSimilarity: appearanceSimilarity
+    )
 }
 
 do {
     let options = try parseOptions()
     let target = try strictRGBA(from: options.target, allowedPixelScales: 1...1)
     let actual = try strictRGBA(from: options.actual, allowedPixelScales: 1...4)
-    let result = score(target: target, actual: actual, ignoreRects: options.ignoreRects)
-    try writeDiff(target: target, actual: actual, ignoreRects: options.ignoreRects, to: options.diff)
+    let mask = try options.mask.map { try strictRGBA(from: $0, allowedPixelScales: 1...1) }
+    let result = score(target: target, actual: actual, mask: mask)
+    try writeDiff(target: target, actual: actual, mask: mask, to: options.diff)
 
     let payload: [String: Any] = [
         "target": options.target.path,
         "actual": options.actual.path,
         "diff": options.diff.path,
-        "composite": result.0,
-        "edgeF1": result.1,
-        "appearanceSimilarity": result.2,
+        "mask": options.mask?.path ?? "",
+        "composite": result.composite,
+        "position": result.position,
+        "size": result.size,
+        "color": result.color,
+        "fontStyle": result.fontStyle,
+        "edgeF1": result.edgeF1,
+        "appearanceSimilarity": result.appearanceSimilarity,
         "threshold": options.threshold,
-        "passed": result.0 >= options.threshold,
-        "ignoredTopRows": ignoredTopRows,
-        "ignoreRects": options.ignoreRects.map { ["x": $0.origin.x, "y": $0.origin.y, "width": $0.size.width, "height": $0.size.height] }
+        "passed": result.composite >= options.threshold
     ]
     let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
     print(String(decoding: data, as: UTF8.self))
-    exit(result.0 >= options.threshold ? 0 : 1)
+    exit(result.composite >= options.threshold ? 0 : 1)
 } catch {
     fputs("\(error)\n", stderr)
     exit(2)

@@ -137,8 +137,8 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertFalse(script.contains("FRIENDS_IGNORE_RECT"))
         XCTAssertFalse(script.contains("0,565,402,48"))
         let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/VisualParity.swift")
-        XCTAssertTrue(parity.contains("ignoreRects"))
-        XCTAssertTrue(parity.contains("[--ignore-rect x,y,w,h]"))
+        XCTAssertTrue(parity.contains("[--mask mask.png]"))
+        XCTAssertFalse(parity.contains("[--ignore-rect x,y,w,h]"))
         let friendsPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets/friends.png"
         ))
