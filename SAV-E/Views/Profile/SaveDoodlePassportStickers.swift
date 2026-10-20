@@ -82,20 +82,22 @@ struct SaveDoodlePassportSlotView: View {
 }
 
 extension SaveDoodleStickerKind {
-    /// Sample set is six official stickers. Extra catalog kinds map to the
-    /// nearest official mark until DESIGN ships the full place set.
+    /// Place marks only. Extra catalog kinds map to the nearest official
+    /// place sticker. Never returns `.elephant` — that mark is brand-only.
     var officialSticker: SaveDoodleOfficialSticker {
+        let mapped: SaveDoodleOfficialSticker
         switch self {
         case .duck, .baozi, .dessert:
-            return .duck
+            mapped = .duck
         case .noodles, .hotpot:
-            return .noodle
+            mapped = .noodle
         case .coffee, .tea:
-            return .coffee
+            mapped = .coffee
         case .temple, .tree, .hill, .museum, .beach, .bridge, .camera, .bicycle, .ferris, .pin:
-            return .temple
+            mapped = .temple
         case .lantern, .wine, .beer, .bag, .bookstore:
-            return .lantern
+            mapped = .lantern
         }
+        return SaveDoodleOfficialSticker.placeCases.contains(mapped) ? mapped : .temple
     }
 }

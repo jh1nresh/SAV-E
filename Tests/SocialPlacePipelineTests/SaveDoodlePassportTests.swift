@@ -43,6 +43,13 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertEqual(SaveDoodlePassportCatalog.stickerKind(for: cafe), .coffee)
         XCTAssertEqual(SaveDoodleStickerKind.duck.officialSticker, .duck)
         XCTAssertEqual(SaveDoodleStickerKind.noodles.officialSticker, .noodle)
+        for kind in SaveDoodleStickerKind.allCases {
+            XCTAssertNotEqual(kind.officialSticker, .elephant)
+        }
+        XCTAssertNotEqual(
+            SaveDoodleOfficialSticker.named(for: .attraction, placeName: "Elephant Park"),
+            .elephant
+        )
         XCTAssertEqual(SaveDoodlePassportCatalog.columnCount(availableGridWidth: 279), 3)
         XCTAssertEqual(SaveDoodlePassportCatalog.columnCount(availableGridWidth: 294), 3)
         XCTAssertEqual(SaveDoodlePassportCatalog.columnCount(availableGridWidth: 306), 4)
@@ -128,6 +135,9 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertFalse(stickers.contains("SaveDoodlePassportStickerArt"))
         XCTAssertFalse(stickers.contains(".fill("))
         XCTAssertTrue(page.contains("columnCount(availableGridWidth:"))
+        XCTAssertTrue(page.contains("SaveDoodleElephant"))
+        XCTAssertTrue(page.contains("passport.empty"))
+        XCTAssertTrue(page.contains("showsEmptyPassport"))
         XCTAssertTrue(page.contains(".frame(width: 8, height: 8)"))
     }
 
@@ -170,6 +180,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(design.contains("passport-dark.png"))
         XCTAssertTrue(design.contains("Passport (Doodle v1)"))
         XCTAssertTrue(design.contains("Do not wrap a shrunken icon in a filled circle"))
+        XCTAssertTrue(design.contains("empty Passport state"))
         XCTAssertTrue(design.contains("floor((availableGridWidth + 16) / 80)"))
         XCTAssertFalse(design.contains("23cca55"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")

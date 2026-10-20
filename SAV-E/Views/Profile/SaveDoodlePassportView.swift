@@ -122,8 +122,12 @@ struct SaveDoodlePassportPage: View {
 
     private var kraftPanel: some View {
         VStack(alignment: .leading, spacing: SaveSpace.md) {
-            stickerGrid
-            legend
+            if showsEmptyPassport {
+                emptyPassport
+            } else {
+                stickerGrid
+                legend
+            }
         }
         .padding(SaveDoodlePassportCatalog.panelPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -133,6 +137,28 @@ struct SaveDoodlePassportPage: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.stampGrid")
+    }
+
+    private var showsEmptyPassport: Bool {
+        !SaveDoodlePassportCatalog.usesDoodleFace && cityPlaces.isEmpty
+    }
+
+    private var emptyPassport: some View {
+        VStack(spacing: SaveSpace.md) {
+            SaveDoodleElephant(size: SaveLayout.passportSlot)
+            Text(languageSettings.localized(
+                english: "No stickers yet",
+                traditionalChinese: "還沒有貼紙"
+            ))
+            .font(SaveAtlasType.strong(17))
+            .foregroundStyle(SaveAtlasPalette.ink)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 160)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("passport.empty")
     }
 
     private var stickerGrid: some View {
