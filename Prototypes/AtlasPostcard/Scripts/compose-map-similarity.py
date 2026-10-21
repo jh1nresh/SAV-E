@@ -51,7 +51,8 @@ def main() -> None:
     overlay = Image.new("RGBA", actual.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     x, y, w, h = args.mask
-    if args.mask_image and args.mask_image.exists():
+    used_mask_image = bool(args.mask_image and args.mask_image.exists())
+    if used_mask_image:
         mask = fit(load(args.mask_image), (402, 874)).convert("L")
         shade = Image.new("RGBA", actual.size, (20, 20, 24, 90))
         overlay.paste(shade, (0, 0), mask.point(lambda v: 255 if v >= 240 else 0))
@@ -100,11 +101,18 @@ def main() -> None:
         "composite": payload.get("composite"),
         "edgeF1": payload.get("edgeF1"),
         "appearanceSimilarity": payload.get("appearanceSimilarity"),
-        "mask": {"x": x, "y": y, "width": w, "height": h},
+        "mask": (
+            {"image": str(args.mask_image), "coverage": "mask-image"}
+            if used_mask_image
+            else {"x": x, "y": y, "width": w, "height": h}
+        ),
         "maskReason": (
-            "Founder lock: default Apple MapKit surface is excluded. "
-            "Ignore 0,48,402,642 covers live MapKit at y 48..<690 "
-            "(header overlay + gap above the sheet) in both capture and mock."
+            f"Mask image {args.mask_image.name} excludes the live MapKit pixels."
+            if used_mask_image
+            else (
+                "Founder lock: default Apple MapKit surface is excluded. "
+                f"Fallback rectangle {x},{y},{w},{h}."
+            )
         ),
         "sideBySide": str(args.output),
         "passed": payload.get("passed"),

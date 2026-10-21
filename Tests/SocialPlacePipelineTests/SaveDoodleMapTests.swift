@@ -70,6 +70,11 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("session.lens"))
         XCTAssertTrue(map.contains("session.city"))
         XCTAssertTrue(map.contains("showsCityPicker = true"))
+        XCTAssertTrue(map.contains("session.mapFollowsHomeFilter = true"))
+        XCTAssertTrue(map.contains("onMapCameraChange(frequency: .onEnd)"))
+        XCTAssertTrue(map.contains("updateVisibleMapRegion(context.region)"))
+        XCTAssertTrue(map.contains("let reselecting = session.lens == item"))
+        XCTAssertTrue(map.contains("disabled(checkIns.isPersisting(placeID: place.id))"))
         XCTAssertTrue(map.contains("map.city.\\(group.id)"))
         XCTAssertTrue(map.contains("[.isButton, .isSelected] : .isButton"))
         XCTAssertTrue(map.contains("consumeMiniMapHandoff()"))
@@ -187,6 +192,45 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(store.hasCheckedInToday(placeID: placeID))
     }
 
+    @MainActor
+    func testEachDaysCheckInRefreshesUndoBaseline() async {
+        var now = Date(timeIntervalSince1970: 1_700_000_000)
+        let store = SaveDoodleCheckInStore(
+            defaults: UserDefaults(suiteName: "save.doodle.checkin.baseline.\(UUID().uuidString)")!,
+            calendar: Calendar(identifier: .gregorian),
+            now: { now }
+        )
+        let placeID = UUID()
+        XCTAssertTrue(await store.applyCheckIn(placeID: placeID, priorStatus: .wantToGo) {})
+        now = now.addingTimeInterval(86_400)
+        XCTAssertTrue(await store.applyCheckIn(placeID: placeID, priorStatus: .visited) {})
+        var restored: PlaceStatus?
+        XCTAssertTrue(await store.applyUndo(placeID: placeID) { restored = $0 })
+        XCTAssertEqual(restored, .visited)
+    }
+
+    @MainActor
+    func testCheckInAndUndoDoNotOverlapPersist() async {
+        let store = SaveDoodleCheckInStore(
+            defaults: UserDefaults(suiteName: "save.doodle.checkin.serialize.\(UUID().uuidString)")!,
+            calendar: Calendar(identifier: .gregorian),
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+        let placeID = UUID()
+        var release: CheckedContinuation<Void, Never>?
+        let persist = Task {
+            await store.applyCheckIn(placeID: placeID) {
+                await withCheckedContinuation { release = $0 }
+            }
+        }
+        while release == nil { await Task.yield() }
+        XCTAssertTrue(store.isPersisting(placeID: placeID))
+        XCTAssertFalse(await store.applyUndo(placeID: placeID) { _ in })
+        release?.resume()
+        XCTAssertTrue(await persist.value)
+        XCTAssertFalse(store.isPersisting(placeID: placeID))
+    }
+
     func testMapWritesAreVisibleToSharedPassportHistory() {
         let suite = "save.doodle.cross-surface.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -212,6 +256,10 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(script.contains("map-doodle-similarity"))
         XCTAssertTrue(script.contains("--ignore-mask"))
         XCTAssertTrue(script.contains("map-mask.png"))
+        let compose = try source(at: "Prototypes/AtlasPostcard/Scripts/compose-map-similarity.py")
+        XCTAssertTrue(compose.contains("used_mask_image"))
+        XCTAssertTrue(compose.contains("\"coverage\": \"mask-image\""))
+        XCTAssertTrue(compose.contains("x, y, w, h = args.mask"))
         XCTAssertTrue(script.contains("status=\"REVIEW\""))
         XCTAssertTrue(script.contains("The 0.90 score is not a CI gate."))
         XCTAssertTrue(script.contains("${#extra_args[@]} -gt 0"))

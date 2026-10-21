@@ -116,6 +116,12 @@ struct SaveDoodleMapView: View {
             }
             fitVisiblePlaces()
         }
+        .onChange(of: session.mapFollowsHomeFilter) { _, follows in
+            if follows {
+                onClearSelection()
+            }
+            fitVisiblePlaces()
+        }
         .onChange(of: mapViewModel.selectedMapFeature) { _, feature in
             mapViewModel.selectMapFeature(feature)
         }
@@ -191,6 +197,9 @@ struct SaveDoodleMapView: View {
         .mapControls {
             MapCompass()
         }
+        .onMapCameraChange(frequency: .onEnd) { context in
+            mapViewModel.updateVisibleMapRegion(context.region)
+        }
         .accessibilityIdentifier("map.liveSurface")
     }
 
@@ -243,8 +252,13 @@ struct SaveDoodleMapView: View {
                 let selected = session.lens == item
                 Button {
                     SaveHaptics.select()
+                    let reselecting = session.lens == item
                     session.lens = item
                     session.mapFollowsHomeFilter = true
+                    if reselecting {
+                        onClearSelection()
+                        fitVisiblePlaces()
+                    }
                 } label: {
                     Text(item.title(language: languageSettings.language))
                         .font(SaveAtlasType.strong(15))
@@ -378,6 +392,7 @@ struct SaveDoodleMapView: View {
                             }
                     }
                     .buttonStyle(.plain)
+                    .disabled(checkIns.isPersisting(placeID: place.id))
                     .accessibilityIdentifier("map.checkIn.undo")
                 } else {
                     Button {
@@ -403,6 +418,7 @@ struct SaveDoodleMapView: View {
                             }
                     }
                     .buttonStyle(.plain)
+                    .disabled(checkIns.isPersisting(placeID: place.id))
                     .accessibilityIdentifier("map.checkIn")
                 }
             }
@@ -450,6 +466,7 @@ struct SaveDoodleMapView: View {
                 if !locationService.isAuthorizationDenied {
                     Button {
                         session.city = .nearYou
+                        session.mapFollowsHomeFilter = true
                         showsCityPicker = false
                     } label: {
                         HStack {
@@ -469,6 +486,7 @@ struct SaveDoodleMapView: View {
                 ForEach(cityGroups) { group in
                     Button {
                         session.city = .city(group.id)
+                        session.mapFollowsHomeFilter = true
                         showsCityPicker = false
                     } label: {
                         HStack {

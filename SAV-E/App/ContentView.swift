@@ -1467,6 +1467,12 @@ struct ContentView: View {
             if let resolved = await mapVM.chooseSavedStampFromExactSearch(place) {
                 exactSearchClueID = nil
                 isExactSearchSessionActive = false
+                drawerLaunchRequest = DrawerLaunchRequest(
+                    target: drawerLaunchRequest.target,
+                    initialQuery: drawerLaunchRequest.initialQuery,
+                    focusesSearch: drawerLaunchRequest.focusesSearch,
+                    preservesExactSearchClue: false
+                )
                 openMapDetail(.savedPlace(resolved))
             }
         }
