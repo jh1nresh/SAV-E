@@ -1515,9 +1515,7 @@ struct ShareExtensionView: View {
     /// Local parse and source-only writes must keep the signed-in owner even
     /// when the social-analysis credential was never loaded.
     private var shareOwnerSubject: String? {
-        shareSessionOwner
-            ?? analysisCredential?.ownerSubject
-            ?? ShareAnalysisKeychain.read()?.ownerSubject
+        shareSessionOwner ?? analysisCredential?.ownerSubject ?? ShareAnalysisKeychain.read()?.ownerSubject
     }
 
     private func bindShareSessionOwnerIfNeeded() {
