@@ -415,27 +415,11 @@ jobs:
           SAVE_SCREENSHOT_DIR: ${{ runner.temp }}/SAVE-First-Run
         run: |
           mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
-          device_type="$(python3 - <<'PY'
-import json, subprocess, sys
-types = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "-j", "devicetypes"]))["devicetypes"]
-preferred = (
-    "com.apple.CoreSimulator.SimDeviceType.iPhone-SE-3rd-generation",
-    "com.apple.CoreSimulator.SimDeviceType.iPhone-SE",
-)
-idents = {item.get("identifier") for item in types}
-for candidate in preferred:
-    if candidate in idents:
-        print(candidate)
-        raise SystemExit(0)
-for item in types:
-    ident = item.get("identifier") or ""
-    name = item.get("name") or ""
-    if "iPhone-SE" in ident or name.startswith("iPhone SE"):
-        print(ident)
-        raise SystemExit(0)
-raise SystemExit("iPhone SE simulator device type is missing")
-PY
-)"
+          device_type="$(xcrun simctl list -j devicetypes | python3 -c "import json,sys; types=json.load(sys.stdin)['devicetypes']; prefs=['com.apple.CoreSimulator.SimDeviceType.iPhone-SE-3rd-generation','com.apple.CoreSimulator.SimDeviceType.iPhone-SE']; idents={item.get('identifier') for item in types}; print(next((pref for pref in prefs if pref in idents), next((item.get('identifier') for item in types if 'iPhone-SE' in (item.get('identifier') or '') or (item.get('name') or '').startswith('iPhone SE')), '')))")"
+          if [[ -z "$device_type" ]]; then
+            echo 'iPhone SE simulator device type is missing' >&2
+            exit 1
+          fi
           se_udid="$(xcrun simctl create \
             'SAV-E CI SE' \
             "$device_type" \
