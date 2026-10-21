@@ -17,12 +17,12 @@ final class SharedPostsStore: ObservableObject {
     var isOverFreeLimit: () -> Bool = {
         SavePlaceLimitHandoff.cachedDecision() == .overFreeLimit
     }
-    var parkOverLimitPlace: (Place) -> PlaceReviewCandidate = { place in
+    var parkOverLimitPlace: (Place) throws -> PlaceReviewCandidate = { place in
         let candidate = PlaceReviewCandidate.unplacedInboxItem(
             from: place,
             ownerSubject: PrivyAuthService.shared.currentUserId
         )
-        _ = try? SaveLocalVaultService.shared.saveReviewCandidate(candidate)
+        _ = try SaveLocalVaultService.shared.saveReviewCandidate(candidate)
         SavePlaceLimitHandoff.markPaywallPending(notify: false)
         return candidate
     }
@@ -146,7 +146,7 @@ final class SharedPostsStore: ObservableObject {
     func save(_ post: SharedPlacePost) async throws -> SharedPostSaveOutcome {
         guard !isDemo else { throw SupabaseError.notAuthenticated }
         if isOverFreeLimit() {
-            _ = parkOverLimitPlace(post.asUnplacedPlace())
+            _ = try parkOverLimitPlace(post.asUnplacedPlace())
             return .parkedAtFreeLimit
         }
         let account = PrivyAuthService.shared.currentUserId
@@ -159,7 +159,7 @@ final class SharedPostsStore: ObservableObject {
                 throw CancellationError()
             }
             if error is SavePlaceLimitError {
-                _ = parkOverLimitPlace(post.asUnplacedPlace())
+                _ = try parkOverLimitPlace(post.asUnplacedPlace())
                 return .parkedAtFreeLimit
             }
             throw error

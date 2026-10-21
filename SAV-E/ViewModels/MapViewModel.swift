@@ -880,12 +880,12 @@ final class MapViewModel: ObservableObject {
     }
 
     @discardableResult
-    func parkPlaceInUnplacedInbox(_ place: Place, requestPaywall: Bool = true) -> PlaceReviewCandidate {
+    func parkPlaceInUnplacedInbox(_ place: Place, requestPaywall: Bool = true) throws -> PlaceReviewCandidate {
         let candidate = PlaceReviewCandidate.unplacedInboxItem(
             from: place,
             ownerSubject: authService.currentUserId
         )
-        mirrorToLocalVault(candidate)
+        try persistParkedReviewCandidate(candidate)
         reviewCandidates = [candidate] + reviewCandidates.filter { $0.id != candidate.id }
         if requestPaywall {
             requestSavedPlaceLimitPaywall()
@@ -910,8 +910,16 @@ final class MapViewModel: ObservableObject {
         } else if authService.currentUserId != nil || authService.sessionGeneration != generation {
             throw ReviewCandidateError.sessionChangedAfterCommit
         }
-        parkPlaceInUnplacedInbox(place)
+        try parkPlaceInUnplacedInbox(place)
         return true
+    }
+
+    private func persistParkedReviewCandidate(_ candidate: PlaceReviewCandidate) throws {
+        var stamped = candidate
+        if stamped.ownerSubject == nil {
+            stamped.ownerSubject = authService.currentUserId
+        }
+        _ = try saveLocalVaultService.saveReviewCandidate(stamped)
     }
 
     // MARK: - Actions
@@ -1049,7 +1057,11 @@ final class MapViewModel: ObservableObject {
                 tier: currentSavedPlaceTier,
                 savedPlaceCount: projectedCount
             ) == .overFreeLimit {
-                parkPlaceInUnplacedInbox(place)
+                do {
+                    try parkPlaceInUnplacedInbox(place)
+                } catch {
+                    keepQueued.append(pendingPlace)
+                }
                 continue
             }
             importedPlaces.append(place)
@@ -1160,7 +1172,7 @@ final class MapViewModel: ObservableObject {
                 if remote != nil {
                     try await supabaseService.updatePlace(merged, previous: existing)
                 } else if isOverFreeSavedPlaceLimit {
-                    parkPlaceInUnplacedInbox(merged)
+                    try parkPlaceInUnplacedInbox(merged)
                     continue
                 } else {
                     try await supabaseService.savePlace(merged, userId: userId)
@@ -1976,7 +1988,7 @@ final class MapViewModel: ObservableObject {
 
             if isOverFreeSavedPlaceLimit {
                 if exactResolution == nil {
-                    parkPlaceInUnplacedInbox(place)
+                    try parkPlaceInUnplacedInbox(place)
                 } else {
                     requestSavedPlaceLimitPaywall()
                 }
@@ -2352,7 +2364,7 @@ final class MapViewModel: ObservableObject {
             }
             let receiptGeneration = authService.sessionGeneration
             if isOverFreeSavedPlaceLimit {
-                parkPlaceInUnplacedInbox(place)
+                try parkPlaceInUnplacedInbox(place)
                 throw SavePlaceLimitError.parkedInUnplacedInbox
             }
             let result: FriendSharedPlaceSaveResult
@@ -2387,7 +2399,7 @@ final class MapViewModel: ObservableObject {
         }
 
         if isOverFreeSavedPlaceLimit {
-            parkPlaceInUnplacedInbox(place)
+            try parkPlaceInUnplacedInbox(place)
             throw SavePlaceLimitError.parkedInUnplacedInbox
         }
 
@@ -2423,8 +2435,14 @@ final class MapViewModel: ObservableObject {
         if let index = places.firstIndex(where: { $0.id == place.id }) {
             places[index] = place
         } else if isOverFreeSavedPlaceLimit {
-            parkPlaceInUnplacedInbox(place)
-            return
+            do {
+                try parkPlaceInUnplacedInbox(place)
+                return
+            } catch {
+                places.append(place)
+                recordPassportFieldActionAfterSavingPlace()
+                syncSavedPlaceLimitCache()
+            }
         } else {
             places.append(place)
             recordPassportFieldActionAfterSavingPlace()
@@ -2443,7 +2461,7 @@ final class MapViewModel: ObservableObject {
         }
 
         if isOverFreeSavedPlaceLimit {
-            parkPlaceInUnplacedInbox(socialPlace)
+            try parkPlaceInUnplacedInbox(socialPlace)
             socialPlaces.removeAll { $0.id == socialPlace.id }
             selectedSocialPlace = nil
             throw SavePlaceLimitError.parkedInUnplacedInbox
@@ -2737,7 +2755,7 @@ final class MapViewModel: ObservableObject {
         }
 
         if isOverFreeSavedPlaceLimit {
-            parkPlaceInUnplacedInbox(place)
+            try parkPlaceInUnplacedInbox(place)
             throw SavePlaceLimitError.parkedInUnplacedInbox
         }
 
@@ -4185,7 +4203,7 @@ final class MapViewModel: ObservableObject {
             existingKeys: existingKeys,
             persist: { place in
                 if isCapped, isOverFreeSavedPlaceLimit {
-                    parkPlaceInUnplacedInbox(place)
+                    try parkPlaceInUnplacedInbox(place)
                     parked += 1
                     return
                 }

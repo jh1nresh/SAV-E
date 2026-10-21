@@ -599,11 +599,11 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
-    func testAcknowledgingPaywallKeepsTheParkedCandidate() {
+    func testAcknowledgingPaywallKeepsTheParkedCandidate() throws {
         let map = makeCappedMap(tier: .free)
         map.places = makeCappedPlaces(50)
         let place = makeSocialPlace(name: "Stay In Review")
-        _ = map.parkPlaceInUnplacedInbox(place)
+        _ = try map.parkPlaceInUnplacedInbox(place)
         XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
         map.acknowledgeSavedPlaceLimitPaywall()
         XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
@@ -710,7 +710,7 @@ final class SAVEProductionConfigTests: XCTestCase {
             usesRemotePersistence: true
         )
         map.places = makeCappedPlaces(49)
-        _ = map.parkPlaceInUnplacedInbox(makeSocialPlace(name: "Local Park Cafe"))
+        _ = try map.parkPlaceInUnplacedInbox(makeSocialPlace(name: "Local Park Cafe"))
         let parked = try XCTUnwrap(map.reviewCandidates.first)
 
         let saved = try await map.saveReviewCandidateAsPlace(parked)
@@ -845,7 +845,7 @@ final class SAVEProductionConfigTests: XCTestCase {
             usesRemotePersistence: false
         )
         map.places = makeCappedPlaces(50)
-        _ = map.parkPlaceInUnplacedInbox(makeSocialPlace(name: "Upgrade Later Cafe"))
+        _ = try map.parkPlaceInUnplacedInbox(makeSocialPlace(name: "Upgrade Later Cafe"))
         map.acknowledgeSavedPlaceLimitPaywall()
         let parked = try XCTUnwrap(map.reviewCandidates.first)
         XCTAssertEqual(parked.name, "Upgrade Later Cafe")
@@ -863,7 +863,7 @@ final class SAVEProductionConfigTests: XCTestCase {
     func testDismissedPaywallKeepsUnplacedUntilASlotFrees() async throws {
         let map = makeCappedMap(tier: .free)
         map.places = makeCappedPlaces(50)
-        _ = map.parkPlaceInUnplacedInbox(makeSocialPlace(name: "Waiting After Dismiss"))
+        _ = try map.parkPlaceInUnplacedInbox(makeSocialPlace(name: "Waiting After Dismiss"))
         map.acknowledgeSavedPlaceLimitPaywall()
         XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
         let parked = try XCTUnwrap(map.reviewCandidates.first)
@@ -1130,6 +1130,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(share.contains("analysisCredential?.ownerSubject ?? ShareAnalysisKeychain.read()?.ownerSubject"))
         XCTAssertTrue(map.contains("belongingTo: authService.currentUserId"))
         XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: userId)"))
+        XCTAssertTrue(map.contains("try persistParkedReviewCandidate(candidate)"))
         XCTAssertTrue(map.contains("startedBy userId: String?"))
         XCTAssertTrue(
             map.contains("throw ReviewCandidateError.sessionChangedAfterCommit"),
@@ -1221,14 +1222,35 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
-    func testParkingFromASheetDoesNotPresentUnderTheSheet() {
+    func testParkingFromASheetDoesNotPresentUnderTheSheet() throws {
         let map = makeCappedMap(tier: .free)
         map.places = makeCappedPlaces(50)
         let place = makeSocialPlace(name: "Sheet Cafe")
-        _ = map.parkPlaceInUnplacedInbox(place, requestPaywall: false)
+        _ = try map.parkPlaceInUnplacedInbox(place, requestPaywall: false)
         XCTAssertEqual(map.reviewCandidates.first?.name, "Sheet Cafe")
         XCTAssertEqual(map.reviewCandidates.first?.status, "review")
         XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    @MainActor
+    func testParkDoesNotReportSuccessWhenVaultWriteFails() throws {
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.place-limit-vault-fail.\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-vault-fail-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        vault.saveReviewCandidateError = SaveLocalVaultError.storageUnavailable
+        let map = MapViewModel(
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: false
+        )
+        map.places = makeCappedPlaces(50)
+        let place = makeSocialPlace(name: "Lost If Parked")
+        XCTAssertThrowsError(try map.parkPlaceInUnplacedInbox(place))
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+        XCTAssertTrue(try vault.reviewCandidates().isEmpty)
     }
 
     @MainActor
@@ -1259,7 +1281,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         map.places = makeCappedPlaces(50)
         let place = makeSocialPlace(name: "Parked After Refresh")
-        _ = map.parkPlaceInUnplacedInbox(place)
+        _ = try map.parkPlaceInUnplacedInbox(place)
         XCTAssertEqual(map.reviewCandidates.first?.id, place.id)
 
         try await map.refreshReviewCandidates()
@@ -1360,7 +1382,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
         let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
         let place = makeSocialPlace(name: "Owner A Secret Cafe")
-        let parked = map.parkPlaceInUnplacedInbox(place)
+        let parked = try map.parkPlaceInUnplacedInbox(place)
         XCTAssertEqual(parked.ownerSubject, "did:privy:owner-a")
         XCTAssertEqual(try vault.reviewCandidates().first?.ownerSubject, "did:privy:owner-a")
 

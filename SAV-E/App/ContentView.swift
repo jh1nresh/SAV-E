@@ -591,7 +591,7 @@ struct ContentView: View {
                             SaveFriendsView(
                                 currentUserID: PrivyAuthService.shared.currentUserId,
                                 onSaved: { await mapVM.loadPlaces(force: true) },
-                                onParkedAtFreeLimit: { mapVM.parkPlaceInUnplacedInbox($0, requestPaywall: false) },
+                                onParkedAtFreeLimit: { try? mapVM.parkPlaceInUnplacedInbox($0, requestPaywall: false) },
                                 onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
                             )
                         case .profile:
@@ -1508,7 +1508,7 @@ struct ContentView: View {
             sourcePlatform: .other,
             createdAt: Date()
         )
-        _ = mapVM.parkPlaceInUnplacedInbox(place, requestPaywall: false)
+        _ = try? mapVM.parkPlaceInUnplacedInbox(place, requestPaywall: false)
         didApplyUnplacedCandidateFixture = true
     }
 #endif
