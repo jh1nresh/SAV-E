@@ -78,6 +78,8 @@ final class SAVEProductionConfigTests: XCTestCase {
         // Backend metering stays intact and untouched by this slice.
         XCTAssertTrue(backend.contains("recordAIUsageEvent"))
         XCTAssertTrue(backend.contains("buildGeminiUsageEvent"))
+        XCTAssertTrue(backend.contains("assertNewSavedPlaceAllowed"))
+        XCTAssertTrue(backend.contains("SavedPlaceLimitError"))
     }
 
     /// The gate is the only thing allowed to refuse an AI assist, so its truth
@@ -470,6 +472,53 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(map.reviewCandidates.first?.name, "Sheet Cafe")
         XCTAssertEqual(map.reviewCandidates.first?.status, "review")
         XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    @MainActor
+    func testParkedOverLimitCandidateSurvivesRemoteRefresh() async throws {
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.url?.path.contains("/memory/candidates") == true { return (200, "[]") }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.place-limit-refresh.\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-refresh-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let service = SupabaseService(
+            apiBaseURL: "https://analysis.test",
+            session: session(),
+            accessTokenProvider: { "test-token" }
+        )
+        let map = MapViewModel(
+            supabaseService: service,
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            usesRemotePersistence: true
+        )
+        map.places = makeCappedPlaces(50)
+        let place = makeSocialPlace(name: "Parked After Refresh")
+        _ = map.parkPlaceInUnplacedInbox(place)
+        XCTAssertEqual(map.reviewCandidates.first?.id, place.id)
+
+        try await map.refreshReviewCandidates()
+        XCTAssertEqual(map.reviewCandidates.first?.id, place.id)
+        XCTAssertEqual(map.reviewCandidates.first?.name, "Parked After Refresh")
+        XCTAssertEqual(try vault.reviewCandidates().first?.id, place.id)
+    }
+
+    func testServerOverLimitResponseIsNotTreatedAsAuthFailure() {
+        let body = #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#
+        XCTAssertTrue(SavePlaceLimitError.matchesServerResponse(status: 403, body: body))
+        guard case .apiError(let status, let message) = SupabaseService.httpError(statusCode: 403, body: body) else {
+            return XCTFail("over_free_limit must stay a structured API error")
+        }
+        XCTAssertEqual(status, 403)
+        XCTAssertEqual(SavePlaceLimitError.fromServerResponse(status: status, body: message), .parkedInUnplacedInbox)
+        guard case .notAuthenticated = SupabaseService.httpError(statusCode: 403, body: "rejected") else {
+            return XCTFail("generic 403 must still require authentication")
+        }
     }
 
     func testShareExtensionDestinationParksAtCachedCap() {

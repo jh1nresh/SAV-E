@@ -147,9 +147,17 @@ final class SharedPostsStore: ObservableObject {
             return .parkedAtFreeLimit
         }
         let account = PrivyAuthService.shared.currentUserId
-        _ = try await service.saveSharedPost(id: post.id)
-        guard account == PrivyAuthService.shared.currentUserId, !Task.isCancelled else { throw CancellationError() }
-        return .saved
+        do {
+            _ = try await service.saveSharedPost(id: post.id)
+            guard account == PrivyAuthService.shared.currentUserId, !Task.isCancelled else { throw CancellationError() }
+            return .saved
+        } catch {
+            if error is SavePlaceLimitError {
+                _ = parkOverLimitPlace(post.asUnplacedPlace())
+                return .parkedAtFreeLimit
+            }
+            throw error
+        }
     }
 
     func acknowledgeSavedPlaceLimitPaywall() {

@@ -884,6 +884,13 @@ final class MapViewModel: ObservableObject {
         return candidate
     }
 
+    @discardableResult
+    private func parkIfServerSavedPlaceLimit(_ error: Error, place: Place) -> Bool {
+        guard error is SavePlaceLimitError else { return false }
+        parkPlaceInUnplacedInbox(place)
+        return true
+    }
+
     // MARK: - Actions
 
     func loadPlaces(force: Bool = false) async {
@@ -1282,7 +1289,7 @@ final class MapViewModel: ObservableObject {
         }
         guard authService.currentUserId == userId, authService.sessionGeneration == generation else { throw CancellationError() }
         correctionOriginalCandidates = originals
-        reviewCandidates = candidates.map { candidate in
+        let remote = candidates.map { candidate in
             var candidate = candidate
             candidate.sourceFailureReason = importFailureReasons[candidate.id]
             return candidate
@@ -1292,6 +1299,12 @@ final class MapViewModel: ObservableObject {
                 candidate.status == "needs_more_evidence" || candidate.status == "source_only"
             )
         }
+        let remoteIDs = Set(remote.map(\.id))
+        let confirmedIDs = Set(places.map(\.id))
+        let localOnly = localReviewCandidates().filter { local in
+            !remoteIDs.contains(local.id) && !confirmedIDs.contains(local.id)
+        }
+        reviewCandidates = (localOnly + remote).sorted(by: PlaceReviewCandidate.newestFirst)
         if let id = selectedReviewCandidate?.id {
             selectedReviewCandidate = reviewCandidates.first { $0.id == id }
         }
@@ -1889,6 +1902,11 @@ final class MapViewModel: ObservableObject {
                 do {
                     try await mapCandidatePlaceSaver(place, userId)
                 } catch {
+                    if parkIfServerSavedPlaceLimit(error, place: place) {
+                        mapCandidates.removeAll { $0.id == candidate.id }
+                        selectedMapCandidate = nil
+                        throw error
+                    }
                     print("MapViewModel: failed to sync saved map candidate \(place.name): \(error)")
                     if exactResolution != nil {
                         // Resolving a Review clue is a two-record operation. Do
@@ -2233,11 +2251,17 @@ final class MapViewModel: ObservableObject {
                 parkPlaceInUnplacedInbox(place)
                 throw SavePlaceLimitError.parkedInUnplacedInbox
             }
-            let result = try await supabaseService.saveFriendSharedPlace(
-                place,
-                code: code,
-                userId: userId
-            )
+            let result: FriendSharedPlaceSaveResult
+            do {
+                result = try await supabaseService.saveFriendSharedPlace(
+                    place,
+                    code: code,
+                    userId: userId
+                )
+            } catch {
+                if parkIfServerSavedPlaceLimit(error, place: place) { throw error }
+                throw error
+            }
             let savedPlace = result.place
             mirrorToLocalVault(savedPlace)
             places.removeAll { $0.matches(savedPlace) }
@@ -2339,6 +2363,11 @@ final class MapViewModel: ObservableObject {
                 try await supabaseService.savePlace(place, userId: userId)
                 recordPassportFieldActionAfterSavingPlace()
             } catch {
+                if parkIfServerSavedPlaceLimit(error, place: place) {
+                    socialPlaces.removeAll { $0.id == socialPlace.id }
+                    selectedSocialPlace = nil
+                    throw error
+                }
                 print("MapViewModel: failed to sync social place \(place.name): \(error)")
             }
         }
@@ -2593,6 +2622,7 @@ final class MapViewModel: ObservableObject {
                 try await supabaseService.savePlace(place, userId: userId)
                 recordPassportFieldActionAfterSavingPlace()
             } catch {
+                if parkIfServerSavedPlaceLimit(error, place: place) { throw error }
                 print("MapViewModel: failed to sync list item \(place.name): \(error)")
             }
         }

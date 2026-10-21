@@ -89,6 +89,17 @@ nonisolated enum SavePlaceLimitError: LocalizedError, Equatable, Sendable {
     var errorDescription: String? {
         "Free: 50 places"
     }
+
+    /// Server `/places` and `/v0/shared-posts/:id/save` return this after the
+    /// transactional count. 403 is otherwise remapped to not-authenticated.
+    static func matchesServerResponse(status: Int, body: String) -> Bool {
+        (status == 403 || status == 409 || status == 422)
+            && (body.contains("over_free_limit") || body.contains("saved_place_limit"))
+    }
+
+    static func fromServerResponse(status: Int, body: String) -> SavePlaceLimitError? {
+        matchesServerResponse(status: status, body: body) ? .parkedInUnplacedInbox : nil
+    }
 }
 
 /// Pure saved-place cap shared by the app, Share Extension, and tests.
