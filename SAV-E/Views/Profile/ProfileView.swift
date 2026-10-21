@@ -79,12 +79,15 @@ struct ProfileView: View {
         // Home already showed Collected from `savedPlaces`; do not wait.
         let source = localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces
         guard !isRootTab else { return source }
-        return SaveDoodleHomeProgressCatalog.cityPlaces(
+        let scoped = SaveDoodleHomeProgressCatalog.cityPlaces(
             from: source,
             selection: session.city,
             location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
             locationDenied: locationService.isAuthorizationDenied
         )
+        // Collected must not open a blank Passport when Near you cannot
+        // resolve (denied + no fix, or a newest save with no locality).
+        return scoped.isEmpty ? source : scoped
     }
 
     private var todayMissions: [SavePassportTodayMission] {
