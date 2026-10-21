@@ -768,7 +768,6 @@ struct ContentView: View {
                         onOpenPlace: { openSavedPlaceFromMapSearch($0) },
                         onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
                     )
-                    .id(isExactSearchSessionActive)
                 }
             }
             .modifier(MapDrawerActionErrorAlert(
@@ -1110,6 +1109,9 @@ struct ContentView: View {
 
     private func openMapSearch(initialQuery: String? = nil, focusesSearch: Bool = true) {
         guard incomingPlaceReceipt == nil else { return }
+        // Expanding or focusing the Map drawer must not drop an in-flight
+        // Review correction. The previous invalidate made saved-stamp taps
+        // open the stamp without retiring the clue.
         let preserveExactSearchClue = isExactSearchSessionActive
             || mapVM.hasActiveExactSearchResolution
             || exactSearchClueID != nil
@@ -1474,7 +1476,7 @@ struct ContentView: View {
 
     private func openSavedPlaceFromMapSearch(_ place: Place) {
         restoreExactSearchResolutionIfNeeded()
-        guard isExactSearchSessionActive else {
+        guard isExactSearchSessionActive || mapVM.hasActiveExactSearchResolution else {
             openMapDetail(.savedPlace(place))
             return
         }
