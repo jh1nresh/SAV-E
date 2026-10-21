@@ -58,6 +58,7 @@ struct SavePlaceFromURLIntent: AppIntent {
     }
 
     /// A late analysis result must not persist into a different signed-in account.
+    @MainActor
     static func ensureInitiatingSession(_ userId: String?, _ generation: Int) throws {
         let auth = PrivyAuthService.shared
         guard auth.currentUserId == userId, auth.sessionGeneration == generation else {
