@@ -71,19 +71,23 @@ struct ProfileView: View {
         localSavedPlaces
     }
 
-    /// Same city X/Y Home Collected uses. Sheet and tab both read this so
-    /// tapping `home.collected` cannot open a Passport that still shows
-    /// all-places / `passportGoal`.
+    /// Home Collected sheet uses city X/Y. The root Passport tab stays the
+    /// full collection — city scope must not hide other cities or an
+    /// unresolved Near you.
     private var cityStampPlaces: [Place] {
         // The sheet mounts with `localSavedPlaces == []` until `.task` runs.
         // Home already showed Collected from `savedPlaces`; do not wait.
         let source = localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces
-        return SaveDoodleHomeProgressCatalog.cityPlaces(
+        guard !isRootTab else { return source }
+        let scoped = SaveDoodleHomeProgressCatalog.cityPlaces(
             from: source,
             selection: session.city,
             location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
             locationDenied: locationService.isAuthorizationDenied
         )
+        // Collected must not open a blank Passport when Near you cannot
+        // resolve (denied + no fix, or a newest save with no locality).
+        return scoped.isEmpty ? source : scoped
     }
 
     private var todayMissions: [SavePassportTodayMission] {
@@ -608,9 +612,11 @@ struct ProfileView: View {
                 visitError = nil
                 Task {
                     defer { isUpdatingVisit = false }
-                    let updated = SaveDoodleVisitStore().markIveBeenHere(place)
                     do {
+                        var updated = place
+                        updated.status = .visited
                         try await onUpdatePlace(updated)
+                        SaveDoodleVisitStore().recordVisit(for: place.id)
                         SavePassportFieldStreakStore.shared.recordFieldAction()
                         refreshFieldStreak()
                         if let index = localSavedPlaces.firstIndex(where: { $0.id == place.id }) {
