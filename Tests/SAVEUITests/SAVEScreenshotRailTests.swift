@@ -532,13 +532,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
             "Home must settle before the Unplaced fixture can appear in Review."
         )
-        let reviewClues = app.descendants(matching: .any)["home.review"]
-        if reviewClues.waitForExistence(timeout: stepTimeout) {
-            tapReachable(reviewClues)
-        }
-        if !app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: timeout(5)) {
-            openSavesFromHome(app: app)
-        }
+        // Live Home puts Review under More and the clues bar below the peek.
+        // Open Saves from the always-visible header icon instead of waiting
+        // 40s for `home.review` and then tapping a swallowed header control.
+        openSavesFromHome(app: app)
         XCTAssertTrue(
             app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout),
             "Unplaced evidence is the Review candidate list, not a Map Stamp."
@@ -3105,13 +3102,26 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
+        let saves = app.descendants(matching: .any)["saves.root"]
+        // Live Home exposes Saves on the header (`home.saves`). Opening More
+        // first drops a sheet that swallows that header tap
+        // (SaveTileTownHomeView). Prefer the header, then More's row.
+        let headerSaves = app.descendants(matching: .any)["home.saves"]
+        if headerSaves.waitForExistence(timeout: timeout(2)) {
+            tapReachable(headerSaves)
+            if saves.waitForExistence(timeout: timeout(5)) {
+                return
+            }
+        }
+
         let moreActions = app.descendants(matching: .any)["home.more"]
         if moreActions.waitForExistence(timeout: timeout(2)) {
             tapReachable(moreActions)
         }
-        // Live Home: Manage (`home.saves`). Parity-fixture Home still uses the
-        // locked One-Face stack, whose Saves entry is Review clues (`home.review`).
+        // Parity-fixture Home still uses the locked One-Face stack, whose
+        // Saves entry is Review clues (`home.review`).
         let candidates: [XCUIElement] = [
+            app.descendants(matching: .any)["home.more.saves"],
             app.descendants(matching: .any)["home.saves"],
             app.buttons["Manage saved places"],
             app.buttons["管理已存地點"],
@@ -3122,7 +3132,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let entry = firstExisting(candidates, timeout: stepTimeout)
         XCTAssertTrue(entry.exists, "Missing Home Saves entry")
         tapReachable(entry)
-        let saves = app.descendants(matching: .any)["saves.root"]
         if !saves.waitForExistence(timeout: timeout(5)) {
             tapReachable(entry)
         }
