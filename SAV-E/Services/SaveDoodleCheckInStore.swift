@@ -33,5 +33,22 @@ final class SaveDoodleCheckInStore: ObservableObject {
         return history.undoToday(for: placeID)
     }
 
+    /// Persist the place update after the local visit. A failed write must
+    /// not leave today's check-in on a place that is still want-to-go.
+    @discardableResult
+    func applyCheckIn(
+        placeID: UUID,
+        persist: () async throws -> Void
+    ) async -> Bool {
+        guard checkIn(placeID: placeID) else { return false }
+        do {
+            try await persist()
+            return true
+        } catch {
+            _ = undoTodaysCheckIn(placeID: placeID)
+            return false
+        }
+    }
+
     static var storageKey: String { SaveDoodleVisitStore.datesKey }
 }

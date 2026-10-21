@@ -568,16 +568,18 @@ struct SaveDoodleMapView: View {
     }
 
     private func performCheckIn(_ place: Place) {
-        guard checkIns.checkIn(placeID: place.id) else { return }
         var updated = place
         updated.status = .visited
         Task {
-            try? await mapViewModel.updatePlace(updated)
-        }
-        SaveHaptics.stamp()
-        stampPulse = false
-        withAnimation(SaveTheme.Motion.stampSpring) {
-            stampPulse = true
+            let accepted = await checkIns.applyCheckIn(placeID: place.id) {
+                try await mapViewModel.updatePlace(updated)
+            }
+            guard accepted else { return }
+            SaveHaptics.stamp()
+            stampPulse = false
+            withAnimation(SaveTheme.Motion.stampSpring) {
+                stampPulse = true
+            }
         }
     }
 

@@ -90,6 +90,34 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertFalse(store.undoTodaysCheckIn(placeID: placeID))
     }
 
+    @MainActor
+    func testFailedPlaceUpdateRollsBackTodaysCheckIn() async throws {
+        let defaults = UserDefaults(suiteName: "save.doodle.checkin.rollback.\(UUID().uuidString)")!
+        let store = SaveDoodleCheckInStore(
+            defaults: defaults,
+            calendar: Calendar(identifier: .gregorian),
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+        let placeID = UUID()
+        struct OfflineError: Error {}
+
+        let failed = await store.applyCheckIn(placeID: placeID) {
+            throw OfflineError()
+        }
+        XCTAssertFalse(failed)
+        XCTAssertEqual(store.visitCount(for: placeID), 0)
+        XCTAssertTrue(store.canCheckIn(placeID: placeID))
+
+        let succeeded = await store.applyCheckIn(placeID: placeID) {}
+        XCTAssertTrue(succeeded)
+        XCTAssertEqual(store.visitCount(for: placeID), 1)
+        XCTAssertFalse(store.canCheckIn(placeID: placeID))
+
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        XCTAssertTrue(map.contains("applyCheckIn(placeID: place.id)"))
+        XCTAssertFalse(map.contains("try? await mapViewModel.updatePlace(updated)"))
+    }
+
     func testMapWritesAreVisibleToSharedPassportHistory() {
         let suite = "save.doodle.cross-surface.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
