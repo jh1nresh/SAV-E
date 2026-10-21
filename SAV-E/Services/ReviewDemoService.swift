@@ -331,10 +331,10 @@ enum ReviewDemoSeed {
     static let harborOvenPizzaName = "Harbor Oven Pizza"
 
     /// Temple of Heaven (天壇) Eat rows plus the Map sheet park. Distances
-    /// match the DESIGN v2 Home mock from a Tiantan fix: 450m / 800m / 1.1km.
+    /// match the Codex packet / spec §8 Tiantan face: 450m / 800m / 1.1km.
     /// Twelve Tiantan saves, four visited (2 Eat + 2 Go). Only the three
     /// nearby Eat rows are mappable on Home; extra city saves stay off the
-    /// map so the 0.90 Home/Map faces keep the same pins.
+    /// map so the packet pins stay aligned. The 0.90 score is not evidence.
     static func doodleParityPlaces(now: Date = Date()) -> [Place] {
         let nearby: [(Int, String, PlaceCategory, PlaceStatus, Double, Double)] = [
             (0, "Siji Minfu Roast Duck", .food, .visited, 39.886242, 116.4066),
