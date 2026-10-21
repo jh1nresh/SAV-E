@@ -278,6 +278,10 @@ final class SaveDoodleHomeTests: XCTestCase {
     func testT1HomeCollectedFourOfTwelveWithThreeEatRows() {
         let now = Date(timeIntervalSince1970: 1_760_000_000)
         let places = ReviewDemoSeed.doodleParityPlaces(now: now)
+        XCTAssertTrue(
+            places.allSatisfy(\.hasValidCoordinate),
+            "0,0 extras are dropped by SaveMemoryRecord.confirmedPlace"
+        )
         let listed = SaveDoodleHomeCatalog.listedPlaces(
             from: places,
             lens: .eat,
@@ -757,6 +761,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         let seed = try source(at: "SAV-E/Services/ReviewDemoService.swift")
         XCTAssertTrue(seed.contains("--uitest-doodle-parity-fixture"))
         XCTAssertTrue(seed.contains("Codex packet / spec §8"))
+        XCTAssertTrue(seed.contains("SaveMemoryRecord.confirmedPlace"))
+        XCTAssertFalse(seed.contains("latitude: 0"))
         let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         let passportCatalog = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportCatalog.swift")
         XCTAssertTrue(profile.contains("SaveDoodlePassportPage"))
