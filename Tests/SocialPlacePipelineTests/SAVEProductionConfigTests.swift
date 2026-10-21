@@ -385,6 +385,11 @@ final class SAVEProductionConfigTests: XCTestCase {
             XCTAssertEqual(map.places.count, 50)
             XCTAssertEqual(map.reviewCandidates.first?.name, "Social Cafe")
             XCTAssertEqual(map.reviewCandidates.first?.status, "review")
+            XCTAssertNotEqual(
+                map.reviewCandidates.first?.id,
+                social.id,
+                "author places.id must not become the recipient Map Stamp id"
+            )
             XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
             XCTAssertFalse(map.socialPlaces.contains { $0.id == social.id })
         }

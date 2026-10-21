@@ -2461,13 +2461,6 @@ final class MapViewModel: ObservableObject {
             return existing
         }
 
-        if isOverFreeSavedPlaceLimit {
-            try parkPlaceInUnplacedInbox(socialPlace)
-            socialPlaces.removeAll { $0.id == socialPlace.id }
-            selectedSocialPlace = nil
-            throw SavePlaceLimitError.parkedInUnplacedInbox
-        }
-
         let place = Place(
             id: UUID(),
             name: socialPlace.name,
@@ -2493,6 +2486,13 @@ final class MapViewModel: ObservableObject {
             visibility: .privateMemory,
             socialSignal: nil
         )
+
+        if isOverFreeSavedPlaceLimit {
+            try parkPlaceInUnplacedInbox(place)
+            socialPlaces.removeAll { $0.id == socialPlace.id }
+            selectedSocialPlace = nil
+            throw SavePlaceLimitError.parkedInUnplacedInbox
+        }
 
         let userId = authService.currentUserId
         let saveGeneration = authService.sessionGeneration
