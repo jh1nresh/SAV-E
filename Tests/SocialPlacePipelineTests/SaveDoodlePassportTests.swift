@@ -147,6 +147,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(page.contains("guard stampingID == nil else { return }"))
         XCTAssertTrue(page.contains("if stampingID != nil { return true }"))
         XCTAssertTrue(catalog.contains("stableHash(place.id.uuidString)"))
+        XCTAssertTrue(catalog.contains("let city = scoped.isEmpty ? places : scoped"))
         XCTAssertFalse(catalog.contains("Hasher()"))
         XCTAssertFalse(catalog.contains("place.name, \"\\(index)\""))
     }

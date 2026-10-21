@@ -182,12 +182,13 @@ enum SaveDoodlePassportCatalog {
         locationDenied: Bool,
         visitStore: SavePassportVisitStore
     ) -> [SaveDoodlePassportSlot] {
-        let city = cityPlaces(
+        let scoped = cityPlaces(
             from: places,
             selection: selection,
             location: location,
             locationDenied: locationDenied
         )
+        let city = scoped.isEmpty ? places : scoped
         let goal = Self.goal(for: max(city.count, 1))
         let visible = Array(city.prefix(goal))
         var result: [SaveDoodlePassportSlot] = visible.map { place in

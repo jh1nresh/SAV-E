@@ -234,6 +234,30 @@ enum SaveDoodleHomeCatalog {
         if trimmed.range(of: #"^\d{5}(?:-\d{4})?$"#, options: .regularExpression) != nil {
             return true
         }
+        // Canada: "BC V8W 1P6" or "V8W 1P6" — not the city.
+        if trimmed.range(
+            of: #"^[A-Za-z]{2}\s+[A-Za-z]\d[A-Za-z]\s*\d[A-Za-z]\d$"#,
+            options: .regularExpression
+        ) != nil {
+            return true
+        }
+        if trimmed.range(
+            of: #"^[A-Za-z]\d[A-Za-z]\s*\d[A-Za-z]\d$"#,
+            options: .regularExpression
+        ) != nil {
+            return true
+        }
+        // UK outward+inward: "SW1A 1AA", "M1 1AE".
+        if trimmed.range(
+            of: #"^[A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d[A-Za-z]{2}$"#,
+            options: .regularExpression
+        ) != nil {
+            return true
+        }
+        // Australia / generic 4-digit postcode.
+        if trimmed.range(of: #"^\d{4}$"#, options: .regularExpression) != nil {
+            return true
+        }
         return false
     }
 
@@ -283,8 +307,10 @@ enum SaveDoodleHomeCatalog {
         locationDenied: Bool
     ) -> SaveDoodleCitySelection {
         guard locationDenied, case .nearYou = selection else { return selection }
-        let newest = places.sorted(by: moreRecent).first
-        if let newest, let id = cityID(for: newest) {
+        // Coordinate-only imports have no locality. Walk recency until a
+        // save actually resolves, so denied Near you does not stay empty.
+        if let match = places.sorted(by: moreRecent).first(where: { cityID(for: $0) != nil }),
+           let id = cityID(for: match) {
             return .city(id)
         }
         return selection
@@ -369,20 +395,9 @@ enum SaveDoodleHomeCatalog {
     ) -> (place: Place, distance: CLLocationDistance?)? {
         let excluded = Set(visible.map(\.id))
         let remaining = places.filter { !excluded.contains($0.id) }
-        guard !remaining.isEmpty else { return nil }
-        if let location {
-            let ranked = remaining.compactMap { place -> (Place, CLLocationDistance)? in
-                guard let meters = distance(from: location, to: place) else { return nil }
-                return (place, meters)
-            }.sorted { $0.1 < $1.1 }
-            if let first = ranked.first {
-                return (first.0, first.1)
-            }
-        }
-        if let newest = remaining.sorted(by: moreRecent).first {
-            return (newest, location.flatMap { distance(from: $0, to: newest) })
-        }
-        return nil
+        // Home labels this “Latest save”. Recency wins; distance is metadata.
+        guard let newest = remaining.sorted(by: moreRecent).first else { return nil }
+        return (newest, location.flatMap { distance(from: $0, to: newest) })
     }
 
     /// All saved places in the current city, every category. Independent of

@@ -184,6 +184,28 @@ final class SaveDoodleHomeTests: XCTestCase {
         )
     }
 
+    /// Canadian (and other) admin/postal lines are not the city.
+    func testFallbackAddressUsesLocalityNotCanadianPostcode() {
+        let empress = place(
+            "Fairmont Empress",
+            "123 Main St, Victoria, BC V8W 1P6, Canada",
+            .stay
+        )
+        let other = place(
+            "Fisherman's Wharf",
+            "1 Dallas Rd, Victoria, V8V 0B2, Canada",
+            .attraction
+        )
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: empress.address), "Victoria")
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: other.address), "Victoria")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: empress), "victoria")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: other), "victoria")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: empress), "bc v8w 1p6")
+        let groups = SaveDoodleHomeCatalog.cityGroups(from: [empress, other])
+        XCTAssertEqual(groups.map(\.id), ["victoria"])
+        XCTAssertEqual(groups.first?.englishName, "Victoria")
+    }
+
     func testNearYouKeepsOnlyWalkingDistance() {
         let here = CLLocation(latitude: 39.882, longitude: 116.407)
         let near = place("Duck", "Beijing, China", .food, latitude: 39.883, longitude: 116.408)
@@ -234,6 +256,64 @@ final class SaveDoodleHomeTests: XCTestCase {
             locationDenied: true
         )
         XCTAssertEqual(visible.map(\.name), ["Fujin"])
+    }
+
+    /// Denied Near you skips a newest save with no locality.
+    func testLocationDeniedFallsBackToNewestResolvableCity() {
+        let older = place(
+            "Fujin",
+            "No. 353, Section 1, Fuxing S Rd, Da'an District, Taipei",
+            .cafe,
+            createdAt: Date().addingTimeInterval(-100)
+        )
+        let newer = place(
+            "Pin drop",
+            "",
+            .attraction,
+            createdAt: Date()
+        )
+        let resolved = SaveDoodleHomeCatalog.resolvedSelection(
+            .nearYou,
+            places: [older, newer],
+            locationDenied: true
+        )
+        XCTAssertEqual(resolved, .city("taipei"))
+        let collected = SaveDoodleHomeCatalog.collectedScopePlaces(
+            from: [older, newer],
+            selection: .nearYou,
+            location: nil,
+            locationDenied: true
+        )
+        XCTAssertEqual(collected.map(\.name), ["Fujin"])
+    }
+
+    /// “Latest save” is recency, even when an older place is closer.
+    func testLatestSaveJumpUsesRecencyNotDistance() {
+        let here = CLLocation(latitude: 25.0330, longitude: 121.5654)
+        let olderNear = place(
+            "Close old",
+            "Taipei, Taiwan",
+            .food,
+            latitude: 25.0331,
+            longitude: 121.5655,
+            createdAt: Date().addingTimeInterval(-1_000)
+        )
+        let newerFar = place(
+            "Far new",
+            "Tokyo, Japan",
+            .food,
+            latitude: 35.66,
+            longitude: 139.70,
+            createdAt: Date()
+        )
+        let listed = [olderNear]
+        let latest = SaveDoodleHomeCatalog.nearestOtherSave(
+            in: [olderNear, newerFar],
+            excluding: listed,
+            location: here
+        )
+        XCTAssertEqual(latest?.place.name, "Far new")
+        XCTAssertNotNil(latest?.distance)
     }
 
     func testDistanceTextAndCollectedProgress() {
@@ -520,6 +600,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(profile.contains("SaveDoodlePassportPage"))
         XCTAssertFalse(profile.contains("PassportTileTownCollection"))
         XCTAssertTrue(profile.contains("localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces"))
+        XCTAssertTrue(profile.contains("guard !isRootTab else { return source }"))
+        XCTAssertTrue(profile.contains("return scoped.isEmpty ? source : scoped"))
         XCTAssertTrue(passportCatalog.contains("SaveDoodleHomeProgressCatalog.cityPlaces"))
         XCTAssertTrue(passportCatalog.contains("SaveDoodleHomeProgressCatalog.visitedCount"))
         XCTAssertTrue(passportPage.contains("profile.stampProgress"))
@@ -741,6 +823,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(attach.contains("pngRepresentation"))
         let workflow = try source(at: ".github/workflows/ios.yml")
         XCTAssertTrue(workflow.contains("SAVE_SCREENSHOT_DIR"))
+        XCTAssertTrue(workflow.contains("TestingEnvironmentVariables"))
         XCTAssertTrue(workflow.contains("five-tab-home"))
         XCTAssertTrue(workflow.contains("light-home"))
         XCTAssertTrue(workflow.contains("dark-home"))
@@ -769,6 +852,11 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(profile.contains("SaveDoodlePassportPage"))
         XCTAssertTrue(passportCatalog.contains("SaveDoodleHomeProgressCatalog.cityPlaces"))
         XCTAssertTrue(profile.contains("markIveBeenHere"))
+        XCTAssertTrue(profile.contains("guard !isRootTab else { return source }"))
+        XCTAssertTrue(profile.contains("return scoped.isEmpty ? source : scoped"))
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        XCTAssertTrue(map.contains("cityGroups.first(where: { $0.id == id })"))
+        XCTAssertTrue(map.contains("group.displayName(language:"))
         let contentView = try source(at: "SAV-E/App/ContentView.swift")
         XCTAssertTrue(contentView.contains(".environmentObject(doodleSession)"))
     }
@@ -880,6 +968,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(content.contains("private func showMapTab()"))
         XCTAssertTrue(content.contains("if !isExactSearchSessionActive"))
         XCTAssertTrue(content.contains("abandonMiniMapHandoff()"))
+        XCTAssertTrue(content.contains("preservesExactSearchClue: isExactSearchSessionActive"))
+        XCTAssertTrue(content.contains(".id(isExactSearchSessionActive)"))
+        XCTAssertTrue(content.contains("guard shouldResolveClue else"))
         XCTAssertTrue(map.contains("consumeMiniMapHandoff()"))
         let catalogSource = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")
         XCTAssertTrue(catalogSource.contains("save.doodle.mapFollows."))

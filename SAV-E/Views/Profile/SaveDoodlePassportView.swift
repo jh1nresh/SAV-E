@@ -330,12 +330,13 @@ struct SaveDoodlePassportPage: View {
     }
 
     private var cityPlaces: [Place] {
-        SaveDoodlePassportCatalog.cityPlaces(
+        let scoped = SaveDoodlePassportCatalog.cityPlaces(
             from: places,
             selection: session.city,
             location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
             locationDenied: locationService.isAuthorizationDenied
         )
+        return scoped.isEmpty ? places : scoped
     }
 
     private var slots: [SaveDoodlePassportSlot] {
