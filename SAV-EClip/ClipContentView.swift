@@ -374,20 +374,24 @@ struct ClipContentView: View {
                 }
                 .overlay(alignment: .top) {
                     HStack(alignment: .top, spacing: 8) {
-                        if let listTitle, !listTitle.isEmpty {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(listTitle)
-                                    .font(ClipDisplayType.title(ClipJournalLayout.listTitlePoint, relativeTo: .title3))
-                                    .foregroundStyle(ClipJournalPalette.cream)
-                                    .lineLimit(2)
-                                Text(ClipCopy.format("clip.list.count", pageIndex + 1, pageCount))
-                                    .font(ClipJournalType.system(13, weight: .semibold, relativeTo: .footnote))
-                                    .foregroundStyle(ClipJournalPalette.cream.opacity(0.9))
+                        VStack(alignment: .leading, spacing: 8) {
+                            if let sender {
+                                ClipSharerChip(name: sender)
                             }
-                        } else if let sender {
-                            ClipSharerChip(name: sender)
-                        } else {
-                            Spacer(minLength: 0)
+                            if let listTitle, !listTitle.isEmpty {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(listTitle)
+                                        .font(ClipDisplayType.title(ClipJournalLayout.listTitlePoint, relativeTo: .title3))
+                                        .foregroundStyle(ClipJournalPalette.cream)
+                                        .lineLimit(2)
+                                    Text(ClipCopy.format("clip.list.count", pageIndex + 1, pageCount))
+                                        .font(ClipJournalType.system(13, weight: .semibold, relativeTo: .footnote))
+                                        .foregroundStyle(ClipJournalPalette.cream.opacity(0.9))
+                                }
+                            }
+                            if sender == nil && (listTitle == nil || listTitle?.isEmpty == true) {
+                                Spacer(minLength: 0)
+                            }
                         }
                         Spacer(minLength: 8)
                         ClipWordmarkPlate()
@@ -466,27 +470,40 @@ struct ClipContentView: View {
     }
 
     private func listOutcomeScreen(_ counts: ClipListSaveCounts) -> some View {
-        let added = counts.addedAnything
-        let hitCap = counts.overCap > 0
-        let title = added
-            ? ClipCopy.string("clip.listSaved.title")
-            : (hitCap ? ClipCopy.string("clip.cap50.title") : ClipCopy.string("clip.duplicate.title"))
-        let identifier = added ? "clip.list.saved" : (hitCap ? "clip.list.cap" : "clip.list.duplicate")
-        return outcomeScreen(
-            title: title,
-            bodyText: ClipCopy.format(
-                "clip.listSaved.body",
-                counts.newlySaved,
-                counts.alreadySaved,
-                counts.overCap,
-                counts.remaining
-            ),
-            sticker: .place,
-            badge: added ? "✓" : (hitCap ? "50" : "↺"),
-            retry: nil,
-            back: hitCap || !added ? ClipCopy.string("clip.cap50.back") : nil,
-            identifier: identifier
-        )
+        let partial = counts.overCap > 0
+        let inSavvy = counts.newlySaved + counts.alreadySaved
+        return VStack(spacing: ClipJournalLayout.stateTitleGap) {
+            HStack {
+                ClipWordmark()
+                Spacer(minLength: 0)
+            }
+            ClipStateIllustration(
+                sticker: .seal,
+                badge: partial ? "50" : "✓"
+            )
+            ClipDisplayTitle(
+                text: partial
+                    ? ClipCopy.string("clip.listPartial.title")
+                    : ClipCopy.string("clip.listSaved.title"),
+                pointSize: 24,
+                relativeTo: .title2
+            )
+            .multilineTextAlignment(.center)
+            ClipListSaveCountTable(counts: counts)
+            Text(
+                partial
+                    ? ClipCopy.format("clip.listPartial.body", counts.overCap)
+                    : ClipCopy.format("clip.listSaved.footer", inSavvy)
+            )
+            .font(ClipJournalType.system(15, weight: .regular, relativeTo: .body))
+            .foregroundStyle(ClipJournalPalette.muted)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: ClipJournalLayout.stateBodyMaxWidth)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, ClipJournalLayout.screenMargin)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(partial ? "clip.list.partial" : "clip.list.saved")
     }
 
     private func areaCategoryLine(_ draft: ClipPlaceDraft) -> String? {
@@ -959,14 +976,15 @@ extension ClipContentView {
         case "list-saved":
             apply(list: ClipPreviewFixtures.sampleList())
             surface = .listSaved(
-                ClipListSaveCounts(newlySaved: 3, alreadySaved: 1, overCap: 1, remaining: 12, limit: 50)
+                ClipListSaveCounts(newlySaved: 4, alreadySaved: 1, overCap: 0, remaining: 12, limit: 50)
             )
             presentsAppClipOverlay = true
-        case "list-cap":
+        case "list-partial":
             apply(list: ClipPreviewFixtures.sampleList())
             surface = .listSaved(
-                ClipListSaveCounts(newlySaved: 0, alreadySaved: 2, overCap: 3, remaining: 0, limit: 50)
+                ClipListSaveCounts(newlySaved: 3, alreadySaved: 1, overCap: 1, remaining: 0, limit: 50)
             )
+            presentsAppClipOverlay = true
         case "loading":
             isLoading = true
         case "expired":

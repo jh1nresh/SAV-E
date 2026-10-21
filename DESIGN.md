@@ -970,19 +970,23 @@ no coordinates.
 
 One place page per page. Vertical paging
 (`ScrollView` + `.scrollTargetBehavior(.paging)`). Right-side vertical
-page indicator. List title (handwritten, cream) plus `第 {i} / {n} 家`
-top-left of the hero. Swipe hint on page 1 only. Each page's primary
-button saves **that** place only. A secondary button,
-「整份清單都存（N 家）」 / "Save whole list (N)", sends the whole list
-in **one** `POST /places` after SIWA (no staging). Dedupe first:
-already-saved places count once and are skipped. Within the remaining
-free quota the server saves in list order; overflow follows #293
-section B (stop at the cap, do not park Clip overflow as Unplaced).
-The response returns three counts — newly saved / already saved /
-over cap — and state 19 shows them plus remaining free slots. A
-network failure does not silently succeed: the write is atomic, or
-the user is told exactly what was and was not saved. Reduce Motion is
-respected.
+page indicator. Over the hero: sharer chip and, under it, the list
+title (handwritten, cream) plus `第{i}/{n}家` / `{i} of {n}`. Swipe
+hint on page 1 only. Each page's primary button saves **that** place
+only. A secondary button, 「整份清單都存（N家）」 / "Save all N
+places", sends the whole list in **one** `POST /places` after SIWA
+(no staging). Dedupe first: already-saved places count once and are
+skipped. Within the remaining free quota the server saves in list
+order; overflow follows #293 section B (stop at the cap, do not park
+Clip overflow as Unplaced). The response returns three counts —
+newly saved / already saved / over cap. State 19 (whole list saved)
+and 19b (part of the list) show those counts as a three-row table.
+19b's over-cap sentence is one localizable string; the #293 Q1 /
+section B wording is still a placeholder. Overlay only after at
+least one new save. A network failure does not silently succeed:
+the write is atomic, or the user is told exactly what was and was
+not saved. Reduce Motion is respected. The App Group is
+`group.com.wanderly.app`, not `group.com.wanderly.app.shared`.
 
 ### Tokens (V3.1)
 

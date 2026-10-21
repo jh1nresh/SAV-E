@@ -15,20 +15,50 @@
     },
     "clip.saveAll" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save whole list (%d)" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "整份清單都存（%d 家）" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save all %d places" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "整份清單都存（%d家）" } }
       }
     },
     "clip.listSaved.title" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved!" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "存好了！" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Whole list saved!" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "整份清單存好了！" } }
       }
     },
-    "clip.listSaved.body" : {
+    "clip.listPartial.title" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "%d added, %d already saved, %d over the free limit. %d free slots left." } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "新存 %d 家，已存過 %d 家，超過免費額度 %d 家。還剩 %d 個免費名額。" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Part of the list was saved" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "清單存了一部分" } }
+      }
+    },
+    "clip.listSaved.row.new" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Newly saved" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "新存了" } }
+      }
+    },
+    "clip.listSaved.row.already" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Already saved (counted once)" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "之前就存過（只算一次）" } }
+      }
+    },
+    "clip.listSaved.row.over" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Over the 50-place limit, not saved" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "超過50個上限，沒存" } }
+      }
+    },
+    "clip.listSaved.footer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All %d are in your Savvy." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%d家都在你的Savvy裡了。" } }
+      }
+    },
+    "clip.listPartial.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The free plan saves up to 50 places, in list order. %d could not be added. Open the full app to tidy your Savvy later — no paywall. (The “50” copy is pending #293 Q1.)" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "免費版最多50個，依清單順序先存得下的。沒存的%d家，下載完整版整理後可以再存，不會跳付費牆。（「50個」文案待#293 Q1）" } }
       }
     },
     "clip.openMaps" : {
@@ -46,7 +76,7 @@
     "clip.list.count" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "%d of %d" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "第 %d / %d 家" } }
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "第%d/%d家" } }
       }
     },
     "clip.list.swipe" : {

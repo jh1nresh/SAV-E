@@ -32,8 +32,8 @@ if (!fs.existsSync(distDir)) {
 }
 
 copyPublicAssets();
-writeAppClipSmartBanner();
 writeShareRouteFallbacks();
+writeAppClipSmartBanner();
 writeAppleAppSiteAssociation();
 
 for (const fileName of fs.readdirSync(distDir)) {
@@ -83,18 +83,24 @@ function writeShareRouteFallbacks() {
 }
 
 function writeAppClipSmartBanner() {
-  const indexPath = path.join(distRoot, "index.html");
-  if (!fs.existsSync(indexPath)) return;
-
-  const bannerMeta = `<meta name="apple-itunes-app" content="app-id=${appStoreId}, app-clip-bundle-id=${smartBannerAppClipBundleId}, app-clip-display=card">`;
-  let html = fs.readFileSync(indexPath, "utf8");
-  if (html.includes('name="apple-itunes-app"')) {
-    html = html.replace(/<meta\s+name=["']apple-itunes-app["'][^>]*>/i, bannerMeta);
-  } else {
-    html = html.replace(/<\/head>/i, `    ${bannerMeta}\n  </head>`);
+  const bannerMeta = `<meta name="apple-itunes-app" content="app-id=${appStoreId}, app-clip-bundle-id=${smartBannerAppClipBundleId}">`;
+  const htmlPaths = [
+    path.join(distRoot, "index.html"),
+    ...["p", "trip", "list", "r", "u", "my"].map((route) => path.join(distRoot, route, "index.html")),
+  ];
+  for (const htmlPath of htmlPaths) {
+    if (!fs.existsSync(htmlPath)) continue;
+    let html = fs.readFileSync(htmlPath, "utf8");
+    if (html.includes('name="apple-itunes-app"')) {
+      html = html.replace(/<meta\s+name=["']apple-itunes-app["'][^>]*>/i, bannerMeta);
+    } else if (/<\/head>/i.test(html)) {
+      html = html.replace(/<\/head>/i, `    ${bannerMeta}\n  </head>`);
+    } else {
+      html = `${bannerMeta}\n${html}`;
+    }
+    fs.writeFileSync(htmlPath, html);
   }
-  fs.writeFileSync(indexPath, html);
-  console.log("Wrote App Clip Smart App Banner meta");
+  console.log("Wrote App Clip Smart App Banner meta on / and /p");
 }
 
 function writeAppleAppSiteAssociation() {

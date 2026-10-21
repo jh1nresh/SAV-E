@@ -1,6 +1,6 @@
 export const clipBundleId = "com.wanderly.app.Clip";
 export const smartAppBannerContent =
-  `app-id=6769216556, app-clip-bundle-id=${clipBundleId}, app-clip-display=card`;
+  `app-id=6769216556, app-clip-bundle-id=${clipBundleId}`;
 
 export function isInAppShareBrowser(userAgent: string): boolean {
   return /\bLine\//i.test(userAgent)

@@ -40,8 +40,8 @@ final class SAVEClipScreenshotTests: XCTestCase {
         capture(screen: "list-saved", appearance: .light, language: "zh-Hant", locale: "zh_TW", name: "19-list-saved-zh-Hant", identifier: "clip.list.saved")
     }
 
-    func test19ListCapEnglish() {
-        capture(screen: "list-cap", appearance: .light, language: "en", locale: "en_US", name: "19-list-cap-en", identifier: "clip.list.cap")
+    func test19bListPartialZhHant() {
+        capture(screen: "list-partial", appearance: .light, language: "zh-Hant", locale: "zh_TW", name: "19b-list-partial-zh-Hant", identifier: "clip.list.partial")
     }
 
     func testListEnglishDark() {

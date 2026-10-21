@@ -285,7 +285,7 @@ private func jitter(_ point: CGPoint, index: Int, seed: UInt64, in bounds: CGRec
 }
 
 enum ClipStickerKind: String {
-    case noodle, coffee, lantern, place
+    case noodle, coffee, lantern, place, seal
 
     static func forHero(_ raw: String?) -> ClipStickerKind {
         let value = (raw ?? "").lowercased()
@@ -337,6 +337,22 @@ struct ClipStickerDrawing: View {
             case .lantern:
                 context.fill(Path(roundedRect: CGRect(x: size.width * 0.3, y: size.height * 0.22, width: size.width * 0.4, height: size.height * 0.56), cornerRadius: 10), with: .color(coral))
                 context.stroke(Path(CGRect(x: size.width * 0.36, y: size.height * 0.08, width: size.width * 0.28, height: size.height * 0.12)), with: .color(ink), lineWidth: 2)
+            case .seal:
+                let ring = CGRect(x: size.width * 0.08, y: size.height * 0.08, width: size.width * 0.84, height: size.height * 0.84)
+                context.stroke(Path(ellipseIn: ring.insetBy(dx: 3, dy: 3)), with: .color(coral), lineWidth: 3)
+                context.stroke(Path(ellipseIn: ring.insetBy(dx: 10, dy: 10)), with: .color(coral), lineWidth: 1.2)
+                var mark = Path()
+                mark.move(to: CGPoint(x: size.width * 0.32, y: size.height * 0.38))
+                mark.addLine(to: CGPoint(x: size.width * 0.68, y: size.height * 0.38))
+                mark.move(to: CGPoint(x: size.width * 0.38, y: size.height * 0.30))
+                mark.addLine(to: CGPoint(x: size.width * 0.38, y: size.height * 0.70))
+                mark.move(to: CGPoint(x: size.width * 0.50, y: size.height * 0.30))
+                mark.addLine(to: CGPoint(x: size.width * 0.50, y: size.height * 0.70))
+                mark.move(to: CGPoint(x: size.width * 0.62, y: size.height * 0.30))
+                mark.addLine(to: CGPoint(x: size.width * 0.62, y: size.height * 0.70))
+                mark.move(to: CGPoint(x: size.width * 0.32, y: size.height * 0.62))
+                mark.addLine(to: CGPoint(x: size.width * 0.68, y: size.height * 0.62))
+                context.stroke(mark, with: .color(coral), lineWidth: 2.4)
             case .place:
                 var pin = Path()
                 let radius = size.width * 0.28
@@ -510,6 +526,47 @@ struct ClipJournalSecondaryButton: View {
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.55)
         .frame(minHeight: ClipJournalLayout.minTap)
+    }
+}
+
+struct ClipListSaveCountTable: View {
+    let counts: ClipListSaveCounts
+
+    var body: some View {
+        VStack(spacing: 0) {
+            row(ClipCopy.string("clip.listSaved.row.new"), counts.newlySaved, highlight: false)
+            divider
+            row(ClipCopy.string("clip.listSaved.row.already"), counts.alreadySaved, highlight: false)
+            divider
+            row(ClipCopy.string("clip.listSaved.row.over"), counts.overCap, highlight: counts.overCap > 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
+        .background(ClipJournalPalette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(ClipJournalPalette.line, lineWidth: 1)
+        }
+        .accessibilityIdentifier("clip.list.counts")
+    }
+
+    private var divider: some View {
+        ClipJournalPalette.line.frame(height: 1)
+    }
+
+    private func row(_ title: String, _ value: Int, highlight: Bool) -> some View {
+        HStack {
+            Text(title)
+                .font(ClipJournalType.system(15, weight: .regular, relativeTo: .body))
+                .foregroundStyle(highlight ? ClipJournalPalette.coral : ClipJournalPalette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 12)
+            Text("\(value)")
+                .font(ClipJournalType.system(17, weight: .semibold, relativeTo: .headline))
+                .foregroundStyle(highlight ? ClipJournalPalette.coral : ClipJournalPalette.ink)
+                .accessibilityIdentifier(highlight ? "clip.list.counts.over" : "clip.list.counts.value")
+        }
+        .padding(.vertical, 12)
     }
 }
 

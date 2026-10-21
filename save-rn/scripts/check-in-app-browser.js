@@ -76,12 +76,15 @@ const project = fs.readFileSync(path.join(workspaceRoot, "project.yml"), "utf8")
 assert.match(project, /PRODUCT_BUNDLE_IDENTIFIER: com\.wanderly\.app\.Clip/);
 assert.equal(
   smartAppBannerContent,
-  "app-id=6769216556, app-clip-bundle-id=com.wanderly.app.Clip, app-clip-display=card",
+  "app-id=6769216556, app-clip-bundle-id=com.wanderly.app.Clip",
 );
+assert.doesNotMatch(smartAppBannerContent, /app-clip-display/);
 
 const patch = fs.readFileSync(path.join(repoRoot, "scripts/patch-web-bundle.js"), "utf8");
 assert.match(patch, /app-clip-bundle-id=\$\{smartBannerAppClipBundleId\}/);
 assert.match(patch, /const appClipBundleId = "com\.wanderly\.app\.Clip"/);
+assert.match(patch, /path\.join\(distRoot, "p", "index\.html"\)/);
+assert.doesNotMatch(patch, /app-clip-display=card/);
 
 const fallback = fs.readFileSync(path.join(repoRoot, "src/ShareClipFallback.tsx"), "utf8");
 assert.match(fallback, /testID="web.clip.fallback"/);
