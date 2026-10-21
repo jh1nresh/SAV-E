@@ -174,7 +174,7 @@ enum SaveDoodleHomeCatalog {
         if let key = SaveHomeSearch.metroKey(in: place.address) {
             return key
         }
-        guard let area = SavedPlaceTripRecommender.areaLabel(for: place) else { return nil }
+        guard let area = localityLabel(in: place.address) else { return nil }
         return area
             .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
             .lowercased()
@@ -188,7 +188,70 @@ enum SaveDoodleHomeCatalog {
            ) {
             return label
         }
-        return SavedPlaceTripRecommender.areaLabel(for: place)
+        return localityLabel(in: place.address)
+    }
+
+    /// Locality for Home city scope. Do not reuse `shareAreaLabel` — that
+    /// takes the second-to-last comma part and turns
+    /// `Berkeley, CA 94704, USA` into `CA 94704`, splitting one city by ZIP.
+    static func localityLabel(in address: String) -> String? {
+        let parts = address
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !parts.isEmpty else { return nil }
+        if let cjk = cjkLocality(in: address) { return cjk }
+
+        var local = parts
+        if let last = local.last, Self.countryTokens.contains(last.lowercased()) {
+            local.removeLast()
+        }
+        while let last = local.last, isPostalOrAdminRegion(last) {
+            local.removeLast()
+        }
+        guard let city = local.last, !city.isEmpty else { return nil }
+        return city
+    }
+
+    private static let countryTokens: Set<String> = [
+        "usa", "us", "united states", "united states of america",
+        "uk", "u.k.", "united kingdom", "taiwan", "japan", "china",
+        "canada", "australia", "france", "germany", "italy", "spain",
+        "korea", "south korea", "thailand", "singapore",
+    ]
+
+    private static func isPostalOrAdminRegion(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.range(of: #"^[A-Za-z]{2}$"#, options: .regularExpression) != nil {
+            return true
+        }
+        if trimmed.range(
+            of: #"^[A-Za-z]{2}\s+\d{5}(?:-\d{4})?$"#,
+            options: .regularExpression
+        ) != nil {
+            return true
+        }
+        if trimmed.range(of: #"^\d{5}(?:-\d{4})?$"#, options: .regularExpression) != nil {
+            return true
+        }
+        return false
+    }
+
+    private static func cjkLocality(in address: String) -> String? {
+        guard address.contains(where: {
+            $0.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
+        }) else { return nil }
+        for marker in ["市", "縣", "县"] {
+            guard let end = address.range(of: marker) else { continue }
+            let head = address[address.startIndex..<end.upperBound]
+            let city = String(head.drop { $0.isNumber })
+                .replacingOccurrences(of: "台灣", with: "")
+                .replacingOccurrences(of: "臺灣", with: "")
+                .replacingOccurrences(of: "中國", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if city.count >= 2 { return city }
+        }
+        return nil
     }
 
     static func cityGroups(from places: [Place]) -> [SaveDoodleCityGroup] {
@@ -340,13 +403,25 @@ enum SaveDoodleHomeCatalog {
     }
 
     static func nearYouCityID(from places: [Place], location: CLLocation?) -> String? {
-        if let location {
-            let nearby = places.filter { distance(from: location, to: $0).map { $0 <= nearbyRadius } ?? false }
-            if let nearest = nearby.sorted(by: { closer($0, $1, to: location) }).first {
-                return cityID(for: nearest)
-            }
-        }
-        return nil
+        guard let place = nearYouCityPlace(from: places, location: location) else { return nil }
+        return cityID(for: place)
+    }
+
+    /// Nearest nearby save across every category. Header, Collected, and
+    /// Passport must share this city — not the nearest Eat/Go row.
+    static func nearYouCityPlace(from places: [Place], location: CLLocation?) -> Place? {
+        guard let location else { return nil }
+        let nearby = places.filter { distance(from: location, to: $0).map { $0 <= nearbyRadius } ?? false }
+        return nearby.sorted { closer($0, $1, to: location) }.first
+    }
+
+    static func nearYouCityName(
+        from places: [Place],
+        location: CLLocation?,
+        language: AppLanguage
+    ) -> String? {
+        guard let place = nearYouCityPlace(from: places, location: location) else { return nil }
+        return cityDisplayName(for: place, language: language)
     }
 
     static func cityCollectedCount(in places: [Place]) -> (visited: Int, saved: Int) {
