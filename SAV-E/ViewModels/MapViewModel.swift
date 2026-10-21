@@ -1118,11 +1118,11 @@ final class MapViewModel: ObservableObject {
 
         for pendingPlace in pending {
             let place = Place.from(pendingPlace)
+            let remote = persistedPlaces.first { $0.matches(place) }
+            let existing = remote ?? existingSavedPlace(matching: place)
+            let merged = existing?.mergingSources(from: place) ?? place
             do {
                 guard authService.sessionGeneration == importGeneration, authService.currentUserId == userId else { throw CancellationError() }
-                let remote = persistedPlaces.first { $0.matches(place) }
-                let existing = remote ?? existingSavedPlace(matching: place)
-                let merged = existing?.mergingSources(from: place) ?? place
                 if remote != nil {
                     try await supabaseService.updatePlace(merged, previous: existing)
                 } else if isOverFreeSavedPlaceLimit {
@@ -1139,6 +1139,9 @@ final class MapViewModel: ObservableObject {
                 places = Place.consolidated(places.filter { $0.id != merged.id } + [merged])
                 if existing == nil { importedPlaces.append(merged) }
             } catch {
+                if parkIfServerSavedPlaceLimit(error, place: merged) {
+                    continue
+                }
                 failedImports.append(pendingPlace)
                 if authService.sessionGeneration == importGeneration, authService.currentUserId == userId {
                     syncFailedPlaceName = pendingPlace.name
@@ -3787,6 +3790,7 @@ final class MapViewModel: ObservableObject {
         }
         activeFilter?.remove(place.id)
         clearRoute()
+        syncSavedPlaceLimitCache()
 
         do {
             if usesRemotePersistence {
@@ -3803,6 +3807,7 @@ final class MapViewModel: ObservableObject {
             _ = try? saveLocalVaultService.saveConfirmedPlace(place)
             places = previousPlaces
             selectedPlace = place
+            syncSavedPlaceLimitCache()
             throw error
         }
     }
@@ -4043,8 +4048,16 @@ final class MapViewModel: ObservableObject {
                     return
                 }
                 if let userId = remoteUserId {
-                    try await supabaseService.savePlace(place, userId: userId)
-                    recordPassportFieldActionAfterSavingPlace()
+                    do {
+                        try await supabaseService.savePlace(place, userId: userId)
+                        recordPassportFieldActionAfterSavingPlace()
+                    } catch {
+                        if parkIfServerSavedPlaceLimit(error, place: place) {
+                            parked += 1
+                            return
+                        }
+                        throw error
+                    }
                 } else {
                     mirrorToLocalVault(place)
                 }

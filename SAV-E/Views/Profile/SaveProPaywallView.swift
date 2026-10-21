@@ -179,10 +179,35 @@ struct SaveProPaywallView: View {
             .background(SaveAtlasPalette.mint.opacity(0.22))
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .accessibilityIdentifier("paywall.notForSale")
-        } else if storeKit.products.isEmpty {
+        } else if storeKit.isLoadingProducts && storeKit.products.isEmpty && storeKit.lastError == nil {
             ProgressView()
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, SaveTheme.Spacing.xl)
+                .accessibilityIdentifier("paywall.loadingProducts")
+        } else if storeKit.products.isEmpty {
+            // StoreKit miss or load failure must not trap the user. The 51st
+            // save is already in Review; this retry reloads products only.
+            VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
+                Text(languageSettings.localized(
+                    english: storeKit.lastError ?? "Couldn't load subscription options.",
+                    traditionalChinese: "無法載入訂閱方案。"
+                ))
+                .font(SaveTheme.Typography.cardTitle)
+                .foregroundStyle(SaveAtlasPalette.forest)
+
+                Button {
+                    Task { await storeKit.loadProducts() }
+                } label: {
+                    Text(languageSettings.localized(english: "Try again", traditionalChinese: "再試一次"))
+                }
+                .buttonStyle(SaveBrandPrimaryButtonStyle(fill: SaveAtlasPalette.honey))
+                .accessibilityIdentifier("paywall.retryProducts")
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(SaveTheme.Spacing.lg)
+            .background(SaveAtlasPalette.mint.opacity(0.22))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .accessibilityIdentifier("paywall.productsRetry")
         } else {
             VStack(spacing: SaveTheme.Spacing.md) {
                 ForEach(storeKit.products, id: \.id) { product in

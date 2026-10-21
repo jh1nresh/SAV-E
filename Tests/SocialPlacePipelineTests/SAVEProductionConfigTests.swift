@@ -44,8 +44,11 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(paywall.contains("paywall.keepGoing"))
         XCTAssertTrue(
             paywall.contains("if trigger == .savedPlaceLimit"),
-            "Keep-going note belongs only on the cap trigger, not Passport or Settings"
+            "Q1: the saved-50 line belongs only on the 51st-save trigger"
         )
+        XCTAssertTrue(paywall.contains("paywall.retryProducts"))
+        XCTAssertTrue(paywall.contains("Try again"))
+        XCTAssertTrue(paywall.contains("再試一次"))
         XCTAssertFalse(paywall.contains("Always free"))
         XCTAssertFalse(paywall.contains("永遠免費"))
         XCTAssertFalse(paywall.contains("stay free and unlimited"))
@@ -61,6 +64,11 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(profile.contains("english: \"Savvy Pro\""))
         XCTAssertTrue(profile.contains("english: \"Free: 50 places\""))
         XCTAssertTrue(profile.contains("traditionalChinese: \"免費：50 個地點\""))
+        XCTAssertTrue(profile.contains("SaveProPaywallView(trigger: .passport)"))
+        XCTAssertFalse(
+            profile.contains("SaveProPaywallView(trigger: .savedPlaceLimit)"),
+            "Q1: Settings/Passport uses neutral copy, not the saved-50 line"
+        )
 
         let share = try source(at: "SAV-EShareExtension/ShareViewController.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
@@ -80,6 +88,14 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(backend.contains("buildGeminiUsageEvent"))
         XCTAssertTrue(backend.contains("assertNewSavedPlaceAllowed"))
         XCTAssertTrue(backend.contains("SavedPlaceLimitError"))
+
+        let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
+        XCTAssertTrue(map.contains("parkIfServerSavedPlaceLimit(error, place: place)"))
+        XCTAssertTrue(map.contains("syncSavedPlaceLimitCache()"))
+        XCTAssertTrue(
+            map.contains("if parkIfServerSavedPlaceLimit(error, place: merged)"),
+            "C6: pending Share Extension imports park on a server cap"
+        )
     }
 
     /// The gate is the only thing allowed to refuse an AI assist, so its truth
@@ -485,6 +501,111 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(summary.skippedDuplicates, 0)
         XCTAssertEqual(map.places.count, 50)
         XCTAssertEqual(map.reviewCandidates.first?.name, "Takeout Cafe")
+        XCTAssertEqual(map.reviewCandidates.first?.status, "review")
+        XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    @MainActor
+    func testDeletingAPlaceFreesASlotAndRefreshesExtensionCache() async throws {
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(50)
+        map.syncSavedPlaceLimitCache()
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .overFreeLimit)
+
+        let removed = try XCTUnwrap(map.places.first)
+        try await map.deletePlace(removed)
+        XCTAssertEqual(map.places.count, 49)
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed)
+
+        let candidate = SaveMapCandidate(
+            id: "cap-after-delete",
+            title: "Freed Slot Cafe",
+            subtitle: "Taipei",
+            latitude: 25.22,
+            longitude: 121.63,
+            category: .cafe
+        )
+        let saved = try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertEqual(saved.name, "Freed Slot Cafe")
+        XCTAssertEqual(map.places.count, 50)
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    @MainActor
+    func testFiftyFirstSaveParksWhenPurchasingIsUnavailable() async throws {
+        XCTAssertFalse(SAVEProAccessPolicy.purchasingIsAvailable)
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(50)
+        let candidate = SaveMapCandidate(
+            id: "cap-b6",
+            title: "Retry Cafe",
+            subtitle: "Taipei",
+            latitude: 25.23,
+            longitude: 121.64,
+            category: .cafe
+        )
+
+        do {
+            _ = try await map.saveMapCandidateAsPlace(candidate)
+            XCTFail("a StoreKit miss must not lock the 51st into a dropped save")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+            XCTAssertEqual(map.places.count, 50)
+            XCTAssertEqual(map.reviewCandidates.first?.name, "Retry Cafe")
+            XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        }
+    }
+
+    @MainActor
+    func testTakeoutServerCapParksInsteadOfDropping() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "takeout-owner")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#)
+            }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.place-limit-takeout.\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-takeout-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(
+            apiBaseURL: "https://analysis.test",
+            session: URLSession(configuration: configuration),
+            accessTokenProvider: { "test-token" }
+        )
+        let map = MapViewModel(
+            supabaseService: service,
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        map.places = makeCappedPlaces(49)
+        let drafts = [
+            ImportedPlaceDraft(
+                name: "Server Takeout Cafe",
+                address: "6 Cap Road",
+                latitude: 25.24,
+                longitude: 121.65,
+                sourceFile: "Saved Places.json",
+                sourceFormat: "json",
+                reviewState: .readyToSave
+            )
+        ]
+
+        let summary = try await map.saveImportedPlaces(drafts)
+        XCTAssertEqual(summary.saved, 0)
+        XCTAssertEqual(summary.reviewDrafts, 1)
+        XCTAssertEqual(map.places.count, 49)
+        XCTAssertEqual(map.reviewCandidates.first?.name, "Server Takeout Cafe")
         XCTAssertEqual(map.reviewCandidates.first?.status, "review")
         XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
     }
