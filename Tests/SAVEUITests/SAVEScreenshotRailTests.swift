@@ -3303,8 +3303,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// Live Home is the Doodle Eat/Go list plus mini-map. The Atlas gate still
     /// compares `five-tab-home` to DESIGN v2 `ProductionTargets/home.png` at
     /// 0.90 with `home-mask.png`. Do not retune that gate here.
-    /// Passport compares `five-tab-passport` to `ProductionTargets/passport.png`
-    /// at exactly 0.90 (DESIGN v2 stickers and cities).
+    /// Passport still writes `five-tab-passport` vs `ProductionTargets/passport.png`
+    /// at exactly 0.90 for the artifact; DESIGN judges that raster manually.
     @MainActor
     private func waitForHomeCoverImagery(_ app: XCUIApplication) {
         XCTAssertTrue(

@@ -165,6 +165,30 @@ struct SaveDoodleMapView: View {
                     }
                 }
             }
+
+            ForEach(mapViewModel.reviewCandidatesOnMap) { candidate in
+                if let coordinate = candidate.coordinate {
+                    Annotation("", coordinate: coordinate) {
+                        ReviewCandidateMapPin(
+                            candidate: candidate,
+                            isSelected: mapViewModel.selectedReviewCandidate?.id == candidate.id
+                        ) {
+                            mapViewModel.selectReviewCandidate(candidate)
+                        }
+                    }
+                }
+            }
+
+            ForEach(mapViewModel.visibleMapCandidates) { candidate in
+                Annotation("", coordinate: candidate.coordinate) {
+                    UnsavedMapCandidatePin(
+                        candidate: candidate,
+                        isSelected: mapViewModel.selectedMapCandidate?.id == candidate.id
+                    ) {
+                        mapViewModel.selectMapCandidate(candidate)
+                    }
+                }
+            }
         }
         .mapStyle(.standard)
         .mapFeatureSelectionDisabled { feature in
@@ -604,6 +628,11 @@ struct SaveDoodleMapView: View {
     }
 
     private func fitVisiblePlaces() {
+        // Focus-on-map / Find-exact already aimed the camera. Do not snap
+        // back to saved stamps and hide the candidate the user asked to see.
+        if preservesCandidateCamera {
+            return
+        }
         if let selected = mapViewModel.selectedPlace, selected.isMapKitMappable {
             mapViewModel.cameraPosition = .region(
                 MKCoordinateRegion(
@@ -626,6 +655,13 @@ struct SaveDoodleMapView: View {
                 )
             )
         }
+    }
+
+    private var preservesCandidateCamera: Bool {
+        mapViewModel.selectedReviewCandidate != nil
+            || mapViewModel.selectedMapCandidate != nil
+            || !mapViewModel.reviewCandidatesOnMap.isEmpty
+            || (!mapViewModel.visibleMapCandidates.isEmpty && mapViewModel.selectedPlace == nil)
     }
 
     /// Pins in the current city (or nearby, when Near you has a fix).

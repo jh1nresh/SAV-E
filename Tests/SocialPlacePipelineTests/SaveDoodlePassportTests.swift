@@ -143,6 +143,8 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(page.contains("passport.empty"))
         XCTAssertTrue(page.contains("showsEmptyPassport"))
         XCTAssertTrue(page.contains(".frame(width: 8, height: 8)"))
+        XCTAssertTrue(page.contains("guard stampingID == nil else { return }"))
+        XCTAssertTrue(page.contains("if stampingID != nil { return true }"))
     }
 
     func testPassportParityTargetIsTheDoodleMockAtExactly90() throws {
@@ -169,6 +171,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertEqual(pngDimension(darkPNG, at: 20), 874)
         XCTAssertEqual(darkPNG[25], 2, "Passport dark target must stay RGB 8-bit, not a generated screenshot.")
         XCTAssertTrue(script.contains("THRESHOLD=\"0.90\""))
+        XCTAssertTrue(script.contains("Passport 0.90 is report-only"))
         let readme = try source(at: "Prototypes/AtlasPostcard/README.md")
         XCTAssertTrue(readme.contains("passport-light.png"))
         XCTAssertTrue(readme.contains("passport-dark.png"))

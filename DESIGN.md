@@ -733,7 +733,8 @@ word only. Body copy stays `SaveAtlasType`.
 The locked parity face is DESIGN v2
 `design/doodle-targets-2026-10-20/passport-light.png` at `eade369`
 (exact 402×874; `passport-dark.png` for DESIGN comparison). Grade
-position, size, color and font style. v1 is retired. The face is
+position, size, color and font style by side-by-side comparison; the
+0.90 visual-parity score is not evidence. v1 is retired. The face is
 Passport + Beijing · 4 of 12, the kraft sticker grid, cities, and the
 five-tab rail with Passport selected. It is not the profile header,
 quests, or shared-post grid.

@@ -173,6 +173,22 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.canCheckIn(placeID: id))
     }
 
+    func testReplacementMapRendersFocusedReviewAndSearchCandidates() throws {
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        XCTAssertTrue(map.contains("reviewCandidatesOnMap"))
+        XCTAssertTrue(map.contains("visibleMapCandidates"))
+        XCTAssertTrue(map.contains("ReviewCandidateMapPin("))
+        XCTAssertTrue(map.contains("UnsavedMapCandidatePin("))
+        XCTAssertTrue(map.contains("selectReviewCandidate(candidate)"))
+        XCTAssertTrue(map.contains("selectMapCandidate(candidate)"))
+        XCTAssertTrue(map.contains("preservesCandidateCamera"))
+        let pinSource = try source(at: "SAV-E/Views/Map/MapView.swift")
+        XCTAssertTrue(pinSource.contains("struct ReviewCandidateMapPin"))
+        XCTAssertTrue(pinSource.contains("struct UnsavedMapCandidatePin"))
+        XCTAssertTrue(pinSource.contains("map.pin.review."))
+        XCTAssertTrue(pinSource.contains("map.pin.unsaved."))
+    }
+
     func testParityMaskLeavesThePointNineGateAndPrefersLiveMap() throws {
         let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/VisualParity.swift")
         let script = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")

@@ -201,6 +201,7 @@ struct SaveDoodlePassportPage: View {
         .buttonStyle(.plain)
         .frame(minWidth: SaveLayout.minTap, minHeight: SaveLayout.minTap)
         .disabled({
+            if stampingID != nil { return true }
             if case .empty = slot.content { return true }
             return false
         }())
@@ -413,6 +414,7 @@ struct SaveDoodlePassportPage: View {
     private func handleTap(_ slot: SaveDoodlePassportSlot) {
         guard case let .place(place, _, rank) = slot.content else { return }
         if rank == .none {
+            guard stampingID == nil else { return }
             SaveHaptics.stamp()
             stampingID = slot.id
             Task {

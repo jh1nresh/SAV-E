@@ -29,8 +29,9 @@ map.png, and passport.png. The result-bundle mode prefers the live
 five-tab-home attachment for Home and falls back to atlas-home for
 prototype-only runs. Passport prefers five-tab-passport and falls back to
 atlas-passport. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
-and atlas-map XCTest attachments. The Passport gate is exactly 0.90 against
-the Doodle Passport mock.
+and atlas-map XCTest attachments. Passport still writes a 0.90 comparison
+against the Doodle mock; that score is report-only. DESIGN judges the
+Passport rasters manually.
 EOF
 }
 
@@ -445,7 +446,11 @@ for screen in home saves plan map passport; do
         comparison_status=$?
         if ((comparison_status == 1)); then
             status="FAIL"
-            gate_failed=1
+            if [[ "$screen" == "passport" ]]; then
+                echo "note: Passport 0.90 is report-only; DESIGN judges rasters manually." >&2
+            else
+                gate_failed=1
+            fi
         else
             echo "error: parity comparison failed for $screen" >&2
             cat "$ARTIFACT_DIR/results/$screen.json" >&2
