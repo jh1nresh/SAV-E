@@ -142,6 +142,10 @@ final class SAVEProductionConfigTests: XCTestCase {
             rail.contains("home.more.saves"),
             "E4 opens Saves from More → Manage saved places, not a header tap under the sheet"
         )
+        XCTAssertFalse(
+            rail.contains("app.buttons[\"Manage saved places\"]"),
+            "that label is shared with header home.saves and throws on tap"
+        )
         for name in [
             "e4-51st-save-paywall",
             "e4-unplaced-candidate",
@@ -1394,6 +1398,10 @@ final class SAVEProductionConfigTests: XCTestCase {
             "reviewer-demo Map Stamps must stay visible to the demo owner"
         )
         XCTAssertTrue(map.contains("try persistParkedReviewCandidate(candidate)"))
+        XCTAssertTrue(
+            map.contains("try ensureConfirmationSession(userId, importGeneration)\n                    do {\n                        try await supabaseService.savePlace(place, userId: userId)"),
+            "Takeout must bind the initiating session before each /places write"
+        )
         XCTAssertTrue(map.contains("try ensureConfirmationSession(userId, importGeneration)"))
         XCTAssertTrue(map.contains("startedBy userId: String?"))
         XCTAssertTrue(

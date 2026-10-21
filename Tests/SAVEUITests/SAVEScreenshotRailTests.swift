@@ -3113,10 +3113,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             tapReachable(moreActions)
         }
         if app.descendants(matching: .any)["home.more.sheet"].waitForExistence(timeout: timeout(5)) {
+            // Identifiers only. The header's accessibility label is also
+            // "Manage saved places"; a label query matches both and tap() throws.
             let manage = firstExisting([
                 app.descendants(matching: .any)["home.more.saves"],
-                app.buttons["Manage saved places"],
-                app.buttons["管理已存地點"],
                 app.descendants(matching: .any)["home.reviewAll"],
             ], timeout: stepTimeout)
             if manage.exists {
@@ -3266,11 +3266,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// still hits the control.
     @MainActor
     private func tapReachable(_ element: XCUIElement) {
-        if element.exists, element.isHittable {
-            element.tap()
+        let target = element.firstMatch
+        if target.exists, target.isHittable {
+            target.tap()
             return
         }
-        element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        target.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
     @MainActor

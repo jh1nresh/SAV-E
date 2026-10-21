@@ -4270,6 +4270,7 @@ final class MapViewModel: ObservableObject {
                     return
                 }
                 if let userId = remoteUserId {
+                    try ensureConfirmationSession(userId, importGeneration)
                     do {
                         try await supabaseService.savePlace(place, userId: userId)
                         try ensureConfirmationSession(userId, importGeneration)
