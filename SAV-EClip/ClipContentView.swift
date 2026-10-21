@@ -55,6 +55,7 @@ enum ClipPreviewFailure: String {
 enum ClipSurface: Equatable {
     case preview
     case saved(String)
+    case listSaved(ClipListSaveCounts)
     case capReached
     case duplicate
     case saveFailed
@@ -76,6 +77,7 @@ struct ClipContentView: View {
     @State private var surface: ClipSurface = .preview
     @State private var signInHint = false
     @State private var isSaving = false
+    @State private var lastSaveWasList = false
     @State private var listPage = 0
     @State private var presentsAppClipOverlay = false
 
@@ -83,6 +85,8 @@ struct ClipContentView: View {
         Group {
             if isLoading {
                 loadingScreen
+            } else if case .listSaved(let counts) = surface {
+                listOutcomeScreen(counts)
             } else if case .saved(let name) = surface {
                 outcomeScreen(
                     title: ClipCopy.string("clip.saved.title"),
@@ -119,7 +123,7 @@ struct ClipContentView: View {
                     bodyText: ClipCopy.string("clip.saveFailed.body"),
                     sticker: .place,
                     badge: "!",
-                    retry: { Task { await saveCurrentPlace() } },
+                    retry: { Task { await retryLastSave() } },
                     back: nil,
                     identifier: "clip.saveFailed"
                 )
@@ -310,6 +314,15 @@ struct ClipContentView: View {
                     }
                     .accessibilityIdentifier(listTitle == nil ? "clip.place.open" : "clip.list.open")
                     .accessibilityHint(ClipCopy.format("clip.signin.reason", draft.name))
+                    if listTitle != nil, pageCount > 0 {
+                        ClipJournalSecondaryButton(
+                            title: ClipCopy.format("clip.saveAll", pageCount),
+                            enabled: !isSaving
+                        ) {
+                            Task { await saveWholeList() }
+                        }
+                        .accessibilityIdentifier("clip.list.saveAll")
+                    }
                     if let maps = draft.mapsURL() {
                         ClipMapsTextLink(title: ClipCopy.string("clip.openMaps")) {
                             UIApplication.shared.open(maps)
@@ -452,6 +465,30 @@ struct ClipContentView: View {
         .accessibilityIdentifier(identifier)
     }
 
+    private func listOutcomeScreen(_ counts: ClipListSaveCounts) -> some View {
+        let added = counts.addedAnything
+        let hitCap = counts.overCap > 0
+        let title = added
+            ? ClipCopy.string("clip.listSaved.title")
+            : (hitCap ? ClipCopy.string("clip.cap50.title") : ClipCopy.string("clip.duplicate.title"))
+        let identifier = added ? "clip.list.saved" : (hitCap ? "clip.list.cap" : "clip.list.duplicate")
+        return outcomeScreen(
+            title: title,
+            bodyText: ClipCopy.format(
+                "clip.listSaved.body",
+                counts.newlySaved,
+                counts.alreadySaved,
+                counts.overCap,
+                counts.remaining
+            ),
+            sticker: .place,
+            badge: added ? "✓" : (hitCap ? "50" : "↺"),
+            retry: nil,
+            back: hitCap || !added ? ClipCopy.string("clip.cap50.back") : nil,
+            identifier: identifier
+        )
+    }
+
     private func areaCategoryLine(_ draft: ClipPlaceDraft) -> String? {
         let area = draft.address.split(separator: ",").first.map(String.init)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -470,8 +507,52 @@ struct ClipContentView: View {
         }
     }
 
+    private func retryLastSave() async {
+        if lastSaveWasList {
+            await saveWholeList()
+        } else {
+            await saveCurrentPlace()
+        }
+    }
+
+    private func saveWholeList() async {
+        guard let list = listData else { return }
+        signInHint = false
+        lastSaveWasList = true
+        isSaving = true
+        defer { isSaving = false }
+        let drafts = list.items.map(ClipPlaceDraft.from(item:))
+        let url = lastIncomingURL ?? URL(string: "https://sav-e-app.vercel.app/list")!
+        let shareCode = lastIncomingURL.flatMap(SharedListPayload.shareCode(from:))
+        let outcome = await ClipSaveService.saveList(
+            drafts: drafts,
+            listId: list.id.uuidString,
+            shareCode: shareCode,
+            handoffURL: url,
+            sender: list.ownerDisplayName.isEmpty ? nil : list.ownerDisplayName
+        )
+        switch outcome {
+        case .handedOff:
+            return
+        case .listSaved(let counts):
+            surface = .listSaved(counts)
+            presentsAppClipOverlay = counts.addedAnything
+        case .listFailed:
+            surface = .saveFailed
+            presentsAppClipOverlay = false
+        case .signInCancelled:
+            surface = .preview
+            signInHint = true
+            presentsAppClipOverlay = false
+        case .saved, .duplicate, .capReached, .failed:
+            surface = .saveFailed
+            presentsAppClipOverlay = false
+        }
+    }
+
     private func save(draft: ClipPlaceDraft, listTitle: String?) async {
         signInHint = false
+        lastSaveWasList = false
         isSaving = true
         defer { isSaving = false }
         let url = handoffURL(for: draft, listTitle: listTitle)
@@ -494,9 +575,12 @@ struct ClipContentView: View {
             surface = .preview
             signInHint = true
             presentsAppClipOverlay = false
-        case .failed:
+        case .failed, .listFailed:
             surface = .saveFailed
             presentsAppClipOverlay = false
+        case .listSaved(let counts):
+            surface = .listSaved(counts)
+            presentsAppClipOverlay = counts.addedAnything
         }
     }
 
@@ -553,6 +637,7 @@ struct ClipContentView: View {
         failure = nil
         surface = .preview
         signInHint = false
+        lastSaveWasList = false
         presentsAppClipOverlay = false
         let requestID = UUID()
         activeIncomingURLRequestID = requestID
@@ -838,6 +923,7 @@ extension ClipContentView {
         failure = nil
         surface = .preview
         signInHint = false
+        lastSaveWasList = false
         presentsAppClipOverlay = false
         clearContent()
         switch screen {
@@ -870,6 +956,17 @@ extension ClipContentView {
             surface = .saveFailed
         case "list":
             apply(list: ClipPreviewFixtures.sampleList())
+        case "list-saved":
+            apply(list: ClipPreviewFixtures.sampleList())
+            surface = .listSaved(
+                ClipListSaveCounts(newlySaved: 3, alreadySaved: 1, overCap: 1, remaining: 12, limit: 50)
+            )
+            presentsAppClipOverlay = true
+        case "list-cap":
+            apply(list: ClipPreviewFixtures.sampleList())
+            surface = .listSaved(
+                ClipListSaveCounts(newlySaved: 0, alreadySaved: 2, overCap: 3, remaining: 0, limit: 50)
+            )
         case "loading":
             isLoading = true
         case "expired":

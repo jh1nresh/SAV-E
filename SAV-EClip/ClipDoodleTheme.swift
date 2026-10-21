@@ -489,6 +489,7 @@ struct ClipJournalPrimaryButton: View {
 
 struct ClipJournalSecondaryButton: View {
     let title: String
+    var enabled: Bool = true
     let action: () -> Void
 
     var body: some View {
@@ -496,6 +497,7 @@ struct ClipJournalSecondaryButton: View {
             Text(title)
                 .font(ClipJournalType.system(17, weight: .semibold, relativeTo: .headline))
                 .foregroundStyle(ClipJournalPalette.ink)
+                .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity, minHeight: ClipJournalLayout.buttonHeight)
                 .background(ClipJournalPalette.card, in: Capsule())
                 .overlay {
@@ -505,6 +507,8 @@ struct ClipJournalSecondaryButton: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.55)
         .frame(minHeight: ClipJournalLayout.minTap)
     }
 }

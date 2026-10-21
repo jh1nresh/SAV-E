@@ -7,6 +7,8 @@ enum ClipSaveOutcome: Equatable {
     case saved
     case duplicate
     case capReached
+    case listSaved(ClipListSaveCounts)
+    case listFailed(ClipListSaveCounts?)
     case signInCancelled
     case failed
 }
@@ -28,7 +30,21 @@ struct ClipPlaceDraft: Equatable {
     var placeId: String?
     var friendShareCode: String?
 
-    var hasValidCoordinate: Bool {
+        var listSaveItem: ClipListSaveItem {
+            ClipListSaveItem(
+                name: name,
+                address: address,
+                latitude: latitude,
+                longitude: longitude,
+                category: category,
+                rating: rating,
+                note: note,
+                sourceURL: sourceURL,
+                placeId: placeId
+            )
+        }
+
+        var hasValidCoordinate: Bool {
         latitude.isFinite && longitude.isFinite
             && (abs(latitude) > 0.0001 || abs(longitude) > 0.0001)
             && (-90...90).contains(latitude)
@@ -139,6 +155,15 @@ enum ClipSaveAPI {
         }
         return .failed
     }
+
+    static func parseListOutcome(status: Int, data: Data) -> ClipSaveOutcome {
+        switch ClipListSavePlanner.parseOutcome(status: status, data: data) {
+        case .success(let counts):
+            return .listSaved(counts)
+        case .failure:
+            return .listFailed(nil)
+        }
+    }
 }
 
 @MainActor
@@ -150,6 +175,19 @@ enum ClipSaveService {
                 shareCode: draft.friendShareCode,
                 placeId: draft.placeId,
                 listId: nil,
+                sender: sender,
+                url: url.absoluteString
+            )
+        )
+    }
+
+    static func persistList(listId: String?, shareCode: String?, url: URL, sender: String?) {
+        PendingShareStore.write(
+            PendingSharePayload(
+                kind: .list,
+                shareCode: shareCode,
+                placeId: nil,
+                listId: listId,
                 sender: sender,
                 url: url.absoluteString
             )
@@ -185,24 +223,44 @@ enum ClipSaveService {
         }
     }
 
+    static func saveList(
+        drafts: [ClipPlaceDraft],
+        listId: String?,
+        shareCode: String?,
+        handoffURL: URL,
+        sender: String?,
+        openURL: @escaping (URL, @escaping (Bool) -> Void) -> Void = { url, completion in
+            UIApplication.shared.open(url, options: [:], completionHandler: completion)
+        },
+        signIn: @escaping () async throws -> String = { try await ClipAppleAuth.signIn() },
+        postPlaces: @escaping ([ClipListSaveItem], String) async throws -> (Int, Data) = postPlaces
+    ) async -> ClipSaveOutcome {
+        persistList(listId: listId, shareCode: shareCode, url: handoffURL, sender: sender)
+        if ClipFullApp.isInstalled {
+            return await withCheckedContinuation { continuation in
+                openURL(handoffURL) { opened in
+                    continuation.resume(returning: opened ? .handedOff : .failed)
+                }
+            }
+        }
+        do {
+            let token = try await signIn()
+            let unique = ClipListSavePlanner.uniqueItems(from: drafts.map(\.listSaveItem))
+            let (status, data) = try await postPlaces(unique, token)
+            return ClipSaveAPI.parseListOutcome(status: status, data: data)
+        } catch let error as ClipSaveError {
+            return error == .cancelled ? .signInCancelled : .listFailed(nil)
+        } catch {
+            return .listFailed(nil)
+        }
+    }
+
     private static func postPlace(_ draft: ClipPlaceDraft, token: String) async throws -> (Int, Data) {
         guard let base = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]),
               let url = URL(string: "\(base)/places")
         else { throw ClipSaveError.failed }
 
-        var body: [String: Any] = [
-            "id": UUID().uuidString.lowercased(),
-            "name": draft.name,
-            "address": draft.address,
-            "latitude": draft.latitude,
-            "longitude": draft.longitude,
-            "category": categoryRaw(draft.category),
-            "status": "wantToGo",
-            "source_platform": "other",
-        ]
-        if let rating = draft.rating { body["rating"] = rating }
-        if let note = draft.note { body["note"] = note }
-        if let sourceURL = draft.sourceURL { body["source_url"] = sourceURL }
+        var body = ClipListSavePlanner.placeBody(from: draft.listSaveItem)
         if let code = draft.friendShareCode { body["friend_share_code"] = code }
 
         var request = URLRequest(url: url)
@@ -215,14 +273,19 @@ enum ClipSaveService {
         return (http.statusCode, data)
     }
 
-    private static func categoryRaw(_ value: String) -> String {
-        let lower = value.lowercased()
-        if lower.contains("cafe") || lower.contains("coffee") || lower.contains("咖啡") { return "cafe" }
-        if lower.contains("bar") || lower.contains("酒") { return "bar" }
-        if lower.contains("stay") || lower.contains("hotel") || lower.contains("宿") { return "stay" }
-        if lower.contains("shop") || lower.contains("購") { return "shopping" }
-        if lower.contains("attraction") || lower.contains("museum") || lower.contains("景") { return "attraction" }
-        return "food"
+    private static func postPlaces(_ items: [ClipListSaveItem], token: String) async throws -> (Int, Data) {
+        guard let base = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]),
+              let url = URL(string: "\(base)/places")
+        else { throw ClipSaveError.failed }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ClipListSavePlanner.requestBody(items: items))
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw ClipSaveError.failed }
+        return (http.statusCode, data)
     }
 }
 

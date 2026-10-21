@@ -103,6 +103,7 @@ import {
   type FriendShareRecipientMetricsRow,
   type FriendShareShareMetricsRow,
 } from "./friendShareEvents.js";
+import { clipListPlaceIdentities, clipListSaveResponse, planClipListSave } from "./clipListSave.js";
 import {
   communityRecommendationSignal,
   normalizeFollowRequest,
@@ -1568,6 +1569,9 @@ async function handlePlaces(
 
   if (request.method === "POST" && !placeId) {
     const rawBody = await readJson(request);
+    if (Array.isArray(rawBody.places)) {
+      return await saveClipListPlaces(response, userId, rawBody.places);
+    }
     const providerFieldError = providerCoordinateFieldError(rawBody);
     if (providerFieldError) return sendJson(response, { error: providerFieldError }, 400);
     let friendShareCode: string | undefined;
@@ -1692,6 +1696,60 @@ async function handlePlaces(
   }
 
   return sendJson(response, { error: "Unsupported places route" }, 405);
+}
+
+async function saveClipListPlaces(
+  response: ServerResponse,
+  userId: string,
+  items: unknown,
+): Promise<void> {
+  if (!Array.isArray(items) || items.length === 0) {
+    return sendJson(response, { error: "places required" }, 400);
+  }
+  if (items.length > 100) {
+    return sendJson(response, { error: "Too many places" }, 400);
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`clip-list-save:${userId}`]);
+    const existing = await client.query(
+      "select id, name, latitude, longitude, google_place_id, provider_place_id from places where user_id = $1",
+      [userId],
+    );
+    const existingIdentities = existing.rows.flatMap((row) => clipListPlaceIdentities(row));
+    const plan = planClipListSave({
+      items,
+      existingIdentities,
+      savedPlaceCount: existing.rows.length,
+    });
+
+    for (const item of plan.toInsert) {
+      const body = withOwner(item, userId);
+      if (typeof body.id !== "string" || !body.id) body.id = randomUUID();
+      const insert = buildInsert("places", body, [...placeFields, "user_id"]);
+      const { rows } = await client.query(
+        `${insert.sql}
+         on conflict (id) do update
+         set id = excluded.id
+         where places.user_id = excluded.user_id
+         returning *`,
+        insert.values,
+      );
+      if (!rows[0]) {
+        throw new Error("Place id conflict");
+      }
+    }
+
+    await client.query("commit");
+    return sendJson(response, clipListSaveResponse(plan), 201);
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function providerCoordinateFieldError(body: JsonBody): string | undefined {

@@ -13,6 +13,24 @@
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "＋ 存到我的 Savvy" } }
       }
     },
+    "clip.saveAll" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save whole list (%d)" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "整份清單都存（%d 家）" } }
+      }
+    },
+    "clip.listSaved.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved!" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "存好了！" } }
+      }
+    },
+    "clip.listSaved.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%d added, %d already saved, %d over the free limit. %d free slots left." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "新存 %d 家，已存過 %d 家，超過免費額度 %d 家。還剩 %d 個免費名額。" } }
+      }
+    },
     "clip.openMaps" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Open in Apple Maps" } },

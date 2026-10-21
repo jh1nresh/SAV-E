@@ -26,6 +26,7 @@ final class SAVEClipScreenshotTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["clip.list.preview"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.descendants(matching: .any)["clip.list.item.0"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["clip.list.swipe"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.list.saveAll"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["clip.place.photo"].exists)
         attachScreenshot(app.screenshot(), name: "03-list-zh-Hant-five-places")
         app.terminate()
@@ -33,6 +34,14 @@ final class SAVEClipScreenshotTests: XCTestCase {
 
     func test04ListEnglishLight() {
         capture(screen: "list", appearance: .light, language: "en", locale: "en_US", name: "04-list-en-light", identifier: "clip.list.preview")
+    }
+
+    func test19ListSavedCountsZhHant() {
+        capture(screen: "list-saved", appearance: .light, language: "zh-Hant", locale: "zh_TW", name: "19-list-saved-zh-Hant", identifier: "clip.list.saved")
+    }
+
+    func test19ListCapEnglish() {
+        capture(screen: "list-cap", appearance: .light, language: "en", locale: "en_US", name: "19-list-cap-en", identifier: "clip.list.cap")
     }
 
     func testListEnglishDark() {
@@ -148,6 +157,7 @@ final class SAVEClipScreenshotTests: XCTestCase {
         let list = launchClip(appearance: .light, language: "en", locale: "en_US", url: Self.listInvokeURL)
         XCTAssertTrue(list.descendants(matching: .any)["clip.list.preview"].waitForExistence(timeout: 20))
         XCTAssertTrue(list.descendants(matching: .any)["clip.list.open"].exists)
+        XCTAssertTrue(list.descendants(matching: .any)["clip.list.saveAll"].exists)
         list.terminate()
     }
 
