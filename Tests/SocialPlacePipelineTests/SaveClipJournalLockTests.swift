@@ -107,10 +107,12 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue((project ?? "").contains("Iansui-ClipTitles.ttf"))
         XCTAssertTrue((project ?? "").contains("ClipSaveService.swift"))
         XCTAssertTrue((project ?? "").contains("PendingShareStoreTests.swift in Sources"))
+        XCTAssertFalse((project ?? "").contains("C1A000000000000000000046 /* PendingShareStoreTests.swift"))
+        XCTAssertFalse((project ?? "").contains("C1A000000000000000000047 /* PendingShareStoreTests.swift"))
         let objectIDs = (project ?? "").split(separator: "\n").compactMap { line -> String? in
             guard line.hasPrefix("\t\t"), line.contains(" = {isa = ") else { return nil }
-            let id = String(line.dropFirst(2).prefix(24))
-            return id.count == 24 ? id : nil
+            let id = String(line.dropFirst(2).prefix { !$0.isWhitespace })
+            return id.allSatisfy(\.isHexDigit) && (24...32).contains(id.count) ? id : nil
         }
         XCTAssertEqual(
             Set(objectIDs).count,
