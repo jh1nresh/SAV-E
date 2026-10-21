@@ -74,7 +74,8 @@ struct SaveFriendsView: View {
                     .font(SaveAtlasType.body(13))
                     .foregroundStyle(SaveAtlasPalette.ink)
                     .padding(.horizontal, SaveSpace.md)
-                    .frame(height: SaveLayout.chipHeight)
+                    .padding(.vertical, 6)
+                    .frame(minHeight: SaveLayout.chipHeight)
                     .overlay {
                         Capsule()
                             .stroke(SaveAtlasPalette.ink, lineWidth: 1)

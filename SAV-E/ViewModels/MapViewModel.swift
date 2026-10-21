@@ -668,6 +668,13 @@ final class MapViewModel: ObservableObject {
     /// Saved-row taps must resolve onto this clue even if the latest map
     /// drawer launch forgot `preservesExactSearchClue`.
     var hasActiveExactSearchCorrection: Bool { exactSearchResolution != nil }
+
+    /// User cancelled Review correction. Drop the model session so a later
+    /// ordinary saved tap cannot attach the abandoned clue (P1 4336392024).
+    func abandonExactSearchCorrection() {
+        dropExactSearchResolutionUnlessLocked()
+    }
+
     /// After a failed rollback the correction stays claimed on this stamp so
     /// the same clue cannot attach to a second place.
     private var exactSearchRollbackLockPlaceID: UUID?

@@ -759,11 +759,12 @@ struct ContentView: View {
                         mapViewModel: mapVM,
                         initialQuery: drawerLaunchRequest.initialQuery ?? "",
                         focusesSearch: drawerLaunchRequest.focusesSearch,
-                        preservesExactSearchClue: drawerLaunchRequest.preservesExactSearchClue,
+                        preservesExactSearchClue: isExactSearchSessionActive,
                         onClose: collapseMapPanel,
                         onOpenPlace: { openSavedPlaceFromMapSearch($0) },
                         onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
                     )
+                    .id(isExactSearchSessionActive)
                 }
             }
             .modifier(MapDrawerActionErrorAlert(
@@ -996,7 +997,6 @@ struct ContentView: View {
                 await mapVM.prepareMapCandidatesForDrawerQuery(
                     query,
                     preservesExactSearchClue: isExactSearchSessionActive
-                        || mapVM.hasActiveExactSearchCorrection
                 )
             },
             onBeginExactSearchResolution: { candidate in
@@ -1005,12 +1005,9 @@ struct ContentView: View {
             },
             onClearMapSearchResults: {
                 // Typing a refine query must not drop an in-flight Review
-                // correction. That left the leftover-clue UI gate opening
-                // the stamp without retiring Harbor Oven Pizza.
-                guard exactSearchRequestID == nil,
-                      !isExactSearchSessionActive,
-                      !mapVM.hasActiveExactSearchCorrection else { return }
-                isExactSearchSessionActive = false
+                // correction. Abandon (invalidateExactSearchRequest) retires
+                // both the UI flag and mapVM.exactSearchResolution (P1 4336392024).
+                guard exactSearchRequestID == nil, !isExactSearchSessionActive else { return }
                 mapVM.clearMapSearchResults()
             },
             collaborativeLists: mapVM.collaborativeLists,
@@ -1433,10 +1430,10 @@ struct ContentView: View {
     /// (`preservesExactSearchClue == false`) while `beginExactSearchResolution`
     /// is still active; that used to open the stamp and leave the clue.
     private func openSavedPlaceFromMapSearch(_ place: Place) {
-        let shouldResolveClue = drawerLaunchRequest.preservesExactSearchClue
-            || isExactSearchSessionActive
-            || mapVM.hasActiveExactSearchCorrection
-        guard shouldResolveClue else {
+        // Home 699d676 + P1 4336392024: only the live UI session may
+        // resolve. `hasActiveExactSearchCorrection` after abandon would
+        // attach a leftover Review clue onto an unrelated stamp.
+        guard isExactSearchSessionActive else {
             openMapDetail(.savedPlace(place))
             return
         }
@@ -1460,6 +1457,7 @@ struct ContentView: View {
         guard exactSearchRequestID != nil || isExactSearchSessionActive else { return }
         exactSearchRequestID = nil
         isExactSearchSessionActive = false
+        mapVM.abandonExactSearchCorrection()
         mapVM.clearMapSearchResults()
     }
 
