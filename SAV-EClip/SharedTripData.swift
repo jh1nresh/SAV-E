@@ -1,6 +1,16 @@
 import Foundation
 import CoreLocation
 
+struct SharedPlacePhotoAuthor: Codable, Equatable {
+    var displayName: String
+    var uri: String?
+}
+
+struct SharedPlacePhotoAttribution: Codable, Equatable {
+    var authors: [SharedPlacePhotoAuthor]
+    var mapsURI: String?
+}
+
 /// Lightweight place payload encoded in the App Clip URL.
 /// Duplicated in SAVEClip target — keep in sync with main app's copy.
 struct SharedPlaceData: Codable {
@@ -18,6 +28,7 @@ struct SharedPlaceData: Codable {
     let sourceURL: String?
     let photoURLs: [String]
     let note: String?
+    var photoAttribution: SharedPlacePhotoAttribution? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: lat, longitude: lng)
@@ -81,7 +92,39 @@ struct SharedPlaceData: Codable {
             sourceLabel: sourceLabel,
             sourceURL: safeSourceURL?.absoluteString,
             photoURLs: Array(photoURLs.compactMap(Self.sanitizedPublicHTTPURL).map(\.absoluteString).prefix(1)),
-            note: Self.publicNote(note)
+            note: Self.publicNote(note),
+            photoAttribution: sanitizedPhotoAttribution()
+        )
+    }
+
+    /// Google photos render on the place-detail card only when authors exist.
+    var journalGooglePhoto: (url: URL, authors: [SharedPlacePhotoAuthor], mapsURL: URL?)? {
+        guard let url = photoURLs.first.flatMap(Self.sanitizedPublicHTTPURL),
+              let attribution = sanitizedPhotoAttribution()
+        else { return nil }
+        return (
+            url,
+            attribution.authors,
+            attribution.mapsURI.flatMap(Self.sanitizedPublicHTTPURL)
+        )
+    }
+
+    func sanitizedPhotoAttribution() -> SharedPlacePhotoAttribution? {
+        guard let photoAttribution else { return nil }
+        let authors = photoAttribution.authors.compactMap { author -> SharedPlacePhotoAuthor? in
+            let name = author.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { return nil }
+            return SharedPlacePhotoAuthor(
+                displayName: name,
+                uri: author.uri.flatMap { Self.sanitizedPublicHTTPURL($0)?.absoluteString }
+            )
+        }
+        guard !authors.isEmpty else { return nil }
+        return SharedPlacePhotoAttribution(
+            authors: authors,
+            mapsURI: photoAttribution.mapsURI.flatMap {
+                Self.sanitizedPublicHTTPURL($0)?.absoluteString
+            }
         )
     }
 

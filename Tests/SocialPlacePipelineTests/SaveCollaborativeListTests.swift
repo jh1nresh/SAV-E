@@ -308,6 +308,21 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertNil(SaveSharedListPayload.shareCode(from: try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/trip?c=abcdef"))))
     }
 
+    @MainActor
+    func testEmbeddedAndShortCodeListLinksStayOnThePublicListRoute() throws {
+        var list = SaveCollaborativeList(title: "Tokyo cafes", note: "Saturday")
+        list.add(.from(place: place(name: "Onibus Coffee", category: .cafe)))
+        let embedded = try XCTUnwrap(list.shareURL(role: .viewer))
+        XCTAssertEqual(embedded.path, "/list")
+        XCTAssertTrue(SaveSharedListPayload.isListLink(embedded))
+        XCTAssertNotNil(SaveSharedListPayload.from(url: embedded))
+
+        let short = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/list?c=AbC123_x"))
+        XCTAssertTrue(SaveSharedListPayload.isListLink(short))
+        XCTAssertEqual(SaveSharedListPayload.shareCode(from: short), "AbC123_x")
+        XCTAssertNil(SaveSharedListPayload.from(url: short))
+    }
+
     // MARK: - Server row mapping
 
     @MainActor

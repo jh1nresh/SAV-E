@@ -166,6 +166,87 @@ jobs:
           fi
           exit "$cleanup_status"
 
+  # Draft-safe App Clip journal screenshots. XCTAttachments are produced on
+  # the macOS runner and uploaded as appclip-doodle-screenshots-<sha>.
+  appclip-screenshots:
+    runs-on: macos-26
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+
+      - name: Verify toolchain
+        run: xcodebuild -version
+
+      - name: Cache SwiftPM packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/SAVEClip-DerivedData/SourcePackages
+          key: clip-spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            clip-spm-${{ runner.os }}-
+
+      - name: Create focused test simulator
+        id: simulator
+        run: |
+          udid="$(xcrun simctl create \
+            'SAV-E Clip CI' \
+            'com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro' \
+            'com.apple.CoreSimulator.SimRuntime.iOS-26-5')"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl bootstatus "$udid" -b
+
+      - name: Run App Clip screenshot UI tests
+        run: |
+          scripts/xcodebuild-clean.sh \
+            -project SAV-E.xcodeproj \
+            -scheme SAVEClip \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
+            -derivedDataPath "$RUNNER_TEMP/SAVEClip-DerivedData" \
+            -only-testing:SAVEClipUITests \
+            -resultBundlePath "$RUNNER_TEMP/SAVEClipUITests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            test
+          bash scripts/extract-xcresult-attachments.sh \
+            "$RUNNER_TEMP/SAVEClipUITests.xcresult" \
+            "$RUNNER_TEMP/appclip-doodle-screenshots"
+
+      - name: Upload App Clip screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: appclip-doodle-screenshots-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/appclip-doodle-screenshots
+            ${{ runner.temp }}/SAVEClipUITests.xcresult
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Tear down simulator
+        if: always() && steps.simulator.outputs.udid != ''
+        run: |
+          cleanup_status=0
+          xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
+          if ! xcrun simctl list devices |
+            grep -F '${{ steps.simulator.outputs.udid }}' |
+            grep -Fq '(Shutdown)'; then
+            echo 'Simulator shutdown could not be verified.' >&2
+            cleanup_status=1
+          fi
+          if ! xcrun simctl delete '${{ steps.simulator.outputs.udid }}'; then
+            echo 'Simulator deletion failed.' >&2
+            cleanup_status=1
+          elif xcrun simctl list devices | grep -Fq '${{ steps.simulator.outputs.udid }}'; then
+            echo 'Simulator deletion could not be verified.' >&2
+            cleanup_status=1
+          fi
+          exit "$cleanup_status"
+
   backend:
     uses: jh1nresh/.github/.github/workflows/node-ci.yml@0cb6fd5b730ced897c767d1c9979aba4e49d201d
     with:

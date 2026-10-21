@@ -1,6 +1,6 @@
 # Savvy Design System
 
-> Last updated: 2026-10-19
+> Last updated: 2026-10-21
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** still governs paper, type, kraft, and coral
 > chrome, with the 2026-10-19 v5 cream/ink/stroke lock below. **Tile-town** is
@@ -385,7 +385,7 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | Friends (`SaveFriendsView`) | Atlas |
 | `CategoryPill`, `EmptyStateView`, `RelatedPlaceSourcesPanel` | Atlas |
 | Brand accents: pet preset colors (Spark = honey), stamp moment ripple, `SaveMemoryBadge` stamp palette, `MemoMascotMark` | Intentional — do not recolor in migrations |
-| App Clip shared place, trip, and list previews | Atlas |
+| App Clip shared place, trip, and list previews | Doodle journal (`ClipJournalPalette` / `ClipDisplayType`, same cream/ink/coral lock as `SaveAtlasPalette` + `SaveDoodle`) |
 | `SaveMemoryBadge` chrome, `EvidenceLinkList` (debug-only), smoke harness | Legacy cream-notebook |
 
 Rules:
