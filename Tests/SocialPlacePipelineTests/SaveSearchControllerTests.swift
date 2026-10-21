@@ -2659,9 +2659,13 @@ final class SaveSearchControllerTests: XCTestCase {
 
         let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
         XCTAssertEqual(resolved.id, stamp.id)
-        XCTAssertTrue(map.reviewCandidates.isEmpty, "Seed and captured Harbor Oven cards must both retire.")
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == captured.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == seed.id },
+            "A leftover same-name row is only retired by its own id"
+        )
         let reloaded = SaveLocalVaultService(overrideVaultURL: vaultURL)
-        XCTAssertTrue(try reloaded.reviewCandidates().isEmpty)
+        XCTAssertEqual(Set(try reloaded.reviewCandidates().map(\.id)), [seed.id])
     }
 
     @MainActor

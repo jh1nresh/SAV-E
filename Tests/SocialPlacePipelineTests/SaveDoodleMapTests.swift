@@ -115,7 +115,10 @@ final class SaveDoodleMapTests: XCTestCase {
 
         let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
         XCTAssertTrue(map.contains("applyCheckIn(placeID: place.id)"))
-        XCTAssertFalse(map.contains("try? await mapViewModel.updatePlace(updated)"))
+        let checkInAt = try XCTUnwrap(map.range(of: "private func performCheckIn"))
+        let undoAt = try XCTUnwrap(map.range(of: "private func undoCheckIn"))
+        let perform = map[checkInAt.lowerBound..<undoAt.lowerBound]
+        XCTAssertFalse(perform.contains("try?"))
     }
 
     func testMapWritesAreVisibleToSharedPassportHistory() {
