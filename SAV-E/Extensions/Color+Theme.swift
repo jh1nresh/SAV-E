@@ -197,14 +197,14 @@ extension Color {
 enum SaveAtlasPalette {
     /// Doodle journal lock 2026-10-19. Warm paper, warm charcoal dark.
     /// Landing / Atlas cream. Canvas and paper light columns use this hex.
-    static let creamHex = "FFF9EB"
+    nonisolated static let creamHex = "FFF9EB"
     static let cream = Color(hex: creamHex)
     /// App icon and wordmark lock. Same hex as light coral; do not recolor assets.
-    static let brandCoralHex = "F26B4A"
+    nonisolated static let brandCoralHex = "F26B4A"
     static let brandCoral = Color(hex: brandCoralHex)
     /// Postage accent: primary CTA and source-clue fill. Matches landing `--coral`.
-    static let coralLightHex = brandCoralHex
-    static let coralDarkHex = "D97861"
+    nonisolated static let coralLightHex = brandCoralHex
+    nonisolated static let coralDarkHex = "D97861"
 
     static let canvas = Color(light: creamHex, dark: "1E1C19")
     static let paper = Color(light: creamHex, dark: "1E1C19")
