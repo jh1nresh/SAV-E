@@ -764,7 +764,6 @@ struct ContentView: View {
                         onOpenPlace: { openSavedPlaceFromMapSearch($0) },
                         onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
                     )
-                    .id(isExactSearchSessionActive)
                 }
             }
             .modifier(MapDrawerActionErrorAlert(
@@ -1086,14 +1085,24 @@ struct ContentView: View {
 
     private func openMapSearch(initialQuery: String? = nil, focusesSearch: Bool = true) {
         guard incomingPlaceReceipt == nil else { return }
-        invalidateExactSearchRequest()
+        // Expanding or focusing the Map drawer must not drop an in-flight
+        // Review correction. The previous invalidate made saved-stamp taps
+        // open the stamp without retiring the clue.
+        if !isExactSearchSessionActive {
+            invalidateExactSearchRequest()
+        }
         mapDetailDrawerItem = nil
         mapVM.clearSelectedMapObject()
         drawerVM.returnToCommands()
         rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
         showMapTab()
         presentAfterClearingExclusiveChrome(.mapDrawer(
-            DrawerLaunchRequest(target: .ask, initialQuery: initialQuery, focusesSearch: focusesSearch)
+            DrawerLaunchRequest(
+                target: .ask,
+                initialQuery: initialQuery,
+                focusesSearch: focusesSearch,
+                preservesExactSearchClue: isExactSearchSessionActive
+            )
         ))
     }
 
@@ -1430,10 +1439,10 @@ struct ContentView: View {
     /// (`preservesExactSearchClue == false`) while `beginExactSearchResolution`
     /// is still active; that used to open the stamp and leave the clue.
     private func openSavedPlaceFromMapSearch(_ place: Place) {
-        // Home 699d676 + P1 4336392024: only the live UI session may
-        // resolve. `hasActiveExactSearchCorrection` after abandon would
-        // attach a leftover Review clue onto an unrelated stamp.
-        guard isExactSearchSessionActive else {
+        // Home dbf1252: drawer expand must still resolve via the model
+        // session. P1 4336392024: real abandon drops that session, so
+        // this fallback cannot attach a leftover clue afterward.
+        guard isExactSearchSessionActive || mapVM.hasActiveExactSearchResolution else {
             openMapDetail(.savedPlace(place))
             return
         }

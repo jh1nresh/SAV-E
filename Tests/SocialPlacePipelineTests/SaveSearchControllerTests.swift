@@ -6243,7 +6243,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(content.contains("P2 4335565262"))
         XCTAssertTrue(content.contains("isExactSearchSessionActive = false"))
         XCTAssertTrue(content.contains("preservesExactSearchClue: isExactSearchSessionActive"))
-        XCTAssertTrue(content.contains("guard isExactSearchSessionActive else"))
+        XCTAssertTrue(content.contains("guard isExactSearchSessionActive || mapVM.hasActiveExactSearchResolution else"))
         XCTAssertTrue(content.contains("abandonExactSearchCorrection"))
         XCTAssertTrue(content.contains("P1 4336392024"))
         XCTAssertFalse(content.contains("|| mapVM.hasActiveExactSearchCorrection"))
