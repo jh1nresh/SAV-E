@@ -62,8 +62,8 @@ def main() -> int:
             f"Threshold: {THRESHOLD:,} bytes.",
             "",
             "Vector stickers are SwiftUI drawings (noodle bowl + plate, coffee +",
-            "saucer, temple, duck, lantern, place/pin fallback), not extra rasters.",
-            "Wordmark is Caveat 'Savvy' in forest at a fixed 34pt — not the elephant.",
+            "saucer, lantern, cream line-art pin). No temple, duck, or elephant.",
+            "Wordmark is Caveat 'Savvy' in forest at a fixed 34pt on a cream plate.",
             "",
         ]
     )

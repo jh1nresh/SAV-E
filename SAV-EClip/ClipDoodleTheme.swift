@@ -2,8 +2,8 @@ import CoreText
 import SwiftUI
 import UIKit
 
-/// Clip Doodle v2 tokens. Catalog colors are the source; coral stays a token
-/// because the landing-page value is still being decided.
+/// Clip Doodle v3.1 tokens. Catalog colors are the source.
+/// Coral stays `#F26B4A` in light and dark (`ClipCoral`).
 enum ClipJournalPalette {
     static let canvas = Color("ClipCanvas")
     static let card = Color("ClipCard")
@@ -21,33 +21,32 @@ enum ClipJournalPalette {
 
 enum ClipJournalLayout {
     static let screenMargin: CGFloat = 24
-    static let headerTop: CGFloat = 4
-    static let headerBottom: CGFloat = 12
+    static let heroWidth: CGFloat = 393
+    static let heroHeight: CGFloat = 470
+    static let heroHeightRatio: CGFloat = 0.55
+    static let heroCircle: CGFloat = 236
+    static let heroSticker: CGFloat = 128
     static let wordmarkHeight: CGFloat = 34
+    static let wordmarkPlateHeight: CGFloat = 40
     static let chipHeight: CGFloat = 32
-    static let placeMapWidth: CGFloat = 345
-    static let placeMapHeight: CGFloat = 300
-    static let listMapHeight: CGFloat = 180
+    static let avatar: CGFloat = 22
     static let cardPadding: CGFloat = 16
     static let stickerCanvas: CGFloat = 48
     static let stickerImage: CGFloat = 40
-    static let rowMinHeight: CGFloat = 64
-    static let numberCircle: CGFloat = 28
-    static let numberToSticker: CGFloat = 8
-    static let stickerToText: CGFloat = 12
-    static let nameToMeta: CGFloat = 4
     static let minTap: CGFloat = 44
-    static let buttonHeight: CGFloat = 50
+    static let buttonHeight: CGFloat = 54
     static let buttonGap: CGFloat = 12
-    static let buttonGroupBottom: CGFloat = 34
+    static let buttonGroupBottom: CGFloat = 28
     static let stateCircle: CGFloat = 120
     static let stateSticker: CGFloat = 84
     static let stateBadge: CGFloat = 40
     static let stateTitleGap: CGFloat = 24
     static let stateBodyGap: CGFloat = 12
     static let stateBodyMaxWidth: CGFloat = 300
-    static let pinWidth: CGFloat = 30
-    static let pinHeight: CGFloat = 38
+    static let namePointLatin: CGFloat = 38
+    static let namePointCJK: CGFloat = 34
+    static let listTitlePoint: CGFloat = 22
+    static let noteRotation: Double = -1.2
     static let dotGridStep: CGFloat = 14
 }
 
@@ -80,9 +79,8 @@ enum ClipDisplayType {
         }
     }()
 
-    /// Caveat (Latin) / Iansui (zh) for titles only. Place names, addresses,
-    /// buttons, meta, and body stay on the system font. The Clip ships
-    /// Iansui-ClipTitles.ttf (title glyphs), not Iansui-SavvySubset.ttf (3.48 MB).
+    /// Caveat (Latin) / Iansui (zh) for place names, list titles, and state titles.
+    /// Ship Iansui-ClipTitles.ttf, not Iansui-SavvySubset.ttf (3.48 MB).
     static func title(_ size: CGFloat, relativeTo style: Font.TextStyle) -> Font {
         _ = register
         if ClipCopy.usesTraditionalChinese {
@@ -93,6 +91,13 @@ enum ClipDisplayType {
         let latin = UIFont(name: latinName, size: size)
             ?? UIFont.systemFont(ofSize: size, weight: .semibold)
         return Font(UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: latin))
+    }
+
+    static var placeName: Font {
+        title(
+            ClipCopy.usesTraditionalChinese ? ClipJournalLayout.namePointCJK : ClipJournalLayout.namePointLatin,
+            relativeTo: .title
+        )
     }
 
     /// Forest handwritten wordmark. Fixed 34pt — not Dynamic Type scaled.
@@ -136,19 +141,16 @@ struct ClipWordmark: View {
     }
 }
 
-struct ClipSharedChip: View {
+struct ClipWordmarkPlate: View {
     var body: some View {
-        Text(ClipCopy.string("clip.chip.shared"))
-            .font(ClipJournalType.system(13, weight: .semibold, relativeTo: .footnote))
-            .foregroundStyle(ClipJournalPalette.ink)
+        ClipWordmark()
             .padding(.horizontal, 12)
-            .frame(height: ClipJournalLayout.chipHeight)
-            .background(ClipJournalPalette.kraft, in: Capsule())
+            .frame(height: ClipJournalLayout.wordmarkPlateHeight)
+            .background(ClipJournalPalette.cream, in: Capsule())
             .overlay {
-                ClipJitterCapsule(seed: 3)
+                ClipJitterCapsule(seed: 19)
                     .stroke(ClipJournalPalette.ink, lineWidth: ClipJournalPalette.strokeWidth)
             }
-            .accessibilityHidden(true)
     }
 }
 
@@ -191,7 +193,6 @@ struct ClipDottedBackground: View {
     }
 }
 
-/// Deterministic ink jitter for cards, buttons, chips, map frames, and state circles.
 struct ClipJitterRoundedRect: Shape {
     var radius: CGFloat
     var seed: UInt64 = 1
@@ -214,6 +215,29 @@ struct ClipJitterCircle: Shape {
 
     func path(in rect: CGRect) -> Path {
         jitteredPath(in: rect, cornerRadius: min(rect.width, rect.height) / 2, seed: seed)
+    }
+}
+
+struct ClipTornPaperEdge: Shape {
+    var seed: UInt64 = 21
+
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - 14))
+        var x = rect.maxX
+        var index = 0
+        while x > rect.minX {
+            let next = max(x - 18, rect.minX)
+            let wave = sin(Double(index) * 1.7 + Double(seed) * 0.31)
+            let y = rect.maxY - 10 + CGFloat(wave) * 6
+            path.addLine(to: CGPoint(x: next, y: y))
+            x = next
+            index += 1
+        }
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -261,9 +285,9 @@ private func jitter(_ point: CGPoint, index: Int, seed: UInt64, in bounds: CGRec
 }
 
 enum ClipStickerKind: String {
-    case noodle, coffee, temple, duck, lantern, place
+    case noodle, coffee, lantern, place
 
-    static func forCategory(_ raw: String?) -> ClipStickerKind {
+    static func forHero(_ raw: String?) -> ClipStickerKind {
         let value = (raw ?? "").lowercased()
         if value.contains("cafe") || value.contains("coffee") || value.contains("咖啡") {
             return .coffee
@@ -272,45 +296,13 @@ enum ClipStickerKind: String {
             || value.contains("餐") || value.contains("麵") || value.contains("面") {
             return .noodle
         }
-        if value.contains("temple") || value.contains("attraction") || value.contains("museum")
-            || value.contains("寺") || value.contains("景") {
-            return .temple
-        }
-        if value.contains("bar") || value.contains("stay") || value.contains("hotel")
-            || value.contains("酒") || value.contains("宿") {
-            return .lantern
-        }
-        if value.contains("shop") || value.contains("duck") || value.contains("購") {
-            return .duck
-        }
         return .place
-    }
-}
-
-struct ClipCategorySticker: View {
-    let kind: ClipStickerKind
-    var canvas: CGFloat = ClipJournalLayout.stickerCanvas
-
-    var body: some View {
-        ZStack {
-            if kind == .place {
-                ClipJitterCircle(seed: 9)
-                    .stroke(ClipJournalPalette.coral, style: StrokeStyle(lineWidth: 1.4, dash: [3, 2.4]))
-            } else {
-                ClipJournalPalette.kraft
-                ClipJitterRoundedRect(radius: 12, seed: 8)
-                    .stroke(ClipJournalPalette.ink, lineWidth: 1.2)
-            }
-            ClipStickerDrawing(kind: kind)
-                .frame(width: ClipJournalLayout.stickerImage, height: ClipJournalLayout.stickerImage)
-        }
-        .frame(width: canvas, height: canvas)
-        .accessibilityHidden(true)
     }
 }
 
 struct ClipStickerDrawing: View {
     let kind: ClipStickerKind
+    var lineArtPin: Bool = false
 
     var body: some View {
         Canvas { context, size in
@@ -342,22 +334,10 @@ struct ClipStickerDrawing: View {
                 var handle = Path()
                 handle.addArc(center: CGPoint(x: size.width * 0.72, y: size.height * 0.42), radius: size.width * 0.12, startAngle: .degrees(-70), endAngle: .degrees(70), clockwise: false)
                 context.stroke(handle, with: .color(ink), lineWidth: 2.2)
-            case .temple:
-                var roof = Path()
-                roof.move(to: CGPoint(x: size.width * 0.12, y: size.height * 0.42))
-                roof.addLine(to: CGPoint(x: size.width * 0.5, y: size.height * 0.16))
-                roof.addLine(to: CGPoint(x: size.width * 0.88, y: size.height * 0.42))
-                context.fill(roof, with: .color(coral))
-                context.fill(Path(CGRect(x: size.width * 0.32, y: size.height * 0.42, width: size.width * 0.36, height: size.height * 0.36)), with: .color(ink.opacity(0.85)))
-            case .duck:
-                context.fill(Path(ellipseIn: CGRect(x: size.width * 0.22, y: size.height * 0.36, width: size.width * 0.52, height: size.height * 0.4)), with: .color(coral))
-                context.fill(Path(ellipseIn: CGRect(x: size.width * 0.48, y: size.height * 0.18, width: size.width * 0.3, height: size.height * 0.28)), with: .color(coral))
-                context.fill(Path(ellipseIn: CGRect(x: size.width * 0.74, y: size.height * 0.3, width: size.width * 0.16, height: size.height * 0.1)), with: .color(ink))
             case .lantern:
                 context.fill(Path(roundedRect: CGRect(x: size.width * 0.3, y: size.height * 0.22, width: size.width * 0.4, height: size.height * 0.56), cornerRadius: 10), with: .color(coral))
                 context.stroke(Path(CGRect(x: size.width * 0.36, y: size.height * 0.08, width: size.width * 0.28, height: size.height * 0.12)), with: .color(ink), lineWidth: 2)
             case .place:
-                // Packet fallback: generic place/pin sticker (not the elephant).
                 var pin = Path()
                 let radius = size.width * 0.28
                 let center = CGPoint(x: size.width * 0.5, y: size.height * 0.38)
@@ -365,90 +345,92 @@ struct ClipStickerDrawing: View {
                 pin.addQuadCurve(to: CGPoint(x: size.width * 0.5, y: size.height * 0.92), control: CGPoint(x: size.width * 0.86, y: size.height * 0.62))
                 pin.addQuadCurve(to: CGPoint(x: center.x - radius * 0.78, y: center.y + radius * 0.42), control: CGPoint(x: size.width * 0.14, y: size.height * 0.62))
                 pin.closeSubpath()
-                context.fill(pin, with: .color(coral))
-                context.fill(Path(ellipseIn: CGRect(x: size.width * 0.42, y: size.height * 0.28, width: size.width * 0.16, height: size.height * 0.16)), with: .color(cream))
+                if lineArtPin {
+                    context.stroke(pin, with: .color(ink), lineWidth: 2.2)
+                    context.stroke(
+                        Path(ellipseIn: CGRect(x: size.width * 0.42, y: size.height * 0.28, width: size.width * 0.16, height: size.height * 0.16)),
+                        with: .color(ink),
+                        lineWidth: 1.6
+                    )
+                } else {
+                    context.fill(pin, with: .color(coral))
+                    context.fill(Path(ellipseIn: CGRect(x: size.width * 0.42, y: size.height * 0.28, width: size.width * 0.16, height: size.height * 0.16)), with: .color(cream))
+                }
             }
         }
         .accessibilityHidden(true)
     }
 }
 
-struct ClipTeardrop: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let radius = rect.width / 2
-        let center = CGPoint(x: rect.midX, y: rect.minY + radius)
-        path.addArc(center: center, radius: radius, startAngle: .degrees(210), endAngle: .degrees(-30), clockwise: false)
-        path.addQuadCurve(
-            to: CGPoint(x: rect.midX, y: rect.maxY),
-            control: CGPoint(x: rect.maxX - 1, y: rect.midY + radius * 0.35)
-        )
-        path.addQuadCurve(
-            to: CGPoint(x: rect.minX + radius * 0.14, y: rect.minY + radius * 1.28),
-            control: CGPoint(x: rect.minX + 1, y: rect.midY + radius * 0.35)
-        )
-        path.closeSubpath()
-        return path
-    }
-}
-
-struct ClipDoodlePin: View {
-    var number: Int? = nil
-    var outlined: Bool = false
+struct ClipHeroSticker: View {
+    let kind: ClipStickerKind
 
     var body: some View {
         ZStack {
-            ClipTeardrop()
-                .fill(outlined ? ClipJournalPalette.cream : ClipJournalPalette.coral)
-            ClipTeardrop()
-                .stroke(outlined ? ClipJournalPalette.coral : ClipJournalPalette.cream, lineWidth: outlined ? 2.2 : 3)
-            if let number {
-                Text("\(number)")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(outlined ? ClipJournalPalette.coral : ClipJournalPalette.cream)
-                    .offset(y: -3)
-            } else {
-                Circle()
-                    .fill(ClipJournalPalette.cream)
-                    .frame(width: 9, height: 9)
-                    .offset(y: -3)
+            ClipJournalPalette.cream
+            ClipJitterCircle(seed: 9)
+                .stroke(ClipJournalPalette.ink, lineWidth: ClipJournalPalette.strokeWidth)
+            ClipStickerDrawing(kind: kind, lineArtPin: kind == .place)
+                .frame(width: ClipJournalLayout.heroSticker, height: ClipJournalLayout.heroSticker)
+        }
+        .frame(width: ClipJournalLayout.heroCircle, height: ClipJournalLayout.heroCircle)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+}
+
+struct ClipSharerChip: View {
+    let name: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ZStack {
+                Circle().fill(ClipJournalPalette.kraft)
+                Text(String(name.prefix(1)))
+                    .font(ClipJournalType.system(12, weight: .semibold, relativeTo: .caption))
+                    .foregroundStyle(ClipJournalPalette.ink)
             }
+            .frame(width: ClipJournalLayout.avatar, height: ClipJournalLayout.avatar)
+            Text(ClipCopy.format("clip.from", name))
+                .font(ClipJournalType.system(14, weight: .semibold, relativeTo: .subheadline))
+                .foregroundStyle(ClipJournalPalette.ink)
+                .lineLimit(1)
         }
-        .frame(width: ClipJournalLayout.pinWidth, height: ClipJournalLayout.pinHeight)
-        .accessibilityHidden(true)
-    }
-}
-
-struct ClipCircledNumber: View {
-    let number: Int
-
-    var body: some View {
-        ZStack {
-            ClipJitterCircle(seed: UInt64(number + 4))
-                .stroke(ClipJournalPalette.coral, lineWidth: ClipJournalPalette.strokeWidth)
-            Text("\(number)")
-                .font(ClipJournalType.system(13, weight: .semibold, relativeTo: .footnote))
-                .foregroundStyle(ClipJournalPalette.coral)
+        .padding(.horizontal, 10)
+        .frame(height: ClipJournalLayout.chipHeight)
+        .background(ClipJournalPalette.cream, in: Capsule())
+        .overlay {
+            ClipJitterCapsule(seed: 3)
+                .stroke(ClipJournalPalette.ink, lineWidth: ClipJournalPalette.strokeWidth)
         }
-        .frame(width: ClipJournalLayout.numberCircle, height: ClipJournalLayout.numberCircle)
-        .accessibilityHidden(true)
+        .accessibilityLabel(ClipCopy.format("clip.from", name))
     }
 }
 
 struct ClipWashiNote: View {
     let text: String
+    var attribution: String? = nil
 
     var body: some View {
-        Text(text)
-            .font(ClipJournalType.system(15, weight: .regular, relativeTo: .subheadline))
-            .foregroundStyle(ClipJournalPalette.ink)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background {
-                ClipWashiStrip()
-                    .fill(ClipJournalPalette.kraft)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(text)
+                .font(ClipJournalType.system(16, weight: .regular, relativeTo: .body))
+                .foregroundStyle(ClipJournalPalette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            if let attribution, !attribution.isEmpty {
+                Text(ClipCopy.format("clip.noteBy", attribution))
+                    .font(ClipJournalType.system(12, weight: .regular, relativeTo: .caption))
+                    .foregroundStyle(ClipJournalPalette.muted)
             }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ClipWashiStrip()
+                .fill(ClipJournalPalette.kraft)
+        }
+        .rotationEffect(.degrees(ClipJournalLayout.noteRotation))
     }
 }
 
@@ -481,54 +463,46 @@ struct ClipWashiStrip: Shape {
 
 struct ClipJournalPrimaryButton: View {
     let title: String
-    var systemImage: String? = nil
+    var enabled: Bool = true
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                if let systemImage {
-                    Image(systemName: systemImage)
+            Text(title)
+                .font(ClipJournalType.system(17, weight: .semibold, relativeTo: .headline))
+                .foregroundStyle(ClipJournalPalette.cream)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, minHeight: ClipJournalLayout.buttonHeight)
+                .background(ClipJournalPalette.coral, in: Capsule())
+                .overlay {
+                    ClipJitterCapsule(seed: 11)
+                        .stroke(ClipJournalPalette.ink, lineWidth: ClipJournalPalette.strokeWidth)
                 }
-                Text(title)
-            }
-            .font(ClipJournalType.system(17, weight: .semibold, relativeTo: .headline))
-            .foregroundStyle(ClipJournalPalette.cream)
-            .frame(maxWidth: .infinity, minHeight: ClipJournalLayout.buttonHeight)
-            .background(ClipJournalPalette.coral, in: Capsule())
-            .overlay {
-                ClipJitterCapsule(seed: 11)
-                    .stroke(ClipJournalPalette.ink, lineWidth: ClipJournalPalette.strokeWidth)
-            }
-            .contentShape(Capsule())
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.55)
         .frame(minHeight: ClipJournalLayout.minTap)
     }
 }
 
 struct ClipJournalSecondaryButton: View {
     let title: String
-    var systemImage: String? = nil
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                if let systemImage {
-                    Image(systemName: systemImage)
+            Text(title)
+                .font(ClipJournalType.system(17, weight: .semibold, relativeTo: .headline))
+                .foregroundStyle(ClipJournalPalette.ink)
+                .frame(maxWidth: .infinity, minHeight: ClipJournalLayout.buttonHeight)
+                .background(ClipJournalPalette.card, in: Capsule())
+                .overlay {
+                    ClipJitterCapsule(seed: 13)
+                        .stroke(ClipJournalPalette.ink, lineWidth: ClipJournalPalette.strokeWidth)
                 }
-                Text(title)
-            }
-            .font(ClipJournalType.system(17, weight: .semibold, relativeTo: .headline))
-            .foregroundStyle(ClipJournalPalette.ink)
-            .frame(maxWidth: .infinity, minHeight: ClipJournalLayout.buttonHeight)
-            .background(ClipJournalPalette.card, in: Capsule())
-            .overlay {
-                ClipJitterCapsule(seed: 13)
-                    .stroke(ClipJournalPalette.ink, lineWidth: ClipJournalPalette.strokeWidth)
-            }
-            .contentShape(Capsule())
+                .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .frame(minHeight: ClipJournalLayout.minTap)
@@ -574,7 +548,7 @@ struct ClipLoadingDots: View {
         HStack(spacing: 8) {
             ForEach(0..<3, id: \.self) { index in
                 Circle()
-                    .fill(ClipJournalPalette.coral)
+                    .fill(ClipJournalPalette.cream)
                     .frame(width: 8, height: 8)
                     .opacity(reduceMotion ? 1 : 0.35 + Double((index + 1) % 3) * 0.3)
             }
@@ -590,34 +564,46 @@ struct ClipMapsTextLink: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(ClipJournalType.system(15, weight: .regular, relativeTo: .subheadline))
+                .font(ClipJournalType.system(15, weight: .semibold, relativeTo: .subheadline))
                 .underline()
-                .foregroundStyle(ClipJournalPalette.ink)
+                .foregroundStyle(ClipJournalPalette.coral)
                 .frame(minHeight: ClipJournalLayout.minTap)
         }
         .buttonStyle(.plain)
     }
 }
 
-extension View {
-    func clipJournalCard() -> some View {
-        padding(ClipJournalLayout.cardPadding)
-            .background(
-                ClipJournalPalette.card,
-                in: RoundedRectangle(cornerRadius: ClipJournalPalette.cardRadius, style: .continuous)
-            )
-            .overlay {
-                ClipJitterRoundedRect(radius: ClipJournalPalette.cardRadius, seed: 6)
-                    .stroke(ClipJournalPalette.ink, lineWidth: ClipJournalPalette.strokeWidth)
-            }
-    }
+struct ClipOwnedPhoto: View {
+    let url: URL
 
-    func clipJournalMapFrame() -> some View {
-        clipShape(RoundedRectangle(cornerRadius: ClipJournalPalette.cardRadius, style: .continuous))
-            .overlay {
-                ClipJitterRoundedRect(radius: ClipJournalPalette.cardRadius, seed: 7)
-                    .stroke(ClipJournalPalette.ink, lineWidth: ClipJournalPalette.strokeWidth)
+    var body: some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+            default:
+                ClipJournalPalette.coral
             }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+struct ClipPageIndicator: View {
+    let count: Int
+    let current: Int
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ForEach(0..<count, id: \.self) { index in
+                Capsule()
+                    .fill(index == current ? ClipJournalPalette.cream : ClipJournalPalette.cream.opacity(0.35))
+                    .frame(width: 5, height: index == current ? 16 : 5)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 

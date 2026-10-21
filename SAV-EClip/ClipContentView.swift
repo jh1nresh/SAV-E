@@ -1,6 +1,5 @@
-import SwiftUI
-import MapKit
 import StoreKit
+import SwiftUI
 import UIKit
 
 enum ClipPreviewFailure: String {
@@ -35,7 +34,7 @@ enum ClipPreviewFailure: String {
         case .expired, .malformed: return .lantern
         case .server: return .coffee
         case .offline, .empty: return .place
-    }
+        }
     }
 
     var badge: String {
@@ -53,6 +52,14 @@ enum ClipPreviewFailure: String {
     }
 }
 
+enum ClipSurface: Equatable {
+    case preview
+    case saved(String)
+    case capReached
+    case duplicate
+    case saveFailed
+}
+
 struct ClipContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var placeReceipt: SharedPlaceReceipt?
@@ -66,51 +73,90 @@ struct ClipContentView: View {
     @State private var activeIncomingURLRequestID: UUID?
     @State private var lastIncomingURL: URL?
     @State private var failure: ClipPreviewFailure?
-    @State private var cameraPosition: MapCameraPosition = .region(MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
-        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-    ))
+    @State private var surface: ClipSurface = .preview
+    @State private var signInHint = false
+    @State private var isSaving = false
+    @State private var listPage = 0
     @State private var presentsAppClipOverlay = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Group {
-                if isLoading {
-                    stateScreen(
-                        title: ClipCopy.string("clip.loading.title"),
-                        bodyText: ClipCopy.string("clip.loading.body"),
-                        sticker: .place,
-                        badge: "",
-                        showProgress: true,
-                        retry: nil
-                    )
-                    .accessibilityIdentifier("clip.loading")
-                } else if let mySaves = mySavesData {
-                    mySavesContentView(mySaves)
-                } else if let referral = referralData {
-                    referralContentView(referral)
-                } else if let list = listData {
-                    listContentView(list)
-                } else if let receipt = placeReceipt {
-                    placeContentView(receipt)
-                } else if let trip = tripData {
-                    tripContentView(trip)
-                } else {
-                    let reason = failure ?? .empty
-                    stateScreen(
-                        title: ClipCopy.string(reason.titleKey),
-                        bodyText: ClipCopy.string(reason.bodyKey),
-                        sticker: reason.sticker,
-                        badge: reason.badge,
-                        showProgress: false,
-                        retry: reason.showsRetry ? lastIncomingURL : nil
-                    )
-                    .accessibilityIdentifier("clip.error.\(reason.rawValue)")
-                }
+        Group {
+            if isLoading {
+                loadingScreen
+            } else if case .saved(let name) = surface {
+                outcomeScreen(
+                    title: ClipCopy.string("clip.saved.title"),
+                    bodyText: ClipCopy.format("clip.saved.body", name),
+                    sticker: .place,
+                    badge: "✓",
+                    retry: nil,
+                    back: nil,
+                    identifier: "clip.saved"
+                )
+            } else if surface == .capReached {
+                outcomeScreen(
+                    title: ClipCopy.string("clip.cap50.title"),
+                    bodyText: ClipCopy.string("clip.cap50.body"),
+                    sticker: .place,
+                    badge: "50",
+                    retry: nil,
+                    back: ClipCopy.string("clip.cap50.back"),
+                    identifier: "clip.cap50"
+                )
+            } else if surface == .duplicate {
+                outcomeScreen(
+                    title: ClipCopy.string("clip.duplicate.title"),
+                    bodyText: ClipCopy.string("clip.duplicate.body"),
+                    sticker: .place,
+                    badge: "↺",
+                    retry: nil,
+                    back: ClipCopy.string("clip.cap50.back"),
+                    identifier: "clip.duplicate"
+                )
+            } else if surface == .saveFailed {
+                outcomeScreen(
+                    title: ClipCopy.string("clip.saveFailed.title"),
+                    bodyText: ClipCopy.string("clip.saveFailed.body"),
+                    sticker: .place,
+                    badge: "!",
+                    retry: { Task { await saveCurrentPlace() } },
+                    back: nil,
+                    identifier: "clip.saveFailed"
+                )
+            } else if let mySaves = mySavesData {
+                leftoverContent(title: "My Savvy", rows: mySaves.places.map(\.name))
+            } else if let referral = referralData {
+                leftoverContent(
+                    title: referral.displayName,
+                    rows: [ClipCopy.format("clip.referral.invite", referral.handle)]
+                )
+            } else if let list = listData {
+                listPages(list)
+            } else if let receipt = placeReceipt {
+                placePage(
+                    draft: .from(place: receipt.payload, shareCode: receipt.code),
+                    sender: receipt.verifiedSenderLabel,
+                    photoURL: ClipOwnedPhotoPolicy.url(from: receipt.payload.photoURLs),
+                    listTitle: nil,
+                    pageIndex: 0,
+                    pageCount: 1
+                )
+            } else if let trip = tripData {
+                leftoverContent(title: trip.name, rows: trip.stops.map(\.name))
+            } else {
+                let reason = failure ?? .empty
+                outcomeScreen(
+                    title: ClipCopy.string(reason.titleKey),
+                    bodyText: ClipCopy.string(reason.bodyKey),
+                    sticker: reason.sticker,
+                    badge: reason.badge,
+                    retry: reason.showsRetry ? { handleIncomingURL(lastIncomingURL) } : nil,
+                    back: nil,
+                    identifier: "clip.error.\(reason.rawValue)"
+                )
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ClipDottedBackground().ignoresSafeArea())
         .background {
             ClipSKOverlayHost(isPresented: $presentsAppClipOverlay)
@@ -154,292 +200,224 @@ struct ClipContentView: View {
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .center) {
-            ClipWordmark()
-            Spacer(minLength: 8)
-            ClipSharedChip()
-        }
-        .padding(.horizontal, ClipJournalLayout.screenMargin)
-        .padding(.top, ClipJournalLayout.headerTop)
-        .padding(.bottom, ClipJournalLayout.headerBottom)
-    }
-
-    // MARK: - Place
-
-    private func placeContentView(_ receipt: SharedPlaceReceipt) -> some View {
-        let place = receipt.payload
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Map(position: $cameraPosition) {
-                    Annotation("", coordinate: place.coordinate, anchor: .bottom) {
-                        ClipDoodlePin()
-                            .accessibilityLabel(ClipCopy.format("a11y.pin", 1, place.name))
+    private var loadingScreen: some View {
+        VStack(spacing: 0) {
+            hero(photoURL: nil, category: nil, sender: nil, listTitle: nil, pageIndex: 0, pageCount: 1)
+                .overlay {
+                    VStack(spacing: 16) {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(ClipJournalPalette.cream.opacity(0.35))
+                            .frame(width: 180, height: 18)
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(ClipJournalPalette.cream.opacity(0.22))
+                            .frame(width: 120, height: 14)
+                        ClipLoadingDots(reduceMotion: reduceMotion)
                     }
                 }
-                .mapStyle(.standard)
-                .frame(maxWidth: ClipJournalLayout.placeMapWidth)
-                .frame(height: ClipJournalLayout.placeMapHeight)
-                .clipJournalMapFrame()
-                .frame(maxWidth: .infinity)
-                .accessibilityIdentifier("clip.place.map")
+            Spacer()
+        }
+        .ignoresSafeArea(edges: .top)
+        .accessibilityIdentifier("clip.loading")
+        .accessibilityLabel(ClipCopy.string("clip.loading.title"))
+    }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .top, spacing: ClipJournalLayout.stickerToText) {
-                        ClipCategorySticker(kind: .forCategory(place.category))
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(place.name)
-                                .font(ClipJournalType.system(20, weight: .semibold, relativeTo: .title3))
-                                .foregroundStyle(ClipJournalPalette.ink)
-                                .fixedSize(horizontal: false, vertical: true)
-                            if !place.category.isEmpty {
-                                Text(place.category)
-                                    .font(ClipJournalType.system(13, weight: .regular, relativeTo: .footnote))
-                                    .foregroundStyle(ClipJournalPalette.muted)
+    private func listPages(_ list: SharedListData) -> some View {
+        let items = list.items
+        return GeometryReader { proxy in
+            ScrollView(.vertical) {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                        placePage(
+                            draft: .from(item: item),
+                            sender: list.ownerDisplayName.isEmpty ? nil : list.ownerDisplayName,
+                            photoURL: ClipOwnedPhotoPolicy.url(from: item.photoURLs),
+                            listTitle: list.title,
+                            pageIndex: index,
+                            pageCount: items.count
+                        )
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .background {
+                            GeometryReader { itemProxy in
+                                Color.clear.preference(
+                                    key: ClipListPageKey.self,
+                                    value: abs(itemProxy.frame(in: .named("clip.list")).minY) < 80 ? index : listPage
+                                )
                             }
                         }
-                    }
-                    if !place.address.isEmpty {
-                        Text(place.address)
-                            .font(ClipJournalType.system(15, weight: .regular, relativeTo: .subheadline))
-                            .foregroundStyle(ClipJournalPalette.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if let sender = receipt.verifiedSenderLabel {
-                        Text(ClipCopy.format("clip.place.sender", sender))
-                            .font(ClipJournalType.system(15, weight: .regular, relativeTo: .subheadline))
-                            .foregroundStyle(ClipJournalPalette.muted)
-                    }
-                    if let note = place.note, !note.isEmpty {
-                        ClipWashiNote(text: note)
+                        .id(index)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .clipJournalCard()
+                .scrollTargetLayout()
             }
-            .padding(.horizontal, ClipJournalLayout.screenMargin)
-            .padding(.bottom, 12)
+            .scrollTargetBehavior(.paging)
+            .scrollIndicators(.hidden)
+            .scrollBounceBehavior(.basedOnSize)
+            .coordinateSpace(name: "clip.list")
+            .onPreferenceChange(ClipListPageKey.self) { listPage = $0 }
         }
-        .scrollIndicators(.hidden)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: ClipJournalLayout.buttonGap) {
-                ClipJournalPrimaryButton(
-                    title: ClipCopy.string("clip.place.save")
-                ) {
-                    saveToMySavvy()
-                }
-                .accessibilityIdentifier("clip.place.open")
-
-                if let mapsURL = place.appleMapsURL {
-                    ClipMapsTextLink(title: ClipCopy.string("clip.place.openMaps")) {
-                        UIApplication.shared.open(mapsURL)
-                    }
-                    .accessibilityIdentifier("clip.place.maps")
-                }
-
-                Text(ClipCopy.string("clip.footnote.howSave"))
-                    .font(ClipJournalType.system(13, weight: .regular, relativeTo: .footnote))
-                    .foregroundStyle(ClipJournalPalette.muted)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-            }
-            .padding(.horizontal, ClipJournalLayout.screenMargin)
-            .padding(.top, 12)
-            .padding(.bottom, ClipJournalLayout.buttonGroupBottom)
-            .background(ClipJournalPalette.canvas)
-        }
-        .accessibilityIdentifier("clip.place.preview")
-    }
-
-    // MARK: - List
-
-    private func listContentView(_ list: SharedListData) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Map(position: $cameraPosition) {
-                    ForEach(Array(list.items.enumerated()), id: \.element.id) { index, item in
-                        Annotation("", coordinate: item.coordinate, anchor: .bottom) {
-                            ClipDoodlePin(number: index + 1, outlined: true)
-                                .accessibilityLabel(ClipCopy.format("a11y.pin", index + 1, item.title))
-                        }
-                    }
-                }
-                .mapStyle(.standard)
-                .frame(height: ClipJournalLayout.listMapHeight)
-                .clipJournalMapFrame()
-                .accessibilityIdentifier("clip.list.map")
-
-                VStack(alignment: .leading, spacing: 8) {
-                    ClipDisplayTitle(text: list.title, pointSize: 28, relativeTo: .title)
-                    Text(listCountLine(list))
-                        .font(ClipJournalType.system(15, weight: .regular, relativeTo: .subheadline))
-                        .foregroundStyle(ClipJournalPalette.muted)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                VStack(spacing: 0) {
-                    ForEach(Array(list.items.enumerated()), id: \.element.id) { index, item in
-                        if index > 0 {
-                            Rectangle()
-                                .fill(ClipJournalPalette.line)
-                                .frame(height: ClipJournalPalette.strokeWidth)
-                        }
-                        listItemRow(item, index: index)
-                    }
-                }
-            }
-            .padding(.horizontal, ClipJournalLayout.screenMargin)
-            .padding(.bottom, 12)
-        }
-        .scrollIndicators(.hidden)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            VStack(spacing: ClipJournalLayout.buttonGap) {
-                ClipJournalPrimaryButton(
-                    title: ClipCopy.string("clip.list.open")
-                ) {
-                    saveToMySavvy()
-                }
-                .accessibilityIdentifier("clip.list.open")
-                Text(ClipCopy.string("clip.footnote.howSave"))
-                    .font(ClipJournalType.system(13, weight: .regular, relativeTo: .footnote))
-                    .foregroundStyle(ClipJournalPalette.muted)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity)
-            }
-            .padding(.horizontal, ClipJournalLayout.screenMargin)
-            .padding(.top, 12)
-            .padding(.bottom, ClipJournalLayout.buttonGroupBottom)
-            .background(ClipJournalPalette.canvas)
-        }
+        .ignoresSafeArea(edges: .top)
         .accessibilityIdentifier("clip.list.preview")
     }
 
-    private func listCountLine(_ list: SharedListData) -> String {
-        let sender = list.ownerDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if sender.isEmpty {
-            return ClipCopy.format("clip.list.count", list.items.count)
-        }
-        return ClipCopy.format("clip.list.countSender", list.items.count, sender)
-    }
-
-    private func listItemRow(_ item: SharedListItem, index: Int) -> some View {
-        HStack(alignment: .center, spacing: 0) {
-            ClipCircledNumber(number: index + 1)
-            ClipCategorySticker(kind: .forCategory(item.category))
-                .padding(.leading, ClipJournalLayout.numberToSticker)
-            VStack(alignment: .leading, spacing: ClipJournalLayout.nameToMeta) {
-                Text(item.title)
-                    .font(ClipJournalType.system(17, weight: .semibold, relativeTo: .headline))
-                    .foregroundStyle(ClipJournalPalette.ink)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                if !item.subtitle.isEmpty {
-                    Text(item.subtitle)
-                        .font(ClipJournalType.system(13, weight: .regular, relativeTo: .footnote))
-                        .foregroundStyle(ClipJournalPalette.muted)
+    private func placePage(
+        draft: ClipPlaceDraft,
+        sender: String?,
+        photoURL: URL?,
+        listTitle: String?,
+        pageIndex: Int,
+        pageCount: Int
+    ) -> some View {
+        VStack(spacing: 0) {
+            hero(
+                photoURL: photoURL,
+                category: draft.category,
+                sender: sender,
+                listTitle: listTitle,
+                pageIndex: pageIndex,
+                pageCount: pageCount
+            )
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    if signInHint {
+                        Text(ClipCopy.string("clip.signin.hint"))
+                            .font(ClipJournalType.system(13, weight: .semibold, relativeTo: .footnote))
+                            .foregroundStyle(ClipJournalPalette.ink)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(ClipJournalPalette.kraft, in: Capsule())
+                            .accessibilityIdentifier("clip.signin.hint")
+                    }
+                    Text(draft.name)
+                        .font(ClipDisplayType.placeName)
+                        .foregroundStyle(ClipJournalPalette.ink)
                         .lineLimit(2)
-                }
-            }
-            .padding(.leading, ClipJournalLayout.stickerToText)
-            Spacer(minLength: 4)
-        }
-        .padding(.vertical, 10)
-        .frame(minHeight: ClipJournalLayout.rowMinHeight, alignment: .center)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("clip.list.item.\(index)")
-    }
-
-    // MARK: - Trip / referral / My Savvy (no restyle; no Google photos)
-
-    private func tripContentView(_ trip: SharedTripData) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Map(position: $cameraPosition) {
-                    ForEach(Array(trip.stops.enumerated()), id: \.element.id) { index, stop in
-                        Annotation("", coordinate: stop.coordinate, anchor: .bottom) {
-                            ClipDoodlePin(number: index + 1)
+                        .minimumScaleFactor(0.8)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let meta = areaCategoryLine(draft) {
+                        Text(meta)
+                            .font(ClipJournalType.system(15, weight: .regular, relativeTo: .subheadline))
+                            .foregroundStyle(ClipJournalPalette.muted)
+                    }
+                    if let note = draft.note, !note.isEmpty {
+                        ClipWashiNote(text: note, attribution: sender)
+                    }
+                    ClipJournalPrimaryButton(
+                        title: ClipCopy.string("clip.save"),
+                        enabled: !isSaving
+                    ) {
+                        Task { await save(draft: draft, listTitle: listTitle) }
+                    }
+                    .accessibilityIdentifier(listTitle == nil ? "clip.place.open" : "clip.list.open")
+                    .accessibilityHint(ClipCopy.format("clip.signin.reason", draft.name))
+                    if let maps = draft.mapsURL() {
+                        ClipMapsTextLink(title: ClipCopy.string("clip.openMaps")) {
+                            UIApplication.shared.open(maps)
                         }
+                        .accessibilityIdentifier("clip.place.maps")
+                    }
+                    if listTitle != nil, pageIndex == 0, pageCount > 1 {
+                        Text("⌃ \(ClipCopy.string("clip.list.swipe"))")
+                            .font(ClipJournalType.system(13, weight: .regular, relativeTo: .footnote))
+                            .foregroundStyle(ClipJournalPalette.muted)
+                            .frame(maxWidth: .infinity)
+                            .accessibilityIdentifier("clip.list.swipe")
                     }
                 }
-                .mapStyle(.standard)
-                .frame(height: ClipJournalLayout.listMapHeight)
-                .clipJournalMapFrame()
-                .accessibilityIdentifier("clip.trip.map")
+                .padding(.horizontal, ClipJournalLayout.screenMargin)
+                .padding(.top, 16)
+                .padding(.bottom, ClipJournalLayout.buttonGroupBottom)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .accessibilityIdentifier(listTitle == nil ? "clip.place.preview" : "clip.list.item.\(pageIndex)")
+    }
 
-                Text(trip.name)
-                    .font(ClipJournalType.system(20, weight: .semibold, relativeTo: .title3))
-                    .foregroundStyle(ClipJournalPalette.ink)
-                ForEach(Array(trip.stops.enumerated()), id: \.element.id) { index, stop in
-                    Text("\(index + 1). \(stop.name)")
-                        .font(ClipJournalType.system(17, weight: .regular, relativeTo: .body))
-                        .foregroundStyle(ClipJournalPalette.ink)
+    private func hero(
+        photoURL: URL?,
+        category: String?,
+        sender: String?,
+        listTitle: String?,
+        pageIndex: Int,
+        pageCount: Int
+    ) -> some View {
+        GeometryReader { proxy in
+            let height = proxy.size.height
+            ZStack(alignment: .bottom) {
+                Group {
+                    if let photoURL {
+                        ClipOwnedPhoto(url: photoURL)
+                            .accessibilityIdentifier("clip.place.photo")
+                    } else {
+                        ClipJournalPalette.coral
+                        ClipHeroSticker(kind: .forHero(category))
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipShape(ClipTornPaperEdge())
+                .overlay(alignment: .bottom) {
+                    ClipTornPaperEdge()
+                        .stroke(ClipJournalPalette.ink, lineWidth: ClipJournalPalette.strokeWidth)
+                }
+                .overlay(alignment: .top) {
+                    HStack(alignment: .top, spacing: 8) {
+                        if let listTitle, !listTitle.isEmpty {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(listTitle)
+                                    .font(ClipDisplayType.title(ClipJournalLayout.listTitlePoint, relativeTo: .title3))
+                                    .foregroundStyle(ClipJournalPalette.cream)
+                                    .lineLimit(2)
+                                Text(ClipCopy.format("clip.list.count", pageIndex + 1, pageCount))
+                                    .font(ClipJournalType.system(13, weight: .semibold, relativeTo: .footnote))
+                                    .foregroundStyle(ClipJournalPalette.cream.opacity(0.9))
+                            }
+                        } else if let sender {
+                            ClipSharerChip(name: sender)
+                        } else {
+                            Spacer(minLength: 0)
+                        }
+                        Spacer(minLength: 8)
+                        ClipWordmarkPlate()
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 54)
+                }
+                if pageCount > 1 {
+                    ClipPageIndicator(count: pageCount, current: pageIndex)
+                        .padding(.trailing, 10)
+                        .padding(.bottom, 28)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
                 }
             }
-            .padding(.horizontal, ClipJournalLayout.screenMargin)
+            .frame(width: proxy.size.width, height: height)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            ClipJournalPrimaryButton(
-                title: ClipCopy.string("clip.trip.open"),
-                action: saveToMySavvy
-            )
-            .accessibilityIdentifier("clip.trip.open")
-            .padding(.horizontal, ClipJournalLayout.screenMargin)
-            .padding(.bottom, ClipJournalLayout.buttonGroupBottom)
-        }
-        .accessibilityIdentifier("clip.trip.preview")
+        .frame(height: min(ClipJournalLayout.heroHeight, UIScreen.main.bounds.height * ClipJournalLayout.heroHeightRatio))
     }
 
-    private func mySavesContentView(_ payload: SharedMySavesData) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                ClipDisplayTitle(text: "My Savvy", pointSize: 28, relativeTo: .title)
-                ForEach(payload.places, id: \.id) { place in
-                    Text(place.name)
-                        .font(ClipJournalType.system(17, weight: .semibold, relativeTo: .headline))
-                        .foregroundStyle(ClipJournalPalette.ink)
-                }
-            }
-            .padding(.horizontal, ClipJournalLayout.screenMargin)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            ClipJournalPrimaryButton(
-                title: ClipCopy.string("clip.trip.open"),
-                action: saveToMySavvy
-            )
-            .padding(.horizontal, ClipJournalLayout.screenMargin)
-            .padding(.bottom, ClipJournalLayout.buttonGroupBottom)
-        }
-    }
-
-    private func referralContentView(_ profile: SharedReferralProfile) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(profile.displayName)
-                    .font(ClipJournalType.system(20, weight: .semibold, relativeTo: .title3))
+    private func leftoverContent(title: String, rows: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            ClipDisplayTitle(text: title, pointSize: 28, relativeTo: .title)
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                Text(row)
+                    .font(ClipJournalType.system(17, weight: .regular, relativeTo: .body))
                     .foregroundStyle(ClipJournalPalette.ink)
-                Text(ClipCopy.format("clip.referral.invite", profile.handle))
-                    .font(ClipJournalType.system(15, weight: .regular, relativeTo: .subheadline))
-                    .foregroundStyle(ClipJournalPalette.muted)
             }
-            .padding(.horizontal, ClipJournalLayout.screenMargin)
+            Spacer()
+            ClipJournalPrimaryButton(title: ClipCopy.string("clip.trip.open"), action: openLeftover)
+                .accessibilityIdentifier("clip.trip.open")
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            ClipJournalPrimaryButton(
-                title: ClipCopy.string("clip.trip.open"),
-                action: saveToMySavvy
-            )
-            .padding(.horizontal, ClipJournalLayout.screenMargin)
-            .padding(.bottom, ClipJournalLayout.buttonGroupBottom)
-        }
+        .padding(.horizontal, ClipJournalLayout.screenMargin)
+        .padding(.bottom, ClipJournalLayout.buttonGroupBottom)
     }
 
-    private func stateScreen(
+    private func outcomeScreen(
         title: String,
         bodyText: String,
         sticker: ClipStickerKind,
         badge: String,
-        showProgress: Bool,
-        retry: URL?
+        retry: (() -> Void)?,
+        back: String?,
+        identifier: String
     ) -> some View {
         VStack(spacing: ClipJournalLayout.stateTitleGap) {
             ClipStateIllustration(sticker: sticker, badge: badge)
@@ -453,24 +431,119 @@ struct ClipContentView: View {
                     .frame(maxWidth: ClipJournalLayout.stateBodyMaxWidth)
             }
             .accessibilityElement(children: .combine)
-            if showProgress {
-                ClipLoadingDots(reduceMotion: reduceMotion)
-            }
             if let retry {
-                ClipJournalPrimaryButton(
-                    title: ClipCopy.string("clip.retry")
-                ) {
-                    handleIncomingURL(retry)
+                ClipJournalPrimaryButton(title: ClipCopy.string("clip.retry"), action: retry)
+                    .accessibilityIdentifier("clip.error.retry")
+                    .padding(.horizontal, ClipJournalLayout.screenMargin)
+            }
+            if let back {
+                Button(back) {
+                    surface = .preview
+                    presentsAppClipOverlay = false
                 }
-                .accessibilityIdentifier("clip.error.retry")
-                .padding(.horizontal, ClipJournalLayout.screenMargin)
+                .font(ClipJournalType.system(15, weight: .semibold, relativeTo: .subheadline))
+                .foregroundStyle(ClipJournalPalette.coral)
+                .underline()
+                .accessibilityIdentifier("clip.cap50.back")
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, ClipJournalLayout.screenMargin)
+        .accessibilityIdentifier(identifier)
     }
 
-    // MARK: - URL Handling
+    private func areaCategoryLine(_ draft: ClipPlaceDraft) -> String? {
+        let area = draft.address.split(separator: ",").first.map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let category = draft.category.trimmingCharacters(in: .whitespacesAndNewlines)
+        if area.isEmpty && category.isEmpty { return nil }
+        if area.isEmpty { return category }
+        if category.isEmpty { return area }
+        return ClipCopy.format("clip.meta.areaCategory", area, category)
+    }
+
+    private func saveCurrentPlace() async {
+        if let receipt = placeReceipt {
+            await save(draft: .from(place: receipt.payload, shareCode: receipt.code), listTitle: nil)
+        } else if let list = listData, list.items.indices.contains(listPage) {
+            await save(draft: .from(item: list.items[listPage]), listTitle: list.title)
+        }
+    }
+
+    private func save(draft: ClipPlaceDraft, listTitle: String?) async {
+        signInHint = false
+        isSaving = true
+        defer { isSaving = false }
+        let url = handoffURL(for: draft, listTitle: listTitle)
+        let sender = placeReceipt?.verifiedSenderLabel
+            ?? (listData?.ownerDisplayName.isEmpty == false ? listData?.ownerDisplayName : nil)
+        let outcome = await ClipSaveService.save(draft: draft, handoffURL: url, sender: sender)
+        switch outcome {
+        case .handedOff:
+            return
+        case .saved:
+            surface = .saved(draft.name)
+            presentsAppClipOverlay = true
+        case .duplicate:
+            surface = .duplicate
+            presentsAppClipOverlay = false
+        case .capReached:
+            surface = .capReached
+            presentsAppClipOverlay = false
+        case .signInCancelled:
+            surface = .preview
+            signInHint = true
+            presentsAppClipOverlay = false
+        case .failed:
+            surface = .saveFailed
+            presentsAppClipOverlay = false
+        }
+    }
+
+    private func handoffURL(for draft: ClipPlaceDraft, listTitle: String?) -> URL {
+        if let lastIncomingURL, listTitle == nil {
+            return lastIncomingURL
+        }
+        if let encoded = SharedPlaceData(
+            id: draft.placeId ?? "",
+            name: draft.name,
+            address: draft.address,
+            lat: draft.latitude,
+            lng: draft.longitude,
+            category: draft.category,
+            rating: draft.rating,
+            reviewCount: nil,
+            priceRange: nil,
+            hours: nil,
+            sourceLabel: "Savvy",
+            sourceURL: draft.sourceURL,
+            photoURLs: [],
+            note: draft.note
+        ).toURL() {
+            return encoded
+        }
+        return lastIncomingURL ?? URL(string: "https://sav-e-app.vercel.app/p")!
+    }
+
+    private func openLeftover() {
+        let url = mySavesSourceURL
+            ?? referralData?.fullAppURL()
+            ?? tripData?.toURL(baseURL: "savvy://trip")
+            ?? URL(string: "savvy://trip")
+        if let url {
+            PendingShareStore.write(
+                PendingSharePayload(
+                    kind: .place,
+                    shareCode: nil,
+                    placeId: nil,
+                    listId: nil,
+                    sender: nil,
+                    url: url.absoluteString
+                )
+            )
+            UIApplication.shared.open(url)
+        }
+    }
 
     private func handleIncomingURL(_ url: URL?) {
         guard let url else { return }
@@ -478,6 +551,9 @@ struct ClipContentView: View {
         incomingURLTask = nil
         lastIncomingURL = url
         failure = nil
+        surface = .preview
+        signInHint = false
+        presentsAppClipOverlay = false
         let requestID = UUID()
         activeIncomingURLRequestID = requestID
 
@@ -545,7 +621,6 @@ struct ClipContentView: View {
             clearContent()
             if let data = SharedPlaceData.from(url: url) {
                 placeReceipt = .embedded(data)
-                updateCamera(for: [SharedTripData.SharedStop(id: data.id, name: data.name, address: data.address, lat: data.lat, lng: data.lng, time: nil, note: data.note, day: nil, order: nil)])
                 isLoading = false
                 return
             } else if SharedPlaceData.shortCode(from: url) != nil {
@@ -554,9 +629,7 @@ struct ClipContentView: View {
                     do {
                         let receipt = try await SharedPlaceReceipt.resolve(from: url)
                         guard !Task.isCancelled, activeIncomingURLRequestID == requestID else { return }
-                        let data = receipt.payload
                         placeReceipt = receipt
-                        updateCamera(for: [SharedTripData.SharedStop(id: data.id, name: data.name, address: data.address, lat: data.lat, lng: data.lng, time: nil, note: data.note, day: nil, order: nil)])
                         isLoading = false
                         if let code = receipt.code {
                             await SharedPlaceReceipt.recordPublicEvent(
@@ -623,28 +696,22 @@ struct ClipContentView: View {
         referralData = nil
         mySavesData = nil
         mySavesSourceURL = nil
+        listPage = 0
     }
 
     private func apply(list: SharedListData) {
         clearContent()
         listData = list
-        updateCamera(for: list.items.map {
-            SharedTripData.SharedStop(id: $0.id.uuidString, name: $0.title, address: $0.subtitle, lat: $0.latitude, lng: $0.longitude, time: nil, note: $0.note, day: nil, order: nil)
-        })
     }
 
     private func apply(referral: SharedReferralProfile) {
         clearContent()
         referralData = referral
-        updateCamera(for: referral.featuredPlaces.map {
-            SharedTripData.SharedStop(id: $0.id, name: $0.name, address: $0.address, lat: $0.lat, lng: $0.lng, time: nil, note: $0.signal, day: nil, order: nil)
-        })
     }
 
     private func apply(trip: SharedTripData) {
         clearContent()
         tripData = trip
-        updateCamera(for: trip.stops)
     }
 
     private func apply(mySaves: SharedMySavesData, url: URL) {
@@ -704,100 +771,33 @@ struct ClipContentView: View {
             item.name == "d" && item.value?.isEmpty == false
         } == true
     }
+}
 
-    private func updateCamera(for stops: [SharedTripData.SharedStop]) {
-        let lats = stops.map(\.lat)
-        let lngs = stops.map(\.lng)
-        guard let minLat = lats.min(), let maxLat = lats.max(),
-              let minLng = lngs.min(), let maxLng = lngs.max() else { return }
-        let center = CLLocationCoordinate2D(
-            latitude: (minLat + maxLat) / 2,
-            longitude: (minLng + maxLng) / 2
-        )
-        let span = MKCoordinateSpan(
-            latitudeDelta: max((maxLat - minLat) * 1.5, 0.01),
-            longitudeDelta: max((maxLng - minLng) * 1.5, 0.01)
-        )
-        cameraPosition = .region(MKCoordinateRegion(center: center, span: span))
+private struct ClipListPageKey: PreferenceKey {
+    static var defaultValue = 0
+    static func reduce(value: inout Int, nextValue: () -> Int) {
+        value = nextValue()
     }
+}
 
-    private func saveToMySavvy() {
-        persistPendingShare()
-        let url: URL?
-        if mySavesData != nil {
-            url = mySavesSourceURL
-        } else if listData != nil {
-            url = currentListAppURL()
-        } else if let referralData {
-            url = referralData.fullAppURL()
-        } else if let placeReceipt {
-            url = placeReceipt.fullAppURL ?? lastIncomingURL ?? URL(string: "https://sav-e-app.vercel.app/p")
-        } else {
-            url = tripData?.toURL(baseURL: "savvy://trip") ?? URL(string: "savvy://trip")
+enum ClipOwnedPhotoPolicy {
+    static func url(from values: [String]) -> URL? {
+        for value in values {
+            guard let url = URL(string: value),
+                  ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+                  url.user == nil,
+                  url.password == nil,
+                  !ShareRoutePhotoPolicy.isGooglePlacesPhotoURL(url),
+                  !ShareRoutePhotoPolicy.looksLikeGooglePlacesPhotoReference(value)
+            else { continue }
+            return url
         }
-        guard let url else {
-            presentsAppClipOverlay = true
-            return
-        }
-        UIApplication.shared.open(url) { opened in
-            if !opened {
-                DispatchQueue.main.async {
-                    presentsAppClipOverlay = true
-                }
-            }
-        }
-    }
-
-    private func persistPendingShare() {
-        if let list = listData {
-            let code = lastIncomingURL.flatMap { SharedListPayload.shareCode(from: $0) }
-            let url = currentListAppURL()?.absoluteString
-                ?? lastIncomingURL?.absoluteString
-                ?? ""
-            guard !url.isEmpty else { return }
-            PendingShareStore.write(
-                PendingSharePayload(
-                    kind: .list,
-                    shareCode: code,
-                    placeId: nil,
-                    listId: list.id.uuidString,
-                    sender: list.ownerDisplayName,
-                    url: url
-                )
-            )
-            return
-        }
-        if let receipt = placeReceipt {
-            let url = (receipt.fullAppURL ?? lastIncomingURL)?.absoluteString ?? ""
-            guard !url.isEmpty else { return }
-            PendingShareStore.write(
-                PendingSharePayload(
-                    kind: .place,
-                    shareCode: receipt.code ?? lastIncomingURL.flatMap { SharedPlaceData.shortCode(from: $0) },
-                    placeId: receipt.payload.id,
-                    listId: nil,
-                    sender: receipt.verifiedSenderLabel,
-                    url: url
-                )
-            )
-        }
-    }
-
-    private func currentListAppURL() -> URL? {
-        if let lastIncomingURL,
-           let code = SharedListPayload.shareCode(from: lastIncomingURL) {
-            return URL(string: "savvy://list?c=\(code)")
-        }
-        guard let listData,
-              let payloadData = try? JSONEncoder().encode(SharedListPayload(list: listData, role: listData.viewerRole)),
-              let base64 = payloadData.base64EncodedString().addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-            return URL(string: "savvy://list")
-        }
-        return URL(string: "savvy://list?d=\(base64)&r=\(listData.viewerRole)")
+        return nil
     }
 }
 
 /// System App Clip overlay. Unstyled — SKOverlay owns the chrome.
+/// Present only after a successful backend save.
 private struct ClipSKOverlayHost: UIViewControllerRepresentable {
     @Binding var isPresented: Bool
 
@@ -810,8 +810,9 @@ private struct ClipSKOverlayHost: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: UIViewController, context: Context) {
-        guard isPresented, !context.coordinator.didPresent else { return }
-        guard let scene = controller.view.window?.windowScene ?? activeScene() else { return }
+        guard isPresented, !context.coordinator.didPresent,
+              let scene = activeScene()
+        else { return }
         context.coordinator.didPresent = true
         let overlay = SKOverlay(configuration: SKOverlay.AppClipConfiguration(position: .bottom))
         overlay.present(in: scene)
@@ -835,6 +836,9 @@ extension ClipContentView {
         guard let screen = ClipPreviewFixtures.requestedScreen() else { return false }
         isLoading = false
         failure = nil
+        surface = .preview
+        signInHint = false
+        presentsAppClipOverlay = false
         clearContent()
         switch screen {
         case "place-sender":
@@ -846,16 +850,24 @@ extension ClipContentView {
                 expiresAt: nil,
                 sender: SharedPlaceSender(displayName: "Mina", handle: "mina")
             )
-            updateCamera(for: [SharedTripData.SharedStop(id: place.id, name: place.name, address: place.address, lat: place.lat, lng: place.lng, time: nil, note: place.note, day: nil, order: nil)])
         case "place-inline":
-            let place = ClipPreviewFixtures.samplePlace()
-            placeReceipt = .embedded(place)
-            updateCamera(for: [SharedTripData.SharedStop(id: place.id, name: place.name, address: place.address, lat: place.lat, lng: place.lng, time: nil, note: place.note, day: nil, order: nil)])
-        case "skoverlay":
-            let place = ClipPreviewFixtures.samplePlace()
-            placeReceipt = .embedded(place)
-            presentsAppClipOverlay = true
-            updateCamera(for: [SharedTripData.SharedStop(id: place.id, name: place.name, address: place.address, lat: place.lat, lng: place.lng, time: nil, note: place.note, day: nil, order: nil)])
+            placeReceipt = .embedded(ClipPreviewFixtures.samplePlace())
+        case "skoverlay", "saved":
+            placeReceipt = .embedded(ClipPreviewFixtures.samplePlace())
+            surface = .saved(ClipPreviewFixtures.samplePlace().name)
+            presentsAppClipOverlay = screen == "skoverlay"
+        case "cap50":
+            placeReceipt = .embedded(ClipPreviewFixtures.samplePlace())
+            surface = .capReached
+        case "duplicate":
+            placeReceipt = .embedded(ClipPreviewFixtures.samplePlace())
+            surface = .duplicate
+        case "signin-fail":
+            placeReceipt = .embedded(ClipPreviewFixtures.samplePlace())
+            signInHint = true
+        case "save-fail":
+            placeReceipt = .embedded(ClipPreviewFixtures.samplePlace())
+            surface = .saveFailed
         case "list":
             apply(list: ClipPreviewFixtures.sampleList())
         case "loading":

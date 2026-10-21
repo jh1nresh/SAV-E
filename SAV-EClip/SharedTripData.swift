@@ -80,7 +80,7 @@ struct SharedPlaceData: Codable {
             hours: hours,
             sourceLabel: sourceLabel,
             sourceURL: safeSourceURL?.absoluteString,
-            photoURLs: [],
+            photoURLs: Self.ownedPhotoURLs(photoURLs),
             note: Self.publicNote(note)
         )
     }
@@ -153,6 +153,10 @@ struct SharedPlaceData: Codable {
             usedUTF16Units += characterUnits
         }
         return truncated.trimmingCharacters(in: .whitespacesAndNewlines) + "…"
+    }
+
+    static func ownedPhotoURLs(_ values: [String]) -> [String] {
+        Array(ShareRoutePhotoPolicy.persistablePhotoURLs(values).prefix(1))
     }
 }
 
@@ -689,7 +693,7 @@ struct SharedListPayload: Codable {
                         rating: item.rating,
                         reviewCount: item.reviewCount,
                         sourceURL: item.sourceURL,
-                        photoURLs: [],
+                        photoURLs: ShareRoutePhotoPolicy.persistablePhotoURLs(item.photoURLs),
                         note: item.note,
                         addedByDisplayName: item.addedByDisplayName,
                         addedAt: item.addedAt

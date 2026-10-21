@@ -185,6 +185,8 @@ targets:
         INFOPLIST_GENERATION_MODE: GeneratedFile
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app.Clip
         IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+        INFOPLIST_KEY_LSApplicationQueriesSchemes:
+          - savvy
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "110"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

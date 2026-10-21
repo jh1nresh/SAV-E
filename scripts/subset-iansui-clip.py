@@ -15,6 +15,7 @@ from fontTools.ttLib import TTFont
 
 CLIP_TITLE_TEXT = (
     "這個連結已失效連不上網路暫時忙不過來讀不懂用分享打開正在內容朋友"
+    "存好了免費額度已滿已經在你的沒有進去"
     "Savvy Passport"
     "，。、．·・「」『』（）？！"
 )

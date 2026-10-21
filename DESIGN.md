@@ -385,7 +385,7 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | Friends (`SaveFriendsView`) | Atlas |
 | `CategoryPill`, `EmptyStateView`, `RelatedPlaceSourcesPanel` | Atlas |
 | Brand accents: pet preset colors (Spark = honey), stamp moment ripple, `SaveMemoryBadge` stamp palette, `MemoMascotMark` | Intentional — do not recolor in migrations |
-| App Clip shared place and list previews | Doodle journal — see **App Clip** below. Trip / referral / My Savvy stay functional with no Google photos and are not a visual restyle in this pass. |
+| App Clip shared place and list previews | Doodle v3.1 (plan A) — see **App Clip** below. Trip / referral / My Savvy stay functional with no Google photos and are not a visual restyle in this pass. |
 | `SaveMemoryBadge` chrome, `EvidenceLinkList` (debug-only), smoke harness | Legacy cream-notebook |
 
 Rules:
@@ -912,70 +912,97 @@ Rules:
 
 ## App Clip
 
-The Clip is a read-only place/list preview plus handoff. It does not save
-to the account, sign in, request location/notification/camera permission, or
-show Pro / price / “free 50” copy. Google Places photos do not appear on any
-Clip screen. “Nothing is added until you open the app” is deleted.
+DESIGN **v3.1 (plan A)** supersedes v1/v2. The Clip is a full-page shared
+place (or a vertically paged list of place pages). It does not show a map,
+preview card, tab bar, or footnote. Google Places photos do not appear on
+any Clip screen. Trip / referral / My Savvy stay functional and are not
+restyled here.
 
-At “Save to my Savvy” tap time the Clip writes App Group
-`pendingShare` (`group.com.wanderly.app`) and opens `savvy://` or the
-universal link. If the full app is missing it presents
-`SKOverlay(AppClipConfiguration(position: .bottom))` — system UI, unstyled.
-On first launch the full app reads `pendingShare`, auto-saves through
-`saveSharedPlaceReceipt` → `POST /places` (#293 server cap), shows
-`app.handoff.saved`, and clears the key. If the key is missing it falls
-back to the invocation `NSUserActivity` webpageURL and re-fetches by share
-code.
+### Flow
 
-### Tokens (V2)
+Tap Save. If the full app is installed, hand off with the universal link
+and do **not** sign in. If it is not installed: Sign in with Apple (system
+sheet only) → `POST /places` (same endpoint as the full app; #293 atomic
+cap and place dedupe) → **Saved** screen → only then
+`SKOverlay(AppClipConfiguration(position: .bottom))`. Never present
+SKOverlay or a “get the app” prompt before a successful save, while
+loading, or on error. Always write App Group `pendingShare`
+(`group.com.wanderly.app`) as the local fallback. The full app still reads
+that key on first launch.
 
-The Clip target cannot link the main app, and `Color+Theme.swift` pulls
-`PlaceCategory`, so the files are not shared. Asset-catalog colors in
-`SAV-EClip/Assets.xcassets` are the Clip source. Coral is a single token
-(`ClipCoral`); do not hardcode the hex — the landing-page value is still
-being decided. After #290 merges, re-diff this table against
-`SaveAtlasPalette`.
+Show **Saved** only after the backend succeeds. Free cap at 50 is an
+explanation page (no paywall, Pro, price, or overlay). A duplicate is
+“saved before, not counted twice” (no overlay). Sign-in cancel/fail
+returns to the place page with a top hint. Network/server save failure
+shows Retry (no Saved, no overlay).
 
-| Role | Clip catalog | Light | Dark | Main `#290` `SaveAtlasPalette` |
-| --- | --- | --- | --- | --- |
-| Canvas / paper | `ClipCanvas` | `#FFF9EB` | `#1E1C17` | `canvas` `#FFF9EB` / `#1E1C19` |
-| Card | `ClipCard` | `#FFF9EB` | `#2A2721` | `paper` (same as canvas; Clip cards are darker in dark mode) |
-| Ink | `ClipInk` | `#2F2E23` | `#FFF9EB` | `ink` `#2F2E23` / `#F4F1E4` |
-| Muted | `ClipMuted` | `#62594F` | `#BDB3A2` | `muted` `#62594F` / `#CFC4B8` |
-| Line | `ClipLine` | `#DCCFB9` | `#4A443A` | `line` `#DCCFB9` / `#4A443B` |
-| Kraft | `ClipKraft` | `#EADDC6` | `#3A342A` | `kraft` `#EADDC6` / `#4A3F32` |
-| Coral (CTA, pins) | `ClipCoral` | `#F26B4A` | `#F26B4A` | `coral` `#F26B4A` / `#D97861` |
-| Forest / wordmark | `ClipForest` | `#0E4A33` | `#B9E0C9` | `forest` `#0E4A33` / `#B9E0C9` |
-| Button label | `ClipCream` | `#FFF9EB` | `#FFF9EB` | cream / paper |
+### Place page
 
-Background is cream paper with a 14pt dot grid in light and dark. Cards,
-buttons, chips, the MapKit card frame, and state circles use a 1.6pt ink
-jitter outline (`ClipJitterRoundedRect` / capsule / circle). Public notes
-use a kraft washi strip (`ClipWashiStrip`). List rows and list map pins use
-coral circled numbers. Place pins are solid coral; list pins are coral
-outlined with a number.
+Full screen. Top hero 393×470 pt (~55%) with a jittery torn-paper bottom
+and a 1.6 pt ink line. Show only the sharer’s own public photo. The main
+state is no photo: coral fill, cream jitter circle (236 pt), large
+category sticker (restaurant = noodle bowl, cafe = coffee cup). If no
+sticker fits, a cream line-art pin. No Temple of Heaven, roast duck, or
+elephant.
 
-No shadows, gradients, or blur. Native MapKit only — no illustrated map.
-The elephant mark is removed from the Clip (wordmark, default sticker, and
-state screens). Unmatched categories use the packet **place/pin** sticker
-inside a coral dashed circle (`ClipStickerKind.place`).
+Over the hero: left is the sharer chip (short-code + backend sender only)
+— cream capsule, jitter border, avatar, `{name} 分享給你` / system 14
+semibold. Right is the Savvy wordmark on a small cream plate (Caveat,
+no elephant).
+
+Place name is handwriting: Caveat 38 (en) / Iansui 34 (zh), max 2 lines.
+`Area · Category` is system 15 muted. Friend note is a zigzag washi strip
+at −1.2°, system 16 (`publicNote`, max 180), attribution system 12.
+
+One primary button: coral capsule height 54, ink jitter border, cream
+system 17 semibold. Then a coral-underline “Open in Apple Maps” (system
+15 semibold). Hide it, or fall back to an address search, when there are
+no coordinates.
+
+### List
+
+One place page per page. Vertical paging
+(`ScrollView` + `.scrollTargetBehavior(.paging)`). Right-side vertical
+page indicator. List title (handwritten, cream) plus `第 {i} / {n} 家`
+top-left of the hero. Swipe hint on page 1 only. Each page saves **that**
+place only. No “save whole list” (founder Q7). Reduce Motion is respected.
+
+### Tokens (V3.1)
+
+The Clip target cannot link the main app. Catalog colors in
+`SAV-EClip/Assets.xcassets` are the Clip source. **Coral stays `#F26B4A`
+in light and dark** (`ClipCoral`) — it does not follow the main-app dark
+`#D97861`.
+
+| Role | Clip catalog | Light | Dark |
+| --- | --- | --- | --- |
+| Canvas / paper | `ClipCanvas` | `#FFF9EB` | `#1E1C17` |
+| Card | `ClipCard` | `#FFF9EB` | `#2A2721` |
+| Ink | `ClipInk` | `#2F2E23` | `#FFF9EB` |
+| Muted | `ClipMuted` | `#62594F` | `#BDB3A2` |
+| Line | `ClipLine` | `#DCCFB9` | `#4A443A` |
+| Kraft | `ClipKraft` | `#EADDC6` | `#3A342A` |
+| Coral (CTA, hero) | `ClipCoral` | `#F26B4A` | `#F26B4A` |
+| Forest / wordmark | `ClipForest` | `#0E4A33` | `#B9E0C9` |
+| Cream / button label | `ClipCream` | `#FFF9EB` | `#FFF9EB` |
+
+No shadows, gradients, or blur. No MapKit on place or list pages. No
+elephant. Unmatched hero categories use the cream line-art pin.
 
 ### Type
 
-Titles only: Caveat SemiBold (Latin) and Iansui (zh-Hant). Place names,
-addresses, buttons, meta, and body use the system font. The wordmark is
-Caveat “Savvy” at a fixed 34pt in `ClipForest` (the packet handwritten
-wordmark; no separate vector PDF is in the repo; not the elephant asset).
-Ship `Iansui-ClipTitles.ttf` (title glyphs). Do not copy
-`Iansui-SavvySubset.ttf` (3.48 MB). User list names fall back to the
-system font when a glyph is missing.
+Handwriting (Caveat Latin / Iansui zh-Hant) only for the place name, list
+title, and state titles. Everything else is the system font. Wordmark is
+Caveat “Savvy” at a fixed 34 pt in `ClipForest` on a cream plate. Ship
+`Iansui-ClipTitles.ttf`. Do not copy `Iansui-SavvySubset.ttf` (3.48 MB).
+Missing glyphs fall back to the system font.
 
 ### Size
 
-Uncompressed per-variant budget is 15 MB until the Clip deployment-target
-question is settled. Ship only the Clip catalog (icon, color sets), Caveat,
-the Clip Iansui title subset, and vector stickers drawn in SwiftUI. Do not
-embed the main `Assets.xcassets` catalog.
+Uncompressed per-variant budget is **15 MB** until the Clip
+deployment-target / physical-invocation question is settled (Z1). Ship
+only the Clip catalog, Caveat, the Clip Iansui title subset, and vector
+stickers drawn in SwiftUI.
 
 ## Accessibility
 

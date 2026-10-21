@@ -11,6 +11,7 @@
 
 		C1A000000000000000000041 /* PendingShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000040 /* PendingShareStore.swift */; };
 		C1A000000000000000000043 /* PendingShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000042 /* PendingShareStore.swift */; };
+		C1A000000000000000000047 /* ClipSaveService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000046 /* ClipSaveService.swift */; };
 		C1A000000000000000000045 /* Iansui-ClipTitles.ttf in SAVEClip Resources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000044 /* Iansui-ClipTitles.ttf */; };
 		C1A000000000000000000047 /* PendingShareStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000046 /* PendingShareStoreTests.swift */; };
 		C1A000000000000000000002 /* ClipDoodleTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000001 /* ClipDoodleTheme.swift */; };
@@ -328,6 +329,7 @@
 
 		C1A000000000000000000001 /* ClipDoodleTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipDoodleTheme.swift; sourceTree = "<group>"; };
 		C1A000000000000000000040 /* PendingShareStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingShareStore.swift; sourceTree = "<group>"; };
+		C1A000000000000000000046 /* ClipSaveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipSaveService.swift; sourceTree = "<group>"; };
 		C1A000000000000000000042 /* PendingShareStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingShareStore.swift; sourceTree = "<group>"; };
 		C1A000000000000000000044 /* Iansui-ClipTitles.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "Iansui-ClipTitles.ttf"; path = "SAV-E/Resources/DisplayFont/Iansui-ClipTitles.ttf"; sourceTree = SOURCE_ROOT; };
 		C1A000000000000000000046 /* PendingShareStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingShareStoreTests.swift; sourceTree = "<group>"; };
@@ -586,6 +588,7 @@
 				C1A000000000000000000044 /* Iansui-ClipTitles.ttf */,
 				C2F29BED31958E2047FAE72E /* ClipContentView.swift */,
 				C1A000000000000000000040 /* PendingShareStore.swift */,
+				C1A000000000000000000046 /* ClipSaveService.swift */,
 				C1A000000000000000000001 /* ClipDoodleTheme.swift */,
 				C1A000000000000000000020 /* ClipPreviewFixtures.swift */,
 				C1A000000000000000000022 /* Localizable.xcstrings */,
@@ -1622,6 +1625,7 @@
 				3F861CFCBB89E535C6F88B20 /* ClipContentView.swift in Sources */,
 				C1A000000000000000000002 /* ClipDoodleTheme.swift in Sources */,
 				C1A000000000000000000041 /* PendingShareStore.swift in Sources */,
+				C1A000000000000000000047 /* ClipSaveService.swift in Sources */,
 				C1A000000000000000000021 /* ClipPreviewFixtures.swift in Sources */,
 				430205DF9D71CB213764DAEB /* SAV-EClipApp.swift in Sources */,
 				6F9A7F7D67162AAFC701986F /* SAVEProductionConfig.swift in Sources */,
@@ -1893,6 +1897,9 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = Savvy;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_LSApplicationQueriesSchemes = (
+					savvy,
+				);
 				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
 
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -2204,6 +2211,9 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = Savvy;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_LSApplicationQueriesSchemes = (
+					savvy,
+				);
 				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
 
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
