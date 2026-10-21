@@ -440,7 +440,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let app = makeApp(launchArguments: [
             "--uitest-complete-onboarding", "--skip-map-tour",
             "--uitest-repair-review-demo-seed", "--uitest-review-demo-offline",
-            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en"
+            "--uitest-reset-review-demo-storage",
+            // Near you without a fix has no city, so Collected is hidden.
+            "--uitest-location-denied",
+            "-save.appLanguage", "en"
         ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()])
         launch(app)
         try signInViaReviewDemoRequired(app: app)
