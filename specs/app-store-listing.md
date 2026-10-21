@@ -151,7 +151,7 @@ Connect. If this version does not attach IAP, leave the public listing as a
 free download and do not imply Pro is on sale.
 
 ```
-Savvy Pro is an optional auto-renewing subscription for a higher monthly AI-assist allowance. Saved places, Map Stamps, and the private map stay free.
+Savvy Pro is an optional auto-renewing subscription for unlimited saved places. Free includes 50 saved places. Monthly AI-assist allowance is the same on Free and Pro.
 
 • Monthly: $6.99
 • Annual: $39.99 (3-day free trial)
