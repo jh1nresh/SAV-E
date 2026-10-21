@@ -48,15 +48,21 @@ struct SaveDoodleHomeView: View {
                             .padding(.top, SaveSpace.xs)
                     }
 
-                    if !showsEmptyHome {
+                    if showsLensEmpty {
+                        lensEmpty
+                            .padding(.top, SaveSpace.md)
+                    } else if !showsEmptyHome {
                         miniMap
                             .padding(.top, SaveSpace.md)
                         placeList
                             .padding(.top, SaveSpace.md)
-                        if !collectedPlaces.isEmpty {
-                            collectedStrip
-                                .padding(.top, SaveSpace.md)
-                        }
+                    }
+
+                    // City X/Y is independent of Eat/Go. A lens with no rows
+                    // must not hide Collected (HoP 2026-10-21).
+                    if !collectedPlaces.isEmpty {
+                        collectedStrip
+                            .padding(.top, SaveSpace.md)
                     }
                 }
                 .padding(.horizontal, SaveLayout.screenMargin)
@@ -409,6 +415,17 @@ struct SaveDoodleHomeView: View {
         .accessibilityIdentifier("home.savedPlaces.empty")
     }
 
+    /// City still has saves; the current Eat/Go list does not. Not the
+    /// first-save empty plate — Collected stays visible with the city X/Y.
+    private var lensEmpty: some View {
+        let lens = session.lens.title(language: languageSettings.language)
+        return Text(localized("No \(lens) saves here", "這裡還沒有\(lens)的收藏"))
+            .font(SaveAtlasType.body(15))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .frame(maxWidth: .infinity, minHeight: SaveLayout.minTap, alignment: .leading)
+            .accessibilityIdentifier("home.lensEmpty")
+    }
+
     private var cityPicker: some View {
         NavigationStack {
             List {
@@ -492,6 +509,7 @@ struct SaveDoodleHomeView: View {
 #endif
         if allPlaces.isEmpty { return true }
         if needsLocationToResolveNearYou { return false }
+        if showsLensEmpty { return false }
         if SaveDoodleHomeCatalog.isNearbyEmpty(
             places: allPlaces,
             lens: session.lens,
@@ -501,7 +519,18 @@ struct SaveDoodleHomeView: View {
         ) {
             return true
         }
-        return listedPlaces.isEmpty
+        return listedPlaces.isEmpty && collectedPlaces.isEmpty
+    }
+
+    /// Selected city has saves, but none match the current Eat/Go lens.
+    private var showsLensEmpty: Bool {
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-empty-home") {
+            return false
+        }
+#endif
+        guard !needsLocationToResolveNearYou else { return false }
+        return listedPlaces.isEmpty && !collectedPlaces.isEmpty
     }
 
     /// Near you with no fix must not invent a worldwide nearby list.
