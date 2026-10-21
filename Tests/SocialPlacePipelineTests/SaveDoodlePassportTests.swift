@@ -145,6 +145,34 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(page.contains(".frame(width: 8, height: 8)"))
         XCTAssertTrue(page.contains("guard stampingID == nil else { return }"))
         XCTAssertTrue(page.contains("if stampingID != nil { return true }"))
+        XCTAssertTrue(catalog.contains("stableHash("))
+        XCTAssertFalse(catalog.contains("Hasher()"))
+    }
+
+    func testUnhintedStickerKindIsStableForTheSamePlace() {
+        let id = UUID(uuidString: "20000000-0000-0000-0000-000000000099")!
+        let first = Place(
+            id: id,
+            name: "Nameless Spot",
+            address: "Beijing, China",
+            latitude: 39.88,
+            longitude: 116.40,
+            category: .attraction,
+            status: .wantToGo,
+            sourcePlatform: .other,
+            createdAt: Date(timeIntervalSince1970: 1_760_000_000)
+        )
+        var second = first
+        second.address = "Jingshan Front St, Beijing, China"
+        XCTAssertNil(SaveDoodlePassportCatalog.kindHinted(by: first.name))
+        XCTAssertEqual(
+            SaveDoodlePassportCatalog.stickerKind(for: first),
+            SaveDoodlePassportCatalog.stickerKind(for: second)
+        )
+        XCTAssertEqual(
+            SaveDoodlePassportCatalog.rotationDegrees(for: first.id.uuidString),
+            SaveDoodlePassportCatalog.rotationDegrees(for: second.id.uuidString)
+        )
     }
 
     func testPassportParityTargetIsTheDoodleMockAtExactly90() throws {

@@ -227,11 +227,7 @@ enum SaveDoodlePassportCatalog {
         case .shopping:
             options = [.bag, .bookstore]
         }
-        var hasher = Hasher()
-        hasher.combine(place.id)
-        hasher.combine(place.name)
-        hasher.combine(index)
-        let value = hasher.finalize() & 0x7fffffff
+        let value = stableHash(place.id.uuidString, place.name, "\(index)")
         return options[value % options.count]
     }
 
@@ -255,9 +251,21 @@ enum SaveDoodlePassportCatalog {
     }
 
     static func rotationDegrees(for id: String) -> Double {
-        var hasher = Hasher()
-        hasher.combine(id)
-        let value = hasher.finalize()
-        return Double(abs(value) % 13) - 6
+        Double(stableHash(id) % 13) - 6
+    }
+
+    /// Swift `Hasher` is randomly seeded per process. Stickers must keep
+    /// the same glyph after relaunch, so hash the stable place identity.
+    private static func stableHash(_ parts: String...) -> Int {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for part in parts {
+            for byte in part.utf8 {
+                hash ^= UInt64(byte)
+                hash = hash &* 1_099_511_628_211
+            }
+            hash ^= 0xFF
+            hash = hash &* 1_099_511_628_211
+        }
+        return Int(hash & 0x7fff_ffff)
     }
 }

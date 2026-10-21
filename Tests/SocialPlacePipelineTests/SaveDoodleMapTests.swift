@@ -166,6 +166,40 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(store.hasCheckedInToday(placeID: placeID))
     }
 
+    @MainActor
+    func testSecondDayUndoKeepsTheDayOneVisitedStatus() async throws {
+        var now = Date(timeIntervalSince1970: 1_700_000_000)
+        let suite = "save.doodle.checkin.day2.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = SaveDoodleCheckInStore(
+            defaults: defaults,
+            calendar: Calendar(identifier: .gregorian),
+            now: { now }
+        )
+        let placeID = UUID()
+
+        let dayOne = await store.applyCheckIn(placeID: placeID, priorStatus: .wantToGo) {}
+        XCTAssertTrue(dayOne)
+        now = now.addingTimeInterval(86_400)
+        let dayTwo = await store.applyCheckIn(placeID: placeID, priorStatus: .visited) {}
+        XCTAssertTrue(dayTwo)
+        XCTAssertEqual(store.visitCount(for: placeID), 2)
+
+        var restored: PlaceStatus?
+        let undone = await store.applyUndo(placeID: placeID) { status in
+            restored = status
+        }
+        XCTAssertTrue(undone)
+        XCTAssertEqual(restored, .visited)
+        XCTAssertEqual(store.visitCount(for: placeID), 1)
+        XCTAssertTrue(store.canCheckIn(placeID: placeID))
+
+        let checkIn = try source(at: "SAV-E/Services/SaveDoodleCheckInStore.swift")
+        XCTAssertTrue(checkIn.contains("history.rememberPriorStatus(priorStatus, for: placeID)"))
+        XCTAssertFalse(checkIn.contains("previousStatus(for: placeID) == nil"))
+    }
+
     func testMapWritesAreVisibleToSharedPassportHistory() {
         let suite = "save.doodle.cross-surface.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!

@@ -41,9 +41,7 @@ final class SaveDoodleCheckInStore: ObservableObject {
         priorStatus: PlaceStatus = .wantToGo,
         persist: () async throws -> Void
     ) async -> Bool {
-        if history.previousStatus(for: placeID) == nil {
-            history.rememberPriorStatus(priorStatus, for: placeID)
-        }
+        history.rememberPriorStatus(priorStatus, for: placeID)
         guard checkIn(placeID: placeID) else { return false }
         do {
             try await persist()
