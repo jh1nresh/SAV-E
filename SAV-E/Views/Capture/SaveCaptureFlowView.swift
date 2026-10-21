@@ -14,17 +14,16 @@ struct SaveCaptureFlowView: View {
     let existingPlaces: [Place]
     let onDraftChange: (String) -> Void
     let onImport: (String) async throws -> [UUID]
-    let onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary
     let onComplete: ([UUID]) -> Void
     let onCancel: () -> Void
     let onSearchNearby: () -> Void
+    let onOpenGoogleTakeout: () -> Void
     @State private var sharedText = ""
     @State private var isAnalyzing = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isPhotoPickerPresented = false
     @State private var isReadingPhoto = false
     @State private var errorMessage: String?
-    @State private var isGoogleTakeoutPresented = false
     @FocusState private var isInputFocused: Bool
     @State private var detent: PresentationDetent = .medium
 
@@ -110,18 +109,6 @@ struct SaveCaptureFlowView: View {
                 }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
-        }
-        .overlay {
-            if isGoogleTakeoutPresented {
-                NavigationStack {
-                    GoogleTakeoutImportView(
-                        existingPlaces: existingPlaces,
-                        onSave: onSaveGoogleTakeoutImport,
-                        onClose: { isGoogleTakeoutPresented = false }
-                    )
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
         }
         .interactiveDismissDisabled(isAnalyzing)
         .presentationDetents([.medium, .large], selection: $detent)
@@ -219,8 +206,7 @@ struct SaveCaptureFlowView: View {
                 identifier: "capture.importGoogleTakeout"
             ) {
                 isInputFocused = false
-                detent = .large
-                isGoogleTakeoutPresented = true
+                onOpenGoogleTakeout()
             }
             .disabled(isAnalyzing)
             .accessibilityLabel(localized("Import Google Takeout", "匯入 Google Takeout"))
@@ -385,12 +371,10 @@ enum SaveCapturePhotoText {
         existingPlaces: [],
         onDraftChange: { _ in },
         onImport: { _ in [] },
-        onSaveGoogleTakeoutImport: { _ in
-            GoogleTakeoutSaveSummary(saved: 0, skippedDuplicates: 0, reviewDrafts: 0)
-        },
         onComplete: { _ in },
         onCancel: {},
-        onSearchNearby: {}
+        onSearchNearby: {},
+        onOpenGoogleTakeout: {}
     )
     .preferredColorScheme(.light)
 }
@@ -402,12 +386,10 @@ enum SaveCapturePhotoText {
         existingPlaces: [],
         onDraftChange: { _ in },
         onImport: { _ in [] },
-        onSaveGoogleTakeoutImport: { _ in
-            GoogleTakeoutSaveSummary(saved: 0, skippedDuplicates: 0, reviewDrafts: 0)
-        },
         onComplete: { _ in },
         onCancel: {},
-        onSearchNearby: {}
+        onSearchNearby: {},
+        onOpenGoogleTakeout: {}
     )
     .preferredColorScheme(.dark)
 }
