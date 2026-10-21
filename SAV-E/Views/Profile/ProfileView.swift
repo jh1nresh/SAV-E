@@ -6,6 +6,8 @@ struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.appLanguageSettings) private var languageSettings
+    @EnvironmentObject private var session: SaveDoodleSession
+    @ObservedObject private var locationService = LocationService.shared
     @StateObject private var viewModel = ProfileViewModel()
     @StateObject private var posts = SharedPostsStore()
     @State private var showSettings = false
@@ -69,6 +71,18 @@ struct ProfileView: View {
         localSavedPlaces
     }
 
+    /// Same city X/Y Home Collected uses. Sheet and tab both read this so
+    /// tapping `home.collected` cannot open a Passport that still shows
+    /// all-places / `passportGoal`.
+    private var cityStampPlaces: [Place] {
+        SaveDoodleHomeProgressCatalog.cityPlaces(
+            from: passportPlaces,
+            selection: session.city,
+            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
+            locationDenied: locationService.isAuthorizationDenied
+        )
+    }
+
     private var todayMissions: [SavePassportTodayMission] {
         guard isRootTab else { return [] }
         return SavePassportTodayCatalog.missions(
@@ -99,8 +113,8 @@ struct ProfileView: View {
                             : SaveTheme.Spacing.lg
                     )
 
-                    if isRootTab {
-                        PassportTileTownCollection(places: passportPlaces, onOpenPlace: onOpenPlace)
+                    if !cityStampPlaces.isEmpty {
+                        PassportTileTownCollection(places: cityStampPlaces, onOpenPlace: onOpenPlace)
                             .padding(.horizontal, 16)
                     }
 
@@ -590,8 +604,7 @@ struct ProfileView: View {
                 visitError = nil
                 Task {
                     defer { isUpdatingVisit = false }
-                    var updated = place
-                    updated.status = .visited
+                    let updated = SaveDoodleVisitStore().markIveBeenHere(place)
                     do {
                         try await onUpdatePlace(updated)
                         SavePassportFieldStreakStore.shared.recordFieldAction()
@@ -2297,6 +2310,10 @@ private struct PassportTileTownCollection: View {
         SaveTileTownProductLock.passportGoal(for: places.count)
     }
 
+    private var cityProgress: (visited: Int, saved: Int) {
+        SaveDoodleHomeProgressCatalog.progress(in: places)
+    }
+
     private var lockedCount: Int {
         max(places.count < goal ? 1 : 0, min(6, goal - places.count))
     }
@@ -2309,7 +2326,7 @@ private struct PassportTileTownCollection: View {
             )
             .accessibilityLabel(languageSettings.localized(english: "Passport", traditionalChinese: "護照"))
             HStack {
-                Text("\(places.count)/\(goal)")
+                Text("\(cityProgress.visited)/\(cityProgress.saved)")
                     .font(SaveAtlasType.strong(13))
                     .foregroundStyle(SaveAtlasPalette.forest)
                 GeometryReader { geo in
@@ -2324,7 +2341,7 @@ private struct PassportTileTownCollection: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("profile.stampProgress")
-            .accessibilityValue("\(places.count) of \(goal)")
+            .accessibilityValue("\(cityProgress.visited) of \(cityProgress.saved)")
 
             LazyVGrid(
                 columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
@@ -2356,8 +2373,8 @@ private struct PassportTileTownCollection: View {
     }
 
     private var progress: CGFloat {
-        guard goal > 0 else { return 0 }
-        return min(1, CGFloat(places.count) / CGFloat(goal))
+        guard cityProgress.saved > 0 else { return 0 }
+        return min(1, CGFloat(cityProgress.visited) / CGFloat(cityProgress.saved))
     }
 }
 
@@ -2948,4 +2965,5 @@ private struct LanguageSettingsSheet: View {
 #Preview {
     ProfileView(requestsConnections: .constant(false))
         .environment(\.appLanguageSettings, AppLanguageSettings())
+        .environmentObject(SaveDoodleSession())
 }
