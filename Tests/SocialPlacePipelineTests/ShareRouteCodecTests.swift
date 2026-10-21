@@ -511,6 +511,7 @@ final class ShareRouteCodecTests: XCTestCase {
         }
     }
 
+    @MainActor
     private func assertNoGoogleDomainURLs(in place: SharedPlaceData, file: StaticString = #filePath, line: UInt = #line) {
         if let source = place.sourceURL {
             XCTAssertFalse(containsGoogleDomain(source), source, file: file, line: line)
