@@ -697,7 +697,7 @@ mini-map opens Map with the same filter and city.
 Collected X/Y is visited / all saved places in the current city scope,
 every category. Eat/Go and the listed row count do not change it;
 switching city does. The strip opens Passport with the same city
-numbers (HoP 2026-10-21).
+numbers (HoP 2026-10-21). Unknown location is not worldwide nearby.
 
 Location denied: hide "Near you", show the last city sorted by most
 recent save, and prompt to allow location. Empty nearby: Caveat title,
@@ -709,11 +709,12 @@ screen when N>0. Saves reaches Trips from its header as `Trips ›`
 (`saves.trips`). Do not add a second Home Trips row. Collected opens
 Passport. Wordmark is Caveat SemiBold 34; the city line is Caveat 20 with
 a 2pt coral underline under the city word only. Body copy stays
-`SaveAtlasType`. The locked parity face is DESIGN v2
+`SaveAtlasType`. The visual reference is the Codex packet and spec §8,
+not DESIGN v2 Home. H1–H4 CI rasters are judged manually by DESIGN;
+the 0.90 visual-parity score is not evidence. Historical DESIGN v2
 `design/doodle-targets-2026-10-20/home-light.png` at `eade369`
-(exact 402×874; `home-dark.png` for DESIGN comparison;
-`home-mask.png` white = ignore). Grade position, size, color and
-font style. v1 is retired.
+(exact 402×874; `home-dark.png`; `home-mask.png` white = ignore)
+is archive only. v1 is retired.
 
 ### Capture and Pro factual state
 

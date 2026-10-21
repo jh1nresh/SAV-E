@@ -6,6 +6,8 @@ struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.appLanguageSettings) private var languageSettings
+    @EnvironmentObject private var session: SaveDoodleSession
+    @ObservedObject private var locationService = LocationService.shared
     @StateObject private var viewModel = ProfileViewModel()
     @StateObject private var posts = SharedPostsStore()
     @State private var showNewPost = false
@@ -73,6 +75,18 @@ struct ProfileView: View {
         localSavedPlaces
     }
 
+    /// Same city X/Y Home Collected uses. Sheet and tab both read this so
+    /// tapping `home.collected` cannot open a Passport that still shows
+    /// all-places / `passportGoal`.
+    private var cityStampPlaces: [Place] {
+        SaveDoodleHomeProgressCatalog.cityPlaces(
+            from: passportPlaces,
+            selection: session.city,
+            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
+            locationDenied: locationService.isAuthorizationDenied
+        )
+    }
+
     private var todayMissions: [SavePassportTodayMission] {
         guard isRootTab else { return [] }
         return SavePassportTodayCatalog.missions(
@@ -116,7 +130,7 @@ struct ProfileView: View {
 
     private var passportContent: some View {
             SaveDoodlePassportPage(
-                places: passportPlaces,
+                places: cityStampPlaces,
                 onOpenPlace: onOpenPlace,
                 onMarkVisited: { place in
                     await markPlaceVisited(place)
@@ -654,6 +668,7 @@ struct ProfileView: View {
         updated.status = .visited
         do {
             try await onUpdatePlace(updated)
+            _ = SaveDoodleVisitStore().markIveBeenHere(updated)
             SavePassportFieldStreakStore.shared.recordFieldAction()
             refreshFieldStreak()
             if let index = localSavedPlaces.firstIndex(where: { $0.id == place.id }) {
@@ -2979,4 +2994,5 @@ private struct LanguageSettingsSheet: View {
 #Preview {
     ProfileView(requestsConnections: .constant(false))
         .environment(\.appLanguageSettings, AppLanguageSettings())
+        .environmentObject(SaveDoodleSession())
 }

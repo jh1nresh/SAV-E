@@ -37,27 +37,30 @@ struct SaveProPaywallView: View {
             SaveAtlasPalette.canvas
                 .ignoresSafeArea()
 
-            VStack(alignment: .leading, spacing: 0) {
-                topBar
-                hero
-                    .padding(.top, SaveSpace.xs)
-                headline
-                    .padding(.top, SaveSpace.lg)
-                benefitRow
-                    .padding(.top, SaveSpace.md)
-                savedNote
-                    .padding(.top, SaveSpace.xs)
-                Spacer(minLength: SaveSpace.md)
-                    .overlay(alignment: .bottom) {
-                        saleStateNotice
-                            .padding(.bottom, SaveSpace.xs)
-                    }
-                offers
-                legalFooter
-                    .padding(.top, SaveSpace.sm)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    topBar
+                    hero
+                        .padding(.top, SaveSpace.xs)
+                    headline
+                        .padding(.top, SaveSpace.lg)
+                    benefitRow
+                        .padding(.top, SaveSpace.md)
+                    savedNote
+                        .padding(.top, SaveSpace.xs)
+                    saleStateNotice
+                        .padding(.top, SaveSpace.md)
+                        .padding(.bottom, SaveSpace.xs)
+                    offers
+                    legalFooter
+                        .padding(.top, SaveSpace.sm)
+                }
+                .padding(.horizontal, SaveLayout.screenMargin)
+                .padding(.bottom, SaveSpace.xs)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, SaveLayout.screenMargin)
-            .padding(.bottom, SaveSpace.xs)
+            .scrollBounceBehavior(.basedOnSize)
+            .accessibilityIdentifier("paywall.scroll")
         }
         .presentationBackground(SaveAtlasPalette.canvas)
         .interactiveDismissDisabled(isPurchasing)
@@ -152,8 +155,8 @@ struct SaveProPaywallView: View {
         .accessibilityIdentifier("paywall.savedNote")
     }
 
-    /// Sale-state copy sits in the spacer so Yearly / Monthly / Continue
-    /// stay on the DESIGN eade369 locks when purchasing is off.
+    /// Sale-state copy sits between the saved note and the Yearly / Monthly
+    /// / Continue stack so the legal footer stays reachable in the scroll.
     @ViewBuilder
     private var saleStateNotice: some View {
         if showsNotForSale || hasStatusNotice {

@@ -237,9 +237,10 @@ enum SaveDoodleHomeCatalog {
         let matching = places.filter { self.lens(for: $0.category) == lens }
         switch resolvedSelection(selection, places: places, locationDenied: locationDenied) {
         case .nearYou:
-            guard let location else {
-                return matching.sorted(by: moreRecent)
-            }
+            // Unknown location is not worldwide nearby. Fresh install,
+            // undetermined authorization, and a transient fix failure must
+            // return no rows so Home can prompt instead of plotting every city.
+            guard let location else { return [] }
             return matching
                 .filter { distance(from: location, to: $0).map { $0 <= nearbyRadius } ?? false }
                 .sorted { lhs, rhs in
@@ -345,7 +346,7 @@ enum SaveDoodleHomeCatalog {
                 return cityID(for: nearest)
             }
         }
-        return places.sorted(by: moreRecent).first.flatMap { cityID(for: $0) }
+        return nil
     }
 
     static func cityCollectedCount(in places: [Place]) -> (visited: Int, saved: Int) {
@@ -435,6 +436,16 @@ final class SaveDoodleVisitStore {
         return true
     }
 
+    /// Production "I've been here" / Mark visited path. Records today's
+    /// check-in and promotes the place to a Map Stamp. Home Collected and
+    /// Passport both read `status == .visited` after this write.
+    func markIveBeenHere(_ place: Place) -> Place {
+        recordVisit(for: place.id)
+        var updated = place
+        updated.status = .visited
+        return updated
+    }
+
     @discardableResult
     func undoToday(for id: UUID) -> Bool {
         let today = now()
@@ -448,6 +459,35 @@ final class SaveDoodleVisitStore {
         defaults.set(payload, forKey: Self.datesKey)
         defaults.set(total, forKey: Self.countKey(id))
         return true
+    }
+
+    struct Snapshot: Equatable {
+        let id: UUID
+        let dates: [Double]
+        let count: Int
+    }
+
+    func snapshot(for id: UUID) -> Snapshot {
+        Snapshot(id: id, dates: visitPayload[id.uuidString] ?? [], count: count(for: id))
+    }
+
+    func restore(_ snapshot: Snapshot) {
+        var payload = visitPayload
+        payload[snapshot.id.uuidString] = snapshot.dates.isEmpty ? nil : snapshot.dates
+        defaults.set(payload, forKey: Self.datesKey)
+        defaults.set(snapshot.count, forKey: Self.countKey(snapshot.id))
+    }
+
+    func previousStatus(for id: UUID) -> PlaceStatus? {
+        defaults.string(forKey: Self.priorStatusKey(id)).flatMap(PlaceStatus.init(rawValue:))
+    }
+
+    func rememberPriorStatus(_ status: PlaceStatus, for id: UUID) {
+        defaults.set(status.rawValue, forKey: Self.priorStatusKey(id))
+    }
+
+    func clearPriorStatus(for id: UUID) {
+        defaults.removeObject(forKey: Self.priorStatusKey(id))
     }
 
     private func dates(for id: UUID) -> [Date] {
@@ -466,5 +506,40 @@ final class SaveDoodleVisitStore {
 
     static func countKey(_ id: UUID) -> String {
         "save.doodle.passport.visits.\(suiteSuffix).\(id.uuidString)"
+    }
+
+    static func priorStatusKey(_ id: UUID) -> String {
+        "save.doodle.checkin.priorStatus.\(suiteSuffix).\(id.uuidString)"
+    }
+}
+
+/// City-scope X/Y for Home Collected and the Passport progress this PR
+/// wires. PR #295 already owns SaveDoodlePassportCatalog in
+/// SaveDoodlePassportCatalog.swift for stamp-grid layout (pageSize,
+/// columns). After #290 merges, #295 keeps that type and should call
+/// SaveDoodleHomeProgressCatalog for city visited/saved numbers — do
+/// not declare SaveDoodlePassportCatalog in this file.
+enum SaveDoodleHomeProgressCatalog {
+    static func cityPlaces(
+        from places: [Place],
+        selection: SaveDoodleCitySelection,
+        location: CLLocation? = nil,
+        locationDenied: Bool
+    ) -> [Place] {
+        SaveDoodleHomeCatalog.collectedScopePlaces(
+            from: places,
+            selection: selection,
+            location: location,
+            locationDenied: locationDenied
+        )
+        .sorted(by: SaveDoodleHomeCatalog.moreRecent)
+    }
+
+    static func progress(in places: [Place]) -> (visited: Int, saved: Int) {
+        SaveDoodleHomeCatalog.cityCollectedCount(in: places)
+    }
+
+    static func visitedCount(in places: [Place]) -> Int {
+        progress(in: places).visited
     }
 }

@@ -483,6 +483,7 @@ struct ContentView: View {
             requestsConnections: $requestsSocialConnections
         )
         .environment(\.appLanguageSettings, languageSettings)
+        .environmentObject(doodleSession)
     }
 
     /// Tab bar selection. `.capture` is a control, not a destination: it opens

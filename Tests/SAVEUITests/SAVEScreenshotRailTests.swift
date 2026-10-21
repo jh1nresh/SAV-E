@@ -328,6 +328,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let start = app.descendants(matching: .any)["home.empty.capture"]
         XCTAssertTrue(start.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(start.isHittable)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["home.locationPrompt"].waitForExistence(timeout: stepTimeout),
+            "Denied + empty Home must keep the Settings recovery prompt"
+        )
+        XCTAssertTrue(app.buttons["home.locationAllow"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["home.saves"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
         attach(app, name: "review-flow-home-empty")
@@ -358,6 +363,64 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.buttons["drawer.review.primaryAction"].exists)
         attach(app, name: "review-next-step-add-clue")
         try assertSearchEditorIsPainted(refinement)
+    }
+
+    /// P2 4335170966: Saves → Trips must keep Saves as the back destination.
+    @MainActor
+    func testSavesTripsBackReturnsToSaves() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed", "--uitest-location-denied",
+            "-save.appLanguage", "en"
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openTripsFromHome(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
+        let back = app.navigationBars["Trips"].buttons.firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: stepTimeout), "Trips must expose a native back action")
+        back.tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout),
+            "Back from Trips must return to Saves, not Home"
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForNonExistence(timeout: stepTimeout))
+    }
+
+    /// T6: tap Home Collected and assert the real Passport screen shows
+    /// the same city 4/12. Codex packet / spec §8 fixture, not DESIGN v2.
+    @MainActor
+    func testHomeCollectedOpensPassportWithCityCount() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed", "--uitest-doodle-parity-fixture",
+            "--uitest-location-denied", "-save.appLanguage", "en"
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let collected = app.descendants(matching: .any)["home.collected"]
+        let list = app.scrollViews.firstMatch
+        if list.exists {
+            for _ in 0..<4 where !collected.exists {
+                list.swipeUp()
+            }
+        }
+        XCTAssertTrue(collected.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(collected.label, "Collected 4/12")
+        tapReachable(collected)
+        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+        let progress = app.descendants(matching: .any)["profile.stampProgress"]
+        XCTAssertTrue(progress.waitForExistence(timeout: stepTimeout))
+        let shown = [progress.value as? String, progress.label]
+            .compactMap { $0 }
+            .joined(separator: " ")
+        XCTAssertTrue(
+            shown.contains("4/12") || shown.contains("4 of 12"),
+            "Passport must show the same city 4/12 as Home Collected, got \(shown)"
+        )
     }
 
     /// A field can remain accessible and accept typing while a parent mask
@@ -897,6 +960,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.staticTexts["Bonus sticker packs"].exists)
         attach(app, name: "five-tab-paywall")
         attach(app, name: "doodle-paywall-light")
+        attach(app, name: "pr295-paywall-light")
 
         let capApp = makeApp(
             launchArguments: [
@@ -950,6 +1014,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "five-tab-capture")
         attach(app, name: "doodle-capture-light")
+        attach(app, name: "pr295-capture-light")
         XCTAssertFalse(app.descendants(matching: .any)["capture.suggestion"].exists)
         let nearby = app.buttons["capture.searchNearby"]
         XCTAssertTrue(nearby.isHittable)
@@ -991,6 +1056,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         capture.tap()
         XCTAssertTrue(captureApp.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
         attach(captureApp, name: "doodle-capture-dark")
+        attach(captureApp, name: "pr295-capture-dark")
         captureApp.buttons["Close capture"].tap()
 
         let paywallApp = makeApp(
@@ -1013,9 +1079,159 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             paywallApp.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout)
         )
         attach(paywallApp, name: "doodle-paywall-dark")
+        attach(paywallApp, name: "pr295-paywall-dark")
     }
 
-    /// Warm dark tokens from spec §1 must paint Home and Passport once Light is unlocked.
+    /// QA evidence for #295: paywall with large Dynamic Type on the CI
+    /// iPhone. Compact-height SE shots are captured by `testPR295SEEvidence`.
+    @MainActor
+    func testPR295PaywallLargeTypeEvidence() throws {
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        let light = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(light)
+        try signInViaReviewDemoRequired(app: light)
+        XCTAssertTrue(light.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(light.descendants(matching: .any)["paywall.scroll"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(light.staticTexts["You've saved 50 places. Keep going."].waitForExistence(timeout: stepTimeout))
+        attach(light, name: "pr295-paywall-large-type-light")
+
+        XCUIDevice.shared.appearance = .dark
+        let dark = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(dark)
+        try signInViaReviewDemoRequired(app: dark)
+        XCTAssertTrue(dark.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        attach(dark, name: "pr295-paywall-large-type-dark")
+    }
+
+    /// QA evidence for #295: capture sheet and paywall on iPhone SE.
+    /// The dedicated iOS workflow step boots the SE simulator for this test.
+    @MainActor
+    func testPR295SEEvidence() throws {
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        let capture = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(capture)
+        try signInViaReviewDemoRequired(app: capture)
+        XCTAssertTrue(capture.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let saveTab = rootTabButton("Save", app: capture)
+        XCTAssertTrue(saveTab.waitForExistence(timeout: stepTimeout))
+        saveTab.tap()
+        XCTAssertTrue(capture.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(capture, name: "pr295-capture-se-light")
+        capture.buttons["Close capture"].tap()
+
+        let paywall = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(paywall)
+        try signInViaReviewDemoRequired(app: paywall)
+        XCTAssertTrue(paywall.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(paywall.descendants(matching: .any)["paywall.scroll"].waitForExistence(timeout: stepTimeout))
+        attach(paywall, name: "pr295-paywall-se-light")
+
+        XCUIDevice.shared.appearance = .dark
+        let captureDark = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(captureDark)
+        try signInViaReviewDemoRequired(app: captureDark)
+        XCTAssertTrue(captureDark.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let saveDark = rootTabButton("Save", app: captureDark)
+        XCTAssertTrue(saveDark.waitForExistence(timeout: stepTimeout))
+        saveDark.tap()
+        XCTAssertTrue(captureDark.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(captureDark, name: "pr295-capture-se-dark")
+
+        let paywallDark = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(paywallDark)
+        try signInViaReviewDemoRequired(app: paywallDark)
+        XCTAssertTrue(paywallDark.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        attach(paywallDark, name: "pr295-paywall-se-dark")
+    }
+
+    /// H1–H4: Codex packet / spec §8 faces (light EN, dark EN, light
+    /// zh-Hant, dark zh-Hant). DESIGN judges these rasters manually; the
+    /// 0.90 score is not evidence. Warm dark tokens from spec §1 must
+    /// paint Home and Passport once Light is unlocked.
     /// Appearance is forced before launch (`-AppleInterfaceStyle`, `--uitest-force-*`,
     /// and `XCUIDevice.appearance`). Background pixels must be near #1E1C19 / #FFF9EB.
     /// Attachment names stay off the production-parity set (`five-tab-*`, `atlas-*`).
@@ -1028,8 +1244,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             appearance: .dark,
             appleInterfaceStyle: "Dark",
             forceArgument: "--uitest-force-dark",
+            language: "en",
             homeName: "dark-home",
             passportName: "dark-passport",
+            referenceName: "H2",
             expectedRed: 0x1E,
             expectedGreen: 0x1C,
             expectedBlue: 0x19,
@@ -1039,12 +1257,38 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             appearance: .light,
             appleInterfaceStyle: "Light",
             forceArgument: "--uitest-force-light",
+            language: "en",
             homeName: "light-home",
             passportName: "light-passport",
+            referenceName: "H1",
             expectedRed: 0xFF,
             expectedGreen: 0xF9,
             expectedBlue: 0xEB,
             extraLaunchArguments: ["--uitest-doodle-passport-face"]
+        )
+        try captureHomeAndPassportCanvas(
+            appearance: .light,
+            appleInterfaceStyle: "Light",
+            forceArgument: "--uitest-force-light",
+            language: "zh-Hant",
+            homeName: "light-home-zh",
+            passportName: "light-passport-zh",
+            referenceName: "H3",
+            expectedRed: 0xFF,
+            expectedGreen: 0xF9,
+            expectedBlue: 0xEB
+        )
+        try captureHomeAndPassportCanvas(
+            appearance: .dark,
+            appleInterfaceStyle: "Dark",
+            forceArgument: "--uitest-force-dark",
+            language: "zh-Hant",
+            homeName: "dark-home-zh",
+            passportName: "dark-passport-zh",
+            referenceName: "H4",
+            expectedRed: 0x1E,
+            expectedGreen: 0x1C,
+            expectedBlue: 0x19
         )
     }
 
@@ -1053,8 +1297,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         appearance: XCUIDevice.Appearance,
         appleInterfaceStyle: String,
         forceArgument: String,
+        language: String = "en",
         homeName: String,
         passportName: String,
+        referenceName: String? = nil,
         expectedRed: Int,
         expectedGreen: Int,
         expectedBlue: Int,
@@ -1069,7 +1315,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-doodle-parity-face",
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
-                "-save.appLanguage", "en",
+                "-save.appLanguage", language,
                 "-AppleInterfaceStyle", appleInterfaceStyle,
                 forceArgument,
                 "--uitest-map-place-selected",
@@ -1085,6 +1331,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.citySwitcher"].waitForExistence(timeout: stepTimeout))
         let homeShot = app.screenshot()
         attach(app, name: homeName)
+        if let referenceName {
+            attach(app, name: referenceName)
+        }
         assertScreenshotBackground(
             homeShot,
             nearRed: expectedRed,
@@ -3320,10 +3569,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let entry = review.exists ? review : fallback
         _ = scrollUntilHittable(entry, in: app.scrollViews.firstMatch)
         XCTAssertTrue(entry.isHittable, "Home Saves must be usable without a hidden test-only route")
-        // Simulator accessibility frames can report 43.999... for a true 44pt
-        // control. Keep the 44pt bar; only absorb float noise.
-        XCTAssertGreaterThanOrEqual(entry.frame.height + 0.01, 44)
-        XCTAssertGreaterThanOrEqual(entry.frame.width + 0.01, 44)
+        // XCUIElement.frame can report 43.99999999999997 for a 44pt SwiftUI
+        // minHeight. Allow 0.01pt of CGRect noise; do not round (43.5 would pass).
+        XCTAssertGreaterThanOrEqual(entry.frame.height, 44 - 0.01)
+        XCTAssertGreaterThanOrEqual(entry.frame.width, 44 - 0.01)
         tapReachable(entry)
         let saves = app.descendants(matching: .any)["saves.root"]
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to
