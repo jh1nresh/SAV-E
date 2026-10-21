@@ -274,7 +274,7 @@ struct MapView: View {
 
 /// Spec P4: Atlas-style notice with an Open Settings recovery path, shown
 /// when locating fails because permission is denied or restricted.
-private struct SaveLocationDeniedNotice: View {
+struct SaveLocationDeniedNotice: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let onOpenSettings: () -> Void
     let onDismiss: () -> Void

@@ -161,13 +161,13 @@ final class SaveTileTownLockTests: XCTestCase {
     }
 
     func testMapOwnsNearbySavedFriendsChipsOnTileTown() throws {
-        let map = try source(at: "SAV-E/Views/TileTown/SaveTileTownRootMap.swift")
+        let map = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
         let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
-        XCTAssertTrue(map.contains("SaveTileTownCanvas"))
+        XCTAssertTrue(map.contains("Map(position:"))
+        XCTAssertTrue(map.contains(".mapStyle("))
+        XCTAssertTrue(map.contains("SavvyMapPhotoPinView"))
         XCTAssertTrue(map.contains("AtlasMetrics.statusBarHeight"))
         XCTAssertFalse(map.contains(".padding(.top, 8)"))
-        XCTAssertTrue(map.contains("SaveTileTownPeekCard"))
-        XCTAssertTrue(map.contains("allowsPan: true"))
         XCTAssertTrue(map.contains(".frame(minHeight: 44)"))
         let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
         XCTAssertTrue(town.contains("interpolationQuality = .none"))
@@ -185,7 +185,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(panel.contains("Spacer(minLength: 0)"))
         XCTAssertTrue(panel.contains("alignment: .bottom"))
         XCTAssertTrue(panel.contains("SaveTileTownProductLock.mapChromeHeight"))
-        XCTAssertTrue(root.contains("SaveTileTownRootMap("))
+        XCTAssertTrue(root.contains("SaveMapPhotoPinsRoot("))
         XCTAssertFalse(root.contains("SaveAtlasInteractiveRootMap("))
     }
 

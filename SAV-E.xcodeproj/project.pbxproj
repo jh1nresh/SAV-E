@@ -12,6 +12,9 @@
 		T7A100000000000000000003 /* SaveKraftStamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000004 /* SaveKraftStamp.swift */; };
 		T7A100000000000000000005 /* SaveTileTownHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000006 /* SaveTileTownHomeView.swift */; };
 		T7A100000000000000000007 /* SaveTileTownRootMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000008 /* SaveTileTownRootMap.swift */; };
+		P13A10000000000000000001 /* SavvyMapPhotoPins.swift in Sources */ = {isa = PBXBuildFile; fileRef = P13A10000000000000000002 /* SavvyMapPhotoPins.swift */; };
+		P13A10000000000000000003 /* SaveMapPhotoPinsRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = P13A10000000000000000004 /* SaveMapPhotoPinsRoot.swift */; };
+		P13A10000000000000000005 /* SavvyMapPhotoPinsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = P13A10000000000000000006 /* SavvyMapPhotoPinsTests.swift */; };
 		T7A100000000000000000009 /* SaveTileTownLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A10000000000000000000A /* SaveTileTownLockTests.swift */; };
 		C91900000000000000000001 /* DisplayFont in Resources */ = {isa = PBXBuildFile; fileRef = C91900000000000000000002 /* DisplayFont */; };
 		A117DCD202609100000000003 /* SavePlanAgentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A117DCD202609100000000004 /* SavePlanAgentTests.swift */; };
@@ -310,6 +313,9 @@
 		T7A100000000000000000004 /* SaveKraftStamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveKraftStamp.swift; sourceTree = "<group>"; };
 		T7A100000000000000000006 /* SaveTileTownHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownHomeView.swift; sourceTree = "<group>"; };
 		T7A100000000000000000008 /* SaveTileTownRootMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownRootMap.swift; sourceTree = "<group>"; };
+		P13A10000000000000000002 /* SavvyMapPhotoPins.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavvyMapPhotoPins.swift; sourceTree = "<group>"; };
+		P13A10000000000000000004 /* SaveMapPhotoPinsRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMapPhotoPinsRoot.swift; sourceTree = "<group>"; };
+		P13A10000000000000000006 /* SavvyMapPhotoPinsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavvyMapPhotoPinsTests.swift; sourceTree = "<group>"; };
 		T7A10000000000000000000A /* SaveTileTownLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownLockTests.swift; sourceTree = "<group>"; };
 		C91900000000000000000002 /* DisplayFont */ = {isa = PBXFileReference; lastKnownFileType = folder; path = DisplayFont; sourceTree = "<group>"; };
 		A117DCD202609100000000004 /* SavePlanAgentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanAgentTests.swift; sourceTree = "<group>"; };
@@ -919,6 +925,7 @@
 				5CD5DE6A80F7B22D67182A2C /* AtlasHomeHeroPresentationTests.swift */,
 				6F3BF7069E799A11086D07F7 /* AtlasOneFaceUITests.swift */,
 				T7A10000000000000000000A /* SaveTileTownLockTests.swift */,
+				P13A10000000000000000006 /* SavvyMapPhotoPinsTests.swift */,
 				A5629446727F6C92D09FD7BE /* AtlasOneJobPerTabUITests.swift */,
 				396D972F2C07BCC409ADBEC7 /* DebugLegacyMigratorTests.swift */,
 				8B41297E1503EE02BE975D45 /* DeterministicTripPlannerTests.swift */,
@@ -976,6 +983,8 @@
 			isa = PBXGroup;
 			children = (
 				1A55AC71904B498274561F2D /* MapView.swift */,
+				P13A10000000000000000004 /* SaveMapPhotoPinsRoot.swift */,
+				P13A10000000000000000002 /* SavvyMapPhotoPins.swift */,
 				61781274A9C071CEF671ADD7 /* PlaceBottomSheet.swift */,
 				B6B5881221BD233BF5F2C4EA /* SaveMapDrawerPanel.swift */,
 			);
@@ -1467,6 +1476,7 @@
 				1C753DEBFAB2D59B79856E1C /* AtlasHomeHeroPresentationTests.swift in Sources */,
 				3A214817A2A61AB5299EEC7E /* AtlasOneFaceUITests.swift in Sources */,
 				T7A100000000000000000009 /* SaveTileTownLockTests.swift in Sources */,
+				P13A10000000000000000005 /* SavvyMapPhotoPinsTests.swift in Sources */,
 				44FE5138EF536EBF57B0EA3A /* AtlasOneJobPerTabUITests.swift in Sources */,
 				94AF43877A54FD0C34CD7217 /* DebugLegacyMigratorTests.swift in Sources */,
 				793EB5D582636871FD6FA8CE /* DeterministicTripPlannerTests.swift in Sources */,
@@ -1576,6 +1586,8 @@
 				C3F9723CC4B97DD1915AFFC3 /* MaatAnalysisCache.swift in Sources */,
 				7D221A99C9D47E9AA8E5D3C8 /* MapCoachmarkTour.swift in Sources */,
 				AEDD117BBD3A0FD842D535BF /* MapView.swift in Sources */,
+				P13A10000000000000000003 /* SaveMapPhotoPinsRoot.swift in Sources */,
+				P13A10000000000000000001 /* SavvyMapPhotoPins.swift in Sources */,
 				97D2C4B481F634DA55B6437C /* MapViewModel.swift in Sources */,
 				B4DAEDB0A245CE1D4707844F /* MemoMascotMark.swift in Sources */,
 				973C85F47B09BEDF4824A262 /* NavigationCardComponent.swift in Sources */,

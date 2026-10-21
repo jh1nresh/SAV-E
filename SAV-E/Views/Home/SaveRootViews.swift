@@ -487,12 +487,13 @@ struct SaveMapRootView: View {
     var body: some View {
         Group {
             if SaveAtlasRuntime.usesParityFixture {
-                // Fixture-only illustrated atlas. Production Map is tile-town
-                // (2026-10-14 founder lock; H1/M1 MapKit-only base superseded).
+                // Fixture-only illustrated atlas. Production Map is default
+                // Apple MapKit with coral photo pins (HoP 2026-10-21). Home
+                // peek stays tile-town. Parity attachments stay on this fixture.
                 RootAtlasMapScreen()
                     .environment(\.atlasPresentation, atlasPresentation)
             } else {
-                SaveTileTownRootMap(
+                SaveMapPhotoPinsRoot(
                     mapViewModel: mapViewModel,
                     presentation: atlasPresentation,
                     onClearSelection: mapViewModel.clearSelectedMapObject,
