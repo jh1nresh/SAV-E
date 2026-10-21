@@ -4658,7 +4658,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(shareText.contains("Bright Coffee Bar"))
         XCTAssertTrue(shareText.contains("Rating: 4.8"))
         XCTAssertTrue(shareText.contains("Reviews: 1200"))
-        XCTAssertTrue(shareText.contains("Source: https://maps.google.com/"))
+        XCTAssertFalse(shareText.contains("google.com"))
         XCTAssertFalse(shareText.contains("token=private"))
         XCTAssertFalse(candidate.saveShareURL?.absoluteString.contains("token=private") == true)
         XCTAssertTrue(shareText.contains("Open in Savvy: https://sav-e-app.vercel.app/p/"))

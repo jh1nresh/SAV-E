@@ -915,8 +915,9 @@ Rules:
 DESIGN **v3.1 (plan A)** supersedes v1/v2. The Clip is a full-page shared
 place (or a vertically paged list of place pages). It does not show a map,
 preview card, tab bar, or footnote. Google Places photos do not appear on
-any Clip screen. Trip / referral / My Savvy stay functional and are not
-restyled here.
+any Clip screen. Shared and public payloads contain no Google-domain URLs
+(photos or source links). Trip / referral / My Savvy stay functional and
+are not restyled here.
 
 ### Flow
 

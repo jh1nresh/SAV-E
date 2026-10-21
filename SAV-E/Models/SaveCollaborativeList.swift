@@ -270,14 +270,14 @@ struct SaveSharedListPayload: Codable, Hashable {
            let role = SaveListRole(rawValue: roleValue) {
             payload.role = role
         }
-        payload.list = payload.list.sanitizingPhotoURLs()
+        payload.list = payload.list.sanitizingPublicPayload()
         payload.list.viewerRole = payload.role
         return payload
     }
 
     func toURL(baseURL: String? = nil) -> URL? {
         var safePayload = self
-        safePayload.list = list.sanitizingPhotoURLs()
+        safePayload.list = list.sanitizingPublicPayload()
         guard let jsonData = try? JSONEncoder().encode(safePayload),
               let base64 = jsonData.base64EncodedString().addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
             return nil
@@ -436,6 +436,16 @@ private extension SaveCollaborativeList {
         copy.items = items.map { item in
             var safeItem = item
             safeItem.photoURLs = ShareRoutePayloadSanitizer.persistablePhotoURLs(item.photoURLs)
+            return safeItem
+        }
+        return copy
+    }
+
+    func sanitizingPublicPayload() -> SaveCollaborativeList {
+        var copy = sanitizingPhotoURLs()
+        copy.items = copy.items.map { item in
+            var safeItem = item
+            safeItem.sourceURL = ShareRoutePayloadSanitizer.publicURL(from: item.sourceURL)?.absoluteString
             return safeItem
         }
         return copy

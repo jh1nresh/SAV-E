@@ -93,16 +93,18 @@ struct SharedPlaceData: Codable {
               components.user == nil,
               components.password == nil
         else { return nil }
-        if ShareRoutePhotoPolicy.isGooglePlacesPhotoURL(components.url ?? URL(fileURLWithPath: "/"))
+        if let candidate = components.url,
+           ShareRoutePhotoPolicy.isGoogleDomainURL(candidate)
+            || ShareRoutePhotoPolicy.isGooglePlacesPhotoURL(candidate)
             || ShareRoutePhotoPolicy.looksLikeGooglePlacesPhotoReference(value) {
             return nil
         }
         components.query = nil
         components.fragment = nil
-        let url = components.url
-        if let url, ShareRoutePhotoPolicy.isGooglePlacesPhotoURL(url) {
-            return nil
-        }
+        guard let url = components.url,
+              !ShareRoutePhotoPolicy.isGoogleDomainURL(url),
+              !ShareRoutePhotoPolicy.isGooglePlacesPhotoURL(url)
+        else { return nil }
         return url
     }
 
@@ -366,6 +368,23 @@ struct SharedTripData: Codable {
 }
 
 enum ShareRoutePhotoPolicy {
+    static func isGoogleDomainHost(_ host: String) -> Bool {
+        let h = host.lowercased()
+        let labels = h.split(separator: ".")
+        if labels.contains("google") { return true }
+        if labels.contains("googleapis") { return true }
+        if labels.contains("googleusercontent") { return true }
+        if labels.contains("gstatic") { return true }
+        if h == "goo.gl" || h.hasSuffix(".goo.gl") { return true }
+        if h == "g.co" || h.hasSuffix(".g.co") { return true }
+        return false
+    }
+
+    static func isGoogleDomainURL(_ url: URL) -> Bool {
+        guard let host = url.host else { return false }
+        return isGoogleDomainHost(host)
+    }
+
     static func isGooglePlacesPhotoURL(_ url: URL) -> Bool {
         let host = url.host?.lowercased() ?? ""
         let path = url.path
@@ -387,7 +406,7 @@ enum ShareRoutePhotoPolicy {
             guard !normalized.isEmpty else { return nil }
             if looksLikeGooglePlacesPhotoReference(normalized) { return nil }
             guard let url = URL(string: normalized) else { return nil }
-            if isGooglePlacesPhotoURL(url) { return nil }
+            if isGoogleDomainURL(url) || isGooglePlacesPhotoURL(url) { return nil }
             return normalized
         }
     }
@@ -692,7 +711,13 @@ struct SharedListPayload: Codable {
                         category: item.category,
                         rating: item.rating,
                         reviewCount: item.reviewCount,
-                        sourceURL: item.sourceURL,
+                        sourceURL: {
+                            guard let raw = item.sourceURL,
+                                  let url = URL(string: raw),
+                                  !ShareRoutePhotoPolicy.isGoogleDomainURL(url)
+                            else { return nil }
+                            return raw
+                        }(),
                         photoURLs: ShareRoutePhotoPolicy.persistablePhotoURLs(item.photoURLs),
                         note: item.note,
                         addedByDisplayName: item.addedByDisplayName,

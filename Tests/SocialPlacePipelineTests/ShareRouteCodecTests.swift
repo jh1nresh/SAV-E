@@ -35,7 +35,7 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertEqual(decoded.priceRange, "$$")
         XCTAssertEqual(decoded.hours, "Wed-Sun dinner")
         XCTAssertEqual(decoded.sourceLabel, "Google")
-        XCTAssertEqual(decoded.sourceURL, "https://www.google.com/maps/place/Quarter+Sheets+Pizza+Club")
+        XCTAssertNil(decoded.sourceURL)
         XCTAssertEqual(decoded.note, "Save this for a slow dinner night")
     }
 
@@ -187,9 +187,107 @@ final class ShareRouteCodecTests: XCTestCase {
             note: nil
         )
 
-        let decoded = try XCTUnwrap(SharedPlaceData.from(url: try XCTUnwrap(attributed.toURL())))
+        let shareURL = try XCTUnwrap(attributed.toURL())
+        let decoded = try XCTUnwrap(SharedPlaceData.from(url: shareURL))
         XCTAssertEqual(decoded.photoURLs, ["https://example.com/own.jpg"])
-        XCTAssertFalse(decoded.photoURLs.contains(where: { $0.contains("googleapis.com") }))
+        XCTAssertNil(decoded.sourceURL)
+        assertNoGoogleDomainURLs(in: shareURL)
+        assertNoGoogleDomainURLs(in: decoded)
+    }
+
+    @MainActor
+    func testSharedPublicPayloadsContainNoGoogleDomainURLs() throws {
+        let place = SharedPlaceData(
+            id: "g-d-place",
+            name: "Harbor Oven",
+            address: "Los Angeles",
+            lat: 34.052,
+            lng: -118.243,
+            category: "Food",
+            rating: 4.5,
+            reviewCount: 10,
+            priceRange: "$$",
+            hours: "Open",
+            sourceLabel: "Google",
+            sourceURL: "https://www.google.com/maps/place/Harbor+Oven",
+            photoURLs: [
+                "https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=abc",
+                "https://lh3.googleusercontent.com/p/owned-looking",
+                "https://places.googleapis.com/v1/places/ChIJ/photos/ABC/media",
+                "https://example.com/own.jpg",
+            ],
+            note: "Keep the bun"
+        )
+        let placeURL = try XCTUnwrap(place.toURL())
+        let decodedPlace = try XCTUnwrap(SharedPlaceData.from(url: placeURL))
+        XCTAssertEqual(decodedPlace.photoURLs, ["https://example.com/own.jpg"])
+        XCTAssertNil(decodedPlace.sourceURL)
+        assertNoGoogleDomainURLs(in: placeURL)
+        assertNoGoogleDomainURLs(in: decodedPlace)
+
+        var list = SaveCollaborativeList(title: "G-d list")
+        list.add(
+            SaveListItem(
+                id: UUID(),
+                source: .savedPlace,
+                sourceID: "owned",
+                title: "Owned Cafe",
+                subtitle: "LA",
+                latitude: 34.05,
+                longitude: -118.24,
+                category: .cafe,
+                rating: nil,
+                reviewCount: nil,
+                sourceURL: "https://maps.google.com/?q=Owned+Cafe",
+                photoURLs: ["https://example.com/own.jpg"],
+                note: nil,
+                addedByDisplayName: "You",
+                addedAt: Date()
+            )
+        )
+        list.add(
+            SaveListItem(
+                id: UUID(),
+                source: .savedPlace,
+                sourceID: "google",
+                title: "Google Cafe",
+                subtitle: "LA",
+                latitude: 34.06,
+                longitude: -118.25,
+                category: .cafe,
+                rating: nil,
+                reviewCount: nil,
+                sourceURL: "https://www.google.com/maps/place/Google+Cafe",
+                photoURLs: [
+                    "https://lh3.googleusercontent.com/p/secret",
+                    "https://maps.googleapis.com/maps/api/place/photo?photo_reference=abc",
+                ],
+                note: nil,
+                addedByDisplayName: "You",
+                addedAt: Date()
+            )
+        )
+        let listURL = try XCTUnwrap(list.shareURL())
+        let listPayload = try XCTUnwrap(SaveSharedListPayload.from(url: listURL))
+        XCTAssertEqual(listPayload.list.items.first?.photoURLs, ["https://example.com/own.jpg"])
+        XCTAssertNil(listPayload.list.items.first?.sourceURL)
+        XCTAssertEqual(listPayload.list.items.last?.photoURLs, [])
+        XCTAssertNil(listPayload.list.items.last?.sourceURL)
+        assertNoGoogleDomainURLs(in: listURL)
+        for item in listPayload.list.items {
+            if let source = item.sourceURL {
+                XCTAssertFalse(containsGoogleDomain(source), source)
+            }
+            for photo in item.photoURLs {
+                XCTAssertFalse(containsGoogleDomain(photo), photo)
+            }
+        }
+
+        XCTAssertTrue(ShareRoutePayloadSanitizer.isGoogleDomainURL(URL(string: "https://maps.google.com/?q=x")!))
+        XCTAssertTrue(ShareRoutePayloadSanitizer.isGoogleDomainURL(URL(string: "https://lh3.googleusercontent.com/p/x")!))
+        XCTAssertTrue(ShareRoutePayloadSanitizer.isGoogleDomainURL(URL(string: "https://www.google.co.uk/maps")!))
+        XCTAssertFalse(ShareRoutePayloadSanitizer.isGoogleDomainURL(URL(string: "https://example.com/own.jpg")!))
+        XCTAssertFalse(ShareRoutePayloadSanitizer.isGoogleDomainURL(URL(string: "https://maps.apple.com/?q=x")!))
     }
 
     @MainActor
@@ -404,6 +502,30 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertNil(receipt.sender)
         XCTAssertNil(receipt.verifiedSenderLabel)
         XCTAssertNil(receipt.privatePlace().recommender)
+    }
+
+    private func assertNoGoogleDomainURLs(in url: URL, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertFalse(containsGoogleDomain(url.absoluteString), url.absoluteString, file: file, line: line)
+        if let decoded = url.absoluteString.removingPercentEncoding {
+            XCTAssertFalse(containsGoogleDomain(decoded), decoded, file: file, line: line)
+        }
+    }
+
+    private func assertNoGoogleDomainURLs(in place: SharedPlaceData, file: StaticString = #filePath, line: UInt = #line) {
+        if let source = place.sourceURL {
+            XCTAssertFalse(containsGoogleDomain(source), source, file: file, line: line)
+        }
+        for photo in place.photoURLs {
+            XCTAssertFalse(containsGoogleDomain(photo), photo, file: file, line: line)
+        }
+    }
+
+    private func containsGoogleDomain(_ value: String) -> Bool {
+        let lower = value.lowercased()
+        return [
+            "google.com", "googleapis.com", "googleusercontent.com",
+            "gstatic.com", "goo.gl", "g.co",
+        ].contains { lower.contains($0) }
     }
 
     private static let saveClipLocalInvokeURL =
