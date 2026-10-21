@@ -224,6 +224,7 @@ struct SaveDoodleMapView: View {
                     + ", " + cityTitle
             )
             .accessibilityIdentifier("map.city")
+            .accessibilityAddTraits(.isButton)
 
             HStack {
                 Spacer(minLength: 0)

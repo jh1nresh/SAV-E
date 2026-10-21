@@ -115,7 +115,9 @@ struct AIDrawerView: View {
     /// Links exact-place map results to the Review clue they resolve, so
     /// saving one retires the clue from the queue.
     var onBeginExactSearchResolution: (PlaceReviewCandidate) -> Void = { _ in }
-    var onClearMapSearchResults: (_ preservesExactSearchClue: Bool) -> Void = { _ in }
+    /// `endsExactSearch` is true only for an explicit close. Launch/refine
+    /// remounts keep `exactSearchClueID` so the original clue stays linked.
+    var onClearMapSearchResults: (_ endsExactSearch: Bool) -> Void = { _ in }
     var collaborativeLists: [SaveCollaborativeList] = []
     var onCreateList: (String, String?) -> SaveCollaborativeList = { title, note in
         SaveCollaborativeList(title: title, note: note)
@@ -403,7 +405,7 @@ struct AIDrawerView: View {
 
     private func applyLaunchRequest(_ request: DrawerLaunchRequest) {
         cancelMapSearch()
-        onClearMapSearchResults(request.preservesExactSearchClue)
+        onClearMapSearchResults(false)
         mapDetailDrawerItem = nil
         onDismissMapDetail()
         viewModel.returnToCommands()
@@ -1213,7 +1215,7 @@ struct AIDrawerView: View {
 
     private func submitSearchField() {
         cancelMapSearch()
-        onClearMapSearchResults(launchRequest.preservesExactSearchClue)
+        onClearMapSearchResults(false)
         SaveHaptics.tap()
         voiceQuery.stop()
         searchFocused = false
@@ -1363,7 +1365,7 @@ struct AIDrawerView: View {
         let shouldClearMapSearch = hasVisibleMapSearchResults
         viewModel.reset()
         if shouldClearMapSearch {
-            onClearMapSearchResults(false)
+            onClearMapSearchResults(true)
         }
         searchFocused = false
         withAnimation { drawerDetent = collapsedDrawerDetent }
@@ -1373,7 +1375,7 @@ struct AIDrawerView: View {
         cancelMapSearch()
         voiceQuery.stop()
         viewModel.reset()
-        onClearMapSearchResults(false)
+        onClearMapSearchResults(true)
         searchFocused = false
         addSpotStatus = nil
         withAnimation { drawerDetent = collapsedDrawerDetent }

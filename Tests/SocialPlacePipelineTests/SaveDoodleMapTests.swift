@@ -23,6 +23,14 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("static var current: Kind = .coralNumbered"))
         XCTAssertTrue(map.contains("SaveAtlasPalette.coral"))
         XCTAssertTrue(map.contains("map.headerBand"))
+        let headerAt = try XCTUnwrap(map.range(of: "private func header"))
+        let eatGoAt = try XCTUnwrap(map.range(of: "private var eatGoRail"))
+        let header = map[headerAt.lowerBound..<eatGoAt.lowerBound]
+        XCTAssertTrue(header.contains("map.city"))
+        XCTAssertTrue(
+            header.contains("accessibilityElement(children: .contain)"),
+            "map.headerBand must contain children so map.city stays queryable"
+        )
         XCTAssertTrue(map.contains("SaveAtlasPalette.paper"))
         let bodyAt = try XCTUnwrap(map.range(of: "var body: some View"))
         let headerFnAt = try XCTUnwrap(map.range(of: "private func header"))
