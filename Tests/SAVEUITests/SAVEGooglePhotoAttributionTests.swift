@@ -2,6 +2,7 @@ import XCTest
 
 /// Real iOS Simulator evidence for PR #306 Google photo attribution (G1–G4).
 final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
+    @MainActor
     func testCaptureLightAndDarkEvidence() {
         captureEvidence(appearance: "light", forceArgument: "--uitest-force-light")
         captureEvidence(appearance: "dark", forceArgument: "--uitest-force-dark")
