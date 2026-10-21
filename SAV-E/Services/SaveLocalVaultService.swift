@@ -19,6 +19,7 @@ final class SaveLocalVaultService: Sendable {
     private let lock = NSLock()
 #if DEBUG
     nonisolated(unsafe) var removeReviewCandidateError: Error?
+    nonisolated(unsafe) var saveReviewCandidateError: Error?
 #endif
 
     init(overrideVaultURL: URL? = nil) {
@@ -181,6 +182,9 @@ final class SaveLocalVaultService: Sendable {
     }
 
     func saveReviewCandidate(_ candidate: PlaceReviewCandidate) throws -> SaveMemoryRecord {
+#if DEBUG
+        if let saveReviewCandidateError { throw saveReviewCandidateError }
+#endif
         let record = SaveMemoryRecord(
             id: candidate.id,
             state: candidate.status == "source_only" ? .sourceOnly : .reviewCandidate,
