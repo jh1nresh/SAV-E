@@ -94,6 +94,7 @@ struct SaveApp: App {
     private let relatedSourcesHarnessActive = SaveSmokeHarness.isRelatedSourcesLaunchEnabled
     @State private var forceOnboardingForUITests = ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding")
     private let stampFeedFixtureActive = ProcessInfo.processInfo.arguments.contains("--uitest-stamp-feed-fixture")
+    private let photoAttributionEvidenceActive = GooglePlacesPhotoAttributionEvidence.isLaunchEnabled
 #endif
 
     private let supabaseService = SupabaseService.shared
@@ -213,7 +214,9 @@ struct SaveApp: App {
     @ViewBuilder
     private var rootContent: some View {
 #if DEBUG
-        if stampFeedFixtureActive {
+        if photoAttributionEvidenceActive {
+            GooglePlacesPhotoAttributionEvidenceView()
+        } else if stampFeedFixtureActive {
             SaveStampFeedFixtureView()
         } else if relatedSourcesHarnessActive {
             SaveRelatedSourcesHarnessView()

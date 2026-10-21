@@ -20,5 +20,6 @@
   "SAVEUITests/SAVEScreenshotRailTests/testTripStopEditorSurfaceIsReachable",
   "SAVEUITests/SAVEScreenshotRailTests/testSocialPassportGridAndComposer",
   "SAVEUITests/SAVEScreenshotRailTests/testPassportListsEntryOpensListsDirectly",
-  "SAVEUITests/SAVEScreenshotRailTests/testFriendsComingSoon"
+  "SAVEUITests/SAVEScreenshotRailTests/testFriendsComingSoon",
+  "SAVEUITests/SAVEGooglePhotoAttributionTests/testCaptureLightAndDarkEvidence"
 ]

@@ -294,7 +294,9 @@ jobs:
         if: steps.scope.outputs.ui == 'true'
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-UI-tests.log
+          SAVE_GOOGLE_PHOTO_EVIDENCE_DIR: ${{ runner.temp }}/pr306-google-photo-attribution
         run: |
+          mkdir -p "$SAVE_GOOGLE_PHOTO_EVIDENCE_DIR"
           ui_args=()
           while IFS= read -r argument; do
             ui_args+=("$argument")
@@ -433,6 +435,17 @@ jobs:
             ${{ runner.temp }}/SAVE-*-tests.log
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Upload PR 306 Google photo attribution screenshots
+        if: always() && (steps.scope.outputs.ui == 'true')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pr306-google-photo-attribution-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/pr306-google-photo-attribution
+            ${{ runner.temp }}/SAVE-First-Run
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Build unsigned release candidate without a simulator
         if: github.event_name == 'push'

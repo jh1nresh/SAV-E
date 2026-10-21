@@ -325,6 +325,24 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertEqual(GoogleMapsAttributionMetrics.clearSpaceTrailing, 10)
         XCTAssertEqual(GoogleMapsAttributionMetrics.clearSpaceTop, 10)
         XCTAssertEqual(GoogleMapsAttributionMetrics.clearSpaceBottom, 5)
+        XCTAssertEqual(GoogleMapsAttributionMetrics.minimumTapTarget, 44)
+        XCTAssertGreaterThanOrEqual(GoogleMapsAttributionMetrics.gradientTopOpacity, 0.38)
+        XCTAssertGreaterThan(GoogleMapsAttributionMetrics.carouselHeight, 200)
+    }
+
+    @MainActor
+    func testGooglePhotosWithoutAuthorsAreDroppedForG1() {
+        GooglePlacePhotoSessionStore.resetForTests()
+        let googleURL = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=no-author"
+        let ownURL = "https://example.com/own.jpg"
+        let pages = PlacePhotoPage.pages(
+            imageURLs: [googleURL, ownURL],
+            googlePlaceId: "ChIJ123",
+            googleMapsURI: URL(string: "https://maps.google.com/?cid=1")
+        )
+        XCTAssertEqual(pages.count, 1)
+        XCTAssertFalse(pages[0].isGooglePlacesPhoto)
+        XCTAssertEqual(pages[0].url.absoluteString, ownURL)
     }
 
     @MainActor

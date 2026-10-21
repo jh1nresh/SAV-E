@@ -89,6 +89,12 @@ enum GoogleMapsAttributionMetrics {
     static let clearSpaceTrailing: CGFloat = 10
     static let clearSpaceTop: CGFloat = 10
     static let clearSpaceBottom: CGFloat = 5
+    static let minimumTapTarget: CGFloat = SaveLayout.minTap
+    /// Card height must fit two 44pt rows, logo, and Google clear space.
+    static let carouselHeight: CGFloat = 232
+    /// White 12pt type is unreadable on light photos at 0.02.
+    static let gradientTopOpacity: Double = 0.42
+    static let gradientBottomOpacity: Double = 0.80
 }
 
 enum GooglePlacesHTMLAttribution {
