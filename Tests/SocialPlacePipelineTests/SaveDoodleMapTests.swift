@@ -24,12 +24,20 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("SaveAtlasPalette.coral"))
         XCTAssertTrue(map.contains("map.headerBand"))
         XCTAssertTrue(map.contains("SaveAtlasPalette.paper"))
+        let bodyAt = try XCTUnwrap(map.range(of: "var body: some View"))
+        let headerFnAt = try XCTUnwrap(map.range(of: "private func header"))
+        let eatGoAt = try XCTUnwrap(map.range(of: "private var eatGoRail"))
+        let chrome = map[bodyAt.lowerBound..<headerFnAt.lowerBound]
+        let header = map[headerFnAt.lowerBound..<eatGoAt.lowerBound]
+        XCTAssertTrue(chrome.contains("map.headerBand"))
+        XCTAssertTrue(chrome.contains("accessibilityElement(children: .contain)"))
+        XCTAssertTrue(header.contains("map.city"))
+        XCTAssertTrue(header.contains("accessibilityElement(children: .contain)"))
         XCTAssertTrue(map.contains("SaveDoodleLollipopShape"))
         XCTAssertTrue(map.contains("anchor: .bottom"))
         XCTAssertFalse(map.contains(".fill(visited ? SaveDoodle.stampRed : SaveAtlasPalette.coral)"))
         XCTAssertTrue(map.contains(".stroke(pinColor, lineWidth: 2)"))
         XCTAssertTrue(map.contains("map.eatGo"))
-        let eatGoAt = try XCTUnwrap(map.range(of: "private var eatGoRail"))
         let sheetAt = try XCTUnwrap(map.range(of: "private func placeSheet"))
         let eatGo = map[eatGoAt.lowerBound..<sheetAt.lowerBound]
         XCTAssertTrue(eatGo.contains("minHeight: SaveLayout.chipHeight"))

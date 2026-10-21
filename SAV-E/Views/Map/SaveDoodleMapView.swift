@@ -43,6 +43,7 @@ struct SaveDoodleMapView: View {
                 .padding(.bottom, SaveSpace.md)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(SaveAtlasPalette.paper)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("map.headerBand")
 
             ZStack(alignment: .top) {
@@ -231,6 +232,7 @@ struct SaveDoodleMapView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
         .accessibilityValue(followsHomeFilter ? "filtered" : "all")
     }
 
