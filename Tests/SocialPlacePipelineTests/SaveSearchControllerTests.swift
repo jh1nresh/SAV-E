@@ -3354,7 +3354,19 @@ final class SaveSearchControllerTests: XCTestCase {
             longitude: 121.1,
             googlePlaceId: "social-session-cafe",
             category: .cafe,
-            status: .wantToGo
+            status: .wantToGo,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: "Alex",
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
         )
         map.socialPlaces = [social]
         map.places = []
