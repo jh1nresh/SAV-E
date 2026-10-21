@@ -987,7 +987,7 @@ struct ContentView: View {
                 let resolvesOriginPlan = pendingOriginPlanCandidateID.map {
                     mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
                 } ?? false
-                let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+                let place = try await saveMapCandidateAndEndExactSearchIfNeeded(candidate)
                 if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
                     requestTripAssignment(for: place)
@@ -1369,7 +1369,7 @@ struct ContentView: View {
                 let resolvesOriginPlan = pendingOriginPlanCandidateID.map {
                     mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
                 } ?? false
-                let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+                let place = try await saveMapCandidateAndEndExactSearchIfNeeded(candidate)
                 if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
                     requestTripAssignment(for: place)
@@ -1484,17 +1484,38 @@ struct ContentView: View {
             // not open the stamp as if it were already corrected.
             restoreExactSearchResolutionIfNeeded()
             if let resolved = await mapVM.chooseSavedStampFromExactSearch(place) {
-                exactSearchClueID = nil
-                isExactSearchSessionActive = false
-                drawerLaunchRequest = DrawerLaunchRequest(
-                    target: drawerLaunchRequest.target,
-                    initialQuery: drawerLaunchRequest.initialQuery,
-                    focusesSearch: drawerLaunchRequest.focusesSearch,
-                    preservesExactSearchClue: false
-                )
+                clearResolvedExactSearchSession()
                 openMapDetail(.savedPlace(resolved))
             }
         }
+    }
+
+    /// Saving an unsaved exact-search result retires the clue in MapViewModel
+    /// but used to leave this session live, so a later pin tap hit
+    /// `noActiveCorrectionSession` instead of opening the new stamp.
+    private func saveMapCandidateAndEndExactSearchIfNeeded(
+        _ candidate: SaveMapCandidate
+    ) async throws -> Place {
+        restoreExactSearchResolutionIfNeeded()
+        let endsExactSearch = isExactSearchSessionActive
+            && exactSearchClueID.map { mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0) } == true
+        let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+        if endsExactSearch {
+            clearResolvedExactSearchSession()
+        }
+        return place
+    }
+
+    private func clearResolvedExactSearchSession() {
+        exactSearchClueID = nil
+        isExactSearchSessionActive = false
+        guard drawerLaunchRequest.preservesExactSearchClue else { return }
+        drawerLaunchRequest = DrawerLaunchRequest(
+            target: drawerLaunchRequest.target,
+            initialQuery: drawerLaunchRequest.initialQuery,
+            focusesSearch: drawerLaunchRequest.focusesSearch,
+            preservesExactSearchClue: false
+        )
     }
 
     private func invalidateExactSearchRequest() {
