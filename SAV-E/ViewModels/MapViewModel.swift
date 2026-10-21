@@ -701,6 +701,7 @@ final class MapViewModel: ObservableObject {
     private let collaborativeListStore: SaveCollaborativeListStore
     private let referralHandoffStore: SaveReferralHandoffStore
     private let entitlementTierProvider: () -> SaveProTier
+    private let entitlementResolvedProvider: () -> Bool
     private let usesRemotePersistence: Bool
     private var importedPendingKeys: Set<String> = []
     private var didRequestInitialLocation = false
@@ -736,6 +737,9 @@ final class MapViewModel: ObservableObject {
         referralHandoffStore: SaveReferralHandoffStore = .shared,
         relatedPlaceSourcesService: RelatedPlaceSourcesProviding = SupabaseService.shared,
         entitlementTierProvider: @escaping () -> SaveProTier = { SaveEntitlementStore.shared.tier },
+        entitlementResolvedProvider: @escaping () -> Bool = {
+            SaveEntitlementStore.shared.hasAuthoritativeSavedPlaceTier
+        },
         usesRemotePersistence: Bool = true
     ) {
         self.supabaseService = supabaseService
@@ -767,6 +771,7 @@ final class MapViewModel: ObservableObject {
         self.collaborativeListStore = collaborativeListStore
         self.referralHandoffStore = referralHandoffStore
         self.entitlementTierProvider = entitlementTierProvider
+        self.entitlementResolvedProvider = entitlementResolvedProvider
         self.usesRemotePersistence = usesRemotePersistence
         correctionAuthObserver = authService.$authState.dropFirst().sink { [weak self] _ in
             // Published emits before the new state is assigned. Remove projected
@@ -841,7 +846,10 @@ final class MapViewModel: ObservableObject {
     private var currentSavedPlaceTier: SaveProTier { entitlementTierProvider() }
 
     private var isOverFreeSavedPlaceLimit: Bool {
-        SavePlaceLimitGate.decide(
+        // Unresolved / fail-open must not refuse. Default `.free` would park a
+        // Pro account that has not refreshed this session.
+        guard entitlementResolvedProvider() else { return false }
+        return SavePlaceLimitGate.decide(
             tier: currentSavedPlaceTier,
             savedPlaceCount: places.count
         ) == .overFreeLimit
@@ -864,6 +872,7 @@ final class MapViewModel: ObservableObject {
     }
 
     func syncSavedPlaceLimitCache() {
+        guard entitlementResolvedProvider() else { return }
         SavePlaceLimitHandoff.syncCache(
             tier: currentSavedPlaceTier,
             savedPlaceCount: places.count
@@ -1768,30 +1777,37 @@ final class MapViewModel: ObservableObject {
         updatedCandidate.latitude = place.latitude
         updatedCandidate.longitude = place.longitude
         updatedCandidate.status = "saved"
-        if candidate.workflowRunId != nil {
-            try await recordCorrectionEvent(
-                for: candidate,
-                eventType: nameOverride == nil ? .confirmCandidate : .editPlaceIdentity,
-                afterCandidate: updatedCandidate,
-                userFinalPlaceId: place.id,
-                finalPlace: place,
-                reason: "User saved review candidate as confirmed Map Stamp."
-            )
-        } else {
-            try await supabaseService.savePlace(place, userId: userId)
-            recordPassportFieldActionAfterSavingPlace()
-            do {
+        do {
+            if candidate.workflowRunId != nil {
                 try await recordCorrectionEvent(
                     for: candidate,
                     eventType: nameOverride == nil ? .confirmCandidate : .editPlaceIdentity,
                     afterCandidate: updatedCandidate,
                     userFinalPlaceId: place.id,
-                    reason: "User saved legacy review candidate as confirmed Map Stamp."
+                    finalPlace: place,
+                    reason: "User saved review candidate as confirmed Map Stamp."
                 )
-            } catch {
-                try? await supabaseService.deletePlace(place.id)
-                throw error
+            } else {
+                try await supabaseService.savePlace(place, userId: userId)
+                recordPassportFieldActionAfterSavingPlace()
+                do {
+                    try await recordCorrectionEvent(
+                        for: candidate,
+                        eventType: nameOverride == nil ? .confirmCandidate : .editPlaceIdentity,
+                        afterCandidate: updatedCandidate,
+                        userFinalPlaceId: place.id,
+                        reason: "User saved legacy review candidate as confirmed Map Stamp."
+                    )
+                } catch {
+                    try? await supabaseService.deletePlace(place.id)
+                    throw error
+                }
             }
+        } catch {
+            if error is SavePlaceLimitError {
+                requestSavedPlaceLimitPaywall()
+            }
+            throw error
         }
         let confirmedPlace = await refreshedConfirmedPlace(place)
         mirrorToLocalVault(confirmedPlace)
@@ -2288,6 +2304,7 @@ final class MapViewModel: ObservableObject {
                 try await supabaseService.savePlace(place, userId: userId)
                 recordPassportFieldActionAfterSavingPlace()
             } catch {
+                if parkIfServerSavedPlaceLimit(error, place: place) { throw error }
                 print("MapViewModel: failed to sync friend share receipt \(place.name): \(error)")
                 syncFailedPlaceName = place.name
             }

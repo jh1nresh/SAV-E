@@ -285,6 +285,35 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
+    func testUnresolvedEntitlementDoesNotParkThe51stLocally() async throws {
+        let map = makeCappedMap(tier: .free, resolved: false)
+        map.places = makeCappedPlaces(50)
+        let item = SaveListItem(
+            id: UUID(),
+            source: .mapCandidate,
+            sourceID: "list-unresolved-51",
+            title: "Unresolved Cafe",
+            subtitle: "4 Cap Road",
+            latitude: 25.18,
+            longitude: 121.59,
+            category: .cafe,
+            rating: nil,
+            reviewCount: nil,
+            sourceURL: nil,
+            photoURLs: [],
+            note: nil,
+            addedByDisplayName: "You",
+            addedAt: Date()
+        )
+
+        let saved = try await map.saveListItemAsPlace(item)
+        XCTAssertEqual(saved.name, "Unresolved Cafe")
+        XCTAssertEqual(map.places.count, 51)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.name == "Unresolved Cafe" })
+    }
+
+    @MainActor
     func testSavingSocialPlaceAtCapParksInUnplacedInbox() async throws {
         let map = makeCappedMap(tier: .free)
         map.places = makeCappedPlaces(50)
@@ -372,6 +401,69 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
+    func testEmbeddedReceiptServerCapParksInsteadOfConfirmingLocally() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "receipt-owner")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#)
+            }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.place-limit-receipt.\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-receipt-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(
+            apiBaseURL: "https://analysis.test",
+            session: URLSession(configuration: configuration),
+            accessTokenProvider: { "test-token" }
+        )
+        let map = MapViewModel(
+            supabaseService: service,
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        map.places = makeCappedPlaces(49)
+        let receipt = SharedPlaceReceipt.embedded(
+            SharedPlaceData(
+                id: "",
+                name: "Server Cap Cafe",
+                address: "5 Cap Road",
+                lat: 25.19,
+                lng: 121.60,
+                category: "Cafe",
+                rating: nil,
+                reviewCount: nil,
+                priceRange: nil,
+                hours: nil,
+                sourceLabel: "Savvy",
+                sourceURL: nil,
+                photoURLs: [],
+                note: nil
+            )
+        )
+
+        do {
+            _ = try await map.saveSharedPlaceReceipt(receipt)
+            XCTFail("a server over-limit receipt must not become a local Map Stamp")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+            XCTAssertEqual(map.places.count, 49)
+            XCTAssertEqual(map.reviewCandidates.first?.name, "Server Cap Cafe")
+            XCTAssertEqual(map.reviewCandidates.first?.status, "review")
+            XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        }
+    }
+
+    @MainActor
     func testTakeoutImportAtCapParksInUnplacedInbox() async throws {
         let map = makeCappedMap(tier: .free)
         map.places = makeCappedPlaces(50)
@@ -432,6 +524,10 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(parked?.latitude, 25.033)
         XCTAssertEqual(parked?.longitude, 121.565)
         XCTAssertEqual(parked?.googlePlaceId, "ChIJcap-harbor")
+        XCTAssertNil(parked?.note)
+        XCTAssertNil(parked?.rating)
+        XCTAssertNil(parked?.recommender)
+        XCTAssertTrue(parked?.sourceEvidence.isEmpty ?? false)
     }
 
     @MainActor
@@ -461,6 +557,40 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(parked.latitude, 25.033)
         XCTAssertEqual(parked.longitude, 121.565)
         XCTAssertEqual(parked.googlePlaceId, "ChIJcap-harbor")
+        XCTAssertNil(parked.note)
+        XCTAssertNil(parked.rating)
+        XCTAssertNil(parked.recommender)
+        XCTAssertTrue(parked.sourceEvidence.isEmpty)
+    }
+
+    @MainActor
+    func testParkedSharedPostStripsRevocableAuthorContent() {
+        let post = SharedPlacePost(
+            id: UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")!,
+            name: "Harbor Town",
+            address: "Water",
+            latitude: 25.033,
+            longitude: 121.565,
+            google_place_id: "ChIJcap-harbor",
+            category: "attraction",
+            status: .visited,
+            stars: 5,
+            caption: "Secret counter seat — withdraw this later",
+            shared_at: "2026-10-12T10:00:00Z",
+            author_id: "alex",
+            author_name: "Alex Last",
+            author_handle: "alex",
+            author_avatar_url: nil,
+            visible_to_followers: true
+        )
+        let parked = post.asUnplacedPlace()
+        let evidence = parked.sourceEvidence.joined(separator: " ")
+        XCTAssertNil(parked.note)
+        XCTAssertNil(parked.rating)
+        XCTAssertNil(parked.recommender)
+        XCTAssertFalse(evidence.contains("Secret counter seat"))
+        XCTAssertFalse(evidence.contains("Alex"))
+        XCTAssertEqual(parked.status, .wantToGo)
     }
 
     @MainActor
@@ -497,6 +627,7 @@ final class SAVEProductionConfigTests: XCTestCase {
             supabaseService: service,
             saveLocalVaultService: vault,
             entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
             usesRemotePersistence: true
         )
         map.places = makeCappedPlaces(50)
@@ -550,7 +681,7 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
-    private func makeCappedMap(tier: SaveProTier) -> MapViewModel {
+    private func makeCappedMap(tier: SaveProTier, resolved: Bool = true) -> MapViewModel {
         SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.place-limit-map.\(UUID().uuidString)")
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("place-limit-\(UUID().uuidString).json")
@@ -558,6 +689,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         return MapViewModel(
             saveLocalVaultService: vault,
             entitlementTierProvider: { tier },
+            entitlementResolvedProvider: { resolved },
             usesRemotePersistence: false
         )
     }

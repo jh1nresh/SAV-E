@@ -833,8 +833,12 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         guard isConfigured else { throw SupabaseError.notConfigured }
 
         let body = try Self.jsonBody(decision.body)
-        let data = try await request(path: "/v0/workflows/place-recovery/runs/\(runId.uuidString)/decision", method: "POST", body: body)
-        return try JSONDecoder.supabase.decode(PlaceRecoveryDecisionReceiptResponse.self, from: data)
+        do {
+            let data = try await request(path: "/v0/workflows/place-recovery/runs/\(runId.uuidString)/decision", method: "POST", body: body)
+            return try JSONDecoder.supabase.decode(PlaceRecoveryDecisionReceiptResponse.self, from: data)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     // MARK: - Trips
