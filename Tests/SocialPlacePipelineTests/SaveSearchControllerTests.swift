@@ -3325,6 +3325,66 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testLocalOnlyConfirmDoesNotMirrorAfterRefreshSessionChange() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        auth.authState = .authenticated(userId: "owner-a")
+        defer { auth.authState = previousAuth }
+
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-only-refresh-swap-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-only-refresh-swap-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.onFetchPlaces = {
+            auth.authState = .authenticated(userId: "owner-b")
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        let parked = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Refresh Swap Cafe",
+            address: "2 Swap Road",
+            city: nil,
+            latitude: 25.1,
+            longitude: 121.1,
+            evidence: [],
+            confidence: 0.9,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        _ = try vault.saveReviewCandidate(parked)
+        map.reviewCandidates = [parked]
+        map.places = []
+
+        do {
+            _ = try await map.saveReviewCandidateAsPlace(parked)
+            XCTFail("a session change during confirmed-place refresh must not continue locally")
+        } catch ReviewCandidateError.sessionChangedAfterCommit {
+            // Account A already saved. Do not write that stamp into B.
+        }
+        XCTAssertEqual(supabase.savedPlaces.count, 1)
+        XCTAssertEqual(supabase.fetchPlacesCalls, 1)
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == parked.id })
+        XCTAssertTrue(try vault.confirmedPlaces().isEmpty)
+        XCTAssertEqual(try vault.reviewCandidates().first?.id, parked.id)
+    }
+
+    @MainActor
     func testExactSearchResolutionDoesNotRollBackAfterCommittedDecision() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("exact-search-committed-no-rollback-\(UUID().uuidString).json")
@@ -6450,8 +6510,10 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
 
     func startAnalysis(id: UUID) async throws -> UUID? { nil }
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {}
+    var onFetchPlaces: (() -> Void)?
     func fetchPlaces(for userId: String) async throws -> [Place] {
         fetchPlacesCalls += 1
+        onFetchPlaces?()
         return []
     }
     func savePlace(_ place: Place, userId: String) async throws {

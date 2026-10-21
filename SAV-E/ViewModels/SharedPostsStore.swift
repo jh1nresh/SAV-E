@@ -152,6 +152,9 @@ final class SharedPostsStore: ObservableObject {
             guard account == PrivyAuthService.shared.currentUserId, !Task.isCancelled else { throw CancellationError() }
             return .saved
         } catch {
+            guard account == PrivyAuthService.shared.currentUserId, !Task.isCancelled else {
+                throw CancellationError()
+            }
             if error is SavePlaceLimitError {
                 _ = parkOverLimitPlace(post.asUnplacedPlace())
                 return .parkedAtFreeLimit
