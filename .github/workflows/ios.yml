@@ -282,11 +282,23 @@ jobs:
           # throwaway venv instead of breaking the system site-packages.
           python3 -m venv "$RUNNER_TEMP/save-parity-venv"
           "$RUNNER_TEMP/save-parity-venv/bin/python" -m pip install Pillow
-          PATH="$RUNNER_TEMP/save-parity-venv/bin:$PATH" \
-            Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh \
-              --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
-              --artifacts "$RUNNER_TEMP/SAVE-Atlas-Parity" \
-              --threshold 0.90
+          skip_args=()
+          if [[ -f "$RUNNER_TEMP/ios-ui-args.txt" ]] \
+             && ! grep -q 'testDoodlePaywallParity' "$RUNNER_TEMP/ios-ui-args.txt"; then
+            # tile-town-home and other focused sets omit the paywall rail.
+            # Requiring five-tab-paywall there fails the required ios job.
+            skip_args+=(--skip-screens paywall)
+          fi
+          parity_cmd=(
+            Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh
+            --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult"
+            --artifacts "$RUNNER_TEMP/SAVE-Atlas-Parity"
+            --threshold 0.90
+          )
+          if [[ ${#skip_args[@]} -gt 0 ]]; then
+            parity_cmd+=("${skip_args[@]}")
+          fi
+          PATH="$RUNNER_TEMP/save-parity-venv/bin:$PATH" "${parity_cmd[@]}"
 
       - name: Export first-run visual evidence
         if: always()

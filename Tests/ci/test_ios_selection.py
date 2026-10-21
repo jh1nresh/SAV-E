@@ -168,6 +168,7 @@ class CoverageTests(unittest.TestCase):
             self.assertIn(selection.RAIL + name, spec["tests"])
         self.assertNotIn(selection.TRIP_SHEET, spec["tests"])
         self.assertNotIn(selection.RAIL + "testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch", spec["tests"])
+        self.assertNotIn(selection.RAIL + "testDoodlePaywallParity", spec["tests"])
 
     def test_cli_honors_save_ui_test_focus_off_main(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -215,6 +216,8 @@ class CoverageTests(unittest.TestCase):
         self.assertRegex(ci_workflow, r"(?m)^  ios-fast:\s*$")
         self.assertIn("run-visual-parity.sh", ios_workflow)
         self.assertIn("--threshold 0.90", ios_workflow)
+        self.assertIn("--skip-screens", ios_workflow)
+        self.assertIn("testDoodlePaywallParity", ios_workflow)
         self.assertNotIn("run-visual-parity.sh", ci_workflow)
         self.assertIn("SAVE_UI_TEST_FOCUS", ios_workflow)
         self.assertIn("Must specify -test-iterations with more than 1 iteration", ios_workflow)

@@ -12,6 +12,7 @@ RESULT_BUNDLE=""
 SCREENSHOTS_DIR=""
 DESTINATION="${ATLAS_DESTINATION:-}"
 BOOTED_BEFORE=""
+SKIP_SCREENS=""
 
 usage() {
     cat <<'EOF'
@@ -23,6 +24,8 @@ Usage:
 Options:
   --artifacts DIR       Write reference/output/diff/results under DIR.
   --threshold NUMBER    Gate threshold. Must be at least 0.90 (default 0.90).
+  --skip-screens LIST   Comma-separated screens to omit when the selected
+                        UI set did not capture them (e.g. paywall).
 
 The screenshots directory must contain home.png, saves.png, plan.png,
 map.png, passport.png, capture.png, and paywall.png. The result-bundle
@@ -61,6 +64,10 @@ while (($#)); do
             THRESHOLD="${2:?missing value for --threshold}"
             shift 2
             ;;
+        --skip-screens)
+            SKIP_SCREENS="${2:?missing value for --skip-screens}"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -79,6 +86,10 @@ then
     echo "error: threshold must be between 0.90 and 1.0" >&2
     exit 2
 fi
+
+should_skip_screen() {
+    [[ ",${SKIP_SCREENS}," == *",$1,"* ]]
+}
 
 input_count=0
 [[ -n "$DESTINATION" ]] && ((input_count += 1))
@@ -359,6 +370,10 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
     done
 
     for screen in home saves plan map passport capture paywall; do
+        if should_skip_screen "$screen"; then
+            echo "note: skipping $screen (not in this coverage set)"
+            continue
+        fi
         newest="$(
             printf '%s' "$candidates" |
                 awk -F"$tab" -v want="$screen" '
@@ -402,6 +417,10 @@ else
         exit 2
     fi
     for screen in home saves plan map passport capture paywall; do
+        if should_skip_screen "$screen"; then
+            echo "note: skipping $screen (not in this coverage set)"
+            continue
+        fi
         if [[ ! -f "$SCREENSHOTS_DIR/$screen.png" ]]; then
             echo "error: missing screenshot: $SCREENSHOTS_DIR/$screen.png" >&2
             exit 2
@@ -416,6 +435,9 @@ mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
 # place sheet, tab bar, and status bar count toward 0.90.
 MAP_MASK="$REFERENCE_SOURCE/map-mask.png"
 for screen in home saves plan map passport capture paywall; do
+    if should_skip_screen "$screen"; then
+        continue
+    fi
     actual="$ARTIFACT_DIR/output/$screen.png"
     if [[ ! -f "$actual" ]]; then
         echo "error: missing exported attachment for $screen" >&2
