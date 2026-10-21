@@ -124,6 +124,8 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertFalse(page.contains("profile.settings"))
         XCTAssertTrue(page.contains("onOpenCollected"))
         XCTAssertTrue(passport.contains("opensCollected"))
+        XCTAssertTrue(passport.contains("if opensCollected"))
+        XCTAssertFalse(passport.contains("navigationDestination(isPresented: $opensCollected)"))
         XCTAssertTrue(passport.contains("profile.collected.root"))
         XCTAssertTrue(passport.contains("SharedPostsGrid"))
         XCTAssertTrue(page.contains("SaveHaptics.stamp()"))

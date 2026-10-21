@@ -2673,6 +2673,42 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testResolvingOneClueRetiresSameCityNameDuplicate() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("same-city-duplicate-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var resolved = Self.correctionClue(overlappingStamp: true)
+        resolved.name = "Harbor Oven Pizza"
+        var leftover = Self.correctionClue(overlappingStamp: false)
+        leftover.name = "Harbor Oven Pizza"
+        leftover.city = resolved.city
+        leftover.address = resolved.address
+        leftover.latitude = 33.7405
+        leftover.longitude = -118.2807
+        resolved.latitude = 33.7405
+        resolved.longitude = -118.2807
+        _ = try vault.saveReviewCandidate(resolved)
+        _ = try vault.saveReviewCandidate(leftover)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        map.reviewCandidates = [resolved, leftover]
+        map.beginExactSearchResolution(for: resolved)
+
+        _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertFalse(
+            map.reviewCandidates.contains { $0.id == leftover.id },
+            "A same-city Harbor Oven leftover must retire with the corrected clue"
+        )
+        let remaining = try vault.reviewCandidates()
+        XCTAssertFalse(remaining.contains { $0.id == leftover.id })
+    }
+
+    @MainActor
     func testExactSearchResolutionPersistsHandleAndDedupesEvidenceRemotely() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("exact-search-saved-remote-\(UUID().uuidString).json")

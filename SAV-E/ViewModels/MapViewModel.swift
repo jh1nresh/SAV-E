@@ -2080,28 +2080,57 @@ final class MapViewModel: ObservableObject {
         // Remote persistence must succeed before the local clue disappears.
         // After the decision commits, local cleanup is best-effort so a vault
         // write cannot roll back a stamp the server already accepted.
-        if committed {
-            try? saveLocalVaultService.removeReviewCandidate(clue.id)
-        } else {
-            try saveLocalVaultService.removeReviewCandidate(clue.id)
-        }
-        retireResolvedReviewClue(clue)
+        try retireResolvedReviewClue(clue, committed: committed)
         if usesRemotePersistence { await refreshReviewCandidatesLoggingFailures() }
         return (true, committed)
     }
 
-    /// Confirming one clue retires that id only. Same-name leftovers — even
-    /// in the same city — are independent review candidates until the user
-    /// resolves them.
-    private func retireResolvedReviewClue(_ clue: PlaceReviewCandidate) {
-        try? saveLocalVaultService.removeReviewCandidate(clue.id)
-        reviewCandidates.removeAll { $0.id == clue.id }
-        if selectedReviewCandidate?.id == clue.id {
+    /// Retire the originating clue and same-city / nearby same-name leftovers
+    /// (seed + recapture of one place). A same-name clue in another city is a
+    /// different candidate and stays.
+    private func retireResolvedReviewClue(
+        _ clue: PlaceReviewCandidate,
+        committed: Bool = true
+    ) throws {
+        let retiring = reviewCandidates.filter { isDuplicateReviewClue($0, of: clue) }
+        let ids = Set(retiring.map(\.id) + [clue.id])
+        if committed {
+            for id in ids {
+                try? saveLocalVaultService.removeReviewCandidate(id)
+            }
+        } else {
+            try saveLocalVaultService.removeReviewCandidate(clue.id)
+            for id in ids where id != clue.id {
+                try? saveLocalVaultService.removeReviewCandidate(id)
+            }
+        }
+        reviewCandidates.removeAll { ids.contains($0.id) }
+        if selectedReviewCandidate.map({ ids.contains($0.id) }) == true {
             selectedReviewCandidate = nil
         }
-        if exactSearchResolution?.clue.id == clue.id {
+        if exactSearchResolution.map({ ids.contains($0.clue.id) }) == true {
             exactSearchResolution = nil
         }
+    }
+
+    private func isDuplicateReviewClue(
+        _ leftover: PlaceReviewCandidate,
+        of resolved: PlaceReviewCandidate
+    ) -> Bool {
+        if leftover.id == resolved.id { return true }
+        let sameName = leftover.name.localizedCaseInsensitiveCompare(resolved.name) == .orderedSame
+        guard sameName else { return false }
+        let leftoverCity = leftover.city?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        let resolvedCity = resolved.city?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        if leftoverCity.isEmpty || resolvedCity.isEmpty || leftoverCity == resolvedCity {
+            return true
+        }
+        guard let lat1 = leftover.latitude, let lon1 = leftover.longitude,
+              let lat2 = resolved.latitude, let lon2 = resolved.longitude
+        else { return false }
+        let meters = CLLocation(latitude: lat1, longitude: lon1)
+            .distance(from: CLLocation(latitude: lat2, longitude: lon2))
+        return meters < 250
     }
 
     /// Terminal actions for this clue (reject / archive / source-only / confirm)

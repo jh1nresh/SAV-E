@@ -122,29 +122,24 @@ struct ProfileView: View {
             .toolbar(.hidden, for: .navigationBar)
             .accessibilityIdentifier("profile.root")
             .refreshable { await posts.refresh(.mine) }
-            .navigationDestination(isPresented: $opensCollected) {
-                collectedPage
-            }
-            .navigationDestination(isPresented: $showSettings) {
-                ScrollView {
-                    VStack(spacing: 20) {
-                        if SaveDoodlePassportFlags.showStampLedger {
-                            PassportStampSection(stats: passportStats).accessibilityIdentifier("profile.stampLedger")
-                        }
-                        if SaveDoodlePassportFlags.showFieldStreak {
-                            PassportFieldStreakStrip(streak: fieldStreak, hasActionToday: hasFieldActionToday, recentActivity: recentFieldActivity)
-                                .accessibilityIdentifier("profile.fieldStreak")
-                        }
-                        settingsContent
-                    }.padding(.vertical, 20)
+    }
+
+    private var settingsPage: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                if SaveDoodlePassportFlags.showStampLedger {
+                    PassportStampSection(stats: passportStats).accessibilityIdentifier("profile.stampLedger")
                 }
-                .background(SaveAtlasPalette.canvas)
-                .navigationTitle(languageSettings.localized(english: "Passport settings", traditionalChinese: "護照設定"))
-                .toolbar(.visible, for: .navigationBar)
-            }
-            .navigationDestination(isPresented: $opensConnections) {
-                connectionsDestination
-            }
+                if SaveDoodlePassportFlags.showFieldStreak {
+                    PassportFieldStreakStrip(streak: fieldStreak, hasActionToday: hasFieldActionToday, recentActivity: recentFieldActivity)
+                        .accessibilityIdentifier("profile.fieldStreak")
+                }
+                settingsContent
+            }.padding(.vertical, 20)
+        }
+        .background(SaveAtlasPalette.canvas)
+        .navigationTitle(languageSettings.localized(english: "Passport settings", traditionalChinese: "護照設定"))
+        .toolbar(.visible, for: .navigationBar)
     }
 
     @ViewBuilder
@@ -435,7 +430,22 @@ struct ProfileView: View {
         // Home NavigationStack, it replaces the Atlas tab bar and Friends
         // / Home become unreachable until the page is dismissed.
         NavigationStack {
-            passportContent
+            // `navigationDestination(isPresented: $opensCollected)` can attach
+            // to ContentView's outer stack and replace the Atlas tab bar.
+            // Keep Collected inside this tab-owned stack.
+            Group {
+                if opensCollected {
+                    collectedPage
+                } else {
+                    passportContent
+                }
+            }
+            .navigationDestination(isPresented: $showSettings) {
+                settingsPage
+            }
+            .navigationDestination(isPresented: $opensConnections) {
+                connectionsDestination
+            }
         }
         .onChange(of: requestsConnections) { _, requested in
             if requested { opensConnections = true; requestsConnections = false }
