@@ -404,6 +404,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         tapReachable(collected)
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         let progress = app.descendants(matching: .any)["profile.stampProgress"]
+        if !progress.waitForExistence(timeout: timeout(4)) {
+            let passportList = app.scrollViews.firstMatch
+            if passportList.exists {
+                passportList.swipeDown()
+            }
+        }
         XCTAssertTrue(progress.waitForExistence(timeout: stepTimeout))
         let shown = [progress.value as? String, progress.label]
             .compactMap { $0 }

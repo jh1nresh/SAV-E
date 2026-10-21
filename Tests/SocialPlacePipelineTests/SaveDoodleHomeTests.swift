@@ -1,4 +1,5 @@
 import CoreLocation
+import MapKit
 import UIKit
 import XCTest
 @testable import SAVE
@@ -170,11 +171,11 @@ final class SaveDoodleHomeTests: XCTestCase {
         )
         XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: one.address), "Berkeley")
         XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: two.address), "Berkeley")
-        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: one), "berkeley")
-        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: two), "berkeley")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: one), "berkeley,ca")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: two), "berkeley,ca")
         XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: one), "ca 94704")
         let groups = SaveDoodleHomeCatalog.cityGroups(from: [one, two])
-        XCTAssertEqual(groups.map(\.id), ["berkeley"])
+        XCTAssertEqual(groups.map(\.id), ["berkeley,ca"])
         XCTAssertEqual(groups.first?.count, 2)
         XCTAssertEqual(groups.first?.englishName, "Berkeley")
         XCTAssertEqual(
@@ -193,17 +194,104 @@ final class SaveDoodleHomeTests: XCTestCase {
         )
         let other = place(
             "Fisherman's Wharf",
-            "1 Dallas Rd, Victoria, V8V 0B2, Canada",
+            "1 Dallas Rd, Victoria, BC V8V 0B2, Canada",
             .attraction
         )
         XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: empress.address), "Victoria")
         XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: other.address), "Victoria")
-        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: empress), "victoria")
-        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: other), "victoria")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: empress), "victoria,bc")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: other), "victoria,bc")
         XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: empress), "bc v8w 1p6")
         let groups = SaveDoodleHomeCatalog.cityGroups(from: [empress, other])
-        XCTAssertEqual(groups.map(\.id), ["victoria"])
+        XCTAssertEqual(groups.map(\.id), ["victoria,bc"])
         XCTAssertEqual(groups.first?.englishName, "Victoria")
+    }
+
+    /// Postcode-first European lines are the city, not the country or ZIP.
+    func testFallbackAddressParsesPostcodePrefixedEuropeanLocality() {
+        let zurich = place(
+            "Bahnhof",
+            "Bahnhofstrasse 1, 8001 Zürich, Switzerland",
+            .shopping
+        )
+        let lyon = place(
+            "Bouchon",
+            "Rue de la République, 69001 Lyon, France",
+            .food
+        )
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: zurich.address), "Zürich")
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: lyon.address), "Lyon")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityDisplayName(for: zurich, language: .english), "Zürich")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityDisplayName(for: lyon, language: .english), "Lyon")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: zurich), "zurich,switzerland")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: lyon), "lyon,france")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: zurich), "switzerland")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: lyon), "69001 lyon")
+    }
+
+    /// Same locality in two US states must not share a city ID.
+    func testFallbackCityIDsKeepRegionQualifier() {
+        let illinois = place(
+            "Cozy Dog",
+            "2935 S 6th St, Springfield, IL 62703, USA",
+            .food
+        )
+        let massachusetts = place(
+            "Student Prince",
+            "8 Fort St, Springfield, MA 01103, USA",
+            .food
+        )
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: illinois.address), "Springfield")
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: massachusetts.address), "Springfield")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityDisplayName(for: illinois, language: .english), "Springfield")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: illinois), "springfield,il")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: massachusetts), "springfield,ma")
+        let groups = SaveDoodleHomeCatalog.cityGroups(from: [illinois, massachusetts])
+        XCTAssertEqual(Set(groups.map(\.id)), Set(["springfield,il", "springfield,ma"]))
+        XCTAssertEqual(Set(groups.map(\.englishName)), Set(["Springfield"]))
+    }
+
+    /// Closest pin without an address must not empty Near you / Collected.
+    func testNearYouCitySkipsAddresslessClosestSave() {
+        let here = CLLocation(latitude: 37.8796, longitude: -122.2697)
+        let pin = place(
+            "Coordinate only",
+            "",
+            .food,
+            latitude: 37.8797,
+            longitude: -122.2697
+        )
+        let berkeley = place(
+            "Chez Panisse",
+            "1517 Shattuck Ave, Berkeley, CA 94704, USA",
+            .food,
+            latitude: 37.8795,
+            longitude: -122.2689
+        )
+        XCTAssertNil(SaveDoodleHomeCatalog.cityID(for: pin))
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.nearYouCityID(from: [pin, berkeley], location: here),
+            "berkeley,ca"
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.collectedScopePlaces(
+                from: [pin, berkeley],
+                selection: .nearYou,
+                location: here,
+                locationDenied: false
+            ).map(\.name),
+            ["Chez Panisse"]
+        )
+    }
+
+    /// Antimeridian neighbors must not fit as a world-scale mini-map.
+    func testMiniMapFitsLongitudesAcrossTheDateLine() {
+        let region = SaveDoodleMiniMap.region(fitting: [
+            CLLocationCoordinate2D(latitude: 51.48, longitude: 179.99),
+            CLLocationCoordinate2D(latitude: 51.48, longitude: -179.99),
+        ])
+        XCTAssertLessThan(region.span.longitudeDelta, 5)
+        XCTAssertGreaterThan(abs(region.center.longitude), 170)
     }
 
     func testNearYouKeepsOnlyWalkingDistance() {
@@ -971,6 +1059,13 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(content.contains("hasActiveExactSearchResolution"))
         XCTAssertTrue(content.contains("if !isExactSearchSessionActive"))
         XCTAssertTrue(content.contains("invalidateExactSearchRequest()"))
+        XCTAssertTrue(content.contains("exactSearchClueID"))
+        XCTAssertTrue(content.contains("activateExactSearchSession(for:"))
+        XCTAssertTrue(content.contains("restoreExactSearchResolutionIfNeeded()"))
+        XCTAssertTrue(content.contains("onClearMapSearchResults: { endsExactSearch in"))
+        let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+        XCTAssertTrue(drawer.contains("onClearMapSearchResults(false)"))
+        XCTAssertTrue(drawer.contains("onClearMapSearchResults(true)"))
         XCTAssertTrue(map.contains("consumeMiniMapHandoff()"))
         let catalogSource = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")
         XCTAssertTrue(catalogSource.contains("save.doodle.mapFollows."))
