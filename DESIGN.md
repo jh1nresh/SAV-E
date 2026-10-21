@@ -972,12 +972,16 @@ Rules:
 
 ### Doodle Map verification boundary
 
-DESIGN v2 `map-mask.png` (white = live Apple Maps) is the ignore mask.
-The place sheet uses a 64pt official DESIGN sticker (color die-cut when
-visited, pencil outline when not) and a 12pt text gap. Do not replace
-default Apple MapKit `.standard` with a paper or hand-drawn basemap.
-City strip, place sheet, tab bar, and status bar count toward 0.90.
-Light and dark screenshot rails must also pass the city/filter/place-sheet/action
-geometry and hit-target assertions; the unmasked screenshots remain required
-for human visual review. Manual visit counts use the shared
-`SaveDoodleVisitStore` read by Map and Passport.
+DESIGN v2 `map-light.png` / `map-dark.png` from
+`design/doodle-targets-2026-10-20` at `eade369` are the goldens.
+`map-mask.png` (white = live Apple Maps) is the ignore mask for that
+side-by-side review, not a 0.90 CI gate. The place sheet uses a 64pt
+official DESIGN sticker (color die-cut when visited, pencil outline when
+not) and a 12pt text gap. Do not replace default Apple MapKit `.standard`
+with a paper or hand-drawn basemap. City strip, place sheet, tab bar, and
+status bar are judged manually by DESIGN; the 0.90 visual-parity score is
+not evidence. Light and dark screenshot rails must also pass the
+city/filter/place-sheet/action geometry and hit-target assertions; the
+unmasked screenshots remain required for human visual review. Manual
+visit counts use the shared `SaveDoodleVisitStore` read by Map and
+Passport.

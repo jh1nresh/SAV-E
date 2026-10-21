@@ -426,14 +426,49 @@ jobs:
             echo "No readable UI result bundle; keep SAVE_SCREENSHOT_DIR rasters."
           fi
           echo "DESIGN Home and Map rasters in SAVE-First-Run:"
-          for name in five-tab-home light-home dark-home H1 H2 H3 H4 five-tab-map doodle-map-light light-map dark-map; do
-            path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
-            if [[ -f "$path" ]]; then
-              wc -c "$path"
-            else
-              echo "missing $name.png"
-            fi
-          done
+          SAVE_FIRST_RUN="$RUNNER_TEMP/SAVE-First-Run" python3 - <<'PY'
+          import json
+          import os
+          import shutil
+          from pathlib import Path
+
+          root = Path(os.environ["SAVE_FIRST_RUN"])
+          names = [
+              "five-tab-home", "light-home", "dark-home", "H1", "H2", "H3", "H4",
+              "five-tab-map", "doodle-map-light", "light-map", "dark-map",
+              "doodle-map-dark",
+          ]
+          newest = {}
+          manifest = root / "manifest.json"
+          if manifest.is_file():
+              for test in json.loads(manifest.read_text()):
+                  for attachment in test.get("attachments") or []:
+                      suggested = str(attachment.get("suggestedHumanReadableName") or "")
+                      exported = attachment.get("exportedFileName")
+                      timestamp = float(attachment.get("timestamp") or 0)
+                      if not exported:
+                          continue
+                      stem = suggested.split("_", 1)[0]
+                      if stem not in names:
+                          continue
+                      path = root / exported
+                      if not path.is_file():
+                          continue
+                      prior = newest.get(stem)
+                      if prior is None or timestamp >= prior[0]:
+                          newest[stem] = (timestamp, path)
+          for name in names:
+              dest = root / f"{name}.png"
+              if dest.is_file():
+                  print(f"{dest.stat().st_size} {dest}")
+                  continue
+              candidate = newest.get(name)
+              if candidate is None:
+                  print(f"missing {name}.png")
+                  continue
+              shutil.copy2(candidate[1], dest)
+              print(f"{dest.stat().st_size} {dest}")
+          PY
 
       - name: Reset focused simulator before Trip sheet UI test
         if: steps.scope.outputs.trip == 'true'

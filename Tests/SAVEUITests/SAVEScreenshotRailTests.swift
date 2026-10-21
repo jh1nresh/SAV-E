@@ -3273,9 +3273,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         return elements.first(where: \.exists) ?? elements[0]
     }
 
-    /// Live Home is the Doodle Eat/Go list plus mini-map. The Atlas gate still
-    /// compares `five-tab-home` to DESIGN v2 `ProductionTargets/home.png` at
-    /// 0.90 with `home-mask.png`. Do not retune that gate here.
+    /// Live Home is the Doodle Eat/Go list plus mini-map. DESIGN judges
+    /// `five-tab-home` against v2 `ProductionTargets/home.png` manually;
+    /// the 0.90 score is not a CI gate. Do not retune that comparison here.
     @MainActor
     private func waitForHomeCoverImagery(_ app: XCUIApplication) {
         XCTAssertTrue(
