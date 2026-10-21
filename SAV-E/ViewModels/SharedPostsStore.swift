@@ -18,7 +18,10 @@ final class SharedPostsStore: ObservableObject {
         SavePlaceLimitHandoff.cachedDecision() == .overFreeLimit
     }
     var parkOverLimitPlace: (Place) -> PlaceReviewCandidate = { place in
-        let candidate = PlaceReviewCandidate.unplacedInboxItem(from: place)
+        let candidate = PlaceReviewCandidate.unplacedInboxItem(
+            from: place,
+            ownerSubject: PrivyAuthService.shared.currentUserId
+        )
         _ = try? SaveLocalVaultService.shared.saveReviewCandidate(candidate)
         SavePlaceLimitHandoff.markPaywallPending(notify: false)
         return candidate

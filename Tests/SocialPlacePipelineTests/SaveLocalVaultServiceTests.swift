@@ -365,6 +365,33 @@ final class SaveLocalVaultServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testReviewCandidatesKeepOwnerSubjectAndDoNotMergeAcrossAccounts() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        var ownerA = makePendingCandidate(localID: UUID())
+        ownerA.ownerSubject = "did:privy:owner-a"
+        ownerA.isSourceOnly = false
+        ownerA.candidateName = "Harbor Cafe"
+        ownerA.address = "1 Harbor Way"
+        ownerA.latitude = 25.05
+        ownerA.longitude = 121.51
+        let savedA = try vault.saveReviewCandidate(ownerA)
+
+        var ownerB = ownerA
+        ownerB.ownerSubject = "did:privy:owner-b"
+        ownerB.evidence += ["Account B caption"]
+        let savedB = try vault.saveReviewCandidate(ownerB)
+
+        XCTAssertNotEqual(savedA.id, savedB.id)
+        let stored = try vault.reviewCandidates()
+        XCTAssertEqual(stored.count, 2)
+        XCTAssertEqual(stored.first { $0.ownerSubject == "did:privy:owner-a" }?.name, "Harbor Cafe")
+        XCTAssertEqual(stored.first { $0.ownerSubject == "did:privy:owner-b" }?.name, "Harbor Cafe")
+        XCTAssertFalse(try XCTUnwrap(stored.first { $0.ownerSubject == "did:privy:owner-a" }).evidence.contains("Account B caption"))
+    }
+
+    @MainActor
     private func makePendingCandidate(localID: UUID?) -> PendingReviewCandidate {
         PendingReviewCandidate(candidateName: "Source clue", address: "", category: "food",
             sourceURL: "https://example.com/shared-post", sourceText: "Original caption",

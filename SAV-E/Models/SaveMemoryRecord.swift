@@ -40,6 +40,7 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
     var sourceImageUrl: String?
     var businessPhotoUrls: [String]?
     var mergedPlaceIDs: [UUID]?
+    var ownerSubject: String?
 
     init(
         id: UUID = UUID(),
@@ -66,7 +67,8 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         sourceImageUrl: String? = nil,
         businessPhotoUrls: [String]? = nil,
         mergedPlaceIDs: [UUID]? = nil,
-        semanticSource: SemanticSourceIdentity? = nil
+        semanticSource: SemanticSourceIdentity? = nil,
+        ownerSubject: String? = nil
     ) {
         self.id = id
         self.state = state
@@ -94,6 +96,7 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         self.sourceImageUrl = GooglePlacesPhotoURL.persistableString(sourceImageUrl)
         self.businessPhotoUrls = GooglePlacesPhotoURL.persistableStrings(businessPhotoUrls)
         self.mergedPlaceIDs = mergedPlaceIDs
+        self.ownerSubject = ownerSubject
     }
 
     nonisolated var displayTitle: String {
@@ -128,6 +131,7 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         case sourceImageUrl
         case businessPhotoUrls
         case mergedPlaceIDs
+        case ownerSubject
     }
 
     init(from decoder: Decoder) throws {
@@ -164,5 +168,6 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         businessPhotoUrls = GooglePlacesPhotoURL.persistableStrings(
             try container.decodeIfPresent([String].self, forKey: .businessPhotoUrls)
         )
+        ownerSubject = try container.decodeIfPresent(String.self, forKey: .ownerSubject)
     }
 }

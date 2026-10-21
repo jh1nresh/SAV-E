@@ -115,7 +115,8 @@ final class SaveLocalVaultService: Sendable {
                     ?? PlaceCategory.inferred(from: "\(candidate.candidateName) \(candidate.address)"),
             createdAt: candidate.savedAt,
             googlePlaceId: candidate.isSourceOnly ? nil : candidate.googlePlaceId,
-            semanticSource: candidate.semanticSource
+            semanticSource: candidate.semanticSource,
+            ownerSubject: candidate.ownerSubject
         )
         guard let recordID else {
             return try upsertReviewRecord(record, matchSourceIdentity: true)
@@ -162,7 +163,8 @@ final class SaveLocalVaultService: Sendable {
             category: candidate.category ?? PlaceCategory.inferred(from: "\(candidate.name) \(candidate.address)"),
             createdAt: candidate.createdAt,
             googlePlaceId: candidate.googlePlaceId,
-            semanticSource: candidate.semanticSource
+            semanticSource: candidate.semanticSource,
+            ownerSubject: candidate.ownerSubject
         )
         return try upsertReviewRecord(record, matchSourceIdentity: false)
     }
@@ -181,6 +183,7 @@ final class SaveLocalVaultService: Sendable {
                 let index = records.firstIndex { existing in
                     if existing.id == incoming.id { return true }
                     guard matchSourceIdentity,
+                          existing.ownerSubject == incoming.ownerSubject,
                           let source = SaveSourceIdentity.url(incoming.sourceURL),
                           source == SaveSourceIdentity.url(existing.sourceURL),
                           existing.state == incoming.state else { return false }
@@ -226,6 +229,7 @@ final class SaveLocalVaultService: Sendable {
             ?? SaveSourceHandle.displayable(existing.sourceHandle)
             ?? SaveSourceHandle.stored(incoming.sourceHandle)
             ?? SaveSourceHandle.stored(existing.sourceHandle)
+        merged.ownerSubject = existing.ownerSubject ?? incoming.ownerSubject
         return merged
     }
 
@@ -534,7 +538,8 @@ private extension SaveMemoryRecord {
             sourceHandle: sourceHandle,
             googlePlaceId: googlePlaceId,
             category: category,
-            semanticSource: semanticSource
+            semanticSource: semanticSource,
+            ownerSubject: ownerSubject
         )
     }
 

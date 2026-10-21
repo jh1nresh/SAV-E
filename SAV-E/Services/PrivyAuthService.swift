@@ -262,7 +262,8 @@ final class PrivyAuthService: ObservableObject {
             repairForUITests: shouldRepairForUITests,
             isolatedOfflineUITest: ReviewDemo.isOfflineUITestMode
         ) {
-            for candidate in ReviewDemoSeed.missingReviewCandidates(from: existingReviewCandidates) {
+            for var candidate in ReviewDemoSeed.missingReviewCandidates(from: existingReviewCandidates) {
+                candidate.ownerSubject = ReviewDemo.userId
                 _ = try? vault.saveReviewCandidate(candidate)
             }
         }
