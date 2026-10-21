@@ -148,7 +148,7 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertFalse(strings.contains("Nothing is added until you open the app"))
     }
 
-    func testClipDoesNotShipMainCatalogOrFullIansuiSubset() {
+    func testClipDoesNotShipMainCatalogOrFullIansuiSubset() throws {
         let project = try? String(
             contentsOf: repositoryRoot.appendingPathComponent("SAV-E.xcodeproj/project.pbxproj"),
             encoding: .utf8
