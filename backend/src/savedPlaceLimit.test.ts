@@ -118,8 +118,9 @@ test("place create and shared-post save enforce the cap after dedup", () => {
 });
 
 test("C1 every production places insert is behind the atomic cap", () => {
+  const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
   const production = [
-    readFileSync(new URL("../src/server.ts", import.meta.url), "utf8"),
+    server,
     readFileSync(new URL("../src/sharedPosts.ts", import.meta.url), "utf8"),
     readFileSync(new URL("../src/friendRatings.ts", import.meta.url), "utf8"),
   ].join("\n");
@@ -133,6 +134,17 @@ test("C1 every production places insert is behind the atomic cap", () => {
     (production.match(/buildInsert\(\s*"places"/g) ?? []).length,
     3,
     "POST /places, friend-share receipt, and workflow final_place use buildInsert",
+  );
+
+  const callSite = server.slice(
+    server.indexOf("await insertFinalPlaceForDecision"),
+    server.indexOf("await validateDecisionReferences"),
+  );
+  assert.match(callSite, /await insertFinalPlaceForDecision\(client, userId, decision\)/);
+  assert.doesNotMatch(
+    callSite,
+    /insert into places|buildInsert\(\s*"places"/,
+    "server.ts:5854 is the call site; it does not insert places itself",
   );
 
   const writePaths = [

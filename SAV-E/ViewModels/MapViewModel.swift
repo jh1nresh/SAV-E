@@ -1759,6 +1759,7 @@ final class MapViewModel: ObservableObject {
                 reason: "User confirmed review candidate, but matching Map Stamp already exists."
             )
             existing = await refreshedConfirmedPlace(existing)
+            try? saveLocalVaultService.removeReviewCandidate(candidate.id)
             mirrorToLocalVault(existing)
             places = Place.consolidated(places.filter { $0.id != existing.id } + [existing])
             reviewCandidates.removeAll { $0.id == candidate.id }

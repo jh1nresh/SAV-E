@@ -5851,6 +5851,7 @@ async function recordPlaceRecoveryDecision(
       };
     }
 
+    // Call site only. The places insert and cap check live inside the helper.
     await insertFinalPlaceForDecision(client, userId, decision);
     await validateDecisionReferences(client, runId, userId, stringValue(run.result_type), decision);
     validateDecisionAttempt({

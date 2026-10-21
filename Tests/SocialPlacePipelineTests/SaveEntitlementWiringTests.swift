@@ -203,6 +203,42 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertTrue(policy.contains("purchasingIsAvailable && hasConfirmedMapStamp"))
     }
 
+    /// B7: Settings opens the informational paywall after a Map Stamp exists.
+    /// The row is not gated on StoreKit, and exhausted AI quota is not this sheet.
+    func testSettingsProRowOpensPassportPaywallWithoutPurchaseGate() throws {
+        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+        XCTAssertTrue(profile.contains("if !passportPlaces.isEmpty"))
+        XCTAssertTrue(profile.contains("accessibilityIdentifier: \"profile.pro\""))
+        XCTAssertTrue(profile.contains("SaveProPaywallView(trigger: .passport)"))
+        XCTAssertFalse(profile.contains("shouldOfferProFromPassport"))
+        XCTAssertFalse(profile.contains("if SAVEProAccessPolicy.purchasingIsAvailable"))
+        XCTAssertFalse(profile.contains("SaveProPaywallView(trigger: .savedPlaceLimit)"))
+        XCTAssertFalse(profile.contains("SaveProPaywallView(trigger: .aiAssistExhausted)"))
+        XCTAssertFalse(content.contains("aiAssistExhausted"))
+        XCTAssertTrue(content.contains("SaveProPaywallView(trigger: .savedPlaceLimit)"))
+    }
+
+    /// B7: exhausted AI quota stays a neutral analysis notice, never the Pro wall.
+    @MainActor
+    func testExhaustedAIQuotaIsANeutralMessageNotThePaywall() async throws {
+        XCTAssertFalse(SAVEProAccessPolicy.enforcementEnabled)
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "free", used: 20, limit: 20) })
+        await store.refresh()
+
+        let decision = store.decideAIAssist()
+        XCTAssertEqual(decision, .allowedEnforcementDisabled)
+        XCTAssertFalse(decision.isRefusal)
+        XCTAssertFalse(store.shouldPresentPaywall(for: decision, hasConfirmedMapStamp: true))
+        XCTAssertFalse(store.shouldPresentPaywall(for: .refusedAllowanceExhausted, hasConfirmedMapStamp: false))
+
+        let notice = try XCTUnwrap(ShareAnalysisError.usageLimit.errorDescription)
+        XCTAssertTrue(notice.contains("usage limit") || notice.contains("用量上限"))
+        XCTAssertFalse(notice.localizedCaseInsensitiveContains("paywall"))
+        XCTAssertFalse(notice.localizedCaseInsensitiveContains("Savvy Pro"))
+        XCTAssertFalse(notice.localizedCaseInsensitiveContains("unlimited saved places"))
+    }
+
     func testSessionStartupRefreshesEntitlementBeforeLocalCap() throws {
         let auth = try source(at: "SAV-E/Services/PrivyAuthService.swift")
         let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")

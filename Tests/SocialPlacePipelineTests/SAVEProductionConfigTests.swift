@@ -671,6 +671,274 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
+    func testAccountSavedPlacesOnlyCountTowardTheCap() async throws {
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(25, status: .visited) + makeCappedPlaces(24, status: .wantToGo, indexOffset: 25)
+        map.socialPlaces = [makeSocialPlace(name: "Friend Share Cafe")]
+        map.collaborativeLists = [
+            SaveCollaborativeList(
+                title: "Taipei weekend",
+                items: makeCappedPlaces(12, indexOffset: 200).map { SaveListItem.from(place: $0) }
+            )
+        ]
+        map.reviewCandidates = [
+            PlaceReviewCandidate(
+                id: UUID(),
+                captureId: nil,
+                name: "Unplaced Cafe",
+                address: "Inbox Road",
+                city: "Taipei",
+                latitude: 25.4,
+                longitude: 121.8,
+                evidence: [],
+                confidence: 0.9,
+                missingInfo: [],
+                status: "review",
+                createdAt: Date()
+            )
+        ]
+
+        let fiftieth = try await map.saveMapCandidateAsPlace(
+            SaveMapCandidate(
+                id: "cap-a1-50",
+                title: "Fiftieth Own Cafe",
+                subtitle: "Taipei",
+                latitude: 25.41,
+                longitude: 121.81,
+                category: .cafe
+            )
+        )
+        XCTAssertEqual(fiftieth.name, "Fiftieth Own Cafe")
+        XCTAssertEqual(map.places.count, 50)
+        XCTAssertEqual(map.places.filter { $0.status == .visited }.count, 25)
+        XCTAssertEqual(map.places.filter { $0.status == .wantToGo }.count, 25)
+        XCTAssertEqual(map.socialPlaces.count, 1)
+        XCTAssertEqual(map.collaborativeLists.first?.items.count, 12)
+        XCTAssertEqual(map.reviewCandidates.count, 1)
+
+        do {
+            _ = try await map.saveMapCandidateAsPlace(
+                SaveMapCandidate(
+                    id: "cap-a1-51",
+                    title: "Fifty First Own Cafe",
+                    subtitle: "Taipei",
+                    latitude: 25.42,
+                    longitude: 121.82,
+                    category: .cafe
+                )
+            )
+            XCTFail("lists, friend shares, and Unplaced must not consume a free slot")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+            XCTAssertEqual(map.places.count, 50)
+            XCTAssertTrue(map.reviewCandidates.contains { $0.name == "Fifty First Own Cafe" })
+        }
+    }
+
+    @MainActor
+    func testServerSavedPlaceCountWinsAfterRefresh() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "server-count-owner")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        let remoteIDs = (0..<50).map { _ in UUID() }
+        let rows = remoteIDs.enumerated().map { index, id in
+            cappedPlaceRowJSON(id: id, index: index)
+        }.joined(separator: ",")
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET", request.url?.path == "/places" {
+                return (200, "[\(rows)]")
+            }
+            if request.url?.path.contains("/memory/candidates") == true { return (200, "[]") }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.place-limit-a5.\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-a5-\(UUID().uuidString).json")
+        let map = makeRemoteCappedMap(vaultURL: vaultURL)
+        map.places = makeCappedPlaces(49)
+
+        await map.loadPlaces()
+        XCTAssertEqual(map.places.count, 50, "A5: the server place list replaces the stale local count")
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .overFreeLimit)
+
+        do {
+            _ = try await map.saveMapCandidateAsPlace(
+                SaveMapCandidate(
+                    id: "cap-a5-51",
+                    title: "After Refresh Cafe",
+                    subtitle: "Taipei",
+                    latitude: 25.43,
+                    longitude: 121.83,
+                    category: .cafe
+                )
+            )
+            XCTFail("a refresh that reports 50 must park the next save")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+            XCTAssertEqual(map.places.count, 50)
+            XCTAssertEqual(map.reviewCandidates.first?.name, "After Refresh Cafe")
+        }
+    }
+
+    @MainActor
+    func testAfterProAParkedCandidateSavesWithOneTap() async throws {
+        var tier: SaveProTier = .free
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.place-limit-b4.\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-b4-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = MapViewModel(
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { tier },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: false
+        )
+        map.places = makeCappedPlaces(50)
+        _ = map.parkPlaceInUnplacedInbox(makeSocialPlace(name: "Upgrade Later Cafe"))
+        map.acknowledgeSavedPlaceLimitPaywall()
+        let parked = try XCTUnwrap(map.reviewCandidates.first)
+        XCTAssertEqual(parked.name, "Upgrade Later Cafe")
+        XCTAssertEqual(map.places.count, 50)
+
+        tier = .pro
+        let saved = try await map.saveReviewCandidateAsPlace(parked)
+        XCTAssertEqual(saved.name, "Upgrade Later Cafe")
+        XCTAssertEqual(map.places.count, 51)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == parked.id })
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    @MainActor
+    func testDismissedPaywallKeepsUnplacedUntilASlotFrees() async throws {
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(50)
+        _ = map.parkPlaceInUnplacedInbox(makeSocialPlace(name: "Waiting After Dismiss"))
+        map.acknowledgeSavedPlaceLimitPaywall()
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+        let parked = try XCTUnwrap(map.reviewCandidates.first)
+        XCTAssertEqual(parked.name, "Waiting After Dismiss")
+
+        try await map.deletePlace(map.places[0])
+        let saved = try await map.saveReviewCandidateAsPlace(parked)
+        XCTAssertEqual(saved.name, "Waiting After Dismiss")
+        XCTAssertEqual(map.places.count, 50)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == parked.id })
+    }
+
+    @MainActor
+    func testExpiredProKeepsExistingPlacesViewableAndDeletable() async throws {
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(60)
+        let kept = try XCTUnwrap(map.places.last)
+        XCTAssertEqual(map.places.count, 60)
+
+        try await map.deletePlace(map.places[0])
+        XCTAssertEqual(map.places.count, 59)
+        XCTAssertTrue(map.places.contains { $0.id == kept.id })
+        XCTAssertEqual(map.places.first { $0.id == kept.id }?.name, kept.name)
+
+        do {
+            _ = try await map.saveMapCandidateAsPlace(
+                SaveMapCandidate(
+                    id: "cap-c5-61",
+                    title: "Expired Pro Extra Cafe",
+                    subtitle: "Taipei",
+                    latitude: 25.44,
+                    longitude: 121.84,
+                    category: .cafe
+                )
+            )
+            XCTFail("expiry must not delete old stamps or allow a 61st insert")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+            XCTAssertEqual(map.places.count, 59)
+            XCTAssertTrue(map.places.contains { $0.id == kept.id })
+            XCTAssertEqual(map.reviewCandidates.first?.name, "Expired Pro Extra Cafe")
+        }
+    }
+
+    @MainActor
+    func testMergeExistingRemovesLocalUnplacedFromTheVault() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "merge-vault-owner")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        let existingID = UUID()
+        let googlePlaceID = "ChIJmerge-existing-cafe"
+        let existingRow = cappedPlaceRowJSON(id: existingID, index: 0, name: "Harbor Cafe", googlePlaceID: googlePlaceID)
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "PATCH", request.url?.path.contains("/memory/candidates/") == true {
+                return (404, #"{"error":"not_found"}"#)
+            }
+            if request.httpMethod == "PATCH", request.url?.path.hasPrefix("/places/") == true {
+                return (200, "{}")
+            }
+            if request.httpMethod == "GET", request.url?.path == "/places" {
+                return (200, "[\(existingRow)]")
+            }
+            if request.url?.path.contains("/memory/candidates") == true { return (200, "[]") }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.place-limit-merge-vault.\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-merge-vault-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+        let existing = Place(
+            id: existingID,
+            name: "Harbor Cafe",
+            address: "0 Server Road",
+            latitude: 25.0,
+            longitude: 121.0,
+            googlePlaceId: googlePlaceID,
+            category: .food,
+            status: .wantToGo,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
+        )
+        map.places = [existing]
+        let parked = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Harbor Cafe",
+            address: "0 Server Road",
+            city: nil,
+            latitude: 25.0,
+            longitude: 121.0,
+            evidence: ["Source URL: https://example.com/harbor-cafe"],
+            confidence: 0.9,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date(),
+            googlePlaceId: googlePlaceID
+        )
+        _ = try vault.saveReviewCandidate(parked)
+        map.reviewCandidates = [parked]
+        XCTAssertEqual(try vault.reviewCandidates().first?.id, parked.id)
+
+        let saved = try await map.saveReviewCandidateAsPlace(parked)
+        XCTAssertEqual(saved.id, existingID)
+        XCTAssertEqual(map.places.count, 1)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == parked.id })
+        XCTAssertFalse(try vault.reviewCandidates().contains { $0.id == parked.id })
+
+        try await map.refreshReviewCandidates()
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == parked.id })
+    }
+
+    @MainActor
     func testFiftyFirstSaveParksWhenPurchasingIsUnavailable() async throws {
         XCTAssertFalse(SAVEProAccessPolicy.purchasingIsAvailable)
         let map = makeCappedMap(tier: .free)
@@ -953,17 +1221,44 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
     }
 
-    private func makeCappedPlaces(_ count: Int) -> [Place] {
+    @MainActor
+    private func makeRemoteCappedMap(
+        vaultURL: URL,
+        vault: SaveLocalVaultService? = nil,
+        tier: SaveProTier = .free
+    ) -> MapViewModel {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(
+            apiBaseURL: "https://analysis.test",
+            session: URLSession(configuration: configuration),
+            accessTokenProvider: { "test-token" }
+        )
+        return MapViewModel(
+            supabaseService: service,
+            saveLocalVaultService: vault ?? SaveLocalVaultService(overrideVaultURL: vaultURL),
+            entitlementTierProvider: { tier },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+    }
+
+    private func makeCappedPlaces(
+        _ count: Int,
+        status: PlaceStatus = .wantToGo,
+        indexOffset: Int = 0
+    ) -> [Place] {
         (0..<count).map { index in
-            Place(
+            let number = index + indexOffset
+            return Place(
                 id: UUID(),
-                name: "Cap Place \(index)",
-                address: "\(index) Cap Street",
-                latitude: 24.0 + Double(index) * 0.01,
-                longitude: 120.0 + Double(index) * 0.01,
-                googlePlaceId: "cap-place-\(index)",
+                name: "Cap Place \(number)",
+                address: "\(number) Cap Street",
+                latitude: 24.0 + Double(number) * 0.01,
+                longitude: 120.0 + Double(number) * 0.01,
+                googlePlaceId: "cap-place-\(number)",
                 category: .food,
-                status: .wantToGo,
+                status: status,
                 rating: nil,
                 note: nil,
                 sourceUrl: nil,
@@ -978,6 +1273,18 @@ final class SAVEProductionConfigTests: XCTestCase {
                 createdAt: Date()
             )
         }
+    }
+
+    private func cappedPlaceRowJSON(
+        id: UUID,
+        index: Int,
+        name: String = "Server Place",
+        googlePlaceID: String? = nil
+    ) -> String {
+        let placeID = googlePlaceID.map { ",\"google_place_id\":\"\($0)\"" } ?? ""
+        return """
+        {"id":"\(id.uuidString)","user_id":"owner","name":"\(name) \(index)","address":"\(index) Server Road","latitude":\(25.0 + Double(index) * 0.01),"longitude":\(121.0 + Double(index) * 0.01),"category":"food","status":"wantToGo","source_platform":"other"\(placeID),"created_at":"2020-01-02T03:04:05Z"}
+        """
     }
 
     private func makeSocialPlace(name: String) -> Place {
