@@ -993,17 +993,19 @@ struct ContentView: View {
                 await mapVM.prepareMapCandidatesForDrawerQuery(
                     query,
                     preservesExactSearchClue: isExactSearchSessionActive
+                        || exactSearchClueID != nil
+                        || mapVM.hasActiveExactSearchResolution
                 )
             },
             onBeginExactSearchResolution: { candidate in
                 activateExactSearchSession(for: candidate)
             },
-            onClearMapSearchResults: { preservesExactSearchClue in
+            onClearMapSearchResults: { endsExactSearch in
                 isExactSearchSessionActive = false
-                // Explicit close / ordinary search drop the retained clue so
-                // the next saved-row tap cannot restore a canceled resolution.
-                // Refine / reopen keeps exactSearchClueID.
-                if !preservesExactSearchClue {
+                // Explicit close drops the retained clue so the next
+                // saved-row tap cannot restore a canceled resolution.
+                // Launch / refine remounts keep exactSearchClueID.
+                if endsExactSearch {
                     exactSearchClueID = nil
                 }
                 guard exactSearchRequestID == nil else { return }

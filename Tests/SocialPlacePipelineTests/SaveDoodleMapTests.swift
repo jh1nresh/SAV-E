@@ -23,13 +23,20 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("static var current: Kind = .coralNumbered"))
         XCTAssertTrue(map.contains("SaveAtlasPalette.coral"))
         XCTAssertTrue(map.contains("map.headerBand"))
+        let headerAt = try XCTUnwrap(map.range(of: "private func header"))
+        let eatGoAt = try XCTUnwrap(map.range(of: "private var eatGoRail"))
+        let header = map[headerAt.lowerBound..<eatGoAt.lowerBound]
+        XCTAssertTrue(header.contains("map.city"))
+        XCTAssertTrue(
+            header.contains("accessibilityElement(children: .contain)"),
+            "map.headerBand must contain children so map.city stays queryable"
+        )
         XCTAssertTrue(map.contains("SaveAtlasPalette.paper"))
         XCTAssertTrue(map.contains("SaveDoodleLollipopShape"))
         XCTAssertTrue(map.contains("anchor: .bottom"))
         XCTAssertFalse(map.contains(".fill(visited ? SaveDoodle.stampRed : SaveAtlasPalette.coral)"))
         XCTAssertTrue(map.contains(".stroke(pinColor, lineWidth: 2)"))
         XCTAssertTrue(map.contains("map.eatGo"))
-        let eatGoAt = try XCTUnwrap(map.range(of: "private var eatGoRail"))
         let sheetAt = try XCTUnwrap(map.range(of: "private func placeSheet"))
         let eatGo = map[eatGoAt.lowerBound..<sheetAt.lowerBound]
         XCTAssertTrue(eatGo.contains("minHeight: SaveLayout.chipHeight"))
