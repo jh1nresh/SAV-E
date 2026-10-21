@@ -998,8 +998,14 @@ struct ContentView: View {
             onBeginExactSearchResolution: { candidate in
                 activateExactSearchSession(for: candidate)
             },
-            onClearMapSearchResults: {
+            onClearMapSearchResults: { preservesExactSearchClue in
                 isExactSearchSessionActive = false
+                // Explicit close / ordinary search drop the retained clue so
+                // the next saved-row tap cannot restore a canceled resolution.
+                // Refine / reopen keeps exactSearchClueID.
+                if !preservesExactSearchClue {
+                    exactSearchClueID = nil
+                }
                 guard exactSearchRequestID == nil else { return }
                 mapVM.clearMapSearchResults()
             },
