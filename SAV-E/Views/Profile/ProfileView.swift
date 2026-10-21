@@ -186,9 +186,9 @@ struct ProfileView: View {
                         showLanguageSettings = true
                     }
 
-                    if SAVEProAccessPolicy.shouldOfferProFromPassport(
-                        hasConfirmedMapStamp: !passportPlaces.isEmpty
-                    ) {
+                    // B7: Settings opens the informational paywall after a Map
+                    // Stamp exists. Purchase buttons still honor purchasingIsAvailable.
+                    if !passportPlaces.isEmpty {
                         SettingsRow(
                             icon: "sparkles",
                             title: languageSettings.localized(

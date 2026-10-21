@@ -205,6 +205,38 @@ test("A1/D3 count is this account's places only", () => {
   assert.doesNotMatch(source, /from cities|from lists|from place_candidates|from friend_/);
 });
 
+test("A3 same-id retry is not a new insert", () => {
+  assert.equal(
+    decideSavedPlaceInsert({ tier: "free", savedPlaceCount: 50, isNewPlace: false }),
+    "allowed",
+  );
+  const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+  const places = server.slice(
+    server.indexOf("async function handlePlaces"),
+    server.indexOf("function providerCoordinateFieldError"),
+  );
+  assert.match(places, /if \(isNewPlace\) await assertNewSavedPlaceAllowed/);
+  assert.match(places, /if \(!existingReceipt\.rows\[0\]\) await assertNewSavedPlaceAllowed/);
+});
+
+test("C3 direct API writes nothing and returns over_free_limit", () => {
+  const error = new SavedPlaceLimitError();
+  assert.equal(error.status, 403);
+  assert.deepEqual(error.body, {
+    error: "saved_place_limit",
+    code: "over_free_limit",
+    limit: 50,
+  });
+  const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+  const places = server.slice(
+    server.indexOf("async function handlePlaces"),
+    server.indexOf("function providerCoordinateFieldError"),
+  );
+  assert.match(places, /await client.query\("rollback"\)/);
+  assert.match(server, /error instanceof SavedPlaceLimitError/);
+  assert.match(server, /error\.body, error\.status/);
+});
+
 test("C5 expired Pro keeps existing rows and gates only new inserts", () => {
   assert.equal(
     decideSavedPlaceInsert({ tier: "free", savedPlaceCount: 80, isNewPlace: false }),

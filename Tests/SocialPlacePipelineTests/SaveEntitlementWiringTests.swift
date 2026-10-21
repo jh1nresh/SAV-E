@@ -267,8 +267,9 @@ final class SaveEntitlementWiringTests: XCTestCase {
     func testPassportProEntryUsesSharedStampGate() throws {
         let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         let policy = try source(at: "SAV-EShared/SAVEProAccessPolicy.swift")
-        XCTAssertTrue(profile.contains("shouldOfferProFromPassport"))
-        XCTAssertTrue(profile.contains("hasConfirmedMapStamp: !passportPlaces.isEmpty"))
+        XCTAssertTrue(profile.contains("if !passportPlaces.isEmpty"))
+        XCTAssertTrue(profile.contains("showProPaywall = true"))
+        XCTAssertTrue(profile.contains("SaveProPaywallView(trigger: .passport)"))
         XCTAssertFalse(profile.contains("SaveEntitlementStore"))
         XCTAssertTrue(policy.contains("shouldOfferProFromPassport"))
         XCTAssertTrue(policy.contains("purchasingIsAvailable && hasConfirmedMapStamp"))
