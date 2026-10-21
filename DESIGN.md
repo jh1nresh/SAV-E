@@ -273,6 +273,16 @@ rules in this section.
 Hex values below are the `SaveAtlasPalette` values in code. If code and this
 table ever disagree, fix whichever one drifted in the same PR.
 
+Token consolidation map (`main` → this PR). Hex values are unchanged.
+
+| Old (`main`) | New token | Light | Dark |
+| --- | --- | --- | --- |
+| `coral` `Color(light: "F26B4A", dark: "D97861")` | `coralLightHex` / `coralDarkHex` → `coral` | `#F26B4A` | `#D97861` |
+| canvas / paper `Color(light: "FFF9EB", dark: "1E1C19")` | `creamHex` / `cream` → canvas / paper | `#FFF9EB` | `#1E1C19` |
+| — | `brandCoralHex` / `brandCoral` | `#F26B4A` | `#F26B4A` |
+| Pin `Color(red: 0.949, green: 0.420, blue: 0.290)` | `SaveAtlasPalette.brandCoral` | `#F26B4A` | `#F26B4A` |
+| Test / Share hex `"F26B4A"` | `SaveAtlasPalette.coralLightHex` | `#F26B4A` | — |
+
 | Role | Token | Light | Dark | Use |
 | --- | --- | --- | --- | --- |
 | Canvas | `SaveAtlasPalette.canvas` | `#FFF9EB` | `#11161C` | Full-screen Atlas background |

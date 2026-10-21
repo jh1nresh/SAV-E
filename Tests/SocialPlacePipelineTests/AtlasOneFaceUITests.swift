@@ -46,6 +46,8 @@ final class AtlasOneFaceUITests: XCTestCase {
         XCTAssertTrue(design.contains("#\(SaveAtlasPalette.coralLightHex)"))
         XCTAssertTrue(design.contains("#\(SaveAtlasPalette.coralDarkHex)"))
         XCTAssertTrue(design.contains("#\(SaveAtlasPalette.creamHex)"))
+        XCTAssertTrue(design.contains("Token consolidation map"))
+        XCTAssertTrue(design.contains("| Old (`main`) | New token | Light | Dark |"))
         XCTAssertFalse(theme.contains("coralStrong"))
     }
 
