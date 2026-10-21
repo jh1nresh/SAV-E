@@ -451,7 +451,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         )
         let design = try source(at: "DESIGN.md")
         XCTAssertTrue(design.contains("keep the Collected strip and show a filter-empty message"))
-        XCTAssertTrue(design.contains("nearest save across every category"))
+        // DESIGN wraps "the nearest / save across every category".
+        XCTAssertTrue(design.contains("save across every category"))
+        XCTAssertTrue(design.contains("not the nearest Eat/Go row"))
         XCTAssertTrue(design.contains("locality (Berkeley)"))
     }
 
