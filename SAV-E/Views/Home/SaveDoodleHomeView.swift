@@ -48,11 +48,19 @@ struct SaveDoodleHomeView: View {
                             .padding(.top, SaveSpace.xs)
                     }
 
-                    if !showsEmptyHome {
+                    if showsLensEmpty {
+                        lensEmpty
+                            .padding(.top, SaveSpace.md)
+                    } else if !showsEmptyHome {
                         miniMap
                             .padding(.top, SaveSpace.md)
                         placeList
                             .padding(.top, SaveSpace.md)
+                    }
+
+                    // City X/Y is independent of Eat/Go. A lens with no rows
+                    // must not hide Collected (HoP 2026-10-21).
+                    if !collectedPlaces.isEmpty {
                         collectedStrip
                             .padding(.top, SaveSpace.md)
                     }
@@ -407,6 +415,17 @@ struct SaveDoodleHomeView: View {
         .accessibilityIdentifier("home.savedPlaces.empty")
     }
 
+    /// City still has saves; the current Eat/Go list does not. Not the
+    /// first-save empty plate — Collected stays visible with the city X/Y.
+    private var lensEmpty: some View {
+        let lens = session.lens.title(language: languageSettings.language)
+        return Text(localized("No \(lens) saves here", "這裡還沒有\(lens)的收藏"))
+            .font(SaveAtlasType.body(15))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .frame(maxWidth: .infinity, minHeight: SaveLayout.minTap, alignment: .leading)
+            .accessibilityIdentifier("home.lensEmpty")
+    }
+
     private var cityPicker: some View {
         NavigationStack {
             List {
@@ -489,6 +508,8 @@ struct SaveDoodleHomeView: View {
         }
 #endif
         if allPlaces.isEmpty { return true }
+        if needsLocationToResolveNearYou { return false }
+        if showsLensEmpty { return false }
         if SaveDoodleHomeCatalog.isNearbyEmpty(
             places: allPlaces,
             lens: session.lens,
@@ -498,11 +519,35 @@ struct SaveDoodleHomeView: View {
         ) {
             return true
         }
-        return listedPlaces.isEmpty
+        return listedPlaces.isEmpty && collectedPlaces.isEmpty
+    }
+
+    /// Selected city has saves, but none match the current Eat/Go lens.
+    private var showsLensEmpty: Bool {
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-empty-home") {
+            return false
+        }
+#endif
+        guard !needsLocationToResolveNearYou else { return false }
+        return listedPlaces.isEmpty && !collectedPlaces.isEmpty
+    }
+
+    /// Near you with no fix must not invent a worldwide nearby list.
+    private var needsLocationToResolveNearYou: Bool {
+        session.city == .nearYou
+            && !locationService.isAuthorizationDenied
+            && locationService.currentLocation == nil
+            && !allPlaces.isEmpty
     }
 
     private var showsLocationPrompt: Bool {
-        locationService.isAuthorizationDenied && !showsEmptyHome
+        // Denied recovery must stay available on the empty plate. Hiding
+        // it with `!showsEmptyHome` left no Home route to Settings.
+        if locationService.isAuthorizationDenied {
+            return true
+        }
+        return needsLocationToResolveNearYou
     }
 
     private var showsNearYouPrefix: Bool {
@@ -546,12 +591,12 @@ struct SaveDoodleHomeView: View {
     }
 
     private var collectedPlaces: [Place] {
-        switch resolvedSelection {
-        case .nearYou:
-            return listedPlaces.map(\.place)
-        case .city(let id):
-            return allPlaces.filter { SaveDoodleHomeCatalog.cityID(for: $0) == id }
-        }
+        SaveDoodleHomeCatalog.collectedScopePlaces(
+            from: allPlaces,
+            selection: session.city,
+            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
+            locationDenied: locationService.isAuthorizationDenied
+        )
     }
 
     private var collectedProgress: (visited: Int, saved: Int, goal: Int) {
@@ -565,8 +610,8 @@ struct SaveDoodleHomeView: View {
     private var collectedText: String {
         let progress = collectedProgress
         return localized(
-            "Collected \(progress.visited)/\(progress.goal)",
-            "已收集 \(progress.visited)/\(progress.goal)"
+            "Collected \(progress.visited)/\(progress.saved)",
+            "已收集 \(progress.visited)/\(progress.saved)"
         )
     }
 

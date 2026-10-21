@@ -21,6 +21,8 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(actual, baseline | {
             selection.RAIL + "testHomeListProgressiveSearch",
             selection.RAIL + "testMiniMapOpensMapWithCarriedFilterAndCityChange",
+            selection.RAIL + "testHomeCollectedOpensPassportWithCityCount",
+            selection.RAIL + "testSavesTripsBackReturnsToSaves",
         })
         self.assertTrue(full["trip"])
         self.assertTrue(full["units"])
