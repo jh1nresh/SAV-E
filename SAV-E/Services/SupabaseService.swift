@@ -297,8 +297,20 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         Self.assignChangedOptional("google_price_level", place.googlePriceLevel, previous: previous?.googlePriceLevel, hasPrevious: hasPrevious, into: &updates)
         Self.assignChangedOptional("price_range", place.priceRange, previous: previous?.priceRange, hasPrevious: hasPrevious, into: &updates)
         Self.assignChangedOptional("opening_hours", place.openingHours, previous: previous?.openingHours, hasPrevious: hasPrevious, into: &updates)
-        Self.assignChangedOptional("source_image_url", place.sourceImageUrl, previous: previous?.sourceImageUrl, hasPrevious: hasPrevious, into: &updates)
-        Self.assignChangedOptional("business_photo_urls", place.businessPhotoUrls, previous: previous?.businessPhotoUrls, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional(
+            "source_image_url",
+            GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
+            previous: GooglePlacesPhotoURL.persistableString(previous?.sourceImageUrl),
+            hasPrevious: hasPrevious,
+            into: &updates
+        )
+        Self.assignChangedOptional(
+            "business_photo_urls",
+            GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
+            previous: GooglePlacesPhotoURL.persistableStrings(previous?.businessPhotoUrls),
+            hasPrevious: hasPrevious,
+            into: &updates
+        )
         // Account-backed attribution lives on `recommender`. Send a handle
         // only when it is displayable and actually changed, so a photo
         // enrichment PATCH cannot rewrite or invent one.

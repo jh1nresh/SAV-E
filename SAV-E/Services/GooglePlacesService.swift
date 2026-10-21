@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import CoreLocation
 import MapKit
 
@@ -41,6 +42,131 @@ struct GooglePlaceDetails: Codable {
     /// Structured `opening_hours.periods`, when Google returns them. The flat
     /// `openingHours` strings stay for display; the planner needs these.
     var openingPeriods: [SavePlaceOpeningPeriod]? = nil
+    /// Session-only photo records with `html_attributions`. Never persist.
+    var photos: [GooglePlacePhoto]? = nil
+    /// Place Details `url` (legacy) / `googleMapsUri` (new). Session-only.
+    var googleMapsUri: String? = nil
+}
+
+struct GooglePlacePhoto: Codable, Hashable {
+    var photoReference: String
+    var htmlAttributions: [String] = []
+}
+
+struct GooglePlacePhotoAuthor: Hashable {
+    var displayName: String
+    var uri: URL?
+}
+
+/// Session-only Google photo metadata keyed by the key-stripped photo URL.
+struct GooglePlacePhotoRecord: Hashable {
+    var url: URL
+    var authors: [GooglePlacePhotoAuthor]
+    var googleMapsURI: URL?
+}
+
+enum GoogleMapsPlatformAvailability {
+    /// Mainland China is a Google Maps Platform prohibited territory.
+    /// Users there must not trigger Places calls; show coral / own photos.
+    static func isAllowed(regionCode: String? = Locale.current.region?.identifier) -> Bool {
+        regionCode?.uppercased() != "CN"
+    }
+}
+
+enum GoogleMapsAttributionMetrics {
+    /// Official Places logo height range is 16–19dp.
+    static let logoHeight: CGFloat = 18
+    static let logoMinHeight: CGFloat = 16
+    static let logoMaxHeight: CGFloat = 19
+    static let clearSpaceLeading: CGFloat = 10
+    static let clearSpaceTrailing: CGFloat = 10
+    static let clearSpaceTop: CGFloat = 10
+    static let clearSpaceBottom: CGFloat = 5
+}
+
+enum GooglePlacesHTMLAttribution {
+    static func authors(from htmlAttributions: [String]) -> [GooglePlacePhotoAuthor] {
+        htmlAttributions.compactMap { raw in
+            let html = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !html.isEmpty else { return nil }
+            if let link = firstLink(in: html) {
+                return GooglePlacePhotoAuthor(displayName: link.name, uri: link.uri)
+            }
+            let name = unescape(stripTags(html))
+            guard !name.isEmpty else { return nil }
+            return GooglePlacePhotoAuthor(displayName: name, uri: nil)
+        }
+    }
+
+    static func mapsURL(placeId: String?, explicit: String? = nil) -> URL? {
+        if let explicit, let url = URL(string: explicit.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            return url
+        }
+        let trimmed = placeId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !trimmed.isEmpty else { return nil }
+        var components = URLComponents(string: "https://www.google.com/maps/search/")
+        components?.queryItems = [
+            URLQueryItem(name: "api", value: "1"),
+            URLQueryItem(name: "query", value: "place_id:\(trimmed)"),
+            URLQueryItem(name: "query_place_id", value: trimmed),
+        ]
+        return components?.url
+    }
+
+    private static func firstLink(in html: String) -> (name: String, uri: URL?)? {
+        let pattern = #"<a[^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else {
+            return nil
+        }
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        guard let match = regex.firstMatch(in: html, options: [], range: range),
+              let hrefRange = Range(match.range(at: 1), in: html),
+              let nameRange = Range(match.range(at: 2), in: html)
+        else { return nil }
+        let name = unescape(stripTags(String(html[nameRange])))
+        guard !name.isEmpty else { return nil }
+        return (name, URL(string: String(html[hrefRange])))
+    }
+
+    private static func stripTags(_ value: String) -> String {
+        value.replacingOccurrences(of: #"<[^>]+>"#, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func unescape(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&apos;", with: "'")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+    }
+}
+
+enum GooglePlacePhotoSessionStore {
+    private static let lock = NSLock()
+    private static var records: [URL: GooglePlacePhotoRecord] = [:]
+
+    static func remember(_ photos: [GooglePlacePhotoRecord]) {
+        lock.lock()
+        defer { lock.unlock() }
+        for photo in photos {
+            records[GooglePlacesPhotoURL.persistableURL(photo.url)] = photo
+        }
+    }
+
+    static func record(for url: URL) -> GooglePlacePhotoRecord? {
+        lock.lock()
+        defer { lock.unlock() }
+        return records[GooglePlacesPhotoURL.persistableURL(url)]
+    }
+
+    static func resetForTests() {
+        lock.lock()
+        records.removeAll()
+        lock.unlock()
+    }
 }
 
 enum PlaceMatchProvider: String, Codable, Hashable {
@@ -471,7 +597,7 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
             throw GooglePlacesError.apiKeyMissing
         }
 
-        let fields = "place_id,name,formatted_address,geometry,rating,price_level,opening_hours,formatted_phone_number,website,photos,types"
+        let fields = "place_id,name,formatted_address,geometry,rating,price_level,opening_hours,formatted_phone_number,website,photos,types,url"
         let urlString = "https://maps.googleapis.com/maps/api/place/details/json?place_id=\(placeId)&fields=\(fields)&key=\(apiKey)"
 
         guard let url = URL(string: urlString) else {
@@ -491,7 +617,7 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
         let geometry = result["geometry"] as? [String: Any]
         let location = geometry?["location"] as? [String: Any]
         let openingHours = result["opening_hours"] as? [String: Any]
-        let photos = result["photos"] as? [[String: Any]]
+        let photos = parsedPhotos(result["photos"] as? [[String: Any]])
 
         return GooglePlaceDetails(
             placeId: placeId,
@@ -504,11 +630,13 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
             openingHours: openingHours?["weekday_text"] as? [String],
             phoneNumber: result["formatted_phone_number"] as? String,
             websiteUrl: result["website"] as? String,
-            photoReferences: photos?.compactMap { $0["photo_reference"] as? String },
+            photoReferences: photos?.map(\.photoReference),
             types: result["types"] as? [String] ?? [],
             openingPeriods: SavePlaceOpeningPeriod.periods(
                 fromGooglePeriods: openingHours?["periods"] as? [[String: Any]]
-            )
+            ),
+            photos: photos,
+            googleMapsUri: result["url"] as? String
         )
     }
 
@@ -539,6 +667,19 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
         }
         return request
     }
+
+    private func parsedPhotos(_ photos: [[String: Any]]?) -> [GooglePlacePhoto]? {
+        let parsed = (photos ?? []).compactMap { photo -> GooglePlacePhoto? in
+            guard let reference = photo["photo_reference"] as? String,
+                  !reference.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else { return nil }
+            return GooglePlacePhoto(
+                photoReference: reference,
+                htmlAttributions: photo["html_attributions"] as? [String] ?? []
+            )
+        }
+        return parsed.isEmpty ? nil : parsed
+    }
 }
 
 enum GooglePlacesPhotoURL {
@@ -568,11 +709,15 @@ enum GooglePlacesPhotoURL {
         return urlWithLiteralPlusesEncoded(from: components) ?? url
     }
 
+    /// Durable persistence only. Google Places photo URLs, media paths, and
+    /// photo references must not be stored; `place_id` is the exempt field.
     nonisolated static func persistableString(_ value: String?) -> String? {
         guard let value else { return nil }
         let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return nil }
+        if looksLikeGooglePlacesPhotoReference(normalized) { return nil }
         guard let url = URL(string: normalized) else { return normalized }
+        if isGooglePlacesPhotoURL(url) { return nil }
         return persistableURL(url).absoluteString
     }
 
@@ -583,9 +728,25 @@ enum GooglePlacesPhotoURL {
     }
 
     nonisolated static func isGooglePlacesPhotoURL(_ url: URL) -> Bool {
-        url.scheme?.lowercased() == "https" &&
-            url.host?.lowercased() == host &&
-            url.path == path
+        let scheme = url.scheme?.lowercased()
+        let hostname = url.host?.lowercased() ?? ""
+        guard scheme == "https" else { return false }
+        if hostname == host && url.path == path { return true }
+        if hostname == "places.googleapis.com" && url.path.contains("/media") { return true }
+        return false
+    }
+
+    nonisolated static func looksLikeGooglePlacesPhotoReference(_ value: String) -> Bool {
+        let lower = value.lowercased()
+        if lower.contains("photo_reference=") { return true }
+        if lower.hasPrefix("places/") && lower.contains("/photos/") { return true }
+        return false
+    }
+
+    /// Session display only. Mainland-China users never load Google photo URLs.
+    nonisolated static func isDisplayable(_ value: String, mapsAllowed: Bool = GoogleMapsPlatformAvailability.isAllowed()) -> Bool {
+        guard let url = URL(string: value) else { return true }
+        return !isGooglePlacesPhotoURL(url) || mapsAllowed
     }
 
     nonisolated static func authorizedURL(_ persistedURL: URL, apiKey: String) -> URL? {

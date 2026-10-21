@@ -2427,17 +2427,29 @@ private struct SavedMapDetailDrawerContent: View {
         return value
     }
 
+    private var showsBusinessPhotoCarousel: Bool {
+        if isEnrichingBusinessDetails { return true }
+        let urls = detailPlace.businessPhotoURLStrings
+        if urls.count > 1 { return true }
+        if let first = urls.first, let url = URL(string: first) {
+            return GooglePlacesPhotoURL.isGooglePlacesPhotoURL(url)
+        }
+        return false
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             postcardIdentity
 
             // Business photo gallery: the postcard corner shows one shot, but
             // enrichment fetches several — surface them all as a swipeable
-            // carousel once there is more than the header photo.
-            if detailPlace.businessPhotoURLStrings.count > 1 || isEnrichingBusinessDetails {
+            // carousel once there is more than the header photo. A single
+            // Google photo still needs the large attributed surface.
+            if showsBusinessPhotoCarousel {
                 PlaceBusinessPhotoCarousel(
                     imageURLs: detailPlace.businessPhotoURLStrings,
-                    isSearching: isEnrichingBusinessDetails
+                    isSearching: isEnrichingBusinessDetails,
+                    googlePlaceId: detailPlace.googlePlaceId
                 )
                 .accessibilityIdentifier("drawer.saved.photoCarousel")
             }
@@ -2944,7 +2956,10 @@ private struct SocialPlaceDetailCard: View {
             tint: SaveAtlasPalette.honey,
             accessibilityIdentifier: "drawer.social.postcardBody"
         ) {
-            PlaceBusinessPhotoCarousel(imageURLs: place.businessPhotoURLStrings)
+            PlaceBusinessPhotoCarousel(
+                imageURLs: place.businessPhotoURLStrings,
+                googlePlaceId: place.googlePlaceId
+            )
 
             HStack(spacing: 8) {
                 CategoryPill(category: place.category, isSelected: true)
@@ -3963,7 +3978,8 @@ private struct UnsavedMapCandidateCard: View {
 
             PlaceBusinessPhotoCarousel(
                 imageURLs: displayPhotoURLStrings,
-                isSearching: isEnrichingPhoto
+                isSearching: isEnrichingPhoto,
+                googlePlaceId: UUID(uuidString: displayCandidate.id) == nil ? displayCandidate.id : nil
             )
 
             PostcardReceiptSection(

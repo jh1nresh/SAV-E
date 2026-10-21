@@ -106,6 +106,20 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
+    func testPersistableStringDropsPhotoNamesAndPlacesMediaURLs() {
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "places/ChIJ123/photos/ABC"
+        ))
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "https://places.googleapis.com/v1/places/ChIJ123/photos/ABC/media"
+        ))
+        XCTAssertEqual(
+            GooglePlacesPhotoURL.persistableString("https://example.com/own.jpg"),
+            "https://example.com/own.jpg"
+        )
+    }
+
+    @MainActor
     func testGooglePhotoKeyIsAddedOnlyForTheTransientRequest() throws {
         let service = GooglePlacesService(
             apiKey: "TEST_ONLY_NON_SECRET_VALUE",
@@ -258,16 +272,17 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
-    func testPersistedMemoryAndSharedListsStripLegacyGooglePhotoKeys() throws {
+    func testPersistedMemoryAndSharedListsDropGooglePhotoURLs() throws {
         let legacyURL = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref&key=TEST_ONLY_NON_SECRET_VALUE"
+        let ownPhoto = "https://example.com/own-photo.jpg"
         let record = SaveMemoryRecord(
             state: .confirmedPlace,
             title: "Legacy Cafe",
             sourceImageUrl: legacyURL,
-            businessPhotoUrls: [legacyURL]
+            businessPhotoUrls: [legacyURL, ownPhoto]
         )
-        XCTAssertFalse(try XCTUnwrap(record.sourceImageUrl).contains("key="))
-        XCTAssertFalse(try XCTUnwrap(record.businessPhotoUrls?.first).contains("key="))
+        XCTAssertNil(record.sourceImageUrl)
+        XCTAssertEqual(record.businessPhotoUrls, [ownPhoto])
 
         var legacyPlace = place(name: "Legacy Cafe", category: .cafe)
         legacyPlace.sourceImageUrl = legacyURL
@@ -277,7 +292,84 @@ final class SaveCollaborativeListTests: XCTestCase {
 
         let shareURL = try XCTUnwrap(list.shareURL())
         let payload = try XCTUnwrap(SaveSharedListPayload.from(url: shareURL))
-        XCTAssertFalse(try XCTUnwrap(payload.list.items.first?.photoURLs.first).contains("key="))
+        XCTAssertEqual(payload.list.items.first?.photoURLs ?? [], [])
+    }
+
+    @MainActor
+    func testHTMLAttributionsExposeAuthorNameAndLink() {
+        let authors = GooglePlacesHTMLAttribution.authors(from: [
+            #"<a href="https://maps.google.com/maps/contrib/123">Jane Doe</a>"#,
+            "Photo by the shop",
+        ])
+        XCTAssertEqual(authors.count, 2)
+        XCTAssertEqual(authors[0].displayName, "Jane Doe")
+        XCTAssertEqual(authors[0].uri?.absoluteString, "https://maps.google.com/maps/contrib/123")
+        XCTAssertEqual(authors[1].displayName, "Photo by the shop")
+        XCTAssertNil(authors[1].uri)
+    }
+
+    @MainActor
+    func testAttributionLogoHeightStaysInsideGoogleSpec() {
+        XCTAssertGreaterThanOrEqual(GoogleMapsAttributionMetrics.logoHeight, GoogleMapsAttributionMetrics.logoMinHeight)
+        XCTAssertLessThanOrEqual(GoogleMapsAttributionMetrics.logoHeight, GoogleMapsAttributionMetrics.logoMaxHeight)
+        XCTAssertEqual(GoogleMapsAttributionMetrics.clearSpaceLeading, 10)
+        XCTAssertEqual(GoogleMapsAttributionMetrics.clearSpaceTrailing, 10)
+        XCTAssertEqual(GoogleMapsAttributionMetrics.clearSpaceTop, 10)
+        XCTAssertEqual(GoogleMapsAttributionMetrics.clearSpaceBottom, 5)
+    }
+
+    @MainActor
+    func testMainlandChinaUsersSkipGooglePhotoEnrichment() async {
+        var saved = place(name: "Memory Cafe", category: .cafe)
+        saved.latitude = 31.2304
+        saved.longitude = 121.4737
+        let service = HomePhotoGooglePlacesService()
+
+        let result = await PlaceBusinessEnricher.enrich(
+            saved,
+            service: service,
+            mapsPlatformAllowed: false
+        )
+
+        XCTAssertNil(result)
+        XCTAssertEqual(service.searchCallCount, 0)
+        XCTAssertEqual(service.detailCallCount, 0)
+    }
+
+    @MainActor
+    func testGooglePhotoPagesKeepAuthorAttributionAndSkipUserPhotos() {
+        GooglePlacePhotoSessionStore.resetForTests()
+        let googleURL = URL(string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=ref-1")!
+        let userURL = "https://example.com/own.jpg"
+        GooglePlacePhotoSessionStore.remember([
+            GooglePlacePhotoRecord(
+                url: googleURL,
+                authors: [GooglePlacePhotoAuthor(displayName: "Jane Doe", uri: URL(string: "https://maps.google.com/maps/contrib/123"))],
+                googleMapsURI: URL(string: "https://maps.google.com/?cid=1")
+            )
+        ])
+
+        let pages = PlacePhotoPage.pages(
+            imageURLs: [googleURL.absoluteString, userURL],
+            googlePlaceId: "ChIJ123",
+            googleMapsURI: nil
+        )
+
+        XCTAssertEqual(pages.count, 2)
+        XCTAssertTrue(pages[0].isGooglePlacesPhoto)
+        XCTAssertEqual(pages[0].authors.first?.displayName, "Jane Doe")
+        XCTAssertEqual(pages[0].mapsURI?.absoluteString, "https://maps.google.com/?cid=1")
+        XCTAssertFalse(pages[1].isGooglePlacesPhoto)
+        XCTAssertTrue(pages[1].authors.isEmpty)
+        XCTAssertNil(pages[1].mapsURI)
+    }
+
+    @MainActor
+    func testMapsPlatformIsBlockedOnlyForMainlandChinaRegion() {
+        XCTAssertFalse(GoogleMapsPlatformAvailability.isAllowed(regionCode: "CN"))
+        XCTAssertTrue(GoogleMapsPlatformAvailability.isAllowed(regionCode: "TW"))
+        XCTAssertTrue(GoogleMapsPlatformAvailability.isAllowed(regionCode: "US"))
+        XCTAssertTrue(GoogleMapsPlatformAvailability.isAllowed(regionCode: "HK"))
     }
 
     // MARK: - Server short-code links (`?c=`)
@@ -539,6 +631,7 @@ private final class StaleGooglePlaceIDService: GooglePlacesServiceProtocol {
 @MainActor
 private final class HomePhotoGooglePlacesService: GooglePlacesServiceProtocol {
     private(set) var searchCallCount = 0
+    private(set) var detailCallCount = 0
 
     func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] {
         searchCallCount += 1
@@ -556,7 +649,8 @@ private final class HomePhotoGooglePlacesService: GooglePlacesServiceProtocol {
     }
 
     func getPlaceDetails(placeId: String) async throws -> GooglePlaceDetails {
-        GooglePlaceDetails(
+        detailCallCount += 1
+        return GooglePlaceDetails(
             placeId: placeId,
             name: "Memory Cafe",
             formattedAddress: "Irvine, CA",

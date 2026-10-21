@@ -110,6 +110,9 @@ final class CachedImageStore {
         }
 
         let isGooglePlacesPhoto = GooglePlacesPhotoURL.isGooglePlacesPhotoURL(cacheURL)
+        if isGooglePlacesPhoto && !GoogleMapsPlatformAvailability.isAllowed() {
+            throw URLError(.networkConnectionLost)
+        }
         guard var request = GooglePlacesService.shared.authorizedPhotoRequest(for: cacheURL) else {
             throw URLError(.userAuthenticationRequired)
         }
