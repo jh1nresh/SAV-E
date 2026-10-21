@@ -6275,6 +6275,8 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertFalse(content.contains("openMapSearch(initialQuery: query)"))
         XCTAssertTrue(content.contains("chooseSavedStampFromExactSearch"))
         XCTAssertTrue(content.contains("openSavedPlaceFromMapSearch($0)"))
+        XCTAssertTrue(content.contains("let shouldResolveClue = isExactSearchSessionActive"))
+        XCTAssertFalse(content.contains("let shouldResolveClue = drawerLaunchRequest.preservesExactSearchClue"))
         XCTAssertTrue(content.contains("hasActiveExactSearchResolution"))
         XCTAssertTrue(content.contains("activateExactSearchSession"))
         XCTAssertTrue(content.contains("restoreExactSearchResolutionIfNeeded"))

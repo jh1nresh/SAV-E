@@ -1452,8 +1452,10 @@ struct ContentView: View {
 
     private func openSavedPlaceFromMapSearch(_ place: Place) {
         restoreExactSearchResolutionIfNeeded()
-        let shouldResolveClue = drawerLaunchRequest.preservesExactSearchClue
-            || isExactSearchSessionActive
+        // The launch request can keep `preservesExactSearchClue` after an
+        // explicit close or a successful resolve. Only a live session may
+        // claim the next saved-pin tap; otherwise the peek never opens.
+        let shouldResolveClue = isExactSearchSessionActive
             || mapVM.hasActiveExactSearchResolution
             || exactSearchClueID != nil
         guard shouldResolveClue else {
