@@ -1005,8 +1005,8 @@ struct ContentView: View {
                 activateExactSearchSession(for: candidate)
             },
             onClearMapSearchResults: { endsExactSearch in
-                isExactSearchSessionActive = false
                 if endsExactSearch {
+                    isExactSearchSessionActive = false
                     exactSearchClueID = nil
                 }
                 guard exactSearchRequestID == nil else { return }

@@ -3516,7 +3516,7 @@ final class MapViewModel: ObservableObject {
     func beginExactSearchResolution(for candidate: PlaceReviewCandidate) {
         if let lockPlaceID = exactSearchRollbackLockPlaceID {
             guard exactSearchResolution?.clue.id == candidate.id else { return }
-            guard let currentClue = reviewCandidates.first(where: { $0.id == candidate.id }) else { return }
+            let currentClue = reviewCandidates.first(where: { $0.id == candidate.id }) ?? candidate
             exactSearchResolution = ExactSearchResolution(
                 clue: currentClue,
                 candidateIDs: Set(mapCandidates.map(\.id))
@@ -3524,7 +3524,7 @@ final class MapViewModel: ObservableObject {
             exactSearchRollbackLockPlaceID = lockPlaceID
             return
         }
-        guard let currentClue = reviewCandidates.first(where: { $0.id == candidate.id }) else { return }
+        let currentClue = reviewCandidates.first(where: { $0.id == candidate.id }) ?? candidate
         exactSearchResolution = ExactSearchResolution(
             clue: currentClue,
             candidateIDs: Set(mapCandidates.map(\.id))

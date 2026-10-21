@@ -3365,6 +3365,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         for _ in 0..<12 {
             if rootTabButton("Home", app: app).exists { return }
 
+            let collectedClose = app.buttons["profile.close"]
+            if collectedClose.exists, collectedClose.isHittable {
+                collectedClose.tap()
+                continue
+            }
+
             let placeDetailClose = app.buttons["drawer.place.close"]
             if placeDetailClose.exists, placeDetailClose.isHittable {
                 placeDetailClose.tap()

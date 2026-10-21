@@ -106,6 +106,7 @@ final class SaveDoodlePassportTests: XCTestCase {
     func testRootIsDoodleGridAndFlagsOffTileTownMissions() throws {
         let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
+        XCTAssertTrue(passport.contains("NavigationStack {"))
         XCTAssertTrue(passport.contains("SaveDoodlePassportPage("))
         XCTAssertTrue(passport.contains("SaveDoodlePassportFlags.showTodayMissions"))
         XCTAssertTrue(passport.contains("SaveDoodlePassportFlags.showFieldStreak"))

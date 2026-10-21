@@ -414,12 +414,11 @@ struct ProfileView: View {
     }
 
     var body: some View {
-        Group {
-            if isRootTab {
-                passportContent
-            } else {
-                NavigationStack { passportContent }
-            }
+        // Root Passport must own this stack. If Collected uses the outer
+        // Home NavigationStack, it replaces the Atlas tab bar and Friends
+        // / Home become unreachable until the page is dismissed.
+        NavigationStack {
+            passportContent
         }
         .onChange(of: requestsConnections) { _, requested in
             if requested { opensConnections = true; requestsConnections = false }
