@@ -141,10 +141,36 @@ jobs:
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
             -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/SAVE-Units.xcresult" \
             -only-testing:SAVETests \
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
+
+      - name: Export ImageRenderer gate 5 attachments
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/SAVE-Gate5/xcattachments"
+          if [[ -d "$RUNNER_TEMP/SAVE-Units.xcresult" ]]; then
+            xcrun xcresulttool export attachments \
+              --path "$RUNNER_TEMP/SAVE-Units.xcresult" \
+              --output-path "$RUNNER_TEMP/SAVE-Gate5/xcattachments"
+          fi
+
+      - name: Capture simulator catalog screenshots and 60fps motion
+        run: |
+          scripts/capture-map-photo-pin-gate5.sh \
+            '${{ steps.simulator.outputs.udid }}' \
+            "$RUNNER_TEMP/SAVE-Gate5"
+
+      - name: Upload map photo-pin gate 5 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: save-map-photo-pins-gate5-${{ github.sha }}
+          path: ${{ runner.temp }}/SAVE-Gate5
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Tear down simulator
         if: always() && steps.simulator.outputs.udid != ''

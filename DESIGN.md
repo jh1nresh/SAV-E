@@ -752,12 +752,17 @@ Rules:
   below `SaveTileTownProductLock.mapChromeHeight`, and only the visible
   paper hits so pins stay tappable through medium.
 - The basemap is native Apple Maps (`.standard`, automatic emphasis, POIs
-  on). Pin size does not follow zoom. `latitudeDelta ≤ 0.02` grows a badge;
-  `> 0.025` returns to the small pin. No clustering.
+  on). Pin size does not follow zoom. `latitudeDelta ≤ 0.02` grows a circular
+  paper badge; `> 0.025` returns to the small pin. No clustering. Pin tap
+  pans with `MapCamera` (pitch 0) and keeps the live distance — it must not
+  square the span.
 - Places without a Savvy-shared photo use a coral round. This PR has no
   clean own-photo field, so production pins are coral. Photo-pin states
   (round, visited ring, zoomed-in badge, card hero) are captured from
-  debug/test fixtures for DESIGN gate 5 — they are not shipping data.
+  SwiftUI `ImageRenderer` snapshots and iOS Simulator screenshots on CI
+  for DESIGN gate 5 — they are not shipping data. A no-photo card hero is
+  a full coral well with a cream category icon (~64pt), never a lone coral
+  dot.
   Visited adds a coral ring. Only confirmed saved Map Stamps get those
   Savvy pins; unsaved places use Apple's native POI markers only. Google
   Places photos are not pin art.

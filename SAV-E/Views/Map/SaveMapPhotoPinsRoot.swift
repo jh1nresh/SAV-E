@@ -18,6 +18,12 @@ struct SaveMapPhotoPinsRoot: View {
     @ObservedObject private var visits = SavvyMapVisitStore.shared
     @State private var lens: SaveTileTownMapLens = .saved
     @State private var latitudeDelta: CLLocationDegrees = 0.04
+    @State private var liveCamera = MapCamera(
+        centerCoordinate: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
+        distance: 4_000,
+        heading: 0,
+        pitch: 0
+    )
     @State private var showsBadge = false
     @State private var pinPoint: CGPoint?
     @State private var session = SavvyMapCardSession()
@@ -147,6 +153,7 @@ struct SaveMapPhotoPinsRoot: View {
             }
             .onMapCameraChange(frequency: .continuous) { context in
                 latitudeDelta = context.region.span.latitudeDelta
+                liveCamera = context.camera
                 let nextBadge = SavvyMapZoomHysteresis.showsBadge(
                     latitudeDelta: latitudeDelta,
                     currentlyBadge: showsBadge
@@ -332,14 +339,13 @@ struct SaveMapPhotoPinsRoot: View {
 
     private func moveCamera(to place: Place) {
         let delta = latitudeDelta > 0 ? latitudeDelta : 0.03
-        let center = SavvyMapCameraFocus.center(for: place.coordinate, latitudeDelta: delta)
+        let next = SavvyMapCameraFocus.camera(
+            pin: place.coordinate,
+            latitudeDelta: delta,
+            current: liveCamera
+        )
         let apply = {
-            mapViewModel.cameraPosition = .region(
-                MKCoordinateRegion(
-                    center: center,
-                    span: MKCoordinateSpan(latitudeDelta: delta, longitudeDelta: delta)
-                )
-            )
+            mapViewModel.cameraPosition = .camera(next)
         }
         if reduceMotion {
             apply()

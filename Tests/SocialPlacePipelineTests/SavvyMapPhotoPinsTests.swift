@@ -1,4 +1,5 @@
 import CoreLocation
+import MapKit
 import SwiftUI
 import XCTest
 @testable import SAVE
@@ -45,6 +46,9 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertEqual(SavvyMapPinMetrics.badgeHeight, 104)
         XCTAssertEqual(SavvyMapPinMetrics.badgePhoto, 59)
         XCTAssertEqual(SavvyMapPinMetrics.badgeScaleFromPin, 40 / 89, accuracy: 0.0001)
+        XCTAssertTrue(SavvyMapPinMetrics.badgeBaseIsCircle)
+        XCTAssertEqual(SavvyMapPinMetrics.badgeStickerWidth, SavvyMapPinMetrics.badgeStickerHeight)
+        XCTAssertEqual(SavvyMapPinMetrics.cardCoralIcon, 64)
     }
 
     func testP2ZoomHysteresisDoesNotFlickerBetweenThresholds() {
@@ -77,6 +81,19 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertEqual(center.longitude, pin.longitude, accuracy: 0.0000001)
         XCTAssertEqual(SavvyMapPinMetrics.cameraDelay, 0.05, accuracy: 0.0001)
         XCTAssertEqual(SavvyMapPinMetrics.pinScreenYFraction, 0.725, accuracy: 0.0001)
+        XCTAssertFalse(SavvyMapCameraFocus.usesEqualLatLonSpan)
+        XCTAssertEqual(SavvyMapCameraFocus.cameraPitch, 0, accuracy: 0.0001)
+        let current = MapCamera(
+            centerCoordinate: pin,
+            distance: 2_500,
+            heading: 12,
+            pitch: 18
+        )
+        let next = SavvyMapCameraFocus.camera(pin: pin, latitudeDelta: 0.02, current: current)
+        XCTAssertEqual(next.distance, 2_500, accuracy: 0.001)
+        XCTAssertEqual(next.heading, 12, accuracy: 0.001)
+        XCTAssertEqual(next.pitch, 0, accuracy: 0.001)
+        XCTAssertEqual(next.centerCoordinate.longitude, pin.longitude, accuracy: 0.0000001)
     }
 
     func testP5CardBackHidesEmptyAlbumAndHours() {
@@ -408,6 +425,56 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
             SavvyMapPhotoPolicy.resolvedPhoto(for: samplePlace(), isConfirmedSaved: true),
             .coral
         )
+        XCTAssertEqual(
+            PlaceCategory.attraction.displayName(language: .traditionalChinese),
+            "景點"
+        )
+    }
+
+    func testP0NoPhotoCardUsesFullCoralAndCreamIcon() throws {
+        let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        XCTAssertTrue(pins.contains("cardCoralIcon"))
+        XCTAssertTrue(pins.contains("place.category.iconName"))
+        XCTAssertTrue(pins.contains("SaveAtlasPalette.coral"))
+        XCTAssertTrue(pins.contains("SaveAtlasPalette.paper"))
+        let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        XCTAssertTrue(root.contains(".camera(next)"))
+        XCTAssertTrue(root.contains("pitch: 0"))
+        XCTAssertFalse(root.contains("longitudeDelta: delta"))
+        XCTAssertTrue(pins.contains("Circle()"))
+        XCTAssertTrue(pins.contains("badgeBaseIsCircle"))
+    }
+
+    func testGate5ImageRendererExportWritesLightDarkAndChinese() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("save-gate5-\(UUID().uuidString)", isDirectory: true)
+        let urls = try SavvyMapPhotoPinSnapshotExport.writeAll(to: directory)
+        XCTAssertGreaterThanOrEqual(urls.count, 20)
+        let names = Set(urls.map(\.lastPathComponent))
+        XCTAssertTrue(names.contains("light-photoRoundPin.png"))
+        XCTAssertTrue(names.contains("dark-coralCardHero.png"))
+        XCTAssertTrue(names.contains("catalog-light.png"))
+        XCTAssertTrue(names.contains("catalog-dark.png"))
+        XCTAssertTrue(names.contains("zh-Hant-photoBadge.png"))
+        XCTAssertTrue(names.contains("p14-saved-unsaved-visited.png"))
+        for url in urls {
+            let data = try Data(contentsOf: url)
+            XCTAssertGreaterThan(data.count, 800, url.lastPathComponent)
+            let attachment = XCTAttachment(contentsOfFile: url)
+            attachment.name = url.lastPathComponent
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+        if let dest = ProcessInfo.processInfo.environment["SAVE_GATE5_EVIDENCE_DIR"] {
+            let destURL = URL(fileURLWithPath: dest, isDirectory: true)
+            try FileManager.default.createDirectory(at: destURL, withIntermediateDirectories: true)
+            for url in urls {
+                try FileManager.default.copyItem(
+                    at: url,
+                    to: destURL.appendingPathComponent(url.lastPathComponent)
+                )
+            }
+        }
     }
 
     func testCardBackUsesDecision2FieldsFromPlace() {

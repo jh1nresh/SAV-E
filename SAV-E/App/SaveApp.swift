@@ -94,6 +94,8 @@ struct SaveApp: App {
     private let relatedSourcesHarnessActive = SaveSmokeHarness.isRelatedSourcesLaunchEnabled
     @State private var forceOnboardingForUITests = ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding")
     private let stampFeedFixtureActive = ProcessInfo.processInfo.arguments.contains("--uitest-stamp-feed-fixture")
+    private let mapPhotoPinCatalogActive = ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-catalog")
+    private let mapPhotoPinMotionActive = ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-motion")
 #endif
 
     private let supabaseService = SupabaseService.shared
@@ -215,6 +217,13 @@ struct SaveApp: App {
 #if DEBUG
         if stampFeedFixtureActive {
             SaveStampFeedFixtureView()
+        } else if mapPhotoPinCatalogActive {
+            SavvyMapPhotoPinPreviewCatalog(
+                colorScheme: ProcessInfo.processInfo.arguments.contains("--uitest-dark") ? .dark : .light,
+                language: ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-zh") ? .traditionalChinese : .english
+            )
+        } else if mapPhotoPinMotionActive {
+            SavvyMapPhotoPinMotionFixtureRoot()
         } else if relatedSourcesHarnessActive {
             SaveRelatedSourcesHarnessView()
         } else if smokeHarnessActive {

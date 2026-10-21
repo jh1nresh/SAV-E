@@ -36,11 +36,14 @@ enum SavvyMapPinMetrics {
     static let badgeWidth: CGFloat = 89
     static let badgeHeight: CGFloat = 104
     static let badgeStickerWidth: CGFloat = 89
-    static let badgeStickerHeight: CGFloat = 81
+    static let badgeStickerHeight: CGFloat = 89
     static let badgePhoto: CGFloat = 59
     static let badgeLabelReserve: CGFloat = 14
     static let badgeTail: CGFloat = 17
     static let badgeScaleFromPin = smallPinOuter / badgeWidth
+    /// Gate 5: paper badge base is a circle (capsule-equivalent when square).
+    static let badgeBaseIsCircle = true
+    static let cardCoralIcon: CGFloat = 64
 
     static let cardWidthFraction: CGFloat = 0.845
     static let cardWidth: CGFloat = 332
@@ -301,6 +304,11 @@ enum SavvyMapZoomHysteresis {
 }
 
 enum SavvyMapCameraFocus {
+    /// P4: pin tap pans north only. Do not square the span — that changes zoom
+    /// on a portrait map. Keep the live camera distance/heading and pitch 0.
+    static let usesEqualLatLonSpan = false
+    static let cameraPitch: CGFloat = 0
+
     static func center(
         for pin: CLLocationCoordinate2D,
         latitudeDelta: CLLocationDegrees
@@ -308,6 +316,19 @@ enum SavvyMapCameraFocus {
         CLLocationCoordinate2D(
             latitude: pin.latitude + 0.225 * latitudeDelta,
             longitude: pin.longitude
+        )
+    }
+
+    static func camera(
+        pin: CLLocationCoordinate2D,
+        latitudeDelta: CLLocationDegrees,
+        current: MapCamera
+    ) -> MapCamera {
+        MapCamera(
+            centerCoordinate: center(for: pin, latitudeDelta: latitudeDelta),
+            distance: current.distance,
+            heading: current.heading,
+            pitch: cameraPitch
         )
     }
 }
@@ -623,12 +644,12 @@ struct SavvyMapPhotoPinView: View {
 
     private var badge: some View {
         VStack(spacing: 0) {
-            ZStack(alignment: .top) {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+            ZStack {
+                Circle()
                     .fill(SaveAtlasPalette.paper)
                     .frame(
                         width: SavvyMapPinMetrics.badgeStickerWidth,
-                        height: SavvyMapPinMetrics.badgeStickerHeight
+                        height: SavvyMapPinMetrics.badgeStickerWidth
                     )
                     .shadow(
                         color: Color.black.opacity(SavvyMapPinMetrics.pinShadowOpacity),
@@ -647,11 +668,15 @@ struct SavvyMapPhotoPinView: View {
                                 )
                         }
                     }
-                    .padding(.top, 18)
+                    .offset(y: 8)
 
                 badgeLabel
-                    .offset(y: -2)
+                    .offset(y: -SavvyMapPinMetrics.badgeStickerWidth / 2 + 18)
             }
+            .frame(
+                width: SavvyMapPinMetrics.badgeStickerWidth,
+                height: SavvyMapPinMetrics.badgeStickerWidth
+            )
             SavvyMapCalloutTail(size: 9)
                 .fill(SaveAtlasPalette.paper)
                 .frame(width: 17, height: 9)
@@ -953,10 +978,7 @@ struct SavvyMapPlaceCard: View {
     private var photoWell: some View {
         ZStack(alignment: .bottomLeading) {
             RoundedRectangle(cornerRadius: SavvyMapPinMetrics.cardPhotoCorner, style: .continuous)
-                .fill(SaveAtlasPalette.ink.opacity(0.08))
-            Circle()
                 .fill(SaveAtlasPalette.coral)
-                .frame(width: 72, height: 72)
             if let image = cardHeroImage {
                 Image(uiImage: image)
                     .resizable()
@@ -965,6 +987,12 @@ struct SavvyMapPlaceCard: View {
                     .clipShape(
                         RoundedRectangle(cornerRadius: SavvyMapPinMetrics.cardPhotoCorner, style: .continuous)
                     )
+            } else {
+                Image(systemName: place.category.iconName)
+                    .font(.system(size: SavvyMapPinMetrics.cardCoralIcon, weight: .semibold))
+                    .foregroundStyle(SaveAtlasPalette.paper)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityHidden(true)
             }
             LinearGradient(
                 colors: [.clear, SaveAtlasPalette.ink.opacity(0.55)],
@@ -1227,6 +1255,7 @@ enum SavvyMapPhotoPinPreviewFixtures {
 
 struct SavvyMapPhotoPinPreviewCell: View {
     let state: SavvyMapPhotoPinPreviewState
+    var language: AppLanguage = .english
     private let visits = SavvyMapVisitStore(
         defaults: UserDefaults(suiteName: "savvy.map.preview.visits") ?? .standard,
         key: "gate5"
@@ -1234,7 +1263,11 @@ struct SavvyMapPhotoPinPreviewCell: View {
 
     var body: some View {
         let place = SavvyMapPhotoPinPreviewFixtures.place(visited: state.isVisited)
-        Group {
+        let settings = AppLanguageSettings(
+            userDefaults: UserDefaults(suiteName: "savvy.map.preview.\(language.rawValue)") ?? .standard
+        )
+        settings.language = language
+        return Group {
             if state.showsCard {
                 SavvyMapPlaceCard(
                     visits: visits,
@@ -1262,6 +1295,7 @@ struct SavvyMapPhotoPinPreviewCell: View {
                 )
             }
         }
+        .environment(\.appLanguageSettings, settings)
         .environment(
             \.savvyMapPreviewPhoto,
             state.usesFixturePhoto ? SavvyMapPhotoPinPreviewFixtures.photo() : nil
@@ -1272,9 +1306,14 @@ struct SavvyMapPhotoPinPreviewCell: View {
 /// Xcode Previews + QA board. Debug/test-only; production Map never seeds this.
 struct SavvyMapPhotoPinPreviewCatalog: View {
     var colorScheme: ColorScheme = .light
+    var language: AppLanguage = .english
 
     var body: some View {
-        ScrollView {
+        let settings = AppLanguageSettings(
+            userDefaults: UserDefaults(suiteName: "savvy.map.catalog.\(language.rawValue)") ?? .standard
+        )
+        settings.language = language
+        return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("DEBUG / test fixtures — not shipping data")
                     .font(SaveAtlasType.strong(13))
@@ -1288,7 +1327,7 @@ struct SavvyMapPhotoPinPreviewCatalog: View {
                 ) {
                     ForEach(SavvyMapPhotoPinPreviewState.allCases) { state in
                         VStack(spacing: 10) {
-                            SavvyMapPhotoPinPreviewCell(state: state)
+                            SavvyMapPhotoPinPreviewCell(state: state, language: language)
                                 .frame(minHeight: state.showsCard ? 430 : 140)
                             Text(state.qaTitle)
                                 .font(SaveAtlasType.strong(12))
@@ -1307,8 +1346,218 @@ struct SavvyMapPhotoPinPreviewCatalog: View {
             .padding(16)
         }
         .background(SaveAtlasPalette.paper.ignoresSafeArea())
+        .environment(\.appLanguageSettings, settings)
         .preferredColorScheme(colorScheme)
         .accessibilityIdentifier("map.pin.previewCatalog")
+    }
+}
+
+/// P14: saved / unsaved / visited on one board. Unsaved is a native-style POI.
+struct SavvyMapP14PreviewBoard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("P14 · saved / unsaved / visited")
+                .font(SaveAtlasType.strong(18))
+                .foregroundStyle(SaveAtlasPalette.ink)
+            HStack(alignment: .bottom, spacing: 28) {
+                labeledPin("Saved", visited: false)
+                labeledPOI("Unsaved")
+                labeledPin("Visited", visited: true)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .padding(20)
+        .background(SaveAtlasPalette.paper)
+        .accessibilityIdentifier("map.p14.board")
+    }
+
+    private func labeledPin(_ title: String, visited: Bool) -> some View {
+        VStack(spacing: 10) {
+            SavvyMapPhotoPinView(
+                place: SavvyMapPhotoPinPreviewFixtures.place(visited: visited),
+                showsBadge: false,
+                isVisited: visited,
+                isSelected: false,
+                reduceMotion: true,
+                onTap: {}
+            )
+            Text(title)
+                .font(SaveAtlasType.strong(13))
+                .foregroundStyle(SaveAtlasPalette.ink)
+        }
+    }
+
+    private func labeledPOI(_ title: String) -> some View {
+        VStack(spacing: 10) {
+            Circle()
+                .fill(Color(red: 0.18, green: 0.44, blue: 0.93))
+                .frame(width: 12, height: 12)
+                .overlay {
+                    Circle().stroke(Color.white, lineWidth: 2)
+                }
+                .shadow(color: .black.opacity(0.35), radius: 2, y: 1)
+                .frame(width: 44, height: 44)
+            Text(title)
+                .font(SaveAtlasType.strong(13))
+                .foregroundStyle(SaveAtlasPalette.ink)
+        }
+    }
+}
+
+enum SavvyMapPhotoPinSnapshotExport {
+    @MainActor
+    static func image<V: View>(for view: V, size: CGSize, scale: CGFloat = 2) -> UIImage? {
+        let renderer = ImageRenderer(content: view.frame(width: size.width, height: size.height))
+        renderer.scale = scale
+        renderer.proposedSize = ProposedViewSize(size)
+        return renderer.uiImage
+    }
+
+    @MainActor
+    static func writeAll(to directory: URL) throws -> [URL] {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var written: [URL] = []
+        let pinSize = CGSize(width: 390, height: 520)
+        let catalogSize = CGSize(width: 780, height: 1680)
+        for scheme in [ColorScheme.light, .dark] {
+            let schemeName = scheme == .light ? "light" : "dark"
+            for state in SavvyMapPhotoPinPreviewState.allCases {
+                let view = previewPage(state, scheme: scheme, language: .english)
+                let url = directory.appendingPathComponent("\(schemeName)-\(state.rawValue).png")
+                try write(view, size: pinSize, to: url)
+                written.append(url)
+            }
+            let catalog = SavvyMapPhotoPinPreviewCatalog(colorScheme: scheme, language: .english)
+            let catalogURL = directory.appendingPathComponent("catalog-\(schemeName).png")
+            try write(catalog, size: catalogSize, to: catalogURL)
+            written.append(catalogURL)
+        }
+        for state in [SavvyMapPhotoPinPreviewState.photoBadge, .coralBadge, .photoCardHero, .coralCardHero] {
+            let view = previewPage(state, scheme: .light, language: .traditionalChinese)
+            let url = directory.appendingPathComponent("zh-Hant-\(state.rawValue).png")
+            try write(view, size: pinSize, to: url)
+            written.append(url)
+        }
+        let p14 = directory.appendingPathComponent("p14-saved-unsaved-visited.png")
+        try write(SavvyMapP14PreviewBoard().preferredColorScheme(.light), size: CGSize(width: 780, height: 360), to: p14)
+        written.append(p14)
+        return written
+    }
+
+    @MainActor
+    private static func write<V: View>(_ view: V, size: CGSize, to url: URL) throws {
+        guard let image = image(for: view, size: size),
+              let data = image.pngData() else {
+            throw NSError(domain: "SavvyMapPhotoPinSnapshotExport", code: 1)
+        }
+        try data.write(to: url, options: .atomic)
+    }
+}
+
+struct SavvyMapPhotoPinMotionFixtureRoot: View {
+    private let photoPlace = SavvyMapPhotoPinPreviewFixtures.place(visited: false)
+    private let coralPlace = SavvyMapPhotoPinPreviewFixtures.place(visited: true)
+    @State private var position = MapCameraPosition.camera(
+        MapCamera(
+            centerCoordinate: CLLocationCoordinate2D(latitude: 39.8822, longitude: 116.4066),
+            distance: 8_000,
+            heading: 0,
+            pitch: 0
+        )
+    )
+    @State private var showsBadge = false
+    @State private var session = SavvyMapCardSession()
+    @State private var selected: Place?
+    @ObservedObject private var visits = SavvyMapVisitStore(
+        defaults: UserDefaults(suiteName: "savvy.map.motion.visits") ?? .standard,
+        key: "motion"
+    )
+
+    var body: some View {
+        GeometryReader { geo in
+            Map(position: $position) {
+                Annotation("", coordinate: photoPlace.coordinate, anchor: .bottom) {
+                    SavvyMapPhotoPinView(
+                        place: photoPlace,
+                        showsBadge: showsBadge,
+                        isVisited: false,
+                        isSelected: selected?.id == photoPlace.id,
+                        reduceMotion: false
+                    ) {
+                        selected = photoPlace
+                        session.select(photoPlace.id)
+                    }
+                    .environment(\.savvyMapPreviewPhoto, SavvyMapPhotoPinPreviewFixtures.photo())
+                }
+                Annotation("", coordinate: CLLocationCoordinate2D(latitude: 39.8848, longitude: 116.4092), anchor: .bottom) {
+                    SavvyMapPhotoPinView(
+                        place: coralPlace,
+                        showsBadge: showsBadge,
+                        isVisited: true,
+                        isSelected: false,
+                        reduceMotion: false
+                    ) {}
+                }
+            }
+            .mapStyle(.standard(elevation: .flat, emphasis: .automatic, pointsOfInterest: .all, showsTraffic: false))
+            .overlay {
+                if let selected, session.isOpen {
+                    SavvyMapPlaceCard(
+                        visits: visits,
+                        place: selected,
+                        userLocation: nil,
+                        isOpen: session.isOpen,
+                        isFlipped: session.isFlipped,
+                        reduceMotion: false,
+                        screenWidth: geo.size.width,
+                        onFlip: { session.toggleFlip() },
+                        onBeenHere: {},
+                        onDirections: {},
+                        onOpenDetail: {},
+                        onEditNote: {},
+                        onCollapse: { session.finishCollapseAfterFlip(); self.selected = nil }
+                    )
+                    .environment(\.savvyMapPreviewPhoto, SavvyMapPhotoPinPreviewFixtures.photo())
+                    .position(x: geo.size.width / 2, y: geo.size.height * 0.42)
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .accessibilityIdentifier("map.fixture.motion")
+        .task { await playMotion() }
+    }
+
+    private func playMotion() async {
+        try? await Task.sleep(nanoseconds: 700_000_000)
+        withAnimation(SavvyMapMotion.camera) {
+            position = .camera(
+                MapCamera(
+                    centerCoordinate: photoPlace.coordinate,
+                    distance: 1_400,
+                    heading: 0,
+                    pitch: 0
+                )
+            )
+            showsBadge = true
+        }
+        try? await Task.sleep(nanoseconds: 1_400_000_000)
+        withAnimation(SavvyMapMotion.cardOpen) {
+            selected = photoPlace
+            session.select(photoPlace.id)
+        }
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+        withAnimation(SavvyMapMotion.flipBack) {
+            session.toggleFlip()
+        }
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+        withAnimation(SavvyMapMotion.flipFront) {
+            session.isFlipped = false
+        }
+        try? await Task.sleep(nanoseconds: 700_000_000)
+        withAnimation(SavvyMapMotion.cardClose) {
+            session.finishCollapseAfterFlip()
+            selected = nil
+        }
     }
 }
 
@@ -1318,6 +1567,14 @@ struct SavvyMapPhotoPinPreviewCatalog: View {
 
 #Preview("Gate 5 catalog / dark") {
     SavvyMapPhotoPinPreviewCatalog(colorScheme: .dark)
+}
+
+#Preview("P2 photo badge / zh") {
+    previewPage(.photoBadge, scheme: .light, language: .traditionalChinese)
+}
+
+#Preview("P14 board") {
+    SavvyMapP14PreviewBoard()
 }
 
 #Preview("P1 photo round pin / light") {
@@ -1352,9 +1609,10 @@ struct SavvyMapPhotoPinPreviewCatalog: View {
     previewPage(.coralCardHero, scheme: .dark)
 }
 
-private func previewPage(
+func previewPage(
     _ state: SavvyMapPhotoPinPreviewState,
-    scheme: ColorScheme
+    scheme: ColorScheme,
+    language: AppLanguage = .english
 ) -> some View {
     ZStack {
         SaveAtlasPalette.paper.ignoresSafeArea()
@@ -1362,7 +1620,7 @@ private func previewPage(
             Text(state.qaTitle)
                 .font(SaveAtlasType.strong(15))
                 .foregroundStyle(SaveAtlasPalette.ink)
-            SavvyMapPhotoPinPreviewCell(state: state)
+            SavvyMapPhotoPinPreviewCell(state: state, language: language)
         }
         .padding(24)
     }
