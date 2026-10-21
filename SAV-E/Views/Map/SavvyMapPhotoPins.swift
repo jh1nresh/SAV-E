@@ -68,10 +68,15 @@ enum SavvyMapPinMetrics {
 
 // MARK: - Q1 photo policy
 
-/// HoP Q1: user photos first; if the data-source photo license is unclear,
-/// every pin is a coral round. `Place` has `sourceImageUrl` (social/OG scrape)
-/// and `businessPhotoUrls` (Google Places Photo API). Neither is a user-owned
-/// album, and neither has a product-cleared license for Map pin art, so Map
+/// HoP Q1: founder wanted Apple Maps business photos on pins. MapKit has no
+/// public API for raw business photos (`MKMapItem` has no photo property;
+/// photos only appear inside Apple's native place card —
+/// `MKMapItemDetailViewController` / `mapItemDetail`). Do not scrape that
+/// card or use Look Around as pin art.
+///
+/// Pins use a coral round, or a user-saved photo only if our own model
+/// already has one. `Place` has `sourceImageUrl` (social/OG scrape) and
+/// `businessPhotoUrls` (Google Places) — neither is a user album — so Map
 /// never renders those URLs as pin or card hero photos.
 enum SavvyMapPhotoPolicy {
     static func licensedPhotoURL(for place: Place) -> URL? {
