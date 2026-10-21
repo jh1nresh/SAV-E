@@ -11,7 +11,7 @@ enum ClipSaveOutcome: Equatable {
     case failed
 }
 
-enum ClipSaveError: Equatable {
+enum ClipSaveError: Error, Equatable, Sendable {
     case cancelled
     case failed
 }

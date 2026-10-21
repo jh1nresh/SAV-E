@@ -57,6 +57,7 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(save.contains("over_free_limit"))
         XCTAssertTrue(save.contains("already_saved"))
         XCTAssertTrue(save.contains("ASAuthorizationAppleIDProvider"))
+        XCTAssertTrue(save.contains("enum ClipSaveError: Error"))
         XCTAssertTrue(save.contains("ClipFullApp.isInstalled"))
         XCTAssertTrue(entitlements.contains("com.apple.developer.applesignin"))
         XCTAssertFalse(clipPayload.contains("var photoAttribution"))
