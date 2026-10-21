@@ -1,6 +1,6 @@
 import Foundation
 
-enum ClipListSaveFailure: Equatable, Sendable {
+enum ClipListSaveFailure: Error, Equatable, Sendable {
     case unconfirmed
 }
 

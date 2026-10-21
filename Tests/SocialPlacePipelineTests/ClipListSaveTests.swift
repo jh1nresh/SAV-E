@@ -83,6 +83,8 @@ final class ClipListSaveTests: XCTestCase {
         )
         XCTAssertEqual(ClipListSavePlanner.parseOutcome(status: 500, data: data), .failure(.unconfirmed))
         XCTAssertEqual(ClipListSavePlanner.parseOutcome(status: 200, data: Data("{}".utf8)), .failure(.unconfirmed))
+        let asError: Error = ClipListSaveFailure.unconfirmed
+        XCTAssertEqual((asError as? ClipListSaveFailure), .unconfirmed)
     }
 
     func testSL6SwipeHintOnlyOnFirstPageUntilDismissed() {
