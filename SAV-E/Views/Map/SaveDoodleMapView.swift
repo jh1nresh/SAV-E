@@ -566,29 +566,35 @@ struct SaveDoodleMapView: View {
     }
 
     private func performCheckIn(_ place: Place) {
-        guard checkIns.checkIn(placeID: place.id) else { return }
         var updated = place
         updated.status = .visited
         Task {
-            try? await mapViewModel.updatePlace(updated)
-        }
-        SaveHaptics.stamp()
-        stampPulse = false
-        withAnimation(SaveTheme.Motion.stampSpring) {
-            stampPulse = true
+            let accepted = await checkIns.applyCheckIn(
+                placeID: place.id,
+                priorStatus: place.status
+            ) {
+                try await mapViewModel.updatePlace(updated)
+            }
+            guard accepted else { return }
+            SaveHaptics.stamp()
+            stampPulse = false
+            withAnimation(SaveTheme.Motion.stampSpring) {
+                stampPulse = true
+            }
         }
     }
 
     private func undoCheckIn(_ place: Place) {
-        guard checkIns.undoTodaysCheckIn(placeID: place.id) else { return }
-        if checkIns.visitCount(for: place.id) == 0 {
-            var updated = place
-            updated.status = .wantToGo
-            Task {
-                try? await mapViewModel.updatePlace(updated)
+        Task {
+            let accepted = await checkIns.applyUndo(placeID: place.id) { restoreStatus in
+                guard place.status != restoreStatus else { return }
+                var updated = place
+                updated.status = restoreStatus
+                try await mapViewModel.updatePlace(updated)
             }
+            guard accepted else { return }
+            stampPulse = false
         }
-        stampPulse = false
     }
 
     private func stampAngle(for id: UUID) -> Double {
