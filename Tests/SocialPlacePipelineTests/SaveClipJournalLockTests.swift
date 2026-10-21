@@ -106,6 +106,17 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue((project ?? "").contains("\"Caveat-SemiBold.ttf\""))
         XCTAssertTrue((project ?? "").contains("Iansui-ClipTitles.ttf"))
         XCTAssertTrue((project ?? "").contains("ClipSaveService.swift"))
+        XCTAssertTrue((project ?? "").contains("PendingShareStoreTests.swift in Sources"))
+        let objectIDs = (project ?? "").split(separator: "\n").compactMap { line -> String? in
+            guard line.hasPrefix("\t\t"), line.contains(" = {isa = ") else { return nil }
+            let id = String(line.dropFirst(2).prefix(24))
+            return id.count == 24 ? id : nil
+        }
+        XCTAssertEqual(
+            Set(objectIDs).count,
+            objectIDs.count,
+            "SAVEClip compiled XCTest after PendingShareStoreTests reused ClipSaveService object IDs"
+        )
         XCTAssertFalse((project ?? "").contains("Iansui-SavvySubset.ttf in SAVEClip Resources"))
         let iansui = repositoryRoot.appendingPathComponent("SAV-E/Resources/DisplayFont/Iansui-SavvySubset.ttf")
         XCTAssertGreaterThan((try? iansui.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0, 3_000_000)
