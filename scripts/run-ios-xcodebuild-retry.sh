@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Run xcodebuild up to N times. Retry only the tests that failed. Stop as
-# soon as the same test fails two consecutive attempts (deterministic).
+# Run xcodebuild up to N times. Retry failed tests and original selectors
+# that never emitted a result. Stop as soon as the same test fails two
+# consecutive attempts (deterministic). Never exit 0 unless every selected
+# test ran and passed.
 set -euo pipefail
 
 usage() {
@@ -66,6 +68,7 @@ if ((max_attempts < 1)); then
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+original_selectors="$only_testing_file"
 selector="$only_testing_file"
 previous_failed=""
 : >"$log_path"
@@ -129,19 +132,28 @@ for ((attempt = 1; attempt <= max_attempts; attempt += 1)); do
         fi
     fi
 
-    if ((status == 0)); then
-        echo "UI tests passed on attempt ${attempt}" >&2
+    current_failed="${log_path%.log}-failed-${attempt}.txt"
+    python3 -B "$script_dir/ios_ui_retry.py" failed-tests "$attempt_log" >"$current_failed"
+    retry_file="${log_path%.log}-retry-${attempt}.txt"
+    python3 -B "$script_dir/ios_ui_retry.py" retry-selectors \
+        "$original_selectors" "$log_path" >"$retry_file"
+
+    if python3 -B "$script_dir/ios_ui_retry.py" coverage \
+        "$original_selectors" "$log_path"; then
+        echo "UI tests passed on attempt ${attempt}: every selected test ran and passed." >&2
         exit 0
     fi
 
-    current_failed="${log_path%.log}-failed-${attempt}.txt"
-    python3 -B "$script_dir/ios_ui_retry.py" failed-tests "$attempt_log" >"$current_failed"
-    if [[ ! -s "$current_failed" ]]; then
+    if [[ ! -s "$retry_file" ]]; then
         echo "xcodebuild failed before reporting Test Case results; retrying the same selectors." >&2
+        if ((attempt == max_attempts)); then
+            echo "UI tests still incomplete after ${max_attempts} attempts." >&2
+            exit 1
+        fi
         continue
     fi
 
-    if [[ -n "$previous_failed" ]]; then
+    if [[ -n "$previous_failed" && -s "$current_failed" ]]; then
         if ! python3 -B "$script_dir/ios_ui_retry.py" fail-fast "$previous_failed" "$current_failed"; then
             echo "Failing fast after a deterministic UI failure." >&2
             exit 1
@@ -149,14 +161,16 @@ for ((attempt = 1; attempt <= max_attempts; attempt += 1)); do
     fi
 
     if ((attempt == max_attempts)); then
-        echo "UI tests still failing after ${max_attempts} attempts." >&2
+        echo "Selected UI tests were not all executed and passed after ${max_attempts} attempts." >&2
         exit 1
     fi
 
-    echo "Retrying only the tests that failed attempt ${attempt}:" >&2
-    cat "$current_failed" >&2
-    selector="$current_failed"
-    previous_failed="$current_failed"
+    echo "Retrying failed and never-completed selected tests:" >&2
+    cat "$retry_file" >&2
+    selector="$retry_file"
+    if [[ -s "$current_failed" ]]; then
+        previous_failed="$current_failed"
+    fi
 done
 
 exit 1

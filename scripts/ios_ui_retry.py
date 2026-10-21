@@ -18,6 +18,9 @@ TEST_CASE = re.compile(
     r"Test Case '-\[(?:(?P<bundle>[^.\]]+)\.)?(?P<class>[^\]\s]+) "
     r"(?P<method>[^\]]+)\]' (?P<result>passed|failed)"
 )
+SUITE_DONE = re.compile(
+    r"Test Suite '(?P<name>[^']+)' (?P<result>passed|failed)"
+)
 
 
 def parse_results(text: str) -> dict[str, str]:
@@ -37,6 +40,96 @@ def failed_ids(text: str) -> list[str]:
 
 def deterministic_failures(previous: list[str], current: list[str]) -> list[str]:
     return sorted(set(previous) & set(current))
+
+
+def _is_method(ident: str) -> bool:
+    return ident.count("/") >= 2
+
+
+def _covers(ident: str, executed: set[str]) -> bool:
+    if ident in executed:
+        return True
+    prefix = ident + "/"
+    return any(item.startswith(prefix) for item in executed)
+
+
+def suite_finished(ident: str, text: str) -> bool:
+    class_name = ident.split("/")[-1]
+    for match in SUITE_DONE.finditer(text):
+        name = match.group("name")
+        if name == class_name or name.endswith("." + class_name):
+            return True
+    return False
+
+
+def never_executed(selected: list[str], text: str) -> list[str]:
+    """Original selectors that never emitted a Test Case result.
+
+    A class-level selector also counts as unfinished when its Test Suite
+    never reported passed/failed, so a mid-class abort cannot go green.
+    """
+    executed = set(parse_results(text))
+    missing: list[str] = []
+    for ident in selected:
+        if _is_method(ident):
+            if ident not in executed:
+                missing.append(ident)
+            continue
+        if not _covers(ident, executed) or not suite_finished(ident, text):
+            missing.append(ident)
+    return missing
+
+
+def unsatisfied(selected: list[str], text: str) -> list[str]:
+    """Selected tests that did not run and pass across the combined log."""
+    executed = parse_results(text)
+    bad: list[str] = []
+    for ident in selected:
+        if _is_method(ident):
+            if executed.get(ident) != "passed":
+                bad.append(ident)
+            continue
+        methods = {
+            key: result
+            for key, result in executed.items()
+            if key == ident or key.startswith(ident + "/")
+        }
+        if (
+            not methods
+            or not suite_finished(ident, text)
+            or any(result != "passed" for result in methods.values())
+        ):
+            bad.append(ident)
+    return bad
+
+
+def retry_selectors(selected: list[str], text: str) -> list[str]:
+    """Failed tests plus original selectors that never completed."""
+    executed = parse_results(text)
+    retry: list[str] = []
+    seen: set[str] = set()
+    for ident in selected:
+        if ident in seen:
+            continue
+        if _is_method(ident):
+            if executed.get(ident) != "passed":
+                retry.append(ident)
+                seen.add(ident)
+            continue
+        methods = {
+            key: result
+            for key, result in executed.items()
+            if key == ident or key.startswith(ident + "/")
+        }
+        if not methods or not suite_finished(ident, text):
+            retry.append(ident)
+            seen.add(ident)
+            continue
+        for key, result in methods.items():
+            if result != "passed" and key not in seen:
+                retry.append(key)
+                seen.add(key)
+    return retry
 
 
 def only_testing_lines(idents: list[str]) -> str:
@@ -69,11 +162,50 @@ def main(argv: list[str] | None = None) -> int:
     decide.add_argument("previous", type=Path)
     decide.add_argument("current", type=Path)
 
+    coverage = sub.add_parser(
+        "coverage",
+        help="exit 2 when a selected test did not run and pass",
+    )
+    coverage.add_argument("selected", type=Path)
+    coverage.add_argument("log", type=Path)
+
+    retry = sub.add_parser(
+        "retry-selectors",
+        help="print failed and never-completed original selectors",
+    )
+    retry.add_argument("selected", type=Path)
+    retry.add_argument("log", type=Path)
+
     args = parser.parse_args(argv)
     if args.command == "failed-tests":
         text = args.log.read_text(errors="replace")
         ids = failed_ids(text)
         sys.stdout.write(only_testing_lines(ids))
+        return 0
+    if args.command == "coverage":
+        selected = _read_idents(args.selected)
+        text = args.log.read_text(errors="replace")
+        gaps = unsatisfied(selected, text)
+        never = never_executed(selected, text)
+        sys.stdout.write(only_testing_lines(gaps))
+        if not gaps:
+            return 0
+        if never:
+            print(
+                "selected UI tests never executed: " + ", ".join(never),
+                file=sys.stderr,
+            )
+        leftover = [ident for ident in gaps if ident not in never]
+        if leftover:
+            print(
+                "selected UI tests did not pass: " + ", ".join(leftover),
+                file=sys.stderr,
+            )
+        return 2
+    if args.command == "retry-selectors":
+        selected = _read_idents(args.selected)
+        text = args.log.read_text(errors="replace")
+        sys.stdout.write(only_testing_lines(retry_selectors(selected, text)))
         return 0
     previous = _read_idents(args.previous)
     current = _read_idents(args.current)

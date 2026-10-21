@@ -308,10 +308,10 @@ jobs:
           xcrun simctl bootstatus '${{ steps.simulator.outputs.udid }}' -b
 
       # Three attempts remain the flake backstop (wedged backboard, "Failed
-      # to get background assertion"). Only failed tests are retried, so a
-      # green run costs nothing. A test that fails two attempts in a row is
-      # treated as deterministic and stops before a third run. Retries are
-      # named by the next step rather than being swallowed.
+      # to get background assertion"). Failed tests and selectors that never
+      # emitted a result are retried, so a mid-suite abort cannot go green.
+      # A test that fails two attempts in a row is treated as deterministic
+      # and stops before a third run. Retries are named by the next step.
       - name: Run selected UI regression tests
         id: ui_tests
         # Job budget is 100. The step gets a real 60m of test time instead of
