@@ -25,6 +25,8 @@ struct SharedPlacePost: Decodable, Identifiable, Equatable {
     var icon: String { PlaceCategory(rawValue: category)?.iconName ?? "mappin.and.ellipse" }
 
     /// Review/Unplaced stand-in when the free cap blocks a confirmed Map Stamp.
+    /// Venue identity only — the same projection as a server shared-post save.
+    /// Caption, rating, and author stay off the device after withdraw/unfollow.
     func asUnplacedPlace() -> Place {
         Place(
             id: id,
@@ -34,16 +36,16 @@ struct SharedPlacePost: Decodable, Identifiable, Equatable {
             longitude: longitude ?? 0,
             googlePlaceId: google_place_id,
             category: PlaceCategory(rawValue: category) ?? .attraction,
-            status: status,
-            rating: stars,
-            note: caption,
+            status: .wantToGo,
+            rating: nil,
+            note: nil,
             sourceUrl: nil,
             sourcePlatform: .other,
             sourceImageUrl: nil,
             extractedDishes: nil,
             priceRange: nil,
-            recommender: author_handle ?? author_name,
-            googleRating: stars,
+            recommender: nil,
+            googleRating: nil,
             googlePriceLevel: nil,
             openingHours: nil,
             createdAt: Date()

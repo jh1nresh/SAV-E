@@ -46,9 +46,14 @@ export async function assertNewSavedPlaceAllowed(
   userId: string,
 ): Promise<void> {
   let tier: "free" | "pro" = "free";
+  // Probe inside a savepoint. A missing entitlement table/column aborts the
+  // surrounding transaction in PostgreSQL; without this, every save 500s.
+  await client.query("savepoint saved_place_entitlement");
   try {
     tier = await entitlementTier(client, userId);
+    await client.query("release savepoint saved_place_entitlement");
   } catch (error) {
+    await client.query("rollback to savepoint saved_place_entitlement");
     if (!isEntitlementSchemaUnavailable(error)) throw error;
   }
 

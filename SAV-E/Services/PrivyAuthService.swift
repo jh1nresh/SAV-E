@@ -355,6 +355,7 @@ final class PrivyAuthService: ObservableObject {
         }
         authState = .authenticated(userId: userId)
         synchronizeShareAnalysisSession(userId: userId)
+        Task { await SaveEntitlementStore.shared.refresh() }
     }
 
     private func synchronizeShareAnalysisSession(userId: String) {

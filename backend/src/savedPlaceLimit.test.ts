@@ -49,6 +49,35 @@ test("assertNewSavedPlaceAllowed counts after entitlement and rejects a free 51s
   assert.ok(calls.some((sql) => sql.includes("count(*)")));
 });
 
+test("assertNewSavedPlaceAllowed recovers when entitlement schema is missing inside a transaction", async () => {
+  const calls: string[] = [];
+  let aborted = false;
+  const client = {
+    query: async (sql: string) => {
+      calls.push(sql);
+      if (/^rollback to savepoint/i.test(sql)) {
+        aborted = false;
+        return { rows: [] };
+      }
+      if (/^savepoint/i.test(sql) || /^release savepoint/i.test(sql)) return { rows: [] };
+      if (aborted) {
+        throw Object.assign(new Error("current transaction is aborted"), { code: "25P02" });
+      }
+      if (sql.includes("subscription_entitlements")) {
+        aborted = true;
+        throw Object.assign(new Error("relation does not exist"), { code: "42P01" });
+      }
+      if (sql.includes("count(*)")) return { rows: [{ count: 49 }] };
+      return { rows: [] };
+    },
+  };
+
+  await assertNewSavedPlaceAllowed(client as never, "owner");
+  assert.ok(calls.some((sql) => /savepoint saved_place_entitlement/i.test(sql)));
+  assert.ok(calls.some((sql) => /rollback to savepoint saved_place_entitlement/i.test(sql)));
+  assert.ok(calls.some((sql) => sql.includes("count(*)")));
+});
+
 test("assertNewSavedPlaceAllowed lets Pro create past 50", async () => {
   const client = {
     query: async (sql: string) => {
@@ -72,10 +101,17 @@ test("place create and shared-post save enforce the cap after dedup", () => {
   const posts = readFileSync(new URL("../src/sharedPosts.ts", import.meta.url), "utf8");
   const ratings = readFileSync(new URL("../src/friendRatings.ts", import.meta.url), "utf8");
 
+  const workflowInsert = server.slice(
+    server.indexOf("async function insertFinalPlaceForDecision"),
+    server.indexOf("async function validateDecisionReferences"),
+  );
+
   assert.match(places, /pg_advisory_xact_lock/);
   assert.match(places, /assertNewSavedPlaceAllowed/);
   assert.match(posts, /assertNewSavedPlaceAllowed/);
   assert.match(ratings, /assertNewSavedPlaceAllowed/);
+  assert.match(workflowInsert, /pg_advisory_xact_lock/);
+  assert.match(workflowInsert, /assertNewSavedPlaceAllowed/);
   assert.match(server, /error instanceof SavedPlaceLimitError/);
   assert.match(server, /error\.body, error\.status/);
 });

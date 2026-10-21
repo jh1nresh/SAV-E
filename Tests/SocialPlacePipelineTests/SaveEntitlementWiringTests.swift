@@ -78,6 +78,16 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertEqual(store.tier, .free, "an offline client must not grant itself Pro")
         XCTAssertTrue(store.isFailingOpen)
         XCTAssertNil(store.quota)
+        XCTAssertFalse(store.hasAuthoritativeSavedPlaceTier, "fail-open must not refuse saves locally")
+    }
+
+    @MainActor
+    func testAuthoritativeSavedPlaceTierRequiresASuccessfulRefresh() async {
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "pro", used: 1) })
+        XCTAssertFalse(store.hasAuthoritativeSavedPlaceTier)
+        await store.refresh()
+        XCTAssertTrue(store.hasAuthoritativeSavedPlaceTier)
+        XCTAssertEqual(store.tier, .pro)
     }
 
     // MARK: - Paywall trigger policy
@@ -262,6 +272,14 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertFalse(profile.contains("SaveEntitlementStore"))
         XCTAssertTrue(policy.contains("shouldOfferProFromPassport"))
         XCTAssertTrue(policy.contains("purchasingIsAvailable && hasConfirmedMapStamp"))
+    }
+
+    func testSessionStartupRefreshesEntitlementBeforeLocalCap() throws {
+        let auth = try source(at: "SAV-E/Services/PrivyAuthService.swift")
+        let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
+        XCTAssertTrue(auth.contains("SaveEntitlementStore.shared.refresh()"))
+        XCTAssertTrue(map.contains("hasAuthoritativeSavedPlaceTier"))
+        XCTAssertTrue(map.contains("entitlementResolvedProvider"))
     }
 
     @MainActor

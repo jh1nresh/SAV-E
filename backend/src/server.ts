@@ -5995,6 +5995,9 @@ async function insertFinalPlaceForDecision(
     throw new WorkflowContractError("final_place requires name, address, latitude, and longitude");
   }
 
+  await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+  await assertNewSavedPlaceAllowed(client, userId);
+
   const body = withOwner(pickFields(decision.finalPlace, placeFields), userId);
   const insert = buildInsert("places", body, [...placeFields, "user_id"]);
   const { rows } = await client.query(`${insert.sql} on conflict (id) do nothing returning id`, insert.values);
