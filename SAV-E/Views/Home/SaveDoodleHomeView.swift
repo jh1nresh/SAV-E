@@ -511,7 +511,9 @@ struct SaveDoodleHomeView: View {
     }
 
     private var showsLocationPrompt: Bool {
-        if locationService.isAuthorizationDenied && !showsEmptyHome {
+        // Denied recovery must stay available on the empty plate. Hiding
+        // it with `!showsEmptyHome` left no Home route to Settings.
+        if locationService.isAuthorizationDenied {
             return true
         }
         return needsLocationToResolveNearYou

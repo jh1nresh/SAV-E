@@ -704,11 +704,12 @@ screen when N>0. Saves reaches Trips from its header as `Trips ›`
 (`saves.trips`). Do not add a second Home Trips row. Collected opens
 Passport. Wordmark is Caveat SemiBold 34; the city line is Caveat 20 with
 a 2pt coral underline under the city word only. Body copy stays
-`SaveAtlasType`. The locked parity face is DESIGN v2
+`SaveAtlasType`. The visual reference is the Codex packet and spec §8,
+not DESIGN v2 Home. H1–H4 CI rasters are judged manually by DESIGN;
+the 0.90 visual-parity score is not evidence. Historical DESIGN v2
 `design/doodle-targets-2026-10-20/home-light.png` at `eade369`
-(exact 402×874; `home-dark.png` for DESIGN comparison;
-`home-mask.png` white = ignore). Grade position, size, color and
-font style. v1 is retired.
+(exact 402×874; `home-dark.png`; `home-mask.png` white = ignore)
+is archive only. v1 is retired.
 
 ### Sign-In
 
