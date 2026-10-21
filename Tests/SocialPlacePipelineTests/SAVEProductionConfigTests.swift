@@ -842,6 +842,8 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(vault.contains("func saveSourceOnly(url: URL, note: String? = nil, ownerSubject: String? = nil)"))
         XCTAssertTrue(vault.contains("func saveConfirmedPlace(_ incoming: Place, ownerSubject: String? = nil)"))
         XCTAssertTrue(vault.contains("func confirmedPlaceRecords"))
+        XCTAssertTrue(vault.contains("func claimOwnerlessRecords(for ownerSubject: String)"))
+        XCTAssertTrue(map.contains("try? saveLocalVaultService.claimOwnerlessRecords(for: owner)"))
         XCTAssertTrue(intent.contains("ownerSubject: PrivyAuthService.shared.currentUserId"))
         XCTAssertTrue(share.contains("analysisCredential?.ownerSubject ?? ShareAnalysisKeychain.read()?.ownerSubject"))
         XCTAssertTrue(map.contains("belongingTo: authService.currentUserId"))
@@ -1083,6 +1085,63 @@ final class SAVEProductionConfigTests: XCTestCase {
         await map.loadPlaces(force: true)
         XCTAssertTrue(map.places.isEmpty, "account B must not inherit A's cached Map Stamps")
         XCTAssertEqual(try vault.confirmedPlaceRecords().count, 50)
+    }
+
+    @MainActor
+    func testOwnerlessPreUpgradeRecordsAreClaimedByTheFirstSignedInAccount() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:owner-a")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ownerless-claim-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = makeCappedPlaces(1)[0]
+        _ = try vault.saveConfirmedPlace(stamp)
+        let unsigned = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Pre-upgrade Clue",
+            address: "1 Legacy Road",
+            city: nil,
+            latitude: 25.0,
+            longitude: 121.0,
+            evidence: ["Source URL: https://example.com/pre-upgrade"],
+            confidence: 0.9,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        _ = try vault.saveReviewCandidate(unsigned)
+        XCTAssertNil(try vault.confirmedPlaceRecords().first?.ownerSubject)
+        XCTAssertNil(try vault.reviewCandidates().first?.ownerSubject)
+
+        let map = MapViewModel(
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: false
+        )
+        await map.loadPlaces(force: true)
+
+        XCTAssertTrue(map.places.contains { $0.id == stamp.id })
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == unsigned.id })
+        XCTAssertEqual(try vault.confirmedPlaceRecords().first?.ownerSubject, "did:privy:owner-a")
+        XCTAssertEqual(try vault.reviewCandidates().first?.ownerSubject, "did:privy:owner-a")
+    }
+
+    @MainActor
+    func testOwnerlessRecordsAreNotClaimedWhenAnotherAccountAlreadyOwnsRows() throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ownerless-no-claim-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        _ = try vault.saveConfirmedPlace(makeCappedPlaces(1)[0], ownerSubject: "did:privy:owner-a")
+        _ = try vault.saveConfirmedPlace(makeSocialPlace(name: "Legacy Ownerless Cafe"))
+
+        try vault.claimOwnerlessRecords(for: "did:privy:owner-b")
+
+        let owners = Set(try vault.confirmedPlaceRecords().map(\.ownerSubject))
+        XCTAssertEqual(owners, Set(["did:privy:owner-a", nil]))
     }
 
     @MainActor
