@@ -155,7 +155,10 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertEqual(store.tier, .pro)
         XCTAssertEqual(store.decideAIAssist(), .allowedEnforcementDisabled)
         XCTAssertFalse(store.shouldPresentPaywall(for: store.decideAIAssist(), hasConfirmedMapStamp: true))
-        XCTAssertNil(store.allowanceNotice())
+        XCTAssertEqual(
+            store.allowanceNotice(),
+            "This month's model allowance is used up. Try again next period."
+        )
     }
 
     @MainActor
@@ -163,12 +166,25 @@ final class SaveEntitlementWiringTests: XCTestCase {
         let store = Self.makeStore(loadQuota: { Self.quota(tier: "free", used: 20, limit: 20) })
         await store.refresh()
 
-        let decision = SaveAIAssistGate.decide(
+        XCTAssertEqual(store.decideAIAssist(), .allowedEnforcementDisabled)
+        XCTAssertTrue(store.decideAIAssist().showsAllowanceNotice)
+        XCTAssertEqual(
+            store.allowanceNotice(language: .english),
+            "This month's model allowance is used up. Try again next period."
+        )
+        XCTAssertEqual(
+            store.allowanceNotice(language: .traditionalChinese),
+            "這個月的模型額度已用完。下個週期再試。"
+        )
+        XCTAssertFalse(store.shouldPresentPaywall(for: store.decideAIAssist(), hasConfirmedMapStamp: true))
+
+        let refused = SaveAIAssistGate.decide(
             tier: .free, usedUnits: 20, limitUnits: 20, warningThresholdUnits: 15,
             enforcementEnabled: true
         )
-        XCTAssertEqual(decision, .refusedAllowanceExhausted)
-        XCTAssertFalse(store.shouldPresentPaywall(for: decision, hasConfirmedMapStamp: true))
+        XCTAssertEqual(refused, .refusedAllowanceExhausted)
+        XCTAssertTrue(refused.showsAllowanceNotice)
+        XCTAssertFalse(store.shouldPresentPaywall(for: refused, hasConfirmedMapStamp: true))
         XCTAssertEqual(
             SaveEntitlementStore.exhaustedAllowanceMessage(language: .english),
             "This month's model allowance is used up. Try again next period."
@@ -181,6 +197,31 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertFalse(SaveAIAssistUserCopy.exhaustedEnglish.localizedCaseInsensitiveContains("assist"))
         XCTAssertFalse(SaveAIAssistUserCopy.exhaustedTraditionalChinese.contains("AI"))
         XCTAssertFalse(SaveAIAssistUserCopy.exhaustedTraditionalChinese.contains("次數"))
+    }
+
+    @MainActor
+    func testDrawerShowsNeutralNoticeAndDoesNotOpenPaywallWhenAllowanceIsExhausted() async {
+        let drawer = AIDrawerViewModel(
+            groundedAnswerClient: nil,
+            assistDecision: { .refusedAllowanceExhausted }
+        )
+        drawer.query = "best noodles nearby"
+        await drawer.submit(outputLanguage: .english)
+
+        guard case .error(let message) = drawer.drawerState else {
+            return XCTFail("exhausted allowance must surface as a drawer notice, not a paywall")
+        }
+        XCTAssertEqual(message, SaveAIAssistUserCopy.exhaustedEnglish)
+        XCTAssertEqual(
+            drawer.allowanceNotice(for: .english),
+            SaveAIAssistUserCopy.exhaustedEnglish
+        )
+        XCTAssertFalse(
+            SaveEntitlementStore.shared.shouldPresentPaywall(
+                for: .refusedAllowanceExhausted,
+                hasConfirmedMapStamp: true
+            )
+        )
     }
 
     // MARK: - Source-level guarantees

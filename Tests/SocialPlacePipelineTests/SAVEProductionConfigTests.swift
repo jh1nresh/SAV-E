@@ -55,6 +55,18 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(paywall.contains("AI quota"))
         XCTAssertFalse(paywall.contains("AI assists"))
         XCTAssertFalse(paywall.contains("aiAssistExhausted"))
+        let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+        let drawerModel = try source(at: "SAV-E/ViewModels/AIDrawerViewModel.swift")
+        XCTAssertTrue(drawer.contains("drawer.modelAllowanceNotice"))
+        XCTAssertTrue(drawer.contains("allowanceNotice(for: languageSettings.language)"))
+        XCTAssertTrue(drawerModel.contains("decision.isRefusal"))
+        XCTAssertTrue(drawerModel.contains("exhaustedAllowanceMessage"))
+        XCTAssertFalse(drawerModel.contains("shouldPresentPaywall"))
+        XCTAssertTrue(drawerModel.contains("showsAllowanceNotice"))
+        XCTAssertTrue(policy.contains("showsAllowanceNotice"))
+        let entitlement = try source(at: "SAV-E/Services/SaveEntitlementStore.swift")
+        XCTAssertTrue(entitlement.contains("decideAIAssist().showsAllowanceNotice"))
+        XCTAssertTrue(entitlement.contains("return false"))
         XCTAssertFalse(paywall.contains("boundaryGroup"))
         XCTAssertFalse(policy.contains("saved-place memory loop is free forever"))
 
@@ -117,13 +129,13 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
 
         // Exhausted while enforcement is off: served anyway, but recorded.
-        XCTAssertEqual(
-            SaveAIAssistGate.decide(
-                tier: .free, usedUnits: 20, limitUnits: 20, warningThresholdUnits: 15,
-                enforcementEnabled: false
-            ),
-            .allowedEnforcementDisabled
+        let exhaustedWhileOpen = SaveAIAssistGate.decide(
+            tier: .free, usedUnits: 20, limitUnits: 20, warningThresholdUnits: 15,
+            enforcementEnabled: false
         )
+        XCTAssertEqual(exhaustedWhileOpen, .allowedEnforcementDisabled)
+        XCTAssertTrue(exhaustedWhileOpen.showsAllowanceNotice)
+        XCTAssertFalse(exhaustedWhileOpen.isRefusal)
 
         // Only with enforcement explicitly on may a refusal happen.
         XCTAssertEqual(

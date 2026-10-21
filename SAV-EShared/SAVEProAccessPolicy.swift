@@ -221,6 +221,17 @@ nonisolated enum SaveAIAssistDecision: Equatable, Sendable {
     case refusedAllowanceExhausted
 
     var isRefusal: Bool { self == .refusedAllowanceExhausted }
+
+    /// Exhausted allowance is a notice whether or not enforcement refuses the
+    /// request. Pro does not raise this limit.
+    var showsAllowanceNotice: Bool {
+        switch self {
+        case .refusedAllowanceExhausted, .allowedEnforcementDisabled:
+            return true
+        case .allowed, .allowedWarningNearLimit:
+            return false
+        }
+    }
 }
 
 /// Neutral notice when monthly model allowance is gone. Not a paywall.

@@ -160,6 +160,16 @@ struct AIDrawerView: View {
             } else {
                 VStack(spacing: 0) {
                     searchBar
+                    if let notice = viewModel.allowanceNotice(for: languageSettings.language) {
+                        Text(notice)
+                            .font(SaveAtlasType.body(13))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, SaveTheme.Spacing.lg)
+                            .padding(.top, SaveTheme.Spacing.sm)
+                            .accessibilityIdentifier("drawer.modelAllowanceNotice")
+                    }
                     if showsContentArea(for: proxy.size.height) {
                         Divider().opacity(colorScheme == .dark ? 0.18 : 0.28)
                         contentArea

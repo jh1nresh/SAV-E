@@ -130,7 +130,9 @@ final class SaveEntitlementStore {
     }
 
     func allowanceNotice(language: AppLanguage = .english) -> String? {
-        decideAIAssist().isRefusal ? Self.exhaustedAllowanceMessage(language: language) : nil
+        decideAIAssist().showsAllowanceNotice
+            ? Self.exhaustedAllowanceMessage(language: language)
+            : nil
     }
 
     /// Passive Passport entry. Still requires a confirmed Map Stamp so pricing
