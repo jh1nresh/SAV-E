@@ -280,7 +280,7 @@ struct SharedPostDetail: View {
                 SharedAuthorPassport(
                     authorID: initialPost.author_id,
                     onSaved: onSaved,
-                    parkOverLimitPlace: { store.parkOverLimitPlace($0) }
+                    parkOverLimitPlace: { try store.parkOverLimitPlace($0) }
                 )
             }
             .sheet(isPresented: $showSavedPlaceLimitPaywall, onDismiss: {
@@ -533,12 +533,12 @@ struct SharedPlacePicker: View {
 struct SharedAuthorPassport: View {
     let authorID: String
     var onSaved: () async -> Void = {}
-    var parkOverLimitPlace: (Place) -> PlaceReviewCandidate = { place in
+    var parkOverLimitPlace: (Place) throws -> PlaceReviewCandidate = { place in
         let candidate = PlaceReviewCandidate.unplacedInboxItem(
             from: place,
             ownerSubject: PrivyAuthService.shared.currentUserId
         )
-        _ = try? SaveLocalVaultService.shared.saveReviewCandidate(candidate)
+        _ = try SaveLocalVaultService.shared.saveReviewCandidate(candidate)
         SavePlaceLimitHandoff.markPaywallPending(notify: false)
         return candidate
     }
