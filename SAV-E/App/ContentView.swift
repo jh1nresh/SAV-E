@@ -205,6 +205,10 @@ struct ContentView: View {
     @State private var suppressChromeDismissSideEffects = false
     @State private var pendingChromePresentation: PendingChromePresentation? = nil
     @State private var showSavedPlaceLimitPaywall = false
+#if DEBUG
+    @State private var showAIQuotaNotice = false
+    @State private var didApplyUnplacedCandidateFixture = false
+#endif
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
@@ -258,10 +262,19 @@ struct ContentView: View {
 #endif
         .environment(\.appLanguageSettings, languageSettings)
 #if DEBUG
+        .alert(
+            languageSettings.localized(english: "Couldn’t finish that action", traditionalChinese: "無法完成這個動作"),
+            isPresented: $showAIQuotaNotice
+        ) {
+            Button(languageSettings.text(.ok)) { showAIQuotaNotice = false }
+        } message: {
+            Text(ShareAnalysisError.usageLimit.errorDescription ?? "")
+        }
         .task {
             if DebugLegacyMigrator.isRequested {
                 await DebugLegacyMigrator.run()
             }
+            await applyFreeCapE4UITestFixturesWhenSignedIn()
         }
 #endif
     }
@@ -1452,6 +1465,51 @@ struct ContentView: View {
         state.qaReviewCandidateCount = snapshot.reviewCandidateCount
         state.qaMapCandidateCount = snapshot.mapCandidateCount
         state.qaHasIncomingReceipt = snapshot.hasIncomingReceipt
+    }
+
+    /// E4 fixtures. Park and present only after a signed-in account exists so
+    /// Unplaced is owned by that session and the quota alert is not the
+    /// sign-in card.
+    private func applyFreeCapE4UITestFixturesWhenSignedIn() async {
+        let arguments = ProcessInfo.processInfo.arguments
+        let wantsUnplaced = arguments.contains("--uitest-show-unplaced-candidate")
+        let wantsQuotaNotice = arguments.contains("--uitest-show-ai-quota-notice")
+        guard wantsUnplaced || wantsQuotaNotice else { return }
+
+        for _ in 0..<480 {
+            if PrivyAuthService.shared.currentUserId != nil { break }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
+        guard PrivyAuthService.shared.currentUserId != nil else { return }
+
+        if wantsUnplaced {
+            applyUnplacedCandidateUITestFixtureIfNeeded()
+        }
+        if wantsQuotaNotice {
+            showAIQuotaNotice = true
+        }
+    }
+
+    private func applyUnplacedCandidateUITestFixtureIfNeeded() {
+        guard !didApplyUnplacedCandidateFixture else { return }
+        let name = "Unplaced Harbor Cafe"
+        if mapVM.reviewCandidates.contains(where: { $0.name == name }) {
+            didApplyUnplacedCandidateFixture = true
+            return
+        }
+        let place = Place(
+            id: UUID(uuidString: "e4000000-0000-4000-8000-000000000051")!,
+            name: name,
+            address: "Harbor Street",
+            latitude: 25.1500,
+            longitude: 121.7800,
+            category: .cafe,
+            status: .wantToGo,
+            sourcePlatform: .other,
+            createdAt: Date()
+        )
+        _ = mapVM.parkPlaceInUnplacedInbox(place, requestPaywall: false)
+        didApplyUnplacedCandidateFixture = true
     }
 #endif
 

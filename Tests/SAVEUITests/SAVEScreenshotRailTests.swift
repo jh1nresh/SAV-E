@@ -496,6 +496,141 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "paywall-free-place-limit")
     }
 
+    /// HoP E4. Four iPhone stills as `XCTAttachment`s for the macOS `ios-fast`
+    /// artifact. Kept off FULL/BASELINE so the required `ios` job does not
+    /// grow four more launches.
+    @MainActor
+    func testFreeCapE4Screenshots() throws {
+        try captureE4FiftyFirstSavePaywall()
+        try captureE4UnplacedCandidate()
+        try captureE4SettingsPaywall()
+        try captureE4AIQuotaNotice()
+    }
+
+    @MainActor
+    private func captureE4FiftyFirstSavePaywall() throws {
+        let app = makeE4App(extraArguments: ["--uitest-show-saved-place-limit-paywall"])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.keepGoing"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["You've saved 50 places. Keep going."].firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["Unlimited saved places"].firstMatch.exists)
+        attach(app, name: "e4-51st-save-paywall")
+        terminate(app)
+    }
+
+    @MainActor
+    private func captureE4UnplacedCandidate() throws {
+        let app = makeE4App(extraArguments: ["--uitest-show-unplaced-candidate"])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
+            "Home must settle before the Unplaced fixture can appear in Review."
+        )
+        let reviewClues = app.descendants(matching: .any)["home.review"]
+        if reviewClues.waitForExistence(timeout: stepTimeout) {
+            tapReachable(reviewClues)
+        }
+        if !app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: timeout(5)) {
+            openSavesFromHome(app: app)
+        }
+        XCTAssertTrue(
+            app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout),
+            "Unplaced evidence is the Review candidate list, not a Map Stamp."
+        )
+        let reviewSegment = app.buttons["saves.segment.review"]
+        if reviewSegment.waitForExistence(timeout: timeout(2)), !reviewSegment.isSelected {
+            tapReachable(reviewSegment)
+        }
+        XCTAssertTrue(
+            app.staticTexts["Unplaced Harbor Cafe"].firstMatch.waitForExistence(timeout: launchTimeout),
+            "Parked Unplaced Harbor Cafe must appear as a Review candidate."
+        )
+        XCTAssertTrue(app.staticTexts["Review Candidate"].firstMatch.exists)
+        XCTAssertTrue(
+            app.staticTexts["Confirm the place before adding it to your map."].firstMatch.exists
+        )
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.root"].exists)
+        XCTAssertFalse(app.staticTexts["Confirmed Map Stamp"].firstMatch.exists)
+        attach(app, name: "e4-unplaced-candidate")
+        terminate(app)
+    }
+
+    @MainActor
+    private func captureE4SettingsPaywall() throws {
+        let app = makeE4App()
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout))
+        openRootTab("Passport", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+        let settings = app.buttons["profile.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: stepTimeout), "Passport settings opens the B7 Pro row.")
+        tapReachable(settings)
+
+        let pro = app.descendants(matching: .any)["profile.pro"]
+        if !pro.waitForExistence(timeout: timeout(3)) {
+            let disclosure = app.descendants(matching: .any)["profile.controlsDisclosure"]
+            XCTAssertTrue(disclosure.waitForExistence(timeout: stepTimeout))
+            tapReachable(disclosure)
+        }
+        XCTAssertTrue(
+            scrollUntilHittable(pro, in: app.scrollViews.firstMatch, maxSwipes: 8),
+            "Settings must expose Savvy Pro after a Map Stamp exists."
+        )
+        tapReachable(pro)
+
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(app.staticTexts["Free: 50 places"].firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Unlimited saved places"].firstMatch.exists)
+        XCTAssertFalse(
+            app.descendants(matching: .any)["paywall.keepGoing"].exists,
+            "Q1: Settings uses the Passport trigger, not the saved-50 line."
+        )
+        attach(app, name: "e4-settings-paywall")
+        terminate(app)
+    }
+
+    @MainActor
+    private func captureE4AIQuotaNotice() throws {
+        let app = makeE4App(extraArguments: ["--uitest-show-ai-quota-notice"])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(
+            app.staticTexts["The analysis usage limit has been reached. Keep the source and try again later."]
+                .firstMatch
+                .waitForExistence(timeout: launchTimeout),
+            "B7: exhausted AI quota is the Share Analysis usage-limit notice."
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["paywall.root"].exists,
+            "B7: exhausted AI quota must not open the paywall."
+        )
+        attach(app, name: "e4-ai-quota-notice")
+        terminate(app)
+    }
+
+    @MainActor
+    private func makeE4App(extraArguments: [String] = []) -> XCUIApplication {
+        makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+            ] + extraArguments + [
+                "-save.appLanguage", "en",
+            ]
+        )
+    }
+
     @MainActor
     func testHomeLeadsWithSavedPlacesAndUsesSaveTabForCapture() throws {
         let app = makeApp(

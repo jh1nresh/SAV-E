@@ -114,6 +114,44 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(imessage.contains("assertNewSavedPlaceAllowed"))
     }
 
+    func testFreeCapE4ScreenshotFixturesStayOnDebugLaunchArgs() throws {
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+        XCTAssertTrue(content.contains("--uitest-show-saved-place-limit-paywall"))
+        XCTAssertTrue(content.contains("--uitest-show-unplaced-candidate"))
+        XCTAssertTrue(content.contains("--uitest-show-ai-quota-notice"))
+        XCTAssertTrue(content.contains("Unplaced Harbor Cafe"))
+        XCTAssertTrue(content.contains("parkPlaceInUnplacedInbox(place, requestPaywall: false)"))
+        XCTAssertTrue(content.contains("ShareAnalysisError.usageLimit.errorDescription"))
+        XCTAssertTrue(content.contains("showAIQuotaNotice = true"))
+
+        let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
+        XCTAssertTrue(rail.contains("func testFreeCapE4Screenshots()"))
+        for name in [
+            "e4-51st-save-paywall",
+            "e4-unplaced-candidate",
+            "e4-settings-paywall",
+            "e4-ai-quota-notice",
+        ] {
+            XCTAssertTrue(rail.contains("attach(app, name: \"\(name)\")"), name)
+        }
+        XCTAssertTrue(rail.contains("You've saved 50 places. Keep going."))
+        XCTAssertTrue(rail.contains("Review Candidate"))
+        XCTAssertTrue(
+            rail.contains("Q1: Settings uses the Passport trigger, not the saved-50 line."),
+            "Settings still must prove the keep-going line is absent"
+        )
+        XCTAssertTrue(rail.contains("The analysis usage limit has been reached. Keep the source and try again later."))
+        XCTAssertTrue(rail.contains("exhausted AI quota must not open the paywall."))
+
+        let workflow = try source(at: ".github/workflows/ci.yml")
+        XCTAssertTrue(workflow.contains("save-free-cap-e4-${{ github.sha }}"))
+        XCTAssertTrue(workflow.contains("SAVEUITests/SAVEScreenshotRailTests/testFreeCapE4Screenshots"))
+        XCTAssertFalse(
+            try source(at: "scripts/select-ios-tests.py").contains("testFreeCapE4Screenshots"),
+            "E4 stays off FULL so the required ios job does not grow four launches"
+        )
+    }
+
     /// The gate is the only thing allowed to refuse an AI assist, so its truth
     /// table is pinned here.
     func testAIAssistGateFailsOpenAndRespectsEnforcementSwitch() {
