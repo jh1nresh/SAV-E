@@ -928,7 +928,13 @@ cap and place dedupe) → **Saved** screen → only then
 SKOverlay or a “get the app” prompt before a successful save, while
 loading, or on error. Always write App Group `pendingShare`
 (`group.com.wanderly.app`) as the local fallback. The full app still reads
-that key on first launch.
+that key on first launch. After SIWA the Clip also writes App Group
+`clipAppleUserID` (the Apple user id only — never a JWT). The full app
+reads that key, calls `ASAuthorizationAppleIDProvider.getCredentialState`,
+and if the state is `.authorized` it skips the sign-in screen and restores
+the Privy session with a follow-up `ASAuthorizationAppleIDRequest` that
+requests no name or email. `.revoked` or `.notFound` falls back to normal
+sign-in.
 
 Show **Saved** only after the backend succeeds. Free cap at 50 is an
 explanation page (no paywall, Pro, price, or overlay). A duplicate is

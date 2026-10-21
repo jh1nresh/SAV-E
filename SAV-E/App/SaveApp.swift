@@ -131,6 +131,7 @@ struct SaveApp: App {
             UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
             UserDefaults.standard.removeObject(forKey: "pendingOnboardingClue")
             UserDefaults.standard.removeObject(forKey: "pendingOnboardingClueOwnerID")
+            ClipAppleAccountStore.clear()
         }
         // Keep the first-run map coachmark tour out of UI tests / smoke runs so
         // it never traps focus over the map under test.
@@ -143,6 +144,7 @@ struct SaveApp: App {
             UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
             UserDefaults.standard.removeObject(forKey: "pendingOnboardingClue")
             UserDefaults.standard.removeObject(forKey: "pendingOnboardingClueOwnerID")
+            ClipAppleAccountStore.clear()
         }
         // After an intentional backend identity rebuild (new account-ref
         // secret), stored refs can never match and the recovery screen has no
@@ -150,6 +152,7 @@ struct SaveApp: App {
         // the local vault is untouched.
         if ProcessInfo.processInfo.arguments.contains("--uitest-reset-account-gate") {
             try? KeychainAccountReferenceStore.shared.clear()
+            ClipAppleAccountStore.clear()
         }
 #endif
     }
