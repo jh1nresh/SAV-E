@@ -355,15 +355,20 @@ final class SaveCollaborativeListTests: XCTestCase {
         }
         let compact = String(sheet[compactStart.lowerBound..<compactEnd.lowerBound])
         XCTAssertTrue(
-            compact.contains("GooglePlacesAttributionHitButton("),
-            "Compact row must host a UIKit UIButton so the identifier cannot be swallowed"
+            compact.contains("Button(compactAccessibilityLabel)"),
+            "Compact row must be a SwiftUI Button so app.buttons can see it"
         )
+        XCTAssertTrue(compact.contains("place.photo.attribution.row"))
         XCTAssertFalse(compact.contains("accessibilityHidden"), "Hidden children swallow the Button identifier")
         XCTAssertFalse(compact.contains("place.photo.attribution.logo"), "Nested logo identifier splits the Button")
-        XCTAssertTrue(sheet.contains("button.accessibilityIdentifier = identifier"))
-        XCTAssertTrue(sheet.contains("button.isAccessibilityElement = true"))
+        XCTAssertFalse(compact.contains("accessibilityElement(children:"), "AX containers are not hittable in XCTest")
+        XCTAssertFalse(compact.contains("UIViewRepresentable"), "UIKit hosts often land in otherElements, not buttons")
         XCTAssertTrue(uiTest.contains("app.buttons[\"place.photo.attribution.row\"]"))
-        XCTAssertTrue(evidence.contains("evidence.googleCarousel"))
+        XCTAssertTrue(evidence.contains("sceneIdentifier: \"evidence.googleCarousel\""))
+        XCTAssertFalse(
+            evidence.contains("accessibilityElement(children: .contain)"),
+            "Contain-container identifiers are invisible to descendants(matching: .any)"
+        )
         XCTAssertTrue(evidence.contains("GoogleMapsAttributionLogo()"))
     }
 

@@ -108,11 +108,9 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
     private var sceneBody: some View {
         switch scene {
         case .googleCarousel:
-            evidenceCard(title: "Harbor Oven") {
+            evidenceCard(title: "Harbor Oven", sceneIdentifier: "evidence.googleCarousel") {
                 googleCarouselPage
             }
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("evidence.googleCarousel")
         case .userPhoto:
             evidenceCard(title: "Harbor Oven") {
                 userPhotoPage
@@ -214,11 +212,16 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
         .accessibilityIdentifier("evidence.userPhoto")
     }
 
-    private func evidenceCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+    private func evidenceCard<Content: View>(
+        title: String,
+        sceneIdentifier: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
                 .font(.headline.weight(.bold))
                 .foregroundColor(.saveInk)
+                .modifier(OptionalAccessibilityIdentifier(sceneIdentifier))
             content()
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
@@ -317,6 +320,22 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
                 )
                 symbolImage.draw(at: origin)
             }
+        }
+    }
+}
+
+private struct OptionalAccessibilityIdentifier: ViewModifier {
+    var identifier: String?
+
+    init(_ identifier: String?) {
+        self.identifier = identifier
+    }
+
+    func body(content: Content) -> some View {
+        if let identifier, !identifier.isEmpty {
+            content.accessibilityIdentifier(identifier)
+        } else {
+            content
         }
     }
 }

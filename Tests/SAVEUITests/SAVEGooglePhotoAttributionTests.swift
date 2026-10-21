@@ -24,11 +24,14 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         )
 
         openScene(app, "googleCarousel")
-        XCTAssertTrue(
-            app.descendants(matching: .any)["evidence.googleCarousel"]
-                .waitForExistence(timeout: stepTimeout),
-            "Google carousel scene did not render"
-        )
+        let carousel = app.descendants(matching: .any)["evidence.googleCarousel"]
+        if !carousel.waitForExistence(timeout: stepTimeout) {
+            let tree = XCTAttachment(string: app.debugDescription)
+            tree.name = "ax-tree-missing-google-carousel"
+            tree.lifetime = .keepAlways
+            add(tree)
+            XCTFail("Google carousel scene did not render. Identifier must live on a leaf, not an AX container.")
+        }
         saveEvidence(app, name: "\(appearance)-google-carousel")
 
         let compactRow = app.buttons["place.photo.attribution.row"]
