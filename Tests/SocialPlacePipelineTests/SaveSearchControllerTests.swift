@@ -3384,6 +3384,51 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testTakeoutSaveDoesNotPublishIntoANewSession() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        auth.authState = .authenticated(userId: "owner-a")
+        defer { auth.authState = previousAuth }
+
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("takeout-session-swap-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let supabase = RecordingSupabaseService()
+        supabase.onSavePlace = {
+            auth.authState = .authenticated(userId: "owner-b")
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        map.places = []
+        let drafts = [
+            ImportedPlaceDraft(
+                name: "Takeout Session Cafe",
+                address: "3 Swap Road",
+                latitude: 25.2,
+                longitude: 121.2,
+                sourceFile: "Saved Places.json",
+                sourceFormat: "json",
+                reviewState: .readyToSave
+            )
+        ]
+
+        do {
+            _ = try await map.saveImportedPlaces(drafts)
+            XCTFail("a session change after /places must not publish into the new session")
+        } catch ReviewCandidateError.sessionChangedAfterCommit {
+            // Account A already saved. Do not insert that stamp into B.
+        }
+        XCTAssertEqual(supabase.savedPlaces.count, 1, "account A already saved on the server")
+        XCTAssertTrue(map.places.isEmpty, "must not insert account A's Takeout stamp into the new session")
+    }
+
+    @MainActor
     func testLocalOnlyConfirmDoesNotMirrorAfterRefreshSessionChange() async throws {
         let auth = PrivyAuthService.shared
         let previousAuth = auth.authState

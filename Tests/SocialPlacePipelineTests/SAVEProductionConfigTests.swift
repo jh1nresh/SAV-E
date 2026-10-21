@@ -847,6 +847,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(map.contains("belongingTo: authService.currentUserId"))
         XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: userId)"))
         XCTAssertTrue(map.contains("try persistParkedReviewCandidate(candidate)"))
+        XCTAssertTrue(map.contains("try ensureConfirmationSession(userId, importGeneration)"))
         XCTAssertTrue(map.contains("startedBy userId: String?"))
         XCTAssertTrue(
             map.contains("throw ReviewCandidateError.sessionChangedAfterCommit"),
