@@ -1039,6 +1039,19 @@ final class SAVEProductionConfigTests: XCTestCase {
             share.contains("ownerSubject: analysisCredential?.ownerSubject,"),
             "do not persist an ownerless share when only analysisCredential is missing"
         )
+        XCTAssertTrue(
+            share.contains("func bindShareSessionOwnerIfNeeded"),
+            "capture the share owner before attachment and analysis awaits"
+        )
+        XCTAssertTrue(
+            share.contains("currentOwner != shareSessionOwner"),
+            "a late share write must not stamp the next signed-in account"
+        )
+        XCTAssertTrue(
+            share.contains("if next.ownerSubject == nil"),
+            "screenshot and Maps-list Review candidates must stamp the owner at persist"
+        )
+        XCTAssertTrue(share.contains("appendPendingItems(stamped"))
         XCTAssertTrue(map.contains("belongingTo: authService.currentUserId"))
         XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: userId)"))
         let privy = try source(at: "SAV-E/Services/PrivyAuthService.swift")

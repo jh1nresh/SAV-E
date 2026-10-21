@@ -494,6 +494,7 @@ struct ShareExtensionView: View {
     @State private var analysisInputKey: String?
     @State private var rotateAnalysisIDOnRetry = false
     @State private var isSocialAnalysis = false
+    @State private var shareSessionOwner: String?
 
     private let categories = ["food", "cafe", "bar", "attraction", "stay", "shopping"]
 
@@ -1224,6 +1225,7 @@ struct ShareExtensionView: View {
     // MARK: - Extract & Parse
 
     private func extractAndParse() async {
+        bindShareSessionOwnerIfNeeded()
         guard let items = extensionContext?.inputItems as? [NSExtensionItem] else {
             parseError = "No content to parse"
             isParsing = false
@@ -1510,19 +1512,35 @@ struct ShareExtensionView: View {
         }
     }
 
-    private func shareAccountStillMatches() -> Bool {
-        guard isSocialAnalysis, let credential = analysisCredential else { return !isSocialAnalysis }
+    /// Local parse and source-only writes must keep the signed-in owner even
+    /// when the social-analysis credential was never loaded.
+    private var shareOwnerSubject: String? {
+        shareSessionOwner
+            ?? analysisCredential?.ownerSubject
+            ?? ShareAnalysisKeychain.read()?.ownerSubject
+    }
+
+    private func bindShareSessionOwnerIfNeeded() {
+        if shareSessionOwner == nil {
+            shareSessionOwner = analysisCredential?.ownerSubject
+                ?? ShareAnalysisKeychain.read()?.ownerSubject
+        }
+    }
+
+    private func shareSessionStillMatches() -> Bool {
+        bindShareSessionOwnerIfNeeded()
+        let currentOwner = analysisCredential?.ownerSubject
+            ?? ShareAnalysisKeychain.read()?.ownerSubject
+        if let shareSessionOwner, currentOwner != shareSessionOwner {
+            parseError = ShareAnalysisError.sessionChanged.errorDescription
+            return false
+        }
+        guard isSocialAnalysis, let credential = analysisCredential else { return true }
         guard ShareAnalysisKeychain.read() == credential, credential.isUsable() else {
             parseError = ShareAnalysisError.sessionChanged.errorDescription
             return false
         }
         return true
-    }
-
-    /// Local parse and source-only writes must keep the signed-in owner even
-    /// when the social-analysis credential was never loaded.
-    private var shareOwnerSubject: String? {
-        analysisCredential?.ownerSubject ?? ShareAnalysisKeychain.read()?.ownerSubject
     }
 
     private func keepSocialSource() {
@@ -1534,7 +1552,7 @@ struct ShareExtensionView: View {
             parseError = ShareAnalysisError.sessionChanged.errorDescription
             return
         }
-        let candidate = PendingReviewCandidate(ownerSubject: current?.ownerSubject,
+        let candidate = PendingReviewCandidate(ownerSubject: shareOwnerSubject,
             candidateName: "Source clue", address: "", category: "other", sourceURL: sharedURL,
             sourceText: socialCaption, evidence: ["Source preserved; semantic analysis pending"],
             confidence: 0, missingInfo: ["Analysis pending", "User confirmation"], savedAt: Date(),
@@ -3635,7 +3653,7 @@ struct ShareExtensionView: View {
 
     private func savePlace() {
         guard !isSaved else { return }
-        if isSocialAnalysis && !shareAccountStillMatches() { return }
+        if !shareSessionStillMatches() { return }
         guard let place = parsedPlace else { return }
         guard let latitude = place.latitude,
               let longitude = place.longitude,
@@ -3703,14 +3721,23 @@ struct ShareExtensionView: View {
 
     private func saveReviewCandidates(_ candidates: [PendingReviewCandidate], sourceFallback: Bool = false) {
         guard !isSaved else { return }
-        if isSocialAnalysis && !sourceFallback && !shareAccountStillMatches() { return }
+        bindShareSessionOwnerIfNeeded()
+        if !sourceFallback && !shareSessionStillMatches() { return }
         guard !candidates.isEmpty else { return }
         guard let fileURL = appGroupFileURL(named: SAVEProductionConfig.pendingReviewCandidatesFileName) else {
             parseError = "Shared app storage is unavailable"
             return
         }
 
-        guard appendPendingItems(candidates, to: fileURL, as: PendingReviewCandidate.self) else { return }
+        let owner = shareOwnerSubject
+        let stamped = candidates.map { candidate -> PendingReviewCandidate in
+            var next = candidate
+            if next.ownerSubject == nil {
+                next.ownerSubject = owner
+            }
+            return next
+        }
+        guard appendPendingItems(stamped, to: fileURL, as: PendingReviewCandidate.self) else { return }
 
         savedReviewCandidateCount = candidates.count
         isSaved = true
