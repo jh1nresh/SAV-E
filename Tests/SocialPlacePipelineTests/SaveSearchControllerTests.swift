@@ -6240,6 +6240,8 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(content.contains("chooseSavedStampFromExactSearch"))
         XCTAssertTrue(content.contains("hasActiveExactSearchCorrection"))
         XCTAssertTrue(content.contains("isExactSearchSessionActive"))
+        XCTAssertTrue(content.contains("P2 4335565262"))
+        XCTAssertTrue(content.contains("isExactSearchSessionActive = false"))
         XCTAssertTrue(content.contains("mapDrawerPresentedActionError"))
         XCTAssertTrue(content.contains("MapDrawerActionErrorAlert"))
         XCTAssertTrue(content.contains("map.drawer.actionError"))

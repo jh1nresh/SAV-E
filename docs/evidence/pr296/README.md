@@ -64,10 +64,10 @@ rows, 32pt line-art stickers, no shared map, no animation (F-B11).
 
 | Topic | Packet / mock | 9fad61a simulator rasters | Current head (code) |
 | --- | --- | --- | --- |
-| P0 stickers | 32pt outline line-art | Filled postage boxes (kraft/gold/red/green) | 32pt stroke-only coffee / noodles / lantern / mountain |
+| P0 stickers | 32pt outline line-art | Filled postage boxes (kraft/gold/red/green) | 32pt official outlines coffee / noodle / temple / lantern |
 | P1 avatar ring | Packet forest ring | 2.4pt wobbly ink ring | 1.5pt circle stroke |
 | P1 Invite | Outline chip | 1.5pt capsule | 1pt capsule, label = Invite / 邀請 |
-| P1 Kai sticker | Outline lantern | Filled red lantern in a box | Outline lantern |
+| P1 Kai sticker | Official temple outline | Filled red lantern in a box | Official `.temple` (v2 lantern not adopted) |
 | P1 tab bar | Shared Atlas root bar | Home / Map / + / Friends / Passport | Unchanged shared chrome (not a Friends-only file) |
 | P2 background | Dotted paper | `SaveDottedBackground` (dots read faint at 1×) | Same |
 | P2 fixture text | last at Place · 2d | Mia / Leo / Kai / Ana last-at copy | Same isolated `--uitest-friends-town` fixture |

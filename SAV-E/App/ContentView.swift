@@ -1435,6 +1435,12 @@ struct ContentView: View {
             // binds `mapVM.correctionDrawerError` so a failed decision does
             // not open the stamp as if it were already corrected.
             if let resolved = await mapVM.chooseSavedStampFromExactSearch(place) {
+                // Successful attach retires the ContentView session too.
+                // mapVM already cleared exactSearchResolution; leaving this
+                // true would send the next ordinary saved tap into
+                // chooseSavedStampFromExactSearch → noActiveCorrectionSession
+                // (P2 4335565262).
+                isExactSearchSessionActive = false
                 openMapDetail(.savedPlace(resolved))
             }
         }
