@@ -425,16 +425,18 @@ struct SaveDoodlePassportPage: View {
     private func handleTap(_ slot: SaveDoodlePassportSlot) {
         guard case let .place(place, _, rank) = slot.content else { return }
         if rank == .none {
+            guard stampingID == nil else { return }
             visitError = nil
+            stampingID = slot.id
             Task {
                 let didVisit = await onMarkVisited(place)
                 if didVisit {
                     SaveHaptics.stamp()
-                    stampingID = slot.id
                     visitStore.recordVisit(for: place.id)
                     try? await Task.sleep(nanoseconds: 420_000_000)
                     stampingID = nil
                 } else {
+                    stampingID = nil
                     SaveHaptics.warning()
                     visitError = languageSettings.localized(
                         english: "Couldn’t update this place. Please try again.",

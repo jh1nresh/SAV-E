@@ -560,7 +560,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         XCTAssertTrue(profile.contains("SaveDoodlePassportPage("))
         XCTAssertTrue(profile.contains("SaveDoodleHomeProgressCatalog.cityPlaces"))
-        XCTAssertTrue(profile.contains("places: cityStampPlaces"))
+        XCTAssertTrue(profile.contains("places: localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces"))
         XCTAssertTrue(profile.contains("localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces"))
         XCTAssertTrue(profile.contains("markIveBeenHere"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")

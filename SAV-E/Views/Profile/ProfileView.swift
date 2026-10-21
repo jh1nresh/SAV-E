@@ -133,7 +133,7 @@ struct ProfileView: View {
 
     private var passportContent: some View {
             SaveDoodlePassportPage(
-                places: cityStampPlaces,
+                places: localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces,
                 onOpenPlace: onOpenPlace,
                 onMarkVisited: { place in
                     await markPlaceVisited(place)

@@ -30,6 +30,8 @@ struct SaveDoodleMapView: View {
     @StateObject private var checkIns = SaveDoodleCheckInStore()
     @State private var showsCityPicker = false
     @State private var stampPulse = false
+    @State private var isMutatingVisit = false
+    @State private var visitError: String?
 
     var body: some View {
         let followsHomeFilter = session.mapFollowsHomeFilter
@@ -358,6 +360,7 @@ struct SaveDoodleMapView: View {
                             }
                     }
                     .buttonStyle(.plain)
+                    .disabled(isMutatingVisit)
                     .accessibilityIdentifier("map.checkIn.undo")
                 } else {
                     Button {
@@ -383,10 +386,18 @@ struct SaveDoodleMapView: View {
                             }
                     }
                     .buttonStyle(.plain)
+                    .disabled(isMutatingVisit)
                     .accessibilityIdentifier("map.checkIn")
                 }
             }
             .padding(.top, SaveSpace.md)
+            if let visitError {
+                Text(visitError)
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.coral)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("map.checkIn.visitError")
+            }
         }
         .padding(.horizontal, SaveLayout.screenMargin)
         .padding(.bottom, SaveSpace.md)
@@ -568,8 +579,11 @@ struct SaveDoodleMapView: View {
     }
 
     private func performCheckIn(_ place: Place) {
+        guard !isMutatingVisit else { return }
         var updated = place
         updated.status = .visited
+        visitError = nil
+        isMutatingVisit = true
         Task {
             let accepted = await checkIns.applyCheckIn(
                 placeID: place.id,
@@ -577,7 +591,15 @@ struct SaveDoodleMapView: View {
             ) {
                 try await mapViewModel.updatePlace(updated)
             }
-            guard accepted else { return }
+            isMutatingVisit = false
+            guard accepted else {
+                SaveHaptics.warning()
+                visitError = languageSettings.localized(
+                    english: "Couldn’t update this place. Please try again.",
+                    traditionalChinese: "暫時無法更新這個地點，請再試一次。"
+                )
+                return
+            }
             SaveHaptics.stamp()
             stampPulse = false
             withAnimation(SaveTheme.Motion.stampSpring) {
@@ -587,6 +609,9 @@ struct SaveDoodleMapView: View {
     }
 
     private func undoCheckIn(_ place: Place) {
+        guard !isMutatingVisit else { return }
+        visitError = nil
+        isMutatingVisit = true
         Task {
             let accepted = await checkIns.applyUndo(placeID: place.id) { restoreStatus in
                 guard place.status != restoreStatus else { return }
@@ -594,7 +619,15 @@ struct SaveDoodleMapView: View {
                 updated.status = restoreStatus
                 try await mapViewModel.updatePlace(updated)
             }
-            guard accepted else { return }
+            isMutatingVisit = false
+            guard accepted else {
+                SaveHaptics.warning()
+                visitError = languageSettings.localized(
+                    english: "Couldn’t undo this visit. Please try again.",
+                    traditionalChinese: "暫時無法撤銷這次打卡，請再試一次。"
+                )
+                return
+            }
             stampPulse = false
         }
     }

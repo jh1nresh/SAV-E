@@ -138,6 +138,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         let tapAt = try XCTUnwrap(page.range(of: "private func handleTap"))
         let nextAt = try XCTUnwrap(page.range(of: "private func slotAccessibilityID"))
         let tap = page[tapAt.lowerBound..<nextAt.lowerBound]
+        XCTAssertTrue(tap.contains("guard stampingID == nil"))
         let visitAt = try XCTUnwrap(tap.range(of: "if didVisit"))
         let stampAt = try XCTUnwrap(tap.range(of: "SaveHaptics.stamp()"))
         XCTAssertLessThan(visitAt.lowerBound, stampAt.lowerBound)

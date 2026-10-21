@@ -117,10 +117,14 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("applyCheckIn("))
         XCTAssertTrue(map.contains("priorStatus: place.status"))
         XCTAssertTrue(map.contains("applyUndo(placeID: place.id)"))
+        XCTAssertTrue(map.contains("map.checkIn.visitError"))
+        XCTAssertTrue(map.contains("isMutatingVisit"))
+        XCTAssertTrue(map.contains(".disabled(isMutatingVisit)"))
         let checkInAt = try XCTUnwrap(map.range(of: "private func performCheckIn"))
         let undoAt = try XCTUnwrap(map.range(of: "private func undoCheckIn"))
         let perform = map[checkInAt.lowerBound..<undoAt.lowerBound]
         XCTAssertFalse(perform.contains("try?"))
+        XCTAssertTrue(perform.contains("guard !isMutatingVisit"))
         let undo = map[undoAt.lowerBound...]
         XCTAssertFalse(String(undo.prefix(800)).contains("try?"))
     }
@@ -157,6 +161,32 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertFalse(failedUndo)
         XCTAssertEqual(store.visitCount(for: placeID), 1)
         XCTAssertTrue(store.hasCheckedInToday(placeID: placeID))
+    }
+
+    @MainActor
+    func testNextDayCheckInRefreshesUndoBaselineToVisited() async throws {
+        var now = Date(timeIntervalSince1970: 1_700_000_000)
+        let defaults = UserDefaults(suiteName: "save.doodle.checkin.nextday.\(UUID().uuidString)")!
+        let store = SaveDoodleCheckInStore(
+            defaults: defaults,
+            calendar: Calendar(identifier: .gregorian),
+            now: { now }
+        )
+        let placeID = UUID()
+
+        let dayOne = await store.applyCheckIn(placeID: placeID, priorStatus: .wantToGo) {}
+        XCTAssertTrue(dayOne)
+        now = now.addingTimeInterval(86_400)
+        XCTAssertTrue(store.canCheckIn(placeID: placeID))
+        let dayTwo = await store.applyCheckIn(placeID: placeID, priorStatus: .visited) {}
+        XCTAssertTrue(dayTwo)
+
+        var restored: PlaceStatus?
+        let undone = await store.applyUndo(placeID: placeID) { status in
+            restored = status
+        }
+        XCTAssertTrue(undone)
+        XCTAssertEqual(restored, .visited)
     }
 
     func testMapWritesAreVisibleToSharedPassportHistory() {

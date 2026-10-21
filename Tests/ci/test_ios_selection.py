@@ -220,6 +220,8 @@ class CoverageTests(unittest.TestCase):
         self.assertIn("--threshold 0.90", ios_workflow)
         self.assertIn("--skip-screens", ios_workflow)
         self.assertIn("testDoodlePaywallParity", ios_workflow)
+        self.assertIn("grep -q 'testDoodleCaptureParity'", ios_workflow)
+        self.assertIn("pr295-capture-light.png", ios_workflow)
         self.assertIn("xcrun simctl io booted screenshot", ios_workflow)
         self.assertNotIn("run-visual-parity.sh", ci_workflow)
         self.assertIn("SAVE_UI_TEST_FOCUS", ios_workflow)
