@@ -990,6 +990,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(MapViewModel.localVaultRecordBelongsToActiveAccount("did:privy:a", currentUserId: nil))
     }
 
+    @MainActor
     func testSourceOnlyFallbackStampsTheSignedInOwner() throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("source-only-owner-\(UUID().uuidString).json")
