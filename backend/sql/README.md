@@ -33,6 +33,11 @@ hygiene or docs PR.
 `idx_places_id_user_id` with `IF NOT EXISTS` before
 `references places(id, user_id)`.
 
+Founder-only, **not** in the apply order above: `google-photo-url-cleanup.sql`
+and `google-photo-url-verify.sql`. See
+[docs/operations/google-photo-url-cleanup.md](../../docs/operations/google-photo-url-cleanup.md).
+Merge is not apply. Agents must not run them.
+
 ## Apply
 
 From `backend/`:

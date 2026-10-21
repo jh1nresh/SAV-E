@@ -1072,6 +1072,30 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         try await service.updatePlace(hoursOnly, previous: Place.mock)
     }
 
+    func testSavePlaceOmitsRetiredBusinessPhotoColumn() async throws {
+        var place = Place.mock
+        place.businessPhotoUrls = [
+            "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref",
+            "https://example.com/own.jpg",
+        ]
+        let service = SupabaseService(
+            apiBaseURL: "https://analysis.test",
+            session: session(),
+            accessTokenProvider: { "test-token" }
+        )
+        AnalysisRequestURLProtocol.handler = { request in
+            XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.url?.path, "/places")
+            let body = try AnalysisRequestURLProtocol.body(request)
+            XCTAssertNil(
+                body["business_photo_urls"],
+                "POST /places must omit retired business_photo_urls so existing rows survive until founder cleanup"
+            )
+            return (200, "{}")
+        }
+        try await service.savePlace(place, userId: "did:privy:owner")
+    }
+
     func testUpdatePlaceOmitsNilEnrichmentUnlessExplicitlyCleared() async throws {
         var local = Place.mock
         local.rating = nil
@@ -1302,7 +1326,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         XCTAssertNil(enrichmentBody["extracted_dishes"], "Photo enrichment must not rewrite dishes")
         XCTAssertNil(enrichmentBody["note"], "Photo enrichment must not rewrite the user note")
         XCTAssertNil(enrichmentBody["memory_meta"], "Photo enrichment must not rewrite stamp memory")
-        XCTAssertEqual(enrichmentBody["business_photo_urls"] as? [String], ["https://photos.example/1.jpg"])
+        XCTAssertNil(enrichmentBody["business_photo_urls"], "Session business photos must not be written to places.business_photo_urls")
 
         var emptied = merged
         emptied.placeHighlights = []

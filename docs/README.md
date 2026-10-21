@@ -22,6 +22,7 @@
 | [Runtime agent contract](save-agent-contract.md) | Evidence and memory boundaries |
 | [Public test readiness](save-public-test-readiness.md) | Readiness checklist and evidence requirements |
 | [Backend rebuild runbook](2026-08-04-backend-rebuild-runbook.md) | Dated backend recovery procedure |
+| [Google photo URL cleanup](operations/google-photo-url-cleanup.md) | Founder-only G5 backup / cleanup / verify (not a migration) |
 | [App Store Connect rename](app-store-connect-savvy-rename.md) | Savvy naming procedure |
 
 ## Security reviews

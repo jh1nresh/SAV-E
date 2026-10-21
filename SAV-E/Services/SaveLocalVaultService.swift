@@ -258,7 +258,7 @@ final class SaveLocalVaultService: Sendable {
                     createdAt: place.createdAt,
                     googlePlaceId: place.googlePlaceId,
                     sourceImageUrl: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
-                    businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
+                    businessPhotoUrls: PlaceBusinessPhotoPersistence.importedRemoteURLs(place.businessPhotoUrls),
                     mergedPlaceIDs: place.mergedPlaceIDs
                 )
                 records.removeAll { record in
@@ -560,7 +560,7 @@ private extension SaveMemoryRecord {
             sourceUrl: sourceURL,
             sourcePlatform: SourcePlatform.from(urlString: sourceURL),
             sourceImageUrl: GooglePlacesPhotoURL.persistableString(sourceImageUrl),
-            businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(businessPhotoUrls),
+            businessPhotoUrls: PlaceBusinessPhotoPersistence.importedRemoteURLs(businessPhotoUrls),
             extractedDishes: recommendedItems.map(\.name).nilIfEmpty,
             priceRange: nil,
             recommender: sourceHandle,

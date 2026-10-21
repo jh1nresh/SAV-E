@@ -26,6 +26,7 @@ nonisolated enum MessagesVaultReader {
     static let fileName = "save-memory-records.json"
 
     /// Mirrors the persisted shape of `SaveMemoryRecord` (only the fields we need).
+    /// Leftover `businessPhotoUrls` keys are ignored; that store is retired.
     private struct StoredRecord: Decodable {
         let id: UUID
         let state: String
@@ -38,7 +39,6 @@ nonisolated enum MessagesVaultReader {
         let rating: Double?
         let sourceURL: String?
         let sourceImageUrl: String?
-        let businessPhotoUrls: [String]?
     }
 
     static func confirmedPlaces(limit: Int = 250) -> [MessagesPlace] {
@@ -66,9 +66,7 @@ nonisolated enum MessagesVaultReader {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !name.isEmpty else { return nil }
 
-                let firstBusinessPhoto = record.businessPhotoUrls?
-                    .first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-                let photo = firstNonEmpty(record.sourceImageUrl, firstBusinessPhoto)
+                let photo = firstNonEmpty(record.sourceImageUrl)
 
                 return MessagesPlace(
                     id: record.id,

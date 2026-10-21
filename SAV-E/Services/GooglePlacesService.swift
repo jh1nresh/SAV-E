@@ -68,8 +68,16 @@ struct GooglePlacePhotoRecord: Hashable {
 enum GoogleMapsPlatformAvailability {
     /// Mainland China is a Google Maps Platform prohibited territory.
     /// Users there must not trigger Places calls; show coral / own photos.
-    static func isAllowed(regionCode: String? = Locale.current.region?.identifier) -> Bool {
-        regionCode?.uppercased() != "CN"
+    nonisolated static func isAllowed(regionCode: String? = nil) -> Bool {
+        let resolved = regionCode ?? currentRegionCode()
+        return resolved?.uppercased() != "CN"
+    }
+
+    /// `Locale.current` is main-actor isolated; CFLocale is safe from
+    /// persist/display helpers that must stay `nonisolated`.
+    nonisolated static func currentRegionCode() -> String? {
+        let identifier = CFLocaleGetIdentifier(CFLocaleCopyCurrent()) as String
+        return Locale(identifier: identifier).region?.identifier
     }
 }
 
@@ -765,6 +773,15 @@ enum GooglePlacesPhotoURL {
         encodedComponents.percentEncodedQuery = encodedComponents.percentEncodedQuery?
             .replacingOccurrences(of: "+", with: "%2B")
         return encodedComponents.url
+    }
+}
+
+/// `places.business_photo_urls` is retired as a read/write source. Session
+/// photos come from `PlaceBusinessEnricher` plus durable `google_place_id`.
+enum PlaceBusinessPhotoPersistence {
+    nonisolated static func importedRemoteURLs(_ values: [String]?) -> [String]? {
+        _ = values
+        return nil
     }
 }
 

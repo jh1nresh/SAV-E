@@ -13,6 +13,26 @@ function walkFiles(relativeDir: string, extensions: Set<string>): string[] {
     .map((name) => join(relativeDir, name));
 }
 
+test("founder Google photo cleanup SQL is transactional and non-destructive", () => {
+  const cleanup = readFileSync(new URL("../sql/google-photo-url-cleanup.sql", import.meta.url), "utf8");
+  const verify = readFileSync(new URL("../sql/google-photo-url-verify.sql", import.meta.url), "utf8");
+  const runbook = readFileSync(new URL("../../docs/operations/google-photo-url-cleanup.md", import.meta.url), "utf8");
+  assert.match(cleanup, /^\s*begin;/m);
+  assert.match(cleanup, /^\s*commit;/m);
+  assert.doesNotMatch(cleanup, /drop\s+(table|column)/i);
+  assert.match(cleanup, /business_photo_urls = '\{\}'/);
+  assert.match(cleanup, /source_image_url = null/);
+  assert.match(verify, /leftover_business_photo_urls/);
+  assert.match(verify, /leftover_google_source_image_urls/);
+  assert.match(runbook, /railway run --service save-backend/);
+  assert.match(runbook, /pg_dump/);
+  assert.match(runbook, /select id, business_photo_urls/);
+  assert.match(runbook, /## 1\. BACKUP/);
+  assert.match(runbook, /## 2\. CLEANUP/);
+  assert.match(runbook, /## 3\. VERIFY/);
+  assert.match(runbook, /Agents and this PR must \*\*not\*\* run/);
+});
+
 test("public city atlas pages do not embed Google Places photo hosts", () => {
   const files = [
     ...walkFiles("SAV-E/Views/Atlas", new Set([".swift"])),

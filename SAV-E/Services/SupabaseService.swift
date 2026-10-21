@@ -255,7 +255,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         guard isConfigured else { return }
 
         let row = PlaceRow.from(place: place, userId: userId)
-        let body = try JSONEncoder.supabase.encode(row)
+        let body = try row.encodedForRemoteWrite()
 
         try await request(path: "/places", method: "POST", body: body)
     }
@@ -268,7 +268,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         guard isConfigured else { throw SupabaseError.notConfigured }
 
         let row = PlaceRow.from(place: place, userId: userId, friendShareCode: code)
-        let body = try JSONEncoder.supabase.encode(row)
+        let body = try row.encodedForRemoteWrite()
         let data = try await request(path: "/places", method: "POST", body: body)
         let response = try JSONDecoder.supabase.decode(FriendSharedPlaceSaveResponse.self, from: data)
         guard let outcome = FriendSharedPlaceSaveResult.Outcome(rawValue: response.outcome) else {
@@ -304,13 +304,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             hasPrevious: hasPrevious,
             into: &updates
         )
-        Self.assignChangedOptional(
-            "business_photo_urls",
-            GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
-            previous: GooglePlacesPhotoURL.persistableStrings(previous?.businessPhotoUrls),
-            hasPrevious: hasPrevious,
-            into: &updates
-        )
+        // `business_photo_urls` is retired. Session photos are not written back.
         // Account-backed attribution lives on `recommender`. Send a handle
         // only when it is displayable and actually changed, so a photo
         // enrichment PATCH cannot rewrite or invent one.
@@ -2020,9 +2014,7 @@ struct PlaceRecoveryDecisionDraft: Equatable {
         if let value = GooglePlacesPhotoURL.persistableString(finalPlace.sourceImageUrl) {
             payload["source_image_url"] = value
         }
-        if let value = GooglePlacesPhotoURL.persistableStrings(finalPlace.businessPhotoUrls) {
-            payload["business_photo_urls"] = value
-        }
+        // `business_photo_urls` is retired; do not send session photo URLs.
         if let value = finalPlace.extractedDishes { payload["extracted_dishes"] = value }
         if let value = finalPlace.priceRange { payload["price_range"] = value }
         if let value = finalPlace.recommender { payload["recommender"] = value }
@@ -2187,7 +2179,7 @@ private struct PlaceRow: Codable {
             providerPlaceId: provider_place_id,
             providerMapUrl: provider_map_url,
             sourceImageUrl: GooglePlacesPhotoURL.persistableString(source_image_url),
-            businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(business_photo_urls),
+            businessPhotoUrls: PlaceBusinessPhotoPersistence.importedRemoteURLs(business_photo_urls),
             extractedDishes: extracted_dishes,
             priceRange: price_range,
             recommender: recommender,
@@ -2225,7 +2217,7 @@ private struct PlaceRow: Codable {
             provider_place_id: place.providerPlaceId,
             provider_map_url: place.providerMapUrl,
             source_image_url: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
-            business_photo_urls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
+            business_photo_urls: PlaceBusinessPhotoPersistence.importedRemoteURLs(place.businessPhotoUrls),
             extracted_dishes: place.extractedDishes,
             memory_meta: place.memoryMetaForPersistence(),
             price_range: place.priceRange,
@@ -2238,6 +2230,23 @@ private struct PlaceRow: Codable {
             social_signal: nil,
             friend_share_code: friendShareCode
         )
+    }
+
+    /// Omits `business_photo_urls` entirely. JSON `null` would still be a
+    /// writable field on insert; founder cleanup owns clearing existing rows.
+    func encodedForRemoteWrite() throws -> Data {
+        let data = try JSONEncoder.supabase.encode(self)
+        guard var object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw EncodingError.invalidValue(
+                self,
+                EncodingError.Context(
+                    codingPath: [],
+                    debugDescription: "Place write body was not a JSON object"
+                )
+            )
+        }
+        object.removeValue(forKey: "business_photo_urls")
+        return try JSONSerialization.data(withJSONObject: object)
     }
 }
 

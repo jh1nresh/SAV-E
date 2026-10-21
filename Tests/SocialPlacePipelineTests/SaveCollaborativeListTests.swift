@@ -106,6 +106,15 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
+    func testRemoteBusinessPhotoColumnIsNeverImported() {
+        XCTAssertNil(PlaceBusinessPhotoPersistence.importedRemoteURLs([
+            "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref",
+            "https://example.com/own.jpg",
+        ]))
+        XCTAssertNil(PlaceBusinessPhotoPersistence.importedRemoteURLs(nil))
+    }
+
+    @MainActor
     func testPersistableStringDropsPhotoNamesAndPlacesMediaURLs() {
         XCTAssertNil(GooglePlacesPhotoURL.persistableString(
             "places/ChIJ123/photos/ABC"
