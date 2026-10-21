@@ -2085,9 +2085,9 @@ final class MapViewModel: ObservableObject {
         return (true, committed)
     }
 
-    /// Retire the originating clue and same-city / nearby same-name leftovers
-    /// (seed + recapture of one place). A same-name clue in another city is a
-    /// different candidate and stays.
+    /// Retire the originating clue and same-place leftovers (seed + recapture).
+    /// Same-name clues in another city, or same-city branches far enough to
+    /// have their own coordinates, stay.
     private func retireResolvedReviewClue(
         _ clue: PlaceReviewCandidate,
         committed: Bool = true
@@ -2118,19 +2118,28 @@ final class MapViewModel: ObservableObject {
         of resolved: PlaceReviewCandidate
     ) -> Bool {
         if leftover.id == resolved.id { return true }
-        let sameName = leftover.name.localizedCaseInsensitiveCompare(resolved.name) == .orderedSame
-        guard sameName else { return false }
+        guard leftover.name.localizedCaseInsensitiveCompare(resolved.name) == .orderedSame else {
+            return false
+        }
+        if let meters = reviewClueDistanceMeters(leftover, resolved) {
+            return meters < 250
+        }
         let leftoverCity = leftover.city?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         let resolvedCity = resolved.city?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-        if leftoverCity.isEmpty || resolvedCity.isEmpty || leftoverCity == resolvedCity {
-            return true
-        }
+        // No coordinates to prove they are different places. Only collapse a
+        // nameless-city leftover when both name the same city (seed + recapture).
+        return !leftoverCity.isEmpty && leftoverCity == resolvedCity
+    }
+
+    private func reviewClueDistanceMeters(
+        _ leftover: PlaceReviewCandidate,
+        _ resolved: PlaceReviewCandidate
+    ) -> CLLocationDistance? {
         guard let lat1 = leftover.latitude, let lon1 = leftover.longitude,
               let lat2 = resolved.latitude, let lon2 = resolved.longitude
-        else { return false }
-        let meters = CLLocation(latitude: lat1, longitude: lon1)
+        else { return nil }
+        return CLLocation(latitude: lat1, longitude: lon1)
             .distance(from: CLLocation(latitude: lat2, longitude: lon2))
-        return meters < 250
     }
 
     /// Terminal actions for this clue (reject / archive / source-only / confirm)
