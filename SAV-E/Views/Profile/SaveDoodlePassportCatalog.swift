@@ -190,8 +190,8 @@ enum SaveDoodlePassportCatalog {
         )
         let goal = Self.goal(for: max(city.count, 1))
         let visible = Array(city.prefix(goal))
-        var result: [SaveDoodlePassportSlot] = visible.enumerated().map { index, place in
-            let kind = stickerKind(for: place, index: index)
+        var result: [SaveDoodlePassportSlot] = visible.map { place in
+            let kind = stickerKind(for: place)
             let rank = visitStore.rank(for: place.id, visited: place.status == .visited)
             return SaveDoodlePassportSlot(
                 id: place.id.uuidString,
@@ -208,7 +208,7 @@ enum SaveDoodlePassportCatalog {
         return result
     }
 
-    static func stickerKind(for place: Place, index: Int = 0) -> SaveDoodleStickerKind {
+    static func stickerKind(for place: Place) -> SaveDoodleStickerKind {
         if let hinted = kindHinted(by: place.name) {
             return hinted
         }
@@ -227,7 +227,7 @@ enum SaveDoodlePassportCatalog {
         case .shopping:
             options = [.bag, .bookstore]
         }
-        let value = stableHash(place.id.uuidString, place.name, "\(index)")
+        let value = stableHash(place.id.uuidString)
         return options[value % options.count]
     }
 

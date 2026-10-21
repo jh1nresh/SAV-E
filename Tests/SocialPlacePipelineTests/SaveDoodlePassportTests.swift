@@ -146,8 +146,9 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(page.contains(".frame(width: 8, height: 8)"))
         XCTAssertTrue(page.contains("guard stampingID == nil else { return }"))
         XCTAssertTrue(page.contains("if stampingID != nil { return true }"))
-        XCTAssertTrue(catalog.contains("stableHash("))
+        XCTAssertTrue(catalog.contains("stableHash(place.id.uuidString)"))
         XCTAssertFalse(catalog.contains("Hasher()"))
+        XCTAssertFalse(catalog.contains("place.name, \"\\(index)\""))
     }
 
     func testUnhintedStickerKindIsStableForTheSamePlace() {
@@ -165,7 +166,9 @@ final class SaveDoodlePassportTests: XCTestCase {
         )
         var second = first
         second.address = "Jingshan Front St, Beijing, China"
+        second.name = "Different Spot"
         XCTAssertNil(SaveDoodlePassportCatalog.kindHinted(by: first.name))
+        XCTAssertNil(SaveDoodlePassportCatalog.kindHinted(by: second.name))
         XCTAssertEqual(
             SaveDoodlePassportCatalog.stickerKind(for: first),
             SaveDoodlePassportCatalog.stickerKind(for: second)
