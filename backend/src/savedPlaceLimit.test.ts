@@ -196,6 +196,26 @@ test("C2 concurrent 50th and 51st serialize to exactly one insert", async () => 
   assert.ok(rejected.reason instanceof SavedPlaceLimitError);
 });
 
+test("A1/D3 count is this account's places only", () => {
+  const source = readFileSync(new URL("../src/savedPlaceLimit.ts", import.meta.url), "utf8");
+  assert.match(
+    source,
+    /select count\(\*\)::int as count from places where user_id = \$1/,
+  );
+  assert.doesNotMatch(source, /from cities|from lists|from place_candidates|from friend_/);
+});
+
+test("C5 expired Pro keeps existing rows and gates only new inserts", () => {
+  assert.equal(
+    decideSavedPlaceInsert({ tier: "free", savedPlaceCount: 80, isNewPlace: false }),
+    "allowed",
+  );
+  assert.equal(
+    decideSavedPlaceInsert({ tier: "free", savedPlaceCount: 80, isNewPlace: true }),
+    "over_free_limit",
+  );
+});
+
 test("D2 over-limit body is counts and codes only", () => {
   const error = new SavedPlaceLimitError();
   assert.deepEqual(Object.keys(error.body).sort(), ["code", "error", "limit"]);
