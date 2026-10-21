@@ -872,6 +872,14 @@ final class SAVEProductionConfigTests: XCTestCase {
             "do not re-read the signed-in account after the analysis await"
         )
         XCTAssertTrue(share.contains("analysisCredential?.ownerSubject ?? ShareAnalysisKeychain.read()?.ownerSubject"))
+        XCTAssertTrue(
+            share.contains("ownerSubject: shareOwnerSubject"),
+            "locally parsed over-cap shares must keep the keychain owner"
+        )
+        XCTAssertFalse(
+            share.contains("ownerSubject: analysisCredential?.ownerSubject,"),
+            "do not persist an ownerless share when only analysisCredential is missing"
+        )
         XCTAssertTrue(map.contains("belongingTo: authService.currentUserId"))
         XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: userId)"))
         let privy = try source(at: "SAV-E/Services/PrivyAuthService.swift")

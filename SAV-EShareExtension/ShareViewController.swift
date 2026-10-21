@@ -1519,6 +1519,12 @@ struct ShareExtensionView: View {
         return true
     }
 
+    /// Local parse and source-only writes must keep the signed-in owner even
+    /// when the social-analysis credential was never loaded.
+    private var shareOwnerSubject: String? {
+        analysisCredential?.ownerSubject ?? ShareAnalysisKeychain.read()?.ownerSubject
+    }
+
     private func keepSocialSource() {
         guard !isSaved else { return }
         // Failed analysis never creates a map pin; this button is an explicit
@@ -3260,7 +3266,7 @@ struct ShareExtensionView: View {
         longitude: Double
     ) -> PendingReviewCandidate {
         PendingReviewCandidate(
-            ownerSubject: analysisCredential?.ownerSubject,
+            ownerSubject: shareOwnerSubject,
             candidateName: cleanPlaceName(place.name),
             address: place.address,
             category: selectedCategory,
@@ -3663,7 +3669,7 @@ struct ShareExtensionView: View {
         }
 
         let pendingPlace = PendingSharedPlace(
-            ownerSubject: analysisCredential?.ownerSubject,
+            ownerSubject: shareOwnerSubject,
             googlePlaceId: place.googlePlaceId,
             name: place.name,
             address: place.address,
@@ -3740,7 +3746,7 @@ struct ShareExtensionView: View {
             evidence: diagnostic.found + diagnostic.attempts + diagnosticSearchEvidence(diagnostic),
             evidenceDiagnostic: diagnostic,
             createdAt: Date(),
-            ownerSubject: analysisCredential?.ownerSubject ?? ShareAnalysisKeychain.read()?.ownerSubject
+            ownerSubject: shareOwnerSubject
         )
         var saved = false
         let coordinated = coordinate(fileURL, purpose: "append source-only memory") { coordinatedURL in
