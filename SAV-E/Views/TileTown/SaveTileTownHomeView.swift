@@ -240,7 +240,7 @@ struct SaveTileTownHomeView: View {
         Button(action: presentation.onCapture) {
             Text(localized("Paste your first link", "貼上第一個連結"))
                 .font(SaveAtlasType.strong(16))
-                .foregroundStyle(.white)
+                .foregroundStyle(SaveAtlasPalette.cream)
                 .frame(maxWidth: .infinity, minHeight: 48)
                 .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
@@ -312,7 +312,7 @@ struct SaveTileTownHomeView: View {
             Button(action: presentation.onReviewAll) {
                 Text(localized("Review clues", "確認線索"))
                     .font(SaveAtlasType.strong(13))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(SaveAtlasPalette.cream)
                     .padding(.horizontal, 12)
                     .frame(minHeight: 44)
                     .background(SaveAtlasPalette.coral, in: Capsule())
@@ -367,7 +367,7 @@ struct SaveTileTownHomeView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.eyebrow)
                                 .font(SaveAtlasType.strong(11))
-                                .foregroundStyle(item.kind == .sourceOnly ? SaveAtlasPalette.coral : SaveAtlasPalette.forest)
+                                .foregroundStyle(item.kind == .sourceOnly ? SaveAtlasPalette.coralStrong : SaveAtlasPalette.forest)
                             Text(item.name)
                                 .font(SaveAtlasType.strong(16))
                                 .foregroundStyle(SaveAtlasPalette.ink)

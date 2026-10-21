@@ -280,7 +280,10 @@ table ever disagree, fix whichever one drifted in the same PR.
 | Forest | `SaveAtlasPalette.forest` | `#0E4A33` | `#B9E0C9` | Display headings, ticket titles, confirmed accent |
 | Ink | `SaveAtlasPalette.ink` | `#2F2E23` | `#F4F1E4` | Primary text, shadows at low opacity |
 | Muted | `SaveAtlasPalette.muted` | `#62594F` | `#CFC4B8` | Supporting and secondary copy |
-| Coral | `SaveAtlasPalette.coral` | `#EF6649` | `#D77661` | Postage accent: primary CTA, source-clue state. **PLACEHOLDER** pending DESIGN 2026-10-22 10:00 CST (was `#F26B4A` / `#D97861`; darkened so cream `#FFF9EB` is ≥ 3:1). |
+| Coral | `SaveAtlasPalette.coral` | `#E95C3A` | `#D56B52` | Postage accent: primary CTA, source-clue state. Cream `#FFF9EB` on this fill is 3.30:1. |
+| Coral strong | `SaveAtlasPalette.coralStrong` | `#CA4424` | `#BE5137` | Small text on paper only. Not a fill. |
+| Brand coral | `SaveAtlasPalette.brandCoral` | `#F26B4A` | `#F26B4A` | App icon and wordmark assets only. Do not use for UI chrome. |
+| Cream | `SaveAtlasPalette.cream` | `#FFF9EB` | `#FFF9EB` | Non-adaptive labels on coral fills |
 | Mint | `SaveAtlasPalette.mint` | `#D6E8C4` | `#4F7258` | Confirmed / saved state fills |
 | Sky | `SaveAtlasPalette.sky` | `#B5E3F5` | `#3F758B` | Review state fills |
 | Lavender | `SaveAtlasPalette.lavender` | `#E3D6F7` | `#57466F` | Premium and soft brand accent |
@@ -358,7 +361,7 @@ Kraft is the neutral "luggage tag" material for chips and tags on Atlas paper.
 
 Coral is the postage accent and the strongest color on any Atlas surface.
 
-- Primary action: coral fill, white label, `strong` type. Secondary action:
+- Primary action: coral fill, cream label, `strong` type. Secondary action:
   paper fill, `ink` label, `line` stroke. This pair replaces the legacy
   honey/cream button pair on Atlas surfaces.
 - Postage and ticket shapes carry the metaphor: `SavePostcardScallopedRectangle`,

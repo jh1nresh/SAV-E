@@ -1727,7 +1727,7 @@ struct MapDetailDrawerView: View {
                     )
                     .font(SaveAtlasType.strong(10))
                     .tracking(0.65)
-                    .foregroundStyle(isSkyTicket ? SaveAtlasPalette.forest : SaveAtlasPalette.coral)
+                    .foregroundStyle(isSkyTicket ? SaveAtlasPalette.forest : SaveAtlasPalette.coralStrong)
 
                     Text(candidate.name)
                         .font(SaveAtlasType.strong(19, relativeTo: .headline))
@@ -2462,7 +2462,7 @@ private struct SavedMapDetailDrawerContent: View {
                         systemImage: "suitcase.rolling.fill"
                     )
                     .font(SaveAtlasType.strong(13))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(SaveAtlasPalette.cream)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
                     .frame(maxWidth: .infinity, minHeight: 44)
@@ -3000,7 +3000,7 @@ private struct SocialPlaceDetailCard: View {
             Button(action: onSave) {
                 Label(languageSettings.localized(english: "Save to my Savvy", traditionalChinese: "保存到我的 Savvy"), systemImage: "plus.circle.fill")
                     .font(SaveAtlasType.strong(14))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(SaveAtlasPalette.cream)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(SaveAtlasPalette.coral)
@@ -3357,7 +3357,7 @@ private struct ReviewCandidateDetailCard: View {
                         title: primaryActionTitle,
                         systemImage: primaryAction.systemImage,
                         fill: SaveAtlasPalette.coral,
-                        foreground: .white,
+                        foreground: SaveAtlasPalette.cream,
                         disabled: isWorking,
                         action: performPrimaryAction
                     )
@@ -4012,7 +4012,7 @@ private struct UnsavedMapCandidateCard: View {
                         : SaveSearchPrimaryAction.savePlace.displayName(language: languageSettings.language),
                     systemImage: presentation.primaryActionSystemImage,
                     fill: SaveAtlasPalette.coral,
-                    foreground: .white,
+                    foreground: SaveAtlasPalette.cream,
                     disabled: isWorking,
                     action: { onSave(displayCandidate) }
                 )
@@ -4345,7 +4345,7 @@ private struct AIResultActionBar: View {
             Button(action: onFollowUp) {
                 Label(languageSettings.localized(english: "Follow up", traditionalChinese: "追問"), systemImage: "text.bubble")
                     .font(SaveAtlasType.strong(13))
-                    .foregroundColor(.white)
+                    .foregroundStyle(SaveAtlasPalette.cream)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
                     .frame(maxWidth: .infinity)
@@ -4396,7 +4396,7 @@ private enum AgentCommandTone {
 
     var textColor: Color {
         switch self {
-        case .signal: return SaveAtlasPalette.coral
+        case .signal: return SaveAtlasPalette.coralStrong
         case .honey: return .saveInk
         case .sky: return .saveInk
         case .cocoa: return .saveInk

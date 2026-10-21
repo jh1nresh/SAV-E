@@ -146,7 +146,7 @@ struct SaveLibraryView: View {
                 Button(action: onOpenCapture) {
                     Image(systemName: "plus")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(SaveAtlasPalette.cream)
                         .frame(width: 44, height: 44)
                         .background(SaveAtlasPalette.coral.opacity(0.92), in: RoundedRectangle(cornerRadius: 14))
                 }
@@ -745,12 +745,13 @@ private struct SaveAtlasReviewPocket: View {
                     Text("\(count)")
                         .font(SaveAtlasType.editorial(28))
                         .monospacedDigit()
+                        .foregroundStyle(SaveAtlasPalette.coral)
                     Text(countLabel)
                         .font(SaveAtlasType.regular(10))
+                        .foregroundStyle(SaveAtlasPalette.coralStrong)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                 }
-                .foregroundStyle(SaveAtlasPalette.coral)
                 .frame(width: 66, height: 66)
                 .background(SaveAtlasPalette.paper.opacity(0.34), in: SaveAtlasSealShape())
                 .overlay {

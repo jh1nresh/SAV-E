@@ -57,7 +57,7 @@ struct NavigationCardComponent: View {
                 // Postage-coral primary CTA (spec P2 follow-up).
                 Label("Start Navigation", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundStyle(SaveAtlasPalette.cream)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(SaveAtlasPalette.coral)

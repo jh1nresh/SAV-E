@@ -212,7 +212,7 @@ struct SaveProPaywallView: View {
                 if let statusMessage {
                     Text(statusMessage)
                         .font(SaveTheme.Typography.supporting)
-                        .foregroundStyle(SaveAtlasPalette.coral)
+                        .foregroundStyle(SaveAtlasPalette.coralStrong)
                 }
 
                 Button {

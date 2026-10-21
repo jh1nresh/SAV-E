@@ -45,8 +45,10 @@ private enum SaveTheme {
     // import the main app target, so these values must stay aligned with
     // SaveAtlasPalette in Color+Theme.swift.
     static let cream = Color(hex: "FDF8F3")
-    static let yellow = Color(hex: "EF6649")
-    static let coral = Color(hex: "EF6649")
+    static let atlasCream = Color(hex: "FFF9EB")
+    static let yellow = Color(hex: "E95C3A")
+    static let coral = Color(hex: "E95C3A")
+    static let coralStrong = Color(hex: "CA4424")
     static let sky = Color(hex: "B5E3F5")
     static let mint = Color(hex: "D6E8C4")
     static let pink = Color(hex: "F0CFA1")
@@ -593,7 +595,7 @@ struct ShareExtensionView: View {
                 Text("SAVVY CAPTURE")
                     .font(ShareAtlasType.strong(11))
                     .tracking(0.9)
-                    .foregroundColor(SaveTheme.coral)
+                    .foregroundColor(SaveTheme.coralStrong)
                 Spacer()
                 ShareStatusPill(text: "Checking place clues")
             }
@@ -778,7 +780,7 @@ struct ShareExtensionView: View {
                 Text("SAVVY CAPTURE")
                     .font(ShareAtlasType.strong(11))
                     .tracking(0.9)
-                    .foregroundColor(SaveTheme.coral)
+                    .foregroundColor(SaveTheme.coralStrong)
                 Spacer()
                 ShareStatusPill(text: "Map Stamp ready", fill: SaveTheme.mint)
             }
@@ -836,7 +838,7 @@ struct ShareExtensionView: View {
                                         Text(cat.capitalized)
                                     }
                                     .font(.caption.weight(.black))
-                                    .foregroundColor(SaveTheme.ink)
+                                    .foregroundColor(cat == selectedCategory ? SaveTheme.atlasCream : SaveTheme.ink)
                                     .padding(.horizontal, 11)
                                     .padding(.vertical, 7)
                                     .background(cat == selectedCategory ? SaveTheme.yellow : SaveTheme.cream)
@@ -852,7 +854,7 @@ struct ShareExtensionView: View {
                         title: "Save Map Stamp",
                         fill: SaveTheme.coral,
                         systemImage: "checkmark.seal.fill",
-                        foregroundColor: .white,
+                        foregroundColor: SaveTheme.atlasCream,
                         action: savePlace
                     )
                     .accessibilityIdentifier("share.capture.saveMapStamp")
@@ -887,7 +889,7 @@ struct ShareExtensionView: View {
                 Text("SAVVY CAPTURE")
                     .font(ShareAtlasType.strong(11))
                     .tracking(0.9)
-                    .foregroundColor(SaveTheme.coral)
+                    .foregroundColor(SaveTheme.coralStrong)
                 Spacer()
             }
             .padding(.top, 2)
@@ -950,7 +952,7 @@ struct ShareExtensionView: View {
                             title: candidate.isSourceOnly ? "Keep Source Clue" : "Add to Review",
                             fill: SaveTheme.coral,
                             systemImage: candidate.isSourceOnly ? "link" : "tray.and.arrow.down.fill",
-                            foregroundColor: .white,
+                            foregroundColor: SaveTheme.atlasCream,
                             action: saveReviewCandidates
                         )
                         .accessibilityIdentifier("share.capture.addToReview")
@@ -1035,7 +1037,7 @@ struct ShareExtensionView: View {
                     title: "Add all \(candidates.count) to Review",
                     fill: SaveTheme.coral,
                     systemImage: "tray.and.arrow.down.fill",
-                    foregroundColor: .white,
+                    foregroundColor: SaveTheme.atlasCream,
                     action: saveReviewCandidates
                 )
                 .accessibilityIdentifier("share.capture.addAllToReview")

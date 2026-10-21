@@ -1715,7 +1715,7 @@ private struct SaveCaptureFlowView: View {
                     if let errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.triangle")
                             .font(SaveAtlasType.body(13))
-                            .foregroundStyle(SaveAtlasPalette.coral)
+                            .foregroundStyle(SaveAtlasPalette.coralStrong)
                             .accessibilityIdentifier("capture.error")
                     }
                 }
@@ -1727,11 +1727,11 @@ private struct SaveCaptureFlowView: View {
             .safeAreaInset(edge: .bottom) {
                 Button(action: analyze) {
                     HStack(spacing: 8) {
-                        if isAnalyzing { ProgressView().tint(.white) }
+                        if isAnalyzing { ProgressView().tint(SaveAtlasPalette.cream) }
                         Text(isAnalyzing ? localized("Analyzing…", "分析中…") : localized("Find the place", "找出地點"))
                     }
                     .font(SaveAtlasType.strong(17))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(SaveAtlasPalette.cream)
                     .frame(maxWidth: .infinity, minHeight: 48)
                     .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 14))
                 }

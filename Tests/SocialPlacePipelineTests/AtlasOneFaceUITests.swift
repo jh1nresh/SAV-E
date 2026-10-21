@@ -23,9 +23,10 @@ final class AtlasOneFaceUITests: XCTestCase {
     }
 
     func testCreamOnCoralMeetsWCAGContrast() {
-        let creamHex = "FFF9EB"
+        let creamHex = SaveAtlasPalette.creamHex
         let lightRatio = SaveWCAGContrast.ratio(creamHex, against: SaveAtlasPalette.coralLightHex)
         let darkRatio = SaveWCAGContrast.ratio(creamHex, against: SaveAtlasPalette.coralDarkHex)
+        XCTAssertEqual(creamHex, "FFF9EB")
         XCTAssertGreaterThanOrEqual(
             lightRatio,
             3.0,
@@ -45,12 +46,17 @@ final class AtlasOneFaceUITests: XCTestCase {
         let pin = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
         let design = try source(at: "DESIGN.md")
         XCTAssertTrue(theme.contains("static let coral = Color(light: coralLightHex, dark: coralDarkHex)"))
+        XCTAssertEqual(SaveAtlasPalette.brandCoralHex, "F26B4A")
+        XCTAssertTrue(theme.contains("static let brandCoral = Color(hex: brandCoralHex)"))
         XCTAssertTrue(clip.contains(SaveAtlasPalette.coralLightHex))
         XCTAssertTrue(share.contains(SaveAtlasPalette.coralLightHex))
         XCTAssertTrue(pin.contains("let coral = SaveAtlasPalette.coral"))
         XCTAssertFalse(pin.contains("0.949"))
         XCTAssertTrue(design.contains("#\(SaveAtlasPalette.coralLightHex)"))
         XCTAssertTrue(design.contains("#\(SaveAtlasPalette.coralDarkHex)"))
+        XCTAssertTrue(design.contains("#\(SaveAtlasPalette.brandCoralHex)"))
+        XCTAssertTrue(design.contains("#\(SaveAtlasPalette.coralStrongLightHex)"))
+        XCTAssertTrue(design.contains("#\(SaveAtlasPalette.coralStrongDarkHex)"))
     }
 
     func testReviewTicketFaceOmitsMapReadyAndConfidencePercent() throws {

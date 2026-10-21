@@ -334,7 +334,7 @@ private struct SaveLocationDeniedNotice: View {
                         .font(.system(size: 13, weight: .semibold))
                     Spacer()
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(SaveAtlasPalette.cream)
                 .frame(minHeight: 40)
                 .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 11))
             }
@@ -550,7 +550,7 @@ private struct TripMapOrderMarker: View {
     var body: some View {
         Text("\(position)")
             .font(SaveAtlasType.strong(17))
-            .foregroundStyle(SaveAtlasPalette.ink)
+            .foregroundStyle(SaveAtlasPalette.cream)
             .frame(width: 38, height: 38)
             .background(SaveAtlasPalette.coral, in: Circle())
             .overlay {

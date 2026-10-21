@@ -49,7 +49,7 @@ struct EmptyStateView: View {
                 } label: {
                     Text(actionTitle)
                         .font(.subheadline.weight(.bold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(SaveAtlasPalette.cream)
                         .padding(.horizontal, SaveTheme.Spacing.xl)
                         .frame(minHeight: 44)
                         .background(SaveAtlasPalette.coral)

@@ -190,7 +190,7 @@ paper       #FFF9EB
 forest      #0E4A33
 ink         #2F2E23
 muted       #62594F
-coral       #EF6649
+coral       #E95C3A
 mint        #D6E8C4
 sky         #B5E3F5
 lavender    #E3D6F7

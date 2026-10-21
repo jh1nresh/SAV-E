@@ -318,7 +318,7 @@ struct SaveOriginView: View {
                  : localized("SKIP", "跳過"))
                 .font(AtlasType.display(22))
                 .tracking(1.2)
-                .foregroundStyle(.white)
+                .foregroundStyle(dragOffset.width < 0 ? SaveAtlasPalette.cream : .white)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
                 .background(

@@ -438,7 +438,7 @@ struct SavePlanView: View {
             Button(action: sendMessage) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(SaveAtlasPalette.cream)
                     .frame(width: 44, height: 44)
                     .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 14))
             }

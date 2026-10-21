@@ -183,7 +183,7 @@ struct MapCoachmarkTour: View {
                 Button(action: advance) {
                     Text(nextButtonTitle)
                         .font(SaveAtlasType.strong(13))
-                        .foregroundStyle(SaveAtlasPalette.paper)
+                        .foregroundStyle(SaveAtlasPalette.cream)
                         .padding(.horizontal, SaveTheme.Spacing.lg)
                         .frame(height: 38)
                         .background(SaveAtlasPalette.coral)

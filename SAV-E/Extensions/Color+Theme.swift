@@ -201,14 +201,20 @@ enum SaveAtlasPalette {
     static let forest = Color(light: "0E4A33", dark: "B9E0C9")
     static let ink = Color(light: "2F2E23", dark: "F4F1E4")
     static let muted = Color(light: "62594F", dark: "CFC4B8")
-    /// PLACEHOLDER pending DESIGN (due 2026-10-22 10:00 CST).
-    /// Minimal darkening of `#F26B4A` so cream `#FFF9EB` reaches WCAG 3:1
-    /// (was ~2.87:1). Replace with DESIGN light/dark/pressed/tint values.
-    static let coralLightHex = "EF6649"
-    /// PLACEHOLDER: minimal darkening of `#D97861` for the same 3:1 cream floor
-    /// (was ~2.94:1). No separate pressed/tint hex exists; press uses opacity.
-    static let coralDarkHex = "D77661"
+    /// Non-adaptive cream for labels sitting on coral fills.
+    static let creamHex = "FFF9EB"
+    static let cream = Color(hex: creamHex)
+    /// App icon and wordmark lock. Do not use for UI chrome; do not recolor assets.
+    static let brandCoralHex = "F26B4A"
+    static let brandCoral = Color(hex: brandCoralHex)
+    /// Postage accent: primary CTA and source-clue fill. Cream on this is 3.30:1.
+    static let coralLightHex = "E95C3A"
+    static let coralDarkHex = "D56B52"
     static let coral = Color(light: coralLightHex, dark: coralDarkHex)
+    /// Small text on paper only. Not a fill.
+    static let coralStrongLightHex = "CA4424"
+    static let coralStrongDarkHex = "BE5137"
+    static let coralStrong = Color(light: coralStrongLightHex, dark: coralStrongDarkHex)
     static let mint = Color(light: "D6E8C4", dark: "4F7258")
     static let sky = Color(light: "B5E3F5", dark: "3F758B")
     static let lavender = Color(light: "E3D6F7", dark: "57466F")
@@ -562,7 +568,7 @@ enum SavePostcardTicketStyle {
         case .review:
             return .saveBlueInk
         case .sourceClue:
-            return SaveAtlasPalette.coral
+            return SaveAtlasPalette.coralStrong
         case .confirmed:
             return SaveAtlasPalette.forest
         }
@@ -734,7 +740,7 @@ struct SaveAtlasLoadingCard: View {
                 Text(eyebrow.uppercased())
                     .font(SaveAtlasType.strong(10))
                     .tracking(0.7)
-                    .foregroundStyle(SaveAtlasPalette.coral)
+                    .foregroundStyle(SaveAtlasPalette.coralStrong)
                 Text(title)
                     .font(SaveAtlasType.strong(19, relativeTo: .headline))
                     .foregroundStyle(SaveAtlasPalette.forest)
