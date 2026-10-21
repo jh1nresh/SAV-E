@@ -162,6 +162,7 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue((project ?? "").contains("ClipListSavePlanner.swift"))
         XCTAssertTrue((project ?? "").contains("ClipListSaveTests.swift in Sources"))
         XCTAssertTrue((project ?? "").contains("PendingShareStoreTests.swift in Sources"))
+        XCTAssertTrue(try source(at: "Tests/SocialPlacePipelineTests/PendingShareStoreTests.swift").contains("@testable import SAVE"))
         XCTAssertFalse((project ?? "").contains("C1A000000000000000000046 /* PendingShareStoreTests.swift"))
         XCTAssertFalse((project ?? "").contains("C1A000000000000000000047 /* PendingShareStoreTests.swift"))
         let objectIDs = (project ?? "").split(separator: "\n").compactMap { line -> String? in
