@@ -31,6 +31,11 @@ prototype-only runs. Friends prefers five-tab-friends and falls back to
 atlas-friends. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
 and atlas-map XCTest attachments. The Friends gate is exactly 0.90 against
 DESIGN 2026-10-20 friends-light.png (402×874, no shared-map strip).
+
+--destination runs the prototype XCTest testCaptureFourLockedScreens
+(Home, Saves, Plan, Map only). Friends is not in that prototype shell, so
+this mode compares those four screens and leaves Friends to --result-bundle
+or --screenshots-dir, where five-tab-friends or friends.png exists.
 EOF
 }
 
@@ -201,6 +206,12 @@ mkdir -p \
     "$ARTIFACT_DIR/diff" \
     "$ARTIFACT_DIR/results"
 
+# Prototype --destination captures four screens. Result-bundle and
+# screenshots-dir still require Friends (five-tab-friends / friends.png).
+destination_screens=(home saves plan map)
+parity_screens=(home saves plan map friends)
+captured_from_prototype=0
+
 for screen in home saves plan map friends; do
     source="$REFERENCE_SOURCE/$screen.png"
     if [[ ! -f "$source" ]]; then
@@ -216,6 +227,7 @@ fi
 if [[ -n "$DESTINATION" ]]; then
     capture_booted_simulators
     trap cleanup_new_simulators EXIT
+    captured_from_prototype=1
 
     RESULT_BUNDLE="$ARTIFACT_DIR/AtlasPostcardVisualParity.xcresult"
     (
@@ -316,7 +328,12 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
         ((test_index += 1))
     done
 
-    for screen in home saves plan map friends; do
+    extract_screens=("${parity_screens[@]}")
+    if ((captured_from_prototype)); then
+        extract_screens=("${destination_screens[@]}")
+    fi
+
+    for screen in "${extract_screens[@]}"; do
         newest="$(
             printf '%s' "$candidates" |
                 awk -F"$tab" -v want="$screen" '
@@ -359,8 +376,13 @@ else
     done
 fi
 
+compare_screens=("${parity_screens[@]}")
+if ((captured_from_prototype)); then
+    compare_screens=("${destination_screens[@]}")
+fi
+
 gate_failed=0
-for screen in home saves plan map friends; do
+for screen in "${compare_screens[@]}"; do
     actual="$ARTIFACT_DIR/output/$screen.png"
     if [[ ! -f "$actual" ]]; then
         echo "error: missing exported attachment for $screen" >&2

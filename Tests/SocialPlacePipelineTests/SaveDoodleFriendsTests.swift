@@ -134,6 +134,13 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertTrue(script.contains("five-tab-friends*)"))
         XCTAssertTrue(script.contains("screen=\"friends\""))
         XCTAssertTrue(script.contains("for screen in home saves plan map friends; do"))
+        XCTAssertTrue(script.contains("destination_screens=(home saves plan map)"))
+        XCTAssertTrue(script.contains("parity_screens=(home saves plan map friends)"))
+        XCTAssertTrue(script.contains("captured_from_prototype=1"))
+        XCTAssertTrue(
+            script.contains("testCaptureFourLockedScreens"),
+            "destination mode still runs the four-screen prototype XCTest"
+        )
         XCTAssertFalse(script.contains("FRIENDS_IGNORE_RECT"))
         XCTAssertFalse(script.contains("0,565,402,48"))
         let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/VisualParity.swift")
