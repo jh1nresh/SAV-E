@@ -137,6 +137,9 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
                 Text("Logo 18dp · clear space 10/10/10/5")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.saveInk)
+                // Compact row hides the nested logo from AX so the 44pt control
+                // stays one hittable button. Keep a standalone logo here.
+                GoogleMapsAttributionLogo()
                 ZStack(alignment: .bottom) {
                     lightPhoto
                         .resizable()

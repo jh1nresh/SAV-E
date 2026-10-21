@@ -26,7 +26,7 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         openScene(app, "googleCarousel")
         saveEvidence(app, name: "\(appearance)-google-carousel")
 
-        let compactRow = app.descendants(matching: .any)["place.photo.attribution.row"]
+        let compactRow = app.buttons["place.photo.attribution.row"]
         XCTAssertTrue(waitUntilHittable(compactRow), "Compact attribution row missing")
         XCTAssertFalse(
             app.buttons["place.photo.attribution.viewOnMaps"].exists,
@@ -65,7 +65,7 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
             app.descendants(matching: .any)["evidence.userPhoto"]
                 .waitForExistence(timeout: stepTimeout)
         )
-        XCTAssertFalse(app.descendants(matching: .any)["place.photo.attribution.row"].exists)
+        XCTAssertFalse(app.buttons["place.photo.attribution.row"].exists)
         XCTAssertFalse(app.buttons["place.photo.attribution.author"].exists)
         XCTAssertFalse(app.buttons["place.photo.attribution.viewOnMaps"].exists)
         saveEvidence(app, name: "\(appearance)-user-photo")

@@ -344,6 +344,27 @@ final class SaveCollaborativeListTests: XCTestCase {
         )
     }
 
+    func testCompactAttributionRowIsAHittableButton() throws {
+        let sheet = try source(at: "SAV-E/Views/Map/PlaceBottomSheet.swift")
+        let uiTest = try source(at: "Tests/SAVEUITests/SAVEGooglePhotoAttributionTests.swift")
+        let evidence = try source(at: "SAV-E/Testing/GooglePlacesPhotoAttributionEvidenceView.swift")
+
+        guard let compactStart = sheet.range(of: "private var compactRow: some View"),
+              let compactEnd = sheet.range(of: "private var expandedStack: some View") else {
+            return XCTFail("Missing compactRow")
+        }
+        let compact = String(sheet[compactStart.lowerBound..<compactEnd.lowerBound])
+        XCTAssertTrue(compact.contains("Button {"), "Compact row must be a Button so XCTest isHittable is true")
+        XCTAssertFalse(
+            compact.contains("children: .contain"),
+            "AX containers exist but are not hittable; that failed PR 306 CI"
+        )
+        XCTAssertTrue(compact.contains("accessibilityHidden(true)"))
+        XCTAssertTrue(compact.contains("accessibilityIdentifier(\"place.photo.attribution.row\")"))
+        XCTAssertTrue(uiTest.contains("app.buttons[\"place.photo.attribution.row\"]"))
+        XCTAssertTrue(evidence.contains("GoogleMapsAttributionLogo()"))
+    }
+
     @MainActor
     func testGooglePhotosWithoutAuthorsAreDroppedForG1() {
         GooglePlacePhotoSessionStore.resetForTests()
@@ -644,6 +665,17 @@ final class SaveCollaborativeListTests: XCTestCase {
             openingHours: nil,
             createdAt: Date()
         )
+    }
+
+    private func source(at relativePath: String) throws -> String {
+        try String(contentsOf: repositoryRoot.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    private var repositoryRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 }
 
