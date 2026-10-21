@@ -220,6 +220,8 @@ class CoverageTests(unittest.TestCase):
         self.assertNotRegex(ios_workflow, r"(?m)^\s+-test-iterations 1\s")
         self.assertIn("test-without-building", ios_workflow)
         self.assertIn("save-ios-test-products-", ios_workflow)
+        self.assertIn("save-ios-test-products.tar", ios_workflow)
+        self.assertIn("ios-products-${{ github.run_id }}", ios_workflow)
         self.assertIn("scripts/run-ios-xcodebuild-retry.sh", ios_workflow)
         self.assertIn("save-parity-venv", ios_workflow)
         self.assertIn("python3 -m venv", ios_workflow)
