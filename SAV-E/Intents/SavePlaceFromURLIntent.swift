@@ -27,8 +27,11 @@ struct SavePlaceFromURLIntent: AppIntent {
 
         var savedCount = 0
         var failedCount = 0
-        for candidate in candidates {
+        for var candidate in candidates {
             do {
+                if candidate.ownerSubject == nil {
+                    candidate.ownerSubject = PrivyAuthService.shared.currentUserId
+                }
                 _ = try SaveLocalVaultService.shared.saveReviewCandidate(candidate)
                 savedCount += 1
             } catch {

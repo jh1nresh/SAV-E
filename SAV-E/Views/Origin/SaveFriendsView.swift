@@ -4,7 +4,10 @@ struct SaveFriendsView: View {
     var currentUserID: String?
     var onSaved: () async -> Void = {}
     var onParkedAtFreeLimit: (Place) -> PlaceReviewCandidate = { place in
-        let candidate = PlaceReviewCandidate.unplacedInboxItem(from: place)
+        let candidate = PlaceReviewCandidate.unplacedInboxItem(
+            from: place,
+            ownerSubject: PrivyAuthService.shared.currentUserId
+        )
         _ = try? SaveLocalVaultService.shared.saveReviewCandidate(candidate)
         SavePlaceLimitHandoff.markPaywallPending(notify: false)
         return candidate

@@ -881,7 +881,10 @@ final class MapViewModel: ObservableObject {
 
     @discardableResult
     func parkPlaceInUnplacedInbox(_ place: Place, requestPaywall: Bool = true) -> PlaceReviewCandidate {
-        let candidate = PlaceReviewCandidate.unplacedInboxItem(from: place)
+        let candidate = PlaceReviewCandidate.unplacedInboxItem(
+            from: place,
+            ownerSubject: authService.currentUserId
+        )
         mirrorToLocalVault(candidate)
         reviewCandidates = [candidate] + reviewCandidates.filter { $0.id != candidate.id }
         if requestPaywall {
@@ -894,8 +897,19 @@ final class MapViewModel: ObservableObject {
     }
 
     @discardableResult
-    private func parkIfServerSavedPlaceLimit(_ error: Error, place: Place) -> Bool {
+    private func parkIfServerSavedPlaceLimit(
+        _ error: Error,
+        place: Place,
+        startedBy userId: String?,
+        generation: Int
+    ) throws -> Bool {
         guard error is SavePlaceLimitError else { return false }
+        guard !Task.isCancelled else { throw CancellationError() }
+        if let userId {
+            try ensureConfirmationSession(userId, generation)
+        } else if authService.currentUserId != nil || authService.sessionGeneration != generation {
+            throw ReviewCandidateError.sessionChangedAfterCommit
+        }
         parkPlaceInUnplacedInbox(place)
         return true
     }
@@ -1059,11 +1073,26 @@ final class MapViewModel: ObservableObject {
 
     private func localReviewCandidates() -> [PlaceReviewCandidate] {
         do {
-            return try saveLocalVaultService.reviewCandidates(limit: 500)
+            let owner = authService.currentUserId
+            return try saveLocalVaultService.reviewCandidates(limit: 500).filter { candidate in
+                Self.localVaultRecordBelongsToActiveAccount(candidate.ownerSubject, currentUserId: owner)
+            }
         } catch {
             print("MapViewModel: failed to load local review candidates: \(error)")
             return []
         }
+    }
+
+    /// Signed-in accounts see only their own vault rows. Unsigned legacy rows
+    /// stay hidden while signed in so they cannot leak to the next account.
+    nonisolated static func localVaultRecordBelongsToActiveAccount(
+        _ ownerSubject: String?,
+        currentUserId: String?
+    ) -> Bool {
+        if let currentUserId {
+            return ownerSubject == currentUserId
+        }
+        return ownerSubject == nil
     }
 
     private func mergeRemotePlaces(_ remotePlaces: [Place], withLocalPlaces localPlaces: [Place]) -> [Place] {
@@ -1139,7 +1168,12 @@ final class MapViewModel: ObservableObject {
                 places = Place.consolidated(places.filter { $0.id != merged.id } + [merged])
                 if existing == nil { importedPlaces.append(merged) }
             } catch {
-                if parkIfServerSavedPlaceLimit(error, place: merged) {
+                if try parkIfServerSavedPlaceLimit(
+                    error,
+                    place: merged,
+                    startedBy: userId,
+                    generation: importGeneration
+                ) {
                     continue
                 }
                 failedImports.append(pendingPlace)
@@ -1187,6 +1221,9 @@ final class MapViewModel: ObservableObject {
             for var candidate in currentBatch {
                 do {
                     guard authService.sessionGeneration == importGeneration, authService.currentUserId == userId else { throw CancellationError() }
+                    if candidate.ownerSubject == nil {
+                        candidate.ownerSubject = userId
+                    }
                     let localRecord = try saveLocalVaultService.saveReviewCandidate(
                         candidate, recordID: candidate.localVaultRecordID, preservingExisting: true
                     )
@@ -1376,25 +1413,30 @@ final class MapViewModel: ObservableObject {
                 candidates = extracted
             }
             let importedCandidates = try candidates.map { pendingCandidate in
-                let record = try saveLocalVaultService.saveReviewCandidate(pendingCandidate)
+                var stamped = pendingCandidate
+                if stamped.ownerSubject == nil {
+                    stamped.ownerSubject = authService.currentUserId
+                }
+                let record = try saveLocalVaultService.saveReviewCandidate(stamped)
                 return PlaceReviewCandidate(
                     id: record.id,
                     captureId: nil,
-                    name: pendingCandidate.candidateName,
-                    address: pendingCandidate.address,
+                    name: stamped.candidateName,
+                    address: stamped.address,
                     city: nil,
-                    latitude: pendingCandidate.latitude,
-                    longitude: pendingCandidate.longitude,
-                    evidence: pendingCandidate.evidence,
-                    confidence: pendingCandidate.confidence,
-                    missingInfo: pendingCandidate.missingInfo,
-                    status: pendingCandidate.isSourceOnly ? "source_only" : "review",
+                    latitude: stamped.latitude,
+                    longitude: stamped.longitude,
+                    evidence: stamped.evidence,
+                    confidence: stamped.confidence,
+                    missingInfo: stamped.missingInfo,
+                    status: stamped.isSourceOnly ? "source_only" : "review",
                     createdAt: record.createdAt,
-                    placeHighlights: pendingCandidate.placeHighlights,
-                    recommendedItems: pendingCandidate.recommendedItems,
-                    vibeTags: pendingCandidate.vibeTags,
-                    accessNotes: pendingCandidate.accessNotes,
-                    sourceHandle: pendingCandidate.sourceHandle
+                    placeHighlights: stamped.placeHighlights,
+                    recommendedItems: stamped.recommendedItems,
+                    vibeTags: stamped.vibeTags,
+                    accessNotes: stamped.accessNotes,
+                    sourceHandle: stamped.sourceHandle,
+                    ownerSubject: stamped.ownerSubject
                 )
             }
             reviewCandidates = localReviewCandidates()
@@ -1406,6 +1448,7 @@ final class MapViewModel: ObservableObject {
         }
         if sourceURL == nil {
             _ = try saveLocalVaultService.saveReviewCandidate(PendingReviewCandidate(
+                ownerSubject: userId,
                 candidateName: "Source clue", address: "", category: "other", sourceURL: nil,
                 sourceText: analysisInput, evidence: [], confidence: 0, missingInfo: ["Exact place"],
                 savedAt: Date(), isSourceOnly: true
@@ -1845,6 +1888,8 @@ final class MapViewModel: ObservableObject {
 
     @discardableResult
     func saveMapCandidateAsPlace(_ candidate: SaveMapCandidate) async throws -> Place {
+        let saveUserId = authService.currentUserId
+        let saveGeneration = authService.sessionGeneration
         if isResolvingExactSearchClue {
             correctionDrawerError = ReviewCandidateError.correctionInFlight.errorDescription
             throw ReviewCandidateError.correctionInFlight
@@ -1939,7 +1984,12 @@ final class MapViewModel: ObservableObject {
                 do {
                     try await mapCandidatePlaceSaver(place, userId)
                 } catch {
-                    if parkIfServerSavedPlaceLimit(error, place: place) {
+                    if try parkIfServerSavedPlaceLimit(
+                        error,
+                        place: place,
+                        startedBy: saveUserId,
+                        generation: saveGeneration
+                    ) {
                         mapCandidates.removeAll { $0.id == candidate.id }
                         selectedMapCandidate = nil
                         throw error
@@ -2284,6 +2334,7 @@ final class MapViewModel: ObservableObject {
             guard let userId = authService.currentUserId else {
                 throw SupabaseError.notAuthenticated
             }
+            let receiptGeneration = authService.sessionGeneration
             if isOverFreeSavedPlaceLimit {
                 parkPlaceInUnplacedInbox(place)
                 throw SavePlaceLimitError.parkedInUnplacedInbox
@@ -2296,7 +2347,12 @@ final class MapViewModel: ObservableObject {
                     userId: userId
                 )
             } catch {
-                if parkIfServerSavedPlaceLimit(error, place: place) { throw error }
+                if try parkIfServerSavedPlaceLimit(
+                    error,
+                    place: place,
+                    startedBy: userId,
+                    generation: receiptGeneration
+                ) { throw error }
                 throw error
             }
             let savedPlace = result.place
@@ -2321,11 +2377,17 @@ final class MapViewModel: ObservableObject {
 
         let savedPlace = place
         if let userId = authService.currentUserId {
+            let receiptGeneration = authService.sessionGeneration
             do {
                 try await supabaseService.savePlace(place, userId: userId)
                 recordPassportFieldActionAfterSavingPlace()
             } catch {
-                if parkIfServerSavedPlaceLimit(error, place: place) { throw error }
+                if try parkIfServerSavedPlaceLimit(
+                    error,
+                    place: place,
+                    startedBy: userId,
+                    generation: receiptGeneration
+                ) { throw error }
                 print("MapViewModel: failed to sync friend share receipt \(place.name): \(error)")
                 syncFailedPlaceName = place.name
             }
@@ -2397,11 +2459,17 @@ final class MapViewModel: ObservableObject {
         )
 
         if let userId = authService.currentUserId {
+            let saveGeneration = authService.sessionGeneration
             do {
                 try await supabaseService.savePlace(place, userId: userId)
                 recordPassportFieldActionAfterSavingPlace()
             } catch {
-                if parkIfServerSavedPlaceLimit(error, place: place) {
+                if try parkIfServerSavedPlaceLimit(
+                    error,
+                    place: place,
+                    startedBy: userId,
+                    generation: saveGeneration
+                ) {
                     socialPlaces.removeAll { $0.id == socialPlace.id }
                     selectedSocialPlace = nil
                     throw error
@@ -2656,11 +2724,17 @@ final class MapViewModel: ObservableObject {
         }
 
         if let userId = authService.currentUserId {
+            let saveGeneration = authService.sessionGeneration
             do {
                 try await supabaseService.savePlace(place, userId: userId)
                 recordPassportFieldActionAfterSavingPlace()
             } catch {
-                if parkIfServerSavedPlaceLimit(error, place: place) { throw error }
+                if try parkIfServerSavedPlaceLimit(
+                    error,
+                    place: place,
+                    startedBy: userId,
+                    generation: saveGeneration
+                ) { throw error }
                 print("MapViewModel: failed to sync list item \(place.name): \(error)")
             }
         }
@@ -2861,7 +2935,11 @@ final class MapViewModel: ObservableObject {
 
     private func mirrorToLocalVault(_ candidate: PendingReviewCandidate) {
         do {
-            _ = try saveLocalVaultService.saveReviewCandidate(candidate)
+            var stamped = candidate
+            if stamped.ownerSubject == nil {
+                stamped.ownerSubject = authService.currentUserId
+            }
+            _ = try saveLocalVaultService.saveReviewCandidate(stamped)
         } catch {
             print("MapViewModel: failed to mirror pending candidate to local vault: \(error)")
         }
@@ -2869,7 +2947,11 @@ final class MapViewModel: ObservableObject {
 
     private func mirrorToLocalVault(_ candidate: PlaceReviewCandidate) {
         do {
-            _ = try saveLocalVaultService.saveReviewCandidate(candidate)
+            var stamped = candidate
+            if stamped.ownerSubject == nil {
+                stamped.ownerSubject = authService.currentUserId
+            }
+            _ = try saveLocalVaultService.saveReviewCandidate(stamped)
         } catch {
             print("MapViewModel: failed to mirror review candidate to local vault: \(error)")
         }
@@ -4049,6 +4131,7 @@ final class MapViewModel: ObservableObject {
 
     func saveImportedPlaces(_ drafts: [ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary {
         let remoteUserId: String?
+        let importGeneration = authService.sessionGeneration
         if usesRemotePersistence {
             guard let userId = authService.currentUserId else {
                 throw SupabaseError.notAuthenticated
@@ -4078,7 +4161,12 @@ final class MapViewModel: ObservableObject {
                         try await supabaseService.savePlace(place, userId: userId)
                         recordPassportFieldActionAfterSavingPlace()
                     } catch {
-                        if parkIfServerSavedPlaceLimit(error, place: place) {
+                        if try parkIfServerSavedPlaceLimit(
+                            error,
+                            place: place,
+                            startedBy: userId,
+                            generation: importGeneration
+                        ) {
                             parked += 1
                             return
                         }

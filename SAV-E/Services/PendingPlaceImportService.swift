@@ -509,6 +509,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     var semanticSource: SemanticSourceIdentity? = nil
     var googlePlaceId: String? = nil
     var category: PlaceCategory? = nil
+    var ownerSubject: String? = nil
 
     init(
         id: UUID,
@@ -531,11 +532,13 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         sourceHandle: String? = nil,
         googlePlaceId: String? = nil,
         category: PlaceCategory? = nil,
-        semanticSource: SemanticSourceIdentity? = nil
+        semanticSource: SemanticSourceIdentity? = nil,
+        ownerSubject: String? = nil
     ) {
         self.semanticSource = semanticSource
         self.googlePlaceId = googlePlaceId
         self.category = category
+        self.ownerSubject = ownerSubject
         self.id = id
         self.captureId = captureId
         self.workflowRunId = workflowRunId
@@ -582,6 +585,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         case semanticSource
         case googlePlaceId
         case category
+        case ownerSubject
     }
 
     init(from decoder: Decoder) throws {
@@ -592,6 +596,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         semanticSource = try container.decodeIfPresent(SemanticSourceIdentity.self, forKey: .semanticSource)
         googlePlaceId = try container.decodeIfPresent(String.self, forKey: .googlePlaceId)
         category = try container.decodeIfPresent(PlaceCategory.self, forKey: .category)
+        ownerSubject = try container.decodeIfPresent(String.self, forKey: .ownerSubject)
         id = try container.decode(UUID.self, forKey: .id)
         captureId = try container.decodeIfPresent(UUID.self, forKey: .captureId)
         workflowRunId = try container.decodeIfPresent(UUID.self, forKey: .workflowRunId)
@@ -632,7 +637,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     }
 
     /// Keep a capped save in the Review / Unplaced inbox instead of dropping it.
-    static func unplacedInboxItem(from place: Place) -> PlaceReviewCandidate {
+    static func unplacedInboxItem(from place: Place, ownerSubject: String? = nil) -> PlaceReviewCandidate {
         PlaceReviewCandidate(
             id: place.id,
             captureId: nil,
@@ -652,7 +657,8 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
             accessNotes: place.savedAccessNotes,
             sourceHandle: place.savedSourceHandle,
             googlePlaceId: place.googlePlaceId,
-            category: place.category
+            category: place.category,
+            ownerSubject: ownerSubject
         )
     }
 

@@ -1057,6 +1057,27 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(parked?.sourceEvidence.isEmpty ?? false)
     }
 
+    func testLocalReviewCandidatesAreScopedToTheActiveAccountInSource() throws {
+        let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
+        XCTAssertTrue(map.contains("localVaultRecordBelongsToActiveAccount"))
+        XCTAssertTrue(
+            map.contains("ownerSubject: authService.currentUserId"),
+            "parked Unplaced must stamp the signed-in account"
+        )
+        XCTAssertTrue(
+            map.contains("return ownerSubject == currentUserId"),
+            "signed-in refresh must hide another account's vault rows"
+        )
+        let vault = try source(at: "SAV-E/Services/SaveLocalVaultService.swift")
+        XCTAssertTrue(vault.contains("existing.ownerSubject == incoming.ownerSubject"))
+        XCTAssertTrue(vault.contains("ownerSubject: candidate.ownerSubject"))
+        XCTAssertTrue(
+            map.contains("try ensureConfirmationSession(userId, generation)"),
+            "a late over-limit must not park into a new account"
+        )
+        XCTAssertTrue(map.contains("startedBy userId: String?"))
+    }
+
     func testSharedPostOverLimitParkRechecksTheInitiatingAccount() throws {
         let store = try source(at: "SAV-E/ViewModels/SharedPostsStore.swift")
         let start = try XCTUnwrap(store.range(of: "func save(_ post: SharedPlacePost)"))
@@ -1181,6 +1202,70 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(map.reviewCandidates.first?.id, place.id)
         XCTAssertEqual(map.reviewCandidates.first?.name, "Parked After Refresh")
         XCTAssertEqual(try vault.reviewCandidates().first?.id, place.id)
+    }
+
+    func testLocalVaultRecordBelongsOnlyToTheActiveAccount() {
+        XCTAssertTrue(MapViewModel.localVaultRecordBelongsToActiveAccount("did:privy:a", currentUserId: "did:privy:a"))
+        XCTAssertFalse(MapViewModel.localVaultRecordBelongsToActiveAccount("did:privy:a", currentUserId: "did:privy:b"))
+        XCTAssertFalse(
+            MapViewModel.localVaultRecordBelongsToActiveAccount(nil, currentUserId: "did:privy:b"),
+            "unsigned legacy Unplaced must not leak to the next signed-in account"
+        )
+        XCTAssertTrue(MapViewModel.localVaultRecordBelongsToActiveAccount(nil, currentUserId: nil))
+        XCTAssertFalse(MapViewModel.localVaultRecordBelongsToActiveAccount("did:privy:a", currentUserId: nil))
+    }
+
+    @MainActor
+    func testParkedUnplacedDoesNotSurfaceAfterAnotherAccountSignsIn() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        auth.authState = .authenticated(userId: "did:privy:owner-a")
+        defer { auth.authState = previousAuth }
+
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.url?.path.contains("/memory/candidates") == true { return (200, "[]") }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.place-limit-owner-scope.\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-owner-scope-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+        let place = makeSocialPlace(name: "Owner A Secret Cafe")
+        let parked = map.parkPlaceInUnplacedInbox(place)
+        XCTAssertEqual(parked.ownerSubject, "did:privy:owner-a")
+        XCTAssertEqual(try vault.reviewCandidates().first?.ownerSubject, "did:privy:owner-a")
+
+        let unsigned = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Legacy Unsigned Cafe",
+            address: "0 Legacy Road",
+            city: nil,
+            latitude: 25.0,
+            longitude: 121.0,
+            evidence: ["Source URL: https://example.com/legacy-unsigned"],
+            confidence: 0.9,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        _ = try vault.saveReviewCandidate(unsigned)
+
+        auth.authState = .authenticated(userId: "did:privy:owner-b")
+        try await map.refreshReviewCandidates()
+
+        XCTAssertFalse(
+            map.reviewCandidates.contains { $0.id == parked.id || $0.name == "Owner A Secret Cafe" },
+            "account B must not see account A's parked Unplaced"
+        )
+        XCTAssertFalse(
+            map.reviewCandidates.contains { $0.id == unsigned.id || $0.name == "Legacy Unsigned Cafe" },
+            "unsigned legacy Unplaced must stay hidden while signed in"
+        )
+        XCTAssertEqual(try vault.reviewCandidates().count, 2, "the vault must keep both records, not delete them")
     }
 
     @MainActor
