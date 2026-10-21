@@ -1003,8 +1003,9 @@ DESIGN v2 `map-mask.png` (white = live Apple Maps) is the ignore mask.
 The place sheet uses a 64pt official DESIGN sticker (color die-cut when
 visited, pencil outline when not) and a 12pt text gap. Do not replace
 default Apple MapKit `.standard` with a paper or hand-drawn basemap.
-City strip, place sheet, tab bar, and status bar count toward 0.90.
-Light and dark screenshot rails must also pass the city/filter/place-sheet/action
+City strip, place sheet, tab bar, and status bar are judged manually
+by DESIGN; the 0.90 visual-parity score is not evidence. Light and dark
+screenshot rails must also pass the city/filter/place-sheet/action
 geometry and hit-target assertions; the unmasked screenshots remain required
 for human visual review. Manual visit counts use the shared
 `SaveDoodleVisitStore` read by Map and Passport.

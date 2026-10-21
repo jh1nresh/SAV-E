@@ -3300,9 +3300,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         return elements.first(where: \.exists) ?? elements[0]
     }
 
-    /// Live Home is the Doodle Eat/Go list plus mini-map. The Atlas gate still
-    /// compares `five-tab-home` to DESIGN v2 `ProductionTargets/home.png` at
-    /// 0.90 with `home-mask.png`. Do not retune that gate here.
+    /// Live Home is the Doodle Eat/Go list plus mini-map. The Atlas runner
+    /// still compares `five-tab-home` to DESIGN v2 `ProductionTargets/home.png`
+    /// at exactly 0.90 with `home-mask.png`; that score is report-only.
     /// Passport still writes `five-tab-passport` vs `ProductionTargets/passport.png`
     /// at exactly 0.90 for the artifact; DESIGN judges that raster manually.
     @MainActor

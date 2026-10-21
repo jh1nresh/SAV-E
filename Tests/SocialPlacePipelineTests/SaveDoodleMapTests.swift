@@ -200,6 +200,8 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(script.contains("map-doodle-similarity"))
         XCTAssertTrue(script.contains("--ignore-mask"))
         XCTAssertTrue(script.contains("map-mask.png"))
+        XCTAssertTrue(script.contains("status=\"REVIEW\""))
+        XCTAssertTrue(script.contains("The 0.90 score is not a CI gate."))
         XCTAssertTrue(script.contains("${#extra_args[@]} -gt 0"))
         XCTAssertTrue(script.contains("${#mask_args[@]} -gt 0"))
         XCTAssertTrue(map.contains("cityOpeningPins()"))

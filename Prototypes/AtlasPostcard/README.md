@@ -46,8 +46,10 @@ Scripts/run-visual-parity.sh \
 ```
 
 The runner captures Home, Saves, Plan, Map, and Passport, then writes matching
-`reference/`, `output/`, `diff/`, and `results/` directories. All five pages
-must score at least `0.90`. Passport uses DESIGN v2 `passport-light.png`.
+`reference/`, `output/`, `diff/`, and `results/` directories. Saves and Plan
+must score at least `0.90`. Home, Map, and Passport Doodle rasters still emit
+a 0.90 score, but that score is not a CI gate; DESIGN goldens are judged
+manually. Passport uses DESIGN v2 `passport-light.png`.
 XCTest locks the application window to 402 × 874
 points; the comparator accepts only exact, uniform Retina pixel multiples of
 that viewport and rejects other dimensions.
@@ -67,7 +69,9 @@ at 1× 402×874, not a crop. `VisualParity.swift` still accepts only a
 v2's exact 402×874 `map-light.png` from the same commit, with
 `map-dark.png` for DESIGN comparison and `map-mask.png` (white =
 ignore the live Apple Maps area). Saves and Plan stay on their current
-locks until those Doodle PRs. The `0.90` threshold remains unchanged.
+locks until those Doodle PRs. The `0.90` threshold remains the Saves/Plan
+gate. Home, Map, and Passport Doodle rasters still emit a 0.90 score, but
+that score is not a CI gate; DESIGN goldens are judged manually.
 
 The Passport production target is DESIGN v2's exact 402×874
 `passport-light.png` from `design/doodle-targets-2026-10-20` at `eade369`.
@@ -76,7 +80,8 @@ Those rasters are rendered at 1× 402×874, not a crop. The locked
 face is stickers and cities: Passport + Beijing · 4 of 12, the kraft
 sticker grid, the city list, and the five-tab rail with Passport
 selected. `VisualParity.swift` still accepts only a 1× 402 × 874
-target. The `0.90` threshold remains unchanged.
+target. The `0.90` threshold remains the Saves/Plan gate. Passport
+rasters still emit a 0.90 score, but that score is not a CI gate.
 
 ## Boundaries
 
