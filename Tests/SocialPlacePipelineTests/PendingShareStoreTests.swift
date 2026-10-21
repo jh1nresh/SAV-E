@@ -1,6 +1,7 @@
 import XCTest
 @testable import SAVE
 
+@MainActor
 final class PendingShareStoreTests: XCTestCase {
     private var store: UserDefaults!
 
