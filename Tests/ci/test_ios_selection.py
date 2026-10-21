@@ -219,6 +219,30 @@ class CoverageTests(unittest.TestCase):
         self.assertIn("iteration_args=(-test-iterations 3 -retry-tests-on-failure)", ios_workflow)
         self.assertIn("iteration_args=()", ios_workflow)
         self.assertNotRegex(ios_workflow, r"(?m)^\s+-test-iterations 1\s")
+        self.assertIn("test-without-building", ios_workflow)
+        self.assertIn("save-ios-test-products-", ios_workflow)
+        self.assertIn("save-ios-test-products.tar", ios_workflow)
+        self.assertIn("ios-products-${{ github.run_id }}", ios_workflow)
+        self.assertIn("scripts/run-ios-xcodebuild-retry.sh", ios_workflow)
+        retry_script = (ROOT / "scripts/run-ios-xcodebuild-retry.sh").read_text()
+        self.assertIn("retry-selectors", retry_script)
+        self.assertIn("ios_ui_retry.py\" coverage", retry_script)
+        self.assertIn("original_selectors", retry_script)
+        self.assertIn("save-parity-venv", ios_workflow)
+        self.assertIn("python3 -m venv", ios_workflow)
+        self.assertIn("pip install Pillow", ios_workflow)
+        self.assertNotIn("pip install --user Pillow", ios_workflow)
+        self.assertNotIn("--break-system-packages", ios_workflow)
+        self.assertIn("actions: write", ios_workflow)
+        self.assertIn("github.head_ref || github.ref_name", ios_workflow)
+        self.assertIn("github.ref != 'refs/heads/main'", ios_workflow)
+        self.assertNotIn(
+            "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+            ios_workflow,
+        )
+        self.assertNotIn("Build without booting a simulator", ios_workflow)
+        self.assertRegex(ios_workflow, r"(?m)^    timeout-minutes: 100\s*$")
+        self.assertIn("timeout-minutes: 60", ios_workflow)
 
     def test_unknown_focus_fails_loudly(self):
         with tempfile.TemporaryDirectory() as temp:
