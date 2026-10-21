@@ -92,10 +92,14 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(backend.contains("SavedPlaceLimitError"))
 
         let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
-        XCTAssertTrue(map.contains("parkIfServerSavedPlaceLimit(error, place: place)"))
+        XCTAssertTrue(map.contains("startedBy userId: String?"))
+        XCTAssertTrue(map.contains("generation: Int"))
+        XCTAssertTrue(map.contains("try ensureConfirmationSession(userId, generation)"))
+        XCTAssertTrue(map.contains("parkIfServerSavedPlaceLimit("))
+        XCTAssertTrue(map.contains("startedBy: userId,"))
         XCTAssertTrue(map.contains("syncSavedPlaceLimitCache()"))
         XCTAssertTrue(
-            map.contains("if parkIfServerSavedPlaceLimit(error, place: merged)"),
+            map.contains("place: merged,") && map.contains("generation: importGeneration"),
             "C6: pending Share Extension imports park on a server cap"
         )
         XCTAssertTrue(share.contains("SaveShareExtensionPlaceDestination.resolve"))
@@ -502,7 +506,14 @@ final class SAVEProductionConfigTests: XCTestCase {
             entitlementResolvedProvider: { true },
             usesRemotePersistence: true
         )
-        map.places = makeCappedPlaces(49)
+        // The receipt path calls loadPlaces() when hasLoadedPlaces is false.
+        // In-memory assignment alone is wiped by GET /places [] + an empty
+        // vault; parking does not clear Map Stamps. Persist the 49 first.
+        let seeded = makeCappedPlaces(49)
+        for place in seeded {
+            _ = try vault.saveConfirmedPlace(place)
+        }
+        map.places = seeded
         let receipt = SharedPlaceReceipt.embedded(
             SharedPlaceData(
                 id: "",
@@ -527,6 +538,7 @@ final class SAVEProductionConfigTests: XCTestCase {
             XCTFail("a server over-limit receipt must not become a local Map Stamp")
         } catch SavePlaceLimitError.parkedInUnplacedInbox {
             XCTAssertEqual(map.places.count, 49)
+            XCTAssertFalse(map.places.contains(where: { $0.name == "Server Cap Cafe" }))
             XCTAssertEqual(map.reviewCandidates.first?.name, "Server Cap Cafe")
             XCTAssertEqual(map.reviewCandidates.first?.status, "review")
             XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
