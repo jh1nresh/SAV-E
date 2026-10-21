@@ -198,7 +198,7 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertTrue(rail.contains("friends-loading"))
         XCTAssertTrue(rail.contains("friends-error"))
         XCTAssertTrue(rail.contains("ProductionTargets/friends.png"))
-        XCTAssertTrue(rail.contains("packet spec §7.4"))
+        XCTAssertTrue(rail.contains("packet §7.4"))
         let workflow = try source(at: ".github/workflows/ios.yml")
         XCTAssertTrue(workflow.contains("light-home"))
         XCTAssertFalse(workflow.contains("light-friends"))
