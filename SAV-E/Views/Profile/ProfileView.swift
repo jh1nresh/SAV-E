@@ -454,6 +454,9 @@ struct ProfileView: View {
             if requestsConnections { opensConnections = true; requestsConnections = false }
             if localSavedPlaces.isEmpty { localSavedPlaces = savedPlaces }
         }
+        .onChange(of: savedPlaces.count) { _, _ in
+            localSavedPlaces = savedPlaces
+        }
         .task(id: posts.filter) { await posts.refresh(.mine) }
         .task(id: currentUserID) {
             viewModel.resetForCurrentSession()
