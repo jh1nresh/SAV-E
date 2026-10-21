@@ -124,18 +124,19 @@ Rules:
 - Nearby / Saved / Friends filter chips live on **Map only**. Home must not
   reuse that chrome.
 - Coral pins only on Map, and only on **saved Map Stamps**. Pins stay coral
-  until someone has shared a photo of that place in Savvy. This PR keeps the
-  own → friend → coral chain with both sources stubbed (`Place` has no
-  user-photo field; friend photos need a later backend PR). Google Places
-  photos must not appear on this Apple Map. Unsaved places stay as Apple's
-  native POI markers — never a photo or Savvy pin, even when a photo URL
-  exists. A later own-photo load failure stays coral, never a broken image.
-  Visited adds a coral ring on the Savvy pin. Tapping an unsaved POI opens
-  the existing save flow (or Apple's native place card); once the user
-  confirms, that place is immediately a Savvy pin. Selected stamp grows a
-  paper callout (name, Eat/Go, Directions, 我來過了) instead of a kraft peek.
-  Source-only clues still have no pin. Five-second test: Savvy pin = saved,
-  coral ring = visited saved, Apple POI = unsaved.
+  until someone has shared a photo of that place in Savvy. Own photo means
+  the user's own shared-post photos (`/v0/shared-posts/{id}/photos/{n}`).
+  This PR cannot bind those posts to a Map Stamp (`SharedPlacePost` has no
+  place id), so production pins stay coral. Friend photos are a later PR.
+  Google Places photos must not appear on this Apple Map. Unsaved places
+  stay as Apple's native POI markers — never a photo or Savvy pin, even when
+  a photo URL exists. A later own-photo load failure stays coral, never a
+  broken image. Visited adds a coral ring on the Savvy pin. Tapping an
+  unsaved POI opens the existing save flow (or Apple's native place card);
+  once the user confirms, that place is immediately a Savvy pin. Selected
+  stamp grows a paper callout (name, Eat/Go, Directions, 我來過了) instead of
+  a kraft peek. Source-only clues still have no pin. Five-second test: Savvy
+  pin = saved, coral ring = visited saved, Apple POI = unsaved.
 - Tile-town is nearest-neighbor integer tiles (`SaveTileTownRaster`): buildings,
   roofs, trees, water, and roads are crisp cells. No anti-aliased vector houses
   or curved roads. Do not blurry-upscale pixel art.

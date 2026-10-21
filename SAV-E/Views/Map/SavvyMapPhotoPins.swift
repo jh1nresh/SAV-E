@@ -70,18 +70,19 @@ enum SavvyMapPinMetrics {
 
 /// HoP 圖釘照片定案: saved pins default to coral. A pin becomes a photo only
 /// when someone has shared a photo of that place in Savvy. No Google Places
-/// photos (terms forbid Places content on a non-Google map). Social/OG scrape
-/// URLs are never pin art. The existing business-photo enricher is left
-/// untouched.
+/// photos (terms forbid Places content on a non-Google map). Do not use
+/// `sourceImageUrl` or `businessPhotoUrls`. The business-photo enricher is
+/// left untouched.
 ///
-/// Photo chain in this PR: own → friend → coral. Both sources are stubbed.
-/// `Place` has no user-photo field (`sourceImageUrl` + Google
-/// `businessPhotoUrls` only — those are never pin art). `SharedPlacePost`
-/// has no place id, so name/address guessing is not a clean own-photo bind.
-/// Friend photos need a later PR (no per-place friend-photo API;
-/// `shared-post-photos.sql` may be unapplied). HoP is still deciding the
-/// own-photo source, so every pin renders coral.
+/// Own photo = the user's own shared-post photos
+/// (`friend_restaurant_ratings` via `/v0/shared-posts/{id}/photos/{n}`,
+/// existing permission checks). Thumbnail cache TTL is 1 hour; a withdrawn
+/// share disappears on the next refresh (≤1h). This PR cannot bind those
+/// photos to a saved `Place`: `SharedPlacePost` has no place id, Google id,
+/// or coordinates, and name/address guessing is not a bind. Pins stay coral.
+/// Friend photos stay a stub for a later PR. No backend/schema changes.
 ///
+/// Photo chain: own → friend → coral.
 /// P14: unsaved places never resolve a pin photo.
 /// P15: load failure stays coral — never a broken-image glyph.
 enum SavvyMapPhotoOrigin: Equatable {
@@ -122,6 +123,28 @@ enum SavvyMapPhotoDisplay: Equatable {
     static var hidesBrokenImageOnFailure: Bool { true }
 }
 
+enum SavvyMapOwnPhotoSource {
+    static let endpointPath = "/v0/shared-posts/{id}/photos/{n}"
+    static let thumbnailCacheTTL: TimeInterval = 60 * 60
+    static let readsSourceImageURL = false
+    static let readsBusinessPhotoURLs = false
+
+    static let missingPlaceBindFields = [
+        "SharedPlacePost.place_id",
+        "SharedPlacePost.google_place_id",
+        "SharedPlacePost.latitude/longitude",
+    ]
+
+    static func canBindToSavedPlace(_ post: SharedPlacePost) -> Bool {
+        _ = post
+        return false
+    }
+
+    static func isThumbnailFresh(storedAt: Date, now: Date = Date()) -> Bool {
+        now.timeIntervalSince(storedAt) < thumbnailCacheTTL
+    }
+}
+
 enum SavvyMapPhotoPolicy {
     static func resolvedPhoto(
         for place: Place,
@@ -143,21 +166,24 @@ enum SavvyMapPhotoPolicy {
         resolvedPhoto(for: place, isConfirmedSaved: isConfirmedSaved).url
     }
 
-    /// `Place` has no user-photo field. Never read Google `businessPhotoUrls`.
+    /// `Place` has no user-photo field. Never read Google `businessPhotoUrls`
+    /// or `sourceImageUrl`.
     static func userAlbumPhotoURLs(for place: Place) -> [URL] {
         _ = place
         return []
     }
 
-    /// Own-photo hook. Empty until HoP names a clean source that can bind a
-    /// Savvy share to a saved `Place` without guessing (no place id on
-    /// `SharedPlacePost`; `Place` has no user-photo field).
+    /// Own shared-post photos cannot be joined to `Place` without a place id
+    /// on `SharedPlacePost`. Do not guess from name/address.
     static func firstOwnSharedPhoto(
         in posts: [SharedPlacePost],
         matching place: Place
     ) -> SavvyMapSharedPhotoRef? {
-        _ = (posts, place)
-        return nil
+        _ = place
+        guard let post = posts.first(where: { ($0.photo_count ?? 0) > 0 && SavvyMapOwnPhotoSource.canBindToSavedPlace($0) }) else {
+            return nil
+        }
+        return SavvyMapSharedPhotoRef(origin: .own, postID: post.id, photoIndex: 0)
     }
 
     /// Friend-photo hook. Empty in this PR — needs a later backend PR.
@@ -170,23 +196,43 @@ enum SavvyMapPhotoPolicy {
     }
 }
 
-/// Reserved pin-photo store. Own and friend sources are stubbed, so this
-/// never fetches or decodes share bytes in this PR.
+/// Memory-only own-share thumbnails. TTL is 1 hour; withdrawn shares drop
+/// on the next refresh. This PR never fills the cache because own posts
+/// cannot be bound to a `Place` without backend identity fields.
 @MainActor
 final class SavvyMapSharedPinPhotoStore: ObservableObject {
     static let shared = SavvyMapSharedPinPhotoStore()
 
     @Published private(set) var ownPosts: [SharedPlacePost] = []
+    private var thumbnails: [String: (image: UIImage, storedAt: Date)] = [:]
 
-    func refreshOwnPosts() async {}
+    func refreshOwnPosts() async {
+        let liveIDs = Set(ownPosts.map(\.id))
+        thumbnails = thumbnails.filter { key, _ in
+            liveIDs.contains(where: { key.hasPrefix($0.uuidString) })
+        }
+    }
 
-    func image(for place: Place) -> UIImage? {
-        _ = place
-        return nil
+    func image(for place: Place, now: Date = Date()) -> UIImage? {
+        guard let ref = SavvyMapPhotoPolicy.resolvedPhoto(
+            for: place,
+            isConfirmedSaved: true,
+            ownPosts: ownPosts
+        ).shared else { return nil }
+        let key = cacheKey(ref)
+        guard let entry = thumbnails[key],
+              SavvyMapOwnPhotoSource.isThumbnailFresh(storedAt: entry.storedAt, now: now) else {
+            return nil
+        }
+        return entry.image
     }
 
     func loadIfNeeded(for place: Place) async {
         _ = place
+    }
+
+    private func cacheKey(_ ref: SavvyMapSharedPhotoRef) -> String {
+        "\(ref.postID.uuidString)-\(ref.photoIndex)"
     }
 }
 

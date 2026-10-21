@@ -330,9 +330,19 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
     }
 
     func testP16OwnThenFriendThenCoralWithBothSourcesStubbed() {
+        XCTAssertEqual(SavvyMapOwnPhotoSource.endpointPath, "/v0/shared-posts/{id}/photos/{n}")
+        XCTAssertEqual(SavvyMapOwnPhotoSource.thumbnailCacheTTL, 3600, accuracy: 0.001)
+        XCTAssertFalse(SavvyMapOwnPhotoSource.readsSourceImageURL)
+        XCTAssertFalse(SavvyMapOwnPhotoSource.readsBusinessPhotoURLs)
+        XCTAssertTrue(SavvyMapOwnPhotoSource.missingPlaceBindFields.contains("SharedPlacePost.place_id"))
+        let stored = Date(timeIntervalSince1970: 1_000)
+        XCTAssertTrue(SavvyMapOwnPhotoSource.isThumbnailFresh(storedAt: stored, now: stored.addingTimeInterval(3599)))
+        XCTAssertFalse(SavvyMapOwnPhotoSource.isThumbnailFresh(storedAt: stored, now: stored.addingTimeInterval(3601)))
+
         let saved = samplePlace()
         let own = sampleSharedPost(name: saved.name, address: saved.address, photoCount: 1)
         let friend = sampleSharedPost(name: saved.name, address: saved.address, photoCount: 2)
+        XCTAssertFalse(SavvyMapOwnPhotoSource.canBindToSavedPlace(own))
         XCTAssertNil(SavvyMapPhotoPolicy.firstOwnSharedPhoto(in: [own], matching: saved))
         XCTAssertNil(SavvyMapPhotoPolicy.firstFriendSharedPhoto(in: [friend], matching: saved))
         XCTAssertEqual(
