@@ -31,6 +31,13 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(eatGo.contains(".contentShape(Rectangle())"))
         XCTAssertTrue(map.contains("mapAccessibilityIdentifier"))
         XCTAssertTrue(map.contains("map.city"))
+        let headerAt = try XCTUnwrap(map.range(of: "private func header"))
+        let eatGoAtHeader = try XCTUnwrap(map.range(of: "private var eatGoRail"))
+        let header = map[headerAt.lowerBound..<eatGoAtHeader.lowerBound]
+        XCTAssertTrue(
+            header.contains("accessibilityElement(children: .contain)"),
+            "Map header must contain children so map.city stays queryable"
+        )
         XCTAssertTrue(map.contains("map.liveSurface"))
         XCTAssertTrue(map.contains("map.checkIn"))
         XCTAssertTrue(map.contains("我來過了"))

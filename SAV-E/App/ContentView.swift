@@ -993,6 +993,8 @@ struct ContentView: View {
                 await mapVM.prepareMapCandidatesForDrawerQuery(
                     query,
                     preservesExactSearchClue: isExactSearchSessionActive
+                        || exactSearchClueID != nil
+                        || mapVM.hasActiveExactSearchResolution
                 )
             },
             onBeginExactSearchResolution: { candidate in

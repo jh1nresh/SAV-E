@@ -243,6 +243,7 @@ struct SaveDoodleMapView: View {
                     + ", " + cityTitle
             )
             .accessibilityIdentifier("map.city")
+            .accessibilityAddTraits(.isButton)
 
             HStack {
                 Spacer(minLength: 0)
@@ -251,6 +252,7 @@ struct SaveDoodleMapView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
         .accessibilityValue(followsHomeFilter ? "filtered" : "all")
     }
 
