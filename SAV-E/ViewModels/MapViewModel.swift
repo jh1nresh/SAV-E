@@ -1623,6 +1623,7 @@ final class MapViewModel: ObservableObject {
             afterCandidate: updatedCandidate,
             reason: "User rejected review candidate."
         )
+        try? saveLocalVaultService.removeReviewCandidate(candidate.id)
         reviewCandidates.removeAll { $0.id == candidate.id }
         if selectedReviewCandidate?.id == candidate.id {
             selectedReviewCandidate = nil
@@ -1639,6 +1640,7 @@ final class MapViewModel: ObservableObject {
             afterCandidate: updatedCandidate,
             reason: "User archived review candidate."
         )
+        try? saveLocalVaultService.removeReviewCandidate(candidate.id)
         reviewCandidates.removeAll { $0.id == candidate.id }
         if selectedReviewCandidate?.id == candidate.id {
             selectedReviewCandidate = nil
@@ -1802,8 +1804,12 @@ final class MapViewModel: ObservableObject {
                         reason: "User saved legacy review candidate as confirmed Map Stamp."
                     )
                 } catch {
-                    try? await supabaseService.deletePlace(place.id)
-                    throw error
+                    // Local-only Unplaced items have no place_candidates row.
+                    // A 404 must not delete the Map Stamp that just landed.
+                    if candidate.captureId != nil || candidate.workflowRunId != nil {
+                        try? await supabaseService.deletePlace(place.id)
+                        throw error
+                    }
                 }
             }
         } catch {
@@ -1813,6 +1819,7 @@ final class MapViewModel: ObservableObject {
             throw error
         }
         let confirmedPlace = await refreshedConfirmedPlace(place)
+        try? saveLocalVaultService.removeReviewCandidate(candidate.id)
         mirrorToLocalVault(confirmedPlace)
         places = [confirmedPlace] + places
         reviewCandidates.removeAll { $0.id == candidate.id }
@@ -2769,13 +2776,15 @@ final class MapViewModel: ObservableObject {
                 ),
                 for: runId
             )
-        } else {
+        } else if candidate.captureId != nil {
             try await supabaseService.updatePlaceCandidateStatus(
                 candidate.id,
                 status: Self.legacyCandidateStatus(for: eventType, finalPlaceId: userFinalPlaceId),
                 placeId: userFinalPlaceId
             )
         }
+        // Parked Unplaced items live only in the local vault. They have no
+        // place_candidates row, so a PATCH would 404 and roll back B4/B5.
         // The remote decision already committed. Throw a dedicated error so
         // callers skip post-commit local vault/places writes without treating
         // this as a pre-commit failure and rolling the stamp back.

@@ -645,6 +645,54 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
+    func testLocalOnlyParkedCandidateConfirmsWithoutRemoteCandidateRow() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "local-park-owner")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        var patchedCandidate = false
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "PATCH", request.url?.path.contains("/memory/candidates/") == true {
+                patchedCandidate = true
+                return (404, #"{"error":"not_found"}"#)
+            }
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                return (201, "{}")
+            }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.place-limit-local-park.\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-local-park-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(
+            apiBaseURL: "https://analysis.test",
+            session: URLSession(configuration: configuration),
+            accessTokenProvider: { "test-token" }
+        )
+        let map = MapViewModel(
+            supabaseService: service,
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        map.places = makeCappedPlaces(49)
+        _ = map.parkPlaceInUnplacedInbox(makeSocialPlace(name: "Local Park Cafe"))
+        let parked = try XCTUnwrap(map.reviewCandidates.first)
+
+        let saved = try await map.saveReviewCandidateAsPlace(parked)
+        XCTAssertEqual(saved.name, "Local Park Cafe")
+        XCTAssertEqual(map.places.count, 50)
+        XCTAssertFalse(patchedCandidate, "local-only Unplaced must not PATCH /memory/candidates")
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == parked.id })
+    }
+
+    @MainActor
     func testFiftyFirstSaveParksWhenPurchasingIsUnavailable() async throws {
         XCTAssertFalse(SAVEProAccessPolicy.purchasingIsAvailable)
         let map = makeCappedMap(tier: .free)
