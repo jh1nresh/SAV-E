@@ -40,11 +40,14 @@ enum ClipAppleSessionExchange {
 
 enum ClipAppleCredentialClient {
     static func state(forUserID userID: String) async -> ClipAppleCredentialState {
-        do {
-            let state = try await ASAuthorizationAppleIDProvider().getCredentialState(forUserID: userID)
-            return ClipSignInCarryOver.map(state)
-        } catch {
-            return .unavailable
+        await withCheckedContinuation { continuation in
+            ASAuthorizationAppleIDProvider().getCredentialState(forUserID: userID) { state, error in
+                if error != nil {
+                    continuation.resume(returning: .unavailable)
+                    return
+                }
+                continuation.resume(returning: ClipSignInCarryOver.map(state))
+            }
         }
     }
 }

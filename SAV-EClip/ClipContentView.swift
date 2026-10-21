@@ -481,6 +481,7 @@ struct ClipContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, ClipJournalLayout.screenMargin)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier(identifier)
     }
 

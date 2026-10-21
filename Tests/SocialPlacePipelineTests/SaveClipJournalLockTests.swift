@@ -55,6 +55,10 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(clip.contains("signInScreen"))
         XCTAssertTrue(clip.contains("clip.signin.saveOne"))
         XCTAssertTrue(clip.contains("clip.signin.saveCount"))
+        XCTAssertGreaterThanOrEqual(
+            clip.components(separatedBy: "accessibilityElement(children: .contain)").count - 1,
+            2
+        )
         XCTAssertTrue(clip.contains("ClipListSwipeHint"))
         XCTAssertTrue(clip.contains("listSaved"))
         XCTAssertTrue(theme.contains("ClipListSaveCountTable"))
@@ -111,7 +115,8 @@ final class SaveClipJournalLockTests: XCTestCase {
         let auth = try source(at: "SAV-E/Services/PrivyAuthService.swift")
         XCTAssertTrue(appleStore.contains("static let key = \"clipAppleUserID\""))
         XCTAssertTrue(appleStore.contains("Never a JWT"))
-        XCTAssertTrue(carry.contains("getCredentialState"))
+        XCTAssertTrue(carry.contains("getCredentialState(forUserID:"))
+        XCTAssertTrue(carry.contains("withCheckedContinuation"))
         XCTAssertTrue(carry.contains("requestedScopes = []"))
         XCTAssertTrue(carry.contains("case skipSignIn"))
         XCTAssertTrue(auth.contains("restoreClipSignInIfNeeded"))
