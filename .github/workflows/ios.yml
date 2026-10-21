@@ -279,7 +279,7 @@ jobs:
         if: always() && (steps.scope.outputs.ui == 'true')
         run: |
           # macOS runners ship a PEP 668 Homebrew Python. Install Pillow in a
-          # throwaway venv so we never need --break-system-packages.
+          # throwaway venv instead of breaking the system site-packages.
           python3 -m venv "$RUNNER_TEMP/save-parity-venv"
           "$RUNNER_TEMP/save-parity-venv/bin/python" -m pip install Pillow
           PATH="$RUNNER_TEMP/save-parity-venv/bin:$PATH" \

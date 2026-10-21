@@ -617,7 +617,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passport.contains("profile.today.shareRecommendation"))
         XCTAssertTrue(passport.contains("profile.today.inviteFriend"))
         XCTAssertTrue(passport.contains("profile.connections"))
-        XCTAssertTrue(passport.contains("opensConnections = true"))
+        XCTAssertTrue(passport.contains("openPassportRoute(.connections)"))
         XCTAssertTrue(passport.contains("opensCollected"))
         XCTAssertTrue(passport.contains("onReviewAll()"))
         XCTAssertTrue(content.contains("onReviewAll:"))
