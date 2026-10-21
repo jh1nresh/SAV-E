@@ -14,24 +14,29 @@ struct SavePlaceFromURLIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        let startedBy = PrivyAuthService.shared.currentUserId
+        let generation = PrivyAuthService.shared.sessionGeneration
         let candidates: [PendingReviewCandidate]
         do {
             candidates = try await SocialLinkReviewCandidateService.shared.reviewCandidates(from: url)
         } catch {
+            try Self.ensureInitiatingSession(startedBy, generation)
             let record = try SaveLocalVaultService.shared.saveSourceOnly(
                 url: url,
                 note: note.trimmingCharacters(in: .whitespacesAndNewlines),
-                ownerSubject: PrivyAuthService.shared.currentUserId
+                ownerSubject: startedBy
             )
             return .result(dialog: "Saved \(record.displayTitle) as a Savvy source clue. Open Savvy to review it.")
         }
+
+        try Self.ensureInitiatingSession(startedBy, generation)
 
         var savedCount = 0
         var failedCount = 0
         for var candidate in candidates {
             do {
                 if candidate.ownerSubject == nil {
-                    candidate.ownerSubject = PrivyAuthService.shared.currentUserId
+                    candidate.ownerSubject = startedBy
                 }
                 _ = try SaveLocalVaultService.shared.saveReviewCandidate(candidate)
                 savedCount += 1
@@ -50,5 +55,13 @@ struct SavePlaceFromURLIntent: AppIntent {
         }
 
         return .result(dialog: "Savvy found review candidates but could not save them. Open Savvy and try again.")
+    }
+
+    /// A late analysis result must not persist into a different signed-in account.
+    static func ensureInitiatingSession(_ userId: String?, _ generation: Int) throws {
+        let auth = PrivyAuthService.shared
+        guard auth.currentUserId == userId, auth.sessionGeneration == generation else {
+            throw ReviewCandidateError.sessionChangedAfterCommit
+        }
     }
 }
