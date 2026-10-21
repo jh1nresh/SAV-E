@@ -87,7 +87,8 @@ class CoverageTests(unittest.TestCase):
             "SAV-E/Services/SaveAIService.swift", "SAV-E/Views/Shared/New.swift",
             "SAV-E/Views/Map/New.swift", "SAV-E.xcodeproj/project.pbxproj",
             "Tests/SAVEUITests/SAVEScreenshotRailTests.swift", "project.yml",
-            ".github/workflows/ci.yml", "scripts/select-ios-tests.py", "unknown.json",
+            ".github/workflows/ci.yml", ".github/workflows/ios.yml",
+            "scripts/select-ios-tests.py", "unknown.json",
         ):
             with self.subTest(path=path):
                 self.assertEqual(selection.select([path])["profile"], "full")
@@ -204,12 +205,19 @@ class CoverageTests(unittest.TestCase):
             self.assertEqual(plan["tests"], selection.FULL)
 
     def test_workflow_focus_omits_single_test_iteration_flag(self):
-        workflow = (ROOT / ".github/workflows/ci.yml").read_text()
-        self.assertIn("SAVE_UI_TEST_FOCUS", workflow)
-        self.assertIn("Must specify -test-iterations with more than 1 iteration", workflow)
-        self.assertIn("iteration_args=(-test-iterations 3 -retry-tests-on-failure)", workflow)
-        self.assertIn("iteration_args=()", workflow)
-        self.assertNotRegex(workflow, r"(?m)^\s+-test-iterations 1\s")
+        ios_workflow = (ROOT / ".github/workflows/ios.yml").read_text()
+        ci_workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+        self.assertRegex(ios_workflow, r"(?m)^  ios:\s*$")
+        self.assertNotRegex(ci_workflow, r"(?m)^  ios:\s*$")
+        self.assertRegex(ci_workflow, r"(?m)^  ios-fast:\s*$")
+        self.assertIn("run-visual-parity.sh", ios_workflow)
+        self.assertIn("--threshold 0.90", ios_workflow)
+        self.assertNotIn("run-visual-parity.sh", ci_workflow)
+        self.assertIn("SAVE_UI_TEST_FOCUS", ios_workflow)
+        self.assertIn("Must specify -test-iterations with more than 1 iteration", ios_workflow)
+        self.assertIn("iteration_args=(-test-iterations 3 -retry-tests-on-failure)", ios_workflow)
+        self.assertIn("iteration_args=()", ios_workflow)
+        self.assertNotRegex(ios_workflow, r"(?m)^\s+-test-iterations 1\s")
 
     def test_unknown_focus_fails_loudly(self):
         with tempfile.TemporaryDirectory() as temp:
