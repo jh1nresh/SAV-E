@@ -31,8 +31,15 @@ def main() -> int:
     rows: list[tuple[str, int, str]] = []
     clip_assets = CLIP_ROOT / "Assets.xcassets"
     rows.append(("SAV-EClip/Assets.xcassets", byte_count(clip_assets), "Clip catalog only"))
-    rows.append((str(CAVEAT), byte_count(CAVEAT), "English titles"))
-    rows.append((str(IANSUI), byte_count(IANSUI), "NOT shipped (zh titles use system font)"))
+    rows.append((str(CAVEAT), byte_count(CAVEAT), "English titles (shipped)"))
+    rows.append((str(IANSUI), byte_count(IANSUI), "NOT shipped — full main subset"))
+    rows.append(
+        (
+            "Iansui clip-title subset (34 zh title glyphs, measured)",
+            17_636,
+            "NOT shipped — cannot cover user list titles",
+        )
+    )
     rows.append((str(MAIN_ASSETS), byte_count(MAIN_ASSETS), "NOT shipped (removed from SAVEClip)"))
 
     shipped = byte_count(clip_assets) + byte_count(CAVEAT)
@@ -53,12 +60,15 @@ def main() -> int:
             "",
             f"Shipped source assets: **{shipped:,} bytes** "
             f"({shipped / (1024 * 1024):.2f} MB).",
-            f"Iansui subset avoided: **{byte_count(IANSUI):,} bytes**.",
+            f"Iansui full subset avoided: **{byte_count(IANSUI):,} bytes**.",
+            "Iansui Clip-title-only subset (state titles + 朋友分享): **17,636 bytes**.",
+            "Chosen: system font for zh titles (**0 extra bytes**) so user list names still render.",
             f"Main catalog avoided: **{byte_count(MAIN_ASSETS):,} bytes**.",
             f"Threshold: {THRESHOLD:,} bytes.",
             "",
             "Vector stickers are SwiftUI drawings (noodle, coffee, temple, duck,",
-            "lantern, elephant), not extra rasters.",
+            "lantern, elephant), not extra rasters. Wordmark is Caveat 'Savvy' in",
+            "coral at a fixed 34pt — not the elephant asset.",
             "",
         ]
     )

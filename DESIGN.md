@@ -940,9 +940,12 @@ blur. Native MapKit only — no custom tiles or overlays.
 
 ### Type
 
-English titles use Caveat SemiBold (`Caveat-SemiBold.ttf`, 261 KB). zh-Hant
-titles use the system font. Do not copy `Iansui-SavvySubset.ttf` (3.48 MB)
-into the Clip; a title-only Iansui subset still cannot cover user list names.
+English titles use Caveat SemiBold (`Caveat-SemiBold.ttf`, 267 KB). The coral
+wordmark is Caveat “Savvy” at a fixed 34pt (not Dynamic Type, not the elephant
+asset). zh-Hant titles use the system font. Do not copy
+`Iansui-SavvySubset.ttf` (3.48 MB). A Clip-only Iansui subset of the state
+title glyphs is 17.6 KB, but it cannot cover user list names, so it is not
+shipped.
 
 ### Size
 

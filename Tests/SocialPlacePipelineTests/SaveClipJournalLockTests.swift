@@ -11,6 +11,8 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(theme.contains("enum ClipDisplayType"))
         XCTAssertTrue(theme.contains("struct ClipDoodlePin"))
         XCTAssertTrue(theme.contains("Iansui-SavvySubset.ttf (3.48 MB)"))
+        XCTAssertTrue(theme.contains("static var wordmark"))
+        XCTAssertFalse(theme.contains("SavvyLogo"))
         XCTAssertTrue(clip.contains("ClipJournalPalette"))
         XCTAssertTrue(clip.contains("ClipDoodlePin"))
         XCTAssertTrue(clip.contains("mapStyle(.standard)"))

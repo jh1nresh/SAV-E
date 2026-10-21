@@ -99,6 +99,14 @@ enum ClipDisplayType {
             ?? UIFont.systemFont(ofSize: size, weight: .semibold)
         return Font(UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: latin))
     }
+
+    /// Coral wordmark. Fixed 34pt — not Dynamic Type scaled.
+    static var wordmark: Font {
+        _ = register
+        let font = UIFont(name: latinName, size: ClipJournalLayout.wordmarkHeight)
+            ?? UIFont.systemFont(ofSize: ClipJournalLayout.wordmarkHeight, weight: .semibold)
+        return Font(font)
+    }
 }
 
 enum ClipCopy {
@@ -123,10 +131,12 @@ enum ClipCopy {
 
 struct ClipWordmark: View {
     var body: some View {
-        Image("SavvyLogo")
-            .resizable()
-            .scaledToFit()
-            .frame(height: ClipJournalLayout.wordmarkHeight)
+        Text("Savvy")
+            .font(ClipDisplayType.wordmark)
+            .foregroundStyle(ClipJournalPalette.coral)
+            .lineLimit(1)
+            .fixedSize()
+            .frame(height: ClipJournalLayout.wordmarkHeight, alignment: .center)
             .accessibilityHidden(true)
     }
 }
@@ -215,14 +225,18 @@ enum ClipStickerKind: String {
 struct ClipCategorySticker: View {
     let kind: ClipStickerKind
     var canvas: CGFloat = ClipJournalLayout.stickerCanvas
-    var image: CGFloat = ClipJournalLayout.stickerImage
+    var image: CGFloat? = nil
+
+    private var drawingSize: CGFloat {
+        image ?? (kind == .elephant ? ClipJournalLayout.defaultElephant : ClipJournalLayout.stickerImage)
+    }
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(ClipJournalPalette.kraft)
             ClipStickerDrawing(kind: kind)
-                .frame(width: image, height: image)
+                .frame(width: drawingSize, height: drawingSize)
         }
         .frame(width: canvas, height: canvas)
         .accessibilityHidden(true)
