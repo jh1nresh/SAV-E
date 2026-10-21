@@ -370,6 +370,41 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         )
     }
 
+    func testGate5PreviewCatalogCoversPhotoAndCoralStates() throws {
+        XCTAssertEqual(
+            SavvyMapPhotoPinPreviewState.allCases.map(\.rawValue),
+            [
+                "photoRoundPin",
+                "photoVisitedRing",
+                "photoBadge",
+                "photoCardHero",
+                "coralRoundPin",
+                "coralVisitedRing",
+                "coralBadge",
+                "coralCardHero",
+            ]
+        )
+        XCTAssertTrue(SavvyMapPhotoPinPreviewState.photoRoundPin.usesFixturePhoto)
+        XCTAssertTrue(SavvyMapPhotoPinPreviewState.photoVisitedRing.isVisited)
+        XCTAssertTrue(SavvyMapPhotoPinPreviewState.photoBadge.showsBadge)
+        XCTAssertTrue(SavvyMapPhotoPinPreviewState.photoCardHero.showsCard)
+        XCTAssertFalse(SavvyMapPhotoPinPreviewState.coralRoundPin.usesFixturePhoto)
+        XCTAssertTrue(SavvyMapPhotoPinPreviewState.coralVisitedRing.isVisited)
+        XCTAssertTrue(SavvyMapPhotoPinPreviewState.coralBadge.showsBadge)
+        XCTAssertTrue(SavvyMapPhotoPinPreviewState.coralCardHero.showsCard)
+
+        let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        XCTAssertTrue(pins.contains("SavvyMapPhotoPinPreviewCatalog"))
+        XCTAssertTrue(pins.contains("savvyMapPreviewPhoto"))
+        XCTAssertTrue(pins.contains("DEBUG FIXTURE"))
+        XCTAssertTrue(pins.contains("#if DEBUG"))
+        XCTAssertFalse(pins.contains("PlaceBusinessEnricher"))
+        XCTAssertEqual(
+            SavvyMapPhotoPolicy.resolvedPhoto(for: samplePlace(), isConfirmedSaved: true),
+            .coral
+        )
+    }
+
     func testCardBackUsesDecision2FieldsFromPlace() {
         let place = samplePlace(
             note: "Bring cash",

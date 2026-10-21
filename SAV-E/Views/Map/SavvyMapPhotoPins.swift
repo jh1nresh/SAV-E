@@ -1,6 +1,7 @@
 import CoreLocation
 import MapKit
 import SwiftUI
+import UIKit
 
 // MARK: - Motion (spec §6; analysis.md §2)
 
@@ -486,10 +487,62 @@ struct SavvyMapCardBackModel: Equatable {
 
 // MARK: - Pin
 
+/// DESIGN gate 5 / QA catalog. Names only — no shipping photos. DEBUG
+/// Previews inject a fixture image for the photo rows; production stays coral.
+enum SavvyMapPhotoPinPreviewState: String, CaseIterable, Identifiable {
+    case photoRoundPin
+    case photoVisitedRing
+    case photoBadge
+    case photoCardHero
+    case coralRoundPin
+    case coralVisitedRing
+    case coralBadge
+    case coralCardHero
+
+    var id: String { rawValue }
+
+    var usesFixturePhoto: Bool {
+        switch self {
+        case .photoRoundPin, .photoVisitedRing, .photoBadge, .photoCardHero:
+            return true
+        case .coralRoundPin, .coralVisitedRing, .coralBadge, .coralCardHero:
+            return false
+        }
+    }
+
+    var isVisited: Bool {
+        self == .photoVisitedRing || self == .coralVisitedRing
+    }
+
+    var showsBadge: Bool {
+        self == .photoBadge || self == .coralBadge
+    }
+
+    var showsCard: Bool {
+        self == .photoCardHero || self == .coralCardHero
+    }
+
+    var qaTitle: String {
+        switch self {
+        case .photoRoundPin: return "P1 photo round pin"
+        case .photoVisitedRing: return "P1 photo + visited ring"
+        case .photoBadge: return "P2 photo badge (latΔ ≤ 0.02)"
+        case .photoCardHero: return "P1/P3 card hero image"
+        case .coralRoundPin: return "P1 coral round pin"
+        case .coralVisitedRing: return "P1 coral + visited ring"
+        case .coralBadge: return "P2 coral badge (latΔ ≤ 0.02)"
+        case .coralCardHero: return "P3 card hero coral"
+        }
+    }
+}
+
 struct SavvyMapPhotoPinView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ObservedObject private var sharedPhotos = SavvyMapSharedPinPhotoStore.shared
+#if DEBUG
+    @Environment(\.savvyMapPreviewPhoto) private var previewPhoto
+#endif
     let place: Place
     var showsBadge: Bool
     var isVisited: Bool
@@ -634,7 +687,7 @@ struct SavvyMapPhotoPinView: View {
                 .fill(SaveAtlasPalette.coral)
                 .frame(width: inner, height: inner)
             SavvyMapPinPhotoFill(
-                image: sharedPhotos.image(for: place),
+                image: pinImage,
                 url: resolvedPhoto.url,
                 diameter: inner
             )
@@ -655,8 +708,15 @@ struct SavvyMapPhotoPinView: View {
         )
     }
 
+    private var pinImage: UIImage? {
+#if DEBUG
+        if let previewPhoto { return previewPhoto }
+#endif
+        return sharedPhotos.image(for: place)
+    }
+
     private var hasPhoto: Bool {
-        sharedPhotos.image(for: place) != nil
+        pinImage != nil
     }
 
     private var pinLabel: String {
@@ -745,6 +805,9 @@ struct SavvyMapPlaceCard: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject var visits: SavvyMapVisitStore
     @ObservedObject private var sharedPhotos = SavvyMapSharedPinPhotoStore.shared
+#if DEBUG
+    @Environment(\.savvyMapPreviewPhoto) private var previewPhoto
+#endif
     let place: Place
     let userLocation: CLLocation?
     var isOpen: Bool
@@ -880,6 +943,13 @@ struct SavvyMapPlaceCard: View {
         .onTapGesture(perform: onFlip)
     }
 
+    private var cardHeroImage: UIImage? {
+#if DEBUG
+        if let previewPhoto { return previewPhoto }
+#endif
+        return sharedPhotos.image(for: place)
+    }
+
     private var photoWell: some View {
         ZStack(alignment: .bottomLeading) {
             RoundedRectangle(cornerRadius: SavvyMapPinMetrics.cardPhotoCorner, style: .continuous)
@@ -887,7 +957,7 @@ struct SavvyMapPlaceCard: View {
             Circle()
                 .fill(SaveAtlasPalette.coral)
                 .frame(width: 72, height: 72)
-            if let image = sharedPhotos.image(for: place) {
+            if let image = cardHeroImage {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -1064,3 +1134,238 @@ struct SavvyMapPlaceCard: View {
         return date.isEmpty ? "Visited \(count) time\(count == 1 ? "" : "s")" : "Visited \(count) time\(count == 1 ? "" : "s") · last \(date)"
     }
 }
+
+#if DEBUG
+/// Preview-only photo hook. Default is nil so DEBUG app runs stay coral
+/// unless a Preview or test fixture injects an image. Not shipping data.
+private struct SavvyMapPreviewPhotoKey: EnvironmentKey {
+    static let defaultValue: UIImage? = nil
+}
+
+extension EnvironmentValues {
+    var savvyMapPreviewPhoto: UIImage? {
+        get { self[SavvyMapPreviewPhotoKey.self] }
+        set { self[SavvyMapPreviewPhotoKey.self] = newValue }
+    }
+}
+
+enum SavvyMapPhotoPinPreviewFixtures {
+    static let placeID = UUID(uuidString: "00000000-0000-4000-8000-000000000021")!
+
+    static func place(visited: Bool) -> Place {
+        Place(
+            id: placeID,
+            name: "Temple of Heaven",
+            address: "Tiantan Rd",
+            latitude: 39.8822,
+            longitude: 116.4066,
+            googlePlaceId: nil,
+            category: .attraction,
+            status: visited ? .visited : .wantToGo,
+            rating: nil,
+            note: "DEBUG fixture — not shipping data",
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            businessPhotoUrls: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: "09:00–17:00",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+    }
+
+    /// Procedural circular-hall photo. Labeled DEBUG so QA never treats it as live.
+    static func photo() -> UIImage {
+        let size = CGSize(width: 360, height: 360)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { context in
+            let cg = context.cgContext
+            let sky = CGGradient(
+                colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                colors: [
+                    UIColor(red: 0.55, green: 0.70, blue: 0.80, alpha: 1).cgColor,
+                    UIColor(red: 0.46, green: 0.58, blue: 0.66, alpha: 1).cgColor,
+                ] as CFArray,
+                locations: [0, 1]
+            )!
+            cg.drawLinearGradient(sky, start: .zero, end: CGPoint(x: 0, y: 360), options: [])
+            UIColor(red: 0.34, green: 0.49, blue: 0.31, alpha: 1).setFill()
+            cg.fill(CGRect(x: 0, y: 220, width: 360, height: 140))
+            UIColor(red: 0.66, green: 0.23, blue: 0.18, alpha: 1).setFill()
+            cg.fillEllipse(in: CGRect(x: 58, y: 78, width: 244, height: 88))
+            UIColor(red: 0.77, green: 0.31, blue: 0.21, alpha: 1).setFill()
+            cg.fillEllipse(in: CGRect(x: 86, y: 108, width: 188, height: 70))
+            UIColor(red: 0.84, green: 0.38, blue: 0.24, alpha: 1).setFill()
+            cg.fillEllipse(in: CGRect(x: 114, y: 132, width: 132, height: 52))
+            UIColor(red: 0.93, green: 0.84, blue: 0.64, alpha: 1).setFill()
+            cg.fillEllipse(in: CGRect(x: 98, y: 118, width: 164, height: 36))
+            UIColor(red: 0.36, green: 0.16, blue: 0.13, alpha: 1).setFill()
+            cg.fill(CGRect(x: 168, y: 168, width: 24, height: 70))
+            UIColor(red: 0.82, green: 0.73, blue: 0.52, alpha: 1).setFill()
+            cg.move(to: CGPoint(x: 110, y: 236))
+            cg.addLine(to: CGPoint(x: 250, y: 236))
+            cg.addLine(to: CGPoint(x: 270, y: 282))
+            cg.addLine(to: CGPoint(x: 90, y: 282))
+            cg.closePath()
+            cg.fillPath()
+            UIColor(red: 0.07, green: 0.05, blue: 0.05, alpha: 1).setFill()
+            cg.fill(CGRect(x: 0, y: 328, width: 360, height: 32))
+            ("DEBUG FIXTURE" as NSString).draw(
+                in: CGRect(x: 12, y: 334, width: 336, height: 22),
+                withAttributes: [
+                    .font: UIFont.systemFont(ofSize: 13, weight: .bold),
+                    .foregroundColor: UIColor.white.withAlphaComponent(0.92),
+                ]
+            )
+        }
+    }
+}
+
+struct SavvyMapPhotoPinPreviewCell: View {
+    let state: SavvyMapPhotoPinPreviewState
+    private let visits = SavvyMapVisitStore(
+        defaults: UserDefaults(suiteName: "savvy.map.preview.visits") ?? .standard,
+        key: "gate5"
+    )
+
+    var body: some View {
+        let place = SavvyMapPhotoPinPreviewFixtures.place(visited: state.isVisited)
+        Group {
+            if state.showsCard {
+                SavvyMapPlaceCard(
+                    visits: visits,
+                    place: place,
+                    userLocation: CLLocation(latitude: 39.883, longitude: 116.407),
+                    isOpen: true,
+                    isFlipped: false,
+                    reduceMotion: true,
+                    screenWidth: 390,
+                    onFlip: {},
+                    onBeenHere: {},
+                    onDirections: {},
+                    onOpenDetail: {},
+                    onEditNote: {},
+                    onCollapse: {}
+                )
+            } else {
+                SavvyMapPhotoPinView(
+                    place: place,
+                    showsBadge: state.showsBadge,
+                    isVisited: state.isVisited,
+                    isSelected: false,
+                    reduceMotion: true,
+                    onTap: {}
+                )
+            }
+        }
+        .environment(
+            \.savvyMapPreviewPhoto,
+            state.usesFixturePhoto ? SavvyMapPhotoPinPreviewFixtures.photo() : nil
+        )
+    }
+}
+
+/// Xcode Previews + QA board. Debug/test-only; production Map never seeds this.
+struct SavvyMapPhotoPinPreviewCatalog: View {
+    var colorScheme: ColorScheme = .light
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("DEBUG / test fixtures — not shipping data")
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                Text("DESIGN gate 5 · photo + coral pin states")
+                    .font(SaveAtlasType.strong(20))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                LazyVGrid(
+                    columns: [GridItem(.flexible()), GridItem(.flexible())],
+                    spacing: 20
+                ) {
+                    ForEach(SavvyMapPhotoPinPreviewState.allCases) { state in
+                        VStack(spacing: 10) {
+                            SavvyMapPhotoPinPreviewCell(state: state)
+                                .frame(minHeight: state.showsCard ? 430 : 140)
+                            Text(state.qaTitle)
+                                .font(SaveAtlasType.strong(12))
+                                .foregroundStyle(SaveAtlasPalette.muted)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(12)
+                        .frame(maxWidth: .infinity)
+                        .background(
+                            SaveAtlasPalette.kraftLight,
+                            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        )
+                    }
+                }
+            }
+            .padding(16)
+        }
+        .background(SaveAtlasPalette.paper.ignoresSafeArea())
+        .preferredColorScheme(colorScheme)
+        .accessibilityIdentifier("map.pin.previewCatalog")
+    }
+}
+
+#Preview("Gate 5 catalog / light") {
+    SavvyMapPhotoPinPreviewCatalog(colorScheme: .light)
+}
+
+#Preview("Gate 5 catalog / dark") {
+    SavvyMapPhotoPinPreviewCatalog(colorScheme: .dark)
+}
+
+#Preview("P1 photo round pin / light") {
+    previewPage(.photoRoundPin, scheme: .light)
+}
+
+#Preview("P1 photo visited ring / dark") {
+    previewPage(.photoVisitedRing, scheme: .dark)
+}
+
+#Preview("P2 photo badge / light") {
+    previewPage(.photoBadge, scheme: .light)
+}
+
+#Preview("P3 photo card hero / dark") {
+    previewPage(.photoCardHero, scheme: .dark)
+}
+
+#Preview("P1 coral pin / light") {
+    previewPage(.coralRoundPin, scheme: .light)
+}
+
+#Preview("P1 coral visited / dark") {
+    previewPage(.coralVisitedRing, scheme: .dark)
+}
+
+#Preview("P2 coral badge / light") {
+    previewPage(.coralBadge, scheme: .light)
+}
+
+#Preview("P3 coral card / dark") {
+    previewPage(.coralCardHero, scheme: .dark)
+}
+
+private func previewPage(
+    _ state: SavvyMapPhotoPinPreviewState,
+    scheme: ColorScheme
+) -> some View {
+    ZStack {
+        SaveAtlasPalette.paper.ignoresSafeArea()
+        VStack(spacing: 16) {
+            Text(state.qaTitle)
+                .font(SaveAtlasType.strong(15))
+                .foregroundStyle(SaveAtlasPalette.ink)
+            SavvyMapPhotoPinPreviewCell(state: state)
+        }
+        .padding(24)
+    }
+    .preferredColorScheme(scheme)
+}
+#endif

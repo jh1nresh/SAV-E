@@ -136,7 +136,10 @@ Rules:
   once the user confirms, that place is immediately a Savvy pin. Selected
   stamp grows a paper callout (name, Eat/Go, Directions, 我來過了) instead of
   a kraft peek. Source-only clues still have no pin. Five-second test: Savvy
-  pin = saved, coral ring = visited saved, Apple POI = unsaved.
+  pin = saved, coral ring = visited saved, Apple POI = unsaved. DESIGN
+  gate 5 / QA verify photo-pin variants (round photo, visited ring, badge,
+  card hero, plus coral) from `#if DEBUG` SwiftUI Previews
+  (`SavvyMapPhotoPinPreviewCatalog`) — fixtures, not shipping data.
 - Tile-town is nearest-neighbor integer tiles (`SaveTileTownRaster`): buildings,
   roofs, trees, water, and roads are crisp cells. No anti-aliased vector houses
   or curved roads. Do not blurry-upscale pixel art.
@@ -752,9 +755,12 @@ Rules:
   on). Pin size does not follow zoom. `latitudeDelta ≤ 0.02` grows a badge;
   `> 0.025` returns to the small pin. No clustering.
 - Places without a Savvy-shared photo use a coral round. This PR has no
-  clean own-photo field, so production pins are coral. Visited adds a coral
-  ring. Only confirmed saved Map Stamps get those Savvy pins; unsaved places
-  use Apple's native POI markers only. Google Places photos are not pin art.
+  clean own-photo field, so production pins are coral. Photo-pin states
+  (round, visited ring, zoomed-in badge, card hero) are captured from
+  debug/test fixtures for DESIGN gate 5 — they are not shipping data.
+  Visited adds a coral ring. Only confirmed saved Map Stamps get those
+  Savvy pins; unsaved places use Apple's native POI markers only. Google
+  Places photos are not pin art.
   Shadows and springs stay on Map pins, the callout, and the delayed camera
   move. Other Map chrome stays doodle-flat. Reduce Motion replaces springs
   with a 0.25s fade and jumps the camera.
