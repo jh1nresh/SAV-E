@@ -491,6 +491,7 @@ struct SaveDoodleHomeView: View {
         }
 #endif
         if allPlaces.isEmpty { return true }
+        if needsLocationToResolveNearYou { return false }
         if SaveDoodleHomeCatalog.isNearbyEmpty(
             places: allPlaces,
             lens: session.lens,
@@ -503,8 +504,19 @@ struct SaveDoodleHomeView: View {
         return listedPlaces.isEmpty
     }
 
+    /// Near you with no fix must not invent a worldwide nearby list.
+    private var needsLocationToResolveNearYou: Bool {
+        session.city == .nearYou
+            && !locationService.isAuthorizationDenied
+            && locationService.currentLocation == nil
+            && !allPlaces.isEmpty
+    }
+
     private var showsLocationPrompt: Bool {
-        locationService.isAuthorizationDenied && !showsEmptyHome
+        if locationService.isAuthorizationDenied && !showsEmptyHome {
+            return true
+        }
+        return needsLocationToResolveNearYou
     }
 
     private var showsNearYouPrefix: Bool {

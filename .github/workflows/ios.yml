@@ -30,10 +30,17 @@ on:
 permissions:
   contents: read
   pull-requests: read
+  # cancel-in-progress needs this. Without it a new PR run queues behind a
+  # stale one for the whole ios job (run 39519670128 on #300 sat for >1h).
+  actions: write
 
 concurrency:
-  group: ios-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Events: push@main, pull_request (labeled / ready_for_review /
+  # synchronize / reopened), and workflow_dispatch. Main is unique per
+  # run and never cancelled. Any other event on the same PR head shares
+  # one group so a new run cancels the older one.
+  group: ios-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.head_ref || github.ref_name }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   # Cheap ubuntu gate so drafts without ready-for-merge fail before the
@@ -67,7 +74,8 @@ jobs:
           exit 1
 
   # Compile-only gate so an iOS compile error fails in ~10 min instead of
-  # waiting on the 75-minute unit+UI job. No tests and no simulator boot.
+  # waiting on the unit+UI job. No tests and no simulator boot. Products
+  # are reused by ios via test-without-building.
   ios-build:
     needs: [ios-gate]
     runs-on: macos-26
@@ -109,6 +117,33 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             build-for-testing
+          # test-without-building on the ios job needs the .xctestrun next
+          # to the products. build-for-testing sometimes writes it elsewhere.
+          while IFS= read -r xctestrun; do
+            cp -n "$xctestrun" "$RUNNER_TEMP/SAVE-DerivedData/Build/Products/" || true
+          done < <(find "$RUNNER_TEMP/SAVE-DerivedData" -name '*.xctestrun' -print)
+          du -sh "$RUNNER_TEMP/SAVE-DerivedData/Build/Products"
+          find "$RUNNER_TEMP/SAVE-DerivedData/Build/Products" -name '*.xctestrun' -print
+          # One tarball survives download-artifact extract flakes better than
+          # 200+ loose product files (run 39524713382 failed after 5 retries).
+          tar -C "$RUNNER_TEMP/SAVE-DerivedData/Build/Products" \
+            -cf "$RUNNER_TEMP/save-ios-test-products.tar" .
+          ls -lh "$RUNNER_TEMP/save-ios-test-products.tar"
+
+      - name: Save this-run test products
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/save-ios-test-products.tar
+          key: ios-products-${{ github.run_id }}
+
+      - name: Upload test products for the ios job
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: save-ios-test-products-${{ github.run_id }}
+          path: ${{ runner.temp }}/save-ios-test-products.tar
+          if-no-files-found: error
+          retention-days: 1
+          overwrite: true
 
   # Required check name `ios` (ruleset 19331432). Never skipped. This job
   # is the full UI + snapshot + 0.90 parity suite and can succeed only when
@@ -117,9 +152,11 @@ jobs:
     if: always()
     needs: [ios-build]
     runs-on: macos-26
-    # The UI suite is ~10 minutes on a healthy runner but has been observed at
-    # 3-4x that on a contended one, and failing tests are now retried.
-    timeout-minutes: 75
+    # Products come from ios-build (no second compile). Setup + units +
+    # simulator is ~15-20m; UI step 60; Trip 15; slack for parity/teardown
+    # and the main-only Release compile. Run 39497842970: 75m job wall cut
+    # the 55m UI step at 52m50s after ~20m of rebuild and setup.
+    timeout-minutes: 100
     env:
       # Re-enabled for the 2026-10-15 pixel-art pass. Disable again after the
       # focused set is green, then run one full suite as the merge gate.
@@ -178,18 +215,62 @@ jobs:
           restore-keys: |
             spm-${{ runner.os }}-
 
-      - name: Build without booting a simulator
+      - name: Restore this-run test products
+        id: products_cache
+        if: steps.scope.outputs.run == 'true'
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/save-ios-test-products.tar
+          key: ios-products-${{ github.run_id }}
+
+      - name: Download test products from ios-build
+        id: products_artifact
+        if: steps.scope.outputs.run == 'true' && steps.products_cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: save-ios-test-products-${{ github.run_id }}
+          path: ${{ runner.temp }}/SAVE-TestProducts-dl
+
+      - name: Retry test-product download
+        if: steps.scope.outputs.run == 'true' && steps.products_cache.outputs.cache-hit != 'true' && steps.products_artifact.outcome != 'success'
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: save-ios-test-products-${{ github.run_id }}
+          path: ${{ runner.temp }}/SAVE-TestProducts-dl
+
+      - name: Locate transferred xctestrun
+        id: products
         if: steps.scope.outputs.run == 'true'
         run: |
-          scripts/xcodebuild-clean.sh \
-            -project SAV-E.xcodeproj \
-            -scheme SAV-E \
-            -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
-            CODE_SIGNING_ALLOWED=NO \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            build
+          tarball="$RUNNER_TEMP/save-ios-test-products.tar"
+          if [[ ! -f "$tarball" ]]; then
+            found=""
+            while IFS= read -r candidate; do
+              found="$candidate"
+              break
+            done < <(find "$RUNNER_TEMP/SAVE-TestProducts-dl" -name 'save-ios-test-products.tar' -print 2>/dev/null)
+            if [[ -z "$found" ]]; then
+              echo 'error: this-run test products were not restored from cache or artifact.' >&2
+              find "$RUNNER_TEMP" -maxdepth 3 -name 'save-ios-test-products.tar' -print >&2 || true
+              exit 1
+            fi
+            tarball="$found"
+          fi
+          rm -rf "$RUNNER_TEMP/SAVE-DerivedData/Build/Products"
+          mkdir -p "$RUNNER_TEMP/SAVE-DerivedData/Build/Products"
+          tar -C "$RUNNER_TEMP/SAVE-DerivedData/Build/Products" -xf "$tarball"
+          xctestrun=""
+          while IFS= read -r candidate; do
+            xctestrun="$candidate"
+            break
+          done < <(find "$RUNNER_TEMP/SAVE-DerivedData/Build/Products" -name '*.xctestrun' | sort)
+          if [[ -z "$xctestrun" ]]; then
+            echo 'error: ios-build products are missing an .xctestrun file.' >&2
+            find "$RUNNER_TEMP/SAVE-DerivedData/Build/Products" -maxdepth 3 -print >&2
+            exit 1
+          fi
+          echo "xctestrun=$xctestrun" >> "$GITHUB_OUTPUT"
 
       - name: Create focused test simulator
         id: simulator
@@ -206,19 +287,66 @@ jobs:
           # launching application via Xcode" on the first test of a step.
           xcrun simctl bootstatus "$udid" -b
 
+      # HoP A2: real SpringBoard screenshot of the installed Savvy icon.
+      # This Linux checkout cannot boot a simulator, so the required ios
+      # job installs SAVE.app on the already-booted device, returns to the
+      # home screen, and uploads light/dark captures.
+      - name: Capture simulator home-screen app icon
+        if: steps.scope.outputs.run == 'true'
+        env:
+          SIM_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/SAVE-Home-Screen"
+          mkdir -p "$out"
+          app="$RUNNER_TEMP/SAVE-DerivedData/Build/Products/Debug-iphonesimulator/SAVE.app"
+          if [[ ! -d "$app" ]]; then
+            app="$(find "$RUNNER_TEMP/SAVE-DerivedData/Build/Products" \
+              -name 'SAVE.app' -path '*iphonesimulator*' -print | head -n 1)"
+          fi
+          if [[ -z "${app:-}" || ! -d "$app" ]]; then
+            echo "SAVE.app not found under DerivedData Products." >&2
+            find "$RUNNER_TEMP/SAVE-DerivedData/Build/Products" -name '*.app' -print >&2 || true
+            exit 1
+          fi
+          xcrun simctl bootstatus "$SIM_UDID" -b
+          xcrun simctl install "$SIM_UDID" "$app"
+          # Fresh boot is already on SpringBoard. Do not launch the app.
+          xcrun simctl terminate "$SIM_UDID" com.wanderly.app 2>/dev/null || true
+          xcrun simctl send-event "$SIM_UDID" home-button 2>/dev/null || \
+            xcrun simctl send-event "$SIM_UDID" home 2>/dev/null || true
+          capture() {
+            local appearance="$1"
+            local file="$2"
+            xcrun simctl ui "$SIM_UDID" appearance "$appearance"
+            sleep 3
+            xcrun simctl io booted screenshot "$file"
+            [[ -s "$file" ]]
+          }
+          capture light "$out/home-screen-light.png"
+          capture dark "$out/home-screen-dark.png"
+          # Restore light so later unit/UI tests do not inherit dark mode.
+          xcrun simctl ui "$SIM_UDID" appearance light
+
+      - name: Upload home-screen app icon screenshots
+        if: always() && steps.scope.outputs.run == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: save-home-screen-icon-${{ github.sha }}
+          path: ${{ runner.temp }}/SAVE-Home-Screen
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Run unit tests
         if: steps.scope.outputs.run == 'true' && steps.scope.outputs.units == 'true'
         run: |
           scripts/xcodebuild-clean.sh \
-            -project SAV-E.xcodeproj \
-            -scheme SAV-E \
-            -configuration Debug \
+            -xctestrun '${{ steps.products.outputs.xctestrun }}' \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
-            -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
             -only-testing:SAVETests \
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            test
+            test-without-building
 
       - name: Reset focused simulator before UI tests
         if: steps.scope.outputs.ui == 'true'
@@ -229,29 +357,23 @@ jobs:
           # rather than inside the first test's app launch.
           xcrun simctl bootstatus '${{ steps.simulator.outputs.udid }}' -b
 
-      # -retry-tests-on-failure is the backstop for simulator-level faults the
-      # test code cannot defend against (wedged backboard, "Failed to get
-      # background assertion"), which have taken out whole runs on main. It
-      # only re-runs tests that failed, so a green run costs nothing, and a
-      # genuine regression still fails all three attempts. Any retry that did
-      # happen is surfaced by the next step rather than being swallowed.
+      # Three attempts remain the flake backstop (wedged backboard, "Failed
+      # to get background assertion"). Failed tests and selectors that never
+      # emitted a result are retried, so a mid-suite abort cannot go green.
+      # A test that fails two attempts in a row is treated as deterministic
+      # and stops before a third run. Retries are named by the next step.
       - name: Run selected UI regression tests
         id: ui_tests
-        # Job budget is 75. 60 was too tight once Plan replaced Origin: unit
-        # tests plus four UI tests that needed three attempts (run 33905649737)
-        # hit the 1h wall while Home-Saves was still running.
-        timeout-minutes: 55
+        # Job budget is 100. The step gets a real 60m of test time instead of
+        # whatever is left after a second compile (run 39497842970).
+        timeout-minutes: 60
         if: steps.scope.outputs.ui == 'true'
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-UI-tests.log
           SAVE_SCREENSHOT_DIR: ${{ runner.temp }}/SAVE-First-Run
         run: |
           mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
-          ui_args=()
-          while IFS= read -r argument; do
-            ui_args+=("$argument")
-          done < "$RUNNER_TEMP/ios-ui-args.txt"
-          if ((${#ui_args[@]} == 0)); then
+          if [[ ! -s "$RUNNER_TEMP/ios-ui-args.txt" ]]; then
             echo 'UI coverage was selected but no test arguments were produced.' >&2
             exit 1
           fi
@@ -263,23 +385,26 @@ jobs:
             echo "SAVE_UI_TEST_FOCUS=${SAVE_UI_TEST_FOCUS}: focused UI set, one attempt, no retry."
             iteration_args=()
           fi
-          scripts/xcodebuild-clean.sh \
-            -project SAV-E.xcodeproj \
-            -scheme SAV-E \
-            -configuration Debug \
+          max_attempts=1
+          if ((${#iteration_args[@]} > 0)); then
+            max_attempts=3
+          fi
+          scripts/run-ios-xcodebuild-retry.sh \
+            --max-attempts "$max_attempts" \
+            --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-UI-tests.log" \
+            --only-testing-file "$RUNNER_TEMP/ios-ui-args.txt" \
+            -- \
+            -xctestrun '${{ steps.products.outputs.xctestrun }}' \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
-            -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
-            -resultBundlePath "$RUNNER_TEMP/SAVE-UI.xcresult" \
-            "${ui_args[@]}" \
-            "${iteration_args[@]}" \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            test
+            test-without-building
 
       - name: Enforce Atlas production visual parity
         if: always() && (steps.scope.outputs.ui == 'true')
         run: |
           # macOS runners ship a PEP 668 Homebrew Python. Install Pillow in a
-          # throwaway venv instead of breaking the system site-packages.
+          # throwaway venv so pip never touches the system interpreter.
           python3 -m venv "$RUNNER_TEMP/save-parity-venv"
           "$RUNNER_TEMP/save-parity-venv/bin/python" -m pip install Pillow
           skip_args=()
@@ -313,7 +438,7 @@ jobs:
             echo "No readable UI result bundle; keep SAVE_SCREENSHOT_DIR rasters."
           fi
           echo "DESIGN Home/Passport/Map rasters in SAVE-First-Run:"
-          for name in five-tab-home light-home dark-home five-tab-passport doodle-passport-light doodle-passport-dark light-passport dark-passport five-tab-map doodle-map-light light-map dark-map five-tab-capture five-tab-paywall pr295-capture-light pr295-paywall-light; do
+          for name in five-tab-home light-home dark-home H1 H2 H3 H4 five-tab-passport doodle-passport-light doodle-passport-dark light-passport dark-passport five-tab-map doodle-map-light light-map dark-map five-tab-capture five-tab-paywall pr295-capture-light pr295-paywall-light; do
             path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
             if [[ -f "$path" ]]; then
               wc -c "$path"
@@ -337,18 +462,19 @@ jobs:
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Trip-Sheets-tests.log
         run: |
-          scripts/xcodebuild-clean.sh \
-            -project SAV-E.xcodeproj \
-            -scheme SAV-E \
-            -configuration Debug \
+          printf '%s\n' \
+            '-only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripStopEditorSurfaceIsReachable' \
+            > "$RUNNER_TEMP/ios-trip-args.txt"
+          scripts/run-ios-xcodebuild-retry.sh \
+            --max-attempts 3 \
+            --result-bundle "$RUNNER_TEMP/SAVE-Trip-Sheets.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Trip-Sheets-tests.log" \
+            --only-testing-file "$RUNNER_TEMP/ios-trip-args.txt" \
+            -- \
+            -xctestrun '${{ steps.products.outputs.xctestrun }}' \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
-            -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
-            -resultBundlePath "$RUNNER_TEMP/SAVE-Trip-Sheets.xcresult" \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testTripStopEditorSurfaceIsReachable \
-            -test-iterations 3 \
-            -retry-tests-on-failure \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            test
+            test-without-building
           xcrun xcresulttool export attachments \
             --path "$RUNNER_TEMP/SAVE-Trip-Sheets.xcresult" \
             --output-path "$RUNNER_TEMP/SAVE-Trip-Sheets"
@@ -392,18 +518,19 @@ jobs:
           SAVE_SCREENSHOT_DIR: ${{ runner.temp }}/SAVE-First-Run
         run: |
           mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
-          scripts/xcodebuild-clean.sh \
-            -project SAV-E.xcodeproj \
-            -scheme SAV-E \
-            -configuration Debug \
+          printf '%s\n' \
+            '-only-testing:SAVEUITests/SAVEScreenshotRailTests/testPR295PaywallLargeTypeEvidence' \
+            > "$RUNNER_TEMP/ios-pr295-large-type-args.txt"
+          scripts/run-ios-xcodebuild-retry.sh \
+            --max-attempts 3 \
+            --result-bundle "$RUNNER_TEMP/SAVE-PR295-LargeType.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-PR295-large-type-tests.log" \
+            --only-testing-file "$RUNNER_TEMP/ios-pr295-large-type-args.txt" \
+            -- \
+            -xctestrun '${{ steps.products.outputs.xctestrun }}' \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
-            -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
-            -resultBundlePath "$RUNNER_TEMP/SAVE-PR295-LargeType.xcresult" \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testPR295PaywallLargeTypeEvidence \
-            -test-iterations 3 \
-            -retry-tests-on-failure \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            test
+            test-without-building
           xcrun xcresulttool export attachments \
             --path "$RUNNER_TEMP/SAVE-PR295-LargeType.xcresult" \
             --output-path "$RUNNER_TEMP/SAVE-First-Run"
@@ -425,19 +552,20 @@ jobs:
             "$device_type" \
             'com.apple.CoreSimulator.SimRuntime.iOS-26-5')"
           xcrun simctl bootstatus "$se_udid" -b
+          printf '%s\n' \
+            '-only-testing:SAVEUITests/SAVEScreenshotRailTests/testPR295SEEvidence' \
+            > "$RUNNER_TEMP/ios-pr295-se-args.txt"
           set +e
-          scripts/xcodebuild-clean.sh \
-            -project SAV-E.xcodeproj \
-            -scheme SAV-E \
-            -configuration Debug \
+          scripts/run-ios-xcodebuild-retry.sh \
+            --max-attempts 3 \
+            --result-bundle "$RUNNER_TEMP/SAVE-PR295-SE.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-PR295-se-tests.log" \
+            --only-testing-file "$RUNNER_TEMP/ios-pr295-se-args.txt" \
+            -- \
+            -xctestrun '${{ steps.products.outputs.xctestrun }}' \
             -destination "platform=iOS Simulator,id=$se_udid" \
-            -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
-            -resultBundlePath "$RUNNER_TEMP/SAVE-PR295-SE.xcresult" \
-            -only-testing:SAVEUITests/SAVEScreenshotRailTests/testPR295SEEvidence \
-            -test-iterations 3 \
-            -retry-tests-on-failure \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            test
+            test-without-building
           status=$?
           set -e
           xcrun xcresulttool export attachments \

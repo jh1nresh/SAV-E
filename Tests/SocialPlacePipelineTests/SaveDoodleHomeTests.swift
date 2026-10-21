@@ -188,6 +188,31 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(count.saved, 12)
     }
 
+    func testNearYouWithoutLocationDoesNotReturnWorldwidePlaces() {
+        let beijing = place("Duck", "Beijing, China", .food)
+        let tokyo = place(
+            "Ichiran",
+            "1-22-7 Jinnan, Shibuya City, Tokyo, Japan",
+            .food
+        )
+        let visible = SaveDoodleHomeCatalog.visiblePlaces(
+            from: [beijing, tokyo],
+            lens: .eat,
+            selection: .nearYou,
+            location: nil,
+            locationDenied: false
+        )
+        XCTAssertTrue(visible.isEmpty)
+        XCTAssertTrue(
+            SaveDoodleHomeCatalog.collectedScopePlaces(
+                from: [beijing, tokyo],
+                selection: .nearYou,
+                location: nil,
+                locationDenied: false
+            ).isEmpty
+        )
+    }
+
     /// T1: city A has 12 saves and 4 visited across Eat and Go. Home reads
     /// Collected 4/12 while the Eat list still shows three nearby rows.
     func testT1HomeCollectedFourOfTwelveWithThreeEatRows() {
@@ -216,7 +241,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(count.saved, 12)
         XCTAssertEqual(
             SaveDoodleHomeCatalog.collectedProgress(in: scope).goal,
-            12
+            count.saved
         )
         XCTAssertEqual(
             SaveDoodleHomeCatalog.cityDisplayName(for: listed[0].place, language: .english),
@@ -279,8 +304,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(count.saved, 12)
     }
 
-    /// T4: switching to city B (3 saved, 1 visited) reads 1/3, not the
-    /// passport-goal 12.
+    /// T4: switching to city B (3 saved, 1 visited) reads 1/3, not a
+    /// hardcoded passport-goal 12.
     func testT4HomeCollectedFollowsCitySwitch() {
         let now = Date(timeIntervalSince1970: 1_760_000_000)
         let cityA = ReviewDemoSeed.doodleParityPlaces(now: now)
@@ -313,7 +338,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(tokyoCount.saved, 3)
         XCTAssertEqual(
             SaveDoodleHomeCatalog.collectedProgress(in: cityB).goal,
-            3
+            tokyoCount.saved
         )
     }
 
@@ -572,6 +597,12 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(workflow.contains("five-tab-home"))
         XCTAssertTrue(workflow.contains("light-home"))
         XCTAssertTrue(workflow.contains("dark-home"))
+        XCTAssertTrue(workflow.contains("H1"))
+        XCTAssertTrue(rail.contains("\"H1\""))
+        XCTAssertTrue(rail.contains("\"H2\""))
+        XCTAssertTrue(rail.contains("\"H3\""))
+        XCTAssertTrue(rail.contains("\"H4\""))
+        XCTAssertTrue(rail.contains("44 - 0.01"))
         XCTAssertTrue(rail.contains("doodle-home-empty"))
         XCTAssertTrue(rail.contains("doodle-home-allowed"))
         XCTAssertTrue(rail.contains("doodle-home-multirow"))
@@ -617,6 +648,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("home.locationAllow"))
         XCTAssertTrue(home.contains("showsLocationPrompt"))
         XCTAssertTrue(home.contains("isAuthorizationDenied && !showsEmptyHome"))
+        XCTAssertTrue(home.contains("needsLocationToResolveNearYou"))
         XCTAssertTrue(home.contains(".accessibilityIdentifier(\"home.locationPrompt\")"))
         XCTAssertTrue(rail.contains("func testHomeListProgressiveSearch"))
         XCTAssertTrue(rail.contains("func testCaptureFiveTabLanding"))
@@ -728,6 +760,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(map.contains("mapAccessibilityIdentifier"))
         XCTAssertTrue(map.contains("map.city"))
         XCTAssertTrue(map.contains("map.eatGo"))
+        XCTAssertTrue(map.contains("onChange(of: session.lens)"))
+        XCTAssertTrue(map.contains("onChange(of: session.city)"))
+        XCTAssertTrue(map.contains("onClearSelection()"))
         XCTAssertTrue(map.contains("accessibilityElement(children: .contain)"))
         XCTAssertTrue(map.contains("showsCityPicker = true"))
         XCTAssertTrue(map.contains("map.city.\\(group.id)"))

@@ -237,9 +237,10 @@ enum SaveDoodleHomeCatalog {
         let matching = places.filter { self.lens(for: $0.category) == lens }
         switch resolvedSelection(selection, places: places, locationDenied: locationDenied) {
         case .nearYou:
-            guard let location else {
-                return matching.sorted(by: moreRecent)
-            }
+            // Unknown location is not worldwide nearby. Fresh install,
+            // undetermined authorization, and a transient fix failure must
+            // return no rows so Home can prompt instead of plotting every city.
+            guard let location else { return [] }
             return matching
                 .filter { distance(from: location, to: $0).map { $0 <= nearbyRadius } ?? false }
                 .sorted { lhs, rhs in
@@ -345,7 +346,7 @@ enum SaveDoodleHomeCatalog {
                 return cityID(for: nearest)
             }
         }
-        return places.sorted(by: moreRecent).first.flatMap { cityID(for: $0) }
+        return nil
     }
 
     static func cityCollectedCount(in places: [Place]) -> (visited: Int, saved: Int) {
