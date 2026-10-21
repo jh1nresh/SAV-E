@@ -1758,6 +1758,7 @@ final class MapViewModel: ObservableObject {
                 userFinalPlaceId: existing.id,
                 reason: "User confirmed review candidate, but matching Map Stamp already exists."
             )
+            try ensureConfirmationSession(userId, confirmationGeneration)
             existing = await refreshedConfirmedPlace(existing)
             try? saveLocalVaultService.removeReviewCandidate(candidate.id)
             mirrorToLocalVault(existing)
@@ -1795,6 +1796,7 @@ final class MapViewModel: ObservableObject {
                 )
             } else {
                 try await supabaseService.savePlace(place, userId: userId)
+                try ensureConfirmationSession(userId, confirmationGeneration)
                 recordPassportFieldActionAfterSavingPlace()
                 do {
                     try await recordCorrectionEvent(
@@ -1805,6 +1807,9 @@ final class MapViewModel: ObservableObject {
                         reason: "User saved legacy review candidate as confirmed Map Stamp."
                     )
                 } catch {
+                    if ReviewCandidateError.preservesCommittedDecision(error) {
+                        throw error
+                    }
                     // Local-only Unplaced items have no place_candidates row.
                     // A 404 must not delete the Map Stamp that just landed.
                     if candidate.captureId != nil || candidate.workflowRunId != nil {
@@ -1819,6 +1824,7 @@ final class MapViewModel: ObservableObject {
             }
             throw error
         }
+        try ensureConfirmationSession(userId, confirmationGeneration)
         let confirmedPlace = await refreshedConfirmedPlace(place)
         try? saveLocalVaultService.removeReviewCandidate(candidate.id)
         mirrorToLocalVault(confirmedPlace)
@@ -2738,6 +2744,12 @@ final class MapViewModel: ObservableObject {
             reason: reason
         )
         updateLocalCandidate(candidate.id, status: "needs_more_evidence")
+    }
+
+    private func ensureConfirmationSession(_ userId: String, _ generation: Int) throws {
+        guard authService.currentUserId == userId, authService.sessionGeneration == generation else {
+            throw ReviewCandidateError.sessionChangedAfterCommit
+        }
     }
 
     private func recordCorrectionEvent(
