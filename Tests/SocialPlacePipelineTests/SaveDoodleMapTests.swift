@@ -149,7 +149,8 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertEqual(store.visitCount(for: placeID), 0)
         XCTAssertTrue(store.canCheckIn(placeID: placeID))
 
-        XCTAssertTrue(await store.applyCheckIn(placeID: placeID, priorStatus: .wantToGo) {})
+        let rechecked = await store.applyCheckIn(placeID: placeID, priorStatus: .wantToGo) {}
+        XCTAssertTrue(rechecked)
         let failedUndo = await store.applyUndo(placeID: placeID) { _ in
             throw OfflineError()
         }
