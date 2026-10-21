@@ -122,7 +122,7 @@ struct SaveProPaywallView: View {
                     .padding(.top, 5)
                 Text(languageSettings.localized(
                     english: "Unlimited saved places",
-                    traditionalChinese: "收藏地點不設限"
+                    traditionalChinese: "無限收藏地點"
                 ))
                 .font(SaveAtlasType.body(13))
                 .foregroundStyle(SaveAtlasPalette.muted)

@@ -38,7 +38,8 @@ final class SAVEProductionConfigTests: XCTestCase {
             "Free: 50 places must appear once, as the free-tier line"
         )
         XCTAssertTrue(paywall.contains("Unlimited saved places"))
-        XCTAssertTrue(paywall.contains("收藏地點不設限"))
+        XCTAssertTrue(paywall.contains("無限收藏地點"))
+        XCTAssertFalse(paywall.contains("收藏地點不設限"))
         XCTAssertTrue(paywall.contains("You've saved 50 places. Keep going."))
         XCTAssertTrue(paywall.contains("已存 50 個地點，繼續存下去"))
         XCTAssertTrue(paywall.contains("paywall.keepGoing"))
@@ -54,7 +55,6 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(paywall.contains("stay free and unlimited"))
         XCTAssertFalse(paywall.contains("Unlimited saved places and Map Stamps"))
         XCTAssertFalse(paywall.contains("永遠免費且無上限"))
-        XCTAssertFalse(paywall.contains("無限收藏地點"))
         XCTAssertFalse(paywall.contains("AI quota"))
         XCTAssertFalse(paywall.contains("AI assists"))
         XCTAssertFalse(paywall.contains("boundaryGroup"))
@@ -65,6 +65,8 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(profile.contains("english: \"Free: 50 places\""))
         XCTAssertTrue(profile.contains("traditionalChinese: \"免費：50 個地點\""))
         XCTAssertTrue(profile.contains("SaveProPaywallView(trigger: .passport)"))
+        XCTAssertTrue(profile.contains("profile.pro"))
+        XCTAssertTrue(profile.contains("if !passportPlaces.isEmpty"))
         XCTAssertFalse(
             profile.contains("SaveProPaywallView(trigger: .savedPlaceLimit)"),
             "Q1: Settings/Passport uses neutral copy, not the saved-50 line"
@@ -101,6 +103,15 @@ final class SAVEProductionConfigTests: XCTestCase {
             map.contains("savedPlaceCount: places.count"),
             "A1: the local cap counts confirmed Map Stamps only"
         )
+        XCTAssertTrue(map.contains("let remotePlaces = try await supabaseService.fetchPlaces(for: userId)"))
+        XCTAssertTrue(map.contains("places = mergeRemotePlaces(remotePlaces, withLocalPlaces: localConfirmedPlaces())"))
+
+        let clip = try source(at: "SAV-EClip/ClipContentView.swift")
+        let imessage = try source(at: "SAV-EiMessage/MessagesViewController.swift")
+        XCTAssertFalse(clip.contains("savePlace("))
+        XCTAssertFalse(imessage.contains("savePlace("))
+        XCTAssertFalse(clip.contains("assertNewSavedPlaceAllowed"))
+        XCTAssertFalse(imessage.contains("assertNewSavedPlaceAllowed"))
     }
 
     /// The gate is the only thing allowed to refuse an AI assist, so its truth
@@ -575,6 +586,40 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(map.places.count, 51)
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == candidate.id })
         XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    @MainActor
+    func testDeletingAPlaceLetsAParkedCandidateSave() async throws {
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(50)
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Waiting Cafe",
+            address: "8 Cap Road",
+            city: nil,
+            latitude: 25.26,
+            longitude: 121.67,
+            evidence: ["Source URL: https://example.com/waiting-cafe"],
+            confidence: 0.9,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        map.reviewCandidates = [candidate]
+
+        do {
+            _ = try await map.saveReviewCandidateAsPlace(candidate)
+            XCTFail("the parked candidate must wait until a slot is free")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+            XCTAssertEqual(map.reviewCandidates.first?.id, candidate.id)
+        }
+
+        try await map.deletePlace(map.places[0])
+        let saved = try await map.saveReviewCandidateAsPlace(candidate)
+        XCTAssertEqual(saved.name, "Waiting Cafe")
+        XCTAssertEqual(map.places.count, 50)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == candidate.id })
     }
 
     @MainActor
