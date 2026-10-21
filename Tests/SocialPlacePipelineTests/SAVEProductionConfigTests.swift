@@ -813,7 +813,11 @@ final class SAVEProductionConfigTests: XCTestCase {
         let outcome = try await store.save(post)
         XCTAssertEqual(outcome, .parkedAtFreeLimit)
         XCTAssertEqual(parked?.name, "Harbor Town")
-        XCTAssertEqual(parked?.id, post.id)
+        XCTAssertNotEqual(
+            parked?.id,
+            post.id,
+            "author places.id must not become the recipient Map Stamp id"
+        )
         XCTAssertEqual(parked?.latitude, 25.033)
         XCTAssertEqual(parked?.longitude, 121.565)
         XCTAssertEqual(parked?.googlePlaceId, "ChIJcap-harbor")
@@ -913,6 +917,11 @@ final class SAVEProductionConfigTests: XCTestCase {
         """
         let post = try JSONDecoder().decode(SharedPlacePost.self, from: Data(json.utf8))
         let parked = post.asUnplacedPlace()
+        XCTAssertNotEqual(
+            parked.id,
+            post.id,
+            "author places.id must not become the recipient Map Stamp id"
+        )
         XCTAssertEqual(parked.latitude, 25.033)
         XCTAssertEqual(parked.longitude, 121.565)
         XCTAssertEqual(parked.googlePlaceId, "ChIJcap-harbor")
@@ -944,6 +953,11 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         let parked = post.asUnplacedPlace()
         let evidence = parked.sourceEvidence.joined(separator: " ")
+        XCTAssertNotEqual(
+            parked.id,
+            post.id,
+            "author places.id must not become the recipient Map Stamp id"
+        )
         XCTAssertNil(parked.note)
         XCTAssertNil(parked.rating)
         XCTAssertNil(parked.recommender)

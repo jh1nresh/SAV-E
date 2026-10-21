@@ -27,9 +27,10 @@ struct SharedPlacePost: Decodable, Identifiable, Equatable {
     /// Review/Unplaced stand-in when the free cap blocks a confirmed Map Stamp.
     /// Venue identity only — the same projection as a server shared-post save.
     /// Caption, rating, and author stay off the device after withdraw/unfollow.
+    /// Mint a recipient-owned ID; the author's `places.id` would 409 on confirm.
     func asUnplacedPlace() -> Place {
         Place(
-            id: id,
+            id: UUID(),
             name: name,
             address: address,
             latitude: latitude ?? 0,
