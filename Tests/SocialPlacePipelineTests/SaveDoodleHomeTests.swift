@@ -382,6 +382,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(body.contains("if showsLensEmpty"))
         XCTAssertTrue(body.contains("else if !showsEmptyHome"))
         XCTAssertTrue(body.contains("if !collectedPlaces.isEmpty"))
+        // `else if !showsEmptyHome` still contains the substring
+        // `if !showsEmptyHome { miniMap }`; require Collected after that
+        // branch instead of forbidding the substring.
         let listBranch = try XCTUnwrap(body.range(of: "else if !showsEmptyHome"))
         let collectedAt = try XCTUnwrap(body.range(of: "if !collectedPlaces.isEmpty"))
         XCTAssertTrue(
