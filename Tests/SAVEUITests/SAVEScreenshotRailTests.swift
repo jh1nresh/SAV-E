@@ -3064,8 +3064,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let entry = review.exists ? review : fallback
         _ = scrollUntilHittable(entry, in: app.scrollViews.firstMatch)
         XCTAssertTrue(entry.isHittable, "Home Saves must be usable without a hidden test-only route")
-        XCTAssertGreaterThanOrEqual(entry.frame.height, 44)
-        XCTAssertGreaterThanOrEqual(entry.frame.width, 44)
+        // XCUIElement.frame can report 43.99999999999997 for a 44pt SwiftUI
+        // minHeight. Round the measured size so CGRect noise does not fail
+        // the 44pt Saves contract.
+        XCTAssertGreaterThanOrEqual(entry.frame.height.rounded(), 44)
+        XCTAssertGreaterThanOrEqual(entry.frame.width.rounded(), 44)
         tapReachable(entry)
         let saves = app.descendants(matching: .any)["saves.root"]
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to
