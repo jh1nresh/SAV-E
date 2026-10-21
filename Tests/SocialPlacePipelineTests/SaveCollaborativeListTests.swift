@@ -354,14 +354,16 @@ final class SaveCollaborativeListTests: XCTestCase {
             return XCTFail("Missing compactRow")
         }
         let compact = String(sheet[compactStart.lowerBound..<compactEnd.lowerBound])
-        XCTAssertTrue(compact.contains("Button {"), "Compact row must be a Button so XCTest isHittable is true")
-        XCTAssertFalse(
-            compact.contains("children: .contain"),
-            "AX containers exist but are not hittable; that failed PR 306 CI"
+        XCTAssertTrue(
+            compact.contains("GooglePlacesAttributionHitButton("),
+            "Compact row must host a UIKit UIButton so the identifier cannot be swallowed"
         )
-        XCTAssertTrue(compact.contains("accessibilityHidden(true)"))
-        XCTAssertTrue(compact.contains("accessibilityIdentifier(\"place.photo.attribution.row\")"))
+        XCTAssertFalse(compact.contains("accessibilityHidden"), "Hidden children swallow the Button identifier")
+        XCTAssertFalse(compact.contains("place.photo.attribution.logo"), "Nested logo identifier splits the Button")
+        XCTAssertTrue(sheet.contains("button.accessibilityIdentifier = identifier"))
+        XCTAssertTrue(sheet.contains("button.isAccessibilityElement = true"))
         XCTAssertTrue(uiTest.contains("app.buttons[\"place.photo.attribution.row\"]"))
+        XCTAssertTrue(evidence.contains("evidence.googleCarousel"))
         XCTAssertTrue(evidence.contains("GoogleMapsAttributionLogo()"))
     }
 

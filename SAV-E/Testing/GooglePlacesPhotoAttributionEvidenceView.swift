@@ -111,6 +111,8 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
             evidenceCard(title: "Harbor Oven") {
                 googleCarouselPage
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("evidence.googleCarousel")
         case .userPhoto:
             evidenceCard(title: "Harbor Oven") {
                 userPhotoPage

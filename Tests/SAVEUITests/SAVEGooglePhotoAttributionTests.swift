@@ -24,10 +24,21 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         )
 
         openScene(app, "googleCarousel")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.googleCarousel"]
+                .waitForExistence(timeout: stepTimeout),
+            "Google carousel scene did not render"
+        )
         saveEvidence(app, name: "\(appearance)-google-carousel")
 
         let compactRow = app.buttons["place.photo.attribution.row"]
-        XCTAssertTrue(waitUntilHittable(compactRow), "Compact attribution row missing")
+        if !waitUntilHittable(compactRow) {
+            let tree = XCTAttachment(string: app.debugDescription)
+            tree.name = "ax-tree-missing-attribution-row"
+            tree.lifetime = .keepAlways
+            add(tree)
+            XCTFail("Compact attribution row missing. Identifier must be on the Button itself.")
+        }
         XCTAssertFalse(
             app.buttons["place.photo.attribution.viewOnMaps"].exists,
             "View on Google Maps stays on the full-screen viewer"

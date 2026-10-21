@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct PlaceBasicInfoPanel: View {
     @Environment(\.appLanguageSettings) private var languageSettings
@@ -706,29 +707,39 @@ struct GooglePlacesPhotoAttributionBar: View {
     }
 
     /// P1-1 / P1-5: one 44pt row (author left, logo right) opens the viewer.
-    /// Must be a real `Button`. A container with `children: .contain` can exist
-    /// in the AX tree without `isHittable`, which fails `waitUntilHittable`.
-    /// Hide the nested logo so it cannot split the control.
+    /// Identifier lives on a UIKit `UIButton`. Hidden SwiftUI children and a
+    /// nested logo identifier previously swallowed `place.photo.attribution.row`
+    /// so `app.buttons` never saw it.
     private var compactRow: some View {
-        Button {
-            onCompactTap?()
-        } label: {
-            HStack(alignment: .center, spacing: 8) {
-                if let author = authors.first {
-                    attributionText(author.displayName, style: .caption, weight: .semibold)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityHidden(true)
-                }
-                GoogleMapsAttributionLogo()
-                    .accessibilityHidden(true)
-            }
-            .frame(maxWidth: .infinity, minHeight: GoogleMapsAttributionMetrics.minimumTapTarget, alignment: .center)
-            .contentShape(Rectangle())
+        ZStack {
+            compactVisualRow
+            GooglePlacesAttributionHitButton(
+                identifier: "place.photo.attribution.row",
+                label: compactAccessibilityLabel,
+                action: { onCompactTap?() }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .buttonStyle(.plain)
-        .disabled(onCompactTap == nil)
-        .accessibilityIdentifier("place.photo.attribution.row")
-        .accessibilityLabel(compactAccessibilityLabel)
+        .frame(maxWidth: .infinity, minHeight: GoogleMapsAttributionMetrics.minimumTapTarget)
+        .contentShape(Rectangle())
+    }
+
+    /// Visual-only. No accessibility identifiers or hidden flags — those steal
+    /// the parent Button's identifier in XCTest.
+    private var compactVisualRow: some View {
+        HStack(alignment: .center, spacing: 8) {
+            if let author = authors.first {
+                attributionText(author.displayName, style: .caption, weight: .semibold)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Image("GoogleMapsLogoOnImage")
+                .renderingMode(.original)
+                .resizable()
+                .scaledToFit()
+                .frame(height: GoogleMapsAttributionMetrics.logoHeight)
+        }
+        .frame(maxWidth: .infinity, minHeight: GoogleMapsAttributionMetrics.minimumTapTarget, alignment: .center)
+        .allowsHitTesting(false)
     }
 
     private var expandedStack: some View {
@@ -815,6 +826,49 @@ struct GooglePlacesPhotoAttributionBar: View {
                 radius: 2
             )
             .lineLimit(1)
+    }
+}
+
+/// UIKit button so XCTest reads `accessibilityIdentifier` from a real UIButton
+/// (`isAccessibilityElement = true`). SwiftUI child views cannot swallow it.
+private struct GooglePlacesAttributionHitButton: UIViewRepresentable {
+    var identifier: String
+    var label: String
+    var action: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(action: action)
+    }
+
+    func makeUIView(context: Context) -> UIButton {
+        let button = FillAttributionButton(type: .custom)
+        button.accessibilityIdentifier = identifier
+        button.accessibilityLabel = label
+        button.isAccessibilityElement = true
+        button.accessibilityTraits = .button
+        button.isUserInteractionEnabled = true
+        button.backgroundColor = .clear
+        button.addTarget(context.coordinator, action: #selector(Coordinator.invoke), for: .touchUpInside)
+        return button
+    }
+
+    func updateUIView(_ button: UIButton, context: Context) {
+        button.accessibilityIdentifier = identifier
+        button.accessibilityLabel = label
+        button.isAccessibilityElement = true
+        context.coordinator.action = action
+    }
+
+    final class Coordinator: NSObject {
+        var action: () -> Void
+        init(action: @escaping () -> Void) { self.action = action }
+        @objc func invoke() { action() }
+    }
+}
+
+private final class FillAttributionButton: UIButton {
+    override var intrinsicContentSize: CGSize {
+        CGSize(width: UIView.noIntrinsicMetric, height: GoogleMapsAttributionMetrics.minimumTapTarget)
     }
 }
 
