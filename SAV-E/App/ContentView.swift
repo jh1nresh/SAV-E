@@ -992,6 +992,7 @@ struct ContentView: View {
                 await mapVM.prepareMapCandidatesForDrawerQuery(
                     query,
                     preservesExactSearchClue: isExactSearchSessionActive
+                        || mapVM.hasActiveExactSearchCorrection
                 )
             },
             onBeginExactSearchResolution: { candidate in
@@ -999,8 +1000,13 @@ struct ContentView: View {
                 mapVM.beginExactSearchResolution(for: candidate)
             },
             onClearMapSearchResults: {
+                // Typing a refine query must not drop an in-flight Review
+                // correction. That left the leftover-clue UI gate opening
+                // the stamp without retiring Harbor Oven Pizza.
+                guard exactSearchRequestID == nil,
+                      !isExactSearchSessionActive,
+                      !mapVM.hasActiveExactSearchCorrection else { return }
                 isExactSearchSessionActive = false
-                guard exactSearchRequestID == nil else { return }
                 mapVM.clearMapSearchResults()
             },
             collaborativeLists: mapVM.collaborativeLists,
