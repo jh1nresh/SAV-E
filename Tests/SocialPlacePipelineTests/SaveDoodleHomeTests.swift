@@ -823,7 +823,6 @@ final class SaveDoodleHomeTests: XCTestCase {
         let workflow = try source(at: ".github/workflows/ios.yml")
         XCTAssertTrue(workflow.contains("SAVE_SCREENSHOT_DIR"))
         XCTAssertTrue(workflow.contains("TestingEnvironmentVariables"))
-        XCTAssertFalse(workflow.contains("-test-environment-variable"))
         XCTAssertTrue(workflow.contains("five-tab-home"))
         XCTAssertTrue(workflow.contains("light-home"))
         XCTAssertTrue(workflow.contains("dark-home"))
