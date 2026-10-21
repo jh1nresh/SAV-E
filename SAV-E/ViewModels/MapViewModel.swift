@@ -2085,29 +2085,16 @@ final class MapViewModel: ObservableObject {
         } else {
             try saveLocalVaultService.removeReviewCandidate(clue.id)
         }
-        retireSameNameReviewClues(as: clue)
+        retireResolvedReviewClue(clue)
         if usesRemotePersistence { await refreshReviewCandidatesLoggingFailures() }
         return (true, committed)
     }
 
-    /// Seed Harbor Oven plus a captured Maps clue are two rows. Choosing a
-    /// saved stamp for that name must clear every same-name Review card.
-    private func retireSameNameReviewClues(as clue: PlaceReviewCandidate) {
-        let leftovers = reviewCandidates.filter { candidate in
-            candidate.id != clue.id
-                && candidate.name.localizedCaseInsensitiveCompare(clue.name) == .orderedSame
-        }
-        for leftover in leftovers {
-            try? saveLocalVaultService.removeReviewCandidate(leftover.id)
-        }
-        reviewCandidates.removeAll { candidate in
-            candidate.id == clue.id
-                || candidate.name.localizedCaseInsensitiveCompare(clue.name) == .orderedSame
-        }
-        if selectedReviewCandidate.map({
-            $0.id == clue.id
-                || $0.name.localizedCaseInsensitiveCompare(clue.name) == .orderedSame
-        }) == true {
+    /// Confirming one clue retires that id only. Same-name branches in
+    /// another city are independent review rows and must stay.
+    private func retireResolvedReviewClue(_ clue: PlaceReviewCandidate) {
+        reviewCandidates.removeAll { $0.id == clue.id }
+        if selectedReviewCandidate?.id == clue.id {
             selectedReviewCandidate = nil
         }
         if exactSearchResolution?.clue.id == clue.id {
