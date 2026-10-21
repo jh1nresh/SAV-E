@@ -94,6 +94,96 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(SaveHomeSearch.metroName(in: ichiran.address, traditionalChinese: true), "東京")
     }
 
+    /// Header, Collected, and Passport share the all-category nearest city.
+    /// A closer New Taipei Go save must not leave the Eat header saying Taipei.
+    func testNearYouHeaderUsesAllCategoryCityNotEatLens() throws {
+        let here = CLLocation(latitude: 25.0300, longitude: 121.5000)
+        let newTaipeiGo = place(
+            "Yingge Ceramics",
+            "Yingge District, New Taipei",
+            .attraction,
+            latitude: 25.03005,
+            longitude: 121.50005
+        )
+        let taipeiEat = place(
+            "Fujin",
+            "No. 353, Section 1, Fuxing S Rd, Da'an District, Taipei",
+            .cafe,
+            latitude: 25.0330,
+            longitude: 121.5100
+        )
+        let places = [newTaipeiGo, taipeiEat]
+        let eatListed = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .nearYou,
+            location: here,
+            locationDenied: false
+        )
+        XCTAssertEqual(eatListed.map(\.place.name), ["Fujin"])
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.cityDisplayName(for: eatListed[0].place, language: .english),
+            "Taipei"
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.nearYouCityID(from: places, location: here),
+            "newTaipei"
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.nearYouCityName(from: places, location: here, language: .english),
+            "New Taipei"
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.collectedScopePlaces(
+                from: places,
+                selection: .nearYou,
+                location: here,
+                locationDenied: false
+            ).map(\.name),
+            ["Yingge Ceramics"]
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeProgressCatalog.cityPlaces(
+                from: places,
+                selection: .nearYou,
+                location: here,
+                locationDenied: false
+            ).map(\.name),
+            ["Yingge Ceramics"]
+        )
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        XCTAssertTrue(home.contains("nearYouCityName"))
+        XCTAssertFalse(home.contains("listedPlaces.first"))
+    }
+
+    /// Unknown-metro addresses must cluster by locality, not state+ZIP.
+    func testFallbackAddressUsesLocalityNotStateZip() {
+        let one = place(
+            "Chez Panisse",
+            "1517 Shattuck Ave, Berkeley, CA 94704, USA",
+            .food
+        )
+        let two = place(
+            "Cheese Board",
+            "1504 Shattuck Ave, Berkeley, CA 94709, USA",
+            .cafe
+        )
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: one.address), "Berkeley")
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: two.address), "Berkeley")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: one), "berkeley")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: two), "berkeley")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: one), "ca 94704")
+        let groups = SaveDoodleHomeCatalog.cityGroups(from: [one, two])
+        XCTAssertEqual(groups.map(\.id), ["berkeley"])
+        XCTAssertEqual(groups.first?.count, 2)
+        XCTAssertEqual(groups.first?.englishName, "Berkeley")
+        XCTAssertEqual(
+            SavedPlaceTripRecommender.areaLabel(for: one),
+            "CA 94704",
+            "share-label fallback stays ZIP; Home must not reuse it"
+        )
+    }
+
     func testNearYouKeepsOnlyWalkingDistance() {
         let here = CLLocation(latitude: 39.882, longitude: 116.407)
         let near = place("Duck", "Beijing, China", .food, latitude: 39.883, longitude: 116.408)
@@ -158,8 +248,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(SaveDoodleHomeCatalog.collectedStamps(in: [visited, saved]).map(\.name), ["Duck"])
     }
 
-    /// T1 extras use 0,0 so they stay off the map. The vault must still
-    /// reload them or Home Collected collapses to the four nearby pins (3/4).
+    /// T1 extras use real coordinates. `0,0` is dropped by
+    /// `SaveMemoryRecord.confirmedPlace`, which collapsed Collected to 3/4.
     func testDoodleParityExtrasSurviveVaultRoundTrip() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -168,7 +258,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         )
         let now = Date(timeIntervalSince1970: 1_760_000_000)
         let seeded = ReviewDemoSeed.doodleParityPlaces(now: now)
-        XCTAssertEqual(seeded.filter { !$0.isMapKitMappable }.count, 8)
+        XCTAssertTrue(seeded.allSatisfy(\.hasValidCoordinate))
+        XCTAssertTrue(seeded.allSatisfy(\.isMapKitMappable))
         for place in seeded {
             _ = try vault.saveConfirmedPlace(place)
         }
@@ -218,6 +309,10 @@ final class SaveDoodleHomeTests: XCTestCase {
     func testT1HomeCollectedFourOfTwelveWithThreeEatRows() {
         let now = Date(timeIntervalSince1970: 1_760_000_000)
         let places = ReviewDemoSeed.doodleParityPlaces(now: now)
+        XCTAssertTrue(
+            places.allSatisfy(\.hasValidCoordinate),
+            "0,0 extras are dropped by SaveMemoryRecord.confirmedPlace"
+        )
         let listed = SaveDoodleHomeCatalog.listedPlaces(
             from: places,
             lens: .eat,
@@ -386,13 +481,23 @@ final class SaveDoodleHomeTests: XCTestCase {
         // `if !showsEmptyHome { miniMap }`; require Collected after that
         // branch instead of forbidding the substring.
         let listBranch = try XCTUnwrap(body.range(of: "else if !showsEmptyHome"))
+        let lensAt = try XCTUnwrap(body.range(of: "if showsLensEmpty"))
         let collectedAt = try XCTUnwrap(body.range(of: "if !collectedPlaces.isEmpty"))
+        XCTAssertLessThan(
+            lensAt.lowerBound,
+            collectedAt.lowerBound,
+            "Collected must stay after the Eat/Go empty branch, not inside it"
+        )
         XCTAssertTrue(
             collectedAt.lowerBound > listBranch.upperBound,
             "Collected must not sit only inside the filtered-list branch"
         )
         let design = try source(at: "DESIGN.md")
         XCTAssertTrue(design.contains("keep the Collected strip and show a filter-empty message"))
+        // DESIGN wraps "the nearest / save across every category".
+        XCTAssertTrue(design.contains("save across every category"))
+        XCTAssertTrue(design.contains("not the nearest Eat/Go row"))
+        XCTAssertTrue(design.contains("locality (Berkeley)"))
     }
 
     /// T5: a city with no saves hides the strip (or would be 0/0) and
@@ -456,6 +561,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(profile.contains("SaveDoodlePassportPage("))
         XCTAssertTrue(profile.contains("SaveDoodleHomeProgressCatalog.cityPlaces"))
         XCTAssertTrue(profile.contains("places: cityStampPlaces"))
+        XCTAssertTrue(profile.contains("localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces"))
         XCTAssertTrue(profile.contains("markIveBeenHere"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("func testHomeCollectedOpensPassportWithCityCount"))
@@ -492,6 +598,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertFalse(root.contains("SaveTileTownHomeView()"))
         XCTAssertTrue(home.contains("home.miniMap"))
         XCTAssertTrue(home.contains("home.citySwitcher"))
+        XCTAssertTrue(home.contains("nearYouCityName"))
+        XCTAssertFalse(home.contains("listedPlaces.first"))
         XCTAssertTrue(home.contains("eatGoRow"))
         XCTAssertTrue(home.contains("fixedSize(horizontal: true, vertical: false)"))
         let headerAt = try XCTUnwrap(home.range(of: "private var header"))
@@ -695,6 +803,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         let seed = try source(at: "SAV-E/Services/ReviewDemoService.swift")
         XCTAssertTrue(seed.contains("--uitest-doodle-parity-fixture"))
         XCTAssertTrue(seed.contains("Codex packet / spec §8"))
+        XCTAssertTrue(seed.contains("SaveMemoryRecord.confirmedPlace"))
+        XCTAssertFalse(seed.contains("latitude: 0"))
         let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         XCTAssertTrue(profile.contains("SaveDoodleHomeProgressCatalog.cityPlaces"))
         XCTAssertTrue(profile.contains("markIveBeenHere"))
@@ -868,6 +978,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(content.contains("SaveDoodleTabIcon("))
         XCTAssertFalse(content.contains("SavePixelChromeIcon("))
         XCTAssertTrue(content.contains("private func showMapTab()"))
+        XCTAssertTrue(content.contains("if !isExactSearchSessionActive"))
         XCTAssertTrue(content.contains("abandonMiniMapHandoff()"))
         XCTAssertTrue(map.contains("consumeMiniMapHandoff()"))
         let catalogSource = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")

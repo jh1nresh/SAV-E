@@ -595,15 +595,27 @@ jobs:
           echo "Staged $copied PR 295 evidence PNGs:"
           ls -la "$RUNNER_TEMP/pr295-evidence"
           required=(
-            pr295-capture-light.png
-            pr295-capture-dark.png
-            pr295-paywall-light.png
-            pr295-paywall-dark.png
             pr295-paywall-large-type-light.png
             pr295-paywall-large-type-dark.png
             pr295-capture-se-light.png
             pr295-paywall-se-light.png
           )
+          # tile-town-home and other focused sets omit capture/paywall
+          # parity. Those four files come from those tests; requiring
+          # them there fails the required ios job (Codex P1 4335775078).
+          args="$RUNNER_TEMP/ios-ui-args.txt"
+          if [[ ! -f "$args" ]] || grep -q 'testDoodleCaptureParity' "$args"; then
+            required+=(pr295-capture-light.png)
+          fi
+          if [[ ! -f "$args" ]] || grep -q 'testDoodleCapturePaywallDarkParity' "$args"; then
+            required+=(pr295-capture-dark.png)
+          fi
+          if [[ ! -f "$args" ]] || grep -q 'testDoodlePaywallParity' "$args"; then
+            required+=(pr295-paywall-light.png)
+          fi
+          if [[ ! -f "$args" ]] || grep -q 'testDoodleCapturePaywallDarkParity' "$args"; then
+            required+=(pr295-paywall-dark.png)
+          fi
           missing=0
           for name in "${required[@]}"; do
             if [[ ! -f "$RUNNER_TEMP/pr295-evidence/$name" ]]; then

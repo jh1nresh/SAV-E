@@ -449,7 +449,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let app = makeApp(launchArguments: [
             "--uitest-complete-onboarding", "--skip-map-tour",
             "--uitest-repair-review-demo-seed", "--uitest-review-demo-offline",
-            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en"
+            "--uitest-reset-review-demo-storage",
+            // Near you without a fix has no city, so Collected is hidden.
+            "--uitest-location-denied",
+            "-save.appLanguage", "en"
         ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()])
         launch(app)
         try signInViaReviewDemoRequired(app: app)
@@ -3783,11 +3786,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     ) throws {
         openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
-        let mapStamps = app.buttons["saves.segment.mapStamps"]
-        if mapStamps.waitForExistence(timeout: timeout(2)) {
-            tapReachable(mapStamps)
+        let stamps = app.buttons["saves.segment.mapStamps"]
+        if stamps.waitForExistence(timeout: timeout(2)) {
+            tapReachable(stamps)
         }
-        let savedPlace = app.descendants(matching: .any).matching(
+        let savedPlace = app.buttons.matching(
             NSPredicate(
                 format: "identifier BEGINSWITH 'saves.place.' AND label CONTAINS[c] %@",
                 placeName

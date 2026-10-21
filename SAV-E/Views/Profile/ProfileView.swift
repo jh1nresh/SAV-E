@@ -79,8 +79,11 @@ struct ProfileView: View {
     /// tapping `home.collected` cannot open a Passport that still shows
     /// all-places / `passportGoal`.
     private var cityStampPlaces: [Place] {
-        SaveDoodleHomeProgressCatalog.cityPlaces(
-            from: passportPlaces,
+        // The sheet mounts with `localSavedPlaces == []` until `.task` runs.
+        // Home already showed Collected from `savedPlaces`; do not wait.
+        let source = localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces
+        return SaveDoodleHomeProgressCatalog.cityPlaces(
+            from: source,
             selection: session.city,
             location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
             locationDenied: locationService.isAuthorizationDenied
@@ -494,6 +497,7 @@ struct ProfileView: View {
         }
         .onAppear {
             if requestsConnections { openPassportRoute(.connections); requestsConnections = false }
+            if localSavedPlaces.isEmpty { localSavedPlaces = savedPlaces }
         }
         .task(id: posts.filter) { await posts.refresh(.mine) }
         .task(id: currentUserID) {
