@@ -94,6 +94,96 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(SaveHomeSearch.metroName(in: ichiran.address, traditionalChinese: true), "東京")
     }
 
+    /// Header, Collected, and Passport share the all-category nearest city.
+    /// A closer New Taipei Go save must not leave the Eat header saying Taipei.
+    func testNearYouHeaderUsesAllCategoryCityNotEatLens() throws {
+        let here = CLLocation(latitude: 25.0300, longitude: 121.5000)
+        let newTaipeiGo = place(
+            "Yingge Ceramics",
+            "Yingge District, New Taipei",
+            .attraction,
+            latitude: 25.03005,
+            longitude: 121.50005
+        )
+        let taipeiEat = place(
+            "Fujin",
+            "No. 353, Section 1, Fuxing S Rd, Da'an District, Taipei",
+            .cafe,
+            latitude: 25.0330,
+            longitude: 121.5100
+        )
+        let places = [newTaipeiGo, taipeiEat]
+        let eatListed = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .nearYou,
+            location: here,
+            locationDenied: false
+        )
+        XCTAssertEqual(eatListed.map(\.place.name), ["Fujin"])
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.cityDisplayName(for: eatListed[0].place, language: .english),
+            "Taipei"
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.nearYouCityID(from: places, location: here),
+            "newTaipei"
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.nearYouCityName(from: places, location: here, language: .english),
+            "New Taipei"
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.collectedScopePlaces(
+                from: places,
+                selection: .nearYou,
+                location: here,
+                locationDenied: false
+            ).map(\.name),
+            ["Yingge Ceramics"]
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeProgressCatalog.cityPlaces(
+                from: places,
+                selection: .nearYou,
+                location: here,
+                locationDenied: false
+            ).map(\.name),
+            ["Yingge Ceramics"]
+        )
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        XCTAssertTrue(home.contains("nearYouCityName"))
+        XCTAssertFalse(home.contains("listedPlaces.first"))
+    }
+
+    /// Unknown-metro addresses must cluster by locality, not state+ZIP.
+    func testFallbackAddressUsesLocalityNotStateZip() {
+        let one = place(
+            "Chez Panisse",
+            "1517 Shattuck Ave, Berkeley, CA 94704, USA",
+            .food
+        )
+        let two = place(
+            "Cheese Board",
+            "1504 Shattuck Ave, Berkeley, CA 94709, USA",
+            .cafe
+        )
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: one.address), "Berkeley")
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: two.address), "Berkeley")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: one), "berkeley")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: two), "berkeley")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: one), "ca 94704")
+        let groups = SaveDoodleHomeCatalog.cityGroups(from: [one, two])
+        XCTAssertEqual(groups.map(\.id), ["berkeley"])
+        XCTAssertEqual(groups.first?.count, 2)
+        XCTAssertEqual(groups.first?.englishName, "Berkeley")
+        XCTAssertEqual(
+            SavedPlaceTripRecommender.areaLabel(for: one),
+            "CA 94704",
+            "share-label fallback stays ZIP; Home must not reuse it"
+        )
+    }
+
     func testNearYouKeepsOnlyWalkingDistance() {
         let here = CLLocation(latitude: 39.882, longitude: 116.407)
         let near = place("Duck", "Beijing, China", .food, latitude: 39.883, longitude: 116.408)
@@ -350,13 +440,19 @@ final class SaveDoodleHomeTests: XCTestCase {
         let headerAt = try XCTUnwrap(home.range(of: "private var savesButton"))
         let body = home[bodyAt.lowerBound..<headerAt.lowerBound]
         XCTAssertTrue(body.contains("if showsLensEmpty"))
+        XCTAssertTrue(body.contains("else if !showsEmptyHome"))
         XCTAssertTrue(body.contains("if !collectedPlaces.isEmpty"))
-        XCTAssertFalse(
-            body.contains("if !showsEmptyHome {\n                        miniMap"),
-            "Collected must not sit only inside the filtered-list branch"
+        let lensAt = try XCTUnwrap(body.range(of: "if showsLensEmpty"))
+        let collectedAt = try XCTUnwrap(body.range(of: "if !collectedPlaces.isEmpty"))
+        XCTAssertLessThan(
+            lensAt.lowerBound,
+            collectedAt.lowerBound,
+            "Collected must stay after the Eat/Go empty branch, not inside it"
         )
         let design = try source(at: "DESIGN.md")
         XCTAssertTrue(design.contains("keep the Collected strip and show a filter-empty message"))
+        XCTAssertTrue(design.contains("nearest save across every category"))
+        XCTAssertTrue(design.contains("locality (Berkeley)"))
     }
 
     /// T5: a city with no saves hides the strip (or would be 0/0) and
@@ -456,6 +552,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertFalse(root.contains("SaveTileTownHomeView()"))
         XCTAssertTrue(home.contains("home.miniMap"))
         XCTAssertTrue(home.contains("home.citySwitcher"))
+        XCTAssertTrue(home.contains("nearYouCityName"))
+        XCTAssertFalse(home.contains("listedPlaces.first"))
         XCTAssertTrue(home.contains("eatGoRow"))
         XCTAssertTrue(home.contains("fixedSize(horizontal: true, vertical: false)"))
         let headerAt = try XCTUnwrap(home.range(of: "private var header"))
