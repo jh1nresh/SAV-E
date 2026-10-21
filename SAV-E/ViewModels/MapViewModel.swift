@@ -1076,6 +1076,7 @@ final class MapViewModel: ObservableObject {
 
     private func localConfirmedPlaces() -> [Place] {
         do {
+            claimOwnerlessVaultRecordsIfNeeded()
             return try saveLocalVaultService.confirmedPlaces(
                 limit: 500,
                 belongingTo: authService.currentUserId
@@ -1088,6 +1089,7 @@ final class MapViewModel: ObservableObject {
 
     private func localReviewCandidates() -> [PlaceReviewCandidate] {
         do {
+            claimOwnerlessVaultRecordsIfNeeded()
             let owner = authService.currentUserId
             return try saveLocalVaultService.reviewCandidates(limit: 500).filter { candidate in
                 Self.localVaultRecordBelongsToActiveAccount(candidate.ownerSubject, currentUserId: owner)
@@ -1098,8 +1100,14 @@ final class MapViewModel: ObservableObject {
         }
     }
 
-    /// Signed-in accounts see only their own vault rows. Unsigned legacy rows
-    /// stay hidden while signed in so they cannot leak to the next account.
+    private func claimOwnerlessVaultRecordsIfNeeded() {
+        guard let owner = authService.currentUserId else { return }
+        try? saveLocalVaultService.claimOwnerlessRecords(for: owner)
+    }
+
+    /// Signed-in accounts see only their own vault rows. Ownerless pre-upgrade
+    /// rows are claimed first when no other owner is present. Remaining
+    /// ownerless rows stay hidden while signed in so they cannot leak.
     nonisolated static func localVaultRecordBelongsToActiveAccount(
         _ ownerSubject: String?,
         currentUserId: String?
