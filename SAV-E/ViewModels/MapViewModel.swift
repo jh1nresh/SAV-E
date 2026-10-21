@@ -4210,6 +4210,7 @@ final class MapViewModel: ObservableObject {
                 if let userId = remoteUserId {
                     do {
                         try await supabaseService.savePlace(place, userId: userId)
+                        try ensureConfirmationSession(userId, importGeneration)
                         recordPassportFieldActionAfterSavingPlace()
                     } catch {
                         if try parkIfServerSavedPlaceLimit(
@@ -4228,6 +4229,8 @@ final class MapViewModel: ObservableObject {
                 }
             },
             didPersist: { place in
+                guard authService.currentUserId == remoteUserId,
+                      authService.sessionGeneration == importGeneration else { return }
                 if places.contains(where: { $0.id == place.id }) { return }
                 if reviewCandidates.contains(where: { $0.id == place.id }) { return }
                 places.insert(place, at: 0)
