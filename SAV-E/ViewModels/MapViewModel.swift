@@ -2364,10 +2364,6 @@ final class MapViewModel: ObservableObject {
                 throw SupabaseError.notAuthenticated
             }
             let receiptGeneration = authService.sessionGeneration
-            if isOverFreeSavedPlaceLimit {
-                try parkPlaceInUnplacedInbox(place)
-                throw SavePlaceLimitError.parkedInUnplacedInbox
-            }
             let result: FriendSharedPlaceSaveResult
             do {
                 result = try await supabaseService.saveFriendSharedPlace(

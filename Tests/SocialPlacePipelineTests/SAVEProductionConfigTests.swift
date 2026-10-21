@@ -535,6 +535,119 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
+    func testShortCodeReceiptExpiredAtCapDoesNotPark() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "receipt-owner")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                return (410, #"{"error":"Shared place link expired"}"#)
+            }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.place-limit-short-expired.\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-short-expired-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(
+            apiBaseURL: "https://analysis.test",
+            session: URLSession(configuration: configuration),
+            accessTokenProvider: { "test-token" }
+        )
+        let map = MapViewModel(
+            supabaseService: service,
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        let seeded = makeCappedPlaces(50)
+        for place in seeded {
+            _ = try vault.saveConfirmedPlace(place, ownerSubject: "receipt-owner")
+        }
+        map.places = seeded
+        let receipt = makeShortCodeReceipt(name: "Expired Cafe", code: "AbC123_x")
+
+        do {
+            _ = try await map.saveSharedPlaceReceipt(receipt)
+            XCTFail("an expired short-code receipt must not become a Map Stamp")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+            XCTFail("an expired short-code receipt must not park as an over-limit save")
+        } catch {
+            let posted = try XCTUnwrap(AnalysisRequestURLProtocol.requests.first {
+                $0.httpMethod == "POST" && $0.url?.path == "/places"
+            })
+            let body = try AnalysisRequestURLProtocol.body(posted)
+            XCTAssertEqual(body["friend_share_code"] as? String, "AbC123_x")
+            XCTAssertEqual(map.places.count, 50)
+            XCTAssertFalse(map.places.contains(where: { $0.name == "Expired Cafe" }))
+            XCTAssertTrue(map.reviewCandidates.isEmpty)
+            XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+        }
+    }
+
+    @MainActor
+    func testShortCodeReceiptServerCapParksInsteadOfConfirmingLocally() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "receipt-owner")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#)
+            }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.place-limit-short-cap.\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-short-cap-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(
+            apiBaseURL: "https://analysis.test",
+            session: URLSession(configuration: configuration),
+            accessTokenProvider: { "test-token" }
+        )
+        let map = MapViewModel(
+            supabaseService: service,
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        let seeded = makeCappedPlaces(49)
+        for place in seeded {
+            _ = try vault.saveConfirmedPlace(place, ownerSubject: "receipt-owner")
+        }
+        map.places = seeded
+        let receipt = makeShortCodeReceipt(name: "Short Cap Cafe", code: "AbC123_x")
+
+        do {
+            _ = try await map.saveSharedPlaceReceipt(receipt)
+            XCTFail("a server over-limit short-code receipt must not become a local Map Stamp")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+            let posted = try XCTUnwrap(AnalysisRequestURLProtocol.requests.first {
+                $0.httpMethod == "POST" && $0.url?.path == "/places"
+            })
+            let body = try AnalysisRequestURLProtocol.body(posted)
+            XCTAssertEqual(body["friend_share_code"] as? String, "AbC123_x")
+            XCTAssertEqual(map.places.count, 49)
+            XCTAssertFalse(map.places.contains(where: { $0.name == "Short Cap Cafe" }))
+            XCTAssertEqual(map.reviewCandidates.first?.name, "Short Cap Cafe")
+            XCTAssertEqual(map.reviewCandidates.first?.status, "review")
+            XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        }
+    }
+
+    @MainActor
     func testTakeoutImportAtCapParksInUnplacedInbox() async throws {
         let map = makeCappedMap(tier: .free)
         map.places = makeCappedPlaces(50)
@@ -790,7 +903,11 @@ final class SAVEProductionConfigTests: XCTestCase {
     @MainActor
     func testSharedPostsStoreSaveAtCapParksAndReturnsDistinctOutcome() async throws {
         let store = SharedPostsStore()
-        store.isOverFreeLimit = { true }
+        var savedIDs: [UUID] = []
+        store.saveSharedPost = { id in
+            savedIDs.append(id)
+            throw SavePlaceLimitError.parkedInUnplacedInbox
+        }
         var parked: Place?
         store.parkOverLimitPlace = { place in
             parked = place
@@ -816,6 +933,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
 
         let outcome = try await store.save(post)
+        XCTAssertEqual(savedIDs, [post.id], "the live post must be revalidated before parking")
         XCTAssertEqual(outcome, .parkedAtFreeLimit)
         XCTAssertEqual(parked?.name, "Harbor Town")
         XCTAssertNotEqual(
@@ -830,6 +948,47 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertNil(parked?.rating)
         XCTAssertNil(parked?.recommender)
         XCTAssertTrue(parked?.sourceEvidence.isEmpty ?? false)
+    }
+
+    @MainActor
+    func testSharedPostsStoreSaveWithdrawnDoesNotPark() async throws {
+        let store = SharedPostsStore()
+        var savedIDs: [UUID] = []
+        store.saveSharedPost = { id in
+            savedIDs.append(id)
+            throw SupabaseError.recordNotFound
+        }
+        var parked: Place?
+        store.parkOverLimitPlace = { place in
+            parked = place
+            return PlaceReviewCandidate.unplacedInboxItem(from: place)
+        }
+        let post = SharedPlacePost(
+            id: UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")!,
+            name: "Harbor Town",
+            address: "Water",
+            latitude: 25.033,
+            longitude: 121.565,
+            google_place_id: "ChIJcap-harbor",
+            category: "attraction",
+            status: .wantToGo,
+            stars: nil,
+            caption: nil,
+            shared_at: "2026-10-12T10:00:00Z",
+            author_id: "alex",
+            author_name: "Alex Last",
+            author_handle: "alex",
+            author_avatar_url: nil,
+            visible_to_followers: true
+        )
+
+        do {
+            _ = try await store.save(post)
+            XCTFail("a withdrawn shared post must not become a Map Stamp")
+        } catch SupabaseError.recordNotFound {
+            XCTAssertEqual(savedIDs, [post.id])
+            XCTAssertNil(parked, "withdrawn or inaccessible posts must not park in Unplaced")
+        }
     }
 
     func testLocalReviewCandidatesAreScopedToTheActiveAccountInSource() throws {
@@ -899,6 +1058,16 @@ final class SAVEProductionConfigTests: XCTestCase {
             "a late over-limit must not park into a new account"
         )
         XCTAssertTrue(map.contains("startedBy userId: String?"))
+        let shortCodeStart = try XCTUnwrap(map.range(of: "A verified short-code receipt is server-owned"))
+        let shortCodeRemainder = String(map[shortCodeStart.lowerBound...])
+        let shortCodeEnd = try XCTUnwrap(shortCodeRemainder.range(of: "if let match = existingSavedPlace"))
+        let shortCode = String(shortCodeRemainder[..<shortCodeEnd.lowerBound])
+        XCTAssertFalse(
+            shortCode.contains("isOverFreeSavedPlaceLimit"),
+            "expired short-code receipts must reach the server before parking"
+        )
+        XCTAssertTrue(shortCode.contains("saveFriendSharedPlace"))
+        XCTAssertTrue(shortCode.contains("parkIfServerSavedPlaceLimit"))
     }
 
     func testSharedPostOverLimitParkRechecksTheInitiatingAccount() throws {
@@ -906,7 +1075,16 @@ final class SAVEProductionConfigTests: XCTestCase {
         let start = try XCTUnwrap(store.range(of: "func save(_ post: SharedPlacePost)"))
         let end = try XCTUnwrap(store.range(of: "func acknowledgeSavedPlaceLimitPaywall()"))
         let save = String(store[start.lowerBound..<end.lowerBound])
+        XCTAssertFalse(
+            save.contains("isOverFreeLimit"),
+            "a cached local cap must not park a withdrawn post before /v0/shared-posts/:id/save"
+        )
         let catchStart = try XCTUnwrap(save.range(of: "} catch {"))
+        let beforeCatch = String(save[..<catchStart.lowerBound])
+        XCTAssertTrue(
+            beforeCatch.contains("saveSharedPost"),
+            "the live post must be revalidated before parking"
+        )
         let catchBody = String(save[catchStart.lowerBound...])
         XCTAssertTrue(
             catchBody.contains("account == PrivyAuthService.shared.currentUserId"),
@@ -914,6 +1092,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertTrue(catchBody.contains("parkOverLimitPlace"))
         XCTAssertTrue(catchBody.contains("Task.isCancelled"))
+        XCTAssertTrue(catchBody.contains("SavePlaceLimitError"))
     }
 
     @MainActor
@@ -1307,6 +1486,31 @@ final class SAVEProductionConfigTests: XCTestCase {
         SavePlaceLimitHandoff.markPaywallPending(defaults: defaults, notify: false)
         XCTAssertTrue(SavePlaceLimitHandoff.consumePaywallPending(defaults: defaults))
         XCTAssertFalse(SavePlaceLimitHandoff.consumePaywallPending(defaults: defaults))
+    }
+
+    private func makeShortCodeReceipt(name: String, code: String) -> SharedPlaceReceipt {
+        SharedPlaceReceipt(
+            code: code,
+            payload: SharedPlaceData(
+                id: "",
+                name: name,
+                address: "7 Cap Road",
+                lat: 25.20,
+                lng: 121.61,
+                category: "Cafe",
+                rating: nil,
+                reviewCount: nil,
+                priceRange: nil,
+                hours: nil,
+                sourceLabel: "Savvy",
+                sourceURL: nil,
+                photoURLs: [],
+                note: nil
+            ),
+            sourcePlaceID: nil,
+            expiresAt: nil,
+            sender: nil
+        )
     }
 
     @MainActor

@@ -14,8 +14,8 @@ final class SharedPostsStore: ObservableObject {
     private var requestID = UUID()
     private var route: Route = .feed
     private let service = SupabaseService.shared
-    var isOverFreeLimit: () -> Bool = {
-        SavePlaceLimitHandoff.cachedDecision() == .overFreeLimit
+    var saveSharedPost: (UUID) async throws -> Place = { id in
+        try await SupabaseService.shared.saveSharedPost(id: id)
     }
     var parkOverLimitPlace: (Place) throws -> PlaceReviewCandidate = { place in
         let candidate = PlaceReviewCandidate.unplacedInboxItem(
@@ -145,13 +145,9 @@ final class SharedPostsStore: ObservableObject {
 
     func save(_ post: SharedPlacePost) async throws -> SharedPostSaveOutcome {
         guard !isDemo else { throw SupabaseError.notAuthenticated }
-        if isOverFreeLimit() {
-            _ = try parkOverLimitPlace(post.asUnplacedPlace())
-            return .parkedAtFreeLimit
-        }
         let account = PrivyAuthService.shared.currentUserId
         do {
-            _ = try await service.saveSharedPost(id: post.id)
+            _ = try await saveSharedPost(post.id)
             guard account == PrivyAuthService.shared.currentUserId, !Task.isCancelled else { throw CancellationError() }
             return .saved
         } catch {
