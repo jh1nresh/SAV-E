@@ -1,4 +1,5 @@
 import XCTest
+@testable import SAVE
 
 final class PendingShareStoreTests: XCTestCase {
     private var store: UserDefaults!

@@ -95,8 +95,10 @@ final class ClipListSaveTests: XCTestCase {
     }
 
     func testSL6SwipeHintPersistsDismissFlag() {
-        let store = UserDefaults(suiteName: "clip.list.swipe.test.\(UUID().uuidString)")
-        defer { store?.removePersistentDomain(forName: store?.suiteName ?? "") }
+        let suite = "clip.list.swipe.test.\(UUID().uuidString)"
+        let store = UserDefaults(suiteName: suite)
+        defer { store?.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(ClipListSwipeHint.suiteName, "group.com.wanderly.app")
         XCTAssertFalse(ClipListSwipeHint.isDismissed(in: store))
         ClipListSwipeHint.dismiss(in: store)
         XCTAssertTrue(ClipListSwipeHint.isDismissed(in: store))

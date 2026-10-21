@@ -80,6 +80,8 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(planner.contains("over_cap"))
         XCTAssertTrue(planner.contains("uniqueItems"))
         XCTAssertTrue(planner.contains("clipListSwipeHintDismissed"))
+        XCTAssertTrue(planner.contains("group.com.wanderly.app"))
+        XCTAssertFalse(planner.contains("PendingShareStore"))
         XCTAssertTrue(planner.contains("enum ClipSignInKind"))
         XCTAssertTrue(planner.contains("enum ClipListSaveFailure: Error"))
         let design = try source(at: "DESIGN.md")

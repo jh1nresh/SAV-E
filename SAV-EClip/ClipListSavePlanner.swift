@@ -25,9 +25,12 @@ enum ClipSignInKind: Equatable, Sendable {
 
 enum ClipListSwipeHint {
     static let key = "clipListSwipeHintDismissed"
+    /// App Group suite. Named here so this Foundation-only file can
+    /// compile into SAVETests without the Clip store type.
+    static let suiteName = "group.com.wanderly.app"
 
     static func defaults(_ store: UserDefaults? = nil) -> UserDefaults? {
-        store ?? UserDefaults(suiteName: PendingShareStore.suiteName)
+        store ?? UserDefaults(suiteName: suiteName)
     }
 
     static func isDismissed(in store: UserDefaults? = nil) -> Bool {
