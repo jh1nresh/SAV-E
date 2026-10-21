@@ -5,6 +5,24 @@ the light/dark main mocks. DESIGN v2 `friends.png` is not adopted. Only
 the 402×874 canvas and rough row spacing carry over. There is no 0.90
 pixel gate against that raster.
 
+## Section D gallery (simulator XCTAttachments)
+
+Light and dark list, empty (en + zh-Hant). CI device is iPhone 16 Pro
+(402×874), the packet canvas. 375pt / 430pt were not booted (would
+need extra simulators and an `ios.yml` change HoP asked us to drop).
+
+| Light list | Dark list |
+| --- | --- |
+| <img alt="light Friends" src="light-friends.png" width="240" /> | <img alt="dark Friends" src="dark-friends.png" width="240" /> |
+
+| Empty (en) | Empty (zh-Hant) |
+| --- | --- |
+| <img alt="empty Friends English" src="friends-empty-en.png" width="240" /> | <img alt="empty Friends Traditional Chinese" src="friends-empty-zh-Hant.png" width="240" /> |
+
+Parity mask (Home only; Friends has none):
+
+<img alt="home-mask white=ignore" src="home-mask.png" width="240" />
+
 ## Provenance
 
 These PNGs are real iOS Simulator XCTAttachments from the macOS `ios`
