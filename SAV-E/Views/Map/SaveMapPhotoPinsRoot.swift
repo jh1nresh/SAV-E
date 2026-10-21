@@ -50,6 +50,20 @@ struct SaveMapPhotoPinsRoot: View {
                     .padding(.top, AtlasMetrics.statusBarHeight + 58)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
 
+                if let attribution = googlePhotoAttribution {
+                    Text(attribution)
+                        .font(SaveAtlasType.strong(11))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(SaveAtlasPalette.paper, in: Capsule())
+                        .padding(.leading, 16)
+                        .padding(.bottom, 20)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                        .allowsHitTesting(false)
+                        .accessibilityIdentifier("map.photoAttribution")
+                }
+
                 if mapViewModel.showsLocationDeniedNotice {
                     VStack {
                         SaveLocationDeniedNotice(
@@ -292,6 +306,14 @@ struct SaveMapPhotoPinsRoot: View {
             selected: mapViewModel.selectedPlace,
             confirmedPlaces: confirmed
         )
+    }
+
+    private var googlePhotoAttribution: String? {
+        let usesGoogle = savvyPinPlaces.contains {
+            SavvyMapPhotoPolicy.resolvedPhoto(for: $0, isConfirmedSaved: true).showsGoogleAttribution
+        }
+        guard usesGoogle else { return nil }
+        return languageSettings.localized(english: "Photos: Google", traditionalChinese: "照片：Google")
     }
 
     private var savvyCardPlace: Place? {

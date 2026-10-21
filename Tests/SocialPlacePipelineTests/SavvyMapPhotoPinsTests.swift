@@ -5,16 +5,37 @@ import XCTest
 
 @MainActor
 final class SavvyMapPhotoPinsTests: XCTestCase {
-    func testQ1HasPhotoFieldsButNoLicensedUserAlbum() {
-        let place = samplePlace(
+    func testQ1OwnThenGoogleThenCoralAndIgnoresOGScrape() {
+        let google = samplePlace(
             sourceImageUrl: "https://example.invalid/og.jpg",
             businessPhotoUrls: ["https://maps.googleapis.com/photo/1"],
             note: nil
         )
-        XCTAssertFalse(place.businessPhotoURLStrings.isEmpty)
-        XCTAssertNil(SavvyMapPhotoPolicy.licensedPhotoURL(for: place))
-        XCTAssertTrue(SavvyMapPhotoPolicy.userAlbumPhotoURLs(for: place).isEmpty)
-        XCTAssertTrue(SavvyMapPhotoPolicy.usesCoralPinsOnly)
+        XCTAssertFalse(google.businessPhotoURLStrings.isEmpty)
+        XCTAssertTrue(SavvyMapPhotoPolicy.userAlbumPhotoURLs(for: google).isEmpty)
+
+        let savedGoogle = SavvyMapPhotoPolicy.resolvedPhoto(for: google, isConfirmedSaved: true)
+        XCTAssertEqual(savedGoogle.origin, .googlePlaces)
+        XCTAssertEqual(savedGoogle.url?.absoluteString, "https://maps.googleapis.com/photo/1")
+        XCTAssertTrue(savedGoogle.showsGoogleAttribution)
+        XCTAssertEqual(
+            SavvyMapPhotoPolicy.licensedPhotoURL(for: google, isConfirmedSaved: true)?.absoluteString,
+            "https://maps.googleapis.com/photo/1"
+        )
+
+        let unsavedGoogle = SavvyMapPhotoPolicy.resolvedPhoto(for: google, isConfirmedSaved: false)
+        XCTAssertEqual(unsavedGoogle, .coral)
+        XCTAssertNil(SavvyMapPhotoPolicy.licensedPhotoURL(for: google, isConfirmedSaved: false))
+
+        let ogOnly = samplePlace(sourceImageUrl: "https://example.invalid/og.jpg", note: nil)
+        XCTAssertEqual(
+            SavvyMapPhotoPolicy.resolvedPhoto(for: ogOnly, isConfirmedSaved: true),
+            .coral
+        )
+        XCTAssertEqual(
+            SavvyMapPhotoPolicy.resolvedPhoto(for: samplePlace(note: nil), isConfirmedSaved: true),
+            .coral
+        )
     }
 
     func testP1PinMetricsStayFixedAndHittable() {
@@ -279,6 +300,40 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertFalse(root.contains("ReviewCandidateMapPin"))
         XCTAssertTrue(root.contains("visibleSocialPlaces"))
         XCTAssertFalse(root.contains("return social.isEmpty ? mapViewModel.socialPlaces : social"))
+    }
+
+    func testP15AttributionRequiredAndLoadFailureStaysCoral() throws {
+        let saved = samplePlace(businessPhotoUrls: ["https://maps.googleapis.com/photo/1"])
+        let photo = SavvyMapPhotoPolicy.resolvedPhoto(for: saved, isConfirmedSaved: true)
+        XCTAssertTrue(photo.showsGoogleAttribution)
+        XCTAssertEqual(
+            SavvyMapPhotoPolicy.attribution(for: photo, language: .english),
+            "Photos: Google"
+        )
+        XCTAssertEqual(
+            SavvyMapPhotoPolicy.attribution(for: photo, language: .traditionalChinese),
+            "照片：Google"
+        )
+        XCTAssertNil(SavvyMapPhotoPolicy.attribution(for: .coral, language: .english))
+
+        XCTAssertEqual(SavvyMapPhotoDisplay.surface(for: .loaded), .photo)
+        XCTAssertEqual(SavvyMapPhotoDisplay.surface(for: .failed), .coral)
+        XCTAssertEqual(SavvyMapPhotoDisplay.surface(for: .loading), .coral)
+        XCTAssertEqual(SavvyMapPhotoDisplay.surface(for: .missing), .coral)
+        XCTAssertTrue(SavvyMapPhotoDisplay.hidesBrokenImageOnFailure)
+
+        let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        XCTAssertTrue(pins.contains("CachedAsyncImage"))
+        XCTAssertTrue(pins.contains("Photos: Google"))
+        XCTAssertTrue(pins.contains("照片：Google"))
+        XCTAssertTrue(pins.contains("SavvyMapPinPhotoFill"))
+        XCTAssertFalse(pins.contains("xmark"))
+        XCTAssertFalse(pins.contains("PlaceBusinessEnricher"))
+
+        let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        XCTAssertTrue(root.contains("map.photoAttribution"))
+        XCTAssertTrue(root.contains("Photos: Google"))
+        XCTAssertFalse(root.contains("PlaceBusinessEnricher"))
     }
 
     func testCardBackUsesDecision2FieldsFromPlace() {

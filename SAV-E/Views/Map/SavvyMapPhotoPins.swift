@@ -66,30 +66,85 @@ enum SavvyMapPinMetrics {
     static let pinScreenYFraction: CGFloat = 0.725
 }
 
-// MARK: - Q1 photo policy
+// MARK: - Q1 final photo policy
 
-/// HoP Q1: founder wanted Apple Maps business photos on pins. MapKit has no
-/// public API for raw business photos (`MKMapItem` has no photo property;
-/// photos only appear inside Apple's native place card —
-/// `MKMapItemDetailViewController` / `mapItemDetail`). Do not scrape that
-/// card or use Look Around as pin art.
-///
-/// Pins use a coral round, or a user-saved photo only if our own model
-/// already has one. `Place` has `sourceImageUrl` (social/OG scrape) and
-/// `businessPhotoUrls` (Google Places) — neither is a user album — so Map
-/// never renders those URLs as pin or card hero photos.
-enum SavvyMapPhotoPolicy {
-    static func licensedPhotoURL(for place: Place) -> URL? {
-        _ = place
-        return nil
+/// HoP Q1 final: pin photo priority is the user's own photo, then an
+/// existing Google Places photo already stored on a **saved** Map Stamp
+/// (`Place.businessPhotoUrls`, filled by the existing
+/// `PlaceBusinessEnricher` path — no new keys or billing), then coral.
+/// Do not scrape Apple's native place card or Look Around.
+/// `sourceImageUrl` is social/OG scrape and is never pin art.
+/// P14: unsaved places never resolve a pin photo (they never get a Savvy pin).
+/// P15: Google photos require visible attribution; load failure is coral,
+/// never a broken-image glyph.
+enum SavvyMapPhotoOrigin: Equatable {
+    case own
+    case googlePlaces
+    case none
+}
+
+struct SavvyMapResolvedPhoto: Equatable {
+    var origin: SavvyMapPhotoOrigin
+    var url: URL?
+
+    var showsGoogleAttribution: Bool { origin == .googlePlaces && url != nil }
+
+    static let coral = SavvyMapResolvedPhoto(origin: .none, url: nil)
+}
+
+enum SavvyMapPhotoLoadState: Equatable {
+    case missing
+    case loading
+    case loaded
+    case failed
+}
+
+enum SavvyMapPhotoDisplay: Equatable {
+    case photo
+    case coral
+
+    static func surface(for state: SavvyMapPhotoLoadState) -> SavvyMapPhotoDisplay {
+        state == .loaded ? .photo : .coral
     }
 
+    static var hidesBrokenImageOnFailure: Bool { true }
+}
+
+enum SavvyMapPhotoPolicy {
+    static func resolvedPhoto(for place: Place, isConfirmedSaved: Bool) -> SavvyMapResolvedPhoto {
+        guard isConfirmedSaved else { return .coral }
+        if let own = userAlbumPhotoURLs(for: place).first {
+            return SavvyMapResolvedPhoto(origin: .own, url: own)
+        }
+        if let google = firstGooglePlacesPhotoURL(for: place) {
+            return SavvyMapResolvedPhoto(origin: .googlePlaces, url: google)
+        }
+        return .coral
+    }
+
+    static func licensedPhotoURL(for place: Place, isConfirmedSaved: Bool = true) -> URL? {
+        resolvedPhoto(for: place, isConfirmedSaved: isConfirmedSaved).url
+    }
+
+    /// Own-album photos. `Place` has no user-photo field yet, so this stays empty.
     static func userAlbumPhotoURLs(for place: Place) -> [URL] {
         _ = place
         return []
     }
 
-    static var usesCoralPinsOnly: Bool { true }
+    /// Existing Google Places URLs only — not `sourceImageUrl`.
+    static func firstGooglePlacesPhotoURL(for place: Place) -> URL? {
+        (place.businessPhotoUrls ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .compactMap(URL.init(string:))
+            .first
+    }
+
+    static func attribution(for photo: SavvyMapResolvedPhoto, language: AppLanguage) -> String? {
+        guard photo.showsGoogleAttribution else { return nil }
+        return language.localized(english: "Photos: Google", traditionalChinese: "照片：Google")
+    }
 }
 
 /// P14: saved vs unsaved must be distinguishable at a glance.
@@ -480,10 +535,12 @@ struct SavvyMapPhotoPinView: View {
     }
 
     private func coralOrPhotoCircle(diameter: CGFloat, paperStroke: CGFloat) -> some View {
-        ZStack {
+        let inner = max(8, diameter - paperStroke * 2)
+        return ZStack {
             Circle()
                 .fill(SaveAtlasPalette.coral)
-                .frame(width: max(8, diameter - paperStroke * 2), height: max(8, diameter - paperStroke * 2))
+                .frame(width: inner, height: inner)
+            SavvyMapPinPhotoFill(url: resolvedPhoto.url, diameter: inner)
             if paperStroke > 0 {
                 Circle()
                     .stroke(SaveAtlasPalette.paper, lineWidth: paperStroke)
@@ -493,8 +550,12 @@ struct SavvyMapPhotoPinView: View {
         .frame(width: diameter, height: diameter)
     }
 
+    private var resolvedPhoto: SavvyMapResolvedPhoto {
+        SavvyMapPhotoPolicy.resolvedPhoto(for: place, isConfirmedSaved: true)
+    }
+
     private var hasPhoto: Bool {
-        SavvyMapPhotoPolicy.licensedPhotoURL(for: place) != nil
+        resolvedPhoto.url != nil
     }
 
     private var pinLabel: String {
@@ -503,6 +564,49 @@ struct SavvyMapPhotoPinView: View {
             ? languageSettings.localized(english: "visited", traditionalChinese: "去過")
             : languageSettings.localized(english: "not visited", traditionalChinese: "沒去過")
         return "\(place.name), \(category), \(visit)"
+    }
+}
+
+/// P15: photo fill sits on coral. Loading and failure keep the coral —
+/// never a broken-image glyph.
+struct SavvyMapPinPhotoFill: View {
+    let url: URL?
+    let diameter: CGFloat
+
+    var body: some View {
+        Group {
+            if let url {
+                CachedAsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    default:
+                        Color.clear
+                    }
+                }
+            } else {
+                Color.clear
+            }
+        }
+        .frame(width: diameter, height: diameter)
+        .clipShape(Circle())
+        .allowsHitTesting(false)
+    }
+}
+
+struct SavvyMapPhotoAttribution: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(SaveAtlasType.strong(10))
+            .foregroundStyle(SaveAtlasPalette.paper)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(SaveAtlasPalette.ink.opacity(0.55), in: Capsule())
+            .accessibilityIdentifier("map.pin.photoAttribution")
     }
 }
 
@@ -681,12 +785,29 @@ struct SavvyMapPlaceCard: View {
     }
 
     private var photoWell: some View {
-        ZStack(alignment: .bottomLeading) {
+        let photo = SavvyMapPhotoPolicy.resolvedPhoto(for: place, isConfirmedSaved: true)
+        return ZStack(alignment: .bottomLeading) {
             RoundedRectangle(cornerRadius: SavvyMapPinMetrics.cardPhotoCorner, style: .continuous)
                 .fill(SaveAtlasPalette.ink.opacity(0.08))
             Circle()
                 .fill(SaveAtlasPalette.coral)
                 .frame(width: 72, height: 72)
+            if let url = photo.url {
+                CachedAsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    default:
+                        Color.clear
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipShape(
+                    RoundedRectangle(cornerRadius: SavvyMapPinMetrics.cardPhotoCorner, style: .continuous)
+                )
+            }
             LinearGradient(
                 colors: [.clear, SaveAtlasPalette.ink.opacity(0.55)],
                 startPoint: .center,
@@ -694,17 +815,25 @@ struct SavvyMapPlaceCard: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: SavvyMapPinMetrics.cardPhotoCorner, style: .continuous))
 
-            Button(action: onOpenDetail) {
-                Text(place.name)
-                    .font(SaveAtlasType.strong(22))
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("map.peek.name")
-                    .accessibilityFocused($nameFocused)
+            VStack(alignment: .leading, spacing: 8) {
+                if let attribution = SavvyMapPhotoPolicy.attribution(
+                    for: photo,
+                    language: languageSettings.language
+                ) {
+                    SavvyMapPhotoAttribution(text: attribution)
+                }
+                Button(action: onOpenDetail) {
+                    Text(place.name)
+                        .font(SaveAtlasType.strong(22))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("map.peek.name")
+                        .accessibilityFocused($nameFocused)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("map.peek.card")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("map.peek.card")
             .padding(16)
         }
         .frame(height: SavvyMapPinMetrics.cardPhotoHeight)
