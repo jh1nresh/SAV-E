@@ -71,7 +71,9 @@ nonisolated enum SaveProTier: String, Codable, Equatable, Sendable {
     case free
     case pro
 
-    var allowsUnlimitedAIAssists: Bool { self == .pro }
+    /// Pro does not raise model allowance. Unlimited saved places is the only
+    /// Pro benefit.
+    var allowsUnlimitedAIAssists: Bool { false }
     var allowsUnlimitedSavedPlaces: Bool { self == .pro }
 }
 
@@ -221,6 +223,12 @@ nonisolated enum SaveAIAssistDecision: Equatable, Sendable {
     var isRefusal: Bool { self == .refusedAllowanceExhausted }
 }
 
+/// Neutral notice when monthly model allowance is gone. Not a paywall.
+enum SaveAIAssistUserCopy {
+    static let exhaustedEnglish = "This month's model allowance is used up. Try again next period."
+    static let exhaustedTraditionalChinese = "這個月的模型額度已用完。下個週期再試。"
+}
+
 /// Pure decision function shared by the app and its tests.
 ///
 /// Kept free of StoreKit, networking, and SwiftUI so the policy can be tested
@@ -233,7 +241,7 @@ nonisolated enum SaveAIAssistGate {
         warningThresholdUnits: Int,
         enforcementEnabled: Bool = SAVEProAccessPolicy.enforcementEnabled
     ) -> SaveAIAssistDecision {
-        // Pro is unmetered.
+        // Pro does not unlock extra model allowance.
         guard !tier.allowsUnlimitedAIAssists else { return .allowed }
 
         // Metering unavailable or still warming up: fail open.

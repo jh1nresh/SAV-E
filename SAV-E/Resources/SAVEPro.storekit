@@ -31,9 +31,14 @@
           },
           "localizations" : [
             {
-              "description" : "Unlimited saved places.",
-              "displayName" : "Savvy Pro Annual",
+              "description" : "Save unlimited places. Free plan includes 50.",
+              "displayName" : "Savvy Pro",
               "locale" : "en_US"
+            },
+            {
+              "description" : "無限收藏地點。免費版可收藏 50 個。",
+              "displayName" : "Savvy Pro",
+              "locale" : "zh_Hant"
             }
           ],
           "productID" : "savvy.pro.annual",
@@ -52,9 +57,14 @@
           "introductoryOffer" : null,
           "localizations" : [
             {
-              "description" : "Unlimited saved places.",
-              "displayName" : "Savvy Pro Monthly",
+              "description" : "Save unlimited places. Free plan includes 50.",
+              "displayName" : "Savvy Pro",
               "locale" : "en_US"
+            },
+            {
+              "description" : "無限收藏地點。免費版可收藏 50 個。",
+              "displayName" : "Savvy Pro",
+              "locale" : "zh_Hant"
             }
           ],
           "productID" : "savvy.pro.monthly",

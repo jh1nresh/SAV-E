@@ -108,16 +108,29 @@ final class SaveEntitlementStore {
         )
     }
 
-    /// A paywall may only appear as a *reaction* to a refusal, and only once the
-    /// user has produced a confirmed Map Stamp. Both conditions are checked here
-    /// so no call site can bypass the trigger policy.
+    /// Model-allowance refusal is not a Pro sales trigger. Pro's only benefit
+    /// is unlimited saved places; exhausted allowance shows a neutral notice.
     func shouldPresentPaywall(
         for decision: SaveAIAssistDecision,
         hasConfirmedMapStamp: Bool
     ) -> Bool {
-        // The value proof must exist before pricing is ever shown.
-        guard hasConfirmedMapStamp else { return false }
-        return decision.isRefusal
+        _ = decision
+        _ = hasConfirmedMapStamp
+        return false
+    }
+
+    /// Neutral copy when the monthly model allowance is used up. Not a paywall.
+    nonisolated static func exhaustedAllowanceMessage(language: AppLanguage = .english) -> String {
+        switch language {
+        case .traditionalChinese:
+            return SaveAIAssistUserCopy.exhaustedTraditionalChinese
+        case .english:
+            return SaveAIAssistUserCopy.exhaustedEnglish
+        }
+    }
+
+    func allowanceNotice(language: AppLanguage = .english) -> String? {
+        decideAIAssist().isRefusal ? Self.exhaustedAllowanceMessage(language: language) : nil
     }
 
     /// Passive Passport entry. Still requires a confirmed Map Stamp so pricing

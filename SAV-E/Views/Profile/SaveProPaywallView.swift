@@ -3,17 +3,16 @@ import SwiftUI
 
 /// Savvy Pro paywall.
 ///
-/// Presented as a reaction to a refused AI assist, a parked 51st free save,
-/// or pulled up deliberately from Passport. Never an automatic first-launch
-/// wall. A Share Extension save over the free cap sets a pending handoff so
-/// this sheet can open the next time the app becomes active.
+/// Presented for a parked 51st free save, or pulled up deliberately from
+/// Passport. Never an automatic first-launch wall. Exhausted model allowance
+/// is a neutral notice, not this sheet. A Share Extension save over the free
+/// cap sets a pending handoff so this sheet can open the next time the app
+/// becomes active.
 ///
 /// App Store review requirements that must stay on this screen: Restore
 /// Purchases, EULA link, privacy policy link, renewal period, cancellation path.
 struct SaveProPaywallView: View {
     enum Trigger: Equatable {
-        /// The user asked for an AI assist and had none left.
-        case aiAssistExhausted
         /// The user opened Pro from Passport.
         case passport
         /// A free save was parked in Review because the 50-place cap is full.
@@ -111,8 +110,8 @@ struct SaveProPaywallView: View {
     }
 
     /// DESIGN §7.6: one free-tier line, one Pro benefit, and a keep-going note
-    /// only for the cap trigger. No AI-quota copy. The free-tier sentence
-    /// appears only in `subheadline`.
+    /// only for the cap trigger. The free-tier sentence appears only in
+    /// `subheadline`.
     private var boundaryPanel: some View {
         VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
             HStack(alignment: .top, spacing: SaveTheme.Spacing.sm) {
@@ -122,7 +121,7 @@ struct SaveProPaywallView: View {
                     .padding(.top, 5)
                 Text(languageSettings.localized(
                     english: "Unlimited saved places",
-                    traditionalChinese: "收藏地點不設限"
+                    traditionalChinese: "無限收藏地點"
                 ))
                 .font(SaveAtlasType.body(13))
                 .foregroundStyle(SaveAtlasPalette.muted)

@@ -12,12 +12,11 @@ export const APPLE_ROOT_CA_G3_SHA256 =
 
 export const proEntitlementPolicy = {
   policyVersion: "pro-entitlement-v0",
-  /// Monthly AI-assist allowance by tier. The free number is inherited from
-  /// `betaUsageQuotaPolicy` and is still an unvalidated placeholder; the Pro
-  /// number is generous because the real cost ceiling is the subscription
-  /// price, not the unit count.
+  /// Monthly model allowance. Pro does not raise this — unlimited saved
+  /// places is the only Pro benefit. The number is inherited from
+  /// `betaUsageQuotaPolicy` and is still an unvalidated placeholder.
   freeMonthlyLimitUnits: 20,
-  proMonthlyLimitUnits: 500,
+  proMonthlyLimitUnits: 20,
   /// A transaction signed for a different app is not evidence about this user.
   expectedBundleID: "com.wanderly.app",
   productIDs: ["savvy.pro.annual", "savvy.pro.monthly"],
@@ -53,10 +52,8 @@ export function resolveTier(
     ? "pro" : "free";
 }
 
-export function monthlyLimitUnits(tier: "free" | "pro"): number {
-  return tier === "pro"
-    ? proEntitlementPolicy.proMonthlyLimitUnits
-    : proEntitlementPolicy.freeMonthlyLimitUnits;
+export function monthlyLimitUnits(_tier: "free" | "pro"): number {
+  return proEntitlementPolicy.freeMonthlyLimitUnits;
 }
 
 /// Verify a StoreKit 2 signed transaction (JWS carrying an x5c chain).

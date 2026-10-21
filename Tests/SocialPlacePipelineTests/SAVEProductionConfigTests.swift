@@ -38,7 +38,8 @@ final class SAVEProductionConfigTests: XCTestCase {
             "Free: 50 places must appear once, as the free-tier line"
         )
         XCTAssertTrue(paywall.contains("Unlimited saved places"))
-        XCTAssertTrue(paywall.contains("收藏地點不設限"))
+        XCTAssertTrue(paywall.contains("無限收藏地點"))
+        XCTAssertFalse(paywall.contains("收藏地點不設限"))
         XCTAssertTrue(paywall.contains("You've saved 50 places. Keep going."))
         XCTAssertTrue(paywall.contains("已存 50 個地點，繼續存下去"))
         XCTAssertTrue(paywall.contains("paywall.keepGoing"))
@@ -51,9 +52,9 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(paywall.contains("stay free and unlimited"))
         XCTAssertFalse(paywall.contains("Unlimited saved places and Map Stamps"))
         XCTAssertFalse(paywall.contains("永遠免費且無上限"))
-        XCTAssertFalse(paywall.contains("無限收藏地點"))
         XCTAssertFalse(paywall.contains("AI quota"))
         XCTAssertFalse(paywall.contains("AI assists"))
+        XCTAssertFalse(paywall.contains("aiAssistExhausted"))
         XCTAssertFalse(paywall.contains("boundaryGroup"))
         XCTAssertFalse(policy.contains("saved-place memory loop is free forever"))
 
@@ -85,10 +86,18 @@ final class SAVEProductionConfigTests: XCTestCase {
     /// The gate is the only thing allowed to refuse an AI assist, so its truth
     /// table is pinned here.
     func testAIAssistGateFailsOpenAndRespectsEnforcementSwitch() {
-        // Pro is unmetered regardless of usage.
+        // Pro uses the same model allowance as free. Unlimited saves is the
+        // only Pro benefit.
         XCTAssertEqual(
             SaveAIAssistGate.decide(tier: .pro, usedUnits: 999, limitUnits: 20, warningThresholdUnits: 15),
-            .allowed
+            .allowedEnforcementDisabled
+        )
+        XCTAssertEqual(
+            SaveAIAssistGate.decide(
+                tier: .pro, usedUnits: 20, limitUnits: 20, warningThresholdUnits: 15,
+                enforcementEnabled: true
+            ),
+            .refusedAllowanceExhausted
         )
 
         // Metering unavailable: fail open rather than guess.
@@ -717,6 +726,29 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(projectSpec.contains("PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app"))
         XCTAssertTrue(storeKit.contains("savvy.pro.annual"))
         XCTAssertTrue(storeKit.contains("savvy.pro.monthly"))
+        XCTAssertEqual(
+            storeKit.components(separatedBy: "Save unlimited places. Free plan includes 50.").count - 1,
+            2,
+            "monthly and annual must share the HoP English subscription description"
+        )
+        XCTAssertEqual(
+            storeKit.components(separatedBy: "無限收藏地點。免費版可收藏 50 個。").count - 1,
+            2,
+            "monthly and annual must share the HoP Traditional Chinese description"
+        )
+        for forbidden in ["AI", "assist", "次數"] {
+            XCTAssertFalse(
+                storeKit.contains(forbidden),
+                "SAVEPro.storekit must not mention \(forbidden)"
+            )
+        }
+        let paywallCopy = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
+        for forbidden in ["AI", "assist", "次數"] {
+            XCTAssertFalse(
+                paywallCopy.contains(forbidden),
+                "paywall copy must not mention \(forbidden)"
+            )
+        }
     }
 
     func testShareExtensionUsesAtlasStatesWithoutConfirmingUnverifiedCandidates() throws {
