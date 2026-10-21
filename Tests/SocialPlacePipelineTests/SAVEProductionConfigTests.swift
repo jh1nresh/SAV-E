@@ -104,8 +104,12 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertTrue(share.contains("SaveShareExtensionPlaceDestination.resolve"))
         XCTAssertTrue(
-            map.contains("savedPlaceCount: places.count"),
-            "A1: the local cap counts confirmed Map Stamps only"
+            map.contains("savedPlaceCount: savedPlaceCountForLimit"),
+            "A1: the local cap counts confirmed Map Stamps, preferring the last server count"
+        )
+        XCTAssertTrue(
+            map.contains("authoritativeSavedPlaceCount"),
+            "A5 inverse: a stale vault row must not keep the local cap at 50"
         )
         XCTAssertTrue(map.contains("let remotePlaces = try await supabaseService.fetchPlaces(for: userId)"))
         XCTAssertTrue(map.contains("places = mergeRemotePlaces(remotePlaces, withLocalPlaces: localConfirmedPlaces())"))
@@ -925,6 +929,66 @@ final class SAVEProductionConfigTests: XCTestCase {
             XCTAssertEqual(map.places.count, 50)
             XCTAssertEqual(map.reviewCandidates.first?.name, "After Refresh Cafe")
         }
+    }
+
+    @MainActor
+    func testStaleLocalVaultDoesNotBlockSaveAfterServerReportsAFreeSlot() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "stale-vault-owner")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        let remotePlaces = makeCappedPlaces(49)
+        let stalePlace = makeCappedPlaces(1, indexOffset: 49)[0]
+        let rows = remotePlaces.enumerated().map { index, place in
+            cappedPlaceRowJSON(
+                id: place.id,
+                index: index,
+                name: place.name,
+                googlePlaceID: place.googlePlaceId
+            )
+        }.joined(separator: ",")
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET", request.url?.path == "/places" {
+                return (200, "[\(rows)]")
+            }
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                return (201, "{}")
+            }
+            if request.url?.path.contains("/memory/candidates") == true { return (200, "[]") }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(
+            suiteName: "save.place-limit-stale-vault.\(UUID().uuidString)"
+        )
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-stale-vault-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        for place in remotePlaces + [stalePlace] {
+            _ = try vault.saveConfirmedPlace(place, ownerSubject: "stale-vault-owner")
+        }
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+
+        await map.loadPlaces()
+        await map.loadPlaces(force: true)
+        XCTAssertEqual(map.places.count, 50, "merge can keep the deleted-elsewhere vault row")
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed)
+
+        let saved = try await map.saveMapCandidateAsPlace(
+            SaveMapCandidate(
+                id: "cap-stale-vault-50",
+                title: "Freed Remote Slot Cafe",
+                subtitle: "Taipei",
+                latitude: 25.44,
+                longitude: 121.84,
+                category: .cafe
+            )
+        )
+        XCTAssertEqual(saved.name, "Freed Remote Slot Cafe")
+        XCTAssertEqual(map.places.count, 51)
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
     }
 
     @MainActor
