@@ -82,6 +82,7 @@ struct SaveMapPhotoPinsRoot: View {
                 session.select(selected.id)
             }
             fitCameraToVisiblePlacesIfNeeded()
+            Task { await SavvyMapSharedPinPhotoStore.shared.refreshOwnPosts() }
         }
         .alert(
             languageSettings.localized(english: "My notes", traditionalChinese: "我的筆記"),

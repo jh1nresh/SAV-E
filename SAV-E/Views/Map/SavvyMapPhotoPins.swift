@@ -66,26 +66,42 @@ enum SavvyMapPinMetrics {
     static let pinScreenYFraction: CGFloat = 0.725
 }
 
-// MARK: - Q1b photo policy
+// MARK: - Q1b / P16 photo policy
 
-/// HoP Q1b (14:15): Google Places photos must not appear on a non-Google
-/// map. Pin photo order is the user's own photo, then coral. Do not scrape
-/// Apple's native place card or Look Around. Social/OG scrape URLs and
-/// Google Places photo URLs are never pin art.
-/// The existing business-photo enricher is left untouched.
-/// P14: unsaved places never resolve a pin photo (they never get a Savvy pin).
-/// P15: if an own photo fails to load, fall back to coral — never a
-/// broken-image glyph.
+/// HoP 圖釘照片定案: saved pins default to coral. A pin becomes a photo only
+/// when someone has shared a photo of that place in Savvy. No Google Places
+/// photos (terms forbid Places content on a non-Google map). Social/OG scrape
+/// URLs are never pin art. The existing business-photo enricher is left
+/// untouched.
+///
+/// This PR: own shared-post photos (`/v0/shared-posts/mine` +
+/// `/v0/shared-posts/{id}/photos/{n}`), then a friend-photo hook, then coral.
+/// Friend-shared photos are stubbed — `SharedPlacePost` has no place id,
+/// coordinates, or Google id; there is no per-place friend-photo API; the
+/// pending `shared-post-photos.sql` migration may be unapplied. The feed
+/// already respects follow/share visibility, but cannot bind a photo to a
+/// Map Stamp without those identity fields.
+///
+/// P14: unsaved places never resolve a pin photo.
+/// P15: load failure stays coral — never a broken-image glyph.
 enum SavvyMapPhotoOrigin: Equatable {
     case own
+    case friend
     case none
+}
+
+struct SavvyMapSharedPhotoRef: Equatable {
+    var origin: SavvyMapPhotoOrigin
+    var postID: UUID
+    var photoIndex: Int
 }
 
 struct SavvyMapResolvedPhoto: Equatable {
     var origin: SavvyMapPhotoOrigin
     var url: URL?
+    var shared: SavvyMapSharedPhotoRef?
 
-    static let coral = SavvyMapResolvedPhoto(origin: .none, url: nil)
+    static let coral = SavvyMapResolvedPhoto(origin: .none, url: nil, shared: nil)
 }
 
 enum SavvyMapPhotoLoadState: Equatable {
@@ -107,10 +123,18 @@ enum SavvyMapPhotoDisplay: Equatable {
 }
 
 enum SavvyMapPhotoPolicy {
-    static func resolvedPhoto(for place: Place, isConfirmedSaved: Bool) -> SavvyMapResolvedPhoto {
+    static func resolvedPhoto(
+        for place: Place,
+        isConfirmedSaved: Bool,
+        ownPosts: [SharedPlacePost] = [],
+        friendPosts: [SharedPlacePost] = []
+    ) -> SavvyMapResolvedPhoto {
         guard isConfirmedSaved else { return .coral }
-        if let own = userAlbumPhotoURLs(for: place).first {
-            return SavvyMapResolvedPhoto(origin: .own, url: own)
+        if let own = firstOwnSharedPhoto(in: ownPosts, matching: place) {
+            return SavvyMapResolvedPhoto(origin: .own, url: nil, shared: own)
+        }
+        if let friend = firstFriendSharedPhoto(in: friendPosts, matching: place) {
+            return SavvyMapResolvedPhoto(origin: .friend, url: nil, shared: friend)
         }
         return .coral
     }
@@ -119,11 +143,117 @@ enum SavvyMapPhotoPolicy {
         resolvedPhoto(for: place, isConfirmedSaved: isConfirmedSaved).url
     }
 
-    /// Own-album photos. `Place` has no user-photo field yet, so this stays empty
-    /// and every pin renders coral until that source exists.
+    /// `Place` has no user-photo field. Own pin art comes from shared posts.
     static func userAlbumPhotoURLs(for place: Place) -> [URL] {
         _ = place
         return []
+    }
+
+    static func firstOwnSharedPhoto(
+        in posts: [SharedPlacePost],
+        matching place: Place
+    ) -> SavvyMapSharedPhotoRef? {
+        posts.first { post in
+            (post.photo_count ?? 0) > 0 && matches(post, place: place)
+        }.map {
+            SavvyMapSharedPhotoRef(origin: .own, postID: $0.id, photoIndex: 0)
+        }
+    }
+
+    /// Reserved hook. Always empty in this PR — see file header for why.
+    static func firstFriendSharedPhoto(
+        in posts: [SharedPlacePost],
+        matching place: Place
+    ) -> SavvyMapSharedPhotoRef? {
+        _ = (posts, place)
+        return nil
+    }
+
+    static func matches(_ post: SharedPlacePost, place: Place) -> Bool {
+        place.matches(
+            Place(
+                id: post.id,
+                name: post.name,
+                address: post.address,
+                latitude: 0,
+                longitude: 0,
+                googlePlaceId: nil,
+                category: PlaceCategory(rawValue: post.category) ?? place.category,
+                status: post.status,
+                rating: post.stars,
+                note: nil,
+                sourceUrl: nil,
+                sourcePlatform: .other,
+                sourceImageUrl: nil,
+                extractedDishes: nil,
+                priceRange: nil,
+                recommender: nil,
+                googleRating: nil,
+                googlePriceLevel: nil,
+                openingHours: nil,
+                createdAt: Date(timeIntervalSince1970: 0)
+            )
+        )
+    }
+}
+
+/// Memory-only thumbnails for own shared-post pin photos. Never writes
+/// follower/own share bytes into the public/disk image cache.
+@MainActor
+final class SavvyMapSharedPinPhotoStore: ObservableObject {
+    static let shared = SavvyMapSharedPinPhotoStore()
+
+    @Published private(set) var ownPosts: [SharedPlacePost] = []
+    @Published private(set) var images: [String: UIImage] = [:]
+    private var failedKeys: Set<String> = []
+    private var inFlight: Set<String> = []
+
+    func refreshOwnPosts(using service: SupabaseService = .shared) async {
+        guard !PrivyAuthService.shared.isReviewerDemo,
+              PrivyAuthService.shared.currentUserId != nil else {
+            ownPosts = []
+            return
+        }
+        do {
+            ownPosts = try await service.fetchSharedPosts(mine: true, filter: .all, cursor: nil).items
+        } catch {
+            return
+        }
+    }
+
+    func image(for place: Place) -> UIImage? {
+        guard let ref = SavvyMapPhotoPolicy.resolvedPhoto(
+            for: place,
+            isConfirmedSaved: true,
+            ownPosts: ownPosts
+        ).shared else { return nil }
+        return images[cacheKey(ref)]
+    }
+
+    func loadIfNeeded(for place: Place, using service: SupabaseService = .shared) async {
+        let resolved = SavvyMapPhotoPolicy.resolvedPhoto(
+            for: place,
+            isConfirmedSaved: true,
+            ownPosts: ownPosts
+        )
+        guard resolved.origin == .own, let ref = resolved.shared else { return }
+        let key = cacheKey(ref)
+        guard images[key] == nil, !failedKeys.contains(key), inFlight.insert(key).inserted else { return }
+        defer { inFlight.remove(key) }
+        do {
+            let data = try await service.fetchSharedPostPhoto(id: ref.postID, index: ref.photoIndex)
+            guard let decoded = UIImage(data: data) else {
+                failedKeys.insert(key)
+                return
+            }
+            images[key] = decoded
+        } catch {
+            failedKeys.insert(key)
+        }
+    }
+
+    private func cacheKey(_ ref: SavvyMapSharedPhotoRef) -> String {
+        "\(ref.postID.uuidString)-\(ref.photoIndex)"
     }
 }
 
@@ -380,6 +510,7 @@ struct SavvyMapCardBackModel: Equatable {
 struct SavvyMapPhotoPinView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ObservedObject private var sharedPhotos = SavvyMapSharedPinPhotoStore.shared
     let place: Place
     var showsBadge: Bool
     var isVisited: Bool
@@ -408,6 +539,9 @@ struct SavvyMapPhotoPinView: View {
         .accessibilityLabel(pinLabel)
         .accessibilityIdentifier("map.pin.saved.\(place.id.uuidString)")
         .zIndex(-place.latitude)
+        .task(id: place.id) {
+            await sharedPhotos.loadIfNeeded(for: place)
+        }
     }
 
     @ViewBuilder
@@ -520,7 +654,11 @@ struct SavvyMapPhotoPinView: View {
             Circle()
                 .fill(SaveAtlasPalette.coral)
                 .frame(width: inner, height: inner)
-            SavvyMapPinPhotoFill(url: resolvedPhoto.url, diameter: inner)
+            SavvyMapPinPhotoFill(
+                image: sharedPhotos.image(for: place),
+                url: resolvedPhoto.url,
+                diameter: inner
+            )
             if paperStroke > 0 {
                 Circle()
                     .stroke(SaveAtlasPalette.paper, lineWidth: paperStroke)
@@ -531,11 +669,15 @@ struct SavvyMapPhotoPinView: View {
     }
 
     private var resolvedPhoto: SavvyMapResolvedPhoto {
-        SavvyMapPhotoPolicy.resolvedPhoto(for: place, isConfirmedSaved: true)
+        SavvyMapPhotoPolicy.resolvedPhoto(
+            for: place,
+            isConfirmedSaved: true,
+            ownPosts: sharedPhotos.ownPosts
+        )
     }
 
     private var hasPhoto: Bool {
-        resolvedPhoto.url != nil
+        sharedPhotos.image(for: place) != nil
     }
 
     private var pinLabel: String {
@@ -550,12 +692,17 @@ struct SavvyMapPhotoPinView: View {
 /// P15: photo fill sits on coral. Loading and failure keep the coral —
 /// never a broken-image glyph.
 struct SavvyMapPinPhotoFill: View {
-    let url: URL?
+    var image: UIImage?
+    var url: URL?
     let diameter: CGFloat
 
     var body: some View {
         Group {
-            if let url {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else if let url {
                 CachedAsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -618,6 +765,7 @@ struct SavvyMapArcText: View {
 struct SavvyMapPlaceCard: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject var visits: SavvyMapVisitStore
+    @ObservedObject private var sharedPhotos = SavvyMapSharedPinPhotoStore.shared
     let place: Place
     let userLocation: CLLocation?
     var isOpen: Bool
@@ -693,6 +841,9 @@ struct SavvyMapPlaceCard: View {
         )
         .onAppear { nameFocused = true }
         .onChange(of: place.id) { _, _ in nameFocused = true }
+        .task(id: place.id) {
+            await sharedPhotos.loadIfNeeded(for: place)
+        }
         .gesture(
             DragGesture(minimumDistance: 12)
                 .onEnded { value in
@@ -751,28 +902,20 @@ struct SavvyMapPlaceCard: View {
     }
 
     private var photoWell: some View {
-        let photo = SavvyMapPhotoPolicy.resolvedPhoto(for: place, isConfirmedSaved: true)
-        return ZStack(alignment: .bottomLeading) {
+        ZStack(alignment: .bottomLeading) {
             RoundedRectangle(cornerRadius: SavvyMapPinMetrics.cardPhotoCorner, style: .continuous)
                 .fill(SaveAtlasPalette.ink.opacity(0.08))
             Circle()
                 .fill(SaveAtlasPalette.coral)
                 .frame(width: 72, height: 72)
-            if let url = photo.url {
-                CachedAsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        Color.clear
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipShape(
-                    RoundedRectangle(cornerRadius: SavvyMapPinMetrics.cardPhotoCorner, style: .continuous)
-                )
+            if let image = sharedPhotos.image(for: place) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipShape(
+                        RoundedRectangle(cornerRadius: SavvyMapPinMetrics.cardPhotoCorner, style: .continuous)
+                    )
             }
             LinearGradient(
                 colors: [.clear, SaveAtlasPalette.ink.opacity(0.55)],

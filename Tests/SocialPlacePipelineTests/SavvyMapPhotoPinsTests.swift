@@ -307,7 +307,8 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
 
         let own = SavvyMapResolvedPhoto(
             origin: .own,
-            url: URL(string: "https://example.invalid/me.jpg")
+            url: URL(string: "https://example.invalid/me.jpg"),
+            shared: nil
         )
         XCTAssertEqual(own.origin, .own)
         XCTAssertEqual(SavvyMapPhotoDisplay.surface(for: .failed), .coral)
@@ -315,10 +316,10 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
         XCTAssertTrue(pins.contains("CachedAsyncImage"))
         XCTAssertTrue(pins.contains("SavvyMapPinPhotoFill"))
-        XCTAssertTrue(pins.contains("user's own photo, then coral") || pins.contains("own photo, then coral"))
+        XCTAssertTrue(pins.contains("firstOwnSharedPhoto"))
+        XCTAssertTrue(pins.contains("firstFriendSharedPhoto"))
         XCTAssertFalse(pins.contains("xmark"))
         XCTAssertFalse(pins.contains("PlaceBusinessEnricher"))
-        XCTAssertFalse(pins.contains("businessPhotoUrls"))
         XCTAssertFalse(pins.contains("Photos: Google"))
 
         let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
@@ -326,6 +327,48 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertFalse(root.contains("map.photoAttribution"))
         XCTAssertFalse(root.contains("PlaceBusinessEnricher"))
         XCTAssertFalse(root.contains("businessPhotoUrls"))
+    }
+
+    func testP16OwnSharedPhotoThenFriendHookThenCoral() {
+        let saved = samplePlace()
+        var own = sampleSharedPost(name: saved.name, address: saved.address, photoCount: 1)
+        XCTAssertTrue(SavvyMapPhotoPolicy.matches(own, place: saved))
+        let resolved = SavvyMapPhotoPolicy.resolvedPhoto(
+            for: saved,
+            isConfirmedSaved: true,
+            ownPosts: [own]
+        )
+        XCTAssertEqual(resolved.origin, .own)
+        XCTAssertEqual(resolved.shared?.postID, own.id)
+        XCTAssertEqual(resolved.shared?.photoIndex, 0)
+
+        own.photo_count = 0
+        XCTAssertNil(SavvyMapPhotoPolicy.firstOwnSharedPhoto(in: [own], matching: saved))
+
+        let other = sampleSharedPost(name: "Friend Cafe", address: "Other Rd", photoCount: 2)
+        XCTAssertFalse(SavvyMapPhotoPolicy.matches(other, place: saved))
+
+        let friendMatch = sampleSharedPost(name: saved.name, address: saved.address, photoCount: 2)
+        XCTAssertNil(SavvyMapPhotoPolicy.firstFriendSharedPhoto(in: [friendMatch], matching: saved))
+        XCTAssertEqual(
+            SavvyMapPhotoPolicy.resolvedPhoto(
+                for: saved,
+                isConfirmedSaved: true,
+                ownPosts: [],
+                friendPosts: [friendMatch]
+            ),
+            .coral
+        )
+
+        let googleOnly = samplePlace(businessPhotoUrls: ["https://maps.googleapis.com/photo/1"])
+        XCTAssertEqual(
+            SavvyMapPhotoPolicy.resolvedPhoto(for: googleOnly, isConfirmedSaved: true),
+            .coral
+        )
+        XCTAssertEqual(
+            SavvyMapPhotoPolicy.resolvedPhoto(for: saved, isConfirmedSaved: false, ownPosts: [own]),
+            .coral
+        )
     }
 
     func testCardBackUsesDecision2FieldsFromPlace() {
@@ -351,6 +394,30 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertFalse(map.contains("SaveTileTownCanvas"))
         XCTAssertTrue(map.contains("SavvyMapMotion.camera"))
         XCTAssertTrue(map.contains("0.05") || map.contains("cameraDelay"))
+    }
+
+    private func sampleSharedPost(
+        name: String,
+        address: String,
+        photoCount: Int
+    ) -> SharedPlacePost {
+        SharedPlacePost(
+            id: UUID(),
+            name: name,
+            address: address,
+            category: PlaceCategory.attraction.rawValue,
+            status: .wantToGo,
+            stars: nil,
+            caption: nil,
+            shared_at: "2026-10-21T00:00:00Z",
+            author_id: "self",
+            author_name: "Self",
+            author_handle: "self",
+            author_avatar_url: nil,
+            visible_to_followers: true,
+            photo_count: photoCount,
+            photo_version: "1"
+        )
     }
 
     private func samplePlace(
