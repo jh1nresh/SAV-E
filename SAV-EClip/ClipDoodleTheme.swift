@@ -16,7 +16,7 @@ enum ClipJournalPalette {
     static let cream = Color("ClipCream")
     static let forest = Color("ClipForest")
     static let cardRadius: CGFloat = 16
-    static let strokeWidth: CGFloat = 1.6
+    nonisolated static let strokeWidth: CGFloat = 1.6
 }
 
 enum ClipJournalLayout {
@@ -193,7 +193,7 @@ struct ClipDottedBackground: View {
     }
 }
 
-struct ClipJitterRoundedRect: Shape {
+nonisolated struct ClipJitterRoundedRect: Shape {
     var radius: CGFloat
     var seed: UInt64 = 1
 
@@ -202,7 +202,7 @@ struct ClipJitterRoundedRect: Shape {
     }
 }
 
-struct ClipJitterCapsule: Shape {
+nonisolated struct ClipJitterCapsule: Shape {
     var seed: UInt64 = 2
 
     func path(in rect: CGRect) -> Path {
@@ -210,7 +210,7 @@ struct ClipJitterCapsule: Shape {
     }
 }
 
-struct ClipJitterCircle: Shape {
+nonisolated struct ClipJitterCircle: Shape {
     var seed: UInt64 = 4
 
     func path(in rect: CGRect) -> Path {
@@ -218,7 +218,7 @@ struct ClipJitterCircle: Shape {
     }
 }
 
-struct ClipTornPaperEdge: Shape {
+nonisolated struct ClipTornPaperEdge: Shape {
     var seed: UInt64 = 21
 
     func path(in rect: CGRect) -> Path {
@@ -241,7 +241,7 @@ struct ClipTornPaperEdge: Shape {
     }
 }
 
-private func jitteredPath(in rect: CGRect, cornerRadius: CGFloat, seed: UInt64) -> Path {
+nonisolated private func jitteredPath(in rect: CGRect, cornerRadius: CGFloat, seed: UInt64) -> Path {
     let inset = ClipJournalPalette.strokeWidth / 2
     let bounds = rect.insetBy(dx: inset, dy: inset)
     let radius = min(cornerRadius, min(bounds.width, bounds.height) / 2)
@@ -276,7 +276,7 @@ private func jitteredPath(in rect: CGRect, cornerRadius: CGFloat, seed: UInt64) 
     return jittered
 }
 
-private func jitter(_ point: CGPoint, index: Int, seed: UInt64, in bounds: CGRect) -> CGPoint {
+nonisolated private func jitter(_ point: CGPoint, index: Int, seed: UInt64, in bounds: CGRect) -> CGPoint {
     let wave = sin(Double(index) * 1.7 + Double(seed) * 0.37)
     let offset = CGFloat(wave) * 0.85
     let x = min(max(point.x + offset, bounds.minX - 1), bounds.maxX + 1)
@@ -450,7 +450,7 @@ struct ClipWashiNote: View {
     }
 }
 
-struct ClipWashiStrip: Shape {
+nonisolated struct ClipWashiStrip: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
         let tooth: CGFloat = 7
