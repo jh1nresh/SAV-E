@@ -1057,6 +1057,21 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(parked?.sourceEvidence.isEmpty ?? false)
     }
 
+    func testSharedPostOverLimitParkRechecksTheInitiatingAccount() throws {
+        let store = try source(at: "SAV-E/ViewModels/SharedPostsStore.swift")
+        let start = try XCTUnwrap(store.range(of: "func save(_ post: SharedPlacePost)"))
+        let end = try XCTUnwrap(store.range(of: "func acknowledgeSavedPlaceLimitPaywall()"))
+        let save = String(store[start.lowerBound..<end.lowerBound])
+        let catchStart = try XCTUnwrap(save.range(of: "} catch {"))
+        let catchBody = String(save[catchStart.lowerBound...])
+        XCTAssertTrue(
+            catchBody.contains("account == PrivyAuthService.shared.currentUserId"),
+            "a late over-limit response must not park into a new account"
+        )
+        XCTAssertTrue(catchBody.contains("parkOverLimitPlace"))
+        XCTAssertTrue(catchBody.contains("Task.isCancelled"))
+    }
+
     @MainActor
     func testSharedPlacePostDecodesCoordinatesAndPlaceIdForParkedSave() throws {
         let json = """

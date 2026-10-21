@@ -1760,6 +1760,7 @@ final class MapViewModel: ObservableObject {
             )
             try ensureConfirmationSession(userId, confirmationGeneration)
             existing = await refreshedConfirmedPlace(existing)
+            try ensureConfirmationSession(userId, confirmationGeneration)
             try? saveLocalVaultService.removeReviewCandidate(candidate.id)
             mirrorToLocalVault(existing)
             places = Place.consolidated(places.filter { $0.id != existing.id } + [existing])
@@ -1768,6 +1769,7 @@ final class MapViewModel: ObservableObject {
                 selectedReviewCandidate = nil
             }
             await refreshReviewCandidatesLoggingFailures()
+            try ensureConfirmationSession(userId, confirmationGeneration)
             focusSavedPlace(existing, showStampMoment: false)
             clearExactSearchResolution(matching: candidate.id)
             return existing
@@ -1826,6 +1828,7 @@ final class MapViewModel: ObservableObject {
         }
         try ensureConfirmationSession(userId, confirmationGeneration)
         let confirmedPlace = await refreshedConfirmedPlace(place)
+        try ensureConfirmationSession(userId, confirmationGeneration)
         try? saveLocalVaultService.removeReviewCandidate(candidate.id)
         mirrorToLocalVault(confirmedPlace)
         places = [confirmedPlace] + places
@@ -1834,6 +1837,7 @@ final class MapViewModel: ObservableObject {
             selectedReviewCandidate = nil
         }
         await refreshReviewCandidatesLoggingFailures()
+        try ensureConfirmationSession(userId, confirmationGeneration)
         revealImportedPlaces([confirmedPlace])
         clearExactSearchResolution(matching: candidate.id)
         return confirmedPlace
