@@ -924,8 +924,6 @@ final class MapViewModel: ObservableObject {
         reviewCandidates = [candidate] + reviewCandidates.filter { $0.id != candidate.id }
         if requestPaywall {
             requestSavedPlaceLimitPaywall()
-        } else {
-            SavePlaceLimitHandoff.markPaywallPending(notify: false)
         }
         syncSavedPlaceLimitCache()
         return candidate

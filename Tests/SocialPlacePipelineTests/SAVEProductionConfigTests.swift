@@ -129,6 +129,10 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(content.contains("--uitest-show-ai-quota-notice"))
         XCTAssertTrue(content.contains("Unplaced Harbor Cafe"))
         XCTAssertTrue(content.contains("parkPlaceInUnplacedInbox(place, requestPaywall: false)"))
+        XCTAssertTrue(
+            content.contains("consumePendingSavedPlaceLimitPaywall()"),
+            "E4 Unplaced must clear a leftover paywall handoff so Home Saves stays tappable"
+        )
         XCTAssertTrue(content.contains("ShareAnalysisError.usageLimit.errorDescription"))
         XCTAssertTrue(content.contains("showAIQuotaNotice = true"))
 
@@ -136,7 +140,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(rail.contains("func testFreeCapE4Screenshots()"))
         XCTAssertTrue(
             rail.contains("home.more.saves"),
-            "E4 must open Saves from the header, then More's row — not More first"
+            "E4 opens Saves from More → Manage saved places, not a header tap under the sheet"
         )
         for name in [
             "e4-51st-save-paywall",
@@ -1520,6 +1524,10 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(map.reviewCandidates.first?.name, "Sheet Cafe")
         XCTAssertEqual(map.reviewCandidates.first?.status, "review")
         XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+        XCTAssertFalse(
+            SavePlaceLimitHandoff.consumePaywallPending(),
+            "a quiet park must not leave a handoff that covers Home on the next activation"
+        )
     }
 
     @MainActor

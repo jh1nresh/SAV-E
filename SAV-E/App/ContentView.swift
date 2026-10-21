@@ -1509,6 +1509,9 @@ struct ContentView: View {
             createdAt: Date()
         )
         _ = try? mapVM.parkPlaceInUnplacedInbox(place, requestPaywall: false)
+        // A leftover App Group handoff from the 51st-save launch, or from
+        // park-with-paywall, would cover Home and swallow Saves taps.
+        _ = mapVM.consumePendingSavedPlaceLimitPaywall()
         didApplyUnplacedCandidateFixture = true
     }
 #endif

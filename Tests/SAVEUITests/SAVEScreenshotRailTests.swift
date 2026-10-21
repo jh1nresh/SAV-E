@@ -532,9 +532,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
             "Home must settle before the Unplaced fixture can appear in Review."
         )
-        // Live Home puts Review under More and the clues bar below the peek.
-        // Open Saves from the always-visible header icon instead of waiting
-        // 40s for `home.review` and then tapping a swallowed header control.
+        // Live Home keeps the library behind More → Manage saved places.
         openSavesFromHome(app: app)
         XCTAssertTrue(
             app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout),
@@ -3103,38 +3101,45 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
         let saves = app.descendants(matching: .any)["saves.root"]
-        // Live Home exposes Saves on the header (`home.saves`). Opening More
-        // first drops a sheet that swallows that header tap
-        // (SaveTileTownHomeView). Prefer the header, then More's row.
-        let headerSaves = app.descendants(matching: .any)["home.saves"]
-        if headerSaves.waitForExistence(timeout: timeout(2)) {
-            tapReachable(headerSaves)
-            if saves.waitForExistence(timeout: timeout(5)) {
-                return
-            }
-        }
+        if saves.exists { return }
+        dismissSavedPlaceLimitPaywallIfPresent(app: app)
 
+        // Tile-town Home (DESIGN): the library is More → Manage saved places
+        // (`home.more.saves`). Header `home.saves` stays in the tree after More
+        // opens; tapping it again hits the header under the sheet and never
+        // pushes Saves. Do not query `home.saves` while the sheet is up.
         let moreActions = app.descendants(matching: .any)["home.more"]
         if moreActions.waitForExistence(timeout: timeout(2)) {
             tapReachable(moreActions)
         }
-        // Parity-fixture Home still uses the locked One-Face stack, whose
-        // Saves entry is Review clues (`home.review`).
-        let candidates: [XCUIElement] = [
-            app.descendants(matching: .any)["home.more.saves"],
-            app.descendants(matching: .any)["home.saves"],
-            app.buttons["Manage saved places"],
-            app.buttons["管理已存地點"],
-            app.buttons["Manage"],
+        if app.descendants(matching: .any)["home.more.sheet"].waitForExistence(timeout: timeout(5)) {
+            let manage = firstExisting([
+                app.descendants(matching: .any)["home.more.saves"],
+                app.buttons["Manage saved places"],
+                app.buttons["管理已存地點"],
+                app.descendants(matching: .any)["home.reviewAll"],
+            ], timeout: stepTimeout)
+            if manage.exists {
+                tapReachable(manage)
+                if saves.waitForExistence(timeout: timeout(5)) { return }
+            }
+        }
+
+        // Resting Home clues bar (`onReviewAll`) still opens Saves.
+        let clues = firstExisting([
             app.descendants(matching: .any)["home.review"],
             app.buttons["Review clues"],
-        ]
-        let entry = firstExisting(candidates, timeout: stepTimeout)
-        XCTAssertTrue(entry.exists, "Missing Home Saves entry")
-        tapReachable(entry)
-        if !saves.waitForExistence(timeout: timeout(5)) {
-            tapReachable(entry)
+        ], timeout: timeout(2))
+        if clues.exists {
+            tapReachable(clues)
+            if saves.waitForExistence(timeout: timeout(5)) { return }
         }
+
+        let headerSaves = app.buttons["home.saves"]
+        if headerSaves.waitForExistence(timeout: timeout(2)), headerSaves.isHittable {
+            headerSaves.tap()
+        }
+
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to
         // burn 120s per attempt; four flakes × 3 retries blew the 35-minute
         // rail step (CI 32778736280, exit 64).
@@ -3142,6 +3147,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             saves.waitForExistence(timeout: stepTimeout),
             "Home Saves entry did not open Saves"
         )
+    }
+
+    @MainActor
+    private func dismissSavedPlaceLimitPaywallIfPresent(app: XCUIApplication) {
+        let paywall = app.descendants(matching: .any)["paywall.root"]
+        guard paywall.exists else { return }
+        let close = app.buttons["paywall.close"]
+        if close.waitForExistence(timeout: timeout(2)) {
+            tapReachable(close)
+        }
+        _ = paywall.waitForNonExistence(timeout: timeout(5))
     }
 
     @MainActor
