@@ -1064,11 +1064,9 @@ final class MapViewModel: ObservableObject {
 
     private func localConfirmedPlaces() -> [Place] {
         do {
-            let owner = authService.currentUserId
-            return Place.consolidated(
-                try saveLocalVaultService.confirmedPlaceRecords(limit: 500)
-                    .filter { Self.localVaultRecordBelongsToActiveAccount($0.ownerSubject, currentUserId: owner) }
-                    .compactMap(\.confirmedPlace)
+            return try saveLocalVaultService.confirmedPlaces(
+                limit: 500,
+                belongingTo: authService.currentUserId
             )
         } catch {
             print("MapViewModel: failed to load local confirmed places: \(error)")

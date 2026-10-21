@@ -844,7 +844,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(vault.contains("func confirmedPlaceRecords"))
         XCTAssertTrue(intent.contains("ownerSubject: PrivyAuthService.shared.currentUserId"))
         XCTAssertTrue(share.contains("analysisCredential?.ownerSubject ?? ShareAnalysisKeychain.read()?.ownerSubject"))
-        XCTAssertTrue(map.contains("confirmedPlaceRecords(limit: 500)"))
+        XCTAssertTrue(map.contains("belongingTo: authService.currentUserId"))
         XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: authService.currentUserId)"))
         XCTAssertTrue(
             map.contains("try ensureConfirmationSession(userId, generation)"),
