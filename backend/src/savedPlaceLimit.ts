@@ -55,6 +55,9 @@ export async function assertNewSavedPlaceAllowed(
   } catch (error) {
     await client.query("rollback to savepoint saved_place_entitlement");
     if (!isEntitlementSchemaUnavailable(error)) throw error;
+    // Schema missing: cannot tell Pro from Free. Fail open like
+    // ai_usage_events — do not apply the free cap as if every account is free.
+    return;
   }
 
   const { rows } = await client.query(

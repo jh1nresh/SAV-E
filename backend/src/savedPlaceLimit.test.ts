@@ -67,7 +67,7 @@ test("assertNewSavedPlaceAllowed recovers when entitlement schema is missing ins
         aborted = true;
         throw Object.assign(new Error("relation does not exist"), { code: "42P01" });
       }
-      if (sql.includes("count(*)")) return { rows: [{ count: 49 }] };
+      if (sql.includes("count(*)")) return { rows: [{ count: 50 }] };
       return { rows: [] };
     },
   };
@@ -75,7 +75,10 @@ test("assertNewSavedPlaceAllowed recovers when entitlement schema is missing ins
   await assertNewSavedPlaceAllowed(client as never, "owner");
   assert.ok(calls.some((sql) => /savepoint saved_place_entitlement/i.test(sql)));
   assert.ok(calls.some((sql) => /rollback to savepoint saved_place_entitlement/i.test(sql)));
-  assert.ok(calls.some((sql) => sql.includes("count(*)")));
+  assert.ok(
+    !calls.some((sql) => sql.includes("count(*)")),
+    "a missing entitlement schema must fail open instead of applying the free cap",
+  );
 });
 
 test("assertNewSavedPlaceAllowed lets Pro create past 50", async () => {
