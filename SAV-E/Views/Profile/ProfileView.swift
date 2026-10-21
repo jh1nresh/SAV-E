@@ -2340,8 +2340,6 @@ private struct PassportTileTownCollection: View {
                 Text("\(cityProgress.visited)/\(cityProgress.saved)")
                     .font(SaveAtlasType.strong(13))
                     .foregroundStyle(SaveAtlasPalette.forest)
-                    .accessibilityIdentifier("profile.stampProgress")
-                    .accessibilityValue("\(cityProgress.visited) of \(cityProgress.saved)")
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(SaveAtlasPalette.kraft.opacity(0.45))
@@ -2353,6 +2351,11 @@ private struct PassportTileTownCollection: View {
                 .frame(height: 8)
                 .accessibilityHidden(true)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("profile.stampProgress")
+            .accessibilityLabel("\(cityProgress.visited)/\(cityProgress.saved)")
+            .accessibilityValue("\(cityProgress.visited) of \(cityProgress.saved)")
+            .accessibilityAddTraits(.isStaticText)
 
             LazyVGrid(
                 columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],

@@ -760,7 +760,8 @@ struct ContentView: View {
                         mapViewModel: mapVM,
                         initialQuery: drawerLaunchRequest.initialQuery ?? "",
                         focusesSearch: drawerLaunchRequest.focusesSearch,
-                        preservesExactSearchClue: isExactSearchSessionActive,
+                        preservesExactSearchClue: isExactSearchSessionActive
+                            || exactSearchClueID != nil,
                         onClose: {
                             endCanceledExactSearchCorrection()
                             collapseMapPanel()
@@ -1023,15 +1024,19 @@ struct ContentView: View {
                 activateExactSearchSession(for: candidate)
             },
             onClearMapSearchResults: { endsExactSearch in
-                isExactSearchSessionActive = false
-                // Explicit close drops the retained clue so the next
-                // saved-row tap cannot restore a canceled resolution.
-                // Launch / refine remounts keep exactSearchClueID.
                 if endsExactSearch {
+                    isExactSearchSessionActive = false
                     exactSearchClueID = nil
                 }
                 guard exactSearchRequestID == nil else { return }
-                mapVM.clearMapSearchResults()
+                // Launch/refine remounts wipe pins. Keep the live Review
+                // correction so a saved-stamp tap still retires the clue.
+                mapVM.clearMapSearchResults(
+                    preservesExactSearchClue: !endsExactSearch
+                        && (isExactSearchSessionActive
+                            || exactSearchClueID != nil
+                            || mapVM.hasActiveExactSearchResolution)
+                )
             },
             collaborativeLists: mapVM.collaborativeLists,
             onCreateList: { title, note in
@@ -1476,7 +1481,13 @@ struct ContentView: View {
 
     private func openSavedPlaceFromMapSearch(_ place: Place) {
         restoreExactSearchResolutionIfNeeded()
-        guard isExactSearchSessionActive || mapVM.hasActiveExactSearchResolution else {
+        // The launch request can keep `preservesExactSearchClue` after an
+        // explicit close or a successful resolve. Only a live session or
+        // retained clue id may claim the next saved-pin tap.
+        let shouldResolveClue = isExactSearchSessionActive
+            || mapVM.hasActiveExactSearchResolution
+            || exactSearchClueID != nil
+        guard shouldResolveClue else {
             openMapDetail(.savedPlace(place))
             return
         }

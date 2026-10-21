@@ -116,7 +116,7 @@ struct AIDrawerView: View {
     /// saving one retires the clue from the queue.
     var onBeginExactSearchResolution: (PlaceReviewCandidate) -> Void = { _ in }
     /// `endsExactSearch` is true only for an explicit close. Launch/refine
-    /// remounts keep `exactSearchClueID` so the original clue stays linked.
+    /// remounts must keep the Review correction session.
     var onClearMapSearchResults: (_ endsExactSearch: Bool) -> Void = { _ in }
     var collaborativeLists: [SaveCollaborativeList] = []
     var onCreateList: (String, String?) -> SaveCollaborativeList = { title, note in
@@ -1382,8 +1382,18 @@ struct AIDrawerView: View {
     }
 
     private func closeMapDetail() {
+        // Empty Find exact opens this Review detail with no pins. Closing
+        // it must end the session so a later saved-stamp tap cannot retire
+        // that clue onto an unrelated Map Stamp.
+        let shouldEndExactSearch: Bool = {
+            guard case .reviewCandidate = mapDetailDrawerItem else { return false }
+            return !hasVisibleMapSearchResults
+        }()
         mapDetailDrawerItem = nil
         onDismissMapDetail()
+        if shouldEndExactSearch {
+            onClearMapSearchResults(true)
+        }
         withAnimation(SaveTheme.Motion.standardSpring) {
             drawerDetent = collapsedDrawerDetent
         }

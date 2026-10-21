@@ -714,26 +714,43 @@ struct SaveDoodleMiniMap: View {
         return .automatic
     }
 
-    private static func region(fitting coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
+    static func region(fitting coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
         var minLat = coordinates[0].latitude
         var maxLat = coordinates[0].latitude
-        var minLon = coordinates[0].longitude
-        var maxLon = coordinates[0].longitude
+        let originLon = coordinates[0].longitude
+        var minLon = originLon
+        var maxLon = originLon
         for coordinate in coordinates.dropFirst() {
             minLat = min(minLat, coordinate.latitude)
             maxLat = max(maxLat, coordinate.latitude)
-            minLon = min(minLon, coordinate.longitude)
-            maxLon = max(maxLon, coordinate.longitude)
+            let lon = unwrappedLongitude(coordinate.longitude, around: originLon)
+            minLon = min(minLon, lon)
+            maxLon = max(maxLon, lon)
         }
         let center = CLLocationCoordinate2D(
             latitude: (minLat + maxLat) / 2,
-            longitude: (minLon + maxLon) / 2
+            longitude: normalizedLongitude((minLon + maxLon) / 2)
         )
         let span = MKCoordinateSpan(
             latitudeDelta: max((maxLat - minLat) * 1.6, 0.012),
             longitudeDelta: max((maxLon - minLon) * 1.6, 0.012)
         )
         return MKCoordinateRegion(center: center, span: span)
+    }
+
+    /// Pins at 179.99 and -179.99 are neighbors, not a 360° world span.
+    private static func unwrappedLongitude(_ longitude: Double, around origin: Double) -> Double {
+        var value = longitude
+        while value - origin > 180 { value -= 360 }
+        while value - origin < -180 { value += 360 }
+        return value
+    }
+
+    private static func normalizedLongitude(_ longitude: Double) -> Double {
+        var value = longitude
+        while value > 180 { value -= 360 }
+        while value < -180 { value += 360 }
+        return value
     }
 }
 
