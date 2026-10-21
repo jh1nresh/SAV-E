@@ -44,10 +44,37 @@ final class SaveLocalVaultService: Sendable {
     }
 
     func confirmedPlaces(limit: Int = 250) throws -> [Place] {
+        try confirmedPlaces(limit: limit, belongingTo: nil, scopedToActiveAccount: false)
+    }
+
+    func confirmedPlaces(
+        limit: Int = 250,
+        belongingTo currentUserId: String?
+    ) throws -> [Place] {
+        try confirmedPlaces(limit: limit, belongingTo: currentUserId, scopedToActiveAccount: true)
+    }
+
+    private func confirmedPlaces(
+        limit: Int,
+        belongingTo currentUserId: String?,
+        scopedToActiveAccount: Bool
+    ) throws -> [Place] {
         try withLock {
             try withCoordinatedVaultRead { url in
                 Array(
-                    Place.consolidated(try loadRecords(from: url).compactMap(\.confirmedPlace)).prefix(limit)
+                    Place.consolidated(
+                        try loadRecords(from: url).compactMap { record -> Place? in
+                            guard record.state == .confirmedPlace else { return nil }
+                            if scopedToActiveAccount,
+                               !MapViewModel.localVaultRecordBelongsToActiveAccount(
+                                record.ownerSubject,
+                                currentUserId: currentUserId
+                               ) {
+                                return nil
+                            }
+                            return record.confirmedPlace
+                        }
+                    ).prefix(limit)
                 )
             }
         }
