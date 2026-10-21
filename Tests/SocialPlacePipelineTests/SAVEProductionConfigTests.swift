@@ -846,6 +846,11 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(share.contains("analysisCredential?.ownerSubject ?? ShareAnalysisKeychain.read()?.ownerSubject"))
         XCTAssertTrue(map.contains("belongingTo: authService.currentUserId"))
         XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: userId)"))
+        let privy = try source(at: "SAV-E/Services/PrivyAuthService.swift")
+        XCTAssertTrue(
+            privy.contains("saveConfirmedPlace(place, ownerSubject: ReviewDemo.userId)"),
+            "reviewer-demo Map Stamps must stay visible to the demo owner"
+        )
         XCTAssertTrue(map.contains("try persistParkedReviewCandidate(candidate)"))
         XCTAssertTrue(map.contains("try ensureConfirmationSession(userId, importGeneration)"))
         XCTAssertTrue(map.contains("startedBy userId: String?"))
