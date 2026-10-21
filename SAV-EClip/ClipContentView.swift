@@ -1458,7 +1458,8 @@ private enum ClipAtlasPalette {
     static let forest = Color(hex: "0E4A33")
     static let ink = Color(hex: "2E2117")
     static let muted = Color(hex: "62594F")
-    static let coral = Color(hex: "F26B4A")
+    // Twin of SaveAtlasPalette.coralLightHex. Keep in lockstep.
+    static let coral = Color(hex: "EF6649")
     static let mint = Color(hex: "D6E8C4")
     static let sky = Color(hex: "B5E3F5")
     static let kraft = Color(hex: "F0CFA1")

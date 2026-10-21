@@ -1,6 +1,6 @@
 # Savvy Design System
 
-> Last updated: 2026-10-19
+> Last updated: 2026-10-21
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** still governs paper, type, kraft, and coral
 > chrome, with the 2026-10-19 v5 cream/ink/stroke lock below. **Tile-town** is
@@ -280,7 +280,7 @@ table ever disagree, fix whichever one drifted in the same PR.
 | Forest | `SaveAtlasPalette.forest` | `#0E4A33` | `#B9E0C9` | Display headings, ticket titles, confirmed accent |
 | Ink | `SaveAtlasPalette.ink` | `#2F2E23` | `#F4F1E4` | Primary text, shadows at low opacity |
 | Muted | `SaveAtlasPalette.muted` | `#62594F` | `#CFC4B8` | Supporting and secondary copy |
-| Coral | `SaveAtlasPalette.coral` | `#F26B4A` | `#D97861` | Postage accent: primary CTA, source-clue state |
+| Coral | `SaveAtlasPalette.coral` | `#EF6649` | `#D77661` | Postage accent: primary CTA, source-clue state. **PLACEHOLDER** pending DESIGN 2026-10-22 10:00 CST (was `#F26B4A` / `#D97861`; darkened so cream `#FFF9EB` is ≥ 3:1). |
 | Mint | `SaveAtlasPalette.mint` | `#D6E8C4` | `#4F7258` | Confirmed / saved state fills |
 | Sky | `SaveAtlasPalette.sky` | `#B5E3F5` | `#3F758B` | Review state fills |
 | Lavender | `SaveAtlasPalette.lavender` | `#E3D6F7` | `#57466F` | Premium and soft brand accent |
@@ -640,7 +640,7 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 - Tab bible: flat full-width cream bar (`canvas`) with a hard 2px `stroke`
   top rule; 24px pixel line icons (`SavePixelChromeIcon`: house, map, plus,
   people, booklet); coral on the active destination only; the center `+` is
-  a coral (`#F26B4A`) circle with no visible "Save" label, but VoiceOver and
+  a coral (`SaveAtlasPalette.coral`) circle with no visible "Save" label, but VoiceOver and
   `root.tab.save` keep the capture name. **DESIGN question:** the 2026-10-19
   packet asked for a red `+` circle; this PR keeps production coral until
   that token is decided. Do not use a mint selection pill or a floating

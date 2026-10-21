@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 @testable import SAVE
 
@@ -6,7 +7,7 @@ final class AtlasOneFaceUITests: XCTestCase {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
         let prototype = try source(at: "Prototypes/AtlasPostcard/Sources/Theme.swift")
         let spec = try source(at: "Prototypes/AtlasPostcard/design.md")
-        let productionHexes = ["FFF9EB", "0E4A33", "F26B4A", "B5E3F5", "2F2E23", "62594F"]
+        let productionHexes = ["FFF9EB", "0E4A33", SaveAtlasPalette.coralLightHex, "B5E3F5", "2F2E23", "62594F"]
         let retiredDraftHexes = ["FFF8EE", "174E37", "F27D5C", "CDEDF4", "3F281A", "80664F"]
 
         for hex in productionHexes {
@@ -19,6 +20,37 @@ final class AtlasOneFaceUITests: XCTestCase {
             XCTAssertFalse(prototype.contains(hex), "AtlasPalette restored retired draft hex \(hex)")
             XCTAssertFalse(spec.contains(hex), "design.md restored retired draft hex \(hex)")
         }
+    }
+
+    func testCreamOnCoralMeetsWCAGContrast() {
+        let creamHex = "FFF9EB"
+        let lightRatio = SaveWCAGContrast.ratio(creamHex, against: SaveAtlasPalette.coralLightHex)
+        let darkRatio = SaveWCAGContrast.ratio(creamHex, against: SaveAtlasPalette.coralDarkHex)
+        XCTAssertGreaterThanOrEqual(
+            lightRatio,
+            3.0,
+            "cream #\(creamHex) on coral #\(SaveAtlasPalette.coralLightHex) is \(lightRatio); need >= 3:1"
+        )
+        XCTAssertGreaterThanOrEqual(
+            darkRatio,
+            3.0,
+            "cream #\(creamHex) on dark coral #\(SaveAtlasPalette.coralDarkHex) is \(darkRatio); need >= 3:1"
+        )
+    }
+
+    func testCoralHardcodesStayOnTheAtlasToken() throws {
+        let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
+        let clip = try source(at: "SAV-EClip/ClipContentView.swift")
+        let share = try source(at: "SAV-EShareExtension/ShareViewController.swift")
+        let pin = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
+        let design = try source(at: "DESIGN.md")
+        XCTAssertTrue(theme.contains("static let coral = Color(light: coralLightHex, dark: coralDarkHex)"))
+        XCTAssertTrue(clip.contains(SaveAtlasPalette.coralLightHex))
+        XCTAssertTrue(share.contains(SaveAtlasPalette.coralLightHex))
+        XCTAssertTrue(pin.contains("let coral = SaveAtlasPalette.coral"))
+        XCTAssertFalse(pin.contains("0.949"))
+        XCTAssertTrue(design.contains("#\(SaveAtlasPalette.coralLightHex)"))
+        XCTAssertTrue(design.contains("#\(SaveAtlasPalette.coralDarkHex)"))
     }
 
     func testReviewTicketFaceOmitsMapReadyAndConfidencePercent() throws {
@@ -173,5 +205,40 @@ final class AtlasOneFaceUITests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+    }
+}
+
+/// WCAG 2 relative-luminance contrast for hex sRGB pairs.
+enum SaveWCAGContrast {
+    static func ratio(_ hexA: String, against hexB: String) -> Double {
+        let first = luminance(hexA)
+        let second = luminance(hexB)
+        let lighter = max(first, second)
+        let darker = min(first, second)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    static func luminance(_ hex: String) -> Double {
+        let channels = components(hex)
+        return 0.2126 * linearize(channels.0)
+            + 0.7152 * linearize(channels.1)
+            + 0.0722 * linearize(channels.2)
+    }
+
+    private static func linearize(_ channel: Double) -> Double {
+        channel <= 0.04045
+            ? channel / 12.92
+            : pow((channel + 0.055) / 1.055, 2.4)
+    }
+
+    private static func components(_ hex: String) -> (Double, Double, Double) {
+        let cleaned = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var value: UInt64 = 0
+        Scanner(string: cleaned).scanHexInt64(&value)
+        return (
+            Double((value >> 16) & 0xFF) / 255,
+            Double((value >> 8) & 0xFF) / 255,
+            Double(value & 0xFF) / 255
+        )
     }
 }

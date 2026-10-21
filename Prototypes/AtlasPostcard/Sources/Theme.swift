@@ -21,7 +21,7 @@ enum AtlasElevation {
 }
 
 // Adaptive tokens. The light column stays the locked production hexes
-// Color(atlasHex: 0xFFF9EB) / 0x0E4A33 / 0xF26B4A / 0xB5E3F5 / 0x2F2E23 /
+// Color(atlasHex: 0xFFF9EB) / 0x0E4A33 / 0xEF6649 / 0xB5E3F5 / 0x2F2E23 /
 // 0x62594F / 0xD6E8C4 / 0xE3D6F7 / 0xEADDC6 / 0xF0E3CA / 0xFFCC4F / 0xDCCFB9.
 // Home and Passport sit inside `ReferenceViewport`, which paints `canvas`,
 // so a light-only mirror made dark-mode captures render cream.

@@ -201,7 +201,14 @@ enum SaveAtlasPalette {
     static let forest = Color(light: "0E4A33", dark: "B9E0C9")
     static let ink = Color(light: "2F2E23", dark: "F4F1E4")
     static let muted = Color(light: "62594F", dark: "CFC4B8")
-    static let coral = Color(light: "F26B4A", dark: "D97861")
+    /// PLACEHOLDER pending DESIGN (due 2026-10-22 10:00 CST).
+    /// Minimal darkening of `#F26B4A` so cream `#FFF9EB` reaches WCAG 3:1
+    /// (was ~2.87:1). Replace with DESIGN light/dark/pressed/tint values.
+    static let coralLightHex = "EF6649"
+    /// PLACEHOLDER: minimal darkening of `#D97861` for the same 3:1 cream floor
+    /// (was ~2.94:1). No separate pressed/tint hex exists; press uses opacity.
+    static let coralDarkHex = "D77661"
+    static let coral = Color(light: coralLightHex, dark: coralDarkHex)
     static let mint = Color(light: "D6E8C4", dark: "4F7258")
     static let sky = Color(light: "B5E3F5", dark: "3F758B")
     static let lavender = Color(light: "E3D6F7", dark: "57466F")
