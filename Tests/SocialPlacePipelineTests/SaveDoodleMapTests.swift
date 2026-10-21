@@ -22,6 +22,12 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("case appleDefault"))
         XCTAssertTrue(map.contains("static var current: Kind = .coralNumbered"))
         XCTAssertTrue(map.contains("SaveAtlasPalette.coral"))
+        XCTAssertTrue(map.contains("map.headerBand"))
+        XCTAssertTrue(map.contains("SaveAtlasPalette.paper"))
+        XCTAssertTrue(map.contains("SaveDoodleLollipopShape"))
+        XCTAssertTrue(map.contains("anchor: .bottom"))
+        XCTAssertFalse(map.contains(".fill(visited ? SaveDoodle.stampRed : SaveAtlasPalette.coral)"))
+        XCTAssertTrue(map.contains(".stroke(pinColor, lineWidth: 2)"))
         XCTAssertTrue(map.contains("map.eatGo"))
         let eatGoAt = try XCTUnwrap(map.range(of: "private var eatGoRail"))
         let sheetAt = try XCTUnwrap(map.range(of: "private func placeSheet"))
@@ -199,6 +205,7 @@ final class SaveDoodleMapTests: XCTestCase {
         let design = try source(at: "DESIGN.md")
         XCTAssertTrue(design.contains("judged manually by DESIGN"))
         XCTAssertTrue(design.contains("0.90 visual-parity score is not evidence"))
+        XCTAssertTrue(design.contains("coral outline lollipops"))
         XCTAssertFalse(design.contains("SaveTileTownRootMap"))
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: repositoryRoot.appendingPathComponent(

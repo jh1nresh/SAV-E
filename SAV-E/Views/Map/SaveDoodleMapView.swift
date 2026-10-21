@@ -4,6 +4,7 @@ import SwiftUI
 import UIKit
 
 /// Founder lock 2026-10-20: coral numbered markers on the product Map.
+/// Outline lollipops match the DESIGN golden (paper fill, coral stroke).
 /// Flip `current` to `.appleDefault` for unstyled Apple pins without
 /// rewriting the Map surface, header, or place sheet.
 enum SaveDoodleMapPinStyle {
@@ -34,15 +35,37 @@ struct SaveDoodleMapView: View {
     var body: some View {
         let followsHomeFilter = session.mapFollowsHomeFilter
         let visitResidue = session.mapVisitResidueID
-        return ZStack(alignment: .top) {
-            mapCanvas
-                .ignoresSafeArea()
-
+        return VStack(spacing: 0) {
             header(followsHomeFilter: followsHomeFilter)
                 .id(visitResidue)
                 .padding(.horizontal, SaveLayout.screenMargin)
                 .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.xs)
+                .padding(.bottom, SaveSpace.md)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(SaveAtlasPalette.paper)
+                .accessibilityIdentifier("map.headerBand")
+
+            ZStack(alignment: .top) {
+                mapCanvas
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if mapViewModel.showsLocationDeniedNotice {
+                    SaveLocationDeniedNotice(
+                        onOpenSettings: openSystemSettings,
+                        onDismiss: {
+                            withAnimation(SaveTheme.Motion.standardSpring) {
+                                mapViewModel.showsLocationDeniedNotice = false
+                            }
+                        }
+                    )
+                    .padding(.top, SaveSpace.sm)
+                    .padding(.horizontal, SaveLayout.screenMargin)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .ignoresSafeArea(edges: .top)
+        .background(SaveAtlasPalette.paper)
         .overlay(alignment: .bottom) {
             VStack(spacing: SaveSpace.md) {
                 Spacer(minLength: 0)
@@ -95,25 +118,6 @@ struct SaveDoodleMapView: View {
         .onChange(of: mapViewModel.selectedMapFeature) { _, feature in
             mapViewModel.selectMapFeature(feature)
         }
-        .overlay {
-            if mapViewModel.showsLocationDeniedNotice {
-                VStack {
-                    SaveLocationDeniedNotice(
-                        onOpenSettings: openSystemSettings,
-                        onDismiss: {
-                            withAnimation(SaveTheme.Motion.standardSpring) {
-                                mapViewModel.showsLocationDeniedNotice = false
-                            }
-                        }
-                    )
-                    .padding(.top, AtlasMetrics.statusBarHeight + 72)
-                    .padding(.horizontal, SaveLayout.screenMargin)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity)
-                .zIndex(2)
-            }
-        }
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
         }
@@ -143,7 +147,7 @@ struct SaveDoodleMapView: View {
             } else {
                 ForEach(displayedListedPlaces) { item in
                     if item.place.isMapKitMappable {
-                        Annotation("", coordinate: item.place.coordinate) {
+                        Annotation("", coordinate: item.place.coordinate, anchor: .bottom) {
                             SaveDoodleCoralPin(
                                 index: item.index,
                                 title: item.place.name,
@@ -720,15 +724,19 @@ struct SaveDoodleCoralPin: View {
 
     var body: some View {
         Button(action: onTap) {
-            VStack(spacing: SaveSpace.tight) {
+            ZStack(alignment: .bottom) {
                 ZStack {
-                    Circle()
-                        .fill(visited ? SaveDoodle.stampRed : SaveAtlasPalette.coral)
-                        .frame(width: diameter, height: diameter)
+                    SaveDoodleLollipopShape()
+                        .fill(SaveAtlasPalette.paper)
+                    SaveDoodleLollipopShape()
+                        .stroke(pinColor, lineWidth: 2)
                     Text("\(index)")
                         .font(SaveAtlasType.strong(13))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(pinColor)
+                        .offset(y: -stemHeight / 2)
                 }
+                .frame(width: headDiameter, height: pinHeight)
+
                 if isSelected {
                     Text(title)
                         .font(SaveAtlasType.strong(13))
@@ -737,17 +745,52 @@ struct SaveDoodleCoralPin: View {
                         .padding(.vertical, SaveSpace.tight)
                         .background(SaveAtlasPalette.kraft, in: Capsule())
                         .lineLimit(1)
+                        .offset(y: -(pinHeight + SaveSpace.tight))
                 }
             }
-            .scaleEffect(isSelected ? 1.0 : 1.0)
             .opacity(dimmed ? 0.6 : 1)
             .animation(SaveTheme.Motion.standardSpring, value: isSelected)
         }
         .buttonStyle(.plain)
-        .frame(minWidth: SaveLayout.minTap, minHeight: SaveLayout.minTap)
+        .frame(minWidth: SaveLayout.minTap, minHeight: SaveLayout.minTap, alignment: .bottom)
+        .contentShape(Rectangle())
     }
 
-    private var diameter: CGFloat {
-        isSelected ? 36 : 28
+    private var pinColor: Color {
+        visited ? SaveDoodle.stampRed : SaveAtlasPalette.coral
+    }
+
+    private var headDiameter: CGFloat {
+        isSelected ? 32 : 26
+    }
+
+    private var stemHeight: CGFloat {
+        isSelected ? 12 : 10
+    }
+
+    private var pinHeight: CGFloat {
+        headDiameter + stemHeight
+    }
+}
+
+/// DESIGN golden pin: numbered circle on a short stem — outline, not a fill.
+struct SaveDoodleLollipopShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let stemWidth = max(2.5, rect.width * 0.14)
+        let stemHeight = max(8, rect.height * 0.28)
+        let headDiameter = min(rect.width, rect.height - stemHeight)
+        let radius = headDiameter / 2
+        let center = CGPoint(x: rect.midX, y: radius)
+        let halfStem = stemWidth / 2
+        let attach = min(radius - 0.5, max(0, sqrt(max(0, radius * radius - halfStem * halfStem))))
+        let start = Angle.radians(Double.pi - asin(Double(min(1, halfStem / max(radius, 0.1)))))
+        let end = Angle.radians(asin(Double(min(1, halfStem / max(radius, 0.1)))))
+        var path = Path()
+        path.move(to: CGPoint(x: center.x - halfStem, y: rect.maxY))
+        path.addLine(to: CGPoint(x: center.x - halfStem, y: center.y + attach))
+        path.addArc(center: center, radius: radius, startAngle: start, endAngle: end, clockwise: true)
+        path.addLine(to: CGPoint(x: center.x + halfStem, y: rect.maxY))
+        path.closeSubpath()
+        return path
     }
 }

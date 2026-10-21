@@ -131,7 +131,8 @@ Rules:
   still hand off to MapKit or Apple Maps.
 - Nearby / Saved / Friends filter chips live on **Map only**. Home must not
   reuse that chrome.
-- Coral pins only. Selected stamp elevates to a kraft peek card (name + date/area).
+- Coral outline lollipop pins only (paper fill, coral stroke, numbered).
+  Selected stamp elevates to a kraft peek card (name + date/area).
   Source-only clues still have no pin.
 - Tile-town is nearest-neighbor integer tiles (`SaveTileTownRaster`): buildings,
   roofs, trees, water, and roads are crisp cells. No anti-aliased vector houses
@@ -537,8 +538,10 @@ on `SaveDoodleMapView`. Trip / Navigate MapKit still uses
 
 Rules:
 
-- Product Map pins are coral teardrops. Selected stamp elevates to a kraft
-  peek card. Do not invent a six-color pin rainbow.
+- Product Map pins are coral outline lollipops (`SaveDoodleCoralPin`):
+  paper fill, coral stroke, numbered head and a short stem. Visited uses
+  stamp red on the same outline. Selected stamp elevates to a kraft peek
+  card. Do not invent a six-color pin rainbow.
 - Trip MapKit confirmed places use `PlaceMapPin`: compact forest category
   symbols; a checkmark means user-marked Visited. A selected stamp gains the
   honey focus ring.
@@ -975,10 +978,12 @@ Rules:
 DESIGN v2 `map-light.png` / `map-dark.png` from
 `design/doodle-targets-2026-10-20` at `eade369` are the goldens.
 `map-mask.png` (white = live Apple Maps) is the ignore mask for that
-side-by-side review, not a 0.90 CI gate. The place sheet uses a 64pt
-official DESIGN sticker (color die-cut when visited, pencil outline when
-not) and a 12pt text gap. Do not replace default Apple MapKit `.standard`
-with a paper or hand-drawn basemap. City strip, place sheet, tab bar, and
+side-by-side review, not a 0.90 CI gate. City and Eat/Go sit on a cream `paper` header band,
+not on the live map. Pins are coral outline lollipops. The place sheet
+uses a 64pt official DESIGN sticker (color die-cut when visited, pencil
+outline when not) and a 12pt text gap. Do not replace default Apple
+MapKit `.standard` with a paper or hand-drawn basemap. City strip, place
+sheet, tab bar, and
 status bar are judged manually by DESIGN; the 0.90 visual-parity score is
 not evidence. Light and dark screenshot rails must also pass the
 city/filter/place-sheet/action geometry and hit-target assertions; the
