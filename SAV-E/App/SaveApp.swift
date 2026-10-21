@@ -74,6 +74,8 @@ struct SaveApp: App {
         store: UserDefaults(suiteName: "group.com.wanderly.app")
     ) private var pendingFriendShareURL = ""
     @State private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @State private var autoSaveIncomingShare = false
+    @State private var consumedLaunchShareActivity = false
     @State private var openedTrip: SharedTripData?
     @State private var openedList: SaveCollaborativeList?
     @State private var openedReferral: SaveReferralProfile?
@@ -161,15 +163,26 @@ struct SaveApp: App {
 #if DEBUG
             .modifier(UITestAppearanceOverride())
 #endif
-            .onAppear(perform: restorePendingFriendShare)
+            .onAppear(perform: restorePendingShare)
             .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
                 if receiptID == nil {
                     pendingFriendShareURL = ""
+                    if !autoSaveIncomingShare {
+                        PendingShareStore.clear()
+                    }
                 }
             }
             .onOpenURL(perform: handleIncomingURL)
             .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                 guard let url = activity.webpageURL else { return }
+                if !consumedLaunchShareActivity,
+                   PendingShareStore.load() == nil,
+                   pendingFriendShareURL.isEmpty,
+                   incomingPlaceReceipt == nil,
+                   isPlaceLink(url) || SaveSharedListPayload.isListLink(url) {
+                    autoSaveIncomingShare = true
+                    consumedLaunchShareActivity = true
+                }
                 handleIncomingURL(url)
             }
             .onChange(of: authService.sessionGeneration) { _, generation in
@@ -257,6 +270,7 @@ struct SaveApp: App {
                     sessionGeneration: authService.sessionGeneration,
                     sessionOrigin: authService.sessionOrigin,
                     incomingPlaceReceipt: $incomingPlaceReceipt,
+                    autoSaveIncomingShare: $autoSaveIncomingShare,
                     pendingOnboardingClue: $pendingOnboardingClue,
                     pendingOnboardingClueOwnerID: $pendingOnboardingClueOwnerID,
                     onVerificationChanged: updateVerifiedAccount
@@ -294,6 +308,9 @@ struct SaveApp: App {
 #endif
         if SaveReferralLink.target(from: url) != nil || SaveSharedListPayload.isListLink(url) {
             guard url.absoluteString.utf8.count <= accountScopedURLMaxBytes else { return }
+            if PendingShareStore.load()?.kind == .list {
+                PendingShareStore.clear()
+            }
             deferredAccountScopedLink = DeferredAccountScopedLink(
                 id: UUID(),
                 url: url,
@@ -307,10 +324,14 @@ struct SaveApp: App {
         if isPlaceLink(url) {
             guard url.absoluteString.utf8.count <= ShareRoutePayloadLimits.pendingPlaceURLMaxBytes else {
                 pendingFriendShareURL = ""
+                PendingShareStore.clear()
                 incomingPlaceReceipt = .malformed(url)
                 return
             }
             pendingFriendShareURL = url.absoluteString
+            if PendingShareStore.load() != nil {
+                autoSaveIncomingShare = true
+            }
             if let place = SharedPlaceData.from(url: url) {
                 incomingPlaceReceipt = .embedded(place)
             } else if SharedPlaceData.shortCode(from: url) != nil {
@@ -535,12 +556,18 @@ struct SaveApp: App {
         authService.isReviewerDemo ? ReviewDemoStorage.referralHandoffStore : .shared
     }
 
-    private func restorePendingFriendShare() {
-        guard incomingPlaceReceipt == nil,
-              !pendingFriendShareURL.isEmpty,
+    private func restorePendingShare() {
+        guard incomingPlaceReceipt == nil else { return }
+        if let payload = PendingShareStore.load(), let url = URL(string: payload.url) {
+            autoSaveIncomingShare = true
+            handleIncomingURL(url)
+            return
+        }
+        guard !pendingFriendShareURL.isEmpty,
               let url = URL(string: pendingFriendShareURL),
               isPlaceLink(url)
         else { return }
+        autoSaveIncomingShare = true
         handleIncomingURL(url)
     }
 
@@ -612,6 +639,7 @@ private struct AuthenticatedRootView: View {
     let sessionGeneration: Int
     let sessionOrigin: AccountSessionOrigin
     @Binding var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @Binding var autoSaveIncomingShare: Bool
     @Binding var pendingOnboardingClue: String
     @Binding var pendingOnboardingClueOwnerID: String
     let onVerificationChanged: (_ sourceGeneration: Int, _ verifiedGeneration: Int?) -> Void
@@ -665,6 +693,7 @@ private struct AuthenticatedRootView: View {
     private var verifiedAccountContent: some View {
         ContentView(
             incomingPlaceReceipt: $incomingPlaceReceipt,
+            autoSaveIncomingShare: $autoSaveIncomingShare,
             pendingOnboardingClue: pendingClueForVerifiedAccount,
             storageScope: authService.isReviewerDemo ? .reviewerDemo : .production
         )

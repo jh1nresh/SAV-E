@@ -912,17 +912,29 @@ Rules:
 
 ## App Clip
 
-The Clip is a read-only place/list preview plus handoff. It does not save,
-sign in, request location/notification/camera permission, or show Pro / price
-/ “free 50” copy. Google Places photos do not appear on any Clip screen.
+The Clip is a read-only place/list preview plus handoff. It does not save
+to the account, sign in, request location/notification/camera permission, or
+show Pro / price / “free 50” copy. Google Places photos do not appear on any
+Clip screen. “Nothing is added until you open the app” is deleted.
 
-### Tokens (V3)
+At “Save to my Savvy” tap time the Clip writes App Group
+`pendingShare` (`group.com.wanderly.app`) and opens `savvy://` or the
+universal link. If the full app is missing it presents
+`SKOverlay(AppClipConfiguration(position: .bottom))` — system UI, unstyled.
+On first launch the full app reads `pendingShare`, auto-saves through
+`saveSharedPlaceReceipt` → `POST /places` (#293 server cap), shows
+`app.handoff.saved`, and clears the key. If the key is missing it falls
+back to the invocation `NSUserActivity` webpageURL and re-fetches by share
+code.
+
+### Tokens (V2)
 
 The Clip target cannot link the main app, and `Color+Theme.swift` pulls
 `PlaceCategory`, so the files are not shared. Asset-catalog colors in
-`SAV-EClip/Assets.xcassets` are the Clip source. After #290 merges, re-diff
-this table against `SaveAtlasPalette` and update the catalog — do not copy
-forest or honey/yellow onto Clip screens.
+`SAV-EClip/Assets.xcassets` are the Clip source. Coral is a single token
+(`ClipCoral`); do not hardcode the hex — the landing-page value is still
+being decided. After #290 merges, re-diff this table against
+`SaveAtlasPalette`.
 
 | Role | Clip catalog | Light | Dark | Main `#290` `SaveAtlasPalette` |
 | --- | --- | --- | --- | --- |
@@ -933,26 +945,37 @@ forest or honey/yellow onto Clip screens.
 | Line | `ClipLine` | `#DCCFB9` | `#4A443A` | `line` `#DCCFB9` / `#4A443B` |
 | Kraft | `ClipKraft` | `#EADDC6` | `#3A342A` | `kraft` `#EADDC6` / `#4A3F32` |
 | Coral (CTA, pins) | `ClipCoral` | `#F26B4A` | `#F26B4A` | `coral` `#F26B4A` / `#D97861` |
+| Forest / wordmark | `ClipForest` | `#0E4A33` | `#B9E0C9` | `forest` `#0E4A33` / `#B9E0C9` |
 | Button label | `ClipCream` | `#FFF9EB` | `#FFF9EB` | cream / paper |
 
-Dark Clip values are provisional until #290 lands. No shadows, gradients, or
-blur. Native MapKit only — no custom tiles or overlays.
+Background is cream paper with a 14pt dot grid in light and dark. Cards,
+buttons, chips, the MapKit card frame, and state circles use a 1.6pt ink
+jitter outline (`ClipJitterRoundedRect` / capsule / circle). Public notes
+use a kraft washi strip (`ClipWashiStrip`). List rows and list map pins use
+coral circled numbers. Place pins are solid coral; list pins are coral
+outlined with a number.
+
+No shadows, gradients, or blur. Native MapKit only — no illustrated map.
+The elephant mark is removed from the Clip (wordmark, default sticker, and
+state screens). Unmatched categories use the packet **place/pin** sticker
+inside a coral dashed circle (`ClipStickerKind.place`).
 
 ### Type
 
-English titles use Caveat SemiBold (`Caveat-SemiBold.ttf`, 267 KB). The coral
-wordmark is Caveat “Savvy” at a fixed 34pt (not Dynamic Type, not the elephant
-asset). zh-Hant titles use the system font. Do not copy
-`Iansui-SavvySubset.ttf` (3.48 MB). A Clip-only Iansui subset of the state
-title glyphs is 17.6 KB, but it cannot cover user list names, so it is not
-shipped.
+Titles only: Caveat SemiBold (Latin) and Iansui (zh-Hant). Place names,
+addresses, buttons, meta, and body use the system font. The wordmark is
+Caveat “Savvy” at a fixed 34pt in `ClipForest` (the packet handwritten
+wordmark; no separate vector PDF is in the repo; not the elephant asset).
+Ship `Iansui-ClipTitles.ttf` (title glyphs). Do not copy
+`Iansui-SavvySubset.ttf` (3.48 MB). User list names fall back to the
+system font when a glyph is missing.
 
 ### Size
 
 Uncompressed per-variant budget is 15 MB until the Clip deployment-target
-question is settled. Ship only the Clip catalog (icon, coral wordmark, color
-sets), Caveat, and vector stickers drawn in SwiftUI. Do not embed the main
-`Assets.xcassets` catalog.
+question is settled. Ship only the Clip catalog (icon, color sets), Caveat,
+the Clip Iansui title subset, and vector stickers drawn in SwiftUI. Do not
+embed the main `Assets.xcassets` catalog.
 
 ## Accessibility
 

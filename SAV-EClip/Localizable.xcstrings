@@ -15,8 +15,8 @@
     },
     "clip.place.save" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save to my Savvy" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "存到我的 Savvy" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "+ Save to my Savvy" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "＋ 存到我的 Savvy" } }
       }
     },
     "clip.place.openMaps" : {
@@ -25,10 +25,10 @@
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "在 Apple 地圖打開" } }
       }
     },
-    "clip.footnote.nothingAdded" : {
+    "clip.footnote.howSave" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nothing is added until you open the app" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "打開 App 前不會加入任何東西" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Preview without installing · saving happens in the full Savvy app" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "免安裝就能看・要存起來，會用完整版 Savvy" } }
       }
     },
     "clip.list.count" : {
@@ -45,8 +45,8 @@
     },
     "clip.list.open" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open list in Savvy" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "在 Savvy 打開清單" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "+ Save this list to my Savvy" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "＋ 把清單存到我的 Savvy" } }
       }
     },
     "clip.loading.title" : {
@@ -57,8 +57,8 @@
     },
     "clip.loading.body" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nothing is added until you open the app" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "打開 App 前不會加入任何東西" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No install needed. Just a moment." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "免安裝，馬上就好。" } }
       }
     },
     "clip.error.expired.title" : {

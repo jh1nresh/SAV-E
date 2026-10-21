@@ -8,6 +8,11 @@
 
 /* Begin PBXBuildFile section */
 
+
+		C1A000000000000000000041 /* PendingShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000040 /* PendingShareStore.swift */; };
+		C1A000000000000000000043 /* PendingShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000042 /* PendingShareStore.swift */; };
+		C1A000000000000000000045 /* Iansui-ClipTitles.ttf in SAVEClip Resources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000044 /* Iansui-ClipTitles.ttf */; };
+		C1A000000000000000000047 /* PendingShareStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000046 /* PendingShareStoreTests.swift */; };
 		C1A000000000000000000002 /* ClipDoodleTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000001 /* ClipDoodleTheme.swift */; };
 		C1A000000000000000000021 /* ClipPreviewFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000020 /* ClipPreviewFixtures.swift */; };
 		C1A000000000000000000023 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000022 /* Localizable.xcstrings */; };
@@ -322,6 +327,10 @@
 /* Begin PBXFileReference section */
 
 		C1A000000000000000000001 /* ClipDoodleTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipDoodleTheme.swift; sourceTree = "<group>"; };
+		C1A000000000000000000040 /* PendingShareStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingShareStore.swift; sourceTree = "<group>"; };
+		C1A000000000000000000042 /* PendingShareStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingShareStore.swift; sourceTree = "<group>"; };
+		C1A000000000000000000044 /* Iansui-ClipTitles.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "Iansui-ClipTitles.ttf"; path = "SAV-E/Resources/DisplayFont/Iansui-ClipTitles.ttf"; sourceTree = SOURCE_ROOT; };
+		C1A000000000000000000046 /* PendingShareStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingShareStoreTests.swift; sourceTree = "<group>"; };
 		C1A000000000000000000005 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C1A000000000000000000020 /* ClipPreviewFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipPreviewFixtures.swift; sourceTree = "<group>"; };
 		C1A000000000000000000022 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
@@ -574,7 +583,9 @@
 			children = (
 				C1A000000000000000000005 /* Assets.xcassets */,
 				C1A000000000000000000024 /* Caveat-SemiBold.ttf */,
+				C1A000000000000000000044 /* Iansui-ClipTitles.ttf */,
 				C2F29BED31958E2047FAE72E /* ClipContentView.swift */,
+				C1A000000000000000000040 /* PendingShareStore.swift */,
 				C1A000000000000000000001 /* ClipDoodleTheme.swift */,
 				C1A000000000000000000020 /* ClipPreviewFixtures.swift */,
 				C1A000000000000000000022 /* Localizable.xcstrings */,
@@ -961,6 +972,7 @@
 				6F3BF7069E799A11086D07F7 /* AtlasOneFaceUITests.swift */,
 				T7A10000000000000000000A /* SaveTileTownLockTests.swift */,
 				C1A000000000000000000016 /* SaveClipJournalLockTests.swift */,
+				C1A000000000000000000046 /* PendingShareStoreTests.swift */,
 				A5629446727F6C92D09FD7BE /* AtlasOneJobPerTabUITests.swift */,
 				396D972F2C07BCC409ADBEC7 /* DebugLegacyMigratorTests.swift */,
 				8B41297E1503EE02BE975D45 /* DeterministicTripPlannerTests.swift */,
@@ -1080,6 +1092,7 @@
 				4D50D8F2711C9E3010A9DDA9 /* SavePlaceCorrectionEvent.swift */,
 				4029203B816A870C920B8924 /* SavePlanAroundModels.swift */,
 				DE718959747F6AEEAE3393B7 /* SaveSearchModels.swift */,
+				C1A000000000000000000042 /* PendingShareStore.swift */,
 				85338A305203F41DF18FAE27 /* SharedTripData.swift */,
 				87D86203F9ECA96AB9E58AA6 /* SocialMapSignals.swift */,
 				A10100000000000000000001 /* SharedPlacePost.swift */,
@@ -1416,6 +1429,7 @@
 				C1A000000000000000000006 /* ClipAssets.xcassets in Resources */,
 				C1A000000000000000000023 /* Localizable.xcstrings in Resources */,
 				C1A000000000000000000025 /* Caveat-SemiBold.ttf in SAVEClip Resources */,
+				C1A000000000000000000045 /* Iansui-ClipTitles.ttf in SAVEClip Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1536,6 +1550,7 @@
 				3A214817A2A61AB5299EEC7E /* AtlasOneFaceUITests.swift in Sources */,
 				T7A100000000000000000009 /* SaveTileTownLockTests.swift in Sources */,
 				C1A000000000000000000015 /* SaveClipJournalLockTests.swift in Sources */,
+				C1A000000000000000000047 /* PendingShareStoreTests.swift in Sources */,
 				44FE5138EF536EBF57B0EA3A /* AtlasOneJobPerTabUITests.swift in Sources */,
 				94AF43877A54FD0C34CD7217 /* DebugLegacyMigratorTests.swift in Sources */,
 				793EB5D582636871FD6FA8CE /* DeterministicTripPlannerTests.swift in Sources */,
@@ -1606,6 +1621,7 @@
 			files = (
 				3F861CFCBB89E535C6F88B20 /* ClipContentView.swift in Sources */,
 				C1A000000000000000000002 /* ClipDoodleTheme.swift in Sources */,
+				C1A000000000000000000041 /* PendingShareStore.swift in Sources */,
 				C1A000000000000000000021 /* ClipPreviewFixtures.swift in Sources */,
 				430205DF9D71CB213764DAEB /* SAV-EClipApp.swift in Sources */,
 				6F9A7F7D67162AAFC701986F /* SAVEProductionConfig.swift in Sources */,
@@ -1718,6 +1734,7 @@
 				620EFD4BCF446FCB18A843DA /* SaveStoreKitService.swift in Sources */,
 				D84C166D8B51EAB41CCD7F23 /* SavedPlaceTripRecommender.swift in Sources */,
 				885D0A9AE9CBA0CD485ACBF5 /* Screens.swift in Sources */,
+				C1A000000000000000000043 /* PendingShareStore.swift in Sources */,
 				6BC478C8D4778B2BE248D315 /* SharedTripData.swift in Sources */,
 				57E8DF73087D818758660998 /* SocialCaptionVenueExtractor.swift in Sources */,
 				FD6208D015EEAD7A1B6BEA66 /* SocialLinkReviewCandidateService.swift in Sources */,
@@ -1881,6 +1898,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				INFOPLIST_KEY_UIAppFonts = (
 					"Caveat-SemiBold.ttf",
+					"Iansui-ClipTitles.ttf",
 				);
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -2191,6 +2209,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				INFOPLIST_KEY_UIAppFonts = (
 					"Caveat-SemiBold.ttf",
+					"Iansui-ClipTitles.ttf",
 				);
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

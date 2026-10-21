@@ -175,6 +175,7 @@ struct ContentView: View {
     @StateObject private var drawerVM = AIDrawerViewModel()
     @StateObject private var planConversation = SavePlanConversation()
     @Binding private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @Binding private var autoSaveIncomingShare: Bool
     @Binding private var pendingOnboardingClue: String
     private let storageScope: ContentStorageScope
     @Environment(\.appLanguageSettings) private var languageSettings
@@ -204,15 +205,18 @@ struct ContentView: View {
     /// Dismiss handlers must not resume capture or re-present a sheet mid-swap.
     @State private var suppressChromeDismissSideEffects = false
     @State private var pendingChromePresentation: PendingChromePresentation? = nil
+    @State private var handoffToastText: String?
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
+        autoSaveIncomingShare: Binding<Bool> = .constant(false),
         pendingOnboardingClue: Binding<String> = .constant(""),
         storageScope: ContentStorageScope = .production
     ) {
         _mapVM = StateObject(wrappedValue: storageScope.makeMapViewModel())
         _tripStore = StateObject(wrappedValue: storageScope.makeTripPackStore())
         _incomingPlaceReceipt = incomingPlaceReceipt
+        _autoSaveIncomingShare = autoSaveIncomingShare
         _pendingOnboardingClue = pendingOnboardingClue
         self.storageScope = storageScope
         let hasInitialReceipt = incomingPlaceReceipt.wrappedValue != nil
@@ -236,6 +240,23 @@ struct ContentView: View {
                 // Keep the editor above the native navigation/map layer when
                 // returning from a full-screen Review candidate with a keyboard.
                 mapDrawerPanel.zIndex(1)
+            }
+            if let handoffToastText {
+                Text(handoffToastText)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: 320)
+                    .background(SaveAtlasPalette.paper, in: Capsule())
+                    .overlay {
+                        Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1)
+                    }
+                    .padding(.bottom, 88)
+                    .accessibilityIdentifier("app.handoff.saved")
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(2)
             }
         }
         .onChange(of: selectedRootTab) { _, tab in
@@ -301,8 +322,17 @@ struct ContentView: View {
         .onChange(of: drawerVM.mapAction) { _, action in
             if let action { mapVM.apply(action) }
         }
+        .onAppear {
+            if autoSaveIncomingShare, incomingPlaceReceipt != nil {
+                Task { await performPendingShareAutoSave() }
+            }
+        }
         .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
             guard receiptID != nil else { return }
+            if autoSaveIncomingShare {
+                Task { await performPendingShareAutoSave() }
+                return
+            }
             invalidateExactSearchRequest()
             fullScreenRoute = nil
             pendingReceiptMapDetail = nil
@@ -1454,6 +1484,47 @@ struct ContentView: View {
             }
         }
         presentAfterClearingExclusiveChrome(.plan)
+    }
+
+    private func performPendingShareAutoSave() async {
+        guard autoSaveIncomingShare, let destination = incomingPlaceReceipt else { return }
+        let receipt: SharedPlaceReceipt
+        switch destination {
+        case .embedded(let payload):
+            receipt = .embedded(payload)
+        case .shortLink(let url):
+            do {
+                receipt = try await SharedPlaceReceipt.resolve(from: url)
+            } catch {
+                autoSaveIncomingShare = false
+                presentExclusiveRootSheet()
+                return
+            }
+        case .malformed:
+            autoSaveIncomingShare = false
+            presentExclusiveRootSheet()
+            return
+        }
+
+        do {
+            let outcome = try await mapVM.saveSharedPlaceReceipt(receipt)
+            PendingShareStore.clear()
+            incomingPlaceReceipt = nil
+            autoSaveIncomingShare = false
+            let name = outcome.place.name
+            // app.handoff.saved
+            handoffToastText = languageSettings.localized(
+                english: String(format: "Saved %@ for you.", name),
+                traditionalChinese: String(format: "已幫你存好「%@」。", name)
+            )
+            try? await Task.sleep(for: .seconds(3))
+            if handoffToastText != nil {
+                handoffToastText = nil
+            }
+        } catch {
+            autoSaveIncomingShare = false
+            presentExclusiveRootSheet()
+        }
     }
 
     private func stagePlaceInPlan(_ place: Place, addingToTrip: Bool) {

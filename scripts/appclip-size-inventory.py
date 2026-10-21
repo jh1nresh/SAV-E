@@ -9,6 +9,7 @@ from pathlib import Path
 CLIP_ROOT = Path("SAV-EClip")
 CAVEAT = Path("SAV-E/Resources/DisplayFont/Caveat-SemiBold.ttf")
 IANSUI = Path("SAV-E/Resources/DisplayFont/Iansui-SavvySubset.ttf")
+IANSUI_CLIP = Path("SAV-E/Resources/DisplayFont/Iansui-ClipTitles.ttf")
 MAIN_ASSETS = Path("SAV-E/Resources/Assets.xcassets")
 THRESHOLD = 15 * 1024 * 1024
 
@@ -32,17 +33,11 @@ def main() -> int:
     clip_assets = CLIP_ROOT / "Assets.xcassets"
     rows.append(("SAV-EClip/Assets.xcassets", byte_count(clip_assets), "Clip catalog only"))
     rows.append((str(CAVEAT), byte_count(CAVEAT), "English titles (shipped)"))
+    rows.append((str(IANSUI_CLIP), byte_count(IANSUI_CLIP), "zh title glyphs (shipped)"))
     rows.append((str(IANSUI), byte_count(IANSUI), "NOT shipped — full main subset"))
-    rows.append(
-        (
-            "Iansui clip-title subset (34 zh title glyphs, measured)",
-            17_636,
-            "NOT shipped — cannot cover user list titles",
-        )
-    )
     rows.append((str(MAIN_ASSETS), byte_count(MAIN_ASSETS), "NOT shipped (removed from SAVEClip)"))
 
-    shipped = byte_count(clip_assets) + byte_count(CAVEAT)
+    shipped = byte_count(clip_assets) + byte_count(CAVEAT) + byte_count(IANSUI_CLIP)
     lines = [
         "# App Clip size inventory",
         "",
@@ -61,14 +56,14 @@ def main() -> int:
             f"Shipped source assets: **{shipped:,} bytes** "
             f"({shipped / (1024 * 1024):.2f} MB).",
             f"Iansui full subset avoided: **{byte_count(IANSUI):,} bytes**.",
-            "Iansui Clip-title-only subset (state titles + 朋友分享): **17,636 bytes**.",
-            "Chosen: system font for zh titles (**0 extra bytes**) so user list names still render.",
+            f"Iansui Clip-title subset shipped: **{byte_count(IANSUI_CLIP):,} bytes**.",
+            "User list names fall back to the system font when a glyph is missing.",
             f"Main catalog avoided: **{byte_count(MAIN_ASSETS):,} bytes**.",
             f"Threshold: {THRESHOLD:,} bytes.",
             "",
-            "Vector stickers are SwiftUI drawings (noodle, coffee, temple, duck,",
-            "lantern, elephant), not extra rasters. Wordmark is Caveat 'Savvy' in",
-            "coral at a fixed 34pt — not the elephant asset.",
+            "Vector stickers are SwiftUI drawings (noodle bowl + plate, coffee +",
+            "saucer, temple, duck, lantern, place/pin fallback), not extra rasters.",
+            "Wordmark is Caveat 'Savvy' in forest at a fixed 34pt — not the elephant.",
             "",
         ]
     )

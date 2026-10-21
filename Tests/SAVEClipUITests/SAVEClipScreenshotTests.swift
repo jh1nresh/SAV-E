@@ -97,6 +97,14 @@ final class SAVEClipScreenshotTests: XCTestCase {
         capture(screen: "offline", appearance: .dark, language: "en", locale: "en_US", name: "offline-dark", identifier: "clip.error.offline")
     }
 
+    func testSKOverlayLightZhHant() {
+        capture(screen: "skoverlay", appearance: .light, language: "zh-Hant", locale: "zh_TW", name: "skoverlay-zh-Hant-light", identifier: "clip.skoverlay")
+    }
+
+    func testSKOverlayDarkEnglish() {
+        capture(screen: "skoverlay", appearance: .dark, language: "en", locale: "en_US", name: "skoverlay-en-dark", identifier: "clip.skoverlay")
+    }
+
     func testShareLinksStillOpenWithoutFixture() {
         let app = launchClip(
             appearance: .light,

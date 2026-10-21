@@ -166,6 +166,8 @@ targets:
       - path: SAV-EShared/SAVEProductionConfig.swift
       - path: SAV-E/Resources/DisplayFont/Caveat-SemiBold.ttf
         buildPhase: resources
+      - path: SAV-E/Resources/DisplayFont/Iansui-ClipTitles.ttf
+        buildPhase: resources
     # Same Release origin gate as SAVE. Without this phase the Clip bundle has
     # no Secrets.plist and SharedTripData falls back to defaultAPIBaseURL.
     postBuildScripts:
@@ -207,6 +209,7 @@ targets:
           NSAppClipRequestLocationConfirmation: false
         INFOPLIST_KEY_UIAppFonts:
           - Caveat-SemiBold.ttf
+          - Iansui-ClipTitles.ttf
   SAVEClipUITests:
     type: bundle.ui-testing
     platform: iOS
