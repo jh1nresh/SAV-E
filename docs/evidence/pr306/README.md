@@ -19,3 +19,8 @@ Light and dark sets:
 | `*-no-author.png` | Google photo with no author data → full coral + cream icon |
 
 Launch argument: `--uitest-google-photo-attribution`.
+
+Contrast (P1-4): white author type over the cream fixture at gradient
+top 0.55 measures **5.62:1** in `testAttributionWhiteTextMeetsContrastOnLightPhoto`.
+After CI writes these PNGs, sample the author-row pixels on
+`*-google-carousel.png` and record the live ratio here.
