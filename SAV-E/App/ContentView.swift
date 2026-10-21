@@ -510,8 +510,12 @@ struct ContentView: View {
 
     /// Search, show-on-map, and list handoffs must drop a leftover Home
     /// Eat/Go+city filter so the place the caller asked to show is visible.
+    /// Review correction keeps the session: abandoning remounts Map and
+    /// drops `preservesExactSearchClue`.
     private func showMapTab() {
-        doodleSession.abandonMiniMapHandoff()
+        if !isExactSearchSessionActive {
+            doodleSession.abandonMiniMapHandoff()
+        }
         selectedRootTab = .map
     }
 
@@ -1386,9 +1390,9 @@ struct ContentView: View {
         guard incomingPlaceReceipt == nil else { return }
         exactSearchRequestID = nil
         rootPath.removeAll()
-        showMapTab()
         isExactSearchSessionActive = true
         mapVM.beginExactSearchResolution(for: candidate)
+        showMapTab()
         openExactSearchRefine(query: candidate.refinementQuery)
     }
 
@@ -1403,9 +1407,9 @@ struct ContentView: View {
         }
         fullScreenRoute = nil
         rootPath.removeAll()
-        showMapTab()
         isExactSearchSessionActive = true
         mapVM.beginExactSearchResolution(for: candidate)
+        showMapTab()
         // The tile-town canvas shows saved stamps, not unconfirmed search pins.
         // Let the existing search panel perform one query and keep its results
         // actionable while retaining the original clue-resolution session.
