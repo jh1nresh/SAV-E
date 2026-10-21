@@ -76,7 +76,7 @@ enum GoogleMapsPlatformAvailability {
     /// `Locale.current` is main-actor isolated; CFLocale is safe from
     /// persist/display helpers that must stay `nonisolated`.
     nonisolated static func currentRegionCode() -> String? {
-        CFLocaleGetValue(CFLocaleCopyCurrent(), kCFLocaleCountryCode) as? String
+        CFLocaleGetValue(CFLocaleCopyCurrent(), CFLocaleKey.countryCode) as? String
     }
 }
 
