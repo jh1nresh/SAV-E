@@ -665,6 +665,9 @@ final class MapViewModel: ObservableObject {
     /// returned map candidate or choosing a saved Map Stamp retires that
     /// clue. A later unrelated map tap must never retire it.
     private var exactSearchResolution: ExactSearchResolution?
+    /// Saved-row taps must resolve onto this clue even if the latest map
+    /// drawer launch forgot `preservesExactSearchClue`.
+    var hasActiveExactSearchCorrection: Bool { exactSearchResolution != nil }
     /// After a failed rollback the correction stays claimed on this stamp so
     /// the same clue cannot attach to a second place.
     private var exactSearchRollbackLockPlaceID: UUID?

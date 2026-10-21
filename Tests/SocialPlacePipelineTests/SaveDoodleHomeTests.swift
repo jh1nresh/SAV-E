@@ -214,6 +214,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         let locationFn = try XCTUnwrap(home.range(of: "private var locationPrompt"))
         let cluesBody = home[cluesFn.lowerBound..<locationFn.lowerBound]
         XCTAssertTrue(cluesBody.contains("minHeight: SaveLayout.minTap"))
+        XCTAssertTrue(cluesBody.contains("minWidth: SaveLayout.minTap, minHeight: SaveLayout.minTap"))
         XCTAssertTrue(cluesBody.contains(".contentShape(Rectangle())"))
         XCTAssertTrue(home.contains("home.openSaves"))
         XCTAssertFalse(home.contains("showsUITestSavesRoute"))
@@ -436,6 +437,12 @@ final class SaveDoodleHomeTests: XCTestCase {
             "map.root must keep the contain container the other Map UI tests query"
         )
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
+        let persistAt = try XCTUnwrap(rail.range(of: "private func assertSavedPlaceAndTripStopPersist"))
+        let scrollAt = try XCTUnwrap(rail.range(of: "private func scrollUntilExists"))
+        let persistBody = rail[persistAt.lowerBound..<scrollAt.lowerBound]
+        XCTAssertTrue(persistBody.contains("saves.segment.mapStamps"))
+        XCTAssertTrue(rail.contains("assertMinimumHitTarget(entry)"))
+        XCTAssertTrue(rail.contains("44 - 0.01"))
         XCTAssertTrue(rail.contains("func testHomeAndPassportWarmDarkMode"))
         XCTAssertTrue(rail.contains("home.eat"))
         XCTAssertTrue(rail.contains("home.citySwitcher"))

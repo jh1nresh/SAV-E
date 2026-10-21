@@ -1166,8 +1166,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "Harbor Oven Pizza"
             )
         ).firstMatch
-        XCTAssertFalse(
-            leftoverClue.exists,
+        XCTAssertTrue(
+            leftoverClue.waitForNonExistence(timeout: stepTimeout),
             "Choosing a saved Map Stamp during Review correction must retire the clue."
         )
     }
@@ -3078,7 +3078,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        let review = app.descendants(matching: .any)["home.review"]
+        let review = app.buttons["home.review"]
         let fallback = app.buttons["home.openSaves"]
         XCTAssertTrue(
             review.waitForExistence(timeout: timeout(2))
@@ -3088,8 +3088,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let entry = review.exists ? review : fallback
         _ = scrollUntilHittable(entry, in: app.scrollViews.firstMatch)
         XCTAssertTrue(entry.isHittable, "Home Saves must be usable without a hidden test-only route")
-        XCTAssertGreaterThanOrEqual(entry.frame.height, 44)
-        XCTAssertGreaterThanOrEqual(entry.frame.width, 44)
+        assertMinimumHitTarget(entry)
         tapReachable(entry)
         let saves = app.descendants(matching: .any)["saves.root"]
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to
@@ -3259,6 +3258,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         field.typeText(replacement)
     }
 
+    /// XCUITest reports a laid-out 44pt frame as 43.99999999999997.
+    @MainActor
+    private func assertMinimumHitTarget(
+        _ element: XCUIElement,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertGreaterThanOrEqual(element.frame.height, 44 - 0.01, file: file, line: line)
+        XCTAssertGreaterThanOrEqual(element.frame.width, 44 - 0.01, file: file, line: line)
+    }
+
     @MainActor
     private func scrollUntilHittable(
         _ element: XCUIElement,
@@ -3280,6 +3290,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     ) throws {
         openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        // A waiting Review queue opens Saves on Review. Confirmed stamps live
+        // on the Map Stamps segment — the same switch this test already uses
+        // right after Confirm.
+        let mapStamps = app.buttons["saves.segment.mapStamps"]
+        if mapStamps.waitForExistence(timeout: timeout(2)) {
+            tapReachable(mapStamps)
+        }
         let savedPlace = app.buttons.matching(
             NSPredicate(
                 format: "identifier BEGINSWITH 'saves.place.' AND label CONTAINS[c] %@",

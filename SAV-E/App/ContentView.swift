@@ -1414,8 +1414,16 @@ struct ContentView: View {
 
     /// Saved-row taps in ordinary map search just open the stamp. During
     /// Review correction they must also resolve the active clue onto it.
+    ///
+    /// Trust the live correction session, not only the latest drawer launch
+    /// flag. Switching onto Map can remount search with a default request
+    /// (`preservesExactSearchClue == false`) while `beginExactSearchResolution`
+    /// is still active; that used to open the stamp and leave the clue.
     private func openSavedPlaceFromMapSearch(_ place: Place) {
-        guard drawerLaunchRequest.preservesExactSearchClue else {
+        let shouldResolveClue = drawerLaunchRequest.preservesExactSearchClue
+            || isExactSearchSessionActive
+            || mapVM.hasActiveExactSearchCorrection
+        guard shouldResolveClue else {
             openMapDetail(.savedPlace(place))
             return
         }

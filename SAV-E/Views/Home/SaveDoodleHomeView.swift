@@ -203,10 +203,12 @@ struct SaveDoodleHomeView: View {
                     .foregroundStyle(SaveAtlasPalette.muted)
                 Spacer(minLength: 0)
             }
-            .frame(minHeight: SaveLayout.minTap, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: SaveLayout.minTap, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(minWidth: SaveLayout.minTap, minHeight: SaveLayout.minTap)
+        .contentShape(Rectangle())
         .accessibilityLabel(cluesText)
         .accessibilityIdentifier("home.review")
         .accessibilityAddTraits(.isButton)
