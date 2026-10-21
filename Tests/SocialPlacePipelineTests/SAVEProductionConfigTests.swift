@@ -1139,7 +1139,17 @@ final class SAVEProductionConfigTests: XCTestCase {
             map.contains("Remote fetch remains the upgrade path"),
             "ownerless pre-upgrade rows stay hidden while signed in"
         )
-        XCTAssertTrue(intent.contains("ownerSubject: PrivyAuthService.shared.currentUserId"))
+        XCTAssertTrue(intent.contains("let startedBy = PrivyAuthService.shared.currentUserId"))
+        XCTAssertTrue(intent.contains("let generation = PrivyAuthService.shared.sessionGeneration"))
+        XCTAssertTrue(intent.contains("try Self.ensureInitiatingSession(startedBy, generation)"))
+        XCTAssertTrue(
+            intent.contains("ownerSubject: startedBy"),
+            "a late URL-intent write must keep the initiating owner"
+        )
+        XCTAssertFalse(
+            intent.contains("ownerSubject: PrivyAuthService.shared.currentUserId"),
+            "do not re-read the signed-in account after the analysis await"
+        )
         XCTAssertTrue(share.contains("analysisCredential?.ownerSubject ?? ShareAnalysisKeychain.read()?.ownerSubject"))
         XCTAssertTrue(map.contains("belongingTo: authService.currentUserId"))
         XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: userId)"))
@@ -1354,6 +1364,27 @@ final class SAVEProductionConfigTests: XCTestCase {
                 currentUserId: "did:privy:owner-b"
             )
         )
+    }
+
+    @MainActor
+    func testURLIntentAbortsWhenTheSessionChanges() throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:owner-a")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        let generation = PrivyAuthService.shared.sessionGeneration
+        XCTAssertNoThrow(
+            try SavePlaceFromURLIntent.ensureInitiatingSession("did:privy:owner-a", generation)
+        )
+
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:owner-b")
+        XCTAssertThrowsError(
+            try SavePlaceFromURLIntent.ensureInitiatingSession("did:privy:owner-a", generation)
+        ) { error in
+            guard case ReviewCandidateError.sessionChangedAfterCommit = error else {
+                return XCTFail("a late URL-intent write must not stamp the next account")
+            }
+        }
     }
 
     @MainActor
