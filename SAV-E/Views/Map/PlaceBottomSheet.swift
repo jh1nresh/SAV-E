@@ -706,23 +706,24 @@ struct GooglePlacesPhotoAttributionBar: View {
     }
 
     /// P1-1 / P1-5: one 44pt row (author left, logo right) opens the viewer.
+    /// Combined so XCTest sees one hittable control; a nested SwiftUI Button
+    /// plus the logo image was invisible to `app.buttons[...]`.
     private var compactRow: some View {
-        Button {
-            onCompactTap?()
-        } label: {
-            HStack(alignment: .center, spacing: 8) {
-                if let author = authors.first {
-                    attributionText(author.displayName, style: .caption, weight: .semibold)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                GoogleMapsAttributionLogo()
+        HStack(alignment: .center, spacing: 8) {
+            if let author = authors.first {
+                attributionText(author.displayName, style: .caption, weight: .semibold)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, minHeight: GoogleMapsAttributionMetrics.minimumTapTarget, alignment: .center)
-            .contentShape(Rectangle())
+            GoogleMapsAttributionLogo()
         }
-        .buttonStyle(.plain)
-        .disabled(onCompactTap == nil)
-        .accessibilityIdentifier("place.photo.attribution.author")
+        .frame(maxWidth: .infinity, minHeight: GoogleMapsAttributionMetrics.minimumTapTarget, alignment: .center)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onCompactTap?()
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("place.photo.attribution.row")
         .accessibilityLabel(compactAccessibilityLabel)
     }
 

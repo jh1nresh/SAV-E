@@ -270,6 +270,37 @@ jobs:
             find "$RUNNER_TEMP/SAVE-DerivedData/Build/Products" -maxdepth 3 -print >&2
             exit 1
           fi
+          export XCTESTRUN_PATH="$xctestrun"
+          export SAVE_GOOGLE_PHOTO_EVIDENCE_DIR="${SAVE_GOOGLE_PHOTO_EVIDENCE_DIR:-$RUNNER_TEMP/pr306-google-photo-attribution}"
+          mkdir -p "$SAVE_GOOGLE_PHOTO_EVIDENCE_DIR"
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import plistlib
+
+          path = pathlib.Path(os.environ["XCTESTRUN_PATH"])
+          evidence = os.environ["SAVE_GOOGLE_PHOTO_EVIDENCE_DIR"]
+          data = plistlib.loads(path.read_bytes())
+
+          def inject(node):
+              if isinstance(node, dict):
+                  env = node.get("EnvironmentVariables")
+                  if isinstance(env, dict):
+                      env["SAVE_GOOGLE_PHOTO_EVIDENCE_DIR"] = evidence
+                  elif "BlueprintName" in node or "TestBundlePath" in node:
+                      node["EnvironmentVariables"] = {
+                          "SAVE_GOOGLE_PHOTO_EVIDENCE_DIR": evidence
+                      }
+                  for value in node.values():
+                      inject(value)
+              elif isinstance(node, list):
+                  for value in node:
+                      inject(value)
+
+          inject(data)
+          path.write_bytes(plistlib.dumps(data))
+          print(f"injected SAVE_GOOGLE_PHOTO_EVIDENCE_DIR into {path}")
+          PY
           echo "xctestrun=$xctestrun" >> "$GITHUB_OUTPUT"
 
       - name: Create focused test simulator
