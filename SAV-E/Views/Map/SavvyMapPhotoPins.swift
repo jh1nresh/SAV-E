@@ -74,13 +74,13 @@ enum SavvyMapPinMetrics {
 /// URLs are never pin art. The existing business-photo enricher is left
 /// untouched.
 ///
-/// This PR: own shared-post photos (`/v0/shared-posts/mine` +
-/// `/v0/shared-posts/{id}/photos/{n}`), then a friend-photo hook, then coral.
-/// Friend-shared photos are stubbed — `SharedPlacePost` has no place id,
-/// coordinates, or Google id; there is no per-place friend-photo API; the
-/// pending `shared-post-photos.sql` migration may be unapplied. The feed
-/// already respects follow/share visibility, but cannot bind a photo to a
-/// Map Stamp without those identity fields.
+/// Photo chain in this PR: own → friend → coral. Both sources are stubbed.
+/// `Place` has no user-photo field (`sourceImageUrl` + Google
+/// `businessPhotoUrls` only — those are never pin art). `SharedPlacePost`
+/// has no place id, so name/address guessing is not a clean own-photo bind.
+/// Friend photos need a later PR (no per-place friend-photo API;
+/// `shared-post-photos.sql` may be unapplied). HoP is still deciding the
+/// own-photo source, so every pin renders coral.
 ///
 /// P14: unsaved places never resolve a pin photo.
 /// P15: load failure stays coral — never a broken-image glyph.
@@ -143,25 +143,16 @@ enum SavvyMapPhotoPolicy {
         resolvedPhoto(for: place, isConfirmedSaved: isConfirmedSaved).url
     }
 
-    /// `Place` has no user-photo field. Own pin art comes from shared posts.
+    /// `Place` has no user-photo field. Never read Google `businessPhotoUrls`.
     static func userAlbumPhotoURLs(for place: Place) -> [URL] {
         _ = place
         return []
     }
 
+    /// Own-photo hook. Empty until HoP names a clean source that can bind a
+    /// Savvy share to a saved `Place` without guessing (no place id on
+    /// `SharedPlacePost`; `Place` has no user-photo field).
     static func firstOwnSharedPhoto(
-        in posts: [SharedPlacePost],
-        matching place: Place
-    ) -> SavvyMapSharedPhotoRef? {
-        posts.first { post in
-            (post.photo_count ?? 0) > 0 && matches(post, place: place)
-        }.map {
-            SavvyMapSharedPhotoRef(origin: .own, postID: $0.id, photoIndex: 0)
-        }
-    }
-
-    /// Reserved hook. Always empty in this PR — see file header for why.
-    static func firstFriendSharedPhoto(
         in posts: [SharedPlacePost],
         matching place: Place
     ) -> SavvyMapSharedPhotoRef? {
@@ -169,91 +160,33 @@ enum SavvyMapPhotoPolicy {
         return nil
     }
 
-    static func matches(_ post: SharedPlacePost, place: Place) -> Bool {
-        place.matches(
-            Place(
-                id: post.id,
-                name: post.name,
-                address: post.address,
-                latitude: 0,
-                longitude: 0,
-                googlePlaceId: nil,
-                category: PlaceCategory(rawValue: post.category) ?? place.category,
-                status: post.status,
-                rating: post.stars,
-                note: nil,
-                sourceUrl: nil,
-                sourcePlatform: .other,
-                sourceImageUrl: nil,
-                extractedDishes: nil,
-                priceRange: nil,
-                recommender: nil,
-                googleRating: nil,
-                googlePriceLevel: nil,
-                openingHours: nil,
-                createdAt: Date(timeIntervalSince1970: 0)
-            )
-        )
+    /// Friend-photo hook. Empty in this PR — needs a later backend PR.
+    static func firstFriendSharedPhoto(
+        in posts: [SharedPlacePost],
+        matching place: Place
+    ) -> SavvyMapSharedPhotoRef? {
+        _ = (posts, place)
+        return nil
     }
 }
 
-/// Memory-only thumbnails for own shared-post pin photos. Never writes
-/// follower/own share bytes into the public/disk image cache.
+/// Reserved pin-photo store. Own and friend sources are stubbed, so this
+/// never fetches or decodes share bytes in this PR.
 @MainActor
 final class SavvyMapSharedPinPhotoStore: ObservableObject {
     static let shared = SavvyMapSharedPinPhotoStore()
 
     @Published private(set) var ownPosts: [SharedPlacePost] = []
-    @Published private(set) var images: [String: UIImage] = [:]
-    private var failedKeys: Set<String> = []
-    private var inFlight: Set<String> = []
 
-    func refreshOwnPosts(using service: SupabaseService = .shared) async {
-        guard !PrivyAuthService.shared.isReviewerDemo,
-              PrivyAuthService.shared.currentUserId != nil else {
-            ownPosts = []
-            return
-        }
-        do {
-            ownPosts = try await service.fetchSharedPosts(mine: true, filter: .all, cursor: nil).items
-        } catch {
-            return
-        }
-    }
+    func refreshOwnPosts() async {}
 
     func image(for place: Place) -> UIImage? {
-        guard let ref = SavvyMapPhotoPolicy.resolvedPhoto(
-            for: place,
-            isConfirmedSaved: true,
-            ownPosts: ownPosts
-        ).shared else { return nil }
-        return images[cacheKey(ref)]
+        _ = place
+        return nil
     }
 
-    func loadIfNeeded(for place: Place, using service: SupabaseService = .shared) async {
-        let resolved = SavvyMapPhotoPolicy.resolvedPhoto(
-            for: place,
-            isConfirmedSaved: true,
-            ownPosts: ownPosts
-        )
-        guard resolved.origin == .own, let ref = resolved.shared else { return }
-        let key = cacheKey(ref)
-        guard images[key] == nil, !failedKeys.contains(key), inFlight.insert(key).inserted else { return }
-        defer { inFlight.remove(key) }
-        do {
-            let data = try await service.fetchSharedPostPhoto(id: ref.postID, index: ref.photoIndex)
-            guard let decoded = UIImage(data: data) else {
-                failedKeys.insert(key)
-                return
-            }
-            images[key] = decoded
-        } catch {
-            failedKeys.insert(key)
-        }
-    }
-
-    private func cacheKey(_ ref: SavvyMapSharedPhotoRef) -> String {
-        "\(ref.postID.uuidString)-\(ref.photoIndex)"
+    func loadIfNeeded(for place: Place) async {
+        _ = place
     }
 }
 

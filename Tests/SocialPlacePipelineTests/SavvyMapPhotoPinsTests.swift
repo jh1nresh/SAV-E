@@ -329,42 +329,31 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertFalse(root.contains("businessPhotoUrls"))
     }
 
-    func testP16OwnSharedPhotoThenFriendHookThenCoral() {
+    func testP16OwnThenFriendThenCoralWithBothSourcesStubbed() {
         let saved = samplePlace()
-        var own = sampleSharedPost(name: saved.name, address: saved.address, photoCount: 1)
-        XCTAssertTrue(SavvyMapPhotoPolicy.matches(own, place: saved))
-        let resolved = SavvyMapPhotoPolicy.resolvedPhoto(
-            for: saved,
-            isConfirmedSaved: true,
-            ownPosts: [own]
-        )
-        XCTAssertEqual(resolved.origin, .own)
-        XCTAssertEqual(resolved.shared?.postID, own.id)
-        XCTAssertEqual(resolved.shared?.photoIndex, 0)
-
-        own.photo_count = 0
+        let own = sampleSharedPost(name: saved.name, address: saved.address, photoCount: 1)
+        let friend = sampleSharedPost(name: saved.name, address: saved.address, photoCount: 2)
         XCTAssertNil(SavvyMapPhotoPolicy.firstOwnSharedPhoto(in: [own], matching: saved))
-
-        let other = sampleSharedPost(name: "Friend Cafe", address: "Other Rd", photoCount: 2)
-        XCTAssertFalse(SavvyMapPhotoPolicy.matches(other, place: saved))
-
-        let friendMatch = sampleSharedPost(name: saved.name, address: saved.address, photoCount: 2)
-        XCTAssertNil(SavvyMapPhotoPolicy.firstFriendSharedPhoto(in: [friendMatch], matching: saved))
+        XCTAssertNil(SavvyMapPhotoPolicy.firstFriendSharedPhoto(in: [friend], matching: saved))
         XCTAssertEqual(
             SavvyMapPhotoPolicy.resolvedPhoto(
                 for: saved,
                 isConfirmedSaved: true,
-                ownPosts: [],
-                friendPosts: [friendMatch]
+                ownPosts: [own],
+                friendPosts: [friend]
             ),
             .coral
         )
 
-        let googleOnly = samplePlace(businessPhotoUrls: ["https://maps.googleapis.com/photo/1"])
+        let googleOnly = samplePlace(
+            sourceImageUrl: "https://example.invalid/og.jpg",
+            businessPhotoUrls: ["https://maps.googleapis.com/photo/1"]
+        )
         XCTAssertEqual(
             SavvyMapPhotoPolicy.resolvedPhoto(for: googleOnly, isConfirmedSaved: true),
             .coral
         )
+        XCTAssertTrue(SavvyMapPhotoPolicy.userAlbumPhotoURLs(for: googleOnly).isEmpty)
         XCTAssertEqual(
             SavvyMapPhotoPolicy.resolvedPhoto(for: saved, isConfirmedSaved: false, ownPosts: [own]),
             .coral
