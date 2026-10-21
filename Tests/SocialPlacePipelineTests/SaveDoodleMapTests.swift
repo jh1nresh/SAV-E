@@ -201,11 +201,14 @@ final class SaveDoodleMapTests: XCTestCase {
             now: { now }
         )
         let placeID = UUID()
-        XCTAssertTrue(await store.applyCheckIn(placeID: placeID, priorStatus: .wantToGo) {})
+        let dayOne = await store.applyCheckIn(placeID: placeID, priorStatus: .wantToGo) {}
+        XCTAssertTrue(dayOne)
         now = now.addingTimeInterval(86_400)
-        XCTAssertTrue(await store.applyCheckIn(placeID: placeID, priorStatus: .visited) {})
+        let dayTwo = await store.applyCheckIn(placeID: placeID, priorStatus: .visited) {}
+        XCTAssertTrue(dayTwo)
         var restored: PlaceStatus?
-        XCTAssertTrue(await store.applyUndo(placeID: placeID) { restored = $0 })
+        let undone = await store.applyUndo(placeID: placeID) { restored = $0 }
+        XCTAssertTrue(undone)
         XCTAssertEqual(restored, .visited)
     }
 
@@ -225,9 +228,11 @@ final class SaveDoodleMapTests: XCTestCase {
         }
         while release == nil { await Task.yield() }
         XCTAssertTrue(store.isPersisting(placeID: placeID))
-        XCTAssertFalse(await store.applyUndo(placeID: placeID) { _ in })
+        let overlappingUndo = await store.applyUndo(placeID: placeID) { _ in }
+        XCTAssertFalse(overlappingUndo)
         release?.resume()
-        XCTAssertTrue(await persist.value)
+        let persisted = await persist.value
+        XCTAssertTrue(persisted)
         XCTAssertFalse(store.isPersisting(placeID: placeID))
     }
 
