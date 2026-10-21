@@ -690,6 +690,9 @@ Eat shows only Eat (food, cafe, bar). Go shows only Go (attraction, stay,
 shopping). The list is the user's own saves near the selected city or
 current location, sorted by distance. No discovery feed. Tapping the
 mini-map opens Map with the same filter and city.
+Near you header, Collected, and Passport share one city: the nearest
+save across every category, not the nearest Eat/Go row. Fallback
+addresses use the locality (Berkeley), not a state+ZIP fragment.
 Collected X/Y is visited / all saved places in the current city scope,
 every category. Eat/Go and the listed row count do not change it;
 switching city does. When the Eat/Go list is empty but the city still

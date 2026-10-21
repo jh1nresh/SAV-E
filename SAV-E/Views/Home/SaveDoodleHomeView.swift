@@ -555,11 +555,11 @@ struct SaveDoodleHomeView: View {
     private var cityTitle: String {
         switch resolvedSelection {
         case .nearYou:
-            if let first = listedPlaces.first,
-               let name = SaveDoodleHomeCatalog.cityDisplayName(
-                for: first.place,
+            if let name = SaveDoodleHomeCatalog.nearYouCityName(
+                from: allPlaces,
+                location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
                 language: languageSettings.language
-               ) {
+            ) {
                 return name
             }
             return localized("Nearby", "附近")
