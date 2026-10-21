@@ -71,9 +71,9 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertEqual(SaveDoodleFriendAvatar.initial(from: "Leo"), "L")
         XCTAssertEqual(SaveDoodleFriendSticker.symbolName(for: .cafe), "cup.and.saucer")
         XCTAssertEqual(SaveDoodleFriendSticker.kind(name: "Grey Cafe", category: "cafe"), .coffee)
-        XCTAssertEqual(SaveDoodleFriendSticker.kind(name: "Fangzhuanchang Noodles", category: "food"), .noodles)
-        XCTAssertEqual(SaveDoodleFriendSticker.kind(name: "Temple of Heaven Park", category: "attraction"), .lantern)
-        XCTAssertEqual(SaveDoodleFriendSticker.kind(name: "Jingshan Hill", category: "attraction"), .mountain)
+        XCTAssertEqual(SaveDoodleFriendSticker.kind(name: "Fangzhuanchang Noodles", category: "food"), .noodle)
+        XCTAssertEqual(SaveDoodleFriendSticker.kind(name: "Temple of Heaven Park", category: "attraction"), .temple)
+        XCTAssertEqual(SaveDoodleFriendSticker.kind(name: "Jingshan Hill", category: "attraction"), .temple)
     }
 
     func testProductionFriendsIsDoodleNotTileTown() throws {
@@ -96,8 +96,10 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertTrue(friends.contains("SaveAtlasPalette.ink"))
         XCTAssertTrue(friends.contains("SaveAtlasPalette.forest"))
         XCTAssertTrue(friends.contains("lineWidth: 1.5"))
-        XCTAssertTrue(friends.contains(".frame(width: 32, height: 32)"))
-        XCTAssertTrue(friends.contains("SaveDoodleFriendStickerArt"))
+        XCTAssertTrue(friends.contains("pointSize: 32"))
+        XCTAssertTrue(friends.contains("visited: false"))
+        XCTAssertTrue(friends.contains("SaveDoodleSticker("))
+        XCTAssertFalse(friends.contains("SaveDoodleFriendStickerArt"))
         XCTAssertFalse(friends.contains("SaveDoodle.stampGold"))
         XCTAssertFalse(friends.contains("SaveDoodle.stampRed"))
         XCTAssertFalse(friends.contains("SaveDoodle.washGreen"))

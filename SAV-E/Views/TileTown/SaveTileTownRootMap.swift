@@ -96,6 +96,12 @@ struct SaveTileTownRootMap: View {
         .onChange(of: session.mapVisitResidueID) { _, _ in
             applyMiniMapHandoff()
         }
+        .onChange(of: session.lens) { _, _ in
+            onClearSelection()
+        }
+        .onChange(of: session.city) { _, _ in
+            onClearSelection()
+        }
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
         }

@@ -656,7 +656,7 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
   Collected opens Passport. Saves remains a child of Review / existing
   library routes — Home no longer shows a See all saves row. Do not add a
   duplicate Saves tab. Trips stay a production child reached from Saves as
-  `Trips ›`.
+  `Trips ›` (HoP acceptance H-6).
 - + opens capture and leaves the previous destination selected when dismissed.
 - Plan is a secondary route while planning demand remains unvalidated.
 - Trips remain a child route. Home no longer shows a More menu.
@@ -668,7 +668,11 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 Home exposes a visible 44pt-minimum Saves control when no clues are
 waiting. Test-only or invisible navigation controls are not valid user
 routes. When clues wait, Review is that route. Visited Home/Map stickers
-use color fill plus ink; unvisited stickers keep their pencil outline.
+use the official DESIGN color die-cut (duck, noodle, coffee, temple,
+lantern); unvisited stickers use the matching pencil outline.
+The elephant is brand-only — wordmark and the empty Home plate — and
+is never a place sticker. Code-drawn geometry is not a place sticker.
+Art sits in a 48pt box at ≤40pt.
 
 Resting Home is Savvy + Eat/Go in the header, then the city, clues,
 native mini-map, nearby own-saves rows, then Collected. It is not the
@@ -686,6 +690,12 @@ Eat shows only Eat (food, cafe, bar). Go shows only Go (attraction, stay,
 shopping). The list is the user's own saves near the selected city or
 current location, sorted by distance. No discovery feed. Tapping the
 mini-map opens Map with the same filter and city.
+Collected X/Y is visited / all saved places in the current city scope,
+every category. Eat/Go and the listed row count do not change it;
+switching city does. When the Eat/Go list is empty but the city still
+has saves, keep the Collected strip and show a filter-empty message
+instead of the whole empty Home. The strip opens Passport with the same
+city numbers (HoP 2026-10-21). Unknown location is not worldwide nearby.
 
 Location denied: hide "Near you", show the last city sorted by most
 recent save, and prompt to allow location. Empty nearby: Caveat title,
@@ -694,14 +704,16 @@ coral + Save link, and a latest-save jump when another city has saves.
 Clues stay on the one-line Review entry when N>0. Home no longer shows
 `See all saves`. Review (`home.review`) still opens the existing Saves
 screen when N>0. Saves reaches Trips from its header as `Trips ›`
-(`saves.trips`). Do not add a second Home Trips row. Collected opens
+(`saves.trips`) — HoP acceptance H-6. Do not add a second Home Trips
+row. Collected opens
 Passport. Wordmark is Caveat SemiBold 34; the city line is Caveat 20 with
 a 2pt coral underline under the city word only. Body copy stays
-`SaveAtlasType`. The locked parity face is DESIGN v2
+`SaveAtlasType`. The visual reference is the Codex packet and spec §8,
+not DESIGN v2 Home. H1–H4 CI rasters are judged manually by DESIGN;
+the 0.90 visual-parity score is not evidence. Historical DESIGN v2
 `design/doodle-targets-2026-10-20/home-light.png` at `eade369`
-(exact 402×874; `home-dark.png` for DESIGN comparison;
-`home-mask.png` white = ignore). Grade position, size, color and
-font style. v1 is retired.
+(exact 402×874; `home-dark.png`; `home-mask.png` white = ignore)
+is archive only. v1 is retired.
 
 ### Sign-In
 

@@ -259,33 +259,26 @@ nonisolated struct SaveDoodleInkRing: Shape {
     }
 }
 
-/// 32pt outline sticker. Packet §7.4 wants line-art, not a filled postage box.
+/// 32pt official outline sticker. Packet §7.4 wants line-art, not a filled box.
 struct SaveDoodleFriendSticker: View {
     let name: String
     let category: String
 
-    enum Kind: String, Equatable {
-        case coffee, noodles, lantern, mountain
-    }
-
     var body: some View {
-        let resolved = Self.kind(name: name, category: category)
-        SaveDoodleFriendStickerArt(kind: resolved)
-            .frame(width: 32, height: 32)
-            .accessibilityHidden(true)
+        SaveDoodleSticker(
+            category: PlaceCategory(rawValue: category) ?? .attraction,
+            placeName: name,
+            visited: false,
+            pointSize: 32,
+            boxSize: SaveLayout.minTap
+        )
     }
 
-    static func kind(name: String, category: String) -> Kind {
-        let hay = name.lowercased()
-        if hay.contains("cafe") || hay.contains("coffee") || category == "cafe" { return .coffee }
-        if hay.contains("noodle") || hay.contains("ramen") { return .noodles }
-        if hay.contains("temple") || hay.contains("lantern") { return .lantern }
-        if hay.contains("hill") || hay.contains("mountain") { return .mountain }
-        switch PlaceCategory(rawValue: category) {
-        case .cafe: return .coffee
-        case .food, .bar: return .noodles
-        case .attraction, .stay, .shopping, nil: return .mountain
-        }
+    static func kind(name: String, category: String) -> SaveDoodleOfficialSticker {
+        SaveDoodleOfficialSticker.named(
+            for: PlaceCategory(rawValue: category) ?? .attraction,
+            placeName: name
+        )
     }
 
     static func symbolName(for category: PlaceCategory?) -> String {
@@ -298,138 +291,6 @@ struct SaveDoodleFriendSticker: View {
         case .shopping: return "bag"
         case nil: return "mappin"
         }
-    }
-}
-
-private struct SaveDoodleFriendStickerArt: View {
-    let kind: SaveDoodleFriendSticker.Kind
-
-    var body: some View {
-        Canvas { context, size in
-            switch kind {
-            case .coffee: drawCoffee(context: &context, size: size)
-            case .noodles: drawNoodles(context: &context, size: size)
-            case .lantern: drawLantern(context: &context, size: size)
-            case .mountain: drawMountain(context: &context, size: size)
-            }
-        }
-    }
-
-    private func strokeInk(_ path: Path, context: inout GraphicsContext) {
-        context.stroke(
-            path,
-            with: .color(SaveAtlasPalette.ink),
-            style: StrokeStyle(lineWidth: 1.2, lineCap: .round, lineJoin: .round)
-        )
-    }
-
-    private func drawCoffee(context: inout GraphicsContext, size: CGSize) {
-        let w = size.width
-        let h = size.height
-        var saucer = Path()
-        saucer.addEllipse(in: CGRect(x: w * 0.10, y: h * 0.72, width: w * 0.72, height: h * 0.18))
-        strokeInk(saucer, context: &context)
-        strokeInk(
-            Path(roundedRect: CGRect(x: w * 0.20, y: h * 0.22, width: w * 0.50, height: h * 0.52), cornerRadius: 5),
-            context: &context
-        )
-        var coffee = Path()
-        coffee.addEllipse(in: CGRect(x: w * 0.26, y: h * 0.26, width: w * 0.38, height: h * 0.16))
-        strokeInk(coffee, context: &context)
-        var handle = Path()
-        handle.addArc(
-            center: CGPoint(x: w * 0.76, y: h * 0.46),
-            radius: w * 0.14,
-            startAngle: .degrees(-80),
-            endAngle: .degrees(80),
-            clockwise: false
-        )
-        strokeInk(handle, context: &context)
-    }
-
-    private func drawNoodles(context: inout GraphicsContext, size: CGSize) {
-        let w = size.width
-        let h = size.height
-        var bowl = Path()
-        bowl.move(to: CGPoint(x: w * 0.10, y: h * 0.40))
-        bowl.addQuadCurve(
-            to: CGPoint(x: w * 0.90, y: h * 0.40),
-            control: CGPoint(x: w * 0.50, y: h * 1.12)
-        )
-        bowl.closeSubpath()
-        strokeInk(bowl, context: &context)
-        for index in 0..<3 {
-            var noodle = Path()
-            let y = h * (0.30 + CGFloat(index) * 0.08)
-            noodle.move(to: CGPoint(x: w * 0.26, y: y))
-            noodle.addQuadCurve(
-                to: CGPoint(x: w * 0.74, y: y + 1),
-                control: CGPoint(x: w * 0.50, y: y - 7)
-            )
-            strokeInk(noodle, context: &context)
-        }
-        var stickA = Path()
-        stickA.move(to: CGPoint(x: w * 0.58, y: h * 0.06))
-        stickA.addLine(to: CGPoint(x: w * 0.90, y: h * 0.38))
-        var stickB = Path()
-        stickB.move(to: CGPoint(x: w * 0.68, y: h * 0.02))
-        stickB.addLine(to: CGPoint(x: w * 0.98, y: h * 0.32))
-        strokeInk(stickA, context: &context)
-        strokeInk(stickB, context: &context)
-    }
-
-    private func drawLantern(context: inout GraphicsContext, size: CGSize) {
-        let w = size.width
-        let h = size.height
-        let cap = Path(
-            roundedRect: CGRect(x: w * 0.28, y: h * 0.10, width: w * 0.44, height: h * 0.12),
-            cornerRadius: 2
-        )
-        strokeInk(cap, context: &context)
-        var body = Path()
-        body.addRoundedRect(
-            in: CGRect(x: w * 0.22, y: h * 0.20, width: w * 0.56, height: h * 0.50),
-            cornerSize: CGSize(width: 10, height: 12)
-        )
-        strokeInk(body, context: &context)
-        for xMul in [0.38, 0.50, 0.62] {
-            var rib = Path()
-            rib.move(to: CGPoint(x: w * xMul, y: h * 0.24))
-            rib.addLine(to: CGPoint(x: w * xMul, y: h * 0.66))
-            strokeInk(rib, context: &context)
-        }
-        let bottom = Path(
-            roundedRect: CGRect(x: w * 0.30, y: h * 0.66, width: w * 0.40, height: h * 0.10),
-            cornerRadius: 2
-        )
-        strokeInk(bottom, context: &context)
-        for xMul in [0.38, 0.50, 0.62] {
-            var tassel = Path()
-            tassel.move(to: CGPoint(x: w * xMul, y: h * 0.76))
-            tassel.addLine(to: CGPoint(x: w * xMul, y: h * 0.92))
-            strokeInk(tassel, context: &context)
-            strokeInk(
-                Path(ellipseIn: CGRect(x: w * xMul - 1.6, y: h * 0.90, width: 3.2, height: 3.2)),
-                context: &context
-            )
-        }
-    }
-
-    private func drawMountain(context: inout GraphicsContext, size: CGSize) {
-        let w = size.width
-        let h = size.height
-        var mountain = Path()
-        mountain.move(to: CGPoint(x: w * 0.06, y: h * 0.82))
-        mountain.addLine(to: CGPoint(x: w * 0.40, y: h * 0.16))
-        mountain.addLine(to: CGPoint(x: w * 0.58, y: h * 0.42))
-        mountain.addLine(to: CGPoint(x: w * 0.72, y: h * 0.26))
-        mountain.addLine(to: CGPoint(x: w * 0.96, y: h * 0.82))
-        mountain.closeSubpath()
-        strokeInk(mountain, context: &context)
-        var ridge = Path()
-        ridge.move(to: CGPoint(x: w * 0.40, y: h * 0.16))
-        ridge.addLine(to: CGPoint(x: w * 0.58, y: h * 0.42))
-        strokeInk(ridge, context: &context)
     }
 }
 

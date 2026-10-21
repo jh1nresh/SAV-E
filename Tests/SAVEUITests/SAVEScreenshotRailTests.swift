@@ -361,6 +361,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let start = app.descendants(matching: .any)["home.empty.capture"]
         XCTAssertTrue(start.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(start.isHittable)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["home.locationPrompt"].waitForExistence(timeout: stepTimeout),
+            "Denied + empty Home must keep the Settings recovery prompt"
+        )
+        XCTAssertTrue(app.buttons["home.locationAllow"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["home.saves"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
         attach(app, name: "review-flow-home-empty")
@@ -391,6 +396,64 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.buttons["drawer.review.primaryAction"].exists)
         attach(app, name: "review-next-step-add-clue")
         try assertSearchEditorIsPainted(refinement)
+    }
+
+    /// P2 4335170966: Saves → Trips must keep Saves as the back destination.
+    @MainActor
+    func testSavesTripsBackReturnsToSaves() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed", "--uitest-location-denied",
+            "-save.appLanguage", "en"
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        openTripsFromHome(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForExistence(timeout: stepTimeout))
+        let back = app.navigationBars["Trips"].buttons.firstMatch
+        XCTAssertTrue(back.waitForExistence(timeout: stepTimeout), "Trips must expose a native back action")
+        back.tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout),
+            "Back from Trips must return to Saves, not Home"
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["trips.home"].waitForNonExistence(timeout: stepTimeout))
+    }
+
+    /// T6: tap Home Collected and assert the real Passport screen shows
+    /// the same city 4/12. Codex packet / spec §8 fixture, not DESIGN v2.
+    @MainActor
+    func testHomeCollectedOpensPassportWithCityCount() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed", "--uitest-doodle-parity-fixture",
+            "--uitest-location-denied", "-save.appLanguage", "en"
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let collected = app.descendants(matching: .any)["home.collected"]
+        let list = app.scrollViews.firstMatch
+        if list.exists {
+            for _ in 0..<4 where !collected.exists {
+                list.swipeUp()
+            }
+        }
+        XCTAssertTrue(collected.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(collected.label, "Collected 4/12")
+        tapReachable(collected)
+        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+        let progress = app.descendants(matching: .any)["profile.stampProgress"]
+        XCTAssertTrue(progress.waitForExistence(timeout: stepTimeout))
+        let shown = [progress.value as? String, progress.label]
+            .compactMap { $0 }
+            .joined(separator: " ")
+        XCTAssertTrue(
+            shown.contains("4/12") || shown.contains("4 of 12"),
+            "Passport must show the same city 4/12 as Home Collected, got \(shown)"
+        )
     }
 
     /// A field can remain accessible and accept typing while a parent mask
@@ -851,7 +914,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected, "Capture cancellation returns to Passport")
     }
 
-    /// Warm dark tokens from spec §1 must paint Home and Passport once Light is unlocked.
+    /// H1–H4: Codex packet / spec §8 faces (light EN, dark EN, light
+    /// zh-Hant, dark zh-Hant). DESIGN judges these rasters manually; the
+    /// 0.90 score is not evidence. Warm dark tokens from spec §1 must
+    /// paint Home and Passport once Light is unlocked.
     /// Appearance is forced before launch (`-AppleInterfaceStyle`, `--uitest-force-*`,
     /// and `XCUIDevice.appearance`). Background pixels must be near #1E1C19 / #FFF9EB.
     /// Attachment names stay off the production-parity set (`five-tab-*`, `atlas-*`).
@@ -864,9 +930,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             appearance: .dark,
             appleInterfaceStyle: "Dark",
             forceArgument: "--uitest-force-dark",
+            language: "en",
             homeName: "dark-home",
             friendsName: "dark-friends",
             passportName: "dark-passport",
+            referenceName: "H2",
             expectedRed: 0x1E,
             expectedGreen: 0x1C,
             expectedBlue: 0x19
@@ -875,12 +943,40 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             appearance: .light,
             appleInterfaceStyle: "Light",
             forceArgument: "--uitest-force-light",
+            language: "en",
             homeName: "light-home",
             friendsName: "light-friends",
             passportName: "light-passport",
+            referenceName: "H1",
             expectedRed: 0xFF,
             expectedGreen: 0xF9,
             expectedBlue: 0xEB
+        )
+        try captureHomeAndPassportCanvas(
+            appearance: .light,
+            appleInterfaceStyle: "Light",
+            forceArgument: "--uitest-force-light",
+            language: "zh-Hant",
+            homeName: "light-home-zh",
+            friendsName: "light-friends-zh",
+            passportName: "light-passport-zh",
+            referenceName: "H3",
+            expectedRed: 0xFF,
+            expectedGreen: 0xF9,
+            expectedBlue: 0xEB
+        )
+        try captureHomeAndPassportCanvas(
+            appearance: .dark,
+            appleInterfaceStyle: "Dark",
+            forceArgument: "--uitest-force-dark",
+            language: "zh-Hant",
+            homeName: "dark-home-zh",
+            friendsName: "dark-friends-zh",
+            passportName: "dark-passport-zh",
+            referenceName: "H4",
+            expectedRed: 0x1E,
+            expectedGreen: 0x1C,
+            expectedBlue: 0x19
         )
     }
 
@@ -889,9 +985,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         appearance: XCUIDevice.Appearance,
         appleInterfaceStyle: String,
         forceArgument: String,
+        language: String = "en",
         homeName: String,
-        friendsName: String,
+        friendsName: String? = nil,
         passportName: String,
+        referenceName: String? = nil,
         expectedRed: Int,
         expectedGreen: Int,
         expectedBlue: Int
@@ -905,7 +1003,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
                 "--uitest-friends-town",
-                "-save.appLanguage", "en",
+                "-save.appLanguage", language,
                 "-AppleInterfaceStyle", appleInterfaceStyle,
                 forceArgument,
             ],
@@ -920,6 +1018,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.citySwitcher"].waitForExistence(timeout: stepTimeout))
         let homeShot = app.screenshot()
         attach(app, name: homeName)
+        if let referenceName {
+            attach(app, name: referenceName)
+        }
         assertScreenshotBackground(
             homeShot,
             nearRed: expectedRed,
@@ -928,18 +1029,20 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             name: homeName
         )
 
-        openRootTab("Friends", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["friends.author.mia"].waitForExistence(timeout: stepTimeout))
-        let friendsShot = app.screenshot()
-        attach(app, name: friendsName)
-        assertScreenshotBackground(
-            friendsShot,
-            nearRed: expectedRed,
-            green: expectedGreen,
-            blue: expectedBlue,
-            name: friendsName
-        )
+        if let friendsName {
+            openRootTab("Friends", app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(app.descendants(matching: .any)["friends.author.mia"].waitForExistence(timeout: stepTimeout))
+            let friendsShot = app.screenshot()
+            attach(app, name: friendsName)
+            assertScreenshotBackground(
+                friendsShot,
+                nearRed: expectedRed,
+                green: expectedGreen,
+                blue: expectedBlue,
+                name: friendsName
+            )
+        }
 
         openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))

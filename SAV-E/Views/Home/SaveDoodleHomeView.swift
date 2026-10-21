@@ -48,11 +48,19 @@ struct SaveDoodleHomeView: View {
                             .padding(.top, SaveSpace.xs)
                     }
 
-                    if !showsEmptyHome {
+                    if showsLensEmpty {
+                        lensEmpty
+                            .padding(.top, SaveSpace.md)
+                    } else if !showsEmptyHome {
                         miniMap
                             .padding(.top, SaveSpace.md)
                         placeList
                             .padding(.top, SaveSpace.md)
+                    }
+
+                    // City X/Y is independent of Eat/Go. A lens with no rows
+                    // must not hide Collected (HoP 2026-10-21).
+                    if !collectedPlaces.isEmpty {
                         collectedStrip
                             .padding(.top, SaveSpace.md)
                     }
@@ -304,7 +312,11 @@ struct SaveDoodleHomeView: View {
                     .padding(.trailing, SaveSpace.xs)
                     .accessibilityHidden(true)
 
-                SaveDoodleSticker(category: item.place.category, visited: item.place.status == .visited)
+                SaveDoodleSticker(
+                    category: item.place.category,
+                    placeName: item.place.name,
+                    visited: item.place.status == .visited
+                )
                     .frame(width: SaveLayout.stickerBox, height: SaveLayout.stickerBox)
                     .padding(.trailing, SaveLayout.stickerToText)
 
@@ -341,7 +353,7 @@ struct SaveDoodleHomeView: View {
                 Spacer(minLength: SaveSpace.xs)
                 HStack(spacing: SaveSpace.xs) {
                     ForEach(collectedStamps) { place in
-                        SaveDoodleCollectedMark(category: place.category)
+                        SaveDoodleCollectedMark(category: place.category, placeName: place.name)
                     }
                 }
             }
@@ -399,6 +411,17 @@ struct SaveDoodleHomeView: View {
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.savedPlaces.empty")
+    }
+
+    /// City still has saves; the current Eat/Go list does not. Not the
+    /// first-save empty plate — Collected stays visible with the city X/Y.
+    private var lensEmpty: some View {
+        let lens = session.lens.title(language: languageSettings.language)
+        return Text(localized("No \(lens) saves here", "這裡還沒有\(lens)的收藏"))
+            .font(SaveAtlasType.body(15))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .frame(maxWidth: .infinity, minHeight: SaveLayout.minTap, alignment: .leading)
+            .accessibilityIdentifier("home.lensEmpty")
     }
 
     private var cityPicker: some View {
@@ -483,6 +506,8 @@ struct SaveDoodleHomeView: View {
         }
 #endif
         if allPlaces.isEmpty { return true }
+        if needsLocationToResolveNearYou { return false }
+        if showsLensEmpty { return false }
         if SaveDoodleHomeCatalog.isNearbyEmpty(
             places: allPlaces,
             lens: session.lens,
@@ -492,11 +517,35 @@ struct SaveDoodleHomeView: View {
         ) {
             return true
         }
-        return listedPlaces.isEmpty
+        return listedPlaces.isEmpty && collectedPlaces.isEmpty
+    }
+
+    /// Selected city has saves, but none match the current Eat/Go lens.
+    private var showsLensEmpty: Bool {
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-empty-home") {
+            return false
+        }
+#endif
+        guard !needsLocationToResolveNearYou else { return false }
+        return listedPlaces.isEmpty && !collectedPlaces.isEmpty
+    }
+
+    /// Near you with no fix must not invent a worldwide nearby list.
+    private var needsLocationToResolveNearYou: Bool {
+        session.city == .nearYou
+            && !locationService.isAuthorizationDenied
+            && locationService.currentLocation == nil
+            && !allPlaces.isEmpty
     }
 
     private var showsLocationPrompt: Bool {
-        locationService.isAuthorizationDenied && !showsEmptyHome
+        // Denied recovery must stay available on the empty plate. Hiding
+        // it with `!showsEmptyHome` left no Home route to Settings.
+        if locationService.isAuthorizationDenied {
+            return true
+        }
+        return needsLocationToResolveNearYou
     }
 
     private var showsNearYouPrefix: Bool {
@@ -540,12 +589,12 @@ struct SaveDoodleHomeView: View {
     }
 
     private var collectedPlaces: [Place] {
-        switch resolvedSelection {
-        case .nearYou:
-            return listedPlaces.map(\.place)
-        case .city(let id):
-            return allPlaces.filter { SaveDoodleHomeCatalog.cityID(for: $0) == id }
-        }
+        SaveDoodleHomeCatalog.collectedScopePlaces(
+            from: allPlaces,
+            selection: session.city,
+            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
+            locationDenied: locationService.isAuthorizationDenied
+        )
     }
 
     private var collectedProgress: (visited: Int, saved: Int, goal: Int) {
@@ -559,8 +608,8 @@ struct SaveDoodleHomeView: View {
     private var collectedText: String {
         let progress = collectedProgress
         return localized(
-            "Collected \(progress.visited)/\(progress.goal)",
-            "已收集 \(progress.visited)/\(progress.goal)"
+            "Collected \(progress.visited)/\(progress.saved)",
+            "已收集 \(progress.visited)/\(progress.saved)"
         )
     }
 
@@ -686,168 +735,93 @@ struct SaveDoodleMiniMap: View {
     }
 }
 
-struct SaveDoodleSticker: View {
-    let category: PlaceCategory
-    let visited: Bool
+enum SaveDoodleOfficialSticker: String, CaseIterable {
+    case duck, noodle, coffee, temple, lantern, elephant
 
-    var body: some View {
-        ZStack {
-            if visited {
-                SaveDoodleStickerShape(category: category)
-                    .fill(visitedFill)
+    var title: String { rawValue.capitalized }
+
+    /// Place marks only. `.elephant` is brand-only (wordmark / empty Home).
+    static let placeCases: [SaveDoodleOfficialSticker] = [
+        .duck, .noodle, .coffee, .temple, .lantern
+    ]
+
+    func imageName(visited: Bool, pointSize: CGFloat = 64) -> String {
+        if visited {
+            return pointSize <= 48
+                ? "DoodleSticker\(title)Color48"
+                : "DoodleSticker\(title)Color"
+        }
+        return "DoodleSticker\(title)Outline"
+    }
+
+    /// Never returns `.elephant`. Place names that mention an elephant still
+    /// use the category mark.
+    static func named(
+        for category: PlaceCategory,
+        placeName: String = ""
+    ) -> SaveDoodleOfficialSticker {
+        let hint = placeName.lowercased()
+        let mapped: SaveDoodleOfficialSticker
+        if hint.contains("duck") || hint.contains("烤鴨") || hint.contains("烤鸭") {
+            mapped = .duck
+        } else if hint.contains("noodle") || hint.contains("ramen") || hint.contains("麵")
+            || hint.contains("拉面") || hint.contains("面条") {
+            mapped = .noodle
+        } else if hint.contains("coffee") || hint.contains("cafe") || hint.contains("咖啡") {
+            mapped = .coffee
+        } else if hint.contains("temple") || hint.contains("寺") || hint.contains("天壇") || hint.contains("天坛") {
+            mapped = .temple
+        } else if hint.contains("lantern") || hint.contains("燈") || hint.contains("灯") {
+            mapped = .lantern
+        } else {
+            switch category {
+            case .food: mapped = .duck
+            case .cafe: mapped = .coffee
+            case .bar: mapped = .lantern
+            case .attraction: mapped = .temple
+            case .stay: mapped = .temple
+            case .shopping: mapped = .lantern
             }
-            SaveDoodleStickerShape(category: category)
-                .stroke(
-                    visited ? SaveAtlasPalette.ink : SaveDoodle.pencil,
-                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)
-                )
         }
-        .frame(width: 40, height: 40)
-        .frame(width: SaveLayout.stickerBox, height: SaveLayout.stickerBox)
-        .accessibilityHidden(true)
-    }
-
-    private var visitedFill: Color {
-        switch category {
-        case .food, .cafe: SaveAtlasPalette.kraft
-        case .bar: SaveDoodle.stampRed
-        case .attraction: SaveDoodle.washGreen
-        case .stay: SaveDoodle.washBlue
-        case .shopping: SaveDoodle.stampGold
-        }
-    }
-
-    static func symbolName(for category: PlaceCategory) -> String {
-        switch category {
-        case .food: return "fork.knife"
-        case .cafe: return "cup.and.saucer"
-        case .bar: return "wineglass"
-        case .attraction: return "leaf"
-        case .stay: return "bed.double"
-        case .shopping: return "bag"
-        }
+        return placeCases.contains(mapped) ? mapped : .temple
     }
 }
 
-nonisolated struct SaveDoodleStickerShape: Shape {
+struct SaveDoodleSticker: View {
     let category: PlaceCategory
+    var placeName: String = ""
+    let visited: Bool
+    var pointSize: CGFloat = SaveLayout.stickerArt
+    var boxSize: CGFloat = SaveLayout.stickerBox
 
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let w = rect.width
-        let h = rect.height
-        switch category {
-        case .food:
-            path.addEllipse(in: CGRect(x: w * 0.08, y: h * 0.62, width: w * 0.84, height: h * 0.28))
-            path.move(to: CGPoint(x: w * 0.22, y: h * 0.58))
-            path.addQuadCurve(
-                to: CGPoint(x: w * 0.78, y: h * 0.52),
-                control: CGPoint(x: w * 0.48, y: h * 0.18)
-            )
-            path.addQuadCurve(
-                to: CGPoint(x: w * 0.28, y: h * 0.58),
-                control: CGPoint(x: w * 0.86, y: h * 0.78)
-            )
-            path.move(to: CGPoint(x: w * 0.70, y: h * 0.30))
-            path.addQuadCurve(
-                to: CGPoint(x: w * 0.88, y: h * 0.22),
-                control: CGPoint(x: w * 0.82, y: h * 0.38)
-            )
-        case .cafe:
-            path.addRoundedRect(
-                in: CGRect(x: w * 0.22, y: h * 0.32, width: w * 0.46, height: h * 0.40),
-                cornerSize: CGSize(width: w * 0.08, height: h * 0.08)
-            )
-            path.move(to: CGPoint(x: w * 0.68, y: h * 0.40))
-            path.addQuadCurve(
-                to: CGPoint(x: w * 0.68, y: h * 0.62),
-                control: CGPoint(x: w * 0.86, y: h * 0.51)
-            )
-            path.addEllipse(in: CGRect(x: w * 0.16, y: h * 0.70, width: w * 0.60, height: h * 0.16))
-            path.move(to: CGPoint(x: w * 0.34, y: h * 0.12))
-            path.addQuadCurve(
-                to: CGPoint(x: w * 0.38, y: h * 0.28),
-                control: CGPoint(x: w * 0.22, y: h * 0.20)
-            )
-            path.move(to: CGPoint(x: w * 0.48, y: h * 0.10))
-            path.addQuadCurve(
-                to: CGPoint(x: w * 0.52, y: h * 0.28),
-                control: CGPoint(x: w * 0.38, y: h * 0.18)
-            )
-        case .bar:
-            path.move(to: CGPoint(x: w * 0.30, y: h * 0.12))
-            path.addLine(to: CGPoint(x: w * 0.70, y: h * 0.12))
-            path.addLine(to: CGPoint(x: w * 0.58, y: h * 0.42))
-            path.addQuadCurve(
-                to: CGPoint(x: w * 0.42, y: h * 0.42),
-                control: CGPoint(x: w * 0.50, y: h * 0.58)
-            )
-            path.closeSubpath()
-            path.move(to: CGPoint(x: w * 0.50, y: h * 0.50))
-            path.addLine(to: CGPoint(x: w * 0.50, y: h * 0.78))
-            path.move(to: CGPoint(x: w * 0.32, y: h * 0.88))
-            path.addLine(to: CGPoint(x: w * 0.68, y: h * 0.88))
-        case .attraction:
-            path.move(to: CGPoint(x: w * 0.50, y: h * 0.90))
-            path.addLine(to: CGPoint(x: w * 0.50, y: h * 0.42))
-            path.move(to: CGPoint(x: w * 0.50, y: h * 0.48))
-            path.addQuadCurve(
-                to: CGPoint(x: w * 0.16, y: h * 0.62),
-                control: CGPoint(x: w * 0.22, y: h * 0.22)
-            )
-            path.move(to: CGPoint(x: w * 0.50, y: h * 0.42))
-            path.addQuadCurve(
-                to: CGPoint(x: w * 0.86, y: h * 0.58),
-                control: CGPoint(x: w * 0.78, y: h * 0.16)
-            )
-            path.move(to: CGPoint(x: w * 0.50, y: h * 0.28))
-            path.addQuadCurve(
-                to: CGPoint(x: w * 0.28, y: h * 0.18),
-                control: CGPoint(x: w * 0.42, y: h * 0.06)
-            )
-        case .stay:
-            path.move(to: CGPoint(x: w * 0.14, y: h * 0.62))
-            path.addLine(to: CGPoint(x: w * 0.14, y: h * 0.38))
-            path.addQuadCurve(
-                to: CGPoint(x: w * 0.38, y: h * 0.22),
-                control: CGPoint(x: w * 0.16, y: h * 0.18)
-            )
-            path.addLine(to: CGPoint(x: w * 0.86, y: h * 0.22))
-            path.addLine(to: CGPoint(x: w * 0.86, y: h * 0.62))
-            path.addLine(to: CGPoint(x: w * 0.14, y: h * 0.62))
-            path.move(to: CGPoint(x: w * 0.14, y: h * 0.62))
-            path.addLine(to: CGPoint(x: w * 0.14, y: h * 0.82))
-            path.move(to: CGPoint(x: w * 0.86, y: h * 0.62))
-            path.addLine(to: CGPoint(x: w * 0.86, y: h * 0.82))
-            path.move(to: CGPoint(x: w * 0.10, y: h * 0.82))
-            path.addLine(to: CGPoint(x: w * 0.90, y: h * 0.82))
-        case .shopping:
-            path.move(to: CGPoint(x: w * 0.22, y: h * 0.36))
-            path.addLine(to: CGPoint(x: w * 0.28, y: h * 0.88))
-            path.addLine(to: CGPoint(x: w * 0.72, y: h * 0.88))
-            path.addLine(to: CGPoint(x: w * 0.78, y: h * 0.36))
-            path.closeSubpath()
-            path.move(to: CGPoint(x: w * 0.34, y: h * 0.36))
-            path.addQuadCurve(
-                to: CGPoint(x: w * 0.66, y: h * 0.36),
-                control: CGPoint(x: w * 0.50, y: h * 0.08)
-            )
-        }
-        return path
+    var body: some View {
+        let sticker = SaveDoodleOfficialSticker.named(for: category, placeName: placeName)
+        Image(sticker.imageName(visited: visited, pointSize: boxSize))
+            .resizable()
+            .interpolation(.high)
+            .renderingMode(.original)
+            .scaledToFit()
+            .frame(width: pointSize, height: pointSize)
+            .frame(width: boxSize, height: boxSize)
+            .accessibilityHidden(true)
     }
 }
 
 struct SaveDoodleCollectedMark: View {
     let category: PlaceCategory
+    var placeName: String = ""
 
     var body: some View {
-        ZStack {
+        SaveDoodleSticker(
+            category: category,
+            placeName: placeName,
+            visited: true,
+            pointSize: 20,
+            boxSize: 24
+        )
+        .overlay {
             Circle()
-                .stroke(SaveDoodle.stampRed, lineWidth: 1.5)
-                .frame(width: 24, height: 24)
-            Image(systemName: SaveDoodleSticker.symbolName(for: category))
-                .font(.system(size: 11, weight: .regular))
-                .foregroundStyle(SaveDoodle.stampRed)
+                .stroke(SaveDoodle.stampRed, lineWidth: 1.2)
         }
         .rotationEffect(.degrees(-4))
         .accessibilityHidden(true)
@@ -870,46 +844,18 @@ struct SaveDoodleDashedDivider: View {
     }
 }
 
+/// Brand elephant. Not a place sticker — wordmark and empty Home only.
 struct SaveDoodleElephant: View {
     var size: CGFloat = 28
 
     var body: some View {
-        SaveDoodleElephantShape()
-            .stroke(SaveAtlasPalette.forest, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+        Image(SaveDoodleOfficialSticker.elephant.imageName(visited: true, pointSize: size))
+            .resizable()
+            .interpolation(.high)
+            .renderingMode(.original)
+            .scaledToFit()
             .frame(width: size, height: size)
             .accessibilityHidden(true)
-    }
-}
-
-nonisolated struct SaveDoodleElephantShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let w = rect.width
-        let h = rect.height
-        path.move(to: CGPoint(x: w * 0.22, y: h * 0.62))
-        path.addQuadCurve(
-            to: CGPoint(x: w * 0.62, y: h * 0.38),
-            control: CGPoint(x: w * 0.18, y: h * 0.18)
-        )
-        path.addQuadCurve(
-            to: CGPoint(x: w * 0.86, y: h * 0.42),
-            control: CGPoint(x: w * 0.80, y: h * 0.22)
-        )
-        path.addQuadCurve(
-            to: CGPoint(x: w * 0.72, y: h * 0.62),
-            control: CGPoint(x: w * 0.96, y: h * 0.52)
-        )
-        path.addLine(to: CGPoint(x: w * 0.68, y: h * 0.86))
-        path.move(to: CGPoint(x: w * 0.38, y: h * 0.62))
-        path.addLine(to: CGPoint(x: w * 0.34, y: h * 0.86))
-        path.move(to: CGPoint(x: w * 0.52, y: h * 0.62))
-        path.addLine(to: CGPoint(x: w * 0.50, y: h * 0.86))
-        path.move(to: CGPoint(x: w * 0.86, y: h * 0.42))
-        path.addQuadCurve(
-            to: CGPoint(x: w * 0.92, y: h * 0.72),
-            control: CGPoint(x: w * 1.02, y: h * 0.52)
-        )
-        return path
     }
 }
 
