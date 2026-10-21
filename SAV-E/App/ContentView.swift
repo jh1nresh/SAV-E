@@ -762,7 +762,6 @@ struct ContentView: View {
                         onOpenPlace: { openSavedPlaceFromMapSearch($0) },
                         onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
                     )
-                    .id(isExactSearchSessionActive)
                 }
             }
             .modifier(MapDrawerActionErrorAlert(
@@ -1082,14 +1081,24 @@ struct ContentView: View {
 
     private func openMapSearch(initialQuery: String? = nil, focusesSearch: Bool = true) {
         guard incomingPlaceReceipt == nil else { return }
-        invalidateExactSearchRequest()
+        // Expanding or focusing the Map drawer must not drop an in-flight
+        // Review correction. The previous invalidate made saved-stamp taps
+        // open the stamp without retiring the clue.
+        if !isExactSearchSessionActive {
+            invalidateExactSearchRequest()
+        }
         mapDetailDrawerItem = nil
         mapVM.clearSelectedMapObject()
         drawerVM.returnToCommands()
         rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
         showMapTab()
         presentAfterClearingExclusiveChrome(.mapDrawer(
-            DrawerLaunchRequest(target: .ask, initialQuery: initialQuery, focusesSearch: focusesSearch)
+            DrawerLaunchRequest(
+                target: .ask,
+                initialQuery: initialQuery,
+                focusesSearch: focusesSearch,
+                preservesExactSearchClue: isExactSearchSessionActive
+            )
         ))
     }
 
@@ -1421,7 +1430,7 @@ struct ContentView: View {
     /// Saved-row taps in ordinary map search just open the stamp. During
     /// Review correction they must also resolve the active clue onto it.
     private func openSavedPlaceFromMapSearch(_ place: Place) {
-        guard isExactSearchSessionActive else {
+        guard isExactSearchSessionActive || mapVM.hasActiveExactSearchResolution else {
             openMapDetail(.savedPlace(place))
             return
         }

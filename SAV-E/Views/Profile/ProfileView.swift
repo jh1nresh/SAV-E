@@ -120,10 +120,8 @@ struct ProfileView: View {
                             : SaveTheme.Spacing.lg
                     )
 
-                    if !cityStampPlaces.isEmpty {
-                        PassportTileTownCollection(places: cityStampPlaces, onOpenPlace: onOpenPlace)
-                            .padding(.horizontal, 16)
-                    }
+                    PassportTileTownCollection(places: cityStampPlaces, onOpenPlace: onOpenPlace)
+                        .padding(.horizontal, 16)
 
                     passportIdentity
                         .padding(.horizontal, 16)
@@ -408,6 +406,9 @@ struct ProfileView: View {
         .onAppear {
             if requestsConnections { opensConnections = true; requestsConnections = false }
             if localSavedPlaces.isEmpty { localSavedPlaces = savedPlaces }
+        }
+        .onChange(of: savedPlaces.count) { _, _ in
+            localSavedPlaces = savedPlaces
         }
         .task(id: posts.filter) { await posts.refresh(.mine) }
         .task(id: currentUserID) {
@@ -2339,6 +2340,8 @@ private struct PassportTileTownCollection: View {
                 Text("\(cityProgress.visited)/\(cityProgress.saved)")
                     .font(SaveAtlasType.strong(13))
                     .foregroundStyle(SaveAtlasPalette.forest)
+                    .accessibilityIdentifier("profile.stampProgress")
+                    .accessibilityValue("\(cityProgress.visited) of \(cityProgress.saved)")
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(SaveAtlasPalette.kraft.opacity(0.45))
@@ -2348,10 +2351,8 @@ private struct PassportTileTownCollection: View {
                     }
                 }
                 .frame(height: 8)
+                .accessibilityHidden(true)
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("profile.stampProgress")
-            .accessibilityValue("\(cityProgress.visited) of \(cityProgress.saved)")
 
             LazyVGrid(
                 columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
