@@ -14,8 +14,12 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
 #if DEBUG
     /// Deterministic denied-state for UI tests — springboard permission
     /// alerts are too flaky to drive the spec P4 recovery path.
-    private let simulatesDeniedAuthorization = ProcessInfo.processInfo.arguments
-        .contains("--uitest-location-denied")
+    /// `SAVE_SKIP_LOCATION_PROMPT=1` is the unit-test host equivalent so
+    /// `UserAnnotation` / `requestWhenInUseAuthorization` do not leave a
+    /// leftover SpringBoard sheet over gate-5 simulator stills.
+    private let simulatesDeniedAuthorization =
+        ProcessInfo.processInfo.arguments.contains("--uitest-location-denied")
+        || ProcessInfo.processInfo.environment["SAVE_SKIP_LOCATION_PROMPT"] == "1"
 #else
     private let simulatesDeniedAuthorization = false
 #endif

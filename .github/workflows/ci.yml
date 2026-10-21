@@ -138,6 +138,7 @@ jobs:
       - name: Run unit tests
         env:
           SAVE_GATE5_EVIDENCE_DIR: ${{ runner.temp }}/SAVE-Gate5/imagerenderer
+          SAVE_SKIP_LOCATION_PROMPT: "1"
         run: |
           mkdir -p "$SAVE_GATE5_EVIDENCE_DIR"
           scripts/xcodebuild-clean.sh \
@@ -156,10 +157,17 @@ jobs:
         if: always()
         run: |
           mkdir -p "$RUNNER_TEMP/SAVE-Gate5/xcattachments"
+          mkdir -p "$RUNNER_TEMP/SAVE-Gate5/imagerenderer"
           if [[ -d "$RUNNER_TEMP/SAVE-Units.xcresult" ]]; then
             xcrun xcresulttool export attachments \
               --path "$RUNNER_TEMP/SAVE-Units.xcresult" \
               --output-path "$RUNNER_TEMP/SAVE-Gate5/xcattachments"
+          fi
+          if [[ -f "$RUNNER_TEMP/SAVE-Gate5/xcattachments/manifest.json" ]]; then
+            python3 scripts/export-gate5-named-stills.py \
+              --manifest "$RUNNER_TEMP/SAVE-Gate5/xcattachments/manifest.json" \
+              --attachments "$RUNNER_TEMP/SAVE-Gate5/xcattachments" \
+              --dest "$RUNNER_TEMP/SAVE-Gate5/imagerenderer"
           fi
 
       - name: Capture simulator catalog screenshots and 60fps motion

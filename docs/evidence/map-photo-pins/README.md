@@ -10,12 +10,16 @@ macOS CI runner from this SwiftUI code — not from composed HTML.
    (`overrideUserInterfaceStyle` + `ImageRenderer` fallback) so light and
    dark `UIColor` traits actually apply. The catalog snapshot uses
    `snapshotLayout` (no `ScrollView` / `Lazy*`).
-2. `SAVETests.testGate5ImageRendererExportWritesLightDarkAndChinese` writes
-   named PNGs to `SAVE_GATE5_EVIDENCE_DIR` and attaches them as
-   `XCTAttachment`s.
-3. `scripts/capture-map-photo-pin-gate5.sh` grants simulator location
-   privacy, launches the DEBUG catalog and motion fixtures, takes
-   screenshots, and records `xcrun simctl io recordVideo --codec=h264`.
+2. `SAVETests.testGate5ImageRendererExportWritesLightDarkAndChinese`
+   attaches named PNGs as `XCTAttachment`s. CI exports them with
+   `xcresulttool`, then `scripts/export-gate5-named-stills.py` copies
+   them to `imagerenderer/` (the simulator cannot write the host
+   `SAVE_GATE5_EVIDENCE_DIR`).
+3. `scripts/capture-map-photo-pin-gate5.sh` reboots the simulator to
+   dismiss a leftover SpringBoard location sheet, grants privacy,
+   launches the DEBUG catalog and motion fixtures with
+   `--uitest-location-denied`, takes screenshots, and records
+   `xcrun simctl io recordVideo --codec=h264`.
 
 ## CI artifact
 

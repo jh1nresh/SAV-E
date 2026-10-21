@@ -107,7 +107,14 @@ struct SaveMapPhotoPinsRoot: View {
     private func mapCanvas(in geo: GeometryProxy) -> some View {
         MapReader { proxy in
             Map(position: $mapViewModel.cameraPosition, selection: $mapViewModel.selectedMapFeature) {
+#if DEBUG
+                if ProcessInfo.processInfo.environment["SAVE_SKIP_LOCATION_PROMPT"] != "1"
+                    && !ProcessInfo.processInfo.arguments.contains("--uitest-location-denied") {
+                    UserAnnotation()
+                }
+#else
                 UserAnnotation()
+#endif
 
                 ForEach(savvyPinPlaces) { place in
                     Annotation(

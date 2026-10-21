@@ -436,6 +436,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(pins.contains("cardCoralIcon"))
         XCTAssertTrue(pins.contains("place.category.iconName"))
         XCTAssertTrue(pins.contains("SaveAtlasPalette.coral"))
+        XCTAssertTrue(pins.contains("SaveTheme.Colors.cream"))
         XCTAssertTrue(pins.contains("SaveAtlasPalette.paper"))
         let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(root.contains(".camera(next)"))

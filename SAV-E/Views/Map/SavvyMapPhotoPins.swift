@@ -995,7 +995,7 @@ struct SavvyMapPlaceCard: View {
             } else {
                 Image(systemName: place.category.iconName)
                     .font(.system(size: SavvyMapPinMetrics.cardCoralIcon, weight: .semibold))
-                    .foregroundStyle(SaveAtlasPalette.paper)
+                    .foregroundStyle(SaveTheme.Colors.cream)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .accessibilityHidden(true)
             }
