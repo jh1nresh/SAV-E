@@ -16,6 +16,7 @@ struct SaveDoodlePassportPage: View {
 
     @State private var showsCityPicker = false
     @State private var stampingID: String?
+    @State private var visitError: String?
     @State private var visitRevision = 0
     @State private var gridWidth: CGFloat = 0
     private let visitStore = SavePassportVisitStore.shared
@@ -123,6 +124,13 @@ struct SaveDoodlePassportPage: View {
 
     private var kraftPanel: some View {
         VStack(alignment: .leading, spacing: SaveSpace.md) {
+            if let visitError {
+                Text(visitError)
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.coral)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("profile.stamp.visitError")
+            }
             if showsEmptyPassport {
                 emptyPassport
             } else {
@@ -417,15 +425,22 @@ struct SaveDoodlePassportPage: View {
     private func handleTap(_ slot: SaveDoodlePassportSlot) {
         guard case let .place(place, _, rank) = slot.content else { return }
         if rank == .none {
-            SaveHaptics.stamp()
-            stampingID = slot.id
+            visitError = nil
             Task {
                 let didVisit = await onMarkVisited(place)
                 if didVisit {
+                    SaveHaptics.stamp()
+                    stampingID = slot.id
                     visitStore.recordVisit(for: place.id)
+                    try? await Task.sleep(nanoseconds: 420_000_000)
+                    stampingID = nil
+                } else {
+                    SaveHaptics.warning()
+                    visitError = languageSettings.localized(
+                        english: "Couldn’t update this place. Please try again.",
+                        traditionalChinese: "暫時無法更新這個地點，請再試一次。"
+                    )
                 }
-                try? await Task.sleep(nanoseconds: 420_000_000)
-                stampingID = nil
             }
         } else {
             SaveHaptics.tap()

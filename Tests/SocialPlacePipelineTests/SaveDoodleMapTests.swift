@@ -114,11 +114,48 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertFalse(store.canCheckIn(placeID: placeID))
 
         let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
-        XCTAssertTrue(map.contains("applyCheckIn(placeID: place.id)"))
+        XCTAssertTrue(map.contains("applyCheckIn("))
+        XCTAssertTrue(map.contains("priorStatus: place.status"))
+        XCTAssertTrue(map.contains("applyUndo(placeID: place.id)"))
         let checkInAt = try XCTUnwrap(map.range(of: "private func performCheckIn"))
         let undoAt = try XCTUnwrap(map.range(of: "private func undoCheckIn"))
         let perform = map[checkInAt.lowerBound..<undoAt.lowerBound]
         XCTAssertFalse(perform.contains("try?"))
+        let undo = map[undoAt.lowerBound...]
+        XCTAssertFalse(String(undo.prefix(800)).contains("try?"))
+    }
+
+    @MainActor
+    func testUndoRestoresPriorVisitedStatusAndRollsBackFailedPersist() async throws {
+        let defaults = UserDefaults(suiteName: "save.doodle.checkin.undo.\(UUID().uuidString)")!
+        let store = SaveDoodleCheckInStore(
+            defaults: defaults,
+            calendar: Calendar(identifier: .gregorian),
+            now: { Date(timeIntervalSince1970: 1_700_000_000) }
+        )
+        let placeID = UUID()
+        struct OfflineError: Error {}
+
+        let checkedIn = await store.applyCheckIn(placeID: placeID, priorStatus: .visited) {}
+        XCTAssertTrue(checkedIn)
+        XCTAssertEqual(store.visitCount(for: placeID), 1)
+
+        var restored: PlaceStatus?
+        let undone = await store.applyUndo(placeID: placeID) { status in
+            restored = status
+        }
+        XCTAssertTrue(undone)
+        XCTAssertEqual(restored, .visited)
+        XCTAssertEqual(store.visitCount(for: placeID), 0)
+        XCTAssertTrue(store.canCheckIn(placeID: placeID))
+
+        XCTAssertTrue(await store.applyCheckIn(placeID: placeID, priorStatus: .wantToGo) {})
+        let failedUndo = await store.applyUndo(placeID: placeID) { _ in
+            throw OfflineError()
+        }
+        XCTAssertFalse(failedUndo)
+        XCTAssertEqual(store.visitCount(for: placeID), 1)
+        XCTAssertTrue(store.hasCheckedInToday(placeID: placeID))
     }
 
     func testMapWritesAreVisibleToSharedPassportHistory() {

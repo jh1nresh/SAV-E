@@ -38,14 +38,42 @@ final class SaveDoodleCheckInStore: ObservableObject {
     @discardableResult
     func applyCheckIn(
         placeID: UUID,
+        priorStatus: PlaceStatus = .wantToGo,
         persist: () async throws -> Void
     ) async -> Bool {
+        if history.previousStatus(for: placeID) == nil {
+            history.rememberPriorStatus(priorStatus, for: placeID)
+        }
         guard checkIn(placeID: placeID) else { return false }
         do {
             try await persist()
             return true
         } catch {
             _ = undoTodaysCheckIn(placeID: placeID)
+            return false
+        }
+    }
+
+    /// Remove today's visit, then persist the restored place status. A failed
+    /// write must put today's history back so the sheet cannot show visited
+    /// with an empty record.
+    @discardableResult
+    func applyUndo(
+        placeID: UUID,
+        persist: (PlaceStatus) async throws -> Void
+    ) async -> Bool {
+        guard hasCheckedInToday(placeID: placeID) else { return false }
+        let restoreStatus = history.previousStatus(for: placeID)
+            ?? (visitCount(for: placeID) > 1 ? .visited : .wantToGo)
+        let snapshot = history.snapshot(for: placeID)
+        guard undoTodaysCheckIn(placeID: placeID) else { return false }
+        do {
+            try await persist(restoreStatus)
+            history.clearPriorStatus(for: placeID)
+            return true
+        } catch {
+            history.restore(snapshot)
+            objectWillChange.send()
             return false
         }
     }

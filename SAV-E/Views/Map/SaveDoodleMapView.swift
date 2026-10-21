@@ -571,7 +571,10 @@ struct SaveDoodleMapView: View {
         var updated = place
         updated.status = .visited
         Task {
-            let accepted = await checkIns.applyCheckIn(placeID: place.id) {
+            let accepted = await checkIns.applyCheckIn(
+                placeID: place.id,
+                priorStatus: place.status
+            ) {
                 try await mapViewModel.updatePlace(updated)
             }
             guard accepted else { return }
@@ -584,15 +587,16 @@ struct SaveDoodleMapView: View {
     }
 
     private func undoCheckIn(_ place: Place) {
-        guard checkIns.undoTodaysCheckIn(placeID: place.id) else { return }
-        if checkIns.visitCount(for: place.id) == 0 {
-            var updated = place
-            updated.status = .wantToGo
-            Task {
-                try? await mapViewModel.updatePlace(updated)
+        Task {
+            let accepted = await checkIns.applyUndo(placeID: place.id) { restoreStatus in
+                guard place.status != restoreStatus else { return }
+                var updated = place
+                updated.status = restoreStatus
+                try await mapViewModel.updatePlace(updated)
             }
+            guard accepted else { return }
+            stampPulse = false
         }
-        stampPulse = false
     }
 
     private func stampAngle(for id: UUID) -> Double {
