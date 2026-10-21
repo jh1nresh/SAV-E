@@ -235,7 +235,7 @@ nonisolated enum SaveAIAssistDecision: Equatable, Sendable {
 }
 
 /// Neutral notice when monthly model allowance is gone. Not a paywall.
-enum SaveAIAssistUserCopy {
+nonisolated enum SaveAIAssistUserCopy {
     static let exhaustedEnglish = "This month's model allowance is used up. Try again next period."
     static let exhaustedTraditionalChinese = "這個月的模型額度已用完。下個週期再試。"
 }
