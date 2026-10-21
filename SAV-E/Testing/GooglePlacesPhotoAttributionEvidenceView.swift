@@ -16,11 +16,16 @@ enum GooglePlacesPhotoAttributionEvidence {
         uri: authorURI
     )
 
+    static let alexChen = GooglePlacePhotoAuthor(
+        displayName: "Alex Chen",
+        uri: URL(string: "https://maps.google.com/maps/contrib/987654321")!
+    )
+
     static let googlePage = PlacePhotoPage(
         id: "evidence-google",
         url: URL(string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=evidence")!,
         isGooglePlacesPhoto: true,
-        authors: [janeDoe],
+        authors: [janeDoe, alexChen],
         mapsURI: mapsURI
     )
 }
@@ -172,7 +177,8 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
             GooglePlacesPhotoAttributionBar(
                 authors: [GooglePlacesPhotoAttributionEvidence.janeDoe],
                 mapsURI: GooglePlacesPhotoAttributionEvidence.mapsURI,
-                compact: true
+                compact: true,
+                onCompactTap: { scene = .fullScreen }
             )
         }
         .frame(height: GoogleMapsAttributionMetrics.carouselHeight)

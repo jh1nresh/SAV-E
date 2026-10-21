@@ -90,11 +90,45 @@ enum GoogleMapsAttributionMetrics {
     static let clearSpaceTop: CGFloat = 10
     static let clearSpaceBottom: CGFloat = 5
     static let minimumTapTarget: CGFloat = SaveLayout.minTap
-    /// Card height must fit two 44pt rows, logo, and Google clear space.
-    static let carouselHeight: CGFloat = 232
-    /// White 12pt type is unreadable on light photos at 0.02.
-    static let gradientTopOpacity: Double = 0.42
-    static let gradientBottomOpacity: Double = 0.80
+    /// Card height: photo plus one 44pt attribution row (P1-5).
+    static let carouselHeight: CGFloat = 156
+    /// White type over light photos. 0.02 failed; 0.25 is the floor.
+    /// 0.55 composites to ≥ 4.5:1 on the cream evidence fixture.
+    static let gradientTopOpacity: Double = 0.55
+    static let gradientBottomOpacity: Double = 0.82
+    static let authorShadowOpacity: Double = 0.5
+    /// Evidence / worst-case light photo (cream paper).
+    static let lightPhotoCream = (r: 0.93, g: 0.90, b: 0.82)
+}
+
+enum GoogleMapsAttributionContrast {
+    static func relativeLuminance(_ rgb: (r: Double, g: Double, b: Double)) -> Double {
+        func channel(_ value: Double) -> Double {
+            value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b)
+    }
+
+    static func ratio(
+        foreground: (r: Double, g: Double, b: Double),
+        background: (r: Double, g: Double, b: Double)
+    ) -> Double {
+        let first = relativeLuminance(foreground)
+        let second = relativeLuminance(background)
+        let lighter = max(first, second)
+        let darker = min(first, second)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    /// White type over `overlayOpacity` black composited on `photo`.
+    static func whiteTextRatio(
+        photo: (r: Double, g: Double, b: Double),
+        overlayOpacity: Double
+    ) -> Double {
+        let remain = 1 - overlayOpacity
+        let background = (r: photo.r * remain, g: photo.g * remain, b: photo.b * remain)
+        return ratio(foreground: (r: 1, g: 1, b: 1), background: background)
+    }
 }
 
 enum GooglePlacesHTMLAttribution {

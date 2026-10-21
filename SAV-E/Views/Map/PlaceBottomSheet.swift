@@ -536,7 +536,8 @@ struct PlaceBusinessPhotoCarousel: View {
                                 GooglePlacesPhotoAttributionBar(
                                     authors: page.authors,
                                     mapsURI: page.mapsURI,
-                                    compact: true
+                                    compact: true,
+                                    onCompactTap: { expandedPhoto = page }
                                 )
                             }
                         }
@@ -608,11 +609,11 @@ struct PlaceBusinessPhotoCarousel: View {
 
     private var fallbackVisual: some View {
         Rectangle()
-            .fill(SaveAtlasPalette.coral.opacity(0.22))
+            .fill(SaveAtlasPalette.coral)
             .overlay {
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(.title2.weight(.semibold))
-                    .foregroundColor(SaveAtlasPalette.coral)
+                    .foregroundColor(SaveTheme.Colors.cream)
             }
     }
 
@@ -677,55 +678,14 @@ struct GooglePlacesPhotoAttributionBar: View {
     var authors: [GooglePlacePhotoAuthor]
     var mapsURI: URL?
     var compact = false
+    var onCompactTap: (() -> Void)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: compact ? 4 : 8) {
-            if let author = authors.first {
-                Button {
-                    if let uri = author.uri { openURL(uri) }
-                } label: {
-                    attributionText(
-                        author.displayName,
-                        size: compact ? 12 : 14,
-                        weight: .semibold
-                    )
-                    .underline(author.uri != nil)
-                    .frame(maxWidth: .infinity, minHeight: GoogleMapsAttributionMetrics.minimumTapTarget, alignment: .leading)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .disabled(author.uri == nil)
-                .accessibilityIdentifier("place.photo.attribution.author")
-                .accessibilityLabel(
-                    languageSettings.localized(
-                        english: "Photo by \(author.displayName)",
-                        traditionalChinese: "照片作者 \(author.displayName)"
-                    )
-                )
-            }
-
-            HStack(alignment: .center, spacing: 8) {
-                if let mapsURI {
-                    Button {
-                        openURL(mapsURI)
-                    } label: {
-                        attributionText(
-                            languageSettings.localized(
-                                english: "View on Google Maps",
-                                traditionalChinese: "在 Google Maps 查看"
-                            ),
-                            size: compact ? 12 : 14,
-                            weight: .regular
-                        )
-                        .frame(maxWidth: .infinity, minHeight: GoogleMapsAttributionMetrics.minimumTapTarget, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("place.photo.attribution.viewOnMaps")
-                }
-
-                Spacer(minLength: 8)
-                GoogleMapsAttributionLogo()
+        Group {
+            if compact {
+                compactRow
+            } else {
+                expandedStack
             }
         }
         .padding(.leading, GoogleMapsAttributionMetrics.clearSpaceLeading)
@@ -745,16 +705,117 @@ struct GooglePlacesPhotoAttributionBar: View {
         )
     }
 
-    private func attributionText(_ text: String, size: CGFloat, weight: Font.Weight) -> some View {
+    /// P1-1 / P1-5: one 44pt row (author left, logo right) opens the viewer.
+    private var compactRow: some View {
+        Button {
+            onCompactTap?()
+        } label: {
+            HStack(alignment: .center, spacing: 8) {
+                if let author = authors.first {
+                    attributionText(author.displayName, style: .caption, weight: .semibold)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                GoogleMapsAttributionLogo()
+            }
+            .frame(maxWidth: .infinity, minHeight: GoogleMapsAttributionMetrics.minimumTapTarget, alignment: .center)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(onCompactTap == nil)
+        .accessibilityIdentifier("place.photo.attribution.author")
+        .accessibilityLabel(compactAccessibilityLabel)
+    }
+
+    private var expandedStack: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            authorButtons
+
+            HStack(alignment: .center, spacing: 8) {
+                if let mapsURI {
+                    Button {
+                        openURL(mapsURI)
+                    } label: {
+                        attributionText(
+                            languageSettings.localized(
+                                english: "View on Google Maps",
+                                traditionalChinese: "在 Google Maps 查看"
+                            ),
+                            style: .footnote,
+                            weight: .regular
+                        )
+                        .frame(maxWidth: .infinity, minHeight: GoogleMapsAttributionMetrics.minimumTapTarget, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("place.photo.attribution.viewOnMaps")
+                }
+
+                Spacer(minLength: 8)
+                GoogleMapsAttributionLogo()
+            }
+        }
+    }
+
+    /// P1-3: every author is shown, joined with 「、」, each tappable.
+    private var authorButtons: some View {
+        HStack(alignment: .center, spacing: 0) {
+            ForEach(Array(authors.enumerated()), id: \.offset) { index, author in
+                if index > 0 {
+                    attributionText("、", style: .footnote, weight: .regular)
+                }
+                Button {
+                    if let uri = author.uri { openURL(uri) }
+                } label: {
+                    attributionText(author.displayName, style: .footnote, weight: .semibold)
+                        .underline(author.uri != nil)
+                        .frame(minHeight: GoogleMapsAttributionMetrics.minimumTapTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(author.uri == nil)
+                .accessibilityIdentifier(
+                    index == 0
+                        ? "place.photo.attribution.author"
+                        : "place.photo.attribution.author.\(index)"
+                )
+                .accessibilityLabel(
+                    languageSettings.localized(
+                        english: "Photo by \(author.displayName)",
+                        traditionalChinese: "照片作者 \(author.displayName)"
+                    )
+                )
+            }
+        }
+    }
+
+    private var compactAccessibilityLabel: String {
+        guard let author = authors.first else {
+            return languageSettings.localized(
+                english: "Open Google photo",
+                traditionalChinese: "開啟 Google 照片"
+            )
+        }
+        return languageSettings.localized(
+            english: "Photo by \(author.displayName)",
+            traditionalChinese: "照片作者 \(author.displayName)"
+        )
+    }
+
+    private func attributionText(_ text: String, style: Font, weight: Font.Weight) -> some View {
         Text(text)
-            .font(.system(size: size, weight: weight))
+            .font(style.weight(weight))
             .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.85), radius: 2, x: 0, y: 1)
+            .shadow(
+                color: .black.opacity(GoogleMapsAttributionMetrics.authorShadowOpacity),
+                radius: 2
+            )
             .lineLimit(1)
     }
 }
 
 struct GoogleMapsAttributionLogo: View {
+    /// Official on-imagery logo (light outline). Used on photos and the
+    /// black viewer; a separate white wordmark is not in the shipped assets.
     var body: some View {
         Image("GoogleMapsLogoOnImage")
             .renderingMode(.original)

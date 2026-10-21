@@ -25,8 +25,21 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         openScene(app, "googleCarousel")
         saveEvidence(app, name: "\(appearance)-google-carousel")
 
+        let compactRow = app.buttons["place.photo.attribution.author"]
+        XCTAssertTrue(waitUntilHittable(compactRow), "Compact attribution row missing")
+        XCTAssertFalse(
+            app.buttons["place.photo.attribution.viewOnMaps"].exists,
+            "View on Google Maps stays on the full-screen viewer"
+        )
+        compactRow.tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["place.photo.viewer.image"]
+                .waitForExistence(timeout: stepTimeout),
+            "Compact attribution row must open the full-screen viewer"
+        )
+
         let author = app.buttons["place.photo.attribution.author"]
-        XCTAssertTrue(waitUntilHittable(author), "Author tap target missing")
+        XCTAssertTrue(waitUntilHittable(author), "Author tap target missing on viewer")
         author.tap()
         XCTAssertTrue(
             app.descendants(matching: .any)["evidence.openedPage"]
@@ -35,7 +48,7 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         )
         saveEvidence(app, name: "\(appearance)-author-page")
 
-        openScene(app, "googleCarousel")
+        openScene(app, "fullScreen")
         let maps = app.buttons["place.photo.attribution.viewOnMaps"]
         XCTAssertTrue(waitUntilHittable(maps), "View on Google Maps tap target missing")
         maps.tap()

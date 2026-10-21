@@ -326,8 +326,22 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertEqual(GoogleMapsAttributionMetrics.clearSpaceTop, 10)
         XCTAssertEqual(GoogleMapsAttributionMetrics.clearSpaceBottom, 5)
         XCTAssertEqual(GoogleMapsAttributionMetrics.minimumTapTarget, 44)
-        XCTAssertGreaterThanOrEqual(GoogleMapsAttributionMetrics.gradientTopOpacity, 0.38)
-        XCTAssertGreaterThan(GoogleMapsAttributionMetrics.carouselHeight, 200)
+        XCTAssertGreaterThanOrEqual(GoogleMapsAttributionMetrics.gradientTopOpacity, 0.25)
+        XCTAssertEqual(GoogleMapsAttributionMetrics.carouselHeight, 156)
+        XCTAssertGreaterThanOrEqual(GoogleMapsAttributionMetrics.authorShadowOpacity, 0.5)
+    }
+
+    @MainActor
+    func testAttributionWhiteTextMeetsContrastOnLightPhoto() {
+        let ratio = GoogleMapsAttributionContrast.whiteTextRatio(
+            photo: GoogleMapsAttributionMetrics.lightPhotoCream,
+            overlayOpacity: GoogleMapsAttributionMetrics.gradientTopOpacity
+        )
+        XCTAssertGreaterThanOrEqual(
+            ratio,
+            4.5,
+            "White attribution type over the cream fixture must stay at WCAG 4.5:1"
+        )
     }
 
     @MainActor
@@ -343,6 +357,24 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertEqual(pages.count, 1)
         XCTAssertFalse(pages[0].isGooglePlacesPhoto)
         XCTAssertEqual(pages[0].url.absoluteString, ownURL)
+    }
+
+    @MainActor
+    func testGooglePhotoRecordWithEmptyAuthorsIsDroppedForG1() {
+        GooglePlacePhotoSessionStore.resetForTests()
+        let googleURL = URL(string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=empty-authors")!
+        GooglePlacePhotoSessionStore.remember([
+            GooglePlacePhotoRecord(url: googleURL, authors: [], googleMapsURI: nil)
+        ])
+        XCTAssertNotNil(GooglePlacePhotoSessionStore.record(for: googleURL))
+        XCTAssertTrue(GooglePlacePhotoSessionStore.record(for: googleURL)?.authors.isEmpty == true)
+
+        let pages = PlacePhotoPage.pages(
+            imageURLs: [googleURL.absoluteString],
+            googlePlaceId: "ChIJEmpty",
+            googleMapsURI: nil
+        )
+        XCTAssertTrue(pages.isEmpty, "A stored Google photo with no authors must not render")
     }
 
     @MainActor
@@ -371,7 +403,10 @@ final class SaveCollaborativeListTests: XCTestCase {
         GooglePlacePhotoSessionStore.remember([
             GooglePlacePhotoRecord(
                 url: googleURL,
-                authors: [GooglePlacePhotoAuthor(displayName: "Jane Doe", uri: URL(string: "https://maps.google.com/maps/contrib/123"))],
+                authors: [
+                    GooglePlacePhotoAuthor(displayName: "Jane Doe", uri: URL(string: "https://maps.google.com/maps/contrib/123")),
+                    GooglePlacePhotoAuthor(displayName: "Alex Chen", uri: URL(string: "https://maps.google.com/maps/contrib/987")),
+                ],
                 googleMapsURI: URL(string: "https://maps.google.com/?cid=1")
             )
         ])
@@ -384,7 +419,7 @@ final class SaveCollaborativeListTests: XCTestCase {
 
         XCTAssertEqual(pages.count, 2)
         XCTAssertTrue(pages[0].isGooglePlacesPhoto)
-        XCTAssertEqual(pages[0].authors.first?.displayName, "Jane Doe")
+        XCTAssertEqual(pages[0].authors.map(\.displayName), ["Jane Doe", "Alex Chen"])
         XCTAssertEqual(pages[0].mapsURI?.absoluteString, "https://maps.google.com/?cid=1")
         XCTAssertFalse(pages[1].isGooglePlacesPhoto)
         XCTAssertTrue(pages[1].authors.isEmpty)

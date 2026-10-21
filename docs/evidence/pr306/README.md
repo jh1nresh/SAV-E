@@ -10,12 +10,12 @@ Light and dark sets:
 
 | File | Scene |
 | --- | --- |
-| `*-google-carousel.png` | Google photo page in the card carousel |
+| `*-google-carousel.png` | Google photo page: 44pt author+logo row (Maps is full-screen only) |
 | `*-user-photo.png` | User's own photo page (no Google chrome) |
-| `*-full-screen.png` | Full-screen viewer |
-| `*-author-page.png` | Page opened by tapping the author |
+| `*-full-screen.png` | Full-screen viewer with every author and View on Google Maps |
+| `*-author-page.png` | Page opened by tapping an author on the viewer |
 | `*-maps-page.png` | Page opened by tapping View on Google Maps |
 | `*-logo-closeup.png` | Logo height and 10/10/10/5 clear space |
-| `*-no-author.png` | Google photo with no author data → coral |
+| `*-no-author.png` | Google photo with no author data → full coral + cream icon |
 
 Launch argument: `--uitest-google-photo-attribution`.
