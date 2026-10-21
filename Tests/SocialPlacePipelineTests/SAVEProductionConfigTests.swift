@@ -486,9 +486,11 @@ final class SAVEProductionConfigTests: XCTestCase {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("place-limit-refresh-\(UUID().uuidString).json")
         let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
         let service = SupabaseService(
             apiBaseURL: "https://analysis.test",
-            session: session(),
+            session: URLSession(configuration: configuration),
             accessTokenProvider: { "test-token" }
         )
         let map = MapViewModel(
@@ -508,6 +510,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(try vault.reviewCandidates().first?.id, place.id)
     }
 
+    @MainActor
     func testServerOverLimitResponseIsNotTreatedAsAuthFailure() {
         let body = #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#
         XCTAssertTrue(SavePlaceLimitError.matchesServerResponse(status: 403, body: body))
