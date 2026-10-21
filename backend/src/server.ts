@@ -5996,6 +5996,13 @@ async function insertFinalPlaceForDecision(
   }
 
   await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+  const existing = await client.query(
+    "select id from places where id = $1 and user_id = $2",
+    [decision.finalPlaceId, userId],
+  );
+  if (existing.rows[0]) {
+    throw new WorkflowConflictError("final_place.id already exists; use an existing-place decision without final_place");
+  }
   await assertNewSavedPlaceAllowed(client, userId);
 
   const body = withOwner(pickFields(decision.finalPlace, placeFields), userId);

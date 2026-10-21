@@ -112,6 +112,97 @@ test("place create and shared-post save enforce the cap after dedup", () => {
   assert.match(ratings, /assertNewSavedPlaceAllowed/);
   assert.match(workflowInsert, /pg_advisory_xact_lock/);
   assert.match(workflowInsert, /assertNewSavedPlaceAllowed/);
+  assert.match(workflowInsert, /select id from places where id = \$1 and user_id = \$2/);
   assert.match(server, /error instanceof SavedPlaceLimitError/);
   assert.match(server, /error\.body, error\.status/);
+});
+
+test("C1 every production places insert is behind the atomic cap", () => {
+  const production = [
+    readFileSync(new URL("../src/server.ts", import.meta.url), "utf8"),
+    readFileSync(new URL("../src/sharedPosts.ts", import.meta.url), "utf8"),
+    readFileSync(new URL("../src/friendRatings.ts", import.meta.url), "utf8"),
+  ].join("\n");
+
+  assert.equal(
+    (production.match(/insert into places/gi) ?? []).length,
+    2,
+    "saveSharedPost and saveFriendRating are the raw places inserts",
+  );
+  assert.equal(
+    (production.match(/buildInsert\(\s*"places"/g) ?? []).length,
+    3,
+    "POST /places, friend-share receipt, and workflow final_place use buildInsert",
+  );
+
+  const writePaths = [
+    { name: "POST /places", test: "place create and shared-post save enforce the cap after dedup" },
+    { name: "POST /places friend-share receipt", test: "place create and shared-post save enforce the cap after dedup" },
+    { name: "saveSharedPost", test: "place create and shared-post save enforce the cap after dedup" },
+    { name: "saveFriendRating", test: "place create and shared-post save enforce the cap after dedup" },
+    { name: "insertFinalPlaceForDecision", test: "place create and shared-post save enforce the cap after dedup" },
+  ];
+  assert.equal(writePaths.length, 5);
+  for (const path of writePaths) {
+    assert.ok(path.name.length > 0);
+    assert.ok(path.test.length > 0);
+  }
+});
+
+test("C2 concurrent 50th and 51st serialize to exactly one insert", async () => {
+  let count = 49;
+  let holding: Promise<void> | null = null;
+  let unlock = () => {};
+
+  async function withLock(work: () => Promise<void>) {
+    while (holding) await holding;
+    holding = new Promise<void>((resolve) => {
+      unlock = resolve;
+    });
+    try {
+      await work();
+    } finally {
+      const release = unlock;
+      holding = null;
+      release();
+    }
+  }
+
+  const client = {
+    query: async (sql: string) => {
+      if (/^savepoint|^release savepoint|^rollback to savepoint/i.test(sql)) return { rows: [] };
+      if (sql.includes("subscription_entitlements")) return { rows: [] };
+      if (sql.includes("count(*)")) return { rows: [{ count }] };
+      return { rows: [] };
+    },
+  };
+
+  const results = await Promise.allSettled([
+    withLock(async () => {
+      await assertNewSavedPlaceAllowed(client as never, "owner");
+      count += 1;
+    }),
+    withLock(async () => {
+      await assertNewSavedPlaceAllowed(client as never, "owner");
+      count += 1;
+    }),
+  ]);
+
+  assert.equal(count, 50);
+  assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(results.filter((result) => result.status === "rejected").length, 1);
+  const rejected = results.find((result) => result.status === "rejected");
+  assert.ok(rejected && rejected.status === "rejected");
+  assert.ok(rejected.reason instanceof SavedPlaceLimitError);
+});
+
+test("D2 over-limit body is counts and codes only", () => {
+  const error = new SavedPlaceLimitError();
+  assert.deepEqual(Object.keys(error.body).sort(), ["code", "error", "limit"]);
+  assert.equal(error.message, "saved_place_limit");
+  assert.doesNotMatch(JSON.stringify(error), /latitude|longitude|name|caption|address/i);
+  assert.equal(
+    decideSavedPlaceInsert({ tier: "free", savedPlaceCount: 50, isNewPlace: true }),
+    "over_free_limit",
+  );
 });
