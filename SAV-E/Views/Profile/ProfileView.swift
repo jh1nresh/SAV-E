@@ -85,6 +85,7 @@ struct ProfileView: View {
     }
 
     private var opensCollected: Bool { passportPath.contains(.collected) }
+    private var opensSettings: Bool { passportPath.contains(.settings) }
     private var opensConnections: Bool { passportPath.contains(.connections) }
 
     private func openPassportRoute(_ route: PassportRoute) {
@@ -96,6 +97,20 @@ struct ProfileView: View {
         guard opensCollected else { return }
         if let index = passportPath.firstIndex(of: .collected) {
             passportPath.removeSubrange(index...)
+        }
+    }
+
+    private func closeSettings() {
+        guard opensSettings else { return }
+        if let index = passportPath.firstIndex(of: .settings) {
+            passportPath.remove(at: index)
+        }
+    }
+
+    private func closeConnections() {
+        guard opensConnections else { return }
+        if let index = passportPath.firstIndex(of: .connections) {
+            passportPath.remove(at: index)
         }
     }
 
@@ -118,16 +133,6 @@ struct ProfileView: View {
             .toolbar(.hidden, for: .navigationBar)
             .accessibilityIdentifier("profile.root")
             .refreshable { await posts.refresh(.mine) }
-            .navigationDestination(for: PassportRoute.self) { route in
-                switch route {
-                case .collected:
-                    collectedPage
-                case .settings:
-                    settingsDestination
-                case .connections:
-                    connectionsDestination
-                }
-            }
     }
 
     private var settingsDestination: some View {
@@ -432,12 +437,44 @@ struct ProfileView: View {
     }
 
     var body: some View {
-        // Collected / settings / connections must push inside Passport.
-        // Using the root NavigationStack replaces the five-tab scaffold
-        // and drops `root.tab.home` from the tree.
-        // Typed path stays on this inner stack. `isPresented` destinations
-        // leak to ContentView's root NavigationStack and drop AtlasTabBar.
-        NavigationStack(path: $passportPath) { passportContent }
+        // In-place overlays stay inside Passport's frame. An inner
+        // NavigationStack push covers sibling AtlasTabBar and steals the
+        // root stack, so Home → Saves dies after a Passport visit.
+        // `isPresented` destinations leak to ContentView's root stack.
+        ZStack {
+            passportContent
+            if opensCollected {
+                collectedPage
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            if opensSettings {
+                NavigationStack {
+                    settingsDestination
+                        .toolbar {
+                            ToolbarItem(placement: .topBarLeading) {
+                                Button {
+                                    SaveHaptics.tap()
+                                    closeSettings()
+                                } label: {
+                                    Image(systemName: "chevron.left")
+                                }
+                                .accessibilityLabel(languageSettings.localized(
+                                    english: "Back",
+                                    traditionalChinese: "返回"
+                                ))
+                            }
+                        }
+                        .navigationBarBackButtonHidden(true)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            if opensConnections {
+                NavigationStack {
+                    connectionsDestination
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
         .onChange(of: requestsConnections) { _, requested in
             if requested { openPassportRoute(.connections); requestsConnections = false }
         }
@@ -572,7 +609,8 @@ struct ProfileView: View {
             onLoadMoreFollowedFriends: onLoadMoreFollowedFriends,
             onUnfollowFriend: onUnfollowFriend,
             initiallyShowLists: opensListsDirectly,
-            onSharedInvite: markInviteShared
+            onSharedInvite: markInviteShared,
+            onClose: closeConnections
         )
     }
 
@@ -722,7 +760,6 @@ private struct PassportConnectionsView: View {
     }
 
     @Environment(\.appLanguageSettings) private var languageSettings
-    @Environment(\.dismiss) private var dismiss
 
     let collaborativeLists: [SaveCollaborativeList]
     let followedFriends: [SaveFollowedFriend]
@@ -746,6 +783,7 @@ private struct PassportConnectionsView: View {
     let onUnfollowFriend: (SaveFollowedFriend) async throws -> Void
     var initiallyShowLists = false
     var onSharedInvite: () -> Void = {}
+    var onClose: () -> Void = {}
 
     @State private var selectedSection: Section = .friends
     @State private var referralValue = ""
@@ -800,7 +838,7 @@ private struct PassportConnectionsView: View {
         HStack(spacing: SaveTheme.Spacing.md) {
             PassportIconButton(systemName: "chevron.left") {
                 SaveHaptics.tap()
-                dismiss()
+                onClose()
             }
             .accessibilityLabel(languageSettings.localized(english: "Back to Passport", traditionalChinese: "返回護照"))
             .accessibilityIdentifier("profile.connections.back")
