@@ -224,7 +224,12 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
 
     func testP14OnlyConfirmedSavedPlacesGetSavvyPins() throws {
         let saved = samplePlace(status: .wantToGo)
-        let visited = samplePlace(status: .visited)
+        let visited = samplePlace(
+            name: "Summer Palace",
+            latitude: 39.9997,
+            longitude: 116.2755,
+            status: .visited
+        )
         let unsavedSocial = samplePlace(
             name: "Friend Cafe",
             latitude: 40.012,
