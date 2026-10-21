@@ -281,7 +281,7 @@ table ever disagree, fix whichever one drifted in the same PR.
 | Ink | `SaveAtlasPalette.ink` | `#2F2E23` | `#F4F1E4` | Primary text, shadows at low opacity |
 | Muted | `SaveAtlasPalette.muted` | `#62594F` | `#CFC4B8` | Supporting and secondary copy |
 | Coral | `SaveAtlasPalette.coral` | `#F26B4A` | `#D97861` | Postage accent: primary CTA, source-clue state. Matches landing `--coral`. |
-| Brand coral | `SaveAtlasPalette.brandCoral` | `#F26B4A` | `#F26B4A` | Same hex as light coral. App icon and wordmark assets only. |
+| Brand coral | `SaveAtlasPalette.brandCoral` | `#F26B4A` | `#F26B4A` | Non-adaptive `#F26B4A`. App icon, wordmark, and the tile-town pin. Do not recolor assets. |
 | Cream | `SaveAtlasPalette.cream` | `#FFF9EB` | `#FFF9EB` | Landing / Atlas cream. Canvas and paper light columns. |
 | Mint | `SaveAtlasPalette.mint` | `#D6E8C4` | `#4F7258` | Confirmed / saved state fills |
 | Sky | `SaveAtlasPalette.sky` | `#B5E3F5` | `#3F758B` | Review state fills |

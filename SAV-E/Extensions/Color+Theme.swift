@@ -199,7 +199,7 @@ enum SaveAtlasPalette {
     /// Landing / Atlas cream. Canvas and paper light columns use this hex.
     nonisolated static let creamHex = "FFF9EB"
     static let cream = Color(hex: creamHex)
-    /// App icon and wordmark lock. Same hex as light coral; do not recolor assets.
+    /// Non-adaptive #F26B4A. Icon, wordmark, and the tile-town pin. Do not recolor assets.
     nonisolated static let brandCoralHex = "F26B4A"
     static let brandCoral = Color(hex: brandCoralHex)
     /// Postage accent: primary CTA and source-clue fill. Matches landing `--coral`.
