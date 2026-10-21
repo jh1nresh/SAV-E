@@ -6138,6 +6138,43 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
     }
 
+    func testLaunchRemountClearKeepsExactSearchResolutionForUnsavedSave() async throws {
+        let search = RecordingMapCandidateSearchService()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("launch-remount-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            mapCandidateSearchService: search,
+            usesRemotePersistence: false
+        )
+        let clue = reviewClue(name: "Harbor Oven", address: "Taipei", latitude: nil, longitude: nil, status: "pending")
+        let refined = SaveMapCandidate(
+            id: "harbor-oven-public",
+            title: "Harbor Oven Xinyi",
+            subtitle: "Taipei",
+            latitude: taipei.latitude,
+            longitude: taipei.longitude,
+            category: .restaurant
+        )
+        search.nextMatchingResults = [refined]
+        map.reviewCandidates = [clue]
+        map.updateVisibleMapRegion(region(around: taipei))
+        map.beginExactSearchResolution(for: clue)
+
+        map.clearMapSearchResults(preservesExactSearchClue: true)
+        XCTAssertTrue(map.hasActiveExactSearchResolution)
+        XCTAssertTrue(map.mapCandidates.isEmpty)
+
+        await map.searchMapPlaces("Harbor Oven Xinyi", preservesExactSearchClue: true)
+        let candidate = try XCTUnwrap(map.mapCandidates.first)
+        XCTAssertTrue(map.mapCandidate(candidate, resolvesReviewCandidateID: clue.id))
+
+        let place = try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertEqual(place.name, "Harbor Oven Xinyi")
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
     func testPlainMapSearchCannotResolveAnExistingReviewClue() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("plain-search-does-not-resolve-\(UUID().uuidString).json")
@@ -6321,8 +6358,11 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(content.contains("if endsExactSearch"))
         XCTAssertTrue(content.contains("isExactSearchSessionActive = false"))
         XCTAssertFalse(content.contains("isExactSearchSessionActive = false\n                if endsExactSearch"))
+        XCTAssertTrue(content.contains("preservesExactSearchClue: !endsExactSearch"))
+        XCTAssertTrue(content.contains("restoreExactSearchResolutionIfNeeded()\n                let resolvesOriginPlan"))
         XCTAssertTrue(drawer.contains("onClearMapSearchResults(true)"))
         XCTAssertTrue(drawer.contains("onClearMapSearchResults(false)"))
+        XCTAssertTrue(mapModel.contains("func clearMapSearchResults(preservesExactSearchClue: Bool = false)"))
         XCTAssertTrue(mapModel.contains("retireResolvedReviewClue"))
         XCTAssertTrue(mapModel.contains("reviewCandidates.first(where: { $0.id == candidate.id }) ?? candidate"))
         XCTAssertFalse(mapModel.contains("retireSameNameReviewClues"))

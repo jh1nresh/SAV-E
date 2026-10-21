@@ -965,10 +965,13 @@ struct ContentView: View {
                 try await mapVM.investigateReviewCandidateMore(candidate)
             },
             onSaveMapCandidate: { candidate in
+                restoreExactSearchResolutionIfNeeded()
                 let resolvesOriginPlan = pendingOriginPlanCandidateID.map {
                     mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
                 } ?? false
                 let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+                exactSearchClueID = nil
+                isExactSearchSessionActive = false
                 if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
                     requestTripAssignment(for: place)
@@ -1010,7 +1013,14 @@ struct ContentView: View {
                     exactSearchClueID = nil
                 }
                 guard exactSearchRequestID == nil else { return }
-                mapVM.clearMapSearchResults()
+                // Launch/refine remounts wipe pins. Keep the live Review
+                // correction so a public-result save still retires the clue.
+                mapVM.clearMapSearchResults(
+                    preservesExactSearchClue: !endsExactSearch
+                        && (isExactSearchSessionActive
+                            || exactSearchClueID != nil
+                            || mapVM.hasActiveExactSearchResolution)
+                )
             },
             collaborativeLists: mapVM.collaborativeLists,
             onCreateList: { title, note in
@@ -1347,10 +1357,13 @@ struct ContentView: View {
         Task {
             defer { fullScreenMapCandidateActionID = nil }
             do {
+                restoreExactSearchResolutionIfNeeded()
                 let resolvesOriginPlan = pendingOriginPlanCandidateID.map {
                     mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
                 } ?? false
                 let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+                exactSearchClueID = nil
+                isExactSearchSessionActive = false
                 if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
                     requestTripAssignment(for: place)

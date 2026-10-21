@@ -3524,7 +3524,7 @@ final class MapViewModel: ObservableObject {
         selectedMapFeature = nil
     }
 
-    func clearMapSearchResults() {
+    func clearMapSearchResults(preservesExactSearchClue: Bool = false) {
         _ = beginMapCandidateSearch()
         mapCandidates = []
         selectedMapCandidate = nil
@@ -3533,7 +3533,9 @@ final class MapViewModel: ObservableObject {
         selectedIntentFilters = []
         nearbyFilterAnchor = nil
         activeFilter = nil
-        dropExactSearchResolutionUnlessLocked()
+        if !preservesExactSearchClue {
+            dropExactSearchResolutionUnlessLocked()
+        }
         mapSearchNeedsLocationHint = false
         lastSearchAnchor = nil
         clearRoute()
