@@ -3429,18 +3429,33 @@ final class MapViewModel: ObservableObject {
             service: googlePlacesService
         ) else { return }
         guard selectedPlace?.id == place.id else { return }
-
-        selectedPlace = updatedPlace
-        if let index = places.firstIndex(where: { $0.id == place.id }) {
-            places[index] = updatedPlace
+        let latest = places.first(where: { $0.id == place.id }) ?? selectedPlace ?? place
+        // Preserve check-in and other edits made while provider details were in flight.
+        guard latest.name == place.name,
+              latest.address == place.address,
+              latest.coordinate.latitude == place.latitude,
+              latest.coordinate.longitude == place.longitude else { return }
+        var merged = latest
+        merged.businessPhotoUrls = updatedPlace.businessPhotoUrls
+        if merged.googlePlaceId == place.googlePlaceId {
+            merged.googlePlaceId = updatedPlace.googlePlaceId
         }
-        mirrorToLocalVault(updatedPlace)
+        merged.googleRating = merged.googleRating ?? updatedPlace.googleRating
+        merged.priceRange = merged.priceRange ?? updatedPlace.priceRange
+        merged.openingHours = merged.openingHours ?? updatedPlace.openingHours
 
+        selectedPlace = merged
+        if let index = places.firstIndex(where: { $0.id == place.id }) {
+            places[index] = merged
+        }
+        mirrorToLocalVault(merged)
+
+        guard usesRemotePersistence else { return }
         do {
             // updatePlace PATCHes the existing row; the create endpoint is a
             // plain insert and 500s on the duplicate id, which silently kept
             // enriched photos from ever persisting.
-            try await supabaseService.updatePlace(updatedPlace, previous: place)
+            try await supabaseService.updatePlace(merged, previous: latest)
         } catch {
             print("MapViewModel: failed to sync business photo for \(place.name): \(error)")
         }
