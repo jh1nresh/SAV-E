@@ -430,8 +430,8 @@ struct ProfileView: View {
         // Home NavigationStack, it replaces the Atlas tab bar and Friends
         // / Home become unreachable until the page is dismissed.
         NavigationStack {
-            // `navigationDestination(isPresented: $opensCollected)` can attach
-            // to ContentView's outer stack and replace the Atlas tab bar.
+            // An isPresented Collected destination can attach to
+            // ContentView's outer stack and replace the Atlas tab bar.
             // Keep Collected inside this tab-owned stack.
             Group {
                 if opensCollected {
