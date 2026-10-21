@@ -815,8 +815,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             appearance: .dark,
             appleInterfaceStyle: "Dark",
             forceArgument: "--uitest-force-dark",
+            language: "en",
             homeName: "dark-home",
             passportName: "dark-passport",
+            referenceName: "H2",
             expectedRed: 0x1E,
             expectedGreen: 0x1C,
             expectedBlue: 0x19
@@ -825,11 +827,37 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             appearance: .light,
             appleInterfaceStyle: "Light",
             forceArgument: "--uitest-force-light",
+            language: "en",
             homeName: "light-home",
             passportName: "light-passport",
+            referenceName: "H1",
             expectedRed: 0xFF,
             expectedGreen: 0xF9,
             expectedBlue: 0xEB
+        )
+        try captureHomeAndPassportCanvas(
+            appearance: .light,
+            appleInterfaceStyle: "Light",
+            forceArgument: "--uitest-force-light",
+            language: "zh-Hant",
+            homeName: "light-home-zh",
+            passportName: "light-passport-zh",
+            referenceName: "H3",
+            expectedRed: 0xFF,
+            expectedGreen: 0xF9,
+            expectedBlue: 0xEB
+        )
+        try captureHomeAndPassportCanvas(
+            appearance: .dark,
+            appleInterfaceStyle: "Dark",
+            forceArgument: "--uitest-force-dark",
+            language: "zh-Hant",
+            homeName: "dark-home-zh",
+            passportName: "dark-passport-zh",
+            referenceName: "H4",
+            expectedRed: 0x1E,
+            expectedGreen: 0x1C,
+            expectedBlue: 0x19
         )
     }
 
@@ -838,8 +866,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         appearance: XCUIDevice.Appearance,
         appleInterfaceStyle: String,
         forceArgument: String,
+        language: String = "en",
         homeName: String,
         passportName: String,
+        referenceName: String? = nil,
         expectedRed: Int,
         expectedGreen: Int,
         expectedBlue: Int
@@ -852,7 +882,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-location-denied",
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
-                "-save.appLanguage", "en",
+                "-save.appLanguage", language,
                 "-AppleInterfaceStyle", appleInterfaceStyle,
                 forceArgument,
             ],
@@ -867,6 +897,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.citySwitcher"].waitForExistence(timeout: stepTimeout))
         let homeShot = app.screenshot()
         attach(app, name: homeName)
+        if let referenceName {
+            attach(app, name: referenceName)
+        }
         assertScreenshotBackground(
             homeShot,
             nearRed: expectedRed,
@@ -3065,10 +3098,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         _ = scrollUntilHittable(entry, in: app.scrollViews.firstMatch)
         XCTAssertTrue(entry.isHittable, "Home Saves must be usable without a hidden test-only route")
         // XCUIElement.frame can report 43.99999999999997 for a 44pt SwiftUI
-        // minHeight. Round the measured size so CGRect noise does not fail
-        // the 44pt Saves contract.
-        XCTAssertGreaterThanOrEqual(entry.frame.height.rounded(), 44)
-        XCTAssertGreaterThanOrEqual(entry.frame.width.rounded(), 44)
+        // minHeight. Allow 0.01pt of CGRect noise; do not round (43.5 would pass).
+        XCTAssertGreaterThanOrEqual(entry.frame.height, 44 - 0.01)
+        XCTAssertGreaterThanOrEqual(entry.frame.width, 44 - 0.01)
         tapReachable(entry)
         let saves = app.descendants(matching: .any)["saves.root"]
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to

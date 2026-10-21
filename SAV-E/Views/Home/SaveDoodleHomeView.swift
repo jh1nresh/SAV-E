@@ -53,8 +53,10 @@ struct SaveDoodleHomeView: View {
                             .padding(.top, SaveSpace.md)
                         placeList
                             .padding(.top, SaveSpace.md)
-                        collectedStrip
-                            .padding(.top, SaveSpace.md)
+                        if !collectedPlaces.isEmpty {
+                            collectedStrip
+                                .padding(.top, SaveSpace.md)
+                        }
                     }
                 }
                 .padding(.horizontal, SaveLayout.screenMargin)
@@ -487,6 +489,7 @@ struct SaveDoodleHomeView: View {
         }
 #endif
         if allPlaces.isEmpty { return true }
+        if needsLocationToResolveNearYou { return false }
         if SaveDoodleHomeCatalog.isNearbyEmpty(
             places: allPlaces,
             lens: session.lens,
@@ -499,8 +502,19 @@ struct SaveDoodleHomeView: View {
         return listedPlaces.isEmpty
     }
 
+    /// Near you with no fix must not invent a worldwide nearby list.
+    private var needsLocationToResolveNearYou: Bool {
+        session.city == .nearYou
+            && !locationService.isAuthorizationDenied
+            && locationService.currentLocation == nil
+            && !allPlaces.isEmpty
+    }
+
     private var showsLocationPrompt: Bool {
-        locationService.isAuthorizationDenied && !showsEmptyHome
+        if locationService.isAuthorizationDenied && !showsEmptyHome {
+            return true
+        }
+        return needsLocationToResolveNearYou
     }
 
     private var showsNearYouPrefix: Bool {
@@ -544,12 +558,12 @@ struct SaveDoodleHomeView: View {
     }
 
     private var collectedPlaces: [Place] {
-        switch resolvedSelection {
-        case .nearYou:
-            return listedPlaces.map(\.place)
-        case .city(let id):
-            return allPlaces.filter { SaveDoodleHomeCatalog.cityID(for: $0) == id }
-        }
+        SaveDoodleHomeCatalog.collectedScopePlaces(
+            from: allPlaces,
+            selection: session.city,
+            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
+            locationDenied: locationService.isAuthorizationDenied
+        )
     }
 
     private var collectedProgress: (visited: Int, saved: Int, goal: Int) {
@@ -563,8 +577,8 @@ struct SaveDoodleHomeView: View {
     private var collectedText: String {
         let progress = collectedProgress
         return localized(
-            "Collected \(progress.visited)/\(progress.goal)",
-            "已收集 \(progress.visited)/\(progress.goal)"
+            "Collected \(progress.visited)/\(progress.saved)",
+            "已收集 \(progress.visited)/\(progress.saved)"
         )
     }
 

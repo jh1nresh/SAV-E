@@ -237,9 +237,10 @@ enum SaveDoodleHomeCatalog {
         let matching = places.filter { self.lens(for: $0.category) == lens }
         switch resolvedSelection(selection, places: places, locationDenied: locationDenied) {
         case .nearYou:
-            guard let location else {
-                return matching.sorted(by: moreRecent)
-            }
+            // Unknown location is not worldwide nearby. Fresh install,
+            // undetermined authorization, and a transient fix failure must
+            // return no rows so Home can prompt instead of plotting every city.
+            guard let location else { return [] }
             return matching
                 .filter { distance(from: location, to: $0).map { $0 <= nearbyRadius } ?? false }
                 .sorted { lhs, rhs in
@@ -321,10 +322,40 @@ enum SaveDoodleHomeCatalog {
         return nil
     }
 
+    /// All saved places in the current city, every category. Independent of
+    /// the Eat/Go list. Near you uses the city of the nearest nearby save.
+    static func collectedScopePlaces(
+        from places: [Place],
+        selection: SaveDoodleCitySelection,
+        location: CLLocation?,
+        locationDenied: Bool
+    ) -> [Place] {
+        switch resolvedSelection(selection, places: places, locationDenied: locationDenied) {
+        case .nearYou:
+            guard let id = nearYouCityID(from: places, location: location) else { return [] }
+            return places.filter { cityID(for: $0) == id }
+        case .city(let id):
+            return places.filter { cityID(for: $0) == id }
+        }
+    }
+
+    static func nearYouCityID(from places: [Place], location: CLLocation?) -> String? {
+        if let location {
+            let nearby = places.filter { distance(from: location, to: $0).map { $0 <= nearbyRadius } ?? false }
+            if let nearest = nearby.sorted(by: { closer($0, $1, to: location) }).first {
+                return cityID(for: nearest)
+            }
+        }
+        return nil
+    }
+
+    static func cityCollectedCount(in places: [Place]) -> (visited: Int, saved: Int) {
+        (places.filter { $0.status == .visited }.count, places.count)
+    }
+
     static func collectedProgress(in places: [Place]) -> (visited: Int, saved: Int, goal: Int) {
-        let saved = places.count
-        let visited = places.filter { $0.status == .visited }.count
-        return (visited, saved, SaveTileTownProductLock.passportGoal(for: saved))
+        let count = cityCollectedCount(in: places)
+        return (count.visited, count.saved, count.saved)
     }
 
     static func collectedStamps(in places: [Place], limit: Int = 3) -> [Place] {
@@ -436,5 +467,27 @@ final class SaveDoodleVisitStore {
 
     static func countKey(_ id: UUID) -> String {
         "save.doodle.passport.visits.\(suiteSuffix).\(id.uuidString)"
+    }
+}
+
+/// Shared city-scope numbers so Home Collected and Passport stay aligned.
+enum SaveDoodlePassportCatalog {
+    static func cityPlaces(
+        from places: [Place],
+        selection: SaveDoodleCitySelection,
+        location: CLLocation? = nil,
+        locationDenied: Bool
+    ) -> [Place] {
+        SaveDoodleHomeCatalog.collectedScopePlaces(
+            from: places,
+            selection: selection,
+            location: location,
+            locationDenied: locationDenied
+        )
+        .sorted(by: SaveDoodleHomeCatalog.moreRecent)
+    }
+
+    static func visitedCount(in places: [Place]) -> Int {
+        SaveDoodleHomeCatalog.cityCollectedCount(in: places).visited
     }
 }
