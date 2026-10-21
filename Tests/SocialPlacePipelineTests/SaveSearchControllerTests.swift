@@ -2659,13 +2659,9 @@ final class SaveSearchControllerTests: XCTestCase {
 
         let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
         XCTAssertEqual(resolved.id, stamp.id)
-        XCTAssertFalse(map.reviewCandidates.contains { $0.id == captured.id })
-        XCTAssertTrue(
-            map.reviewCandidates.contains { $0.id == seed.id },
-            "A leftover same-name row is only retired by its own id"
-        )
+        XCTAssertTrue(map.reviewCandidates.isEmpty, "Seed and captured Harbor Oven cards in the same city must both retire.")
         let reloaded = SaveLocalVaultService(overrideVaultURL: vaultURL)
-        XCTAssertEqual(Set(try reloaded.reviewCandidates().map(\.id)), [seed.id])
+        XCTAssertTrue(try reloaded.reviewCandidates().isEmpty)
     }
 
     @MainActor
@@ -6312,8 +6308,8 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(content.contains("preserveExactSearchClue"))
         XCTAssertTrue(content.contains("exactSearchClueID"))
         XCTAssertTrue(mapModel.contains("retireResolvedReviewClue"))
+        XCTAssertTrue(mapModel.contains("isIndependentSameNameBranch"))
         XCTAssertFalse(mapModel.contains("retireSameNameReviewClues"))
-        XCTAssertFalse(mapModel.contains("localizedCaseInsensitiveCompare(clue.name)"))
         XCTAssertTrue(content.contains("mapDrawerPresentedActionError"))
         XCTAssertTrue(content.contains("MapDrawerActionErrorAlert"))
         XCTAssertTrue(content.contains("map.drawer.actionError"))

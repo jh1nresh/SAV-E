@@ -111,12 +111,16 @@ struct SaveCaptureFlowView: View {
             }
             .toolbarBackground(.hidden, for: .navigationBar)
         }
-        .fullScreenCover(isPresented: $isGoogleTakeoutPresented) {
-            NavigationStack {
-                GoogleTakeoutImportView(
-                    existingPlaces: existingPlaces,
-                    onSave: onSaveGoogleTakeoutImport
-                )
+        .overlay {
+            if isGoogleTakeoutPresented {
+                NavigationStack {
+                    GoogleTakeoutImportView(
+                        existingPlaces: existingPlaces,
+                        onSave: onSaveGoogleTakeoutImport,
+                        onClose: { isGoogleTakeoutPresented = false }
+                    )
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .interactiveDismissDisabled(isAnalyzing)

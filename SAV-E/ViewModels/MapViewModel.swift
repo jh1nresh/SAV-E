@@ -2090,16 +2090,47 @@ final class MapViewModel: ObservableObject {
         return (true, committed)
     }
 
-    /// Confirming one clue retires that id only. Same-name branches in
-    /// another city are independent review rows and must stay.
+    /// Confirming one clue retires that id. Same-name leftovers in the same
+    /// city are the same correction (seed + captured). A same-name branch
+    /// with a different city is a different place and must stay.
     private func retireResolvedReviewClue(_ clue: PlaceReviewCandidate) {
-        reviewCandidates.removeAll { $0.id == clue.id }
-        if selectedReviewCandidate?.id == clue.id {
+        let retiredIDs = Set(
+            reviewCandidates
+                .filter { shouldRetire(alongside: clue, candidate: $0) }
+                .map(\.id)
+            + [clue.id]
+        )
+        for id in retiredIDs where id != clue.id {
+            try? saveLocalVaultService.removeReviewCandidate(id)
+        }
+        reviewCandidates.removeAll { retiredIDs.contains($0.id) }
+        if selectedReviewCandidate.map({ retiredIDs.contains($0.id) }) == true {
             selectedReviewCandidate = nil
         }
-        if exactSearchResolution?.clue.id == clue.id {
+        if exactSearchResolution.map({ retiredIDs.contains($0.clue.id) }) == true {
             exactSearchResolution = nil
         }
+    }
+
+    private func shouldRetire(
+        alongside clue: PlaceReviewCandidate,
+        candidate: PlaceReviewCandidate
+    ) -> Bool {
+        if candidate.id == clue.id { return true }
+        guard candidate.name.localizedCaseInsensitiveCompare(clue.name) == .orderedSame else {
+            return false
+        }
+        return !isIndependentSameNameBranch(candidate, of: clue)
+    }
+
+    private func isIndependentSameNameBranch(
+        _ leftover: PlaceReviewCandidate,
+        of clue: PlaceReviewCandidate
+    ) -> Bool {
+        let left = leftover.city?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let right = clue.city?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !left.isEmpty, !right.isEmpty else { return false }
+        return left.localizedCaseInsensitiveCompare(right) != .orderedSame
     }
 
     /// Terminal actions for this clue (reject / archive / source-only / confirm)

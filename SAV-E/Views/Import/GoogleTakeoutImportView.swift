@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct GoogleTakeoutImportView: View {
     let existingPlaces: [Place]
     let onSave: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary
+    var onClose: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var isFileImporterPresented = false
@@ -47,7 +48,11 @@ struct GoogleTakeoutImportView: View {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Close") {
                     SaveHaptics.tap()
-                    dismiss()
+                    if let onClose {
+                        onClose()
+                    } else {
+                        dismiss()
+                    }
                 }
                 .font(SaveAtlasType.strong(15))
                 .foregroundStyle(SaveAtlasPalette.forest)
