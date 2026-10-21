@@ -20,7 +20,8 @@ struct SavePlaceFromURLIntent: AppIntent {
         } catch {
             let record = try SaveLocalVaultService.shared.saveSourceOnly(
                 url: url,
-                note: note.trimmingCharacters(in: .whitespacesAndNewlines)
+                note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+                ownerSubject: PrivyAuthService.shared.currentUserId
             )
             return .result(dialog: "Saved \(record.displayTitle) as a Savvy source clue. Open Savvy to review it.")
         }

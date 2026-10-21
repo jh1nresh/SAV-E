@@ -468,6 +468,7 @@ private struct ShareMemoryRecord: Codable {
     var evidence: [String]
     var evidenceDiagnostic: SocialPlaceEvidenceDiagnostic? = nil
     var createdAt: Date
+    var ownerSubject: String? = nil
 }
 
 // MARK: - Share Extension SwiftUI View
@@ -3738,7 +3739,8 @@ struct ShareExtensionView: View {
             address: nil,
             evidence: diagnostic.found + diagnostic.attempts + diagnosticSearchEvidence(diagnostic),
             evidenceDiagnostic: diagnostic,
-            createdAt: Date()
+            createdAt: Date(),
+            ownerSubject: analysisCredential?.ownerSubject ?? ShareAnalysisKeychain.read()?.ownerSubject
         )
         var saved = false
         let coordinated = coordinate(fileURL, purpose: "append source-only memory") { coordinatedURL in

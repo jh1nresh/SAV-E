@@ -1064,7 +1064,12 @@ final class MapViewModel: ObservableObject {
 
     private func localConfirmedPlaces() -> [Place] {
         do {
-            return try saveLocalVaultService.confirmedPlaces(limit: 500)
+            let owner = authService.currentUserId
+            return Place.consolidated(
+                try saveLocalVaultService.confirmedPlaceRecords(limit: 500)
+                    .filter { Self.localVaultRecordBelongsToActiveAccount($0.ownerSubject, currentUserId: owner) }
+                    .compactMap(\.confirmedPlace)
+            )
         } catch {
             print("MapViewModel: failed to load local confirmed places: \(error)")
             return []
@@ -1386,7 +1391,11 @@ final class MapViewModel: ObservableObject {
         }
         guard !analysisInput.isEmpty else { throw URLError(.badURL) }
         if usesRemotePersistence, let sourceURL {
-            _ = try saveLocalVaultService.saveSourceOnly(url: sourceURL, note: normalizedShare.captionEvidence)
+            _ = try saveLocalVaultService.saveSourceOnly(
+                url: sourceURL,
+                note: normalizedShare.captionEvidence,
+                ownerSubject: authService.currentUserId
+            )
         }
 
         let candidates: [PendingReviewCandidate]
@@ -2959,7 +2968,7 @@ final class MapViewModel: ObservableObject {
 
     private func mirrorToLocalVault(_ place: Place) {
         do {
-            _ = try saveLocalVaultService.saveConfirmedPlace(place)
+            _ = try saveLocalVaultService.saveConfirmedPlace(place, ownerSubject: authService.currentUserId)
         } catch {
             print("MapViewModel: failed to mirror confirmed place to local vault: \(error)")
         }

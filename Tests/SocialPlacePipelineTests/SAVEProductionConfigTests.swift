@@ -495,7 +495,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         // vault; parking does not clear Map Stamps. Persist the 49 first.
         let seeded = makeCappedPlaces(49)
         for place in seeded {
-            _ = try vault.saveConfirmedPlace(place)
+            _ = try vault.saveConfirmedPlace(place, ownerSubject: "receipt-owner")
         }
         map.places = seeded
         let receipt = SharedPlaceReceipt.embedded(
@@ -835,8 +835,17 @@ final class SAVEProductionConfigTests: XCTestCase {
             "signed-in refresh must hide another account's vault rows"
         )
         let vault = try source(at: "SAV-E/Services/SaveLocalVaultService.swift")
+        let intent = try source(at: "SAV-E/Intents/SavePlaceFromURLIntent.swift")
+        let share = try source(at: "SAV-EShareExtension/ShareViewController.swift")
         XCTAssertTrue(vault.contains("existing.ownerSubject == incoming.ownerSubject"))
         XCTAssertTrue(vault.contains("ownerSubject: candidate.ownerSubject"))
+        XCTAssertTrue(vault.contains("func saveSourceOnly(url: URL, note: String? = nil, ownerSubject: String? = nil)"))
+        XCTAssertTrue(vault.contains("func saveConfirmedPlace(_ incoming: Place, ownerSubject: String? = nil)"))
+        XCTAssertTrue(vault.contains("func confirmedPlaceRecords"))
+        XCTAssertTrue(intent.contains("ownerSubject: PrivyAuthService.shared.currentUserId"))
+        XCTAssertTrue(share.contains("analysisCredential?.ownerSubject ?? ShareAnalysisKeychain.read()?.ownerSubject"))
+        XCTAssertTrue(map.contains("confirmedPlaceRecords(limit: 500)"))
+        XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: authService.currentUserId)"))
         XCTAssertTrue(
             map.contains("try ensureConfirmationSession(userId, generation)"),
             "a late over-limit must not park into a new account"
@@ -979,6 +988,67 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertTrue(MapViewModel.localVaultRecordBelongsToActiveAccount(nil, currentUserId: nil))
         XCTAssertFalse(MapViewModel.localVaultRecordBelongsToActiveAccount("did:privy:a", currentUserId: nil))
+    }
+
+    func testSourceOnlyFallbackStampsTheSignedInOwner() throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("source-only-owner-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let record = try vault.saveSourceOnly(
+            url: URL(string: "https://example.com/clue")!,
+            note: "Keep this source",
+            ownerSubject: "did:privy:owner-a"
+        )
+        XCTAssertEqual(record.ownerSubject, "did:privy:owner-a")
+        XCTAssertEqual(try vault.reviewCandidates().first?.ownerSubject, "did:privy:owner-a")
+        XCTAssertTrue(
+            MapViewModel.localVaultRecordBelongsToActiveAccount(
+                try XCTUnwrap(vault.reviewCandidates().first).ownerSubject,
+                currentUserId: "did:privy:owner-a"
+            )
+        )
+        XCTAssertFalse(
+            MapViewModel.localVaultRecordBelongsToActiveAccount(
+                try XCTUnwrap(vault.reviewCandidates().first).ownerSubject,
+                currentUserId: "did:privy:owner-b"
+            )
+        )
+    }
+
+    @MainActor
+    func testAnotherAccountVaultDoesNotInflateTheFreeCap() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:owner-b")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.place-limit-scope-\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-scope-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        for place in makeCappedPlaces(50) {
+            _ = try vault.saveConfirmedPlace(place, ownerSubject: "did:privy:owner-a")
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let map = MapViewModel(
+            supabaseService: SupabaseService(
+                apiBaseURL: "https://analysis.test",
+                session: URLSession(configuration: configuration),
+                accessTokenProvider: { "test-token" }
+            ),
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        await map.loadPlaces(force: true)
+        XCTAssertTrue(map.places.isEmpty, "account B must not inherit A's cached Map Stamps")
+        XCTAssertEqual(try vault.confirmedPlaceRecords().count, 50)
     }
 
     @MainActor
