@@ -1076,7 +1076,6 @@ final class MapViewModel: ObservableObject {
 
     private func localConfirmedPlaces() -> [Place] {
         do {
-            claimOwnerlessVaultRecordsIfNeeded()
             return try saveLocalVaultService.confirmedPlaces(
                 limit: 500,
                 belongingTo: authService.currentUserId
@@ -1089,7 +1088,6 @@ final class MapViewModel: ObservableObject {
 
     private func localReviewCandidates() -> [PlaceReviewCandidate] {
         do {
-            claimOwnerlessVaultRecordsIfNeeded()
             let owner = authService.currentUserId
             return try saveLocalVaultService.reviewCandidates(limit: 500).filter { candidate in
                 Self.localVaultRecordBelongsToActiveAccount(candidate.ownerSubject, currentUserId: owner)
@@ -1100,14 +1098,9 @@ final class MapViewModel: ObservableObject {
         }
     }
 
-    private func claimOwnerlessVaultRecordsIfNeeded() {
-        guard let owner = authService.currentUserId else { return }
-        try? saveLocalVaultService.claimOwnerlessRecords(for: owner)
-    }
-
-    /// Signed-in accounts see only their own vault rows. Ownerless pre-upgrade
-    /// rows are claimed first when no other owner is present. Remaining
-    /// ownerless rows stay hidden while signed in so they cannot leak.
+    /// Signed-in accounts see only their own vault rows. Ownerless legacy rows
+    /// stay hidden while signed in; a nil owner is not evidence that the
+    /// current account created them. Remote fetch remains the upgrade path.
     nonisolated static func localVaultRecordBelongsToActiveAccount(
         _ ownerSubject: String?,
         currentUserId: String?

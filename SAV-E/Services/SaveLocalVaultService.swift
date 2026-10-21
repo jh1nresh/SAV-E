@@ -81,27 +81,6 @@ final class SaveLocalVaultService: Sendable {
         }
     }
 
-    /// Pre-upgrade vault rows decode `ownerSubject` as nil. Claim them for the
-    /// signed-in account only when no other owner already has rows, so existing
-    /// memory stays visible without leaking to the next account.
-    func claimOwnerlessRecords(for ownerSubject: String) throws {
-        try withLock {
-            try withCoordinatedVaultWrite { url in
-                var records = try loadRecords(from: url)
-                let otherOwners = Set(records.compactMap(\.ownerSubject).filter { $0 != ownerSubject })
-                guard otherOwners.isEmpty else { return }
-                var changed = false
-                for index in records.indices where records[index].ownerSubject == nil {
-                    records[index].ownerSubject = ownerSubject
-                    changed = true
-                }
-                if changed {
-                    try save(records, to: url)
-                }
-            }
-        }
-    }
-
     func confirmedPlaceRecords(limit: Int = 250) throws -> [SaveMemoryRecord] {
         try withLock {
             try withCoordinatedVaultRead { url in
