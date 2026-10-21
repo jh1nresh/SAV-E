@@ -379,7 +379,7 @@ private struct AtlasRegionalHomeHero: View {
                 .frame(width: isFloating && !reduceMotion ? 58 : 42)
             Image(systemName: "location.fill")
                 .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(AtlasPalette.cream)
+                .foregroundStyle(.white)
                 .frame(width: 38, height: 38)
                 .background(AtlasPalette.coral, in: Circle())
                 .overlay {
@@ -808,7 +808,7 @@ private struct HomeSavedPlacesEmpty: View {
             Button(action: onCapture) {
                 Label(localized("Paste your first link", "貼上第一個連結"), systemImage: "link")
                     .font(AtlasType.strong(16))
-                    .foregroundStyle(AtlasPalette.cream)
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity, minHeight: 48)
                     .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 14))
             }
@@ -952,7 +952,7 @@ private struct HomeReviewCard: View {
                         .font(.system(size: 18, weight: .regular))
                         .padding(.trailing, 14)
                 }
-                .foregroundStyle(AtlasPalette.cream)
+                .foregroundStyle(.white)
                 .frame(width: 296, height: 41)
                 .background(
                     LinearGradient(
@@ -1299,7 +1299,7 @@ struct TripsAtlasScreen: View {
                     Button(action: presentation.onCreateTrip) {
                         Label(presentation.newTripLabel, systemImage: "plus")
                             .font(AtlasType.strong(16))
-                            .foregroundStyle(AtlasPalette.cream)
+                            .foregroundStyle(.white)
                             .frame(maxWidth: .infinity, minHeight: 50)
                             .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 16))
                     }
@@ -1389,7 +1389,7 @@ private struct TripRecommendationCard: View {
 
                 Image(systemName: "arrow.right")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(AtlasPalette.cream)
+                    .foregroundStyle(.white)
                     .frame(width: 28, height: 28)
                     .background(AtlasPalette.coral, in: Circle())
             }
@@ -1543,7 +1543,7 @@ struct SavesPocketScreen: View {
                 Button(action: presentation.onCapture) {
                     Image(systemName: "link")
                         .font(.system(size: 20, weight: .medium))
-                        .foregroundStyle(AtlasPalette.cream)
+                        .foregroundStyle(.white)
                         .frame(width: 40, height: 40)
                         .background(AtlasPalette.coral.opacity(0.92), in: RoundedRectangle(cornerRadius: 13))
                         .overlay {
@@ -2182,7 +2182,7 @@ struct TripMapPlaceCard: View {
                     Image(systemName: "arrow.right")
                         .font(.system(size: 18, weight: .regular))
                 }
-                .foregroundStyle(AtlasPalette.cream)
+                .foregroundStyle(.white)
                 .frame(width: 160, height: 42)
                 .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 10))
             }
@@ -2410,7 +2410,7 @@ struct PlaceAtlasCard: View {
                         .font(.system(size: 18, weight: .regular))
                         .padding(.trailing, 14)
                 }
-                .foregroundStyle(AtlasPalette.cream)
+                .foregroundStyle(.white)
                 .frame(width: 226, height: 42)
                 .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 10))
             }

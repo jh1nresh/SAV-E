@@ -102,7 +102,7 @@ struct SaveTileTownRootMap: View {
                         Text(item.title(language: languageSettings.language))
                     }
                     .font(SaveAtlasType.strong(13))
-                    .foregroundStyle(lens == item ? SaveAtlasPalette.coralStrong : SaveAtlasPalette.forest)
+                    .foregroundStyle(lens == item ? SaveAtlasPalette.coral : SaveAtlasPalette.forest)
                     .padding(.horizontal, 12)
                     .frame(minHeight: 44)
                     .contentShape(Capsule())

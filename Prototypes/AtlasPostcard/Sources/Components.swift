@@ -224,7 +224,7 @@ struct RoundStamp: View {
                 if let text = SaveSoftPixelAccentsLock.visibleStampText(text) {
                     Text(text)
                         .font(AtlasType.strong(17))
-                        .foregroundStyle(AtlasPalette.cream)
+                        .foregroundStyle(AtlasPalette.ink)
                         .frame(width: 38, height: 38)
                         .background(AtlasPalette.coral.opacity(0.90), in: Circle())
                         .overlay {
@@ -233,7 +233,7 @@ struct RoundStamp: View {
                 } else {
                     Image(systemName: "mappin")
                         .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(AtlasPalette.cream)
+                        .foregroundStyle(AtlasPalette.ink)
                         .frame(width: 38, height: 38)
                         .background(AtlasPalette.coral.opacity(0.90), in: Circle())
                         .overlay {

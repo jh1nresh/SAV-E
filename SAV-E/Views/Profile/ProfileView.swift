@@ -610,7 +610,7 @@ struct ProfileView: View {
             } label: {
                 Text(languageSettings.localized(english: "Mark visited", traditionalChinese: "標記去過"))
                     .font(SaveAtlasType.strong(15))
-                    .foregroundStyle(SaveAtlasPalette.cream)
+                    .foregroundStyle(SaveAtlasPalette.paper)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(SaveAtlasPalette.coral, in: Capsule())
@@ -881,7 +881,7 @@ private struct PassportConnectionsView: View {
                         systemImage: "person.badge.plus"
                     )
                     .font(SaveAtlasType.strong(13))
-                    .foregroundStyle(SaveAtlasPalette.cream)
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
                     .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
@@ -1026,7 +1026,7 @@ private struct PassportConnectionsView: View {
             Text(eyebrow)
                 .font(SaveAtlasType.strong(10))
                 .tracking(1.05)
-                .foregroundStyle(SaveAtlasPalette.coralStrong)
+                .foregroundStyle(SaveAtlasPalette.coral)
             Text(title)
                 .font(SaveAtlasType.display(22))
                 .foregroundStyle(SaveAtlasPalette.forest)
@@ -1420,7 +1420,7 @@ private struct ListManageView: View {
             Text(languageSettings.localized(english: "MEMBERS", traditionalChinese: "成員"))
                 .font(SaveAtlasType.strong(10))
                 .tracking(1.05)
-                .foregroundStyle(SaveAtlasPalette.coralStrong)
+                .foregroundStyle(SaveAtlasPalette.coral)
 
             if isLoadingMembers {
                 ProgressView()
@@ -1508,7 +1508,7 @@ private struct ListManageView: View {
             Text(languageSettings.localized(english: "SHARE CODES", traditionalChinese: "分享碼"))
                 .font(SaveAtlasType.strong(10))
                 .tracking(1.05)
-                .foregroundStyle(SaveAtlasPalette.coralStrong)
+                .foregroundStyle(SaveAtlasPalette.coral)
 
             if isLoadingShareCodes {
                 ProgressView()
@@ -1733,7 +1733,7 @@ private struct EditProfileSheet: View {
                     } label: {
                         Text(isSaving ? languageSettings.text(.saving) : languageSettings.text(.save))
                             .font(.caption.weight(.bold))
-                            .foregroundStyle(SaveAtlasPalette.cream)
+                            .foregroundColor(.white)
                             .padding(.horizontal, SaveTheme.Spacing.md)
                             .frame(height: 38)
                             .background(SaveAtlasPalette.coral)

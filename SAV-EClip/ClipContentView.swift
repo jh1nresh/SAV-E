@@ -368,7 +368,7 @@ struct ClipContentView: View {
                                 Text("PLACE POSTCARD")
                                     .font(ClipAtlasType.strong(10, relativeTo: .caption))
                                     .tracking(0.8)
-                                    .foregroundStyle(ClipAtlasPalette.coralStrong)
+                                    .foregroundStyle(ClipAtlasPalette.coral)
 
                                 Text(place.name)
                                     .font(ClipAtlasType.strong(25, relativeTo: .title2))
@@ -452,7 +452,7 @@ struct ClipContentView: View {
                 Button(action: openInFullApp) {
                     Label("Save to my Savvy", systemImage: "plus.circle.fill")
                         .font(ClipAtlasType.strong(16, relativeTo: .headline))
-                        .foregroundStyle(ClipAtlasPalette.atlasCream)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 14)
                         .frame(maxWidth: .infinity, minHeight: 52)
@@ -523,7 +523,7 @@ struct ClipContentView: View {
                                 Text("TRIP POSTCARD")
                                     .font(ClipAtlasType.strong(10, relativeTo: .caption))
                                     .tracking(0.8)
-                                    .foregroundStyle(ClipAtlasPalette.coralStrong)
+                                    .foregroundStyle(ClipAtlasPalette.coral)
 
                                 Text(trip.name)
                                     .font(ClipAtlasType.strong(25, relativeTo: .title2))
@@ -607,7 +607,7 @@ struct ClipContentView: View {
                 Button(action: openInFullApp) {
                     Label("Open in Savvy", systemImage: "arrow.up.right")
                         .font(ClipAtlasType.strong(16, relativeTo: .headline))
-                        .foregroundStyle(ClipAtlasPalette.atlasCream)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 14)
                         .frame(maxWidth: .infinity, minHeight: 52)
@@ -708,7 +708,7 @@ struct ClipContentView: View {
                     Text("SHARED LIST PREVIEW")
                         .font(ClipAtlasType.strong(11))
                         .tracking(0.8)
-                        .foregroundStyle(ClipAtlasPalette.coralStrong)
+                        .foregroundStyle(ClipAtlasPalette.coral)
                     Text(list.title)
                         .font(ClipAtlasType.display(27, relativeTo: .title))
                         .foregroundStyle(ClipAtlasPalette.ink)
@@ -750,7 +750,7 @@ struct ClipContentView: View {
                     Button(action: openInFullApp) {
                         Label("Open list in Savvy", systemImage: "arrow.up.right.square")
                             .font(ClipAtlasType.strong(16))
-                            .foregroundStyle(ClipAtlasPalette.atlasCream)
+                            .foregroundStyle(.white)
                             .frame(maxWidth: .infinity, minHeight: 48)
                             .background(ClipAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 11))
                     }
@@ -805,7 +805,7 @@ struct ClipContentView: View {
             Spacer(minLength: 4)
             Text(item.sourceLabel)
                 .font(ClipAtlasType.strong(10))
-                .foregroundStyle(item.source == "savedPlace" ? ClipAtlasPalette.forest : ClipAtlasPalette.coralStrong)
+                .foregroundStyle(item.source == "savedPlace" ? ClipAtlasPalette.forest : ClipAtlasPalette.coral)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 5)
                 .background(ClipAtlasPalette.paper, in: Capsule())
@@ -908,7 +908,7 @@ struct ClipContentView: View {
                 Text("OPENING SHARED MEMORY")
                     .font(ClipAtlasType.strong(11))
                     .tracking(0.9)
-                    .foregroundStyle(ClipAtlasPalette.coralStrong)
+                    .foregroundStyle(ClipAtlasPalette.coral)
 
                 ZStack(alignment: .bottomTrailing) {
                     Image(systemName: "map.fill")
@@ -996,7 +996,7 @@ struct ClipContentView: View {
                     } label: {
                         Label("Try again", systemImage: "arrow.clockwise")
                             .font(ClipAtlasType.strong(15))
-                            .foregroundStyle(ClipAtlasPalette.atlasCream)
+                            .foregroundStyle(.white)
                             .frame(maxWidth: .infinity, minHeight: 46)
                             .background(ClipAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 11))
                     }
@@ -1458,10 +1458,7 @@ private enum ClipAtlasPalette {
     static let forest = Color(hex: "0E4A33")
     static let ink = Color(hex: "2E2117")
     static let muted = Color(hex: "62594F")
-    static let atlasCream = Color(hex: "FFF9EB")
-    // Twin of SaveAtlasPalette.coralLightHex. Keep in lockstep.
-    static let coral = Color(hex: "E95C3A")
-    static let coralStrong = Color(hex: "CA4424")
+    static let coral = Color(hex: "F26B4A")
     static let mint = Color(hex: "D6E8C4")
     static let sky = Color(hex: "B5E3F5")
     static let kraft = Color(hex: "F0CFA1")
@@ -1532,7 +1529,7 @@ private struct ClipSharedPostageStamp: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
-        .foregroundStyle(ClipAtlasPalette.atlasCream)
+        .foregroundStyle(.white)
         .frame(width: 62, height: 72)
         .background {
             ClipScallopedRectangle(depth: 2.5, pitch: 8)

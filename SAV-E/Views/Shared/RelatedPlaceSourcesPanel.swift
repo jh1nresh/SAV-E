@@ -349,7 +349,7 @@ struct RelatedPlaceSourcesPanel: View {
         } label: {
             Label(title, systemImage: systemImage)
         }
-        .buttonStyle(SaveBrandPrimaryButtonStyle(fill: SaveAtlasPalette.coral, foreground: SaveAtlasPalette.cream))
+        .buttonStyle(SaveBrandPrimaryButtonStyle(fill: SaveAtlasPalette.coral, foreground: .white))
         .disabled(state == .loading || !hasGoogleIdentity)
         .accessibilityIdentifier("drawer.saved.relatedSources.find")
     }

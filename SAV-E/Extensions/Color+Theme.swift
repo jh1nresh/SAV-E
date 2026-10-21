@@ -196,25 +196,22 @@ extension Color {
 
 enum SaveAtlasPalette {
     /// Doodle journal lock 2026-10-19. Warm paper, warm charcoal dark.
-    static let canvas = Color(light: "FFF9EB", dark: "1E1C19")
-    static let paper = Color(light: "FFF9EB", dark: "1E1C19")
+    /// Landing / Atlas cream. Canvas and paper light columns use this hex.
+    static let creamHex = "FFF9EB"
+    static let cream = Color(hex: creamHex)
+    /// App icon and wordmark lock. Same hex as light coral; do not recolor assets.
+    static let brandCoralHex = "F26B4A"
+    static let brandCoral = Color(hex: brandCoralHex)
+    /// Postage accent: primary CTA and source-clue fill. Matches landing `--coral`.
+    static let coralLightHex = brandCoralHex
+    static let coralDarkHex = "D97861"
+
+    static let canvas = Color(light: creamHex, dark: "1E1C19")
+    static let paper = Color(light: creamHex, dark: "1E1C19")
     static let forest = Color(light: "0E4A33", dark: "B9E0C9")
     static let ink = Color(light: "2F2E23", dark: "F4F1E4")
     static let muted = Color(light: "62594F", dark: "CFC4B8")
-    /// Non-adaptive cream for labels sitting on coral fills.
-    static let creamHex = "FFF9EB"
-    static let cream = Color(hex: creamHex)
-    /// App icon and wordmark lock. Do not use for UI chrome; do not recolor assets.
-    static let brandCoralHex = "F26B4A"
-    static let brandCoral = Color(hex: brandCoralHex)
-    /// Postage accent: primary CTA and source-clue fill. Cream on this is 3.30:1.
-    static let coralLightHex = "E95C3A"
-    static let coralDarkHex = "D56B52"
     static let coral = Color(light: coralLightHex, dark: coralDarkHex)
-    /// Small text on paper only. Not a fill.
-    static let coralStrongLightHex = "CA4424"
-    static let coralStrongDarkHex = "BE5137"
-    static let coralStrong = Color(light: coralStrongLightHex, dark: coralStrongDarkHex)
     static let mint = Color(light: "D6E8C4", dark: "4F7258")
     static let sky = Color(light: "B5E3F5", dark: "3F758B")
     static let lavender = Color(light: "E3D6F7", dark: "57466F")
@@ -568,7 +565,7 @@ enum SavePostcardTicketStyle {
         case .review:
             return .saveBlueInk
         case .sourceClue:
-            return SaveAtlasPalette.coralStrong
+            return SaveAtlasPalette.coral
         case .confirmed:
             return SaveAtlasPalette.forest
         }
@@ -740,7 +737,7 @@ struct SaveAtlasLoadingCard: View {
                 Text(eyebrow.uppercased())
                     .font(SaveAtlasType.strong(10))
                     .tracking(0.7)
-                    .foregroundStyle(SaveAtlasPalette.coralStrong)
+                    .foregroundStyle(SaveAtlasPalette.coral)
                 Text(title)
                     .font(SaveAtlasType.strong(19, relativeTo: .headline))
                     .foregroundStyle(SaveAtlasPalette.forest)

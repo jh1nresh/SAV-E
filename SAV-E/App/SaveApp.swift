@@ -1119,7 +1119,7 @@ struct AuthLoadingView: View {
                     ))
                     .font(SaveAtlasType.strong(10))
                     .tracking(1)
-                    .foregroundStyle(SaveAtlasPalette.coralStrong)
+                    .foregroundStyle(SaveAtlasPalette.coral)
 
                     Text(languageSettings.text(.opening))
                         .font(SaveAtlasType.strong(27, relativeTo: .title2))
@@ -1637,7 +1637,7 @@ private struct SignInInputRow: View {
             Button(buttonTitle, action: action)
                 .accessibilityIdentifier(buttonAccessibilityID)
                 .font(SaveAtlasType.strong(13))
-                .foregroundStyle(SaveAtlasPalette.cream)
+                .foregroundStyle(SaveAtlasPalette.paper)
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
                 .padding(.horizontal, 11)

@@ -823,7 +823,7 @@ struct SaveAtlasLivePlaceCard: View {
                             .font(.system(size: 14, weight: .semibold))
                         Spacer()
                     }
-                    .foregroundStyle(SaveAtlasPalette.cream)
+                    .foregroundStyle(.white)
                     .frame(height: 44)
                     .background(AtlasPalette.coral, in: RoundedRectangle(cornerRadius: 11))
                 }

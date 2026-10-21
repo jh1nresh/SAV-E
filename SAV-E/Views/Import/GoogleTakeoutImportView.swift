@@ -90,7 +90,7 @@ struct GoogleTakeoutImportView: View {
                 Text("POSTAL IMPORT")
                     .font(SaveAtlasType.strong(11))
                     .tracking(0.8)
-                    .foregroundStyle(SaveAtlasPalette.coralStrong)
+                    .foregroundStyle(SaveAtlasPalette.coral)
 
                 Text("Bulk delivery")
                     .font(SaveAtlasType.strong(34, relativeTo: .largeTitle))
@@ -146,14 +146,14 @@ struct GoogleTakeoutImportView: View {
                 } label: {
                     HStack(spacing: 9) {
                         if isParsing {
-                            ProgressView().tint(SaveAtlasPalette.cream)
+                            ProgressView().tint(.white)
                         } else {
                             Image(systemName: "doc.badge.plus")
                         }
                         Text(isParsing ? "Reading export…" : "Choose delivery file")
                     }
                     .font(SaveAtlasType.strong(17))
-                    .foregroundStyle(SaveAtlasPalette.cream)
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 52)
                     .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -263,7 +263,7 @@ struct GoogleTakeoutImportView: View {
             Text("DELIVERY RECEIPT")
                 .font(SaveAtlasType.strong(11))
                 .tracking(0.75)
-                .foregroundStyle(SaveAtlasPalette.coralStrong)
+                .foregroundStyle(SaveAtlasPalette.coral)
 
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -419,14 +419,14 @@ struct GoogleTakeoutImportView: View {
             } label: {
                 HStack(spacing: 8) {
                     if isSaving {
-                        ProgressView().tint(SaveAtlasPalette.cream)
+                        ProgressView().tint(.white)
                     } else {
                         Image(systemName: "checkmark.seal.fill")
                     }
                     Text(isSaving ? "Saving…" : "Accept delivery")
                 }
                 .font(SaveAtlasType.strong(18))
-                .foregroundStyle(SaveAtlasPalette.cream)
+                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 54)
                 .background(

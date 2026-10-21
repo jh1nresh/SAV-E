@@ -24,7 +24,7 @@ struct SaveFriendsView: View {
                     Button(action: onConnections) {
                         Text(language.localized(english: "Invite", traditionalChinese: "邀請"))
                             .font(SaveAtlasType.strong(13))
-                            .foregroundStyle(SaveAtlasPalette.cream)
+                            .foregroundStyle(.white)
                             .padding(.horizontal, 14)
                             .frame(minHeight: 36)
                             .background(SaveAtlasPalette.coral, in: Capsule())

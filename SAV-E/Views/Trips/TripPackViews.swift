@@ -561,7 +561,7 @@ private struct TripRouteNode: View {
         VStack(spacing: 4) {
             Text("\(position)")
                 .font(SaveAtlasType.strong(17))
-                .foregroundStyle(SaveAtlasPalette.cream)
+                .foregroundStyle(SaveAtlasPalette.ink)
                 .frame(width: 38, height: 38)
                 .background(SaveAtlasPalette.coral.opacity(0.90), in: Circle())
                 .overlay {
@@ -674,7 +674,7 @@ private struct TripAtlasSheetHeader: View {
                 Text(eyebrow.uppercased())
                     .font(SaveAtlasType.strong(11))
                     .tracking(0.8)
-                    .foregroundStyle(SaveAtlasPalette.coralStrong)
+                    .foregroundStyle(SaveAtlasPalette.coral)
 
                 Text(title)
                     .font(SaveAtlasType.strong(31, relativeTo: .title))
@@ -784,7 +784,7 @@ private struct TripAtlasPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(SaveAtlasType.strong(18))
-            .foregroundStyle(SaveAtlasPalette.cream)
+            .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 54)
             .background(
@@ -1423,7 +1423,7 @@ private struct TripAddressedPostcard: View {
                     Text(localized("TRIP POSTCARD", "行程明信片"))
                         .font(SaveAtlasType.strong(10))
                         .tracking(0.75)
-                        .foregroundStyle(SaveAtlasPalette.coralStrong)
+                        .foregroundStyle(SaveAtlasPalette.coral)
                     Text(trip.name)
                         .font(SaveAtlasType.strong(24, relativeTo: .title2))
                         .foregroundStyle(SaveAtlasPalette.forest)

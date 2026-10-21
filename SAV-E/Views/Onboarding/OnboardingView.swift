@@ -441,7 +441,7 @@ private struct OnboardingPrimaryStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(SaveAtlasType.strong(16))
-            .foregroundStyle(SaveAtlasPalette.cream)
+            .foregroundStyle(SaveAtlasPalette.paper)
             .padding(.horizontal, 16)
             .background(isEnabled ? SaveAtlasPalette.coral : SaveAtlasPalette.muted.opacity(0.4), in: RoundedRectangle(cornerRadius: 16))
             .opacity(configuration.isPressed ? 0.8 : 1)
