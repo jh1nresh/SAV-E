@@ -1129,7 +1129,12 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(intent.contains("ownerSubject: PrivyAuthService.shared.currentUserId"))
         XCTAssertTrue(share.contains("analysisCredential?.ownerSubject ?? ShareAnalysisKeychain.read()?.ownerSubject"))
         XCTAssertTrue(map.contains("belongingTo: authService.currentUserId"))
-        XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: authService.currentUserId)"))
+        XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: userId)"))
+        XCTAssertTrue(map.contains("startedBy userId: String?"))
+        XCTAssertTrue(
+            map.contains("throw ReviewCandidateError.sessionChangedAfterCommit"),
+            "a late vault mirror must not stamp the next signed-in account"
+        )
         XCTAssertTrue(
             map.contains("try ensureConfirmationSession(userId, generation)"),
             "a late over-limit must not park into a new account"

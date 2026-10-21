@@ -3325,6 +3325,53 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testSocialSaveDoesNotMirrorIntoANewSession() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        auth.authState = .authenticated(userId: "owner-a")
+        defer { auth.authState = previousAuth }
+
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("social-session-swap-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let supabase = RecordingSupabaseService()
+        supabase.onSavePlace = {
+            auth.authState = .authenticated(userId: "owner-b")
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        let social = Place(
+            id: UUID(),
+            name: "Social Session Cafe",
+            address: "2 Swap Road",
+            latitude: 25.1,
+            longitude: 121.1,
+            googlePlaceId: "social-session-cafe",
+            category: .cafe,
+            status: .wantToGo
+        )
+        map.socialPlaces = [social]
+        map.places = []
+
+        do {
+            _ = try await map.saveSocialPlaceToMySave(social)
+            XCTFail("a session change after /places must not continue locally")
+        } catch ReviewCandidateError.sessionChangedAfterCommit {
+            // Account A already saved. Do not write that stamp into B.
+        }
+        XCTAssertEqual(supabase.savedPlaces.count, 1, "account A already saved on the server")
+        XCTAssertTrue(map.places.isEmpty, "must not insert account A's stamp into the new session")
+        XCTAssertTrue(try vault.confirmedPlaces().isEmpty)
+        XCTAssertTrue(try vault.confirmedPlaceRecords().allSatisfy { $0.ownerSubject != "owner-b" })
+    }
+
+    @MainActor
     func testLocalOnlyConfirmDoesNotMirrorAfterRefreshSessionChange() async throws {
         let auth = PrivyAuthService.shared
         let previousAuth = auth.authState
