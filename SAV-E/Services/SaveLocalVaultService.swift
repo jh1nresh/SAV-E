@@ -53,6 +53,14 @@ final class SaveLocalVaultService: Sendable {
         }
     }
 
+    func confirmedPlaceRecords(limit: Int = 250) throws -> [SaveMemoryRecord] {
+        try withLock {
+            try withCoordinatedVaultRead { url in
+                Array(try loadRecords(from: url).filter { $0.state == .confirmedPlace }.prefix(limit))
+            }
+        }
+    }
+
     func reviewCandidates(limit: Int = 250) throws -> [PlaceReviewCandidate] {
         try withLock {
             try withCoordinatedVaultRead { url in
@@ -74,7 +82,7 @@ final class SaveLocalVaultService: Sendable {
         }
     }
 
-    func saveSourceOnly(url: URL, note: String? = nil) throws -> SaveMemoryRecord {
+    func saveSourceOnly(url: URL, note: String? = nil, ownerSubject: String? = nil) throws -> SaveMemoryRecord {
         let diagnostic = sourceOnlyDiagnostic(url: url, note: note)
         let record = SaveMemoryRecord(
             state: .sourceOnly,
@@ -82,7 +90,8 @@ final class SaveLocalVaultService: Sendable {
             sourceText: note,
             title: sourceOnlyDisplayName(for: url),
             evidence: diagnostic.candidateEvidence(extras: diagnosticSearchEvidence(diagnostic)),
-            evidenceDiagnostic: diagnostic
+            evidenceDiagnostic: diagnostic,
+            ownerSubject: ownerSubject
         )
         return try upsertReviewRecord(record, matchSourceIdentity: true)
     }
@@ -233,11 +242,15 @@ final class SaveLocalVaultService: Sendable {
         return merged
     }
 
-    func saveConfirmedPlace(_ incoming: Place) throws -> SaveMemoryRecord {
+    func saveConfirmedPlace(_ incoming: Place, ownerSubject: String? = nil) throws -> SaveMemoryRecord {
         try withLock {
             try withCoordinatedVaultWrite { url in
                 var records = try loadRecords(from: url)
-                let matches = records.compactMap(\.confirmedPlace).filter { $0.matches(incoming) }
+                let matches = records.compactMap { record -> Place? in
+                    guard record.state == .confirmedPlace,
+                          record.ownerSubject == ownerSubject else { return nil }
+                    return record.confirmedPlace
+                }.filter { $0.matches(incoming) }
                 // Keep current edits, and retain all prior source evidence and trip IDs.
                 let place = matches.reduce(incoming) { $0.mergingSources(from: $1) }
                 let record = SaveMemoryRecord(
@@ -263,7 +276,8 @@ final class SaveLocalVaultService: Sendable {
                     googlePlaceId: place.googlePlaceId,
                     sourceImageUrl: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
                     businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
-                    mergedPlaceIDs: place.mergedPlaceIDs
+                    mergedPlaceIDs: place.mergedPlaceIDs,
+                    ownerSubject: ownerSubject
                 )
                 records.removeAll { record in
                     record.state == .confirmedPlace && place.savedIDs.contains(record.id)
