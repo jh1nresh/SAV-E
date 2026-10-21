@@ -14,20 +14,54 @@ struct SaveCaptureFlowView: View {
     let existingPlaces: [Place]
     let onDraftChange: (String) -> Void
     let onImport: (String) async throws -> [UUID]
+    let onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary
     let onComplete: ([UUID]) -> Void
     let onCancel: () -> Void
     let onSearchNearby: () -> Void
-    let onOpenGoogleTakeout: () -> Void
     @State private var sharedText = ""
     @State private var isAnalyzing = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isPhotoPickerPresented = false
     @State private var isReadingPhoto = false
     @State private var errorMessage: String?
+    @State private var isGoogleTakeoutPresented = false
     @FocusState private var isInputFocused: Bool
     @State private var detent: PresentationDetent = .medium
 
     var body: some View {
+        Group {
+            if isGoogleTakeoutPresented {
+                NavigationStack {
+                    GoogleTakeoutImportView(
+                        existingPlaces: existingPlaces,
+                        onSave: onSaveGoogleTakeoutImport,
+                        onClose: { isGoogleTakeoutPresented = false }
+                    )
+                }
+            } else {
+                captureStack
+            }
+        }
+        .interactiveDismissDisabled(isAnalyzing)
+        .presentationDetents([.medium, .large], selection: $detent)
+        .presentationDragIndicator(.visible)
+        .presentationBackground(SaveAtlasPalette.paper)
+        .accessibilityIdentifier(isGoogleTakeoutPresented ? "takeout.import.root" : "capture.flow")
+        .onAppear {
+            if sharedText.isEmpty {
+                sharedText = initialText
+            }
+        }
+        .photosPicker(isPresented: $isPhotoPickerPresented, selection: $selectedPhoto, matching: .images)
+        .task(id: selectedPhoto) {
+            await readSelectedPhoto()
+        }
+        .onChange(of: sharedText) { _, draft in
+            onDraftChange(draft)
+        }
+    }
+
+    private var captureStack: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 0) {
                 header
@@ -110,23 +144,6 @@ struct SaveCaptureFlowView: View {
             }
             .toolbarBackground(.hidden, for: .navigationBar)
         }
-        .interactiveDismissDisabled(isAnalyzing)
-        .presentationDetents([.medium, .large], selection: $detent)
-        .presentationDragIndicator(.visible)
-        .presentationBackground(SaveAtlasPalette.paper)
-        .accessibilityIdentifier("capture.flow")
-        .onAppear {
-            if sharedText.isEmpty {
-                sharedText = initialText
-            }
-        }
-        .photosPicker(isPresented: $isPhotoPickerPresented, selection: $selectedPhoto, matching: .images)
-        .task(id: selectedPhoto) {
-            await readSelectedPhoto()
-        }
-        .onChange(of: sharedText) { _, draft in
-            onDraftChange(draft)
-        }
     }
 
     private var header: some View {
@@ -206,7 +223,8 @@ struct SaveCaptureFlowView: View {
                 identifier: "capture.importGoogleTakeout"
             ) {
                 isInputFocused = false
-                onOpenGoogleTakeout()
+                detent = .large
+                isGoogleTakeoutPresented = true
             }
             .disabled(isAnalyzing)
             .accessibilityLabel(localized("Import Google Takeout", "匯入 Google Takeout"))
@@ -371,10 +389,12 @@ enum SaveCapturePhotoText {
         existingPlaces: [],
         onDraftChange: { _ in },
         onImport: { _ in [] },
+        onSaveGoogleTakeoutImport: { _ in
+            GoogleTakeoutSaveSummary(saved: 0, skippedDuplicates: 0, reviewDrafts: 0)
+        },
         onComplete: { _ in },
         onCancel: {},
-        onSearchNearby: {},
-        onOpenGoogleTakeout: {}
+        onSearchNearby: {}
     )
     .preferredColorScheme(.light)
 }
@@ -386,10 +406,12 @@ enum SaveCapturePhotoText {
         existingPlaces: [],
         onDraftChange: { _ in },
         onImport: { _ in [] },
+        onSaveGoogleTakeoutImport: { _ in
+            GoogleTakeoutSaveSummary(saved: 0, skippedDuplicates: 0, reviewDrafts: 0)
+        },
         onComplete: { _ in },
         onCancel: {},
-        onSearchNearby: {},
-        onOpenGoogleTakeout: {}
+        onSearchNearby: {}
     )
     .preferredColorScheme(.dark)
 }

@@ -697,11 +697,9 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(passport.contains("profile.importGoogleTakeout"))
 
         XCTAssertTrue(capture.contains("capture.importGoogleTakeout"))
-        XCTAssertTrue(capture.contains("onOpenGoogleTakeout"))
-        XCTAssertFalse(capture.contains("GoogleTakeoutImportView("))
-        XCTAssertTrue(content.contains("GoogleTakeoutImportView("))
-        XCTAssertTrue(content.contains("presentExclusiveCover(.takeout)"))
-        XCTAssertTrue(content.contains("try await mapVM.saveImportedPlaces(drafts)"))
+        XCTAssertTrue(capture.contains("GoogleTakeoutImportView("))
+        XCTAssertTrue(capture.contains("if isGoogleTakeoutPresented"))
+        XCTAssertTrue(content.contains("onSaveGoogleTakeoutImport: { drafts in"))
     }
 
     func testOneJobPerTabDoesNotTouchGrantPath() throws {

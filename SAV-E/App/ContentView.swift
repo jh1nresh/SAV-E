@@ -85,15 +85,12 @@ enum SaveRootRoute: Hashable {
 
 private enum SaveFullScreenRoute: Identifiable {
     case capture
-    case takeout
     case placeDetail(MapDetailDrawerItem)
 
     var id: String {
         switch self {
         case .capture:
             return "capture"
-        case .takeout:
-            return "takeout"
         case .placeDetail(let item):
             switch item {
             case .savedPlace(let place):
@@ -564,17 +561,9 @@ struct ContentView: View {
 
     private var detailPresentation: Binding<SaveFullScreenRoute?> {
         Binding(
-            get: {
-                switch fullScreenRoute {
-                case .placeDetail, .takeout: return fullScreenRoute
-                default: return nil
-                }
-            },
+            get: { if case .placeDetail = fullScreenRoute { return fullScreenRoute }; return nil },
             set: { value in
-                switch fullScreenRoute {
-                case .placeDetail, .takeout: fullScreenRoute = value
-                default: break
-                }
+                if case .placeDetail = fullScreenRoute { fullScreenRoute = value }
             }
         )
     }
@@ -863,6 +852,9 @@ struct ContentView: View {
                 onImport: { sharedText in
                     try await mapVM.importSharedTextAsReviewCandidates(sharedText)
                 },
+                onSaveGoogleTakeoutImport: { drafts in
+                    try await mapVM.saveImportedPlaces(drafts)
+                },
                 onComplete: { candidateIDs in
                     pendingOnboardingClue = ""
                     selectedRootTab = .home
@@ -886,25 +878,8 @@ struct ContentView: View {
                 onSearchNearby: {
                     suppressPendingOnboardingCaptureResume = true
                     openMapSearch()
-                },
-                onOpenGoogleTakeout: {
-                    presentExclusiveCover(.takeout)
                 }
             )
-            .environment(\.appLanguageSettings, languageSettings)
-
-        case .takeout:
-            NavigationStack {
-                GoogleTakeoutImportView(
-                    existingPlaces: mapVM.places,
-                    onSave: { drafts in
-                        try await mapVM.saveImportedPlaces(drafts)
-                    },
-                    onClose: {
-                        presentExclusiveCover(.capture)
-                    }
-                )
-            }
             .environment(\.appLanguageSettings, languageSettings)
 
         case .placeDetail(let item):
@@ -1539,7 +1514,6 @@ struct ContentView: View {
     private var debugQARefreshToken: DebugQARefreshToken {
         let fullScreenKind: String? = switch fullScreenRoute {
         case .capture: "capture"
-        case .takeout: "takeout"
         case .placeDetail: "placeDetail"
         case nil: nil
         }

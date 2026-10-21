@@ -2832,11 +2832,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let capture = rootTabButton("Save", app: app)
         XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
         capture.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        let captureFlow = app.descendants(matching: .any)["capture.flow"]
+        XCTAssertTrue(captureFlow.waitForExistence(timeout: stepTimeout))
 
-        let importButton = app.buttons["capture.importGoogleTakeout"]
+        let importButton = captureFlow.buttons["capture.importGoogleTakeout"]
+        let captureScroll = captureFlow.scrollViews.firstMatch
         XCTAssertTrue(
-            scrollUntilHittable(importButton, in: app.scrollViews.firstMatch, maxSwipes: 12),
+            scrollUntilHittable(
+                importButton,
+                in: captureScroll.exists ? captureScroll : app.scrollViews.firstMatch,
+                maxSwipes: 12
+            ),
             "The center Save flow should expose Postal Import."
         )
         importButton.tap()
