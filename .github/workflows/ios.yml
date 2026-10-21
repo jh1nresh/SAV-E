@@ -390,7 +390,8 @@ jobs:
             max_attempts=3
           fi
           # Host `env:` does not reach the xctestrun UI runner. Inject the
-          # fallback path into the plist and pass it on the xcodebuild line.
+          # fallback path into the plist. Do not pass
+          # -test-environment-variable: Xcode 26.6 xcodebuild rejects it.
           python3 - "${{ steps.products.outputs.xctestrun }}" "$SAVE_SCREENSHOT_DIR" <<'PY'
           import plistlib, sys
           from pathlib import Path
@@ -435,7 +436,6 @@ jobs:
             -- \
             -xctestrun '${{ steps.products.outputs.xctestrun }}' \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
-            -test-environment-variable "SAVE_SCREENSHOT_DIR=${SAVE_SCREENSHOT_DIR}" \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test-without-building
 
