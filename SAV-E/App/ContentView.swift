@@ -998,8 +998,11 @@ struct ContentView: View {
             onBeginExactSearchResolution: { candidate in
                 activateExactSearchSession(for: candidate)
             },
-            onClearMapSearchResults: {
+            onClearMapSearchResults: { endsExactSearch in
                 isExactSearchSessionActive = false
+                if endsExactSearch {
+                    exactSearchClueID = nil
+                }
                 guard exactSearchRequestID == nil else { return }
                 mapVM.clearMapSearchResults()
             },
