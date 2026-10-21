@@ -193,7 +193,10 @@ final class SaveEntitlementWiringTests: XCTestCase {
             SaveEntitlementStore.exhaustedAllowanceMessage(language: .traditionalChinese),
             "這個月的模型額度已用完。下個週期再試。"
         )
-        XCTAssertFalse(SaveAIAssistUserCopy.exhaustedEnglish.localizedCaseInsensitiveContains("ai"))
+        XCTAssertNil(
+            SaveAIAssistUserCopy.exhaustedEnglish.range(of: #"\bAI\b"#, options: [.regularExpression, .caseInsensitive]),
+            "neutral allowance copy must not name AI as a word"
+        )
         XCTAssertFalse(SaveAIAssistUserCopy.exhaustedEnglish.localizedCaseInsensitiveContains("assist"))
         XCTAssertFalse(SaveAIAssistUserCopy.exhaustedTraditionalChinese.contains("AI"))
         XCTAssertFalse(SaveAIAssistUserCopy.exhaustedTraditionalChinese.contains("次數"))

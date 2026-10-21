@@ -1511,7 +1511,7 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         var readbackFails = false
         let capture = UUID(), oldID = UUID(), newID = UUID(), secondID = UUID(), run = UUID(), firstRun = UUID(), secondRun = UUID()
         let oldJSON = "{\"id\":\"\(oldID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(run)\",\"name\":\"Clue\",\"status\":\"source_only\",\"created_at\":\"2020-01-02T03:04:05Z\",\"superseded_by_candidate_id\":\"\(newID)\",\"superseded_by_candidate_ids\":[\"\(newID)\",\"\(secondID)\"]}"
-        let newJSON = "{\"id\":\"\(newID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(firstRun)\",\"name\":\"Cafe\",\"status\":\"review\",\"created_at\":\"2020-01-02T03:04:05Z\"}"
+        let newJSON = "{\"id\":\"\(newID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(firstRun)\",\"name\":\"Cafe\",\"status\":\"review\",\"created_at\":\"2020-01-02T03:04:06Z\"}"
         let secondJSON = "{\"id\":\"\(secondID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(secondRun)\",\"name\":\"Museum\",\"status\":\"review\",\"created_at\":\"2020-01-02T03:04:05Z\"}"
         AnalysisRequestURLProtocol.handler = { request in
             if request.url?.path == "/v0/analysis" {
