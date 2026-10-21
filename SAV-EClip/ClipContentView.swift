@@ -54,6 +54,7 @@ enum ClipPreviewFailure: String {
 
 enum ClipSurface: Equatable {
     case preview
+    case signIn(ClipSignInKind)
     case saved(String)
     case listSaved(ClipListSaveCounts)
     case capReached
@@ -79,12 +80,15 @@ struct ClipContentView: View {
     @State private var isSaving = false
     @State private var lastSaveWasList = false
     @State private var listPage = 0
+    @State private var showListSwipeHint = !ClipListSwipeHint.isDismissed()
     @State private var presentsAppClipOverlay = false
 
     var body: some View {
         Group {
             if isLoading {
                 loadingScreen
+            } else if case .signIn(let kind) = surface {
+                signInScreen(kind)
             } else if case .listSaved(let counts) = surface {
                 listOutcomeScreen(counts)
             } else if case .saved(let name) = surface {
@@ -257,7 +261,13 @@ struct ClipContentView: View {
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
             .coordinateSpace(name: "clip.list")
-            .onPreferenceChange(ClipListPageKey.self) { listPage = $0 }
+            .onPreferenceChange(ClipListPageKey.self) { page in
+                if page > 0 {
+                    ClipListSwipeHint.dismiss()
+                    showListSwipeHint = false
+                }
+                listPage = page
+            }
         }
         .ignoresSafeArea(edges: .top)
         .accessibilityIdentifier("clip.list.preview")
@@ -310,7 +320,7 @@ struct ClipContentView: View {
                         title: ClipCopy.string("clip.save"),
                         enabled: !isSaving
                     ) {
-                        Task { await save(draft: draft, listTitle: listTitle) }
+                        beginSave(draft: draft, listTitle: listTitle)
                     }
                     .accessibilityIdentifier(listTitle == nil ? "clip.place.open" : "clip.list.open")
                     .accessibilityHint(ClipCopy.format("clip.signin.reason", draft.name))
@@ -319,7 +329,7 @@ struct ClipContentView: View {
                             title: ClipCopy.format("clip.saveAll", pageCount),
                             enabled: !isSaving
                         ) {
-                            Task { await saveWholeList() }
+                            beginSaveWholeList()
                         }
                         .accessibilityIdentifier("clip.list.saveAll")
                     }
@@ -329,7 +339,12 @@ struct ClipContentView: View {
                         }
                         .accessibilityIdentifier("clip.place.maps")
                     }
-                    if listTitle != nil, pageIndex == 0, pageCount > 1 {
+                    if listTitle != nil,
+                       ClipListSwipeHint.shouldShow(
+                           pageIndex: pageIndex,
+                           pageCount: pageCount,
+                           dismissed: !showListSwipeHint
+                       ) {
                         Text("⌃ \(ClipCopy.string("clip.list.swipe"))")
                             .font(ClipJournalType.system(13, weight: .regular, relativeTo: .footnote))
                             .foregroundStyle(ClipJournalPalette.muted)
@@ -469,6 +484,43 @@ struct ClipContentView: View {
         .accessibilityIdentifier(identifier)
     }
 
+    private func signInScreen(_ kind: ClipSignInKind) -> some View {
+        let title = kind == .onePlace
+            ? ClipCopy.string("clip.signin.saveOne")
+            : ClipCopy.format("clip.signin.saveCount", kind.placeCount)
+        return VStack(spacing: ClipJournalLayout.stateTitleGap) {
+            ClipWordmarkPlate()
+            ClipStateIllustration(sticker: .seal, badge: "")
+            VStack(spacing: ClipJournalLayout.stateBodyGap) {
+                ClipDisplayTitle(text: title, pointSize: 24, relativeTo: .title2)
+                    .multilineTextAlignment(.center)
+                Text(ClipCopy.string("clip.signin.hint"))
+                    .font(ClipJournalType.system(15, weight: .regular, relativeTo: .body))
+                    .foregroundStyle(ClipJournalPalette.muted)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: ClipJournalLayout.stateBodyMaxWidth)
+            }
+            ClipJournalPrimaryButton(title: title, enabled: !isSaving) {
+                Task { await continueSignIn() }
+            }
+            .accessibilityIdentifier("clip.signin.continue")
+            .padding(.horizontal, ClipJournalLayout.screenMargin)
+            Button(ClipCopy.string("clip.cap50.back")) {
+                surface = .preview
+                signInHint = true
+                presentsAppClipOverlay = false
+            }
+            .font(ClipJournalType.system(15, weight: .semibold, relativeTo: .subheadline))
+            .foregroundStyle(ClipJournalPalette.coral)
+            .underline()
+            .accessibilityIdentifier("clip.signin.back")
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, ClipJournalLayout.screenMargin)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("clip.signin")
+    }
+
     private func listOutcomeScreen(_ counts: ClipListSaveCounts) -> some View {
         let partial = counts.overCap > 0
         let inSavvy = counts.newlySaved + counts.alreadySaved
@@ -526,9 +578,41 @@ struct ClipContentView: View {
 
     private func retryLastSave() async {
         if lastSaveWasList {
-            await saveWholeList()
+            beginSaveWholeList()
         } else {
             await saveCurrentPlace()
+        }
+    }
+
+    private func beginSave(draft: ClipPlaceDraft, listTitle: String?) {
+        signInHint = false
+        lastSaveWasList = false
+        if ClipFullApp.isInstalled {
+            Task { await save(draft: draft, listTitle: listTitle) }
+            return
+        }
+        surface = .signIn(.onePlace)
+    }
+
+    private func beginSaveWholeList() {
+        guard listData != nil else { return }
+        signInHint = false
+        lastSaveWasList = true
+        if ClipFullApp.isInstalled {
+            Task { await saveWholeList() }
+            return
+        }
+        surface = .signIn(.wholeList(listData?.items.count ?? 0))
+    }
+
+    private func continueSignIn() async {
+        switch surface {
+        case .signIn(.onePlace):
+            await saveCurrentPlace()
+        case .signIn(.wholeList):
+            await saveWholeList()
+        default:
+            break
         }
     }
 
@@ -804,6 +888,8 @@ struct ClipContentView: View {
     private func apply(list: SharedListData) {
         clearContent()
         listData = list
+        showListSwipeHint = !ClipListSwipeHint.isDismissed()
+        listPage = 0
     }
 
     private func apply(referral: SharedReferralProfile) {
@@ -968,11 +1054,23 @@ extension ClipContentView {
         case "signin-fail":
             placeReceipt = .embedded(ClipPreviewFixtures.samplePlace())
             signInHint = true
+        case "signin":
+            placeReceipt = .embedded(ClipPreviewFixtures.samplePlace())
+            surface = .signIn(.onePlace)
+        case "signin-list":
+            apply(list: ClipPreviewFixtures.sampleList())
+            surface = .signIn(.wholeList(ClipPreviewFixtures.sampleList().items.count))
         case "save-fail":
             placeReceipt = .embedded(ClipPreviewFixtures.samplePlace())
             surface = .saveFailed
         case "list":
+            ClipListSwipeHint.reset()
             apply(list: ClipPreviewFixtures.sampleList())
+            showListSwipeHint = true
+        case "list-swiped":
+            ClipListSwipeHint.dismiss()
+            apply(list: ClipPreviewFixtures.sampleList())
+            showListSwipeHint = false
         case "list-saved":
             apply(list: ClipPreviewFixtures.sampleList())
             surface = .listSaved(

@@ -85,6 +85,32 @@ final class ClipListSaveTests: XCTestCase {
         XCTAssertEqual(ClipListSavePlanner.parseOutcome(status: 200, data: Data("{}".utf8)), .failure(.unconfirmed))
     }
 
+    func testSL6SwipeHintOnlyOnFirstPageUntilDismissed() {
+        XCTAssertTrue(ClipListSwipeHint.shouldShow(pageIndex: 0, pageCount: 5, dismissed: false))
+        XCTAssertFalse(ClipListSwipeHint.shouldShow(pageIndex: 1, pageCount: 5, dismissed: false))
+        XCTAssertFalse(ClipListSwipeHint.shouldShow(pageIndex: 0, pageCount: 1, dismissed: false))
+        XCTAssertFalse(ClipListSwipeHint.shouldShow(pageIndex: 0, pageCount: 5, dismissed: true))
+    }
+
+    func testSL6SwipeHintPersistsDismissFlag() {
+        let store = UserDefaults(suiteName: "clip.list.swipe.test.\(UUID().uuidString)")
+        defer { store?.removePersistentDomain(forName: store?.suiteName ?? "") }
+        XCTAssertFalse(ClipListSwipeHint.isDismissed(in: store))
+        ClipListSwipeHint.dismiss(in: store)
+        XCTAssertTrue(ClipListSwipeHint.isDismissed(in: store))
+        XCTAssertFalse(ClipListSwipeHint.shouldShow(pageIndex: 0, pageCount: 5, dismissed: ClipListSwipeHint.isDismissed(in: store)))
+        ClipListSwipeHint.reset(in: store)
+        XCTAssertFalse(ClipListSwipeHint.isDismissed(in: store))
+    }
+
+    func testLS4SignInCopyUsesOneLayoutAndTwoTitles() {
+        XCTAssertEqual(ClipSignInKind.onePlace.titleKey, "clip.signin.saveOne")
+        XCTAssertEqual(ClipSignInKind.wholeList(5).titleKey, "clip.signin.saveCount")
+        XCTAssertEqual(ClipSignInKind.onePlace.placeCount, 1)
+        XCTAssertEqual(ClipSignInKind.wholeList(5).placeCount, 5)
+        XCTAssertNotEqual(ClipSignInKind.onePlace.titleKey, ClipSignInKind.wholeList(5).titleKey)
+    }
+
     func testSL5AlreadySavedPlacesCountOnce() {
         let items = [
             item("place1", "Onibus Coffee", lat: 35.644, lng: 139.699),

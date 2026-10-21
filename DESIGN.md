@@ -972,7 +972,10 @@ One place page per page. Vertical paging
 (`ScrollView` + `.scrollTargetBehavior(.paging)`). Right-side vertical
 page indicator. Over the hero: sharer chip and, under it, the list
 title (handwritten, cream) plus `第{i}/{n}家` / `{i} of {n}`. Swipe
-hint on page 1 only. Each page's primary button saves **that** place
+hint 「往上滑看下一家」 / "Swipe up for the next place" on page 1
+only (SL6). After the first swipe, persist `clipListSwipeHintDismissed`
+in App Group `group.com.wanderly.app` and never show it again. Each
+page's primary button saves **that** place
 only. A secondary button, 「整份清單都存（N家）」 / "Save all N
 places", sends the whole list in **one** `POST /places` after SIWA
 (no staging). Dedupe first: already-saved places count once and are
@@ -987,6 +990,11 @@ least one new save. A network failure does not silently succeed:
 the write is atomic, or the user is told exactly what was and was
 not saved. Reduce Motion is respected. The App Group is
 `group.com.wanderly.app`, not `group.com.wanderly.app.shared`.
+
+Sign-in (LS4) is one Clip layout. The system SIWA sheet still does
+the actual Apple sign-in. The Clip screen only changes copy: 「存這一家」
+/ "Save this place" for a single place, 「存 N 家」 / "Save N places"
+for the whole list.
 
 ### Tokens (V3.1)
 

@@ -30,6 +30,11 @@ final class SAVEClipScreenshotTests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any)["clip.place.photo"].exists)
         attachScreenshot(app.screenshot(), name: "03-list-zh-Hant-five-places")
         app.terminate()
+
+        let swiped = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "list-swiped")
+        XCTAssertTrue(swiped.descendants(matching: .any)["clip.list.preview"].waitForExistence(timeout: 20))
+        XCTAssertFalse(swiped.descendants(matching: .any)["clip.list.swipe"].exists)
+        swiped.terminate()
     }
 
     func test04ListEnglishLight() {
@@ -107,6 +112,22 @@ final class SAVEClipScreenshotTests: XCTestCase {
 
     func testDuplicateEnglishDark() {
         capture(screen: "duplicate", appearance: .dark, language: "en", locale: "en_US", name: "duplicate-en-dark", identifier: "clip.duplicate")
+    }
+
+    func testSignInOnePlaceZhHant() {
+        let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "signin")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.signin"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.signin.continue"].exists)
+        attachScreenshot(app.screenshot(), name: "signin-one-zh-Hant")
+        app.terminate()
+    }
+
+    func testSignInWholeListEnglish() {
+        let app = launchClip(appearance: .light, language: "en", locale: "en_US", screen: "signin-list")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.signin"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.signin.continue"].exists)
+        attachScreenshot(app.screenshot(), name: "signin-list-en")
+        app.terminate()
     }
 
     func testSignInFailZhHantLight() {

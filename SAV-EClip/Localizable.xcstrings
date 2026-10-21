@@ -91,6 +91,18 @@
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "登入後，%@ 會存到你的 Savvy。" } }
       }
     },
+    "clip.signin.saveOne" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save this place" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "存這一家" } }
+      }
+    },
+    "clip.signin.saveCount" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save %d places" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "存 %d 家" } }
+      }
+    },
     "clip.signin.hint" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Not signed in · nothing saved" } },

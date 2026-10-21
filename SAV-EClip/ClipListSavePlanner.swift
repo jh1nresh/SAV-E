@@ -4,6 +4,49 @@ enum ClipListSaveFailure: Equatable, Sendable {
     case unconfirmed
 }
 
+enum ClipSignInKind: Equatable, Sendable {
+    case onePlace
+    case wholeList(Int)
+
+    var titleKey: String {
+        switch self {
+        case .onePlace: return "clip.signin.saveOne"
+        case .wholeList: return "clip.signin.saveCount"
+        }
+    }
+
+    var placeCount: Int {
+        switch self {
+        case .onePlace: return 1
+        case .wholeList(let count): return count
+        }
+    }
+}
+
+enum ClipListSwipeHint {
+    static let key = "clipListSwipeHintDismissed"
+
+    static func defaults(_ store: UserDefaults? = nil) -> UserDefaults? {
+        store ?? UserDefaults(suiteName: PendingShareStore.suiteName)
+    }
+
+    static func isDismissed(in store: UserDefaults? = nil) -> Bool {
+        defaults(store)?.bool(forKey: key) == true
+    }
+
+    static func dismiss(in store: UserDefaults? = nil) {
+        defaults(store)?.set(true, forKey: key)
+    }
+
+    static func reset(in store: UserDefaults? = nil) {
+        defaults(store)?.removeObject(forKey: key)
+    }
+
+    static func shouldShow(pageIndex: Int, pageCount: Int, dismissed: Bool) -> Bool {
+        pageIndex == 0 && pageCount > 1 && !dismissed
+    }
+}
+
 struct ClipListSaveCounts: Equatable, Sendable {
     var newlySaved: Int
     var alreadySaved: Int
