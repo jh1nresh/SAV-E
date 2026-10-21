@@ -436,6 +436,16 @@ final class SaveDoodleVisitStore {
         return true
     }
 
+    /// Production "I've been here" / Mark visited path. Records today's
+    /// check-in and promotes the place to a Map Stamp. Home Collected and
+    /// Passport both read `status == .visited` after this write.
+    func markIveBeenHere(_ place: Place) -> Place {
+        recordVisit(for: place.id)
+        var updated = place
+        updated.status = .visited
+        return updated
+    }
+
     @discardableResult
     func undoToday(for id: UUID) -> Bool {
         let today = now()
@@ -500,5 +510,36 @@ final class SaveDoodleVisitStore {
 
     static func priorStatusKey(_ id: UUID) -> String {
         "save.doodle.checkin.priorStatus.\(suiteSuffix).\(id.uuidString)"
+    }
+}
+
+/// City-scope X/Y for Home Collected and the Passport progress this PR
+/// wires. PR #295 already owns SaveDoodlePassportCatalog in
+/// SaveDoodlePassportCatalog.swift for stamp-grid layout (pageSize,
+/// columns). After #290 merges, #295 keeps that type and should call
+/// SaveDoodleHomeProgressCatalog for city visited/saved numbers — do
+/// not declare SaveDoodlePassportCatalog in this file.
+enum SaveDoodleHomeProgressCatalog {
+    static func cityPlaces(
+        from places: [Place],
+        selection: SaveDoodleCitySelection,
+        location: CLLocation? = nil,
+        locationDenied: Bool
+    ) -> [Place] {
+        SaveDoodleHomeCatalog.collectedScopePlaces(
+            from: places,
+            selection: selection,
+            location: location,
+            locationDenied: locationDenied
+        )
+        .sorted(by: SaveDoodleHomeCatalog.moreRecent)
+    }
+
+    static func progress(in places: [Place]) -> (visited: Int, saved: Int) {
+        SaveDoodleHomeCatalog.cityCollectedCount(in: places)
+    }
+
+    static func visitedCount(in places: [Place]) -> Int {
+        progress(in: places).visited
     }
 }
