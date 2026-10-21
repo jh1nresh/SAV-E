@@ -380,9 +380,12 @@ final class SaveDoodleHomeTests: XCTestCase {
         let headerAt = try XCTUnwrap(home.range(of: "private var savesButton"))
         let body = home[bodyAt.lowerBound..<headerAt.lowerBound]
         XCTAssertTrue(body.contains("if showsLensEmpty"))
+        XCTAssertTrue(body.contains("else if !showsEmptyHome"))
         XCTAssertTrue(body.contains("if !collectedPlaces.isEmpty"))
-        XCTAssertFalse(
-            body.contains("if !showsEmptyHome {\n                        miniMap"),
+        let listBranch = try XCTUnwrap(body.range(of: "else if !showsEmptyHome"))
+        let collectedAt = try XCTUnwrap(body.range(of: "if !collectedPlaces.isEmpty"))
+        XCTAssertTrue(
+            collectedAt.lowerBound > listBranch.upperBound,
             "Collected must not sit only inside the filtered-list branch"
         )
         let design = try source(at: "DESIGN.md")
