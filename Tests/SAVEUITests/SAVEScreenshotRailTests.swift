@@ -1005,6 +1005,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: passportName)
         if appearance == .dark {
             attach(app, name: "doodle-passport-dark")
+        } else {
+            attach(app, name: "doodle-passport-light")
         }
         assertScreenshotBackground(
             passportShot,
@@ -1022,6 +1024,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         }
         XCTAssertTrue(app.descendants(matching: .any)["map.placeSheet"].waitForExistence(timeout: stepTimeout))
         attach(app, name: homeName.replacingOccurrences(of: "home", with: "map"))
+        if appearance == .dark {
+            attach(app, name: "doodle-map-dark")
+        }
         assertDoodleMapChrome(app)
         terminate(app)
     }

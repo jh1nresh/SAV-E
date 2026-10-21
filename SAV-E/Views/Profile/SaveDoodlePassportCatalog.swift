@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 import SwiftUI
 
@@ -159,33 +160,34 @@ enum SaveDoodlePassportCatalog {
     static func cityPlaces(
         from places: [Place],
         selection: SaveDoodleCitySelection,
+        location: CLLocation? = nil,
         locationDenied: Bool
     ) -> [Place] {
-        switch SaveDoodleHomeCatalog.resolvedSelection(
-            selection,
-            places: places,
+        SaveDoodleHomeProgressCatalog.cityPlaces(
+            from: places,
+            selection: selection,
+            location: location,
             locationDenied: locationDenied
-        ) {
-        case .nearYou:
-            return places.sorted(by: moreRecent)
-        case .city(let id):
-            return places
-                .filter { SaveDoodleHomeCatalog.cityID(for: $0) == id }
-                .sorted(by: moreRecent)
-        }
+        )
     }
 
     static func visitedCount(in places: [Place]) -> Int {
-        places.filter { $0.status == .visited }.count
+        SaveDoodleHomeProgressCatalog.visitedCount(in: places)
     }
 
     static func slots(
         from places: [Place],
         selection: SaveDoodleCitySelection,
+        location: CLLocation? = nil,
         locationDenied: Bool,
         visitStore: SavePassportVisitStore
     ) -> [SaveDoodlePassportSlot] {
-        let city = cityPlaces(from: places, selection: selection, locationDenied: locationDenied)
+        let city = cityPlaces(
+            from: places,
+            selection: selection,
+            location: location,
+            locationDenied: locationDenied
+        )
         let goal = Self.goal(for: max(city.count, 1))
         let visible = Array(city.prefix(goal))
         var result: [SaveDoodlePassportSlot] = visible.enumerated().map { index, place in
@@ -257,10 +259,5 @@ enum SaveDoodlePassportCatalog {
         hasher.combine(id)
         let value = hasher.finalize()
         return Double(abs(value) % 13) - 6
-    }
-
-    private static func moreRecent(_ lhs: Place, _ rhs: Place) -> Bool {
-        if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
-        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
     }
 }

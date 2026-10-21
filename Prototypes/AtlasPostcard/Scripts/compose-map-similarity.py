@@ -50,12 +50,12 @@ def main() -> None:
     diff = fit(load(args.diff), (402, 874))
     overlay = Image.new("RGBA", actual.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
+    x, y, w, h = args.mask
     if args.mask_image and args.mask_image.exists():
         mask = fit(load(args.mask_image), (402, 874)).convert("L")
         shade = Image.new("RGBA", actual.size, (20, 20, 24, 90))
         overlay.paste(shade, (0, 0), mask.point(lambda v: 255 if v >= 240 else 0))
     else:
-        x, y, w, h = args.mask
         draw.rectangle((x, y, x + w, y + h), fill=(20, 20, 24, 90))
     actual_masked = Image.alpha_composite(actual.convert("RGBA"), overlay).convert("RGB")
     target_masked = Image.alpha_composite(target.convert("RGBA"), overlay).convert("RGB")

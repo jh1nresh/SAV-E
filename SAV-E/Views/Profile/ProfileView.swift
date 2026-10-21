@@ -72,18 +72,6 @@ struct ProfileView: View {
         localSavedPlaces
     }
 
-    /// Same city X/Y Home Collected uses. Sheet and tab both read this so
-    /// tapping `home.collected` cannot open a Passport that still shows
-    /// all-places / `passportGoal`.
-    private var cityStampPlaces: [Place] {
-        SaveDoodleHomeProgressCatalog.cityPlaces(
-            from: passportPlaces,
-            selection: session.city,
-            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
-            locationDenied: locationService.isAuthorizationDenied
-        )
-    }
-
     private var todayMissions: [SavePassportTodayMission] {
         guard isRootTab else { return [] }
         return SavePassportTodayCatalog.missions(
@@ -604,8 +592,8 @@ struct ProfileView: View {
 
     @discardableResult
     private func markPlaceVisited(_ place: Place) async -> Bool {
-        var updated = place
-        updated.status = .visited
+        let history = SaveDoodleVisitStore()
+        let updated = history.markIveBeenHere(place)
         do {
             try await onUpdatePlace(updated)
             SavePassportFieldStreakStore.shared.recordFieldAction()
@@ -615,6 +603,7 @@ struct ProfileView: View {
             }
             return true
         } catch {
+            _ = history.undoToday(for: place.id)
             visitError = languageSettings.localized(
                 english: "Couldn’t update this place. Please try again.",
                 traditionalChinese: "暫時無法更新這個地點，請再試一次。"

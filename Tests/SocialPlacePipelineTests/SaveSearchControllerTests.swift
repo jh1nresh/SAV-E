@@ -2638,30 +2638,38 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testExactSearchResolutionRetiresSameNameSeedAndCapturedClues() async throws {
+    func testResolvingOneClueKeepsSameNameSiblingByID() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("exact-search-same-name-\(UUID().uuidString).json")
+            .appendingPathComponent("same-name-sibling-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: vaultURL) }
         let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
         let stamp = Self.correctionStamp()
         _ = try vault.saveConfirmedPlace(stamp)
-        var seed = Self.correctionClue(overlappingStamp: true)
-        seed.name = "Harbor Oven Pizza"
-        var captured = seed
-        captured.id = UUID()
-        captured.evidence = ["Source URL: https://www.google.com/maps/place/Harbor+Oven+Pizza"]
-        _ = try vault.saveReviewCandidate(seed)
-        _ = try vault.saveReviewCandidate(captured)
+        var resolved = Self.correctionClue(overlappingStamp: true)
+        resolved.name = "Harbor Oven Pizza"
+        var sibling = Self.correctionClue(overlappingStamp: false)
+        sibling.name = "harbor oven pizza"
+        sibling.city = "Osaka"
+        sibling.address = "Osaka"
+        _ = try vault.saveReviewCandidate(resolved)
+        _ = try vault.saveReviewCandidate(sibling)
         let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
         map.places = [stamp]
-        map.reviewCandidates = [seed, captured]
-        map.beginExactSearchResolution(for: captured)
+        map.reviewCandidates = [resolved, sibling]
+        map.selectedReviewCandidate = sibling
+        map.beginExactSearchResolution(for: resolved)
 
-        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
-        XCTAssertEqual(resolved.id, stamp.id)
-        XCTAssertTrue(map.reviewCandidates.isEmpty, "Seed and captured Harbor Oven cards must both retire.")
-        let reloaded = SaveLocalVaultService(overrideVaultURL: vaultURL)
-        XCTAssertTrue(try reloaded.reviewCandidates().isEmpty)
+        _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == sibling.id },
+            "A same-name sibling must stay until it is resolved by id"
+        )
+        XCTAssertEqual(map.selectedReviewCandidate?.id, sibling.id)
+        let leftover = try vault.reviewCandidates()
+        XCTAssertFalse(leftover.contains { $0.id == resolved.id })
+        XCTAssertTrue(leftover.contains { $0.id == sibling.id })
     }
 
     @MainActor
@@ -6272,7 +6280,8 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(content.contains("restoreExactSearchResolutionIfNeeded"))
         XCTAssertTrue(content.contains("preserveExactSearchClue"))
         XCTAssertTrue(content.contains("exactSearchClueID"))
-        XCTAssertTrue(mapModel.contains("retireSameNameReviewClues"))
+        XCTAssertTrue(mapModel.contains("retireResolvedReviewClue"))
+        XCTAssertFalse(mapModel.contains("retireSameNameReviewClues"))
         XCTAssertTrue(content.contains("mapDrawerPresentedActionError"))
         XCTAssertTrue(content.contains("MapDrawerActionErrorAlert"))
         XCTAssertTrue(content.contains("map.drawer.actionError"))

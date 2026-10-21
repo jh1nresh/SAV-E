@@ -332,6 +332,7 @@ struct SaveDoodlePassportPage: View {
         SaveDoodlePassportCatalog.cityPlaces(
             from: places,
             selection: session.city,
+            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
             locationDenied: locationService.isAuthorizationDenied
         )
     }
@@ -344,6 +345,7 @@ struct SaveDoodlePassportPage: View {
         return SaveDoodlePassportCatalog.slots(
             from: places,
             selection: session.city,
+            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
             locationDenied: locationService.isAuthorizationDenied,
             visitStore: visitStore
         )
