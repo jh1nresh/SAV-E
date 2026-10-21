@@ -62,11 +62,12 @@ screenshot "$OUT/simulator-catalog-zh-Hant.png"
 
 xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1 || true
 grant_location
+# Launch first so the recording is the map (pins → badges), not SpringBoard.
+launch_app --uitest-map-photo-pin-motion "${FIXTURE_ARGS[@]}"
+sleep 2
 xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$OUT/gate5-motion-60fps.mp4" &
 rec_pid=$!
-sleep 1
-launch_app --uitest-map-photo-pin-motion "${FIXTURE_ARGS[@]}"
-sleep 10
+sleep 12
 screenshot "$OUT/simulator-motion-end.png"
 kill -INT "$rec_pid" >/dev/null 2>&1 || true
 wait "$rec_pid" || true

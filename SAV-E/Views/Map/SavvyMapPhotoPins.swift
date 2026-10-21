@@ -1527,8 +1527,8 @@ struct SavvyMapPhotoPinMotionFixtureRoot: View {
     private let coralPlace = SavvyMapPhotoPinPreviewFixtures.place(visited: true)
     @State private var position = MapCameraPosition.camera(
         MapCamera(
-            centerCoordinate: CLLocationCoordinate2D(latitude: 39.8822, longitude: 116.4066),
-            distance: 8_000,
+            centerCoordinate: CLLocationCoordinate2D(latitude: 39.8835, longitude: 116.4079),
+            distance: 2_800,
             heading: 0,
             pitch: 0
         )
@@ -1596,19 +1596,21 @@ struct SavvyMapPhotoPinMotionFixtureRoot: View {
     }
 
     private func playMotion() async {
-        try? await Task.sleep(nanoseconds: 700_000_000)
+        // Hold small pins on the live Apple Map before zoom so the 60fps
+        // recording shows pin → badge, not a badge that appears already grown.
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
         withAnimation(SavvyMapMotion.camera) {
             position = .camera(
                 MapCamera(
                     centerCoordinate: photoPlace.coordinate,
-                    distance: 1_400,
+                    distance: 1_200,
                     heading: 0,
                     pitch: 0
                 )
             )
             showsBadge = true
         }
-        try? await Task.sleep(nanoseconds: 1_400_000_000)
+        try? await Task.sleep(nanoseconds: 1_600_000_000)
         withAnimation(SavvyMapMotion.cardOpen) {
             selected = photoPlace
             session.select(photoPlace.id)
