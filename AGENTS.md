@@ -9,6 +9,24 @@ product scope or authorize new planning work.
 External sources supply evidence. Only user confirmation establishes saved
 place memory; analysis or import must not silently confirm or publish places.
 
+## Scope And Delivery
+
+This file adds Savvy-specific constraints to the general engineering rules; it
+does not introduce a second workflow. Use `founder-engineering-workflow` for
+non-trivial implementation.
+
+- Questions and read-only audits end with findings. Documentation and local-only
+  requests end with verified local changes; they do not authorize publishing.
+- For PR delivery: scoped brief -> isolated branch/worktree -> smallest patch ->
+  local verification -> atomic PR -> required CI and independent review.
+  PR delivery ends when acceptance criteria and current-head gates pass, blocking
+  findings are resolved, and the diff contains only authorized changes. Report it
+  as ready for human review/merge; creating a PR alone is not completion.
+- Merge, release and cleanup are separate authorized actions. Do not continue to
+  them merely because implementation is complete. Reuse approval only for the
+  exact still-pending operation and specified PR, build or resource. Approval
+  for a completed operation does not authorize another operation or artifact.
+
 ## Required Brief
 
 For each change, establish the observed problem or user job, scoped files and
@@ -19,7 +37,10 @@ product meaning, privacy, payment, or authority.
 
 For new product or commercial scope, also state the demand evidence, pricing
 hypothesis if relevant, and initial distribution. Routine fixes do not need
-commercial fields or a separate planning artifact.
+commercial fields or a separate planning artifact. Record the authorized delivery
+endpoint and any actions still needing approval. For documentation changes,
+verify concrete scenarios the instructions must handle. For product-state
+changes, describe the affected clue, Review Candidate and Map Stamp transitions.
 
 ## Design Reference
 
@@ -37,31 +58,25 @@ Token authority order, most authoritative first:
 3. `design-assets/` — accepted examples (`app-store/`, `logo-exploration/`,
    `social/`). Reference them; do not treat them as tokens.
 
-For a bounded implementation detail, follow the nearest established pattern
-and state any material assumption. Ask when a missing decision changes design
-direction, product-state meaning, privacy or scope. If `DESIGN.md` and the code
-disagree, report the drift and apply the authority order above; do not invent a
-new design rule to hide it.
-
-When you have finished a user-visible change, check your own output against
-`DESIGN.md` and the theme tokens, fix what fails, and only then present it.
+For bounded details, follow the nearest established pattern and state material
+assumptions. Report design/code drift and use the authority above within each
+source's domain: palette code does not override product-state intent.
+Check the finished change against `DESIGN.md` and theme tokens; fix violations
+before presenting it.
 
 The five-second state test from `DESIGN.md` applies to every surface: a user
 must be able to tell a clue from a review candidate from a Map Stamp. A diff
 that blurs those states fails review even if it compiles.
 
-## Delivery
+## Failure And Data Boundaries
 
-Use `founder-engineering-workflow`: scoped problem → isolated branch/worktree →
-smallest patch → focused verification → atomic PR → CI and independent review.
-Preserve unrelated work and use task-relevant files and redacted fixtures.
-Done means acceptance passes, current-head checks pass, review has no blocking
-findings, and the diff contains only the authorized scope. PR creation alone
-is not completion.
-
-Stop dependent work for unresolved product/auth/payment/privacy boundaries,
-unavailable credentials, or failing checks after three repair attempts. Keep
-independent work moving and report the concrete blocker.
+- Use only task-relevant repo files and redacted fixtures. Preserve unrelated work.
+- Pause affected actions for missing product boundaries, auth/payment ambiguity,
+  private-data risk or unavailable credentials; continue independent authorized
+  work. Report the exact blocker and what would unblock it.
+- Diagnose failed checks before repairing. Retry only with new evidence or a
+  narrower hypothesis; stop unchanged attempts early. If checks still fail after
+  three repair attempts, report the blocker rather than continuing the loop.
 
 ## PR Queue And Closeout
 
@@ -69,13 +84,13 @@ independent work moving and report the concrete blocker.
   waiting for review; an explicit user priority or concurrency instruction takes
   precedence for the named work. A draft is not exempt while an agent is working
   on it. Park the rest with an owner, dependency, and next action in the PR;
-  do not open another
-  product task just because its predecessor is waiting. A bounded CI repair may
-  proceed to unblock this queue.
-- Before starting another task, inspect the open PR queue:
+  do not open another product task just because its predecessor is waiting.
+  A bounded CI repair may proceed to unblock this queue.
+- Before starting a new implementation task, inspect the open PR queue:
   `gh pr list --repo jh1nresh/SAV-E --state open --limit 100 --json number,title,isDraft,headRefName,baseRefName`.
-  This is an admission policy, not a required CI check: a queue limit must never
-  prevent an existing PR from completing. No bot listener enforces this policy.
+  This is an implementation admission policy, not a gate for read-only or local
+  documentation work. It must never prevent an existing PR from completing.
+  No bot listener enforces this policy.
 - Record predecessor PRs and the intended merge order. Update from main only
   when the PR is next for review/merge; do not repeatedly update every queued
   branch. Judge may inspect the frozen diff while CI runs, but its final verdict
@@ -110,7 +125,17 @@ independent work moving and report the concrete blocker.
 
 ## Verification
 
-For ordinary iOS edits, compile without booting a simulator:
+Choose checks for the changed behavior; documentation-only edits need a scoped
+diff, reference and instruction-consistency review, not a simulator build.
+CI remains the canonical full checker for the native app, backend, web contracts
+and evidence rubric; local checks do not waive required CI coverage.
+
+For ordinary iOS edits, compile without booting a simulator. Check disk space and
+export `SAVE_DERIVED_DATA_PATH` as a task-specific absolute path first, following
+`docs/verification.md`. This also configures the social regression helper.
+Reuse an existing
+cache only with exclusive ownership enforced by a lock or one serialized build
+owner; an idle process snapshot is insufficient.
 
 ```bash
 scripts/xcodebuild-clean.sh \
@@ -118,7 +143,7 @@ scripts/xcodebuild-clean.sh \
   -scheme SAV-E \
   -configuration Debug \
   -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath "$HOME/Library/Developer/Xcode/DerivedData/SAVE-Codex" \
+  -derivedDataPath "${SAVE_DERIVED_DATA_PATH:?Export a task-owned DerivedData path}" \
   CODE_SIGNING_ALLOWED=NO \
   COMPILER_INDEX_STORE_ENABLE=NO \
   build
@@ -126,13 +151,10 @@ scripts/xcodebuild-clean.sh \
 
 Below 10 GiB free, block new Xcode/runtime work until authorized cleanup or
 explicit acceptance of that task's storage risk. Boot one headless simulator
-only for focused XCTest or UI evidence. Reuse the
-same DerivedData root and verify shutdown afterward. For a borrowed or existing
-device, shutdown is the cleanup boundary. Remove a temporary device only when
-this task created it and its removal is authorized; never delete another
-workflow's device as routine cleanup.
-CI is the canonical full checker for the native app, backend, web contracts,
-and evidence rubric.
+only for focused XCTest or UI evidence, with exclusive device ownership.
+Reuse the task-owned DerivedData root and verify Shutdown
+afterward. For a borrowed device, shutdown is the cleanup boundary. Remove a
+temporary device only when this task created it and removal is authorized.
 
 ## Approval And Release Boundaries
 
@@ -145,5 +167,6 @@ The main-branch CI builds an unsigned generic-device Release configuration with
 a synthetic non-secret Google key and emits a release-readiness receipt only
 after every required job passes. The binary is not uploaded as an artifact.
 That receipt is evidence of code readiness, not a signed archive or deployment.
-Never run `railway up`, `vercel --prod`, archive/upload to App Store Connect, or
-publish a TestFlight build without explicit user approval at action time.
+Before `railway up`, `vercel --prod`, archive/upload or TestFlight publication,
+verify that explicit approval covers the exact pending operation, artifact and
+target. Do not reuse a completed operation's approval for a later release.
