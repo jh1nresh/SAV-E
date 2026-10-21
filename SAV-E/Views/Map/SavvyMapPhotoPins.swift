@@ -1528,7 +1528,7 @@ struct SavvyMapPhotoPinMotionFixtureRoot: View {
     @State private var position = MapCameraPosition.camera(
         MapCamera(
             centerCoordinate: CLLocationCoordinate2D(latitude: 39.8835, longitude: 116.4079),
-            distance: 2_800,
+            distance: 4_500,
             heading: 0,
             pitch: 0
         )
@@ -1597,8 +1597,8 @@ struct SavvyMapPhotoPinMotionFixtureRoot: View {
 
     private func playMotion() async {
         // Hold small pins on the live Apple Map before zoom so the 60fps
-        // recording shows pin → badge, not a badge that appears already grown.
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        // recording (starts at launch) shows pin → badge, not a grown badge.
+        try? await Task.sleep(nanoseconds: 5_000_000_000)
         withAnimation(SavvyMapMotion.camera) {
             position = .camera(
                 MapCamera(

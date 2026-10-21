@@ -215,10 +215,10 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(source.contains("response: 0.57, dampingFraction: 0.76"))
         XCTAssertTrue(source.contains("response: 1.05, dampingFraction: 0.76"))
         XCTAssertTrue(source.contains("easeInOut(duration: 0.25)"))
-        XCTAssertTrue(source.contains("3_000_000_000"))
+        XCTAssertTrue(source.contains("5_000_000_000"))
         XCTAssertTrue(source.contains("showsBadge = true"))
         XCTAssertTrue(
-            source.range(of: "3_000_000_000")!.lowerBound
+            source.range(of: "5_000_000_000")!.lowerBound
                 < source.range(of: "showsBadge = true")!.lowerBound
         )
     }
