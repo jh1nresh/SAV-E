@@ -115,7 +115,7 @@ struct AIDrawerView: View {
     /// Links exact-place map results to the Review clue they resolve, so
     /// saving one retires the clue from the queue.
     var onBeginExactSearchResolution: (PlaceReviewCandidate) -> Void = { _ in }
-    var onClearMapSearchResults: () -> Void = {}
+    var onClearMapSearchResults: (_ preservesExactSearchClue: Bool) -> Void = { _ in }
     var collaborativeLists: [SaveCollaborativeList] = []
     var onCreateList: (String, String?) -> SaveCollaborativeList = { title, note in
         SaveCollaborativeList(title: title, note: note)
@@ -403,7 +403,7 @@ struct AIDrawerView: View {
 
     private func applyLaunchRequest(_ request: DrawerLaunchRequest) {
         cancelMapSearch()
-        onClearMapSearchResults()
+        onClearMapSearchResults(request.preservesExactSearchClue)
         mapDetailDrawerItem = nil
         onDismissMapDetail()
         viewModel.returnToCommands()
@@ -1213,7 +1213,7 @@ struct AIDrawerView: View {
 
     private func submitSearchField() {
         cancelMapSearch()
-        onClearMapSearchResults()
+        onClearMapSearchResults(launchRequest.preservesExactSearchClue)
         SaveHaptics.tap()
         voiceQuery.stop()
         searchFocused = false
@@ -1363,7 +1363,7 @@ struct AIDrawerView: View {
         let shouldClearMapSearch = hasVisibleMapSearchResults
         viewModel.reset()
         if shouldClearMapSearch {
-            onClearMapSearchResults()
+            onClearMapSearchResults(false)
         }
         searchFocused = false
         withAnimation { drawerDetent = collapsedDrawerDetent }
@@ -1373,7 +1373,7 @@ struct AIDrawerView: View {
         cancelMapSearch()
         voiceQuery.stop()
         viewModel.reset()
-        onClearMapSearchResults()
+        onClearMapSearchResults(false)
         searchFocused = false
         addSpotStatus = nil
         withAnimation { drawerDetent = collapsedDrawerDetent }
