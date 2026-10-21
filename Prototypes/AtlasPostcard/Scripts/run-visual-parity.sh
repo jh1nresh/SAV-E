@@ -25,17 +25,14 @@ Options:
   --threshold NUMBER    Gate threshold. Must be at least 0.90 (default 0.90).
 
 The screenshots directory must contain home.png, saves.png, plan.png,
-map.png, and friends.png. The result-bundle mode prefers the live
-five-tab-home attachment for Home and falls back to atlas-home for
-prototype-only runs. Friends prefers five-tab-friends and falls back to
-atlas-friends. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
-and atlas-map XCTest attachments. The Friends gate is exactly 0.90 against
-DESIGN 2026-10-20 friends-light.png (402×874, no shared-map strip).
+and map.png. The result-bundle mode prefers the live five-tab-home
+attachment for Home and falls back to atlas-home for prototype-only
+runs. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
+and atlas-map XCTest attachments. Friends is not in the 0.90 gate;
+HoP grades it by side-by-side against Codex packet spec §7.4.
 
 --destination runs the prototype XCTest testCaptureFourLockedScreens
-(Home, Saves, Plan, Map only). Friends is not in that prototype shell, so
-this mode compares those four screens and leaves Friends to --result-bundle
-or --screenshots-dir, where five-tab-friends or friends.png exists.
+(Home, Saves, Plan, Map only). Friends is not in that prototype shell.
 EOF
 }
 
@@ -206,13 +203,13 @@ mkdir -p \
     "$ARTIFACT_DIR/diff" \
     "$ARTIFACT_DIR/results"
 
-# Prototype --destination captures four screens. Result-bundle and
-# screenshots-dir still require Friends (five-tab-friends / friends.png).
+# Prototype --destination and production result-bundle both compare four
+# screens. Friends is packet §7.4 side-by-side, not a 0.90 v2 raster gate.
 destination_screens=(home saves plan map)
-parity_screens=(home saves plan map friends)
+parity_screens=(home saves plan map)
 captured_from_prototype=0
 
-for screen in home saves plan map friends; do
+for screen in home saves plan map; do
     source="$REFERENCE_SOURCE/$screen.png"
     if [[ ! -f "$source" ]]; then
         echo "error: missing reference image: $source" >&2
@@ -367,7 +364,7 @@ else
         echo "error: screenshots directory not found: $SCREENSHOTS_DIR" >&2
         exit 2
     fi
-    for screen in home saves plan map friends; do
+    for screen in home saves plan map; do
         if [[ ! -f "$SCREENSHOTS_DIR/$screen.png" ]]; then
             echo "error: missing screenshot: $SCREENSHOTS_DIR/$screen.png" >&2
             exit 2

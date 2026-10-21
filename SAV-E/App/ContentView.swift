@@ -589,6 +589,8 @@ struct ContentView: View {
                             SaveFriendsView(
                                 currentUserID: PrivyAuthService.shared.currentUserId,
                                 onSaved: { await mapVM.loadPlaces(force: true) },
+                                // Invite / 邀請: ProfileView.requestsConnections
+                                // presents PassportConnectionsView (Friends section).
                                 onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
                             )
                         case .profile:

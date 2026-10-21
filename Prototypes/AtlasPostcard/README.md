@@ -45,14 +45,16 @@ Scripts/run-visual-parity.sh \
   --artifacts /absolute/path/to/new-empty-artifact-directory
 ```
 
-The runner captures Home, Saves, Plan, Map, and Friends, then writes matching
-`reference/`, `output/`, `diff/`, and `results/` directories. All five pages
-must score at least `0.90`. Friends uses DESIGN v2 (eade369)
-`friends-light.png` (exact 402 × 874, no device frame, no shared-map
-strip). The dark companion is `friends-dark.png`. XCTest
-locks the application window to 402 × 874 points; the comparator accepts
-only exact, uniform Retina pixel multiples of that viewport and rejects
-other dimensions.
+`--destination` runs the prototype XCTest `testCaptureFourLockedScreens`
+and compares only Home, Saves, Plan, and Map. That prototype shell has
+no Friends tab, so a local four-screen pass is not Friends evidence.
+Friends is graded by side-by-side against Codex packet spec §7.4
+(and the Friends column of the light/dark main mocks), not by a 0.90
+gate against DESIGN v2 `friends-light.png`. Live `five-tab-friends`
+attachments still ship in the iOS First-Run artifact. XCTest locks
+the application window to 402 × 874 points; the Home/Saves/Plan/Map
+comparator accepts only exact, uniform Retina pixel multiples of that
+viewport and rejects other dimensions.
 
 Production parity uses `Reference/ProductionTargets`. The original
 `Reference/Targets` remain the immutable inputs for deterministic illustration

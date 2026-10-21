@@ -114,6 +114,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'friends.save.' OR identifier BEGINSWITH 'friends.rate.'")).firstMatch.exists)
             XCTAssertLessThan(title.frame.maxY, rootTabButton("Friends", app: app).frame.minY)
             attach(app, name: "friends-coming-soon-\(language)")
+            attach(app, name: "friends-empty-\(language)")
             let findFriends = app.buttons["friends.findFriends"]
             XCTAssertTrue(findFriends.isHittable)
             XCTAssertEqual(findFriends.label, language == "en" ? "Find friends" : "追蹤朋友")
@@ -137,6 +138,47 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             attach(app, name: "passport-shared-ratings-\(language)")
             app.buttons["profile.sharedRatings.done"].tap()
             XCTAssertTrue(emptyRatings.waitForNonExistence(timeout: stepTimeout))
+            terminate(app)
+        }
+
+        let dynamicType = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed",
+            "-save.appLanguage", "en",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(dynamicType)
+        try signInViaReviewDemoRequired(app: dynamicType)
+        XCTAssertTrue(dynamicType.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        openRootTab("Friends", app: dynamicType)
+        XCTAssertTrue(dynamicType.staticTexts["friends.empty"].waitForExistence(timeout: stepTimeout))
+        attach(dynamicType, name: "friends-dynamic-type-xxxl")
+        let widthNote = XCTAttachment(string: "friends.window.width=\(dynamicType.windows.firstMatch.frame.width)")
+        widthNote.name = "friends-window-width"
+        widthNote.lifetime = .keepAlways
+        add(widthNote)
+        terminate(dynamicType)
+
+        for (name, flag) in [
+            ("friends-loading", "--uitest-friends-loading"),
+            ("friends-error", "--uitest-friends-error"),
+        ] {
+            let app = makeApp(launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed", flag,
+                "-save.appLanguage", "en",
+            ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+            launch(app)
+            try signInViaReviewDemoRequired(app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+            openRootTab("Friends", app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
+            if name == "friends-error" {
+                XCTAssertTrue(app.descendants(matching: .any)["posts.error"].waitForExistence(timeout: stepTimeout))
+            }
+            attach(app, name: name)
             terminate(app)
         }
     }
@@ -3153,8 +3195,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// Live Home is the Doodle Eat/Go list plus mini-map. The Atlas gate still
     /// compares `five-tab-home` to DESIGN v2 `ProductionTargets/home.png` at
     /// 0.90 with `home-mask.png`. Do not retune that gate here.
-    /// Friends compares `five-tab-friends` to `ProductionTargets/friends.png`
-    /// at exactly 0.90 (DESIGN v2 friends-light.png, 402×874, no shared-map).
+    /// Friends `five-tab-friends` is packet §7.4 evidence, not a 0.90 gate
+    /// against `ProductionTargets/friends.png`.
     @MainActor
     private func waitForHomeCoverImagery(_ app: XCUIApplication) {
         XCTAssertTrue(

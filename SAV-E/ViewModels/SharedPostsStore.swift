@@ -32,6 +32,13 @@ final class SharedPostsStore: ObservableObject {
     private func load(append: Bool) async {
         let ticket = requestID
         let account = PrivyAuthService.shared.currentUserId
+        if isDemo && ProcessInfo.processInfo.arguments.contains("--uitest-friends-loading") {
+            posts = []
+            error = nil
+            isLoading = true
+            counts = SocialProfileCounts(postCount: 0, followingCount: 0, followerCount: 0)
+            return
+        }
         isLoading = true; error = nil
         defer { if ticket == requestID { isLoading = false } }
         if isDemo {
@@ -39,6 +46,13 @@ final class SharedPostsStore: ObservableObject {
             // is requested. It never reads or publishes real social records.
             // Friends-town is the Doodle mock people list (Mia / Leo / Kai / Ana).
             // Social-posts keeps the Harbor Town UUID lock for passport tests.
+            if ProcessInfo.processInfo.arguments.contains("--uitest-friends-error") {
+                posts = []
+                error = "Couldn't load friends"
+                isLoading = false
+                counts = SocialProfileCounts(postCount: 0, followingCount: 0, followerCount: 0)
+                return
+            }
             if ProcessInfo.processInfo.arguments.contains("--uitest-friends-town") {
                 applyDemoFixture(items: Self.friendsTownPosts)
             } else if ProcessInfo.processInfo.arguments.contains("--uitest-social-posts") {
