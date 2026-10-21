@@ -6326,6 +6326,10 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(mapModel.contains("retireResolvedReviewClue"))
         XCTAssertTrue(mapModel.contains("reviewCandidates.first(where: { $0.id == candidate.id }) ?? candidate"))
         XCTAssertFalse(mapModel.contains("retireSameNameReviewClues"))
+        XCTAssertEqual(
+            mapModel.components(separatedBy: "var hasActiveExactSearchResolution: Bool { exactSearchResolution != nil }").count - 1,
+            1
+        )
         XCTAssertTrue(content.contains("mapDrawerPresentedActionError"))
         XCTAssertTrue(content.contains("MapDrawerActionErrorAlert"))
         XCTAssertTrue(content.contains("map.drawer.actionError"))

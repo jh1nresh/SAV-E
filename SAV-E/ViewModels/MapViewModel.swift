@@ -3560,8 +3560,6 @@ final class MapViewModel: ObservableObject {
         )
     }
 
-    var hasActiveExactSearchResolution: Bool { exactSearchResolution != nil }
-
     private func dropExactSearchResolutionUnlessLocked() {
         guard exactSearchRollbackLockPlaceID == nil else { return }
         exactSearchResolution = nil
