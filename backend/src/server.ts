@@ -230,6 +230,10 @@ import {
 } from "./entitlementPersistence.js";
 import { deleteAccount } from "./accountDeletion.js";
 import {
+  SavedPlaceLimitError,
+  assertNewSavedPlaceAllowed,
+} from "./savedPlaceLimit.js";
+import {
   FriendRatingError, listFriendRatings, getFriendRating, ownFriendRatings,
   putFriendRating, withdrawFriendRating, saveFriendRating, savedFriendAttributions,
 } from "./friendRatings.js";
@@ -1271,6 +1275,7 @@ createServer(async (request, response) => {
     return sendJson(response, { error: "Not found" }, 404);
   } catch (error) {
     if (error instanceof FriendRatingError) return sendJson(response, { error: error.message }, error.status);
+    if (error instanceof SavedPlaceLimitError) return sendJson(response, error.body, error.status);
     if (error instanceof AnalysisProviderError) return sendJson(response,{error:"Gemini upstream request failed",status:error.upstreamStatus},502);
     if (error instanceof AnalysisControlError) return sendJson(response,{error:error.message,code:error.code},error.status);
     const status = error instanceof ApiError
@@ -1603,6 +1608,12 @@ async function handlePlaces(
       const client = await pool.connect();
       try {
         await client.query("begin");
+        await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+        const existingReceipt = await client.query(
+          "select id from places where user_id = $1 and origin_shared_place_link_id = $2",
+          [userId, link.id],
+        );
+        if (!existingReceipt.rows[0]) await assertNewSavedPlaceAllowed(client, userId);
         const { rows } = await client.query(
           `${insert.sql}
            ${friendSharePlaceOriginConflictClause}
@@ -1641,16 +1652,39 @@ async function handlePlaces(
     }
 
     const insert = buildInsert("places", body, [...placeFields, "user_id"]);
-    const { rows } = await pool.query(
-      `${insert.sql}
-       on conflict (id) do update
-       set id = excluded.id
-       where places.user_id = excluded.user_id
-       returning *`,
-      insert.values,
-    );
-    if (!rows[0]) return sendJson(response, { error: "Place id conflict" }, 409);
-    return sendJson(response, formatPlace(rows[0]), 201);
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+      let isNewPlace = true;
+      if (typeof body.id === "string" && body.id) {
+        const existing = await client.query(
+          "select id from places where id = $1 and user_id = $2",
+          [body.id, userId],
+        );
+        isNewPlace = existing.rows.length === 0;
+      }
+      if (isNewPlace) await assertNewSavedPlaceAllowed(client, userId);
+      const { rows } = await client.query(
+        `${insert.sql}
+         on conflict (id) do update
+         set id = excluded.id
+         where places.user_id = excluded.user_id
+         returning *`,
+        insert.values,
+      );
+      if (!rows[0]) {
+        await client.query("rollback");
+        return sendJson(response, { error: "Place id conflict" }, 409);
+      }
+      await client.query("commit");
+      return sendJson(response, formatPlace(rows[0]), 201);
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   if (request.method === "PATCH" && placeId) {

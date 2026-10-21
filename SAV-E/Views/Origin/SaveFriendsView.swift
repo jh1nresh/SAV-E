@@ -3,6 +3,12 @@ import SwiftUI
 struct SaveFriendsView: View {
     var currentUserID: String?
     var onSaved: () async -> Void = {}
+    var onParkedAtFreeLimit: (Place) -> PlaceReviewCandidate = { place in
+        let candidate = PlaceReviewCandidate.unplacedInboxItem(from: place)
+        _ = try? SaveLocalVaultService.shared.saveReviewCandidate(candidate)
+        SavePlaceLimitHandoff.markPaywallPending(notify: false)
+        return candidate
+    }
     var onConnections: () -> Void = {}
     @StateObject private var store = SharedPostsStore()
     @State private var selected: SharedPlacePost?
@@ -55,11 +61,14 @@ struct SaveFriendsView: View {
         }
         .background(SaveAtlasPalette.canvas).foregroundStyle(SaveAtlasPalette.forest)
         .accessibilityIdentifier("friends.root")
-        .task(id: currentUserID) { await store.refresh(.feed) }
         .refreshable { await store.refresh(.feed) }
         .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await store.refresh(.feed) } } }
+        .task(id: currentUserID) {
+            store.parkOverLimitPlace = onParkedAtFreeLimit
+            await store.refresh(.feed)
+        }
         .sheet(item: $selected) { SharedPostDetail(initialPost: $0, store: store, onSaved: onSaved) }
-        .sheet(item: $author) { SharedAuthorPassport(authorID: $0.author_id, onSaved: onSaved) }
+        .sheet(item: $author) { SharedAuthorPassport(authorID: $0.author_id, onSaved: onSaved, parkOverLimitPlace: onParkedAtFreeLimit) }
     }
 
     private var emptyState: some View {

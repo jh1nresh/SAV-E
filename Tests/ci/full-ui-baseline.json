@@ -1,6 +1,7 @@
 [
   "SAVEUITests/SAVEScreenshotRailTests/testCaptureAtlasProductionParity",
   "SAVEUITests/SAVEScreenshotRailTests/testCaptureFiveTabLanding",
+  "SAVEUITests/SAVEScreenshotRailTests/testHomeAndPassportWarmDarkMode",
   "SAVEUITests/SAVEScreenshotRailTests/testAtlasHomeAndSavesRenderPersistedPlaceData",
   "SAVEUITests/SAVEScreenshotRailTests/testHomeSearchAndPendingCandidateOpenDirectly",
   "SAVEUITests/SAVEScreenshotRailTests/testCaptureMultipleResultsExcludeOlderClues",
@@ -19,5 +20,6 @@
   "SAVEUITests/SAVEScreenshotRailTests/testTripStopEditorSurfaceIsReachable",
   "SAVEUITests/SAVEScreenshotRailTests/testSocialPassportGridAndComposer",
   "SAVEUITests/SAVEScreenshotRailTests/testPassportListsEntryOpensListsDirectly",
-  "SAVEUITests/SAVEScreenshotRailTests/testFriendsComingSoon"
+  "SAVEUITests/SAVEScreenshotRailTests/testFriendsComingSoon",
+  "SAVEUITests/SAVEScreenshotRailTests/testSavedPlaceLimitPaywallStatesFreeCap"
 ]

@@ -5,7 +5,6 @@ struct AtlasPostcardPrototypeApp: App {
     var body: some Scene {
         WindowGroup {
             PrototypeShell()
-                .preferredColorScheme(.light)
         }
     }
 }

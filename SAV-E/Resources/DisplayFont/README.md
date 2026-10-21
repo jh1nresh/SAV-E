@@ -21,7 +21,9 @@ via `SaveAtlasType` (system rounded).
   https://github.com/ButTaiwan/iansui/releases/tag/v1.020
 - Bundled file: `Iansui-SavvySubset.ttf` — MOE 4808 common characters plus
   fixed title / city-switcher strings. Rebuild with
-  `scripts/subset-iansui.py`
+  `scripts/subset-iansui.py --src Iansui-Regular.ttf`
+- Charset tables live in `scripts/doodle-fonts/` so this folder ships only
+  the font files and OFL licenses
 - License: SIL Open Font License 1.1 (`LICENSES/iansui/OFL.txt`)
 - PostScript name remains `Iansui-Regular` (no Reserved Font Name)
 - Missing glyphs cascade to PingFang TC via `kCTFontCascadeListAttribute`

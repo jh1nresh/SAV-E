@@ -468,6 +468,35 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    func testSavedPlaceLimitPaywallStatesFreeCap() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-show-saved-place-limit-paywall",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(app.staticTexts["Free: 50 places"].firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.staticTexts["Save every place you love"].firstMatch.exists)
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.freePlaceLimit"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.proBenefit"].exists)
+        XCTAssertTrue(app.staticTexts["Unlimited saved places"].firstMatch.exists)
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.keepGoing"].exists)
+        XCTAssertTrue(app.staticTexts["You've saved 50 places. Keep going."].firstMatch.exists)
+        XCTAssertFalse(app.staticTexts["Always free"].exists)
+        XCTAssertFalse(app.staticTexts["Always free: unlimited saved places"].exists)
+        XCTAssertFalse(app.staticTexts["Unlimited saved places and Map Stamps"].exists)
+        XCTAssertTrue(app.buttons["paywall.close"].exists)
+        attach(app, name: "paywall-free-place-limit")
+    }
+
+    @MainActor
     func testHomeLeadsWithSavedPlacesAndUsesSaveTabForCapture() throws {
         let app = makeApp(
             launchArguments: [
@@ -687,6 +716,93 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForNonExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected, "Capture cancellation returns to Passport")
+    }
+
+    /// Warm dark tokens from spec §1 must paint Home and Passport once Light is unlocked.
+    /// Appearance is forced before launch (`-AppleInterfaceStyle`, `--uitest-force-*`,
+    /// and `XCUIDevice.appearance`). Background pixels must be near #1E1C19 / #FFF9EB.
+    /// Attachment names stay off the production-parity set (`five-tab-*`, `atlas-*`).
+    @MainActor
+    func testHomeAndPassportWarmDarkMode() throws {
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        try captureHomeAndPassportCanvas(
+            appearance: .dark,
+            appleInterfaceStyle: "Dark",
+            forceArgument: "--uitest-force-dark",
+            homeName: "dark-home",
+            passportName: "dark-passport",
+            expectedRed: 0x1E,
+            expectedGreen: 0x1C,
+            expectedBlue: 0x19
+        )
+        try captureHomeAndPassportCanvas(
+            appearance: .light,
+            appleInterfaceStyle: "Light",
+            forceArgument: "--uitest-force-light",
+            homeName: "light-home",
+            passportName: "light-passport",
+            expectedRed: 0xFF,
+            expectedGreen: 0xF9,
+            expectedBlue: 0xEB
+        )
+    }
+
+    @MainActor
+    private func captureHomeAndPassportCanvas(
+        appearance: XCUIDevice.Appearance,
+        appleInterfaceStyle: String,
+        forceArgument: String,
+        homeName: String,
+        passportName: String,
+        expectedRed: Int,
+        expectedGreen: Int,
+        expectedBlue: Int
+    ) throws {
+        XCUIDevice.shared.appearance = appearance
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "-save.appLanguage", "en",
+                "-AppleInterfaceStyle", appleInterfaceStyle,
+                forceArgument,
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(rootTabButton("Home", app: app).waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.textFields["home.search"].waitForExistence(timeout: stepTimeout))
+        let homeShot = app.screenshot()
+        attach(app, name: homeName)
+        assertScreenshotBackground(
+            homeShot,
+            nearRed: expectedRed,
+            green: expectedGreen,
+            blue: expectedBlue,
+            name: homeName
+        )
+
+        openRootTab("Passport", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Passport", app: app).isSelected)
+        let passportShot = app.screenshot()
+        attach(app, name: passportName)
+        assertScreenshotBackground(
+            passportShot,
+            nearRed: expectedRed,
+            green: expectedGreen,
+            blue: expectedBlue,
+            name: passportName
+        )
+        terminate(app)
     }
 
     @MainActor

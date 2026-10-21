@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from "pg";
+import { assertNewSavedPlaceAllowed } from "./savedPlaceLimit.js";
 
 export class FriendRatingError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
@@ -144,6 +145,7 @@ export async function saveFriendRating(pool: Pool, userId: string, placeID: stri
       order by created_at, id limit 1`, [userId, source.google_place_id, source.provider_place_id, source.location_provider]);
     let place = existing.rows[0];
     if (!place) {
+      await assertNewSavedPlaceAllowed(client, userId);
       const inserted = await client.query(`insert into places
         (user_id, name, address, latitude, longitude, google_place_id, category,
           coordinate_system, location_provider, provider_place_id, provider_map_url, status)

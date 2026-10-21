@@ -257,7 +257,11 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let row = PlaceRow.from(place: place, userId: userId)
         let body = try JSONEncoder.supabase.encode(row)
 
-        try await request(path: "/places", method: "POST", body: body)
+        do {
+            try await request(path: "/places", method: "POST", body: body)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     func saveFriendSharedPlace(
@@ -269,7 +273,12 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
 
         let row = PlaceRow.from(place: place, userId: userId, friendShareCode: code)
         let body = try JSONEncoder.supabase.encode(row)
-        let data = try await request(path: "/places", method: "POST", body: body)
+        let data: Data
+        do {
+            data = try await request(path: "/places", method: "POST", body: body)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
         let response = try JSONDecoder.supabase.decode(FriendSharedPlaceSaveResponse.self, from: data)
         guard let outcome = FriendSharedPlaceSaveResult.Outcome(rawValue: response.outcome) else {
             throw SupabaseError.invalidResponse("Savvy returned an invalid friend share save outcome")
@@ -466,6 +475,9 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     }
 
     static func httpError(statusCode: Int, body: String) -> SupabaseError {
+        if SavePlaceLimitError.matchesServerResponse(status: statusCode, body: body) {
+            return .apiError(statusCode, body)
+        }
         if statusCode == 401 || statusCode == 403 {
             return .notAuthenticated
         }
@@ -970,8 +982,21 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     }
 
     func saveSharedPost(id: UUID) async throws -> Place {
-        let data = try await request(path: "/v0/shared-posts/\(id)/save", method: "POST", body: Data("{}".utf8))
-        return try JSONDecoder.supabase.decode(PlaceRow.self, from: data).toPlace()
+        do {
+            let data = try await request(path: "/v0/shared-posts/\(id)/save", method: "POST", body: Data("{}".utf8))
+            return try JSONDecoder.supabase.decode(PlaceRow.self, from: data).toPlace()
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
+    }
+
+    private func mappedSavedPlaceLimit(_ error: Error) -> Error {
+        if error is SavePlaceLimitError { return error }
+        if case .apiError(let status, let body) = error as? SupabaseError,
+           let limit = SavePlaceLimitError.fromServerResponse(status: status, body: body) {
+            return limit
+        }
+        return error
     }
 
     func fetchFollowers(cursor: String?) async throws -> SaveFollowedFriendsPage {

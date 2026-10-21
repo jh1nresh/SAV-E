@@ -14,6 +14,7 @@ TRIP_SHEET = RAIL + "testTripStopEditorSurfaceIsReachable"
 BASELINE = [RAIL + name for name in (
     "testCaptureAtlasProductionParity",
     "testCaptureFiveTabLanding",
+    "testHomeAndPassportWarmDarkMode",
     "testAtlasHomeAndSavesRenderPersistedPlaceData",
     "testHomeSearchAndPendingCandidateOpenDirectly",
     "testCaptureMultipleResultsExcludeOlderClues",
@@ -30,6 +31,7 @@ BASELINE = [RAIL + name for name in (
     "testSocialPassportGridAndComposer",
     "testPassportListsEntryOpensListsDirectly",
     "testFriendsComingSoon",
+    "testSavedPlaceLimitPaywallStatesFreeCap",
 )] + [ONBOARDING, RAIL + "testPassportTutorialReplaysWithoutAddingPlaces"]
 
 # Exact-file allowlist: adding another view/service requires coverage review.

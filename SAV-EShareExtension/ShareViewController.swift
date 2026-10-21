@@ -3251,6 +3251,34 @@ struct ShareExtensionView: View {
         return isValidCoordinate(latitude: latitude, longitude: longitude)
     }
 
+    private func unplacedReviewCandidate(
+        from place: ParsedPlace,
+        sourceURLString: String,
+        sourceText: String,
+        latitude: Double,
+        longitude: Double
+    ) -> PendingReviewCandidate {
+        PendingReviewCandidate(
+            ownerSubject: analysisCredential?.ownerSubject,
+            candidateName: cleanPlaceName(place.name),
+            address: place.address,
+            category: selectedCategory,
+            latitude: latitude,
+            longitude: longitude,
+            sourceURL: sourceURLString.isEmpty ? nil : sourceURLString,
+            sourceText: sourceText.isEmpty ? nil : sourceText,
+            evidence: [
+                "Held in Review: Free: 50 places",
+                sourceURLString.isEmpty ? nil : "Source URL: \(sourceURLString)",
+                sourceText.isEmpty ? nil : String(sourceText.prefix(300)),
+                place.googlePlaceId.map { "Google Place ID: \($0)" }
+            ].compactMap { $0 },
+            confidence: 0.9,
+            missingInfo: [],
+            savedAt: Date()
+        )
+    }
+
     private func reviewCandidate(from place: ParsedPlace, sourceURLString: String, sourceText: String) -> PendingReviewCandidate? {
         let name = cleanPlaceName(place.name)
         guard isUsablePlaceName(name), name != "Unknown Place" else { return nil }
@@ -3615,6 +3643,21 @@ struct ShareExtensionView: View {
                 return
             }
             parseError = "Savvy needs reliable coordinates before saving a Map Stamp."
+            return
+        }
+
+        if SaveShareExtensionPlaceDestination.resolve(
+            cached: SavePlaceLimitHandoff.cachedDecision()
+        ) == .unplacedInbox {
+            let candidate = unplacedReviewCandidate(
+                from: place,
+                sourceURLString: sharedURL.isEmpty ? sharedText : sharedURL,
+                sourceText: sharedText,
+                latitude: latitude,
+                longitude: longitude
+            )
+            SavePlaceLimitHandoff.markPaywallPending()
+            saveReviewCandidates([candidate])
             return
         }
 

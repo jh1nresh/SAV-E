@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import { FriendRatingError } from "./friendRatings.js";
 import { sharedPostPhotos } from "./sharedPostPhotos.js";
+import { assertNewSavedPlaceAllowed } from "./savedPlaceLimit.js";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function requireID(id: string) {
@@ -140,6 +141,7 @@ export async function saveSharedPost(pool: Pool, userId: string, placeID: string
       order by created_at, id limit 1`, [userId, source.google_place_id, source.provider_place_id, source.location_provider]);
     let place = existing.rows[0];
     if (!place) {
+      await assertNewSavedPlaceAllowed(client, userId);
       const inserted = await client.query(`insert into places
         (user_id,name,address,latitude,longitude,google_place_id,category,coordinate_system,location_provider,provider_place_id,provider_map_url,status)
         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'wantToGo') returning *`,

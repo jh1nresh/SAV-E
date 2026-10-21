@@ -3,10 +3,10 @@ import SwiftUI
 
 /// Savvy Pro paywall.
 ///
-/// Presented only as a reaction to a refused AI assist, or pulled up
-/// deliberately from Passport. Never automatic, never at launch, never before
-/// the first confirmed Map Stamp — `SaveEntitlementStore.shouldPresentPaywall`
-/// enforces that and this view does not second-guess it.
+/// Presented as a reaction to a refused AI assist, a parked 51st free save,
+/// or pulled up deliberately from Passport. Never an automatic first-launch
+/// wall. A Share Extension save over the free cap sets a pending handoff so
+/// this sheet can open the next time the app becomes active.
 ///
 /// App Store review requirements that must stay on this screen: Restore
 /// Purchases, EULA link, privacy policy link, renewal period, cancellation path.
@@ -16,6 +16,8 @@ struct SaveProPaywallView: View {
         case aiAssistExhausted
         /// The user opened Pro from Passport.
         case passport
+        /// A free save was parked in Review because the 50-place cap is full.
+        case savedPlaceLimit
     }
 
     let trigger: Trigger
@@ -82,64 +84,63 @@ struct SaveProPaywallView: View {
                 .font(SaveTheme.Typography.eyebrow)
                 .foregroundStyle(SaveAtlasPalette.muted)
 
-            Text(headline)
-                .font(SaveAtlasType.display(28))
-                .foregroundStyle(SaveAtlasPalette.forest)
+            SaveDisplayTitle(text: headline, pointSize: 34)
 
             Text(subheadline)
                 .font(SaveAtlasType.body(14))
                 .foregroundStyle(SaveAtlasPalette.muted)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("paywall.freePlaceLimit")
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("paywall.header")
     }
 
     private var headline: String {
-        switch trigger {
-        case .aiAssistExhausted:
-            return languageSettings.localized(
-                english: "You've used this month's AI assists",
-                traditionalChinese: "這個月的 AI 協助已用完"
-            )
-        case .passport:
-            return languageSettings.localized(
-                english: "More AI, same private map",
-                traditionalChinese: "更多 AI，同一張私人地圖"
-            )
-        }
+        languageSettings.localized(
+            english: "Save every place you love",
+            traditionalChinese: "想去的地方，全部存下"
+        )
     }
 
     private var subheadline: String {
         languageSettings.localized(
-            english: "Your saved places, Map Stamps, and private map stay free and unlimited. Pro raises the monthly allowance for the parts that call a model.",
-            traditionalChinese: "你收藏的地點、Map Stamp 與私人地圖永遠免費且無上限。Pro 只提高需要呼叫模型的每月額度。"
+            english: "Free: 50 places",
+            traditionalChinese: "免費：50 個地點"
         )
     }
 
-    /// The free/paid boundary is stated plainly. Hiding it would make the
-    /// refusal feel arbitrary and invite refund requests.
+    /// DESIGN §7.6: one free-tier line, one Pro benefit, and a keep-going note
+    /// only for the cap trigger. No AI-quota copy. The free-tier sentence
+    /// appears only in `subheadline`.
     private var boundaryPanel: some View {
-        VStack(alignment: .leading, spacing: SaveTheme.Spacing.md) {
-            boundaryGroup(
-                title: languageSettings.localized(english: "Always free", traditionalChinese: "永遠免費"),
-                tint: SaveAtlasPalette.mint,
-                items: [
-                    languageSettings.localized(english: "Unlimited saved places and Map Stamps", traditionalChinese: "無限收藏地點與 Map Stamp"),
-                    languageSettings.localized(english: "Your private map and notebooks", traditionalChinese: "你的私人地圖與筆記本"),
-                    languageSettings.localized(english: "Search across everything you saved", traditionalChinese: "搜尋你收藏過的所有內容"),
-                    languageSettings.localized(english: "Opening and editing existing trips", traditionalChinese: "開啟與編輯既有行程")
-                ]
-            )
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
+            HStack(alignment: .top, spacing: SaveTheme.Spacing.sm) {
+                Circle()
+                    .fill(SaveAtlasPalette.lavender)
+                    .frame(width: 7, height: 7)
+                    .padding(.top, 5)
+                Text(languageSettings.localized(
+                    english: "Unlimited saved places",
+                    traditionalChinese: "收藏地點不設限"
+                ))
+                .font(SaveAtlasType.body(13))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .accessibilityIdentifier("paywall.proBenefit")
 
-            boundaryGroup(
-                title: languageSettings.localized(english: "Counts as an AI assist", traditionalChinese: "計入 AI 協助"),
-                tint: SaveAtlasPalette.lavender,
-                items: [
-                    languageSettings.localized(english: "Ask Savvy answers that need a model", traditionalChinese: "需要模型回答的 Ask Savvy"),
-                    languageSettings.localized(english: "Generating a trip or gap suggestions", traditionalChinese: "生成行程或補齊建議"),
-                    languageSettings.localized(english: "Link parsing that can't be resolved locally", traditionalChinese: "無法在本機解析的連結")
-                ]
-            )
+            if trigger == .savedPlaceLimit {
+                Text(languageSettings.localized(
+                    english: "You've saved 50 places. Keep going.",
+                    traditionalChinese: "已存 50 個地點，繼續存下去"
+                ))
+                .font(SaveAtlasType.body(15))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("paywall.keepGoing")
+            }
         }
         .padding(SaveTheme.Spacing.lg)
         .background(SaveAtlasPalette.paper)
@@ -148,29 +149,8 @@ struct SaveProPaywallView: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
         )
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("paywall.boundary")
-    }
-
-    private func boundaryGroup(title: String, tint: Color, items: [String]) -> some View {
-        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
-            Text(title)
-                .font(SaveTheme.Typography.sectionLabel)
-                .foregroundStyle(SaveAtlasPalette.ink)
-
-            ForEach(items, id: \.self) { item in
-                HStack(alignment: .top, spacing: SaveTheme.Spacing.sm) {
-                    Circle()
-                        .fill(tint)
-                        .frame(width: 7, height: 7)
-                        .padding(.top, 5)
-                    Text(item)
-                        .font(SaveAtlasType.body(13))
-                        .foregroundStyle(SaveAtlasPalette.muted)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                }
-            }
-        }
     }
 
     @ViewBuilder
@@ -187,8 +167,8 @@ struct SaveProPaywallView: View {
                 .foregroundStyle(SaveAtlasPalette.forest)
 
                 Text(languageSettings.localized(
-                    english: "Everything above is free while Savvy is in TestFlight. Nothing is charged and no allowance is enforced.",
-                    traditionalChinese: "Savvy 在 TestFlight 期間以上功能全部免費，不會收費，也不會限制額度。"
+                    english: "Purchasing isn't live yet.",
+                    traditionalChinese: "目前還不能購買。"
                 ))
                 .font(SaveAtlasType.body(13))
                 .foregroundStyle(SaveAtlasPalette.muted)
