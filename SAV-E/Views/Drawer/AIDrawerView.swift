@@ -1362,8 +1362,12 @@ struct AIDrawerView: View {
     private func closeDrawerContent() {
         cancelMapSearch()
         voiceQuery.stop()
-        let shouldClearMapSearch = hasVisibleMapSearchResults
+        // Empty Find exact leaves no pins, so `hasVisibleMapSearchResults`
+        // is false. The no-match status still means this close ends the
+        // Review correction session.
+        let shouldClearMapSearch = hasVisibleMapSearchResults || addSpotStatus != nil
         viewModel.reset()
+        addSpotStatus = nil
         if shouldClearMapSearch {
             onClearMapSearchResults(true)
         }
@@ -1382,8 +1386,18 @@ struct AIDrawerView: View {
     }
 
     private func closeMapDetail() {
+        // Empty Find exact opens this Review detail with no pins. Closing
+        // it must end the session so a later saved-stamp tap cannot retire
+        // that clue onto an unrelated Map Stamp.
+        let shouldEndExactSearch: Bool = {
+            guard case .reviewCandidate = mapDetailDrawerItem else { return false }
+            return !hasVisibleMapSearchResults
+        }()
         mapDetailDrawerItem = nil
         onDismissMapDetail()
+        if shouldEndExactSearch {
+            onClearMapSearchResults(true)
+        }
         withAnimation(SaveTheme.Motion.standardSpring) {
             drawerDetent = collapsedDrawerDetent
         }
