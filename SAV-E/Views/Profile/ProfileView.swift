@@ -68,8 +68,11 @@ struct ProfileView: View {
         PassportStats(profile: viewModel.profile, savedPlaces: passportPlaces, waitingClues: waitingClues)
     }
 
+    /// Same city X/Y Home Collected uses. The sheet mounts with
+    /// `localSavedPlaces == []` until `.task` runs; Home already showed
+    /// Collected from `savedPlaces`, so do not wait on the local copy.
     private var passportPlaces: [Place] {
-        localSavedPlaces
+        localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces
     }
 
     private var todayMissions: [SavePassportTodayMission] {
@@ -423,6 +426,7 @@ struct ProfileView: View {
         }
         .onAppear {
             if requestsConnections { opensConnections = true; requestsConnections = false }
+            if localSavedPlaces.isEmpty { localSavedPlaces = savedPlaces }
         }
         .task(id: posts.filter) { await posts.refresh(.mine) }
         .task(id: currentUserID) {
