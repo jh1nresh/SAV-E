@@ -96,6 +96,11 @@ final class SAVEProductionConfigTests: XCTestCase {
             map.contains("if parkIfServerSavedPlaceLimit(error, place: merged)"),
             "C6: pending Share Extension imports park on a server cap"
         )
+        XCTAssertTrue(share.contains("SaveShareExtensionPlaceDestination.resolve"))
+        XCTAssertTrue(
+            map.contains("savedPlaceCount: places.count"),
+            "A1: the local cap counts confirmed Map Stamps only"
+        )
     }
 
     /// The gate is the only thing allowed to refuse an AI assist, so its truth
@@ -529,6 +534,46 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(saved.name, "Freed Slot Cafe")
         XCTAssertEqual(map.places.count, 50)
         XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    @MainActor
+    func testAcknowledgingPaywallKeepsTheParkedCandidate() {
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(50)
+        let place = makeSocialPlace(name: "Stay In Review")
+        _ = map.parkPlaceInUnplacedInbox(place)
+        XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        map.acknowledgeSavedPlaceLimitPaywall()
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+        XCTAssertEqual(map.reviewCandidates.first?.name, "Stay In Review")
+        XCTAssertEqual(map.places.count, 50)
+    }
+
+    @MainActor
+    func testProCanConfirmAParkedCandidateWithOneTap() async throws {
+        let map = makeCappedMap(tier: .pro)
+        map.places = makeCappedPlaces(50)
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Upgrade Cafe",
+            address: "7 Cap Road",
+            city: nil,
+            latitude: 25.25,
+            longitude: 121.66,
+            evidence: ["Source URL: https://example.com/upgrade-cafe"],
+            confidence: 0.9,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        map.reviewCandidates = [candidate]
+
+        let saved = try await map.saveReviewCandidateAsPlace(candidate)
+        XCTAssertEqual(saved.name, "Upgrade Cafe")
+        XCTAssertEqual(map.places.count, 51)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == candidate.id })
         XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
     }
 
