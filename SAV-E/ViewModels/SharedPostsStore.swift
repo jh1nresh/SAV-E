@@ -174,7 +174,7 @@ final class SharedPostsStore: ObservableObject {
         }
     }
 
-    /// DESIGN v2 Friends people (Mia / Leo / Kai / Ana). Clock is frozen
+    /// Packet §7.4 Friends fixture (Mia / Leo / Kai / Ana). Clock is frozen
     /// to 2026-10-20T10:00:00Z so ages stay 2d / 5d / 1w / 2w.
     private static var friendsTownPosts: [SharedPlacePost] {
         [

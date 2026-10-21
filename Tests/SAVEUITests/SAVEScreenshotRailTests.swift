@@ -175,6 +175,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
             openRootTab("Friends", app: app)
             XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
+            if name == "friends-loading" {
+                XCTAssertTrue(app.descendants(matching: .any)["friends.loading"].waitForExistence(timeout: stepTimeout))
+            }
             if name == "friends-error" {
                 XCTAssertTrue(app.descendants(matching: .any)["posts.error"].waitForExistence(timeout: stepTimeout))
             }

@@ -25,6 +25,7 @@ struct SaveFriendsView: View {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                             .padding(.top, SaveSpace.xl)
+                            .accessibilityIdentifier("friends.loading")
                     }
                     if store.error != nil { SocialLoadError().padding(.top, SaveSpace.md) }
                     if !store.isLoading && store.error == nil && store.posts.isEmpty {
