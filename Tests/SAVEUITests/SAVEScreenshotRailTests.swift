@@ -3358,6 +3358,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     ) throws {
         openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        let stamps = app.buttons["saves.segment.mapStamps"]
+        if stamps.waitForExistence(timeout: timeout(2)) {
+            tapReachable(stamps)
+        }
         let savedPlace = app.buttons.matching(
             NSPredicate(
                 format: "identifier BEGINSWITH 'saves.place.' AND label CONTAINS[c] %@",
