@@ -126,6 +126,7 @@ final class ReviewDemoTests: XCTestCase {
         )
     }
 
+    @MainActor
     func testReviewerDemoSeedsStayVisibleToTheDemoOwner() throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("review-demo-owner-\(UUID().uuidString).json")
