@@ -189,6 +189,19 @@ struct SaveDoodleMapView: View {
                     }
                 }
             }
+
+            if let polyline = mapViewModel.routePolyline {
+                MapPolyline(polyline)
+                    .stroke(
+                        SaveAtlasPalette.ink.opacity(0.76),
+                        style: StrokeStyle(
+                            lineWidth: 3,
+                            lineCap: .round,
+                            lineJoin: .round,
+                            dash: [7, 5]
+                        )
+                    )
+            }
         }
         .mapStyle(.standard)
         .mapFeatureSelectionDisabled { feature in
@@ -630,7 +643,7 @@ struct SaveDoodleMapView: View {
     private func fitVisiblePlaces() {
         // Focus-on-map / Find-exact already aimed the camera. Do not snap
         // back to saved stamps and hide the candidate the user asked to see.
-        if preservesCandidateCamera {
+        if preservesCandidateCamera || mapViewModel.routePolyline != nil {
             return
         }
         if let selected = mapViewModel.selectedPlace, selected.isMapKitMappable {
