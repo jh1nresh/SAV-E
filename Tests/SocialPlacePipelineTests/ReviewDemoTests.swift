@@ -126,6 +126,48 @@ final class ReviewDemoTests: XCTestCase {
         )
     }
 
+    func testReviewerDemoSeedsStayVisibleToTheDemoOwner() throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("review-demo-owner-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let seeds = ReviewDemoSeed.places()
+        for place in seeds {
+            _ = try vault.saveConfirmedPlace(place, ownerSubject: ReviewDemo.userId)
+        }
+        _ = try vault.saveConfirmedPlace(
+            Place(
+                id: UUID(),
+                name: "Ownerless Seed Cafe",
+                address: "Irvine, CA",
+                latitude: 33.68,
+                longitude: -117.82,
+                googlePlaceId: nil,
+                category: .cafe,
+                status: .wantToGo,
+                rating: nil,
+                note: nil,
+                sourceUrl: nil,
+                sourcePlatform: .other,
+                sourceImageUrl: nil,
+                businessPhotoUrls: nil,
+                extractedDishes: nil,
+                priceRange: nil,
+                recommender: nil,
+                googleRating: nil,
+                googlePriceLevel: nil,
+                openingHours: nil,
+                createdAt: Date()
+            )
+        )
+
+        let demoPlaces = try vault.confirmedPlaces(limit: 500, belongingTo: ReviewDemo.userId)
+        XCTAssertEqual(Set(demoPlaces.map(\.name)), Set(seeds.map(\.name)))
+        XCTAssertFalse(demoPlaces.contains { $0.name == "Ownerless Seed Cafe" })
+        XCTAssertTrue(
+            try vault.confirmedPlaces(limit: 500).contains { $0.name == "Ownerless Seed Cafe" }
+        )
+    }
+
     @MainActor
     func testGuestTokenHolderRoundTrips() {
         let holder = ReviewDemoGuestTokenHolder()

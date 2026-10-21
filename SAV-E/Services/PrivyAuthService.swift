@@ -252,7 +252,7 @@ final class PrivyAuthService: ObservableObject {
             repairForUITests: shouldRepairForUITests
         ) {
             for place in ReviewDemoSeed.missingPlaces(from: existingPlaces) {
-                _ = try? vault.saveConfirmedPlace(place)
+                _ = try? vault.saveConfirmedPlace(place, ownerSubject: ReviewDemo.userId)
             }
         }
         // Isolated demo vault only. Harbor Oven is the Review fixture, but
