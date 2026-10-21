@@ -132,9 +132,14 @@ jobs:
           # Boot now and block until the device reports ready, so first-boot
           # work never lands inside a test's launch budget.
           xcrun simctl bootstatus "$udid" -b
+          xcrun simctl privacy "$udid" grant location com.wanderly.app || true
+          xcrun simctl privacy "$udid" grant location-always com.wanderly.app || true
 
       - name: Run unit tests
+        env:
+          SAVE_GATE5_EVIDENCE_DIR: ${{ runner.temp }}/SAVE-Gate5/imagerenderer
         run: |
+          mkdir -p "$SAVE_GATE5_EVIDENCE_DIR"
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
             -scheme SAV-E \
@@ -167,7 +172,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: save-map-photo-pins-gate5-${{ github.sha }}
+          name: save-map-photo-pins-gate5-${{ github.event.pull_request.head.sha || github.sha }}
           path: ${{ runner.temp }}/SAVE-Gate5
           if-no-files-found: error
           retention-days: 14

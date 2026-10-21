@@ -688,13 +688,11 @@ struct SavvyMapPhotoPinView: View {
     @ViewBuilder
     private var badgeLabel: some View {
         let text = place.category.displayName(language: languageSettings.language)
-        if dynamicTypeSize >= .xxxLarge {
-            Text(text)
-                .font(SaveAtlasType.strong(15))
-                .foregroundStyle(SaveAtlasPalette.ink)
-                .lineLimit(1)
-                .padding(.horizontal, 8)
-        } else {
+        // P1: 「景點」 stays a word. Arc lettering splits two CJK characters.
+        let usesArc = dynamicTypeSize < .xxxLarge
+            && languageSettings.language != .traditionalChinese
+            && text.count > 4
+        if usesArc {
             SavvyMapArcText(
                 text: text,
                 radius: 38,
@@ -702,6 +700,13 @@ struct SavvyMapPhotoPinView: View {
             )
             .foregroundStyle(SaveAtlasPalette.ink)
             .frame(width: 86, height: 28)
+        } else {
+            Text(text)
+                .font(SaveAtlasType.strong(15))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.horizontal, 8)
         }
     }
 
@@ -1307,48 +1312,65 @@ struct SavvyMapPhotoPinPreviewCell: View {
 struct SavvyMapPhotoPinPreviewCatalog: View {
     var colorScheme: ColorScheme = .light
     var language: AppLanguage = .english
+    /// Snapshot export: no ScrollView / Lazy* so every cell actually paints.
+    var snapshotLayout: Bool = false
 
     var body: some View {
         let settings = AppLanguageSettings(
             userDefaults: UserDefaults(suiteName: "savvy.map.catalog.\(language.rawValue)") ?? .standard
         )
         settings.language = language
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("DEBUG / test fixtures — not shipping data")
-                    .font(SaveAtlasType.strong(13))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                Text("DESIGN gate 5 · photo + coral pin states")
-                    .font(SaveAtlasType.strong(20))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                LazyVGrid(
-                    columns: [GridItem(.flexible()), GridItem(.flexible())],
-                    spacing: 20
-                ) {
-                    ForEach(SavvyMapPhotoPinPreviewState.allCases) { state in
-                        VStack(spacing: 10) {
-                            SavvyMapPhotoPinPreviewCell(state: state, language: language)
-                                .frame(minHeight: state.showsCard ? 430 : 140)
-                            Text(state.qaTitle)
-                                .font(SaveAtlasType.strong(12))
-                                .foregroundStyle(SaveAtlasPalette.muted)
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding(12)
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            SaveAtlasPalette.kraftLight,
-                            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        )
-                    }
-                }
+        let content = catalogGrid
+        return Group {
+            if snapshotLayout {
+                content
+            } else {
+                ScrollView { content }
             }
-            .padding(16)
         }
         .background(SaveAtlasPalette.paper.ignoresSafeArea())
         .environment(\.appLanguageSettings, settings)
+        .environment(\.colorScheme, colorScheme)
         .preferredColorScheme(colorScheme)
         .accessibilityIdentifier("map.pin.previewCatalog")
+    }
+
+    private var catalogGrid: some View {
+        let states = SavvyMapPhotoPinPreviewState.allCases
+        return VStack(alignment: .leading, spacing: 16) {
+            Text("DEBUG / test fixtures — not shipping data")
+                .font(SaveAtlasType.strong(13))
+                .foregroundStyle(SaveAtlasPalette.muted)
+            Text("DESIGN gate 5 · photo + coral pin states")
+                .font(SaveAtlasType.strong(20))
+                .foregroundStyle(SaveAtlasPalette.ink)
+            Grid(alignment: .top, horizontalSpacing: 20, verticalSpacing: 20) {
+                ForEach(0..<(states.count / 2), id: \.self) { row in
+                    GridRow {
+                        catalogCell(states[row * 2])
+                        catalogCell(states[row * 2 + 1])
+                    }
+                }
+            }
+        }
+        .padding(16)
+    }
+
+    private func catalogCell(_ state: SavvyMapPhotoPinPreviewState) -> some View {
+        VStack(spacing: 10) {
+            SavvyMapPhotoPinPreviewCell(state: state, language: language)
+                .frame(minHeight: state.showsCard ? 430 : 140)
+            Text(state.qaTitle)
+                .font(SaveAtlasType.strong(12))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .multilineTextAlignment(.center)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity)
+        .background(
+            SaveAtlasPalette.kraftLight,
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
     }
 }
 
@@ -1405,9 +1427,39 @@ struct SavvyMapP14PreviewBoard: View {
 }
 
 enum SavvyMapPhotoPinSnapshotExport {
+    /// Hosted snapshot of the SwiftUI view. `ImageRenderer` alone skips
+    /// `Lazy*` grids and ignores `UIColor` dynamic light/dark traits.
     @MainActor
-    static func image<V: View>(for view: V, size: CGSize, scale: CGFloat = 2) -> UIImage? {
-        let renderer = ImageRenderer(content: view.frame(width: size.width, height: size.height))
+    static func image<V: View>(
+        for view: V,
+        size: CGSize,
+        scale: CGFloat = 2,
+        scheme: ColorScheme
+    ) -> UIImage? {
+        let themed = view
+            .frame(width: size.width, height: size.height)
+            .environment(\.colorScheme, scheme)
+            .preferredColorScheme(scheme)
+        let host = UIHostingController(rootView: themed)
+        host.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
+        let window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        window.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
+        window.rootViewController = host
+        window.isHidden = false
+        host.view.bounds = CGRect(origin: .zero, size: size)
+        host.view.backgroundColor = .clear
+        host.view.layoutIfNeeded()
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        format.opaque = false
+        let hosted = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+        }
+        window.isHidden = true
+        if hosted.size.width > 1 {
+            return hosted
+        }
+        let renderer = ImageRenderer(content: themed)
         renderer.scale = scale
         renderer.proposedSize = ProposedViewSize(size)
         return renderer.uiImage
@@ -1418,35 +1470,51 @@ enum SavvyMapPhotoPinSnapshotExport {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var written: [URL] = []
         let pinSize = CGSize(width: 390, height: 520)
-        let catalogSize = CGSize(width: 780, height: 1680)
+        let catalogSize = CGSize(width: 780, height: 1860)
         for scheme in [ColorScheme.light, .dark] {
             let schemeName = scheme == .light ? "light" : "dark"
             for state in SavvyMapPhotoPinPreviewState.allCases {
                 let view = previewPage(state, scheme: scheme, language: .english)
                 let url = directory.appendingPathComponent("\(schemeName)-\(state.rawValue).png")
-                try write(view, size: pinSize, to: url)
+                try write(view, size: pinSize, scheme: scheme, to: url)
                 written.append(url)
             }
-            let catalog = SavvyMapPhotoPinPreviewCatalog(colorScheme: scheme, language: .english)
+            let catalog = SavvyMapPhotoPinPreviewCatalog(
+                colorScheme: scheme,
+                language: .english,
+                snapshotLayout: true
+            )
             let catalogURL = directory.appendingPathComponent("catalog-\(schemeName).png")
-            try write(catalog, size: catalogSize, to: catalogURL)
+            try write(catalog, size: catalogSize, scheme: scheme, to: catalogURL)
             written.append(catalogURL)
         }
         for state in [SavvyMapPhotoPinPreviewState.photoBadge, .coralBadge, .photoCardHero, .coralCardHero] {
             let view = previewPage(state, scheme: .light, language: .traditionalChinese)
             let url = directory.appendingPathComponent("zh-Hant-\(state.rawValue).png")
-            try write(view, size: pinSize, to: url)
+            try write(view, size: pinSize, scheme: .light, to: url)
             written.append(url)
         }
         let p14 = directory.appendingPathComponent("p14-saved-unsaved-visited.png")
-        try write(SavvyMapP14PreviewBoard().preferredColorScheme(.light), size: CGSize(width: 780, height: 360), to: p14)
+        try write(
+            SavvyMapP14PreviewBoard()
+                .environment(\.colorScheme, .light)
+                .preferredColorScheme(.light),
+            size: CGSize(width: 780, height: 360),
+            scheme: .light,
+            to: p14
+        )
         written.append(p14)
         return written
     }
 
     @MainActor
-    private static func write<V: View>(_ view: V, size: CGSize, to url: URL) throws {
-        guard let image = image(for: view, size: size),
+    private static func write<V: View>(
+        _ view: V,
+        size: CGSize,
+        scheme: ColorScheme,
+        to url: URL
+    ) throws {
+        guard let image = image(for: view, size: size, scheme: scheme),
               let data = image.pngData() else {
             throw NSError(domain: "SavvyMapPhotoPinSnapshotExport", code: 1)
         }
@@ -1624,6 +1692,7 @@ func previewPage(
         }
         .padding(24)
     }
+    .environment(\.colorScheme, scheme)
     .preferredColorScheme(scheme)
 }
 #endif

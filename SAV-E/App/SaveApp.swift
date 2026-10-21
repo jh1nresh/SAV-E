@@ -22,7 +22,7 @@ private struct UITestAppearanceOverride: ViewModifier {
 
     init() {
         let arguments = ProcessInfo.processInfo.arguments
-        if arguments.contains("--uitest-force-dark") {
+        if arguments.contains("--uitest-force-dark") || arguments.contains("--uitest-dark") {
             scheme = .dark
             style = .dark
         } else if arguments.contains("--uitest-force-light") {

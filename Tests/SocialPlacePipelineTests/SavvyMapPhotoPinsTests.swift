@@ -443,6 +443,10 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertFalse(root.contains("longitudeDelta: delta"))
         XCTAssertTrue(pins.contains("Circle()"))
         XCTAssertTrue(pins.contains("badgeBaseIsCircle"))
+        XCTAssertTrue(pins.contains("usesArc"))
+        XCTAssertTrue(pins.contains("languageSettings.language != .traditionalChinese"))
+        XCTAssertTrue(pins.contains("snapshotLayout"))
+        XCTAssertTrue(pins.contains("overrideUserInterfaceStyle"))
     }
 
     func testGate5ImageRendererExportWritesLightDarkAndChinese() throws {
@@ -457,6 +461,23 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(names.contains("catalog-dark.png"))
         XCTAssertTrue(names.contains("zh-Hant-photoBadge.png"))
         XCTAssertTrue(names.contains("p14-saved-unsaved-visited.png"))
+        let lightCard = try Data(contentsOf: directory.appendingPathComponent("light-coralCardHero.png"))
+        let darkCard = try Data(contentsOf: directory.appendingPathComponent("dark-coralCardHero.png"))
+        XCTAssertNotEqual(
+            lightCard,
+            darkCard,
+            "dark coral card must use charcoal paper, not a second light render"
+        )
+        XCTAssertGreaterThan(
+            try Data(contentsOf: directory.appendingPathComponent("catalog-light.png")).count,
+            200_000,
+            "catalog-light.png must be a painted grid, not a blank paper page"
+        )
+        XCTAssertGreaterThan(
+            try Data(contentsOf: directory.appendingPathComponent("catalog-dark.png")).count,
+            200_000,
+            "catalog-dark.png must be a painted grid, not a blank paper page"
+        )
         for url in urls {
             let data = try Data(contentsOf: url)
             XCTAssertGreaterThan(data.count, 800, url.lastPathComponent)
@@ -469,10 +490,11 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
             let destURL = URL(fileURLWithPath: dest, isDirectory: true)
             try FileManager.default.createDirectory(at: destURL, withIntermediateDirectories: true)
             for url in urls {
-                try FileManager.default.copyItem(
-                    at: url,
-                    to: destURL.appendingPathComponent(url.lastPathComponent)
-                )
+                let target = destURL.appendingPathComponent(url.lastPathComponent)
+                if FileManager.default.fileExists(atPath: target.path) {
+                    try FileManager.default.removeItem(at: target)
+                }
+                try FileManager.default.copyItem(at: url, to: target)
             }
         }
     }
