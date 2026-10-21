@@ -1312,6 +1312,10 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(share.contains("appendPendingItems(stamped"))
         XCTAssertTrue(map.contains("belongingTo: authService.currentUserId"))
         XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: userId)"))
+        XCTAssertTrue(
+            map.contains("saveConfirmedPlace(place, ownerSubject: authService.currentUserId)"),
+            "local-only confirm must stamp the active owner so a signed-in reload keeps the Map Stamp"
+        )
         let privy = try source(at: "SAV-E/Services/PrivyAuthService.swift")
         XCTAssertTrue(
             privy.contains("saveConfirmedPlace(place, ownerSubject: ReviewDemo.userId)"),
@@ -1652,6 +1656,52 @@ final class SAVEProductionConfigTests: XCTestCase {
             "a nil owner is not evidence that the current account created the row"
         )
         XCTAssertNil(try vault.reviewCandidates().first?.ownerSubject)
+    }
+
+    @MainActor
+    func testLocalOnlyConfirmStampsOwnerSoSignedInReloadKeepsTheMapStamp() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:demo-owner")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-only-confirm-owner-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = MapViewModel(
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .pro },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: false
+        )
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Quarter Sheets Pizza Club",
+            address: "1 Fixture Road",
+            city: nil,
+            latitude: 34.0779,
+            longitude: -118.2543,
+            evidence: ["Source URL: https://www.google.com/maps/place/Quarter+Sheets"],
+            confidence: 0.9,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        map.reviewCandidates = [candidate]
+
+        let saved = try await map.saveReviewCandidateAsPlace(candidate)
+        XCTAssertEqual(saved.name, "Quarter Sheets Pizza Club")
+        XCTAssertEqual(
+            try vault.confirmedPlaceRecords().first?.ownerSubject,
+            "did:privy:demo-owner"
+        )
+
+        map.places = []
+        await map.loadPlaces(force: true)
+        XCTAssertTrue(
+            map.places.contains { $0.id == saved.id },
+            "a signed-in offline confirm must remain visible after a vault reload"
+        )
     }
 
     @MainActor

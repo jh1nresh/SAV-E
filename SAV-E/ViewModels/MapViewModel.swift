@@ -1770,7 +1770,7 @@ final class MapViewModel: ObservableObject {
                 requestSavedPlaceLimitPaywall()
                 throw SavePlaceLimitError.parkedInUnplacedInbox
             }
-            _ = try saveLocalVaultService.saveConfirmedPlace(place)
+            _ = try saveLocalVaultService.saveConfirmedPlace(place, ownerSubject: authService.currentUserId)
             try saveLocalVaultService.removeReviewCandidate(candidate.id)
             places = [place] + places
             reviewCandidates.removeAll { $0.id == candidate.id }
