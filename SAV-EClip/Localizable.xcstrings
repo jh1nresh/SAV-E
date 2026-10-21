@@ -1,0 +1,150 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "clip.chip.shared" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Shared with you" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "朋友分享" } }
+      }
+    },
+    "clip.place.sender" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Shared by %@" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@ 分享給你" } }
+      }
+    },
+    "clip.place.save" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save to my Savvy" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "存到我的 Savvy" } }
+      }
+    },
+    "clip.place.openMaps" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open in Apple Maps" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "在 Apple 地圖打開" } }
+      }
+    },
+    "clip.footnote.nothingAdded" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nothing is added until you open the app" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "打開 App 前不會加入任何東西" } }
+      }
+    },
+    "clip.list.count" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%d places" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%d 個地點" } }
+      }
+    },
+    "clip.list.countSender" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%d places · shared by %@" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%d 個地點 · %@ 分享" } }
+      }
+    },
+    "clip.list.open" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open list in Savvy" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "在 Savvy 打開清單" } }
+      }
+    },
+    "clip.loading.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Opening shared link" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "正在打開分享內容" } }
+      }
+    },
+    "clip.loading.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nothing is added until you open the app" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "打開 App 前不會加入任何東西" } }
+      }
+    },
+    "clip.error.expired.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This link has expired" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "這個連結已失效" } }
+      }
+    },
+    "clip.error.expired.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The sender may have removed it, or it has expired." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "分享的人可能已經收回，或連結過期了。" } }
+      }
+    },
+    "clip.error.offline.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "You’re offline" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "連不上網路" } }
+      }
+    },
+    "clip.error.offline.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Check your connection and try again." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "檢查網路連線後，再試一次。" } }
+      }
+    },
+    "clip.error.server.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Savvy is busy right now" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Savvy 暫時忙不過來" } }
+      }
+    },
+    "clip.error.server.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Wait a moment and try again." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "稍等一下，再試一次。" } }
+      }
+    },
+    "clip.error.malformed.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Can’t read this link" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "讀不懂這個連結" } }
+      }
+    },
+    "clip.error.malformed.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The link may be incomplete. Ask the sender to share it again." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "連結可能不完整，請分享的人重新傳一次。" } }
+      }
+    },
+    "clip.empty.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open with a shared link" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "用分享連結打開" } }
+      }
+    },
+    "clip.empty.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "When a friend sends you a Savvy place or list link, it opens here." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "朋友傳來的 Savvy 地點或清單連結，點開就會顯示在這裡。" } }
+      }
+    },
+    "clip.retry" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Try again" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "再試一次" } }
+      }
+    },
+    "a11y.pin" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Place %d, %@" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "第 %d 個地點，%@" } }
+      }
+    },
+    "clip.trip.open" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open in Savvy" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "在 Savvy 打開" } }
+      }
+    },
+    "clip.referral.invite" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "@%@ invited you to Savvy" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "@%@ 邀請你加入 Savvy" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

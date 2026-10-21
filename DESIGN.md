@@ -385,7 +385,7 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | Friends (`SaveFriendsView`) | Atlas |
 | `CategoryPill`, `EmptyStateView`, `RelatedPlaceSourcesPanel` | Atlas |
 | Brand accents: pet preset colors (Spark = honey), stamp moment ripple, `SaveMemoryBadge` stamp palette, `MemoMascotMark` | Intentional — do not recolor in migrations |
-| App Clip shared place, trip, and list previews | Doodle journal (`ClipJournalPalette` / `ClipDisplayType`, same cream/ink/coral lock as `SaveAtlasPalette` + `SaveDoodle`) |
+| App Clip shared place and list previews | Doodle journal — see **App Clip** below. Trip / referral / My Savvy stay functional with no Google photos and are not a visual restyle in this pass. |
 | `SaveMemoryBadge` chrome, `EvidenceLinkList` (debug-only), smoke harness | Legacy cream-notebook |
 
 Rules:
@@ -909,6 +909,47 @@ Rules:
 - No full app chrome.
 - Show capture status, extracted clues, and next action.
 - If confidence is weak, save as clue or Review Candidate, not Map Stamp.
+
+## App Clip
+
+The Clip is a read-only place/list preview plus handoff. It does not save,
+sign in, request location/notification/camera permission, or show Pro / price
+/ “free 50” copy. Google Places photos do not appear on any Clip screen.
+
+### Tokens (V3)
+
+The Clip target cannot link the main app, and `Color+Theme.swift` pulls
+`PlaceCategory`, so the files are not shared. Asset-catalog colors in
+`SAV-EClip/Assets.xcassets` are the Clip source. After #290 merges, re-diff
+this table against `SaveAtlasPalette` and update the catalog — do not copy
+forest or honey/yellow onto Clip screens.
+
+| Role | Clip catalog | Light | Dark | Main `#290` `SaveAtlasPalette` |
+| --- | --- | --- | --- | --- |
+| Canvas / paper | `ClipCanvas` | `#FFF9EB` | `#1E1C17` | `canvas` `#FFF9EB` / `#1E1C19` |
+| Card | `ClipCard` | `#FFF9EB` | `#2A2721` | `paper` (same as canvas; Clip cards are darker in dark mode) |
+| Ink | `ClipInk` | `#2F2E23` | `#FFF9EB` | `ink` `#2F2E23` / `#F4F1E4` |
+| Muted | `ClipMuted` | `#62594F` | `#BDB3A2` | `muted` `#62594F` / `#CFC4B8` |
+| Line | `ClipLine` | `#DCCFB9` | `#4A443A` | `line` `#DCCFB9` / `#4A443B` |
+| Kraft | `ClipKraft` | `#EADDC6` | `#3A342A` | `kraft` `#EADDC6` / `#4A3F32` |
+| Coral (CTA, pins) | `ClipCoral` | `#F26B4A` | `#F26B4A` | `coral` `#F26B4A` / `#D97861` |
+| Button label | `ClipCream` | `#FFF9EB` | `#FFF9EB` | cream / paper |
+
+Dark Clip values are provisional until #290 lands. No shadows, gradients, or
+blur. Native MapKit only — no custom tiles or overlays.
+
+### Type
+
+English titles use Caveat SemiBold (`Caveat-SemiBold.ttf`, 261 KB). zh-Hant
+titles use the system font. Do not copy `Iansui-SavvySubset.ttf` (3.48 MB)
+into the Clip; a title-only Iansui subset still cannot cover user list names.
+
+### Size
+
+Uncompressed per-variant budget is 15 MB until the Clip deployment-target
+question is settled. Ship only the Clip catalog (icon, coral wordmark, color
+sets), Caveat, and vector stickers drawn in SwiftUI. Do not embed the main
+`Assets.xcassets` catalog.
 
 ## Accessibility
 

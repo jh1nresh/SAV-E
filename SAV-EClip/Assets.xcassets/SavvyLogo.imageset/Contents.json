@@ -1,17 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "GoogleMaps_Logo_WithLightOutline_1x.png",
+      "filename" : "savvy-logo.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "GoogleMaps_Logo_WithLightOutline_2x.png",
+      "filename" : "savvy-logo@2x.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
-      "filename" : "GoogleMaps_Logo_WithLightOutline_4x.png",
+      "filename" : "savvy-logo@3x.png",
       "idiom" : "universal",
       "scale" : "3x"
     }
@@ -19,8 +19,5 @@
   "info" : {
     "author" : "xcode",
     "version" : 1
-  },
-  "properties" : {
-    "template-rendering-intent" : "original"
   }
 }

@@ -277,7 +277,24 @@ final class SaveCollaborativeListTests: XCTestCase {
 
         let shareURL = try XCTUnwrap(list.shareURL())
         let payload = try XCTUnwrap(SaveSharedListPayload.from(url: shareURL))
-        XCTAssertFalse(try XCTUnwrap(payload.list.items.first?.photoURLs.first).contains("key="))
+        XCTAssertTrue(payload.list.items.first?.photoURLs.isEmpty == true)
+    }
+
+    @MainActor
+    func testSharedListPayloadDropsGooglePhotoURLsAndKeepsOwnedPhotos() throws {
+        var owned = place(name: "Owned Cafe", category: .cafe)
+        owned.businessPhotoUrls = ["https://example.com/own.jpg"]
+        var google = place(name: "Google Cafe", category: .cafe)
+        google.businessPhotoUrls = [
+            "https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=abc"
+        ]
+        var list = SaveCollaborativeList(title: "Mixed photos")
+        list.add(.from(place: owned))
+        list.add(.from(place: google))
+
+        let payload = try XCTUnwrap(SaveSharedListPayload.from(url: try XCTUnwrap(list.shareURL())))
+        XCTAssertEqual(payload.list.items.first?.photoURLs, ["https://example.com/own.jpg"])
+        XCTAssertEqual(payload.list.items.last?.photoURLs, [])
     }
 
     // MARK: - Server short-code links (`?c=`)

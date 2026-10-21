@@ -435,7 +435,7 @@ private extension SaveCollaborativeList {
         var copy = self
         copy.items = items.map { item in
             var safeItem = item
-            safeItem.photoURLs = GooglePlacesPhotoURL.persistableStrings(item.photoURLs) ?? []
+            safeItem.photoURLs = ShareRoutePayloadSanitizer.persistablePhotoURLs(item.photoURLs)
             return safeItem
         }
         return copy

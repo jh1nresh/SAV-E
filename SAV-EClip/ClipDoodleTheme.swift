@@ -2,64 +2,58 @@ import CoreText
 import SwiftUI
 import UIKit
 
-/// Doodle v1 journal tokens for the App Clip. Mirrors `SaveAtlasPalette`,
-/// `SaveDoodle`, `SaveDisplayType`, and `SaveLayout` from the main app so the
-/// clip target stays standalone.
+/// Clip Doodle v1 tokens. Values come from DESIGN.md (2026-10-21 App Clip
+/// spec). They stay in sync with `SaveAtlasPalette` in
+/// `SAV-E/Extensions/Color+Theme.swift` by table in DESIGN.md — the Clip
+/// target cannot link the main app, and Color+Theme.swift pulls PlaceCategory.
 enum ClipJournalPalette {
-    static let canvas = Color(light: "FFF9EB", dark: "1E1C19")
-    static let paper = Color(light: "FFF9EB", dark: "1E1C19")
-    static let forest = Color(light: "0E4A33", dark: "B9E0C9")
-    static let ink = Color(light: "2F2E23", dark: "F4F1E4")
-    static let muted = Color(light: "62594F", dark: "CFC4B8")
-    static let coral = Color(light: "F26B4A", dark: "D97861")
-    static let mint = Color(light: "D6E8C4", dark: "4F7258")
-    static let sky = Color(light: "B5E3F5", dark: "3F758B")
-    static let kraft = Color(light: "EADDC6", dark: "4A3F32")
-    static let honey = Color(light: "FFCC4F", dark: "A87328")
-    static let stroke = Color(light: "DCCFB9", dark: "4A443B")
-    static let pencil = Color(light: "A39C8E", dark: "8A8478")
-    static let washGreen = Color(light: "D3E4C1", dark: "3E5236")
+    static let canvas = Color("ClipCanvas")
+    static let card = Color("ClipCard")
+    static let paper = canvas
+    static let ink = Color("ClipInk")
+    static let muted = Color("ClipMuted")
+    static let line = Color("ClipLine")
+    static let kraft = Color("ClipKraft")
+    static let coral = Color("ClipCoral")
+    static let cream = Color("ClipCream")
     static let cardRadius: CGFloat = 12
     static let strokeWidth: CGFloat = 1
 }
 
 enum ClipJournalLayout {
     static let screenMargin: CGFloat = 24
+    static let headerTop: CGFloat = 4
+    static let headerBottom: CGFloat = 12
+    static let wordmarkHeight: CGFloat = 34
+    static let chipHeight: CGFloat = 32
+    static let placeMapWidth: CGFloat = 345
+    static let placeMapHeight: CGFloat = 300
+    static let listMapHeight: CGFloat = 180
+    static let cardPadding: CGFloat = 16
+    static let stickerCanvas: CGFloat = 48
+    static let stickerImage: CGFloat = 40
+    static let defaultElephant: CGFloat = 34
+    static let rowMinHeight: CGFloat = 64
+    static let numberCircle: CGFloat = 24
+    static let numberToSticker: CGFloat = 8
+    static let stickerToText: CGFloat = 12
+    static let nameToMeta: CGFloat = 4
     static let minTap: CGFloat = 44
     static let buttonHeight: CGFloat = 48
-    static let cardPadding: CGFloat = 16
+    static let buttonGap: CGFloat = 12
+    static let buttonGroupBottom: CGFloat = 34
+    static let stateCircle: CGFloat = 120
+    static let stateSticker: CGFloat = 84
+    static let stateBadge: CGFloat = 40
+    static let stateTitleGap: CGFloat = 24
+    static let stateBodyGap: CGFloat = 12
+    static let stateBodyMaxWidth: CGFloat = 300
+    static let pinWidth: CGFloat = 30
+    static let pinHeight: CGFloat = 38
 }
 
 enum ClipJournalType {
-    static func display(
-        _ size: CGFloat,
-        relativeTo style: Font.TextStyle = .title
-    ) -> Font {
-        ClipDisplayType.display(size, relativeTo: style)
-    }
-
-    static func strong(
-        _ size: CGFloat,
-        relativeTo style: Font.TextStyle = .body
-    ) -> Font {
-        rounded(size, weight: .bold, relativeTo: style)
-    }
-
-    static func body(
-        _ size: CGFloat,
-        relativeTo style: Font.TextStyle = .body
-    ) -> Font {
-        rounded(size, weight: .medium, relativeTo: style)
-    }
-
-    static func regular(
-        _ size: CGFloat,
-        relativeTo style: Font.TextStyle = .body
-    ) -> Font {
-        rounded(size, weight: .regular, relativeTo: style)
-    }
-
-    private static func rounded(
+    static func rounded(
         _ size: CGFloat,
         weight: UIFont.Weight,
         relativeTo style: Font.TextStyle
@@ -72,58 +66,38 @@ enum ClipJournalType {
             .scaledFont(for: roundedFont)
         return Font(scaledFont)
     }
+
+    static func system(
+        _ size: CGFloat,
+        weight: UIFont.Weight,
+        relativeTo style: Font.TextStyle
+    ) -> Font {
+        let font = UIFont.systemFont(ofSize: size, weight: weight)
+        return Font(UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: font))
+    }
 }
 
 enum ClipDisplayType {
     static let latinName = "Caveat-SemiBold"
-    static let cjkName = "Iansui-Regular"
 
     private static let register: Void = {
-        let files: [(String, String)] = [
-            ("Caveat-SemiBold", "ttf"),
-            ("Iansui-SavvySubset", "ttf"),
-        ]
-        for (name, ext) in files {
-            let url = Bundle.main.url(forResource: name, withExtension: ext, subdirectory: "DisplayFont")
-                ?? Bundle.main.url(forResource: name, withExtension: ext)
-            if let url {
-                CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
-            }
+        let url = Bundle.main.url(forResource: "Caveat-SemiBold", withExtension: "ttf", subdirectory: "DisplayFont")
+            ?? Bundle.main.url(forResource: "Caveat-SemiBold", withExtension: "ttf")
+        if let url {
+            CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
         }
     }()
 
-    static func display(
-        _ size: CGFloat,
-        relativeTo style: Font.TextStyle = .title
-    ) -> Font {
-        Font(scaledFont(size: size, name: latinName, relativeTo: style))
-    }
-
-    private static func scaledFont(
-        size: CGFloat,
-        name: String,
-        relativeTo style: Font.TextStyle
-    ) -> UIFont {
+    /// English titles use Caveat. zh-Hant titles use the system font so the
+    /// Clip does not ship Iansui-SavvySubset.ttf (3.48 MB).
+    static func title(_ size: CGFloat, relativeTo style: Font.TextStyle) -> Font {
+        if ClipCopy.usesTraditionalChinese {
+            return ClipJournalType.system(size, weight: .semibold, relativeTo: style)
+        }
         _ = register
-        let latin = UIFont(name: name, size: size)
+        let latin = UIFont(name: latinName, size: size)
             ?? UIFont.systemFont(ofSize: size, weight: .semibold)
-        var cascade: [UIFontDescriptor] = []
-        if let cjk = UIFont(name: cjkName, size: size) {
-            cascade.append(cjk.fontDescriptor)
-        }
-        if let pingFang = UIFont(name: "PingFangTC-Regular", size: size) {
-            cascade.append(pingFang.fontDescriptor)
-        }
-        let font: UIFont
-        if cascade.isEmpty {
-            font = latin
-        } else {
-            let descriptor = latin.fontDescriptor.addingAttributes([
-                UIFontDescriptor.AttributeName(rawValue: kCTFontCascadeListAttribute as String): cascade,
-            ])
-            font = UIFont(descriptor: descriptor, size: size)
-        }
-        return UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: font)
+        return Font(UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: latin))
     }
 }
 
@@ -133,65 +107,247 @@ enum ClipCopy {
         return preferred.hasPrefix("zh-Hant")
             || preferred.hasPrefix("zh-TW")
             || preferred.hasPrefix("zh-HK")
+            || preferred.hasPrefix("zh_Hant")
             || preferred.hasPrefix("zh_TW")
             || preferred.hasPrefix("zh_HK")
     }
 
-    static func text(_ english: String, _ traditionalChinese: String) -> String {
-        usesTraditionalChinese ? traditionalChinese : english
+    static func string(_ key: String.LocalizationValue) -> String {
+        String(localized: key)
+    }
+
+    static func format(_ key: String, _ arguments: CVarArg...) -> String {
+        String(format: String(localized: String.LocalizationValue(stringLiteral: key)), arguments: arguments)
+    }
+}
+
+struct ClipWordmark: View {
+    var body: some View {
+        Image("SavvyLogo")
+            .resizable()
+            .scaledToFit()
+            .frame(height: ClipJournalLayout.wordmarkHeight)
+            .accessibilityHidden(true)
+    }
+}
+
+struct ClipSharedChip: View {
+    var body: some View {
+        Text(ClipCopy.string("clip.chip.shared"))
+            .font(ClipJournalType.system(13, weight: .semibold, relativeTo: .footnote))
+            .foregroundStyle(ClipJournalPalette.ink)
+            .padding(.horizontal, 12)
+            .frame(height: ClipJournalLayout.chipHeight)
+            .background(ClipJournalPalette.kraft, in: Capsule())
+            .overlay {
+                Capsule().stroke(ClipJournalPalette.line, lineWidth: ClipJournalPalette.strokeWidth)
+            }
+            .accessibilityHidden(true)
     }
 }
 
 struct ClipDisplayTitle: View {
     let text: String
-    var pointSize: CGFloat = 22
+    var pointSize: CGFloat = 28
     var relativeTo: Font.TextStyle = .title
+    var color: Color = ClipJournalPalette.ink
 
     var body: some View {
         Text(text)
-            .font(ClipDisplayType.display(pointSize, relativeTo: relativeTo))
-            .foregroundStyle(ClipJournalPalette.forest)
-            .lineLimit(2)
-            .minimumScaleFactor(0.75)
+            .font(ClipDisplayType.title(pointSize, relativeTo: relativeTo))
+            .foregroundStyle(color)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
 struct ClipDottedBackground: View {
-    @Environment(\.colorScheme) private var colorScheme
-
     var body: some View {
         ClipJournalPalette.canvas
             .overlay {
-                Image(colorScheme == .dark ? "PaperGrainDark" : "PaperGrain")
-                    .resizable(resizingMode: .tile)
-                    .allowsHitTesting(false)
+                Canvas { context, size in
+                    let step: CGFloat = 10
+                    let dot = ClipJournalPalette.line.opacity(0.18)
+                    var x: CGFloat = 4
+                    while x < size.width {
+                        var y: CGFloat = 4
+                        while y < size.height {
+                            context.fill(
+                                Path(ellipseIn: CGRect(x: x, y: y, width: 1.1, height: 1.1)),
+                                with: .color(dot)
+                            )
+                            y += step
+                        }
+                        x += step
+                    }
+                }
+                .allowsHitTesting(false)
             }
     }
 }
 
-struct ClipJournalChip: View {
-    let text: String
-    var systemImage: String? = nil
+enum ClipStickerKind: String {
+    case noodle, coffee, temple, duck, lantern, elephant
+
+    static func forCategory(_ raw: String?) -> ClipStickerKind {
+        let value = (raw ?? "").lowercased()
+        if value.contains("cafe") || value.contains("coffee") || value.contains("咖啡") {
+            return .coffee
+        }
+        if value.contains("food") || value.contains("restaurant") || value.contains("noodle")
+            || value.contains("餐") || value.contains("麵") || value.contains("面") {
+            return .noodle
+        }
+        if value.contains("temple") || value.contains("attraction") || value.contains("museum")
+            || value.contains("寺") || value.contains("景") {
+            return .temple
+        }
+        if value.contains("bar") || value.contains("stay") || value.contains("hotel")
+            || value.contains("酒") || value.contains("宿") {
+            return .lantern
+        }
+        if value.contains("shop") || value.contains("duck") || value.contains("購") {
+            return .duck
+        }
+        return .elephant
+    }
+}
+
+struct ClipCategorySticker: View {
+    let kind: ClipStickerKind
+    var canvas: CGFloat = ClipJournalLayout.stickerCanvas
+    var image: CGFloat = ClipJournalLayout.stickerImage
 
     var body: some View {
-        HStack(spacing: 6) {
-            if let systemImage {
-                Image(systemName: systemImage)
+        ZStack {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(ClipJournalPalette.kraft)
+            ClipStickerDrawing(kind: kind)
+                .frame(width: image, height: image)
+        }
+        .frame(width: canvas, height: canvas)
+        .accessibilityHidden(true)
+    }
+}
+
+struct ClipStickerDrawing: View {
+    let kind: ClipStickerKind
+
+    var body: some View {
+        Canvas { context, size in
+            let ink = ClipJournalPalette.ink
+            let coral = ClipJournalPalette.coral
+            let cream = ClipJournalPalette.cream
+            switch kind {
+            case .noodle:
+                var bowl = Path()
+                bowl.addEllipse(in: CGRect(x: size.width * 0.12, y: size.height * 0.38, width: size.width * 0.76, height: size.height * 0.48))
+                context.fill(bowl, with: .color(coral))
+                var noodle = Path()
+                noodle.move(to: CGPoint(x: size.width * 0.28, y: size.height * 0.42))
+                noodle.addQuadCurve(to: CGPoint(x: size.width * 0.72, y: size.height * 0.48), control: CGPoint(x: size.width * 0.5, y: size.height * 0.18))
+                noodle.addQuadCurve(to: CGPoint(x: size.width * 0.34, y: size.height * 0.58), control: CGPoint(x: size.width * 0.62, y: size.height * 0.72))
+                context.stroke(noodle, with: .color(cream), lineWidth: 2.4)
+            case .coffee:
+                var cup = Path(roundedRect: CGRect(x: size.width * 0.22, y: size.height * 0.28, width: size.width * 0.46, height: size.height * 0.46), cornerRadius: 6)
+                context.fill(cup, with: .color(coral))
+                var handle = Path()
+                handle.addArc(center: CGPoint(x: size.width * 0.72, y: size.height * 0.48), radius: size.width * 0.12, startAngle: .degrees(-70), endAngle: .degrees(70), clockwise: false)
+                context.stroke(handle, with: .color(ink), lineWidth: 2.2)
+            case .temple:
+                var roof = Path()
+                roof.move(to: CGPoint(x: size.width * 0.12, y: size.height * 0.42))
+                roof.addLine(to: CGPoint(x: size.width * 0.5, y: size.height * 0.16))
+                roof.addLine(to: CGPoint(x: size.width * 0.88, y: size.height * 0.42))
+                context.fill(roof, with: .color(coral))
+                context.fill(Path(CGRect(x: size.width * 0.32, y: size.height * 0.42, width: size.width * 0.36, height: size.height * 0.36)), with: .color(ink.opacity(0.85)))
+            case .duck:
+                context.fill(Path(ellipseIn: CGRect(x: size.width * 0.22, y: size.height * 0.36, width: size.width * 0.52, height: size.height * 0.4)), with: .color(coral))
+                context.fill(Path(ellipseIn: CGRect(x: size.width * 0.48, y: size.height * 0.18, width: size.width * 0.3, height: size.height * 0.28)), with: .color(coral))
+                context.fill(Path(ellipseIn: CGRect(x: size.width * 0.74, y: size.height * 0.3, width: size.width * 0.16, height: size.height * 0.1)), with: .color(ink))
+            case .lantern:
+                context.fill(Path(roundedRect: CGRect(x: size.width * 0.3, y: size.height * 0.22, width: size.width * 0.4, height: size.height * 0.56), cornerRadius: 10), with: .color(coral))
+                context.stroke(Path(CGRect(x: size.width * 0.36, y: size.height * 0.08, width: size.width * 0.28, height: size.height * 0.12)), with: .color(ink), lineWidth: 2)
+            case .elephant:
+                context.fill(Path(ellipseIn: CGRect(x: size.width * 0.18, y: size.height * 0.22, width: size.width * 0.62, height: size.height * 0.52)), with: .color(coral))
+                var trunk = Path()
+                trunk.move(to: CGPoint(x: size.width * 0.28, y: size.height * 0.58))
+                trunk.addQuadCurve(to: CGPoint(x: size.width * 0.16, y: size.height * 0.82), control: CGPoint(x: size.width * 0.08, y: size.height * 0.62))
+                context.stroke(trunk, with: .color(ink), lineWidth: 3)
+                context.fill(Path(ellipseIn: CGRect(x: size.width * 0.48, y: size.height * 0.4, width: size.width * 0.08, height: size.height * 0.1)), with: .color(cream))
             }
-            Text(text)
         }
-        .font(ClipJournalType.strong(12, relativeTo: .caption))
-        .foregroundStyle(ClipJournalPalette.ink)
-        .padding(.horizontal, 10)
-        .frame(minHeight: 32)
-        .background(ClipJournalPalette.kraft.opacity(0.55), in: Capsule())
-        .overlay {
-            Capsule().stroke(ClipJournalPalette.stroke, lineWidth: ClipJournalPalette.strokeWidth)
+        .accessibilityHidden(true)
+    }
+}
+
+struct ClipTeardrop: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let radius = rect.width / 2
+        let center = CGPoint(x: rect.midX, y: rect.minY + radius)
+        path.addArc(center: center, radius: radius, startAngle: .degrees(210), endAngle: .degrees(-30), clockwise: false)
+        path.addQuadCurve(
+            to: CGPoint(x: rect.midX, y: rect.maxY),
+            control: CGPoint(x: rect.maxX - 1, y: rect.midY + radius * 0.35)
+        )
+        path.addQuadCurve(
+            to: CGPoint(x: rect.minX + radius * 0.14, y: rect.minY + radius * 1.28),
+            control: CGPoint(x: rect.minX + 1, y: rect.midY + radius * 0.35)
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
+struct ClipDoodlePin: View {
+    var number: Int? = nil
+
+    var body: some View {
+        ZStack {
+            ClipTeardrop()
+                .fill(ClipJournalPalette.coral)
+            ClipTeardrop()
+                .stroke(ClipJournalPalette.cream, lineWidth: 3)
+            if let number {
+                Text("\(number)")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(ClipJournalPalette.cream)
+                    .offset(y: -3)
+            } else {
+                Circle()
+                    .fill(ClipJournalPalette.cream)
+                    .frame(width: 9, height: 9)
+                    .offset(y: -3)
+            }
         }
+        .frame(width: ClipJournalLayout.pinWidth, height: ClipJournalLayout.pinHeight)
+        .accessibilityHidden(true)
     }
 }
 
 struct ClipJournalPrimaryButton: View {
+    let title: String
+    var systemImage: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                Text(title)
+            }
+            .font(ClipJournalType.rounded(17, weight: .semibold, relativeTo: .headline))
+            .foregroundStyle(ClipJournalPalette.cream)
+            .frame(maxWidth: .infinity, minHeight: ClipJournalLayout.buttonHeight)
+            .background(ClipJournalPalette.coral, in: RoundedRectangle(cornerRadius: ClipJournalPalette.cardRadius, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(minHeight: ClipJournalLayout.minTap)
+    }
+}
+
+struct ClipJournalSecondaryButton: View {
     let title: String
     var systemImage: String? = nil
     let action: () -> Void
@@ -204,61 +360,60 @@ struct ClipJournalPrimaryButton: View {
                 }
                 Text(title)
             }
-            .font(ClipJournalType.strong(16, relativeTo: .headline))
-            .foregroundStyle(.white)
+            .font(ClipJournalType.rounded(17, weight: .semibold, relativeTo: .headline))
+            .foregroundStyle(ClipJournalPalette.ink)
             .frame(maxWidth: .infinity, minHeight: ClipJournalLayout.buttonHeight)
-            .background(ClipJournalPalette.coral, in: RoundedRectangle(cornerRadius: ClipJournalPalette.cardRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: ClipJournalPalette.cardRadius, style: .continuous)
+                    .stroke(ClipJournalPalette.ink, lineWidth: 1.5)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .frame(minHeight: ClipJournalLayout.minTap)
+    }
+}
+
+struct ClipStateIllustration: View {
+    let sticker: ClipStickerKind
+    let badge: String
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Circle()
+                .fill(ClipJournalPalette.kraft)
+                .frame(width: ClipJournalLayout.stateCircle, height: ClipJournalLayout.stateCircle)
+            ClipStickerDrawing(kind: sticker)
+                .frame(width: ClipJournalLayout.stateSticker, height: ClipJournalLayout.stateSticker)
+            if !badge.isEmpty {
+                ZStack {
+                    Circle()
+                        .fill(ClipJournalPalette.paper)
+                    Circle()
+                        .stroke(ClipJournalPalette.ink, lineWidth: 1.5)
+                    Text(badge)
+                        .font(ClipJournalType.rounded(16, weight: .bold, relativeTo: .headline))
+                        .foregroundStyle(ClipJournalPalette.coral)
+                }
+                .frame(width: ClipJournalLayout.stateBadge, height: ClipJournalLayout.stateBadge)
+                .offset(x: 8, y: -4)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 
 extension View {
-    func clipJournalPaper(radius: CGFloat = ClipJournalPalette.cardRadius) -> some View {
-        background(
-            ClipJournalPalette.paper,
-            in: RoundedRectangle(cornerRadius: radius, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
-                .stroke(ClipJournalPalette.stroke, lineWidth: ClipJournalPalette.strokeWidth)
-        }
-    }
-}
-
-extension Color {
-    init(light lightHex: String, dark darkHex: String) {
-        self.init(uiColor: UIColor { traits in
-            UIColor(clipHex: traits.userInterfaceStyle == .dark ? darkHex : lightHex)
-        })
-    }
-
-    init(clipHex: String) {
-        self.init(uiColor: UIColor(clipHex: clipHex))
-    }
-}
-
-private extension UIColor {
-    convenience init(clipHex: String) {
-        let hex = clipHex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: hex).scanHexInt64(&int)
-        let a, r, g, b: UInt64
-        switch hex.count {
-        case 6:
-            (a, r, g, b) = (255, (int >> 16) & 0xFF, (int >> 8) & 0xFF, int & 0xFF)
-        case 8:
-            (a, r, g, b) = ((int >> 24) & 0xFF, (int >> 16) & 0xFF, (int >> 8) & 0xFF, int & 0xFF)
-        default:
-            (a, r, g, b) = (255, 0, 0, 0)
-        }
-        self.init(
-            red: CGFloat(r) / 255,
-            green: CGFloat(g) / 255,
-            blue: CGFloat(b) / 255,
-            alpha: CGFloat(a) / 255
-        )
+    func clipJournalCard() -> some View {
+        padding(ClipJournalLayout.cardPadding)
+            .background(
+                ClipJournalPalette.card,
+                in: RoundedRectangle(cornerRadius: ClipJournalPalette.cardRadius, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: ClipJournalPalette.cardRadius, style: .continuous)
+                    .stroke(ClipJournalPalette.line, lineWidth: ClipJournalPalette.strokeWidth)
+            }
     }
 }
 

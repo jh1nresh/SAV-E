@@ -2,16 +2,6 @@ import Foundation
 import CoreLocation
 import CryptoKit
 
-struct SharedPlacePhotoAuthor: Codable, Equatable {
-    var displayName: String
-    var uri: String?
-}
-
-struct SharedPlacePhotoAttribution: Codable, Equatable {
-    var authors: [SharedPlacePhotoAuthor]
-    var mapsURI: String?
-}
-
 /// Lightweight place payload encoded in the App Clip URL.
 /// Duplicated across targets — keep in sync with SAVEClip's copy.
 struct SharedPlaceData: Codable {
@@ -29,7 +19,6 @@ struct SharedPlaceData: Codable {
     let sourceURL: String?
     let photoURLs: [String]
     let note: String?
-    var photoAttribution: SharedPlacePhotoAttribution? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: lat, longitude: lng)
@@ -111,8 +100,7 @@ struct SharedPlaceData: Codable {
             sourceLabel: sourceLabel,
             sourceURL: sourceURL,
             photoURLs: photoURLs,
-            note: ShareRoutePayloadSanitizer.publicNote(note),
-            photoAttribution: photoAttribution
+            note: ShareRoutePayloadSanitizer.publicNote(note)
         )
     }
 
@@ -131,39 +119,7 @@ struct SharedPlaceData: Codable {
             sourceLabel: sourceLabel,
             sourceURL: safeSourceURL?.absoluteString,
             photoURLs: ShareRoutePayloadSanitizer.publicPhotoURLs(photoURLs),
-            note: ShareRoutePayloadSanitizer.publicNote(note),
-            photoAttribution: sanitizedPhotoAttribution()
-        )
-    }
-
-    /// Google photos render on the place-detail card only when authors exist.
-    var journalGooglePhoto: (url: URL, authors: [SharedPlacePhotoAuthor], mapsURL: URL?)? {
-        guard let url = photoURLs.first.flatMap({ ShareRoutePayloadSanitizer.publicURL(from: $0) }),
-              let attribution = sanitizedPhotoAttribution()
-        else { return nil }
-        return (
-            url,
-            attribution.authors,
-            attribution.mapsURI.flatMap { ShareRoutePayloadSanitizer.publicURL(from: $0) }
-        )
-    }
-
-    func sanitizedPhotoAttribution() -> SharedPlacePhotoAttribution? {
-        guard let photoAttribution else { return nil }
-        let authors = photoAttribution.authors.compactMap { author -> SharedPlacePhotoAuthor? in
-            let name = author.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !name.isEmpty else { return nil }
-            return SharedPlacePhotoAuthor(
-                displayName: name,
-                uri: author.uri.flatMap { ShareRoutePayloadSanitizer.publicURL(from: $0)?.absoluteString }
-            )
-        }
-        guard !authors.isEmpty else { return nil }
-        return SharedPlacePhotoAttribution(
-            authors: authors,
-            mapsURI: photoAttribution.mapsURI.flatMap {
-                ShareRoutePayloadSanitizer.publicURL(from: $0)?.absoluteString
-            }
+            note: ShareRoutePayloadSanitizer.publicNote(note)
         )
     }
 
@@ -655,12 +611,38 @@ enum ShareRoutePayloadSanitizer {
         "Stack trace:",
     ]
 
-    static func publicPhotoURLs(_ values: [String]) -> [String] {
+    static func isGooglePlacesPhotoURL(_ url: URL) -> Bool {
+        let host = url.host?.lowercased() ?? ""
+        let path = url.path
+        if host == "maps.googleapis.com" && path == "/maps/api/place/photo" { return true }
+        if host == "places.googleapis.com" && path.contains("/media") { return true }
+        return false
+    }
+
+    static func looksLikeGooglePlacesPhotoReference(_ value: String) -> Bool {
+        let lower = value.lowercased()
+        if lower.contains("photo_reference=") { return true }
+        if lower.hasPrefix("places/") && lower.contains("/photos/") { return true }
+        return false
+    }
+
+    static func persistablePhotoURLs(_ values: [String]) -> [String] {
         var seen = Set<String>()
-        return Array(values
-            .compactMap { publicURL(from: $0)?.absoluteString }
-            .filter { seen.insert($0).inserted }
-            .prefix(1))
+        return values.compactMap { value -> String? in
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalized.isEmpty else { return nil }
+            if looksLikeGooglePlacesPhotoReference(normalized) { return nil }
+            guard let url = URL(string: normalized) else { return nil }
+            if isGooglePlacesPhotoURL(url) { return nil }
+            guard let publicURL = publicURL(from: normalized) else { return nil }
+            if isGooglePlacesPhotoURL(publicURL) { return nil }
+            return publicURL.absoluteString
+        }
+        .filter { seen.insert($0).inserted }
+    }
+
+    static func publicPhotoURLs(_ values: [String]) -> [String] {
+        Array(persistablePhotoURLs(values).prefix(1))
     }
 
     static func publicURL(from value: String?) -> URL? {

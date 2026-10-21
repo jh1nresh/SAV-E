@@ -165,8 +165,8 @@ final class ShareRouteCodecTests: XCTestCase {
     }
 
     @MainActor
-    func testEmbeddedPlaceKeepsPhotoAttributionAndDropsAuthorlessPhotos() throws {
-        var attributed = SharedPlaceData(
+    func testEmbeddedPlaceDropsGooglePhotoURLsFromSharePayloads() throws {
+        let attributed = SharedPlaceData(
             id: "place_photo",
             name: "Harbor Oven",
             address: "Los Angeles",
@@ -179,43 +179,25 @@ final class ShareRouteCodecTests: XCTestCase {
             hours: nil,
             sourceLabel: "Google",
             sourceURL: "https://maps.google.com/?cid=1",
-            photoURLs: ["https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=abc"],
-            note: nil,
-            photoAttribution: SharedPlacePhotoAttribution(
-                authors: [
-                    SharedPlacePhotoAuthor(
-                        displayName: "Jane Doe",
-                        uri: "https://maps.google.com/maps/contrib/123?token=secret#frag"
-                    )
-                ],
-                mapsURI: "https://maps.google.com/?cid=1&signature=secret"
-            )
+            photoURLs: [
+                "https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=abc",
+                "places/ChIJ123/photos/ABC",
+                "https://example.com/own.jpg",
+            ],
+            note: nil
         )
 
         let decoded = try XCTUnwrap(SharedPlaceData.from(url: try XCTUnwrap(attributed.toURL())))
-        XCTAssertEqual(decoded.photoURLs, ["https://maps.googleapis.com/maps/api/place/photo"])
-        XCTAssertEqual(decoded.photoAttribution?.authors.first?.displayName, "Jane Doe")
-        XCTAssertEqual(
-            decoded.photoAttribution?.authors.first?.uri,
-            "https://maps.google.com/maps/contrib/123"
-        )
-        XCTAssertEqual(decoded.photoAttribution?.mapsURI, "https://maps.google.com/")
-        XCTAssertNotNil(decoded.journalGooglePhoto)
-
-        attributed.photoAttribution = SharedPlacePhotoAttribution(authors: [], mapsURI: nil)
-        let authorless = try XCTUnwrap(SharedPlaceData.from(url: try XCTUnwrap(attributed.toURL())))
-        XCTAssertNil(authorless.journalGooglePhoto)
-        XCTAssertNil(authorless.photoAttribution)
+        XCTAssertEqual(decoded.photoURLs, ["https://example.com/own.jpg"])
+        XCTAssertFalse(decoded.photoURLs.contains(where: { $0.contains("googleapis.com") }))
     }
 
     @MainActor
-    func testLegacyEmbeddedPlaceWithoutPhotoAttributionStillDecodes() throws {
+    func testLegacyEmbeddedPlaceStillDecodesWithoutPhotos() throws {
         let url = try XCTUnwrap(URL(string: Self.saveClipLocalInvokeURL))
         let decoded = try XCTUnwrap(SharedPlaceData.from(url: url))
         XCTAssertEqual(decoded.name, "Quarter Sheets Pizza Club")
         XCTAssertTrue(decoded.photoURLs.isEmpty)
-        XCTAssertNil(decoded.photoAttribution)
-        XCTAssertNil(decoded.journalGooglePhoto)
     }
 
     @MainActor

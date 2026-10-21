@@ -164,10 +164,7 @@ targets:
     sources:
       - path: SAV-EClip
       - path: SAV-EShared/SAVEProductionConfig.swift
-      - path: SAV-E/Resources/Assets.xcassets
-        buildPhase: resources
-      - path: SAV-E/Resources/DisplayFont
-        type: folder
+      - path: SAV-E/Resources/DisplayFont/Caveat-SemiBold.ttf
         buildPhase: resources
     # Same Release origin gate as SAVE. Without this phase the Clip bundle has
     # no Secrets.plist and SharedTripData falls back to defaultAPIBaseURL.
@@ -185,6 +182,7 @@ targets:
         CODE_SIGN_IDENTITY: Apple Development
         INFOPLIST_GENERATION_MODE: GeneratedFile
         PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app.Clip
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
         MARKETING_VERSION: "1.0.0"
         CURRENT_PROJECT_VERSION: "110"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -208,8 +206,7 @@ targets:
           NSAppClipRequestEphemeralUserNotification: false
           NSAppClipRequestLocationConfirmation: false
         INFOPLIST_KEY_UIAppFonts:
-          - DisplayFont/Caveat-SemiBold.ttf
-          - DisplayFont/Iansui-SavvySubset.ttf
+          - Caveat-SemiBold.ttf
   SAVEClipUITests:
     type: bundle.ui-testing
     platform: iOS

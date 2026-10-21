@@ -1,16 +1,6 @@
 import Foundation
 import CoreLocation
 
-struct SharedPlacePhotoAuthor: Codable, Equatable {
-    var displayName: String
-    var uri: String?
-}
-
-struct SharedPlacePhotoAttribution: Codable, Equatable {
-    var authors: [SharedPlacePhotoAuthor]
-    var mapsURI: String?
-}
-
 /// Lightweight place payload encoded in the App Clip URL.
 /// Duplicated in SAVEClip target — keep in sync with main app's copy.
 struct SharedPlaceData: Codable {
@@ -28,7 +18,6 @@ struct SharedPlaceData: Codable {
     let sourceURL: String?
     let photoURLs: [String]
     let note: String?
-    var photoAttribution: SharedPlacePhotoAttribution? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: lat, longitude: lng)
@@ -91,40 +80,8 @@ struct SharedPlaceData: Codable {
             hours: hours,
             sourceLabel: sourceLabel,
             sourceURL: safeSourceURL?.absoluteString,
-            photoURLs: Array(photoURLs.compactMap(Self.sanitizedPublicHTTPURL).map(\.absoluteString).prefix(1)),
-            note: Self.publicNote(note),
-            photoAttribution: sanitizedPhotoAttribution()
-        )
-    }
-
-    /// Google photos render on the place-detail card only when authors exist.
-    var journalGooglePhoto: (url: URL, authors: [SharedPlacePhotoAuthor], mapsURL: URL?)? {
-        guard let url = photoURLs.first.flatMap(Self.sanitizedPublicHTTPURL),
-              let attribution = sanitizedPhotoAttribution()
-        else { return nil }
-        return (
-            url,
-            attribution.authors,
-            attribution.mapsURI.flatMap(Self.sanitizedPublicHTTPURL)
-        )
-    }
-
-    func sanitizedPhotoAttribution() -> SharedPlacePhotoAttribution? {
-        guard let photoAttribution else { return nil }
-        let authors = photoAttribution.authors.compactMap { author -> SharedPlacePhotoAuthor? in
-            let name = author.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !name.isEmpty else { return nil }
-            return SharedPlacePhotoAuthor(
-                displayName: name,
-                uri: author.uri.flatMap { Self.sanitizedPublicHTTPURL($0)?.absoluteString }
-            )
-        }
-        guard !authors.isEmpty else { return nil }
-        return SharedPlacePhotoAttribution(
-            authors: authors,
-            mapsURI: photoAttribution.mapsURI.flatMap {
-                Self.sanitizedPublicHTTPURL($0)?.absoluteString
-            }
+            photoURLs: [],
+            note: Self.publicNote(note)
         )
     }
 
@@ -136,9 +93,17 @@ struct SharedPlaceData: Codable {
               components.user == nil,
               components.password == nil
         else { return nil }
+        if ShareRoutePhotoPolicy.isGooglePlacesPhotoURL(components.url ?? URL(fileURLWithPath: "/"))
+            || ShareRoutePhotoPolicy.looksLikeGooglePlacesPhotoReference(value) {
+            return nil
+        }
         components.query = nil
         components.fragment = nil
-        return components.url
+        let url = components.url
+        if let url, ShareRoutePhotoPolicy.isGooglePlacesPhotoURL(url) {
+            return nil
+        }
+        return url
     }
 
     private static func publicNote(_ value: String?) -> String? {
@@ -396,6 +361,34 @@ struct SharedTripData: Codable {
     }
 }
 
+enum ShareRoutePhotoPolicy {
+    static func isGooglePlacesPhotoURL(_ url: URL) -> Bool {
+        let host = url.host?.lowercased() ?? ""
+        let path = url.path
+        if host == "maps.googleapis.com" && path == "/maps/api/place/photo" { return true }
+        if host == "places.googleapis.com" && path.contains("/media") { return true }
+        return false
+    }
+
+    static func looksLikeGooglePlacesPhotoReference(_ value: String) -> Bool {
+        let lower = value.lowercased()
+        if lower.contains("photo_reference=") { return true }
+        if lower.hasPrefix("places/") && lower.contains("/photos/") { return true }
+        return false
+    }
+
+    static func persistablePhotoURLs(_ values: [String]) -> [String] {
+        values.compactMap { value in
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalized.isEmpty else { return nil }
+            if looksLikeGooglePlacesPhotoReference(normalized) { return nil }
+            guard let url = URL(string: normalized) else { return nil }
+            if isGooglePlacesPhotoURL(url) { return nil }
+            return normalized
+        }
+    }
+}
+
 enum ShareRoutePayloadLimits {
     static let placePayloadMaxBytes = 12 * 1024
     // Base64 expands by roughly one third. Keep raw Trip JSON at or below
@@ -624,7 +617,7 @@ struct SharedListPayload: Codable {
             payload.role = role
             payload.list.viewerRole = role
         }
-        return payload
+        return payload.strippingGooglePhotos()
     }
 
     static func shareCode(from url: URL) -> String? {
@@ -672,7 +665,41 @@ struct SharedListPayload: Codable {
         guard let payload = try? decoder.decode(SharedListPayload.self, from: data) else {
             throw SharedListPreviewError.invalidResponse
         }
-        return payload
+        return payload.strippingGooglePhotos()
+    }
+
+    func strippingGooglePhotos() -> SharedListPayload {
+        SharedListPayload(
+            list: SharedListData(
+                id: list.id,
+                title: list.title,
+                note: list.note,
+                ownerDisplayName: list.ownerDisplayName,
+                viewerRole: list.viewerRole,
+                items: list.items.map { item in
+                    SharedListItem(
+                        id: item.id,
+                        source: item.source,
+                        sourceID: item.sourceID,
+                        title: item.title,
+                        subtitle: item.subtitle,
+                        latitude: item.latitude,
+                        longitude: item.longitude,
+                        category: item.category,
+                        rating: item.rating,
+                        reviewCount: item.reviewCount,
+                        sourceURL: item.sourceURL,
+                        photoURLs: [],
+                        note: item.note,
+                        addedByDisplayName: item.addedByDisplayName,
+                        addedAt: item.addedAt
+                    )
+                },
+                createdAt: list.createdAt,
+                updatedAt: list.updatedAt
+            ),
+            role: role
+        )
     }
 
     static func isListLink(_ url: URL) -> Bool {

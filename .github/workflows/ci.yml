@@ -216,6 +216,20 @@ jobs:
             "$RUNNER_TEMP/SAVEClipUITests.xcresult" \
             "$RUNNER_TEMP/appclip-doodle-screenshots"
 
+      - name: App Clip size inventory
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/appclip-doodle-screenshots"
+          python3 scripts/appclip-size-inventory.py \
+            --out "$RUNNER_TEMP/appclip-doodle-screenshots/10-size-report.md"
+          {
+            echo
+            echo "## Built SAVEClip.app (Debug, not a thinning report)"
+            echo
+            find "$RUNNER_TEMP/SAVEClip-DerivedData" -name 'SAVEClip.app' -type d \
+              -exec du -sh {} \; || true
+          } >> "$RUNNER_TEMP/appclip-doodle-screenshots/10-size-report.md"
+
       - name: Upload App Clip screenshots
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
