@@ -241,8 +241,11 @@ class CoverageTests(unittest.TestCase):
             ios_workflow,
         )
         self.assertNotIn("Build without booting a simulator", ios_workflow)
-        self.assertRegex(ios_workflow, r"(?m)^    timeout-minutes: 100\s*$")
+        self.assertRegex(ios_workflow, r"(?m)^    timeout-minutes: 120\s*$")
         self.assertIn("timeout-minutes: 60", ios_workflow)
+        self.assertIn("testCoralTokenContrastScreens", ios_workflow)
+        self.assertIn("save-coral-t3-screens-${{ github.sha }}", ios_workflow)
+        self.assertIn("scripts/extract-named-ui-screenshots.py", ios_workflow)
 
     def test_unknown_focus_fails_loudly(self):
         with tempfile.TemporaryDirectory() as temp:

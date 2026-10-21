@@ -776,6 +776,113 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         terminate(app)
     }
 
+    /// HoP T3 evidence: one light and one dark capture of Home, Map (saved
+    /// tile-town pins), Saves, Friends, Passport, Settings, and Paywall.
+    /// Attachment names stay on the `t3-` prefix so CI can extract exactly 14.
+    @MainActor
+    func testCoralTokenContrastScreens() throws {
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        try captureCoralTokenContrastScreens(
+            appearance: .light,
+            appleInterfaceStyle: "Light",
+            forceArgument: "--uitest-force-light",
+            suffix: "light"
+        )
+        try captureCoralTokenContrastScreens(
+            appearance: .dark,
+            appleInterfaceStyle: "Dark",
+            forceArgument: "--uitest-force-dark",
+            suffix: "dark"
+        )
+    }
+
+    @MainActor
+    private func captureCoralTokenContrastScreens(
+        appearance: XCUIDevice.Appearance,
+        appleInterfaceStyle: String,
+        forceArgument: String,
+        suffix: String
+    ) throws {
+        XCUIDevice.shared.appearance = appearance
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-map-place-selected",
+                "-save.appLanguage", "en",
+                "-AppleInterfaceStyle", appleInterfaceStyle,
+                forceArgument,
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        attach(app, name: "t3-home-\(suffix)")
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        dismissLocationAlertIfPresent()
+        let locationNoticeDismiss = app.buttons["map.locationNotice.dismiss"]
+        if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
+            locationNoticeDismiss.tap()
+        }
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.tileTown"].waitForExistence(timeout: stepTimeout),
+            "Product Map must show the tile-town base for T3 pin evidence."
+        )
+        let savedPins = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.'")
+        )
+        XCTAssertGreaterThan(savedPins.count, 0, "Map should show at least one saved coral pin.")
+        attach(app, name: "t3-map-saved-unsaved-\(suffix)")
+
+        openSavesFromHome(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "t3-saves-\(suffix)")
+
+        openRootTab("Friends", app: app)
+        XCTAssertTrue(app.staticTexts["friends.empty"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "t3-friends-\(suffix)")
+
+        openRootTab("Passport", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "t3-passport-\(suffix)")
+
+        let settings = app.buttons["profile.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: stepTimeout))
+        tapReachable(settings)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["profile.stampLedger"].waitForExistence(timeout: stepTimeout)
+                || app.buttons["profile.tutorial"].waitForExistence(timeout: stepTimeout),
+            "Passport settings must open for the T3 Settings shot."
+        )
+        attach(app, name: "t3-settings-\(suffix)")
+
+        let disclosure = app.descendants(matching: .any)["profile.controlsDisclosure"]
+        if disclosure.waitForExistence(timeout: timeout(2)) {
+            tapReachable(disclosure)
+        }
+        let pro = app.buttons["profile.pro"]
+        if pro.waitForExistence(timeout: timeout(2)) {
+            tapReachable(pro)
+            XCTAssertTrue(
+                app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: stepTimeout),
+                "Savvy Pro must open the paywall when the Passport entry is offered."
+            )
+        }
+        attach(app, name: "t3-paywall-\(suffix)")
+        terminate(app)
+    }
+
     @MainActor
     func testCaptureAppStoreScreens() throws {
         let app = makeApp(
