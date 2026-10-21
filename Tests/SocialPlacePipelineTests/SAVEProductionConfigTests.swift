@@ -64,6 +64,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(drawerModel.contains("shouldPresentPaywall"))
         XCTAssertTrue(drawerModel.contains("showsAllowanceNotice"))
         XCTAssertTrue(policy.contains("showsAllowanceNotice"))
+        XCTAssertTrue(policy.contains("nonisolated enum SaveAIAssistUserCopy"))
         let entitlement = try source(at: "SAV-E/Services/SaveEntitlementStore.swift")
         XCTAssertTrue(entitlement.contains("decideAIAssist().showsAllowanceNotice"))
         XCTAssertTrue(entitlement.contains("return false"))
