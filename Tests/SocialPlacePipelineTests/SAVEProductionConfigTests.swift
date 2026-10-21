@@ -2470,6 +2470,10 @@ final class SAVEAnalysisTransportTests: XCTestCase {
 
     @MainActor
     func testRetryUsesExistingCaptureAndHidesOnlySupersededClueAfterReload() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "owner")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
