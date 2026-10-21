@@ -655,7 +655,7 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
   Collected opens Passport. Saves remains a child of Review / existing
   library routes — Home no longer shows a See all saves row. Do not add a
   duplicate Saves tab. Trips stay a production child reached from Saves as
-  `Trips ›`.
+  `Trips ›` (HoP acceptance H-6).
 - + opens capture and leaves the previous destination selected when dismissed.
 - Plan is a secondary route while planning demand remains unvalidated.
 - Trips remain a child route. Home no longer shows a More menu.
@@ -691,8 +691,10 @@ current location, sorted by distance. No discovery feed. Tapping the
 mini-map opens Map with the same filter and city.
 Collected X/Y is visited / all saved places in the current city scope,
 every category. Eat/Go and the listed row count do not change it;
-switching city does. The strip opens Passport with the same city
-numbers (HoP 2026-10-21). Unknown location is not worldwide nearby.
+switching city does. When the Eat/Go list is empty but the city still
+has saves, keep the Collected strip and show a filter-empty message
+instead of the whole empty Home. The strip opens Passport with the same
+city numbers (HoP 2026-10-21). Unknown location is not worldwide nearby.
 
 Location denied: hide "Near you", show the last city sorted by most
 recent save, and prompt to allow location. Empty nearby: Caveat title,
@@ -701,7 +703,8 @@ coral + Save link, and a latest-save jump when another city has saves.
 Clues stay on the one-line Review entry when N>0. Home no longer shows
 `See all saves`. Review (`home.review`) still opens the existing Saves
 screen when N>0. Saves reaches Trips from its header as `Trips ›`
-(`saves.trips`). Do not add a second Home Trips row. Collected opens
+(`saves.trips`) — HoP acceptance H-6. Do not add a second Home Trips
+row. Collected opens
 Passport. Wordmark is Caveat SemiBold 34; the city line is Caveat 20 with
 a 2pt coral underline under the city word only. Body copy stays
 `SaveAtlasType`. The visual reference is the Codex packet and spec §8,

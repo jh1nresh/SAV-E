@@ -317,6 +317,48 @@ final class SaveDoodleHomeTests: XCTestCase {
         )
     }
 
+    /// City has saves, current Eat/Go list is empty: keep Collected X/Y
+    /// and show a filter-empty message instead of the whole empty Home.
+    func testHomeCollectedStaysVisibleWhenLensHasNoRows() throws {
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+        let eatOnly = [
+            place("Duck", "Beijing, China", .food, status: .visited, createdAt: now),
+            place("Grey", "Beijing, China", .cafe, createdAt: now.addingTimeInterval(-1)),
+        ]
+        let goListed = SaveDoodleHomeCatalog.listedPlaces(
+            from: eatOnly,
+            lens: .go,
+            selection: .city("beijing"),
+            location: nil,
+            locationDenied: true
+        )
+        let scope = SaveDoodleHomeCatalog.collectedScopePlaces(
+            from: eatOnly,
+            selection: .city("beijing"),
+            location: nil,
+            locationDenied: true
+        )
+        let count = SaveDoodleHomeCatalog.cityCollectedCount(in: scope)
+        XCTAssertTrue(goListed.isEmpty)
+        XCTAssertEqual(count.visited, 1)
+        XCTAssertEqual(count.saved, 2)
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        XCTAssertTrue(home.contains("showsLensEmpty"))
+        XCTAssertTrue(home.contains("home.lensEmpty"))
+        XCTAssertTrue(home.contains("No \\(lens) saves here"))
+        let bodyAt = try XCTUnwrap(home.range(of: "var body: some View"))
+        let headerAt = try XCTUnwrap(home.range(of: "private var savesButton"))
+        let body = home[bodyAt.lowerBound..<headerAt.lowerBound]
+        XCTAssertTrue(body.contains("if showsLensEmpty"))
+        XCTAssertTrue(body.contains("if !collectedPlaces.isEmpty"))
+        XCTAssertFalse(
+            body.contains("if !showsEmptyHome {\n                        miniMap"),
+            "Collected must not sit only inside the filtered-list branch"
+        )
+        let design = try source(at: "DESIGN.md")
+        XCTAssertTrue(design.contains("keep the Collected strip and show a filter-empty message"))
+    }
+
     /// T5: a city with no saves hides the strip (or would be 0/0) and
     /// does not crash.
     func testT5HomeCollectedHiddenWhenCityHasNoSaves() throws {
@@ -437,6 +479,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("home.collected"))
         XCTAssertTrue(home.contains("collectedScopePlaces"))
         XCTAssertTrue(home.contains("if !collectedPlaces.isEmpty"))
+        XCTAssertTrue(home.contains("showsLensEmpty"))
+        XCTAssertTrue(home.contains("home.lensEmpty"))
         XCTAssertTrue(home.contains("home.empty.capture"))
         XCTAssertTrue(home.contains("home.review"))
         let cluesFn = try XCTUnwrap(home.range(of: "private var cluesLine"))
@@ -571,6 +615,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(root.contains("saves.trips"))
         XCTAssertTrue(root.contains("Trips ›"))
         XCTAssertTrue(root.contains("onOpenTrips"))
+        XCTAssertTrue(design.contains("HoP acceptance H-6"))
         XCTAssertTrue(root.contains("accessibilityElement(children: .ignore)"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("app.buttons[\"saves.trips\"]"))
