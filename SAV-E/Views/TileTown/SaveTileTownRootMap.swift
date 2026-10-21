@@ -234,6 +234,11 @@ struct SaveTileTownRootMap: View {
         case .nearYou:
             return languageSettings.localized(english: "Near you", traditionalChinese: "附近")
         case .city(let id):
+            if let group = cityGroups.first(where: { $0.id == id }) {
+                return languageSettings.language == .traditionalChinese
+                    ? group.chineseName
+                    : group.englishName
+            }
             return SaveHomeSearch.cityLabel(
                 for: id,
                 traditionalChinese: languageSettings.language == .traditionalChinese
