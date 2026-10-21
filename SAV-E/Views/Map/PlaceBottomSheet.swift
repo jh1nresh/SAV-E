@@ -720,7 +720,11 @@ struct GooglePlacesPhotoAttributionBar: View {
             .buttonStyle(.plain)
             .font(.body)
             .foregroundStyle(.clear)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: GoogleMapsAttributionMetrics.minimumTapTarget,
+                maxHeight: GoogleMapsAttributionMetrics.minimumTapTarget
+            )
             .contentShape(Rectangle())
             .accessibilityIdentifier("place.photo.attribution.row")
             .accessibilityAddTraits(.isButton)

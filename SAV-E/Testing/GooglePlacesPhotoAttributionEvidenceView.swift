@@ -63,6 +63,13 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 12) {
+                // Leaf only. A parent identifier here overwrote Harbor Oven,
+                // the compact Button, and evidence.googleCarousel in XCTest.
+                Text("Evidence")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.saveCocoa)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("evidence.googlePhoto.root")
                 scenePicker
                 sceneBody
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -71,7 +78,6 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
             .background(Color.saveCream.ignoresSafeArea())
             .navigationTitle("Photo attribution")
             .navigationBarTitleDisplayMode(.inline)
-            .accessibilityIdentifier("evidence.googlePhoto.root")
         }
         .environment(\.openURL, OpenURLAction { url in
             openedURL = url
@@ -218,10 +224,18 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .font(.headline.weight(.bold))
-                .foregroundColor(.saveInk)
-                .modifier(OptionalAccessibilityIdentifier(sceneIdentifier))
+            Group {
+                if let sceneIdentifier, !sceneIdentifier.isEmpty {
+                    Text(title)
+                        .font(.headline.weight(.bold))
+                        .foregroundColor(.saveInk)
+                        .accessibilityIdentifier(sceneIdentifier)
+                } else {
+                    Text(title)
+                        .font(.headline.weight(.bold))
+                        .foregroundColor(.saveInk)
+                }
+            }
             content()
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
@@ -320,22 +334,6 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
                 )
                 symbolImage.draw(at: origin)
             }
-        }
-    }
-}
-
-private struct OptionalAccessibilityIdentifier: ViewModifier {
-    var identifier: String?
-
-    init(_ identifier: String?) {
-        self.identifier = identifier
-    }
-
-    func body(content: Content) -> some View {
-        if let identifier, !identifier.isEmpty {
-            content.accessibilityIdentifier(identifier)
-        } else {
-            content
         }
     }
 }

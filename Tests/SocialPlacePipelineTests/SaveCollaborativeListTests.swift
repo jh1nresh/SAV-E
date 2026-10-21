@@ -369,6 +369,20 @@ final class SaveCollaborativeListTests: XCTestCase {
             evidence.contains("accessibilityElement(children: .contain)"),
             "Contain-container identifiers are invisible to descendants(matching: .any)"
         )
+        guard let bodyStart = evidence.range(of: "var body: some View"),
+              let pickerStart = evidence.range(of: "private var scenePicker: some View") else {
+            return XCTFail("Missing evidence body")
+        }
+        let body = String(evidence[bodyStart.lowerBound..<pickerStart.lowerBound])
+        XCTAssertTrue(
+            body.contains("Text(\"Evidence\")"),
+            "Root identifier must live on a leaf, not the stack that wraps the carousel"
+        )
+        XCTAssertTrue(body.contains(".accessibilityIdentifier(\"evidence.googlePhoto.root\")"))
+        XCTAssertFalse(
+            body.contains(".navigationBarTitleDisplayMode(.inline)\n            .accessibilityIdentifier(\"evidence.googlePhoto.root\")"),
+            "Parent root identifier overwrites Harbor Oven, the compact Button, and evidence.googleCarousel"
+        )
         XCTAssertTrue(evidence.contains("GoogleMapsAttributionLogo()"))
     }
 
