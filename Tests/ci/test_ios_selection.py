@@ -212,6 +212,7 @@ class CoverageTests(unittest.TestCase):
         self.assertRegex(ci_workflow, r"(?m)^  ios-fast:\s*$")
         self.assertIn("run-visual-parity.sh", ios_workflow)
         self.assertIn("--threshold 0.90", ios_workflow)
+        self.assertIn("xcrun simctl io booted screenshot", ios_workflow)
         self.assertNotIn("run-visual-parity.sh", ci_workflow)
         self.assertIn("SAVE_UI_TEST_FOCUS", ios_workflow)
         self.assertIn("Must specify -test-iterations with more than 1 iteration", ios_workflow)

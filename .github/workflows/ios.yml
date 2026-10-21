@@ -287,6 +287,56 @@ jobs:
           # launching application via Xcode" on the first test of a step.
           xcrun simctl bootstatus "$udid" -b
 
+      # HoP A2: real SpringBoard screenshot of the installed Savvy icon.
+      # This Linux checkout cannot boot a simulator, so the required ios
+      # job installs SAVE.app on the already-booted device, returns to the
+      # home screen, and uploads light/dark captures.
+      - name: Capture simulator home-screen app icon
+        if: steps.scope.outputs.run == 'true'
+        env:
+          SIM_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/SAVE-Home-Screen"
+          mkdir -p "$out"
+          app="$RUNNER_TEMP/SAVE-DerivedData/Build/Products/Debug-iphonesimulator/SAVE.app"
+          if [[ ! -d "$app" ]]; then
+            app="$(find "$RUNNER_TEMP/SAVE-DerivedData/Build/Products" \
+              -name 'SAVE.app' -path '*iphonesimulator*' -print | head -n 1)"
+          fi
+          if [[ -z "${app:-}" || ! -d "$app" ]]; then
+            echo "SAVE.app not found under DerivedData Products." >&2
+            find "$RUNNER_TEMP/SAVE-DerivedData/Build/Products" -name '*.app' -print >&2 || true
+            exit 1
+          fi
+          xcrun simctl bootstatus "$SIM_UDID" -b
+          xcrun simctl install "$SIM_UDID" "$app"
+          # Fresh boot is already on SpringBoard. Do not launch the app.
+          xcrun simctl terminate "$SIM_UDID" com.wanderly.app 2>/dev/null || true
+          xcrun simctl send-event "$SIM_UDID" home-button 2>/dev/null || \
+            xcrun simctl send-event "$SIM_UDID" home 2>/dev/null || true
+          capture() {
+            local appearance="$1"
+            local file="$2"
+            xcrun simctl ui "$SIM_UDID" appearance "$appearance"
+            sleep 3
+            xcrun simctl io booted screenshot "$file"
+            [[ -s "$file" ]]
+          }
+          capture light "$out/home-screen-light.png"
+          capture dark "$out/home-screen-dark.png"
+          # Restore light so later unit/UI tests do not inherit dark mode.
+          xcrun simctl ui "$SIM_UDID" appearance light
+
+      - name: Upload home-screen app icon screenshots
+        if: always() && steps.scope.outputs.run == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: save-home-screen-icon-${{ github.sha }}
+          path: ${{ runner.temp }}/SAVE-Home-Screen
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Run unit tests
         if: steps.scope.outputs.run == 'true' && steps.scope.outputs.units == 'true'
         run: |
