@@ -92,6 +92,49 @@ enum SavvyMapPhotoPolicy {
     static var usesCoralPinsOnly: Bool { true }
 }
 
+/// P14: saved vs unsaved must be distinguishable at a glance.
+/// Only user-confirmed saved Map Stamps get Savvy pins. Unsaved Apple POIs,
+/// review candidates, and friend-social places stay as native MapKit markers
+/// even when a photo URL exists. Tapping an unsaved POI uses `selectMapFeature`
+/// → the existing unsaved-candidate save flow. After the user confirms, the
+/// stamp is in `MapViewModel.places` and appears immediately as a Savvy pin.
+enum SavvyMapPinKind: Equatable {
+    case savvyPin
+    case nativeApplePOI
+}
+
+enum SavvyMapStampPolicy {
+    static func pinKind(isConfirmedSaved: Bool, hasPhotoURL: Bool) -> SavvyMapPinKind {
+        _ = hasPhotoURL
+        return isConfirmedSaved ? .savvyPin : .nativeApplePOI
+    }
+
+    static func qualifiesForSavvyPin(_ place: Place, confirmedPlaces: [Place]) -> Bool {
+        place.isMapKitMappable && confirmedPlaces.contains { $0.savedIDs.contains(place.id) }
+    }
+
+    static func friendLensPins(confirmedPlaces: [Place], socialPlaces: [Place]) -> [Place] {
+        confirmedPlaces.filter { saved in
+            guard saved.isMapKitMappable else { return false }
+            if saved.socialSignal != nil { return true }
+            return socialPlaces.contains { saved.matches($0) }
+        }
+    }
+
+    static func includingSelectedSavedPin(
+        _ pins: [Place],
+        selected: Place?,
+        confirmedPlaces: [Place]
+    ) -> [Place] {
+        guard let selected,
+              qualifiesForSavvyPin(selected, confirmedPlaces: confirmedPlaces),
+              !pins.contains(where: { $0.id == selected.id }) else {
+            return pins
+        }
+        return pins + [selected]
+    }
+}
+
 // MARK: - Zoom hysteresis + stagger (spec §3)
 
 enum SavvyMapZoomHysteresis {

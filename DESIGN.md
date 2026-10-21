@@ -123,10 +123,14 @@ Rules:
   MapKit. The product Map tab is also MapKit as of 2026-10-21.
 - Nearby / Saved / Friends filter chips live on **Map only**. Home must not
   reuse that chrome.
-- Coral pins only on Map. Places without a licensed user photo stay a coral
-  round; visited adds a coral ring. Selected stamp grows a paper callout
-  (name, Eat/Go, Directions, 我來過了) instead of a kraft peek. Source-only
-  clues still have no pin.
+- Coral pins only on Map, and only on **saved Map Stamps**. Unsaved places
+  stay as Apple's native POI markers — never a photo or Savvy pin, even when
+  a photo URL exists. Visited adds a coral ring on the Savvy pin. Tapping an
+  unsaved POI opens the existing save flow (or Apple's native place card);
+  once the user confirms, that place is immediately a Savvy pin. Selected
+  stamp grows a paper callout (name, Eat/Go, Directions, 我來過了) instead of
+  a kraft peek. Source-only clues still have no pin. Five-second test: Savvy
+  pin = saved, coral ring = visited saved, Apple POI = unsaved.
 - Tile-town is nearest-neighbor integer tiles (`SaveTileTownRaster`): buildings,
   roofs, trees, water, and roads are crisp cells. No anti-aliased vector houses
   or curved roads. Do not blurry-upscale pixel art.
@@ -626,14 +630,16 @@ Every UI object must map to one of these states:
 | --- | --- | --- | --- |
 | Source Clue | Savvy preserved source evidence but lacks a confirmed place | No | Find exact place |
 | Review Candidate | Likely place match, user confirmation needed | Only with reliable coordinates | Confirm or reject |
-| Unsaved Candidate | Recommendation or visible map object not saved | Optional if map-originated | Save or inspect |
-| Map Stamp | Confirmed saved place | Yes | Navigate or plan |
-| Visited Map Stamp | Confirmed place with visited memory | Yes | Update memory |
+| Unsaved Candidate | Recommendation or visible map object not saved | Apple native POI only — never a Savvy/photo pin | Save or inspect |
+| Map Stamp | Confirmed saved place | Yes — Savvy pin | Navigate or plan |
+| Visited Map Stamp | Confirmed place with visited memory | Yes — Savvy pin + coral ring | Update memory |
 | Private Review | User review proof or note, private by default | No by itself | Add proof |
 | Trip Stop | Route/planning object, not necessarily saved | In trip context only | Review plan |
 | Travel window | Arrival, departure, check-in, or check-out constraint on a Trip Plan | No pin of its own | Adjust time |
 
 Never collapse Source Clue, Review Candidate, and Map Stamp into one visual state.
+On the product Map, saved vs unsaved must also be obvious in five seconds:
+Savvy pin = Map Stamp, coral ring = Visited Map Stamp, Apple POI = unsaved.
 
 ## Screen Rules
 
@@ -740,9 +746,11 @@ Rules:
   on). Pin size does not follow zoom. `latitudeDelta ≤ 0.02` grows a badge;
   `> 0.025` returns to the small pin. No clustering.
 - Places without a licensed user photo use a coral round. Visited adds a
-  coral ring. Shadows and springs stay on Map pins, the callout, and the
-  delayed camera move. Other Map chrome stays doodle-flat. Reduce Motion
-  replaces springs with a 0.25s fade and jumps the camera.
+  coral ring. Only confirmed saved Map Stamps get those Savvy pins; unsaved
+  places use Apple's native POI markers only. Shadows and springs stay on
+  Map pins, the callout, and the delayed camera move. Other Map chrome stays
+  doodle-flat. Reduce Motion replaces springs with a 0.25s fade and jumps
+  the camera.
 - Pin tap grows a paper callout from the pin (name, category · Eat/Go ·
   distance, Directions, 我來過了). Tap blank flips to notes / album /
   visits / address. Swipe down > 60pt or tap empty map collapses; the
@@ -750,8 +758,11 @@ Rules:
 - Drawer search (collapsed capsule) still opens the parked search panel.
   Category, Want to try, Visited, and Nearby-distance chips may remain in
   the drawer as Map Stamp lenses; they are not Home chrome.
-- Only reliable states get pins. Source-only clues have no pin.
-- Unsaved nearby candidates are shown only after an explicit drawer action.
+- Only reliable states get pins. Source-only clues have no pin. Unsaved
+  places never become Savvy / photo pins; they remain Apple native POIs.
+- Unsaved nearby candidates are shown only after an explicit drawer action
+  or a native POI tap into the existing save flow. After save, the stamp
+  appears as a Savvy pin immediately.
 - Tapping the collapsed search shelf opens the existing full-height panel,
   focuses the search field, and shows the keyboard.
 - Dragging the handle or panel resizes through parked stages and must not

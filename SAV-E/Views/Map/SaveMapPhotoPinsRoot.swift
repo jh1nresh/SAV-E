@@ -3,8 +3,10 @@ import MapKit
 import SwiftUI
 
 /// Product Map tab: default Apple MapKit + coral photo pins (HoP 2026-10-21).
-/// Home peek stays tile-town. Shadows/springs stay on pins, the callout, and
-/// the delayed camera move — not on the wordmark, lenses, or locate control.
+/// P14: only confirmed saved Map Stamps get Savvy pins. Unsaved places stay
+/// as Apple native POIs. Home peek stays tile-town. Shadows/springs stay on
+/// pins, the callout, and the delayed camera move — not on the wordmark,
+/// lenses, or locate control.
 struct SaveMapPhotoPinsRoot: View {
     @ObservedObject var mapViewModel: MapViewModel
     let presentation: AtlasPresentation
@@ -101,7 +103,7 @@ struct SaveMapPhotoPinsRoot: View {
             Map(position: $mapViewModel.cameraPosition, selection: $mapViewModel.selectedMapFeature) {
                 UserAnnotation()
 
-                ForEach(visiblePlaces.filter(\.isMapKitMappable)) { place in
+                ForEach(savvyPinPlaces) { place in
                     Annotation(
                         place.name,
                         coordinate: place.coordinate,
@@ -166,7 +168,7 @@ struct SaveMapPhotoPinsRoot: View {
             }
             .accessibilityIdentifier("map.liveSurface")
             .overlay {
-                if let place = mapViewModel.selectedPlace {
+                if let place = savvyCardPlace {
                     let point = pinPoint ?? CGPoint(x: geo.size.width / 2, y: geo.size.height * 0.55)
                     SavvyMapPlaceCard(
                         visits: visits,
@@ -260,13 +262,19 @@ struct SaveMapPhotoPinsRoot: View {
         .accessibilityIdentifier("map.currentLocation")
     }
 
-    private var visiblePlaces: [Place] {
+    /// P14: Savvy pins are confirmed Map Stamps only. Friends/social and
+    /// unsaved candidates never become `SavvyMapPhotoPinView`s — Apple's
+    /// native POI markers remain the only unsaved glyphs, and a POI tap
+    /// goes through `selectMapFeature` into the existing save flow.
+    private var savvyPinPlaces: [Place] {
+        let confirmed = mapViewModel.places
+        let lensPins: [Place]
         switch lens {
         case .saved:
-            return mapViewModel.places
+            lensPins = confirmed.filter(\.isMapKitMappable)
         case .nearby:
-            return SaveMapIntentFilter.places(
-                mapViewModel.places,
+            lensPins = SaveMapIntentFilter.places(
+                confirmed,
                 categories: [],
                 intents: [.nearby],
                 nearbyAnchor: locationService.currentLocation?.coordinate
@@ -274,8 +282,27 @@ struct SaveMapPhotoPinsRoot: View {
             )
         case .friends:
             let social = mapViewModel.visibleSocialPlaces
-            return social.isEmpty ? mapViewModel.socialPlaces : social
+            lensPins = SavvyMapStampPolicy.friendLensPins(
+                confirmedPlaces: confirmed,
+                socialPlaces: social.isEmpty ? mapViewModel.socialPlaces : social
+            )
         }
+        return SavvyMapStampPolicy.includingSelectedSavedPin(
+            lensPins,
+            selected: mapViewModel.selectedPlace,
+            confirmedPlaces: confirmed
+        )
+    }
+
+    private var savvyCardPlace: Place? {
+        guard let place = mapViewModel.selectedPlace,
+              SavvyMapStampPolicy.qualifiesForSavvyPin(
+                place,
+                confirmedPlaces: mapViewModel.places
+              ) else {
+            return nil
+        }
+        return place
     }
 
     private func isVisited(_ place: Place) -> Bool {
@@ -396,7 +423,7 @@ struct SaveMapPhotoPinsRoot: View {
     }
 
     private func fitCameraToVisiblePlacesIfNeeded() {
-        let coordinates = visiblePlaces.filter(\.isMapKitMappable).map(\.coordinate)
+        let coordinates = savvyPinPlaces.map(\.coordinate)
         guard coordinates.count >= 1 else { return }
         let lats = coordinates.map(\.latitude)
         let lons = coordinates.map(\.longitude)

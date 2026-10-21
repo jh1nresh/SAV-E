@@ -166,7 +166,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
 
     func testP11ThirtyPinsStayIndividualAnnotations() throws {
         let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
-        XCTAssertTrue(root.contains("ForEach(visiblePlaces.filter(\\ .isMapKitMappable))".replacingOccurrences(of: "\\ ", with: "\\")) || root.contains("isMapKitMappable"))
+        XCTAssertTrue(root.contains("ForEach(savvyPinPlaces)"))
         XCTAssertTrue(root.contains("Annotation("))
         XCTAssertFalse(root.contains("MKClusterAnnotation"))
         XCTAssertFalse(root.contains("clusteringIdentifier"))
@@ -205,6 +205,82 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(mask.contains("atlas-map"))
     }
 
+    func testP14OnlyConfirmedSavedPlacesGetSavvyPins() throws {
+        let saved = samplePlace(status: .wantToGo)
+        let visited = samplePlace(status: .visited)
+        let unsavedSocial = samplePlace(
+            name: "Friend Cafe",
+            latitude: 40.012,
+            longitude: 116.401,
+            sourceImageUrl: "https://example.invalid/friend.jpg",
+            businessPhotoUrls: ["https://maps.googleapis.com/photo/unsaved"]
+        )
+        XCTAssertEqual(
+            SavvyMapStampPolicy.pinKind(isConfirmedSaved: true, hasPhotoURL: false),
+            .savvyPin
+        )
+        XCTAssertEqual(
+            SavvyMapStampPolicy.pinKind(isConfirmedSaved: true, hasPhotoURL: true),
+            .savvyPin
+        )
+        XCTAssertEqual(
+            SavvyMapStampPolicy.pinKind(isConfirmedSaved: false, hasPhotoURL: true),
+            .nativeApplePOI
+        )
+        XCTAssertTrue(SavvyMapStampPolicy.qualifiesForSavvyPin(saved, confirmedPlaces: [saved, visited]))
+        XCTAssertTrue(SavvyMapStampPolicy.qualifiesForSavvyPin(visited, confirmedPlaces: [saved, visited]))
+        XCTAssertFalse(
+            SavvyMapStampPolicy.qualifiesForSavvyPin(unsavedSocial, confirmedPlaces: [saved, visited])
+        )
+
+        let friendMatch = Place(
+            id: UUID(),
+            name: saved.name,
+            address: saved.address,
+            latitude: saved.latitude,
+            longitude: saved.longitude,
+            googlePlaceId: saved.googlePlaceId,
+            category: saved.category,
+            status: .wantToGo,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: "https://example.invalid/og.jpg",
+            businessPhotoUrls: ["https://example.invalid/biz.jpg"],
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: "Ada",
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
+        )
+        let friends = SavvyMapStampPolicy.friendLensPins(
+            confirmedPlaces: [saved, visited],
+            socialPlaces: [friendMatch, unsavedSocial]
+        )
+        XCTAssertEqual(friends.map(\.id), [saved.id])
+
+        let afterSave = SavvyMapStampPolicy.includingSelectedSavedPin(
+            [],
+            selected: saved,
+            confirmedPlaces: [saved]
+        )
+        XCTAssertEqual(afterSave.map(\.id), [saved.id])
+
+        let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        XCTAssertTrue(root.contains("savvyPinPlaces"))
+        XCTAssertTrue(root.contains("SavvyMapStampPolicy.friendLensPins"))
+        XCTAssertTrue(root.contains("selectMapFeature"))
+        XCTAssertTrue(root.contains("pointsOfInterest: .all"))
+        XCTAssertFalse(root.contains("UnsavedMapCandidatePin"))
+        XCTAssertFalse(root.contains("SocialPlaceMapPin"))
+        XCTAssertFalse(root.contains("ReviewCandidateMapPin"))
+        XCTAssertTrue(root.contains("visibleSocialPlaces"))
+        XCTAssertFalse(root.contains("return social.isEmpty ? mapViewModel.socialPlaces : social"))
+    }
+
     func testCardBackUsesDecision2FieldsFromPlace() {
         let place = samplePlace(
             note: "Bring cash",
@@ -231,6 +307,9 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
     }
 
     private func samplePlace(
+        name: String = "Temple of Heaven",
+        latitude: Double = 39.8822,
+        longitude: Double = 116.4066,
         sourceImageUrl: String? = nil,
         businessPhotoUrls: [String]? = nil,
         note: String? = "Bring cash",
@@ -239,10 +318,10 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
     ) -> Place {
         Place(
             id: UUID(),
-            name: "Temple of Heaven",
+            name: name,
             address: "Tiantan Rd",
-            latitude: 39.8822,
-            longitude: 116.4066,
+            latitude: latitude,
+            longitude: longitude,
             googlePlaceId: nil,
             category: .attraction,
             status: status,
