@@ -5,7 +5,7 @@ import XCTest
 
 @MainActor
 final class SavvyMapPhotoPinsTests: XCTestCase {
-    func testQ1OwnThenGoogleThenCoralAndIgnoresOGScrape() {
+    func testQ1bOwnThenCoralNeverUsesGoogleOrOG() {
         let google = samplePlace(
             sourceImageUrl: "https://example.invalid/og.jpg",
             businessPhotoUrls: ["https://maps.googleapis.com/photo/1"],
@@ -13,19 +13,15 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         )
         XCTAssertFalse(google.businessPhotoURLStrings.isEmpty)
         XCTAssertTrue(SavvyMapPhotoPolicy.userAlbumPhotoURLs(for: google).isEmpty)
-
-        let savedGoogle = SavvyMapPhotoPolicy.resolvedPhoto(for: google, isConfirmedSaved: true)
-        XCTAssertEqual(savedGoogle.origin, .googlePlaces)
-        XCTAssertEqual(savedGoogle.url?.absoluteString, "https://maps.googleapis.com/photo/1")
-        XCTAssertTrue(savedGoogle.showsGoogleAttribution)
         XCTAssertEqual(
-            SavvyMapPhotoPolicy.licensedPhotoURL(for: google, isConfirmedSaved: true)?.absoluteString,
-            "https://maps.googleapis.com/photo/1"
+            SavvyMapPhotoPolicy.resolvedPhoto(for: google, isConfirmedSaved: true),
+            .coral
         )
-
-        let unsavedGoogle = SavvyMapPhotoPolicy.resolvedPhoto(for: google, isConfirmedSaved: false)
-        XCTAssertEqual(unsavedGoogle, .coral)
-        XCTAssertNil(SavvyMapPhotoPolicy.licensedPhotoURL(for: google, isConfirmedSaved: false))
+        XCTAssertNil(SavvyMapPhotoPolicy.licensedPhotoURL(for: google, isConfirmedSaved: true))
+        XCTAssertEqual(
+            SavvyMapPhotoPolicy.resolvedPhoto(for: google, isConfirmedSaved: false),
+            .coral
+        )
 
         let ogOnly = samplePlace(sourceImageUrl: "https://example.invalid/og.jpg", note: nil)
         XCTAssertEqual(
@@ -302,38 +298,34 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertFalse(root.contains("return social.isEmpty ? mapViewModel.socialPlaces : social"))
     }
 
-    func testP15AttributionRequiredAndLoadFailureStaysCoral() throws {
-        let saved = samplePlace(businessPhotoUrls: ["https://maps.googleapis.com/photo/1"])
-        let photo = SavvyMapPhotoPolicy.resolvedPhoto(for: saved, isConfirmedSaved: true)
-        XCTAssertTrue(photo.showsGoogleAttribution)
-        XCTAssertEqual(
-            SavvyMapPhotoPolicy.attribution(for: photo, language: .english),
-            "Photos: Google"
-        )
-        XCTAssertEqual(
-            SavvyMapPhotoPolicy.attribution(for: photo, language: .traditionalChinese),
-            "照片：Google"
-        )
-        XCTAssertNil(SavvyMapPhotoPolicy.attribution(for: .coral, language: .english))
-
+    func testP15LoadFailureStaysCoralWithoutBrokenImage() throws {
         XCTAssertEqual(SavvyMapPhotoDisplay.surface(for: .loaded), .photo)
         XCTAssertEqual(SavvyMapPhotoDisplay.surface(for: .failed), .coral)
         XCTAssertEqual(SavvyMapPhotoDisplay.surface(for: .loading), .coral)
         XCTAssertEqual(SavvyMapPhotoDisplay.surface(for: .missing), .coral)
         XCTAssertTrue(SavvyMapPhotoDisplay.hidesBrokenImageOnFailure)
 
+        let own = SavvyMapResolvedPhoto(
+            origin: .own,
+            url: URL(string: "https://example.invalid/me.jpg")
+        )
+        XCTAssertEqual(own.origin, .own)
+        XCTAssertEqual(SavvyMapPhotoDisplay.surface(for: .failed), .coral)
+
         let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
         XCTAssertTrue(pins.contains("CachedAsyncImage"))
-        XCTAssertTrue(pins.contains("Photos: Google"))
-        XCTAssertTrue(pins.contains("照片：Google"))
         XCTAssertTrue(pins.contains("SavvyMapPinPhotoFill"))
+        XCTAssertTrue(pins.contains("user's own photo, then coral") || pins.contains("own photo, then coral"))
         XCTAssertFalse(pins.contains("xmark"))
         XCTAssertFalse(pins.contains("PlaceBusinessEnricher"))
+        XCTAssertFalse(pins.contains("businessPhotoUrls"))
+        XCTAssertFalse(pins.contains("Photos: Google"))
 
         let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
-        XCTAssertTrue(root.contains("map.photoAttribution"))
-        XCTAssertTrue(root.contains("Photos: Google"))
+        XCTAssertFalse(root.contains("Photos: Google"))
+        XCTAssertFalse(root.contains("map.photoAttribution"))
         XCTAssertFalse(root.contains("PlaceBusinessEnricher"))
+        XCTAssertFalse(root.contains("businessPhotoUrls"))
     }
 
     func testCardBackUsesDecision2FieldsFromPlace() {

@@ -124,16 +124,16 @@ Rules:
 - Nearby / Saved / Friends filter chips live on **Map only**. Home must not
   reuse that chrome.
 - Coral pins only on Map, and only on **saved Map Stamps**. Pin photo order
-  is the user's own photo, then an existing Google Places photo already on
-  that saved stamp, then coral. Unsaved places stay as Apple's native POI
-  markers — never a photo or Savvy pin, even when a photo URL exists.
-  Google photos show “Photos: Google”; a load failure stays coral, never a
-  broken image. Visited adds a coral ring on the Savvy pin. Tapping an
-  unsaved POI opens the existing save flow (or Apple's native place card);
-  once the user confirms, that place is immediately a Savvy pin. Selected
-  stamp grows a paper callout (name, Eat/Go, Directions, 我來過了) instead of
-  a kraft peek. Source-only clues still have no pin. Five-second test: Savvy
-  pin = saved, coral ring = visited saved, Apple POI = unsaved.
+  is the user's own photo, then coral. Google Places photos must not appear
+  on this Apple Map. Unsaved places stay as Apple's native POI markers —
+  never a photo or Savvy pin, even when a photo URL exists. An own-photo
+  load failure stays coral, never a broken image. Visited adds a coral ring
+  on the Savvy pin. Tapping an unsaved POI opens the existing save flow (or
+  Apple's native place card); once the user confirms, that place is
+  immediately a Savvy pin. Selected stamp grows a paper callout (name,
+  Eat/Go, Directions, 我來過了) instead of a kraft peek. Source-only clues
+  still have no pin. Five-second test: Savvy pin = saved, coral ring =
+  visited saved, Apple POI = unsaved.
 - Tile-town is nearest-neighbor integer tiles (`SaveTileTownRaster`): buildings,
   roofs, trees, water, and roads are crisp cells. No anti-aliased vector houses
   or curved roads. Do not blurry-upscale pixel art.
@@ -748,13 +748,12 @@ Rules:
 - The basemap is native Apple Maps (`.standard`, automatic emphasis, POIs
   on). Pin size does not follow zoom. `latitudeDelta ≤ 0.02` grows a badge;
   `> 0.025` returns to the small pin. No clustering.
-- Places without an own photo or an existing Google Places photo use a coral
-  round. Visited adds a coral ring. Only confirmed saved Map Stamps get those
-  Savvy pins; unsaved places use Apple's native POI markers only. Google
-  photos require visible attribution; load failure is coral. Shadows and
-  springs stay on Map pins, the callout, and the delayed camera move. Other
-  Map chrome stays doodle-flat. Reduce Motion replaces springs with a 0.25s
-  fade and jumps the camera.
+- Places without an own photo use a coral round. Visited adds a coral ring.
+  Only confirmed saved Map Stamps get those Savvy pins; unsaved places use
+  Apple's native POI markers only. Google Places photos are not pin art.
+  Own-photo load failure is coral. Shadows and springs stay on Map pins, the
+  callout, and the delayed camera move. Other Map chrome stays doodle-flat.
+  Reduce Motion replaces springs with a 0.25s fade and jumps the camera.
 - Pin tap grows a paper callout from the pin (name, category · Eat/Go ·
   distance, Directions, 我來過了). Tap blank flips to notes / album /
   visits / address. Swipe down > 60pt or tap empty map collapses; the

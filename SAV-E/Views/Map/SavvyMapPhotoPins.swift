@@ -66,28 +66,24 @@ enum SavvyMapPinMetrics {
     static let pinScreenYFraction: CGFloat = 0.725
 }
 
-// MARK: - Q1 final photo policy
+// MARK: - Q1b photo policy
 
-/// HoP Q1 final: pin photo priority is the user's own photo, then an
-/// existing Google Places photo already stored on a **saved** Map Stamp
-/// (`Place.businessPhotoUrls`, filled by the existing
-/// `PlaceBusinessEnricher` path — no new keys or billing), then coral.
-/// Do not scrape Apple's native place card or Look Around.
-/// `sourceImageUrl` is social/OG scrape and is never pin art.
+/// HoP Q1b (14:15): Google Places photos must not appear on a non-Google
+/// map. Pin photo order is the user's own photo, then coral. Do not scrape
+/// Apple's native place card or Look Around. Social/OG scrape URLs and
+/// Google Places photo URLs are never pin art.
+/// The existing business-photo enricher is left untouched.
 /// P14: unsaved places never resolve a pin photo (they never get a Savvy pin).
-/// P15: Google photos require visible attribution; load failure is coral,
-/// never a broken-image glyph.
+/// P15: if an own photo fails to load, fall back to coral — never a
+/// broken-image glyph.
 enum SavvyMapPhotoOrigin: Equatable {
     case own
-    case googlePlaces
     case none
 }
 
 struct SavvyMapResolvedPhoto: Equatable {
     var origin: SavvyMapPhotoOrigin
     var url: URL?
-
-    var showsGoogleAttribution: Bool { origin == .googlePlaces && url != nil }
 
     static let coral = SavvyMapResolvedPhoto(origin: .none, url: nil)
 }
@@ -116,9 +112,6 @@ enum SavvyMapPhotoPolicy {
         if let own = userAlbumPhotoURLs(for: place).first {
             return SavvyMapResolvedPhoto(origin: .own, url: own)
         }
-        if let google = firstGooglePlacesPhotoURL(for: place) {
-            return SavvyMapResolvedPhoto(origin: .googlePlaces, url: google)
-        }
         return .coral
     }
 
@@ -126,24 +119,11 @@ enum SavvyMapPhotoPolicy {
         resolvedPhoto(for: place, isConfirmedSaved: isConfirmedSaved).url
     }
 
-    /// Own-album photos. `Place` has no user-photo field yet, so this stays empty.
+    /// Own-album photos. `Place` has no user-photo field yet, so this stays empty
+    /// and every pin renders coral until that source exists.
     static func userAlbumPhotoURLs(for place: Place) -> [URL] {
         _ = place
         return []
-    }
-
-    /// Existing Google Places URLs only — not `sourceImageUrl`.
-    static func firstGooglePlacesPhotoURL(for place: Place) -> URL? {
-        (place.businessPhotoUrls ?? [])
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-            .compactMap(URL.init(string:))
-            .first
-    }
-
-    static func attribution(for photo: SavvyMapResolvedPhoto, language: AppLanguage) -> String? {
-        guard photo.showsGoogleAttribution else { return nil }
-        return language.localized(english: "Photos: Google", traditionalChinese: "照片：Google")
     }
 }
 
@@ -596,20 +576,6 @@ struct SavvyMapPinPhotoFill: View {
     }
 }
 
-struct SavvyMapPhotoAttribution: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(SaveAtlasType.strong(10))
-            .foregroundStyle(SaveAtlasPalette.paper)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(SaveAtlasPalette.ink.opacity(0.55), in: Capsule())
-            .accessibilityIdentifier("map.pin.photoAttribution")
-    }
-}
-
 struct SavvyMapCalloutTail: Shape {
     var size: CGFloat = 12
 
@@ -815,25 +781,17 @@ struct SavvyMapPlaceCard: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: SavvyMapPinMetrics.cardPhotoCorner, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 8) {
-                if let attribution = SavvyMapPhotoPolicy.attribution(
-                    for: photo,
-                    language: languageSettings.language
-                ) {
-                    SavvyMapPhotoAttribution(text: attribution)
-                }
-                Button(action: onOpenDetail) {
-                    Text(place.name)
-                        .font(SaveAtlasType.strong(22))
-                        .foregroundStyle(.white)
-                        .lineLimit(2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityIdentifier("map.peek.name")
-                        .accessibilityFocused($nameFocused)
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("map.peek.card")
+            Button(action: onOpenDetail) {
+                Text(place.name)
+                    .font(SaveAtlasType.strong(22))
+                    .foregroundStyle(.white)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("map.peek.name")
+                    .accessibilityFocused($nameFocused)
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("map.peek.card")
             .padding(16)
         }
         .frame(height: SavvyMapPinMetrics.cardPhotoHeight)
