@@ -130,6 +130,10 @@ final class SAVEProductionConfigTests: XCTestCase {
 
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("func testFreeCapE4Screenshots()"))
+        XCTAssertTrue(
+            rail.contains("home.more.saves"),
+            "E4 must open Saves from the header, then More's row — not More first"
+        )
         for name in [
             "e4-51st-save-paywall",
             "e4-unplaced-candidate",
