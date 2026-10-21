@@ -169,6 +169,19 @@ struct SaveDoodleMapView: View {
                     }
                 }
             }
+
+            if let polyline = mapViewModel.routePolyline {
+                MapPolyline(polyline)
+                    .stroke(
+                        SaveAtlasPalette.ink.opacity(0.76),
+                        style: StrokeStyle(
+                            lineWidth: 3,
+                            lineCap: .round,
+                            lineJoin: .round,
+                            dash: [7, 5]
+                        )
+                    )
+            }
         }
         .mapStyle(.standard)
         .mapFeatureSelectionDisabled { feature in
@@ -608,6 +621,11 @@ struct SaveDoodleMapView: View {
     }
 
     private func fitVisiblePlaces() {
+        // Show-on-Map for a collaborative list already aimed the camera at
+        // `routePolyline`. Do not snap back to personal city stamps.
+        if mapViewModel.routePolyline != nil {
+            return
+        }
         if let selected = mapViewModel.selectedPlace, selected.isMapKitMappable {
             mapViewModel.cameraPosition = .region(
                 MKCoordinateRegion(

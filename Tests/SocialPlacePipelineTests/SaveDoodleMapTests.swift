@@ -65,6 +65,16 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("showsCityPicker = false"))
     }
 
+    func testReplacementMapRendersCollaborativeListRoute() throws {
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        let pinSource = try source(at: "SAV-E/Views/Map/MapView.swift")
+        XCTAssertTrue(map.contains("routePolyline"))
+        XCTAssertTrue(map.contains("MapPolyline(polyline)"))
+        XCTAssertTrue(map.contains("if mapViewModel.routePolyline != nil"))
+        XCTAssertTrue(pinSource.contains("if let polyline = viewModel.routePolyline"))
+        XCTAssertTrue(pinSource.contains("dash: [7, 5]"))
+    }
+
     func testCheckInIsOneVisitPerPlacePerDayAndCanUndo() {
         let defaults = UserDefaults(suiteName: "save.doodle.checkin.\(UUID().uuidString)")!
         var now = Date(timeIntervalSince1970: 1_700_000_000)
