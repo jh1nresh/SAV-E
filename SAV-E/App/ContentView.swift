@@ -760,11 +760,15 @@ struct ContentView: View {
                         mapViewModel: mapVM,
                         initialQuery: drawerLaunchRequest.initialQuery ?? "",
                         focusesSearch: drawerLaunchRequest.focusesSearch,
-                        preservesExactSearchClue: drawerLaunchRequest.preservesExactSearchClue,
-                        onClose: collapseMapPanel,
+                        preservesExactSearchClue: isExactSearchSessionActive,
+                        onClose: {
+                            endCanceledExactSearchCorrection()
+                            collapseMapPanel()
+                        },
                         onOpenPlace: { openSavedPlaceFromMapSearch($0) },
                         onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
                     )
+                    .id(isExactSearchSessionActive)
                 }
             }
             .modifier(MapDrawerActionErrorAlert(
@@ -791,6 +795,21 @@ struct ContentView: View {
     private func collapseMapPanel() {
         isMapPanelExpanded = false
         handleRootSheetDismiss()
+    }
+
+    /// `map.search.close` cancels Review correction. Collapse/reopen still
+    /// keeps the session so a refine remount can finish; this explicit close
+    /// drops it so a later pin or peek cannot silently confirm the canceled
+    /// clue.
+    private func endCanceledExactSearchCorrection() {
+        invalidateExactSearchRequest()
+        guard drawerLaunchRequest.preservesExactSearchClue else { return }
+        drawerLaunchRequest = DrawerLaunchRequest(
+            target: drawerLaunchRequest.target,
+            initialQuery: drawerLaunchRequest.initialQuery,
+            focusesSearch: drawerLaunchRequest.focusesSearch,
+            preservesExactSearchClue: false
+        )
     }
 
     @ViewBuilder
@@ -1455,11 +1474,7 @@ struct ContentView: View {
 
     private func openSavedPlaceFromMapSearch(_ place: Place) {
         restoreExactSearchResolutionIfNeeded()
-        let shouldResolveClue = drawerLaunchRequest.preservesExactSearchClue
-            || isExactSearchSessionActive
-            || mapVM.hasActiveExactSearchResolution
-            || exactSearchClueID != nil
-        guard shouldResolveClue else {
+        guard isExactSearchSessionActive else {
             openMapDetail(.savedPlace(place))
             return
         }
