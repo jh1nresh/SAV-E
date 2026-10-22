@@ -328,6 +328,15 @@ struct SharedPlaceReceipt: Identifiable {
             socialSignal: nil
         )
     }
+
+    /// Preview may show a consented share note. Recipient stamps never inherit it.
+    func recipientOwnedPlace() -> Place {
+        var place = privatePlace()
+        place.rating = nil
+        place.note = nil
+        place.googleRating = nil
+        return place
+    }
 }
 
 enum SharedPlaceReceiptDestination: Identifiable {

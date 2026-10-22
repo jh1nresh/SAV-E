@@ -72,7 +72,10 @@ enum ClipPreviewFixtures {
             photoURLs: [],
             note: nil,
             addedByDisplayName: "Mina",
-            addedAt: Date(timeIntervalSince1970: 812_505_600)
+            addedAt: Date(timeIntervalSince1970: 812_505_600),
+            coordinateSystem: nil,
+            locationProvider: nil,
+            providerMapUrl: nil
         )
     }
 }

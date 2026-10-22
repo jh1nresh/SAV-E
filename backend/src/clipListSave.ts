@@ -110,6 +110,13 @@ export function mergeClipListPlace(
     }
   }
   if (extras.length > 0) result.extra_place_ids = extras;
+  for (const key of ["coordinate_system", "location_provider", "provider_map_url"] as const) {
+    const current = result[key];
+    const next = incoming[key];
+    if ((typeof current !== "string" || !current.trim()) && typeof next === "string" && next.trim()) {
+      result[key] = next;
+    }
+  }
   return promoteGooglePlaceId(result);
 }
 

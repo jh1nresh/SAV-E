@@ -2120,7 +2120,7 @@ final class MapViewModel: ObservableObject {
             await loadPlaces()
         }
 
-        let place = receipt.privatePlace()
+        let place = receipt.recipientOwnedPlace()
 
         // A verified short-code receipt is server-owned. The server must accept
         // the save before we mirror it locally, otherwise an expired, forged,

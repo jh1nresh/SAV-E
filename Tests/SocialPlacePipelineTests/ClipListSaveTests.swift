@@ -378,6 +378,26 @@ final class ClipListSaveTests: XCTestCase {
         )
     }
 
+    func testPlaceBodyKeepsNonWGS84Coordinates() {
+        var gcj = item("amap-onibus", "Onibus Coffee", lat: 35.644, lng: 139.699)
+        gcj.coordinateSystem = "GCJ-02"
+        gcj.locationProvider = "amap"
+        gcj.providerMapURL = "https://uri.amap.com/marker?position=139.699,35.644"
+        let places = ClipListSavePlanner.requestBody(items: [gcj])["places"] as? [[String: Any]]
+        XCTAssertEqual(places?.first?["coordinate_system"] as? String, "GCJ-02")
+        XCTAssertEqual(places?.first?["location_provider"] as? String, "amap")
+        XCTAssertEqual(places?.first?["provider_map_url"] as? String, "https://uri.amap.com/marker?position=139.699,35.644")
+        var wgs = item("ChIJ123", "Onibus Coffee", lat: 35.644, lng: 139.699)
+        wgs.coordinateSystem = "WGS84"
+        XCTAssertNil(
+            (ClipListSavePlanner.requestBody(items: [wgs])["places"] as? [[String: Any]])?.first?["provider_map_url"]
+        )
+        XCTAssertEqual(
+            (ClipListSavePlanner.requestBody(items: [wgs])["places"] as? [[String: Any]])?.first?["coordinate_system"] as? String,
+            "WGS84"
+        )
+    }
+
     private func item(
         _ placeId: String?,
         _ name: String,

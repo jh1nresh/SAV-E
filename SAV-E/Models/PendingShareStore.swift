@@ -11,6 +11,9 @@ struct PendingConfirmedPlace: Codable, Equatable {
     var category: String
     var sourceURL: String?
     var extraPlaceIds: [String]? = nil
+    var coordinateSystem: String? = nil
+    var locationProvider: String? = nil
+    var providerMapUrl: String? = nil
 
     func asListItem() -> SaveListItem {
         SaveListItem(
@@ -29,7 +32,10 @@ struct PendingConfirmedPlace: Codable, Equatable {
             note: nil,
             addedByDisplayName: "",
             addedAt: Date(timeIntervalSince1970: 0),
-            extraPlaceIds: extraPlaceIds
+            extraPlaceIds: extraPlaceIds,
+            coordinateSystem: coordinateSystem.flatMap(PlaceCoordinateSystem.init(rawValue:)),
+            locationProvider: locationProvider.flatMap(PlaceMatchProvider.init(rawValue:)),
+            providerMapUrl: providerMapUrl
         )
     }
 }
@@ -438,6 +444,9 @@ enum ClipListHandoff {
             body["google_place_id"] = google
         }
         if !extras.isEmpty { body["extra_place_ids"] = extras }
+        if let system = item.coordinateSystem?.rawValue { body["coordinate_system"] = system }
+        if let provider = item.locationProvider?.rawValue { body["location_provider"] = provider }
+        if let mapURL = item.providerMapUrl, !mapURL.isEmpty { body["provider_map_url"] = mapURL }
         return body
     }
 
@@ -546,6 +555,9 @@ enum ClipListHandoff {
             }
         }
         result.extraPlaceIds = extras.isEmpty ? nil : extras.sorted()
+        if result.coordinateSystem == nil { result.coordinateSystem = incoming.coordinateSystem }
+        if result.locationProvider == nil { result.locationProvider = incoming.locationProvider }
+        if result.providerMapUrl == nil { result.providerMapUrl = incoming.providerMapUrl }
         return result
     }
 

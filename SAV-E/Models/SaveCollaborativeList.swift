@@ -48,6 +48,9 @@ struct SaveListItem: Identifiable, Codable, Hashable {
     var addedByDisplayName: String
     var addedAt: Date
     var extraPlaceIds: [String]? = nil
+    var coordinateSystem: PlaceCoordinateSystem? = nil
+    var locationProvider: PlaceMatchProvider? = nil
+    var providerMapUrl: String? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -73,7 +76,10 @@ struct SaveListItem: Identifiable, Codable, Hashable {
             photoURLs: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoURLStrings) ?? [],
             note: place.note,
             addedByDisplayName: addedByDisplayName,
-            addedAt: addedAt
+            addedAt: addedAt,
+            coordinateSystem: place.coordinateSystem,
+            locationProvider: place.locationProvider,
+            providerMapUrl: place.providerMapUrl
         )
     }
 
@@ -137,6 +143,9 @@ struct SaveListItem: Identifiable, Codable, Hashable {
             note: includeSenderMemory ? note : nil,
             sourceUrl: sourceURL,
             sourcePlatform: .other,
+            coordinateSystem: coordinateSystem,
+            locationProvider: locationProvider,
+            providerMapUrl: providerMapUrl,
             sourceImageUrl: GooglePlacesPhotoURL.persistableString(photoURLs.first),
             businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(photoURLs),
             extractedDishes: nil,

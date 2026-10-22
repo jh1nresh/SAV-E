@@ -83,6 +83,25 @@ test("primary Google provider id is promoted to google_place_id", () => {
   assert.equal(plan.toInsert[0]?.google_place_id, undefined);
 });
 
+test("merged Clip items keep a later GCJ-02 provider reference", () => {
+  const unique = uniqueClipListItems([
+    { id: "id-a", name: "Onibus Coffee", latitude: 35.644, longitude: 139.699 },
+    {
+      id: "amap-onibus",
+      name: "Onibus Coffee",
+      latitude: 35.644,
+      longitude: 139.699,
+      coordinate_system: "GCJ-02",
+      location_provider: "amap",
+      provider_map_url: "https://uri.amap.com/marker?position=139.699,35.644",
+    },
+  ]);
+  assert.equal(unique.length, 1);
+  assert.equal(unique[0]?.coordinate_system, "GCJ-02");
+  assert.equal(unique[0]?.location_provider, "amap");
+  assert.equal(unique[0]?.provider_map_url, "https://uri.amap.com/marker?position=139.699,35.644");
+});
+
 test("every merged extra identity is used for account dedupe", () => {
   const items = [
     { id: "id-a", name: "Onibus Coffee", latitude: 35.644, longitude: 139.699 },

@@ -721,7 +721,10 @@ struct SharedListPayload: Codable {
                         photoURLs: ShareRoutePhotoPolicy.persistablePhotoURLs(item.photoURLs),
                         note: item.note,
                         addedByDisplayName: item.addedByDisplayName,
-                        addedAt: item.addedAt
+                        addedAt: item.addedAt,
+                        coordinateSystem: item.coordinateSystem,
+                        locationProvider: item.locationProvider,
+                        providerMapUrl: item.providerMapUrl
                     )
                 },
                 createdAt: list.createdAt,
@@ -796,6 +799,9 @@ struct SharedListItem: Codable, Identifiable {
     let note: String?
     let addedByDisplayName: String
     let addedAt: Date
+    var coordinateSystem: String? = nil
+    var locationProvider: String? = nil
+    var providerMapUrl: String? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)

@@ -88,6 +88,30 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
+    func testListItemKeepsNonWGS84Coordinates() {
+        var amap = place(name: "Onibus Coffee", category: .cafe)
+        amap.latitude = 35.644
+        amap.longitude = 139.699
+        amap.coordinateSystem = .gcj02
+        amap.locationProvider = .amap
+        amap.providerPlaceId = "amap-onibus"
+        amap.providerMapUrl = "https://uri.amap.com/marker?position=139.699,35.644"
+        let item = SaveListItem.from(place: amap)
+        XCTAssertEqual(item.coordinateSystem, .gcj02)
+        XCTAssertEqual(item.locationProvider, .amap)
+        XCTAssertEqual(item.providerMapUrl, "https://uri.amap.com/marker?position=139.699,35.644")
+        let stamp = item.asPlace(includeSenderMemory: false)
+        XCTAssertEqual(stamp.coordinateSystem, .gcj02)
+        XCTAssertEqual(stamp.locationProvider, .amap)
+        XCTAssertEqual(stamp.providerMapUrl, "https://uri.amap.com/marker?position=139.699,35.644")
+        XCTAssertFalse(stamp.isMapKitMappable)
+        let body = ClipListHandoff.placeBody(from: item)
+        XCTAssertEqual(body["coordinate_system"] as? String, "GCJ-02")
+        XCTAssertEqual(body["location_provider"] as? String, "amap")
+        XCTAssertEqual(body["provider_map_url"] as? String, "https://uri.amap.com/marker?position=139.699,35.644")
+    }
+
+    @MainActor
     func testListItineraryKeepsUnsavedItemsSeparateFromPlaceIds() {
         var list = SaveCollaborativeList(title: "Mixed plan")
         let saved = place(name: "Saved Cafe", category: .cafe)

@@ -73,6 +73,9 @@ struct ClipListSaveItem: Equatable, Sendable {
     var sourceURL: String?
     var placeId: String?
     var extraPlaceIds: [String] = []
+    var coordinateSystem: String? = nil
+    var locationProvider: String? = nil
+    var providerMapURL: String? = nil
 }
 
 enum ClipListSavePlanner {
@@ -135,6 +138,9 @@ enum ClipListSavePlanner {
             }
         }
         result.extraPlaceIds = extras.sorted()
+        if result.coordinateSystem == nil { result.coordinateSystem = incoming.coordinateSystem }
+        if result.locationProvider == nil { result.locationProvider = incoming.locationProvider }
+        if result.providerMapURL == nil { result.providerMapURL = incoming.providerMapURL }
         return result
     }
 
@@ -311,6 +317,9 @@ enum ClipListSavePlanner {
             body["google_place_id"] = google
         }
         if !extras.isEmpty { body["extra_place_ids"] = extras }
+        if let system = item.coordinateSystem, !system.isEmpty { body["coordinate_system"] = system }
+        if let provider = item.locationProvider, !provider.isEmpty { body["location_provider"] = provider }
+        if let mapURL = item.providerMapURL, !mapURL.isEmpty { body["provider_map_url"] = mapURL }
         return body
     }
 

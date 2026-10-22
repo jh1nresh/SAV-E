@@ -669,6 +669,28 @@ final class PendingShareStoreTests: XCTestCase {
         )
         XCTAssertNil(legacy.extraPlaceIds)
         XCTAssertNil(legacy.asListItem().extraPlaceIds)
+        let gcj = PendingConfirmedPlace(
+            placeId: "amap-onibus",
+            name: "Onibus Coffee",
+            address: "Tokyo",
+            latitude: 35.644,
+            longitude: 139.699,
+            category: "Cafe",
+            sourceURL: nil,
+            coordinateSystem: "GCJ-02",
+            locationProvider: "amap",
+            providerMapUrl: "https://uri.amap.com/marker?position=139.699,35.644"
+        )
+        let gcjItem = gcj.asListItem()
+        XCTAssertEqual(gcjItem.coordinateSystem, .gcj02)
+        XCTAssertEqual(gcjItem.locationProvider, .amap)
+        XCTAssertFalse(gcjItem.asPlace(includeSenderMemory: false).isMapKitMappable)
+        XCTAssertEqual(ClipListHandoff.placeBody(from: gcjItem)["coordinate_system"] as? String, "GCJ-02")
+        let gcjEncoded = try? JSONEncoder().encode(gcj)
+        let gcjDecoded = gcjEncoded.flatMap { try? JSONDecoder().decode(PendingConfirmedPlace.self, from: $0) }
+        XCTAssertEqual(gcjDecoded?.coordinateSystem, "GCJ-02")
+        XCTAssertEqual(gcjDecoded?.locationProvider, "amap")
+        XCTAssertEqual(gcjDecoded?.providerMapUrl, "https://uri.amap.com/marker?position=139.699,35.644")
     }
 
     func testHandoffSnapshotRestoresCafeBarStayCategories() {
