@@ -206,7 +206,8 @@ enum ClipSaveService {
                 latitude: $0.latitude,
                 longitude: $0.longitude,
                 category: $0.category,
-                sourceURL: $0.sourceURL
+                sourceURL: $0.sourceURL,
+                extraPlaceIds: $0.extraPlaceIds.isEmpty ? nil : $0.extraPlaceIds
             )
         }
         return PendingShareStore.write(

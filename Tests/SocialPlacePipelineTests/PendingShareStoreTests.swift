@@ -480,6 +480,39 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertEqual(PendingShareStore.load(from: store)?.shareCode, "ok")
     }
 
+    func testHandoffSnapshotCarriesBridgePlaceIds() {
+        let snapshot = PendingConfirmedPlace(
+            placeId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            name: "Onibus Coffee",
+            address: "Tokyo",
+            latitude: 35.644,
+            longitude: 139.699,
+            category: "Cafe",
+            sourceURL: nil,
+            extraPlaceIds: ["ChIJ123"]
+        )
+        let item = snapshot.asListItem()
+        XCTAssertEqual(item.sourceID, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        XCTAssertEqual(item.extraPlaceIds, ["ChIJ123"])
+        let body = ClipListHandoff.placeBody(from: item)
+        XCTAssertEqual(body["provider_place_id"] as? String, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+        XCTAssertEqual(body["google_place_id"] as? String, "ChIJ123")
+        let encoded = try? JSONEncoder().encode(snapshot)
+        let decoded = encoded.flatMap { try? JSONDecoder().decode(PendingConfirmedPlace.self, from: $0) }
+        XCTAssertEqual(decoded?.extraPlaceIds, ["ChIJ123"])
+        let legacy = PendingConfirmedPlace(
+            placeId: "shop-1",
+            name: "Onibus Coffee",
+            address: "Tokyo",
+            latitude: 35.644,
+            longitude: 139.699,
+            category: "Cafe",
+            sourceURL: nil
+        )
+        XCTAssertNil(legacy.extraPlaceIds)
+        XCTAssertNil(legacy.asListItem().extraPlaceIds)
+    }
+
     func testHandoffSnapshotRestoresCafeBarStayCategories() {
         XCTAssertEqual(PlaceCategory.fromClipSnapshot("Cafe"), .cafe)
         XCTAssertEqual(PlaceCategory.fromClipSnapshot("Bar"), .bar)

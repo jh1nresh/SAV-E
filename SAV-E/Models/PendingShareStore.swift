@@ -10,6 +10,7 @@ struct PendingConfirmedPlace: Codable, Equatable {
     var longitude: Double
     var category: String
     var sourceURL: String?
+    var extraPlaceIds: [String]? = nil
 
     func asListItem() -> SaveListItem {
         SaveListItem(
@@ -27,7 +28,8 @@ struct PendingConfirmedPlace: Codable, Equatable {
             photoURLs: [],
             note: nil,
             addedByDisplayName: "",
-            addedAt: Date(timeIntervalSince1970: 0)
+            addedAt: Date(timeIntervalSince1970: 0),
+            extraPlaceIds: extraPlaceIds
         )
     }
 }
@@ -280,18 +282,11 @@ enum ClipListHandoff {
         savedPlaceCount: Int,
         limit: Int = freeLimit
     ) -> (toStamp: [SaveListItem], counts: ClipListHandoffCounts) {
-        var seen = Set<String>()
-        var already = 0
+        let countable = confirmed.filter { !identities(of: $0).isEmpty }
+        let unique = uniqueItems(countable)
+        var already = max(0, countable.count - unique.count)
         var novel: [SaveListItem] = []
-        for item in confirmed {
-            let keys = identities(of: item)
-            guard !keys.isEmpty else { continue }
-            if keys.contains(where: { seen.contains($0) }) {
-                already += 1
-                keys.forEach { seen.insert($0) }
-                continue
-            }
-            keys.forEach { seen.insert($0) }
+        for item in unique {
             if alreadySaved(item) {
                 already += 1
                 continue
@@ -389,6 +384,9 @@ enum ClipListHandoff {
         ]
         if let sourceURL = item.sourceURL { body["source_url"] = sourceURL }
         if !item.sourceID.isEmpty { body["provider_place_id"] = item.sourceID }
+        if let google = (item.extraPlaceIds ?? []).first, !google.isEmpty {
+            body["google_place_id"] = google
+        }
         return body
     }
 
@@ -436,13 +434,73 @@ enum ClipListHandoff {
             && String(format: "%.4f", item.longitude) == String(format: "%.4f", row.longitude)
     }
 
+    static func uniqueItems(_ items: [SaveListItem]) -> [SaveListItem] {
+        var indexByKey: [String: Int] = [:]
+        var unique: [SaveListItem] = []
+        for item in items {
+            let keys = identities(of: item)
+            guard !keys.isEmpty else { continue }
+            let matched = Array(Set(keys.compactMap { indexByKey[$0] })).sorted()
+            if matched.isEmpty {
+                let index = unique.count
+                unique.append(item)
+                for key in keys { indexByKey[key] = index }
+                continue
+            }
+            let keep = matched[0]
+            var merged = mergingIdentities(unique[keep], item)
+            for other in matched.dropFirst() {
+                merged = mergingIdentities(merged, unique[other])
+            }
+            unique[keep] = merged
+            if matched.count == 1 {
+                for key in identities(of: merged) { indexByKey[key] = keep }
+                continue
+            }
+            let remove = Set(matched.dropFirst())
+            unique = unique.enumerated().compactMap { remove.contains($0.offset) ? nil : $0.element }
+            indexByKey = [:]
+            for (index, remaining) in unique.enumerated() {
+                for key in identities(of: remaining) { indexByKey[key] = index }
+            }
+        }
+        return unique
+    }
+
+    private static func mergingIdentities(_ kept: SaveListItem, _ incoming: SaveListItem) -> SaveListItem {
+        var result = kept
+        var extras = Set(
+            (kept.extraPlaceIds ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+        )
+        let incomingId = incoming.sourceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !incomingId.isEmpty,
+           result.sourceID.caseInsensitiveCompare(incomingId) != .orderedSame {
+            extras.insert(incomingId)
+        }
+        for extra in incoming.extraPlaceIds ?? [] {
+            let trimmed = extra.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty,
+               result.sourceID.caseInsensitiveCompare(trimmed) != .orderedSame {
+                extras.insert(trimmed)
+            }
+        }
+        result.extraPlaceIds = extras.isEmpty ? nil : extras.sorted()
+        return result
+    }
+
     private static func identities(of item: SaveListItem) -> [String] {
         var keys: [String] = []
+        var placeIds: [String] = []
         let sourceID = item.sourceID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if !sourceID.isEmpty {
-            keys.append("id:\(sourceID)")
-            keys.append("p:\(sourceID)")
-            keys.append("g:\(sourceID)")
+        if !sourceID.isEmpty { placeIds.append(sourceID) }
+        for extra in item.extraPlaceIds ?? [] {
+            let trimmed = extra.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !trimmed.isEmpty { placeIds.append(trimmed) }
+        }
+        for placeId in placeIds {
+            keys.append("id:\(placeId)")
+            keys.append("p:\(placeId)")
+            keys.append("g:\(placeId)")
         }
         let name = item.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if !name.isEmpty {

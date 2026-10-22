@@ -51,6 +51,23 @@ test("google and provider place ids share one identity", () => {
   assert.equal(plan.newlySaved, 0);
 });
 
+test("SL1 merges every group a later item bridges", () => {
+  const plan = planClipListSave({
+    items: [
+      { id: "id-a", name: "Onibus Coffee", latitude: 35.644, longitude: 139.699 },
+      { id: "id-c", name: "Katsu Midori", latitude: 35.690, longitude: 139.700 },
+      { id: "id-c", name: "Onibus Coffee", latitude: 35.644, longitude: 139.699 },
+    ],
+    existingIdentities: [],
+    savedPlaceCount: 0,
+  });
+  assert.equal(plan.toInsert.length, 1);
+  assert.equal(plan.toInsert[0]?.id, "id-a");
+  assert.equal(plan.toInsert[0]?.google_place_id, "id-c");
+  assert.equal(plan.newlySaved, 1);
+  assert.equal(plan.alreadySaved, 2);
+});
+
 test("SL1 records skipped identities so transitive duplicates collapse", () => {
   const plan = planClipListSave({
     items: [
@@ -216,6 +233,9 @@ test("SL4 POST /places list writes are one transactional call", () => {
     "one-place Clip saves in { places: [item] } must use the quota planner",
   );
   assert.match(handler, /planClipListSave/);
+  const planner = readFileSync(new URL("../src/clipListSave.ts", import.meta.url), "utf8");
+  assert.match(planner, /export function uniqueClipListItems/);
+  assert.match(planner, /matched\.slice\(1\)/);
   assert.match(handler, /begin/);
   assert.match(handler, /commit/);
   assert.match(handler, /rollback/);

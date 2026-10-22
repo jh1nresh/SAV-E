@@ -296,6 +296,22 @@ final class ClipListSaveTests: XCTestCase {
         XCTAssertNil(result(status: 500, json: #"{"newly_saved":0,"already_saved":0,"over_cap":1}"#))
     }
 
+    func testUniqueItemsMergesEveryBridgedGroup() {
+        let items = [
+            item("id-a", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("id-c", "Katsu Midori", lat: 35.690, lng: 139.700),
+            item("id-c", "Onibus Coffee", lat: 35.644, lng: 139.699),
+        ]
+        let unique = ClipListSavePlanner.uniqueItems(from: items)
+        XCTAssertEqual(unique.count, 1, "B bridges A and C into one stamp")
+        XCTAssertEqual(unique.first?.placeId, "id-a")
+        XCTAssertEqual(unique.first?.extraPlaceIds, ["id-c"])
+        let places = ClipListSavePlanner.requestBody(items: items)["places"] as? [[String: Any]]
+        XCTAssertEqual(places?.count, 1)
+        XCTAssertEqual(places?.first?["provider_place_id"] as? String, "id-a")
+        XCTAssertEqual(places?.first?["google_place_id"] as? String, "id-c")
+    }
+
     func testUniqueItemsPreservesBridgePlaceIds() {
         let senderUUID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
         let items = [

@@ -2511,8 +2511,16 @@ final class MapViewModel: ObservableObject {
     }
 
     private static func importedPlace(_ place: Place, matches item: SaveListItem) -> Bool {
-        if let provider = place.providerPlaceId, !provider.isEmpty {
-            return item.sourceID.caseInsensitiveCompare(provider) == .orderedSame
+        let ids = ([item.sourceID] + (item.extraPlaceIds ?? []))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if let provider = place.providerPlaceId, !provider.isEmpty,
+           ids.contains(where: { $0.caseInsensitiveCompare(provider) == .orderedSame }) {
+            return true
+        }
+        if let google = place.googlePlaceId, !google.isEmpty,
+           ids.contains(where: { $0.caseInsensitiveCompare(google) == .orderedSame }) {
+            return true
         }
         return place.matchesMapFeature(title: item.title, coordinate: item.coordinate)
     }

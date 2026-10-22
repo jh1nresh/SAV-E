@@ -45,6 +45,73 @@ function isPlaceObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+export function mergeClipListPlace(
+  kept: Record<string, unknown>,
+  incoming: Record<string, unknown>,
+): Record<string, unknown> {
+  const result = { ...kept };
+  const taken = new Set(
+    [result.id, result.provider_place_id, result.google_place_id]
+      .filter((value): value is string => typeof value === "string" && value.trim() !== "")
+      .map((value) => value.trim()),
+  );
+  for (const field of ["provider_place_id", "google_place_id", "id"] as const) {
+    const value = incoming[field];
+    if (typeof value !== "string" || !value.trim()) continue;
+    const trimmed = value.trim();
+    if (taken.has(trimmed)) continue;
+    if (
+      (typeof result.provider_place_id !== "string" || !String(result.provider_place_id).trim())
+      && (typeof result.id !== "string" || !String(result.id).trim())
+    ) {
+      result.provider_place_id = trimmed;
+      taken.add(trimmed);
+      continue;
+    }
+    if (typeof result.google_place_id !== "string" || !String(result.google_place_id).trim()) {
+      result.google_place_id = trimmed;
+      taken.add(trimmed);
+    }
+  }
+  return result;
+}
+
+/// Collapse transitive duplicates (A↔B↔C) into one retained item.
+export function uniqueClipListItems(items: unknown[]): Record<string, unknown>[] {
+  const indexByKey = new Map<string, number>();
+  let unique: Record<string, unknown>[] = [];
+  for (const raw of items) {
+    if (!isPlaceObject(raw)) continue;
+    const keys = clipListPlaceIdentities(raw);
+    if (keys.length === 0) continue;
+    const matched = [...new Set(keys.map((key) => indexByKey.get(key)).filter((index): index is number => index !== undefined))]
+      .sort((left, right) => left - right);
+    if (matched.length === 0) {
+      const index = unique.length;
+      unique.push({ ...raw });
+      for (const key of keys) indexByKey.set(key, index);
+      continue;
+    }
+    const keep = matched[0];
+    let merged = mergeClipListPlace(unique[keep], raw);
+    for (const other of matched.slice(1)) {
+      merged = mergeClipListPlace(merged, unique[other]);
+    }
+    unique[keep] = merged;
+    if (matched.length === 1) {
+      for (const key of clipListPlaceIdentities(merged)) indexByKey.set(key, keep);
+      continue;
+    }
+    const remove = new Set(matched.slice(1));
+    unique = unique.filter((_, index) => !remove.has(index));
+    indexByKey.clear();
+    unique.forEach((item, index) => {
+      for (const key of clipListPlaceIdentities(item)) indexByKey.set(key, index);
+    });
+  }
+  return unique;
+}
+
 /// SL1: walk the list once, skip intra-list and account duplicates first.
 /// SL2: fill remaining free slots in list order; overflow is over_cap (#293 B).
 export function planClipListSave(input: {
@@ -62,21 +129,14 @@ export function planClipListSave(input: {
       if (!rowByKey.has(key)) rowByKey.set(key, row);
     }
   }
-  const seen = new Set<string>();
-  let alreadySaved = 0;
+  const countable = input.items.filter((raw) => isPlaceObject(raw) && clipListPlaceIdentities(raw).length > 0);
+  const unique = uniqueClipListItems(input.items);
+  let alreadySaved = Math.max(0, countable.length - unique.length);
   const alreadyExisting: Record<string, unknown>[] = [];
   const novel: Record<string, unknown>[] = [];
 
-  for (const raw of input.items) {
-    if (!isPlaceObject(raw)) continue;
+  for (const raw of unique) {
     const identities = clipListPlaceIdentities(raw);
-    if (identities.length === 0) continue;
-    if (identities.some((key) => seen.has(key))) {
-      alreadySaved += 1;
-      for (const key of identities) seen.add(key);
-      continue;
-    }
-    for (const key of identities) seen.add(key);
     if (identities.some((key) => existing.has(key))) {
       alreadySaved += 1;
       const matched = identities.map((key) => rowByKey.get(key)).find(Boolean);

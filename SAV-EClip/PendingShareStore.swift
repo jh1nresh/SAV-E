@@ -28,6 +28,7 @@ struct PendingConfirmedPlace: Codable, Equatable {
     var longitude: Double
     var category: String
     var sourceURL: String?
+    var extraPlaceIds: [String]? = nil
 }
 
 enum PendingShareStore {

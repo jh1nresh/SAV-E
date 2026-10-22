@@ -82,16 +82,29 @@ enum ClipListSavePlanner {
         for item in items {
             let keys = identities(of: item)
             guard !keys.isEmpty else { continue }
-            if let index = keys.compactMap({ indexByKey[$0] }).first {
-                unique[index] = mergingIdentities(unique[index], item)
-                for key in identities(of: unique[index]) {
-                    indexByKey[key] = index
-                }
+            let matched = Array(Set(keys.compactMap { indexByKey[$0] })).sorted()
+            if matched.isEmpty {
+                let index = unique.count
+                unique.append(item)
+                for key in keys { indexByKey[key] = index }
                 continue
             }
-            let index = unique.count
-            unique.append(item)
-            for key in keys { indexByKey[key] = index }
+            let keep = matched[0]
+            var merged = mergingIdentities(unique[keep], item)
+            for other in matched.dropFirst() {
+                merged = mergingIdentities(merged, unique[other])
+            }
+            unique[keep] = merged
+            if matched.count == 1 {
+                for key in identities(of: merged) { indexByKey[key] = keep }
+                continue
+            }
+            let remove = Set(matched.dropFirst())
+            unique = unique.enumerated().compactMap { remove.contains($0.offset) ? nil : $0.element }
+            indexByKey = [:]
+            for (index, remaining) in unique.enumerated() {
+                for key in identities(of: remaining) { indexByKey[key] = index }
+            }
         }
         return unique
     }

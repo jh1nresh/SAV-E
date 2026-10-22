@@ -47,6 +47,7 @@ struct SaveListItem: Identifiable, Codable, Hashable {
     var note: String?
     var addedByDisplayName: String
     var addedAt: Date
+    var extraPlaceIds: [String]? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -104,14 +105,17 @@ struct SaveListItem: Identifiable, Codable, Hashable {
     }
 
     func alreadySaved(in places: [Place]) -> Bool {
-        places.contains { place in
-            if !sourceID.isEmpty {
+        let ids = ([sourceID] + (extraPlaceIds ?? []))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return places.contains { place in
+            for id in ids {
                 if let provider = place.providerPlaceId, !provider.isEmpty,
-                   sourceID.caseInsensitiveCompare(provider) == .orderedSame {
+                   id.caseInsensitiveCompare(provider) == .orderedSame {
                     return true
                 }
                 if let google = place.googlePlaceId, !google.isEmpty,
-                   sourceID.caseInsensitiveCompare(google) == .orderedSame {
+                   id.caseInsensitiveCompare(google) == .orderedSame {
                     return true
                 }
             }
