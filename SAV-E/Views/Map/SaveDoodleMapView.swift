@@ -27,6 +27,7 @@ struct SaveDoodleMapView: View {
     let shouldFocusOnUserLocation: Bool
 
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.openURL) private var openURL
     @EnvironmentObject private var session: SaveDoodleSession
     @ObservedObject private var locationService = LocationService.shared
     @StateObject private var checkIns = SaveDoodleCheckInStore()
@@ -390,7 +391,7 @@ struct SaveDoodleMapView: View {
             HStack(spacing: SaveSpace.sm) {
                 Button {
                     SaveHaptics.tap()
-                    NavigationService.navigate(to: place.coordinate, name: place.name, mode: .walking)
+                    openDirections(for: place)
                 } label: {
                     Text(languageSettings.localized(english: "Directions", traditionalChinese: "導航"))
                         .font(SaveAtlasType.strong(17))
@@ -637,6 +638,14 @@ struct SaveDoodleMapView: View {
             return "\(lens) · \(area)"
         }
         return lens
+    }
+
+    private func openDirections(for place: Place) {
+        if let providerURL = place.providerMapDestinationURL {
+            openURL(providerURL)
+            return
+        }
+        NavigationService.navigate(to: place.coordinate, name: place.name, mode: .walking)
     }
 
     private func performCheckIn(_ place: Place) {
