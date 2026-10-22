@@ -92,6 +92,8 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertFalse(app.contains("PendingShareStore.load() == nil"))
         XCTAssertTrue(app.contains("matchesIncomingPlace(url:"))
         XCTAssertTrue(appPending.contains("matchesIncomingPlace(url:"))
+        XCTAssertTrue(app.contains("Preview-only AppStorage URL is not a Clip save intent."))
+        XCTAssertTrue(app.contains("payload.kind == .place"))
         let design = try source(at: "DESIGN.md")
         XCTAssertTrue(design.contains("Save all N"))
         XCTAssertTrue(design.contains("19b"))

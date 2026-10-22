@@ -553,7 +553,9 @@ struct SaveApp: App {
     private func restorePendingShare() {
         guard incomingPlaceReceipt == nil else { return }
         if let payload = PendingShareStore.load(), let url = URL(string: payload.url) {
-            autoSaveIncomingShare = true
+            if payload.kind == .place {
+                autoSaveIncomingShare = true
+            }
             handleIncomingURL(url)
             return
         }
@@ -561,7 +563,7 @@ struct SaveApp: App {
               let url = URL(string: pendingFriendShareURL),
               isPlaceLink(url)
         else { return }
-        autoSaveIncomingShare = true
+        // Preview-only AppStorage URL is not a Clip save intent.
         handleIncomingURL(url)
     }
 
