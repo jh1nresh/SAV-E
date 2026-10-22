@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 
 enum ClipListSaveFailure: Error, Equatable, Sendable {
@@ -85,7 +86,11 @@ enum ClipListSavePlanner {
         for item in items {
             let keys = identities(of: item)
             guard !keys.isEmpty else { continue }
-            let matched = Array(Set(keys.compactMap { indexByKey[$0] })).sorted()
+            var matchedIndexes = Set(keys.compactMap { indexByKey[$0] })
+            for (index, existing) in unique.enumerated() where isNearbyDuplicate(item, existing) {
+                matchedIndexes.insert(index)
+            }
+            let matched = matchedIndexes.sorted()
             if matched.isEmpty {
                 let index = unique.count
                 unique.append(item)
@@ -337,6 +342,14 @@ enum ClipListSavePlanner {
     /// never collides with the owner's `places.id`.
     private static func recipientOwnedPlaceID() -> String {
         UUID().uuidString.lowercased()
+    }
+
+    static func isNearbyDuplicate(_ left: ClipListSaveItem, _ right: ClipListSaveItem) -> Bool {
+        let leftName = left.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let rightName = right.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !leftName.isEmpty, leftName == rightName else { return false }
+        return CLLocation(latitude: left.latitude, longitude: left.longitude)
+            .distance(from: CLLocation(latitude: right.latitude, longitude: right.longitude)) < 120
     }
 
     private static func coordinateToken(_ value: Double) -> String {

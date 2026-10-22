@@ -83,7 +83,10 @@ struct ClipPlaceDraft: Equatable {
             note: place.note,
             sourceURL: place.safeSourceURL?.absoluteString,
             placeId: place.id.isEmpty ? nil : place.id,
-            friendShareCode: shareCode
+            friendShareCode: shareCode,
+            coordinateSystem: place.coordinateSystem,
+            locationProvider: place.locationProvider,
+            providerMapURL: place.providerMapUrl
         )
     }
 
@@ -187,6 +190,19 @@ enum ClipSaveAPI {
 enum ClipSaveService {
     @discardableResult
     static func persist(_ draft: ClipPlaceDraft, url: URL, sender: String?) -> Bool {
+        let snapshot = PendingConfirmedPlace(
+            placeId: draft.placeId ?? "",
+            name: draft.name,
+            address: draft.address,
+            latitude: draft.latitude,
+            longitude: draft.longitude,
+            category: draft.category,
+            sourceURL: draft.sourceURL,
+            extraPlaceIds: nil,
+            coordinateSystem: draft.coordinateSystem,
+            locationProvider: draft.locationProvider,
+            providerMapUrl: draft.providerMapURL
+        )
         PendingShareStore.write(
             PendingSharePayload(
                 kind: .place,
@@ -194,7 +210,8 @@ enum ClipSaveService {
                 placeId: draft.placeId,
                 listId: nil,
                 sender: sender,
-                url: url.absoluteString
+                url: url.absoluteString,
+                confirmedPlaces: [snapshot]
             )
         )
     }

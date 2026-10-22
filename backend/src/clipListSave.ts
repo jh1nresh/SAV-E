@@ -1,4 +1,5 @@
 export const FREE_LIST_SAVE_LIMIT = 50;
+export const CLIP_LIST_NEARBY_DUPLICATE_METERS = 120;
 
 export type ClipListSavePlan = {
   toInsert: Record<string, unknown>[];
@@ -74,6 +75,31 @@ export function clipListPlaceIdentities(place: {
   return keys;
 }
 
+export function clipListPlacesAreNearbyDuplicate(
+  left: { name?: unknown; latitude?: unknown; longitude?: unknown },
+  right: { name?: unknown; latitude?: unknown; longitude?: unknown },
+): boolean {
+  const leftName = String(left.name ?? "").trim().toLowerCase();
+  const rightName = String(right.name ?? "").trim().toLowerCase();
+  if (!leftName || leftName !== rightName) return false;
+  const lat1 = Number(left.latitude);
+  const lng1 = Number(left.longitude);
+  const lat2 = Number(right.latitude);
+  const lng2 = Number(right.longitude);
+  if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) return false;
+  return haversineMeters(lat1, lng1, lat2, lng2) < CLIP_LIST_NEARBY_DUPLICATE_METERS;
+}
+
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (degrees: number) => (degrees * Math.PI) / 180;
+  const earthRadiusMeters = 6_371_000;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * earthRadiusMeters * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
 function isPlaceObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -139,8 +165,10 @@ export function uniqueClipListItems(items: unknown[]): Record<string, unknown>[]
     if (!isPlaceObject(raw)) continue;
     const keys = clipListPlaceIdentities(raw);
     if (keys.length === 0) continue;
-    const matched = [...new Set(keys.map((key) => indexByKey.get(key)).filter((index): index is number => index !== undefined))]
-      .sort((left, right) => left - right);
+    const matched = [...new Set([
+      ...keys.map((key) => indexByKey.get(key)).filter((index): index is number => index !== undefined),
+      ...unique.flatMap((item, index) => clipListPlacesAreNearbyDuplicate(item, raw) ? [index] : []),
+    ])].sort((left, right) => left - right);
     if (matched.length === 0) {
       const index = unique.length;
       unique.push(promoteGooglePlaceId({ ...raw }));
@@ -192,9 +220,10 @@ export function planClipListSave(input: {
 
   for (const raw of unique) {
     const identities = clipListPlaceIdentities(raw);
-    if (identities.some((key) => existing.has(key))) {
+    const nearbyExisting = (input.existingPlaces ?? []).find((row) => clipListPlacesAreNearbyDuplicate(raw, row));
+    if (identities.some((key) => existing.has(key)) || nearbyExisting) {
       alreadySaved += 1;
-      const matched = identities.map((key) => rowByKey.get(key)).find(Boolean);
+      const matched = identities.map((key) => rowByKey.get(key)).find(Boolean) ?? nearbyExisting;
       if (matched && !alreadyExisting.includes(matched)) {
         alreadyExisting.push(matched);
       }

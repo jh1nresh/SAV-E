@@ -18,6 +18,9 @@ struct SharedPlaceData: Codable {
     let sourceURL: String?
     let photoURLs: [String]
     let note: String?
+    var coordinateSystem: String? = nil
+    var locationProvider: String? = nil
+    var providerMapUrl: String? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: lat, longitude: lng)
@@ -81,7 +84,10 @@ struct SharedPlaceData: Codable {
             sourceLabel: sourceLabel,
             sourceURL: safeSourceURL?.absoluteString,
             photoURLs: Self.ownedPhotoURLs(photoURLs),
-            note: Self.publicNote(note)
+            note: Self.publicNote(note),
+            coordinateSystem: coordinateSystem,
+            locationProvider: locationProvider,
+            providerMapUrl: providerMapUrl
         )
     }
 

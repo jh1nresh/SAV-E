@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 
 /// Compact list snapshot written at Clip “save all” tap. Stamp only these
@@ -195,6 +196,22 @@ enum ClipPlaceHandoff {
 
     static func resetPlaceHandoffOnAccountChange() {
         PendingShareStore.clear()
+    }
+
+    /// One-place Clip journals carry provider coordinates the `/p` URL may omit.
+    static func applyingJournalCoordinates(_ place: Place, pending: PendingSharePayload?) -> Place {
+        guard pending?.kind == .place, let snapshot = pending?.confirmedPlaces?.first else { return place }
+        var next = place
+        if next.coordinateSystem == nil {
+            next.coordinateSystem = snapshot.coordinateSystem.flatMap(PlaceCoordinateSystem.init(rawValue:))
+        }
+        if next.locationProvider == nil {
+            next.locationProvider = snapshot.locationProvider.flatMap(PlaceMatchProvider.init(rawValue:))
+        }
+        if next.providerMapUrl == nil {
+            next.providerMapUrl = snapshot.providerMapUrl
+        }
+        return next
     }
 }
 
@@ -510,7 +527,11 @@ enum ClipListHandoff {
         for item in items {
             let keys = identities(of: item)
             guard !keys.isEmpty else { continue }
-            let matched = Array(Set(keys.compactMap { indexByKey[$0] })).sorted()
+            var matchedIndexes = Set(keys.compactMap { indexByKey[$0] })
+            for (index, existing) in unique.enumerated() where isNearbyDuplicate(item, existing) {
+                matchedIndexes.insert(index)
+            }
+            let matched = matchedIndexes.sorted()
             if matched.isEmpty {
                 let index = unique.count
                 unique.append(item)
@@ -559,6 +580,22 @@ enum ClipListHandoff {
         if result.locationProvider == nil { result.locationProvider = incoming.locationProvider }
         if result.providerMapUrl == nil { result.providerMapUrl = incoming.providerMapUrl }
         return result
+    }
+
+    static func isNearbyDuplicate(title: String, coordinate: CLLocationCoordinate2D, place: Place) -> Bool {
+        let left = title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let right = place.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !left.isEmpty, left == right, place.hasValidCoordinate else { return false }
+        return CLLocation(latitude: place.latitude, longitude: place.longitude)
+            .distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)) < 120
+    }
+
+    private static func isNearbyDuplicate(_ left: SaveListItem, _ right: SaveListItem) -> Bool {
+        let leftName = left.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let rightName = right.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !leftName.isEmpty, leftName == rightName else { return false }
+        return CLLocation(latitude: left.latitude, longitude: left.longitude)
+            .distance(from: CLLocation(latitude: right.latitude, longitude: right.longitude)) < 120
     }
 
     private static func identities(of item: SaveListItem) -> [String] {

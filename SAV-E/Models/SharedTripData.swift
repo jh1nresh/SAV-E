@@ -19,6 +19,9 @@ struct SharedPlaceData: Codable {
     let sourceURL: String?
     let photoURLs: [String]
     let note: String?
+    var coordinateSystem: String? = nil
+    var locationProvider: String? = nil
+    var providerMapUrl: String? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: lat, longitude: lng)
@@ -81,7 +84,10 @@ struct SharedPlaceData: Codable {
             sourceLabel: place.sourcePlatform == .other ? "Savvy" : place.sourcePlatform.displayName,
             sourceURL: place.publicShareSourceURL?.absoluteString,
             photoURLs: ShareRoutePayloadSanitizer.publicPhotoURLs(place.businessPhotoURLStrings),
-            note: nil
+            note: nil,
+            coordinateSystem: place.coordinateSystem?.rawValue,
+            locationProvider: place.locationProvider?.rawValue,
+            providerMapUrl: place.providerMapUrl
         )
     }
 
@@ -100,7 +106,10 @@ struct SharedPlaceData: Codable {
             sourceLabel: sourceLabel,
             sourceURL: sourceURL,
             photoURLs: photoURLs,
-            note: ShareRoutePayloadSanitizer.publicNote(note)
+            note: ShareRoutePayloadSanitizer.publicNote(note),
+            coordinateSystem: coordinateSystem,
+            locationProvider: locationProvider,
+            providerMapUrl: providerMapUrl
         )
     }
 
@@ -119,7 +128,10 @@ struct SharedPlaceData: Codable {
             sourceLabel: sourceLabel,
             sourceURL: safeSourceURL?.absoluteString,
             photoURLs: ShareRoutePayloadSanitizer.publicPhotoURLs(photoURLs),
-            note: ShareRoutePayloadSanitizer.publicNote(note)
+            note: ShareRoutePayloadSanitizer.publicNote(note),
+            coordinateSystem: coordinateSystem,
+            locationProvider: locationProvider,
+            providerMapUrl: providerMapUrl
         )
     }
 
@@ -315,6 +327,9 @@ struct SharedPlaceReceipt: Identifiable {
             note: payload.note,
             sourceUrl: payload.sourceURL,
             sourcePlatform: payload.sourcePlatform,
+            coordinateSystem: payload.coordinateSystem.flatMap(PlaceCoordinateSystem.init(rawValue:)),
+            locationProvider: payload.locationProvider.flatMap(PlaceMatchProvider.init(rawValue:)),
+            providerMapUrl: payload.providerMapUrl,
             sourceImageUrl: payload.photoURLs.first,
             businessPhotoUrls: payload.photoURLs,
             extractedDishes: nil,

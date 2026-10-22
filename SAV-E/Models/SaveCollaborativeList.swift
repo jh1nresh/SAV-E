@@ -126,6 +126,7 @@ struct SaveListItem: Identifiable, Codable, Hashable {
                 }
             }
             return place.matchesMapFeature(title: title, coordinate: coordinate)
+                || ClipListHandoff.isNearbyDuplicate(title: title, coordinate: coordinate, place: place)
         }
     }
 

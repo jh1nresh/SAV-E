@@ -126,6 +126,17 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertNil(sanitized.sourceURL)
         XCTAssertTrue(sanitized.photoURLs.isEmpty)
         XCTAssertLessThanOrEqual(sanitized.note?.utf16.count ?? 0, 180)
+        var gcj = validCoordinate
+        gcj.coordinateSystem = "GCJ-02"
+        gcj.locationProvider = "amap"
+        gcj.providerMapUrl = "https://uri.amap.com/marker?position=139.699,35.644"
+        let gcjDecoded = try XCTUnwrap(SharedPlaceData.from(url: try XCTUnwrap(gcj.toURL())))
+        XCTAssertEqual(gcjDecoded.coordinateSystem, "GCJ-02")
+        XCTAssertEqual(gcjDecoded.locationProvider, "amap")
+        XCTAssertEqual(gcjDecoded.providerMapUrl, "https://uri.amap.com/marker?position=139.699,35.644")
+        let receipt = SharedPlaceReceipt.embedded(gcjDecoded)
+        XCTAssertEqual(receipt.recipientOwnedPlace().coordinateSystem, .gcj02)
+        XCTAssertFalse(receipt.recipientOwnedPlace().isMapKitMappable)
         XCTAssertNil(ShareRoutePayloadSanitizer.publicNote(SavvyGeneratedLine.marking("Debug: private pipeline state")))
         XCTAssertNil(ShareRoutePayloadSanitizer.publicNote("Debug: private pipeline state"))
         XCTAssertEqual(ShareRoutePayloadSanitizer.publicNote("Highlight: the bun was amazing"), "Highlight: the bun was amazing")

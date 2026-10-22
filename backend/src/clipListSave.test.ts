@@ -11,6 +11,7 @@ import {
   FREE_LIST_SAVE_LIMIT,
   planClipListSave,
   uniqueClipListItems,
+  clipListPlacesAreNearbyDuplicate,
 } from "./clipListSave.js";
 
 const cafe = (id: string, name = "Onibus Coffee") => ({
@@ -188,6 +189,31 @@ test("SL1 skips places already on the account", () => {
   assert.deepEqual(plan.toInsert.map((item) => item.id), ["b"]);
   assert.equal(plan.alreadySaved, 1);
   assert.equal(plan.newlySaved, 1);
+});
+
+test("same-name venues within 120m are account duplicates", () => {
+  const owned = cafe("owned");
+  const drifted = {
+    id: "sender-uuid",
+    name: "Onibus Coffee",
+    latitude: 35.6444,
+    longitude: 139.699,
+  };
+  assert.equal(clipListPlacesAreNearbyDuplicate(owned, drifted), true);
+  assert.equal(
+    clipListPlacesAreNearbyDuplicate(owned, { ...drifted, latitude: 35.66 }),
+    false,
+  );
+  assert.equal(uniqueClipListItems([owned, drifted]).length, 1);
+  const plan = planClipListSave({
+    items: [drifted],
+    existingIdentities: clipListPlaceIdentities(owned),
+    existingPlaces: [owned],
+    savedPlaceCount: 12,
+  });
+  assert.equal(plan.newlySaved, 0);
+  assert.equal(plan.alreadySaved, 1);
+  assert.equal(plan.toInsert.length, 0);
 });
 
 test("SL2 fills remaining quota in list order and counts overflow", () => {

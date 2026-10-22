@@ -398,6 +398,16 @@ final class ClipListSaveTests: XCTestCase {
         )
     }
 
+    func testUniqueItemsMergesSameNameVenuesWithin120Meters() {
+        let kept = item("sender-uuid", "Onibus Coffee", lat: 35.644, lng: 139.699)
+        let drifted = item("other", "Onibus Coffee", lat: 35.6444, lng: 139.699)
+        let far = item("far", "Onibus Coffee", lat: 35.66, lng: 139.699)
+        XCTAssertTrue(ClipListSavePlanner.isNearbyDuplicate(kept, drifted))
+        XCTAssertFalse(ClipListSavePlanner.isNearbyDuplicate(kept, far))
+        XCTAssertEqual(ClipListSavePlanner.uniqueItems(from: [kept, drifted]).count, 1)
+        XCTAssertEqual(ClipListSavePlanner.uniqueItems(from: [kept, far]).count, 2)
+    }
+
     private func item(
         _ placeId: String?,
         _ name: String,

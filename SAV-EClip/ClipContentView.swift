@@ -72,7 +72,9 @@ struct ClipContentView: View {
     @State private var mySavesSourceURL: URL?
     @State private var isLoading = true
     @State private var incomingURLTask: Task<Void, Never>?
+    @State private var saveTask: Task<Void, Never>?
     @State private var activeIncomingURLRequestID: UUID?
+    @State private var activeSaveRequestID: UUID?
     @State private var lastIncomingURL: URL?
     @State private var failure: ClipPreviewFailure?
     @State private var surface: ClipSurface = .preview
@@ -629,7 +631,7 @@ struct ClipContentView: View {
         pendingSaveDraft = draft
         pendingSaveListTitle = listTitle
         if ClipFullApp.isInstalled {
-            Task { await save(draft: draft, listTitle: listTitle) }
+            enqueueSave { await save(draft: draft, listTitle: listTitle) }
             return
         }
         surface = .signIn(.onePlace)
@@ -643,7 +645,7 @@ struct ClipContentView: View {
             pendingListDrafts = list.items.map(ClipPlaceDraft.from(item:))
         }
         if ClipFullApp.isInstalled {
-            Task { await saveWholeList() }
+            enqueueSave { await saveWholeList() }
             return
         }
         surface = .signIn(.wholeList(pendingListDrafts?.count ?? list.items.count))
@@ -660,12 +662,23 @@ struct ClipContentView: View {
         }
     }
 
+    private func enqueueSave(_ work: @escaping () async -> Void) {
+        saveTask?.cancel()
+        let saveID = UUID()
+        activeSaveRequestID = saveID
+        saveTask = Task { @MainActor in
+            await work()
+        }
+    }
+
     private func saveWholeList() async {
         guard let drafts = pendingListDrafts, !drafts.isEmpty else { return }
         signInHint = false
         lastSaveWasList = true
+        let saveID = activeSaveRequestID ?? UUID()
+        activeSaveRequestID = saveID
         isSaving = true
-        defer { isSaving = false }
+        defer { if activeSaveRequestID == saveID { isSaving = false } }
         let url = lastIncomingURL ?? URL(string: "https://sav-e-app.vercel.app/list")!
         let shareCode = lastIncomingURL.flatMap(SharedListPayload.shareCode(from:))
         let outcome = await ClipSaveService.saveList(
@@ -675,6 +688,7 @@ struct ClipContentView: View {
             handoffURL: url,
             sender: listData?.ownerDisplayName.isEmpty == false ? listData?.ownerDisplayName : nil
         )
+        guard !Task.isCancelled, activeSaveRequestID == saveID else { return }
         switch outcome {
         case .handedOff:
             return
@@ -697,12 +711,15 @@ struct ClipContentView: View {
     private func save(draft: ClipPlaceDraft, listTitle: String?) async {
         signInHint = false
         lastSaveWasList = false
+        let saveID = activeSaveRequestID ?? UUID()
+        activeSaveRequestID = saveID
         isSaving = true
-        defer { isSaving = false }
+        defer { if activeSaveRequestID == saveID { isSaving = false } }
         let url = handoffURL(for: draft, listTitle: listTitle)
         let sender = placeReceipt?.verifiedSenderLabel
             ?? (listData?.ownerDisplayName.isEmpty == false ? listData?.ownerDisplayName : nil)
         let outcome = await ClipSaveService.save(draft: draft, handoffURL: url, sender: sender)
+        guard !Task.isCancelled, activeSaveRequestID == saveID else { return }
         switch outcome {
         case .handedOff:
             return
@@ -746,7 +763,10 @@ struct ClipContentView: View {
             sourceLabel: "Savvy",
             sourceURL: draft.sourceURL,
             photoURLs: [],
-            note: nil
+            note: nil,
+            coordinateSystem: draft.coordinateSystem,
+            locationProvider: draft.locationProvider,
+            providerMapUrl: draft.providerMapURL
         ).toURL() {
             return encoded
         }
@@ -767,6 +787,10 @@ struct ClipContentView: View {
         guard let url else { return }
         incomingURLTask?.cancel()
         incomingURLTask = nil
+        saveTask?.cancel()
+        saveTask = nil
+        activeSaveRequestID = nil
+        isSaving = false
         lastIncomingURL = url
         failure = nil
         surface = .preview

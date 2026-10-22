@@ -366,6 +366,12 @@ final class PendingShareStoreTests: XCTestCase {
                 alreadySaved: 1
             )
         )
+        var nearby = seattle
+        nearby.name = tokyo.title
+        nearby.latitude = tokyo.latitude + 0.0004
+        nearby.longitude = tokyo.longitude
+        XCTAssertTrue(tokyo.alreadySaved(in: [nearby]))
+        XCTAssertTrue(ClipListHandoff.isNearbyDuplicate(title: tokyo.title, coordinate: tokyo.coordinate, place: nearby))
     }
 
     func testPlanStampsRecordsSkippedIdentities() {
