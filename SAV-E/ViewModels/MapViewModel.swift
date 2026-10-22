@@ -2454,8 +2454,8 @@ final class MapViewModel: ObservableObject {
     }
 
     @discardableResult
-    func saveListItemAsPlace(_ item: SaveListItem) async throws -> Place {
-        let place = item.asPlace()
+    func saveListItemAsPlace(_ item: SaveListItem, includeSenderMemory: Bool = true) async throws -> Place {
+        let place = item.asPlace(includeSenderMemory: includeSenderMemory)
         if let match = existingSavedPlace(matching: place) {
             let existing = try await mergeSavedSources(place, into: match)
             focusSavedPlace(existing, showStampMoment: false)

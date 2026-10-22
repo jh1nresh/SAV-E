@@ -5,7 +5,12 @@ import { AnalysisControlError, AnalysisUsageStore, analysisID, analysisLimits, a
 import { runAnalysisRecovery } from "./analysisRecovery.js";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomUUID, randomBytes, createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { importSPKI, jwtVerify, type JWTPayload, type KeyLike } from "jose";
+import { decodeJwt, importSPKI, jwtVerify, type JWTPayload, type KeyLike } from "jose";
+import {
+  APPLE_IDENTITY_ISSUER,
+  AppleIdentityTokenError,
+  verifiedAppleIdentitySubject,
+} from "./appleIdentityToken.js";
 import pg, { type PoolClient } from "pg";
 import {
   evaluateAccountConfirmationRequest,
@@ -6640,6 +6645,23 @@ async function resolveUserId(request: IncomingMessage): Promise<string> {
   const header = request.headers.authorization ?? "";
   const token = header.match(/^Bearer\s+(.+)$/i)?.[1];
   if (token) {
+    let appleIssuer = false;
+    try {
+      appleIssuer = decodeJwt(token).iss === APPLE_IDENTITY_ISSUER;
+    } catch {
+      appleIssuer = false;
+    }
+    if (appleIssuer) {
+      try {
+        const appleSubject = await verifiedAppleIdentitySubject(token);
+        return await profileIdForPrivySubject(appleSubject);
+      } catch (error) {
+        if (error instanceof AppleIdentityTokenError) {
+          throw new ApiError(401, error.message);
+        }
+        throw error;
+      }
+    }
     const privySubject = await verifiedPrivySubject(token);
     return await profileIdForPrivySubject(privySubject);
   }

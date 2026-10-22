@@ -35,6 +35,26 @@ struct PendingSharePayload: Codable, Equatable {
         return false
     }
 
+    /// Clip “save all” journal for this list URL. A leftover list journal
+    /// must not stamp an unrelated list the user only opened.
+    func matchesIncomingList(url: URL) -> Bool {
+        guard kind == .list else { return false }
+        if Self.normalizedLink(self.url) == Self.normalizedLink(url.absoluteString) {
+            return true
+        }
+        let incomingCode = SaveSharedListPayload.shareCode(from: url)
+            ?? Self.pathToken(url.absoluteString)
+        if let shareCode, !shareCode.isEmpty,
+           incomingCode.caseInsensitiveCompare(shareCode) == .orderedSame {
+            return true
+        }
+        if let listId, !listId.isEmpty,
+           url.absoluteString.range(of: listId, options: .caseInsensitive) != nil {
+            return true
+        }
+        return false
+    }
+
     private static func normalizedLink(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: trimmed),
@@ -104,5 +124,13 @@ enum PendingShareStore {
         guard let defaults = defaults(store) else { return }
         defaults.removeObject(forKey: key)
         defaults.removeObject(forKey: legacyURLKey)
+    }
+}
+
+/// A matching Clip “save all” journal is user confirmation to stamp the
+/// joined list items. A list link without that journal is join-only.
+enum ClipListHandoff {
+    static func shouldSaveItems(pending: PendingSharePayload?, incomingURL: URL) -> Bool {
+        pending?.matchesIncomingList(url: incomingURL) == true
     }
 }

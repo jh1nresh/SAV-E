@@ -81,6 +81,10 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertEqual(saved.googleRating, 4.7)
         XCTAssertEqual(saved.recommender, "Ezven")
         XCTAssertEqual(saved.sourceUrl, "https://maps.apple.com/?q=List%20Ramen")
+        let recipient = item.asPlace(includeSenderMemory: false)
+        XCTAssertNil(recipient.note)
+        XCTAssertNil(recipient.googleRating)
+        XCTAssertNil(recipient.rating)
     }
 
     @MainActor

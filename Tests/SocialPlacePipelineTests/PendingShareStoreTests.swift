@@ -80,6 +80,35 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertFalse(leftoverTrip.matchesIncomingPlace(url: urlA))
     }
 
+    func testListJournalMatchesIncomingURLAndIgnoresUnrelated() {
+        let listURL = URL(string: "https://sav-e-app.vercel.app/list?c=LiSt99_z")!
+        let otherURL = URL(string: "https://sav-e-app.vercel.app/list?c=ZzOther99")!
+        let list = PendingSharePayload(
+            kind: .list,
+            shareCode: "LiSt99_z",
+            placeId: nil,
+            listId: "22222222-2222-2222-2222-222222222222",
+            sender: "Mina",
+            url: listURL.absoluteString
+        )
+        let place = PendingSharePayload(
+            kind: .place,
+            shareCode: "AbC123_x",
+            placeId: "quarter-sheets",
+            listId: nil,
+            sender: "Mina",
+            url: "https://sav-e-app.vercel.app/p/AbC123_x"
+        )
+        XCTAssertTrue(list.matchesIncomingList(url: listURL))
+        XCTAssertTrue(list.matchesIncomingList(url: URL(string: "https://sav-e-app.vercel.app/list?c=LiSt99_z")!))
+        XCTAssertFalse(list.matchesIncomingList(url: otherURL))
+        XCTAssertFalse(place.matchesIncomingList(url: listURL))
+        XCTAssertTrue(ClipListHandoff.shouldSaveItems(pending: list, incomingURL: listURL))
+        XCTAssertFalse(ClipListHandoff.shouldSaveItems(pending: list, incomingURL: otherURL))
+        XCTAssertFalse(ClipListHandoff.shouldSaveItems(pending: nil, incomingURL: listURL))
+        XCTAssertFalse(ClipListHandoff.shouldSaveItems(pending: place, incomingURL: listURL))
+    }
+
     func testListPayloadKeepsShareCodeAndListId() {
         let payload = PendingSharePayload(
             kind: .list,

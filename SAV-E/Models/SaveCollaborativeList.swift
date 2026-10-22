@@ -110,7 +110,7 @@ struct SaveListItem: Identifiable, Codable, Hashable {
         }
     }
 
-    func asPlace(createdAt: Date = Date()) -> Place {
+    func asPlace(createdAt: Date = Date(), includeSenderMemory: Bool = true) -> Place {
         Place(
             id: UUID(),
             name: title,
@@ -121,7 +121,7 @@ struct SaveListItem: Identifiable, Codable, Hashable {
             category: category ?? .food,
             status: .wantToGo,
             rating: nil,
-            note: note,
+            note: includeSenderMemory ? note : nil,
             sourceUrl: sourceURL,
             sourcePlatform: .other,
             sourceImageUrl: GooglePlacesPhotoURL.persistableString(photoURLs.first),
@@ -129,7 +129,7 @@ struct SaveListItem: Identifiable, Codable, Hashable {
             extractedDishes: nil,
             priceRange: nil,
             recommender: addedByDisplayName,
-            googleRating: rating,
+            googleRating: includeSenderMemory ? rating : nil,
             googlePriceLevel: nil,
             openingHours: nil,
             createdAt: createdAt

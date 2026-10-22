@@ -75,6 +75,8 @@ struct SaveApp: App {
     ) private var pendingFriendShareURL = ""
     @State private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     @State private var autoSaveIncomingShare = false
+    @State private var autoSaveIncomingList = false
+    @State private var pendingClipListSave: SaveCollaborativeList?
     @State private var openedTrip: SharedTripData?
     @State private var openedList: SaveCollaborativeList?
     @State private var openedReferral: SaveReferralProfile?
@@ -169,7 +171,7 @@ struct SaveApp: App {
             .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
                 if receiptID == nil {
                     pendingFriendShareURL = ""
-                    if !autoSaveIncomingShare {
+                    if !autoSaveIncomingShare && !autoSaveIncomingList {
                         PendingShareStore.clear()
                     }
                 }
@@ -265,6 +267,8 @@ struct SaveApp: App {
                     sessionOrigin: authService.sessionOrigin,
                     incomingPlaceReceipt: $incomingPlaceReceipt,
                     autoSaveIncomingShare: $autoSaveIncomingShare,
+                    autoSaveIncomingList: $autoSaveIncomingList,
+                    pendingClipListSave: $pendingClipListSave,
                     pendingOnboardingClue: $pendingOnboardingClue,
                     pendingOnboardingClueOwnerID: $pendingOnboardingClueOwnerID,
                     onVerificationChanged: updateVerifiedAccount
@@ -302,8 +306,9 @@ struct SaveApp: App {
 #endif
         if SaveReferralLink.target(from: url) != nil || SaveSharedListPayload.isListLink(url) {
             guard url.absoluteString.utf8.count <= accountScopedURLMaxBytes else { return }
-            if PendingShareStore.load()?.kind == .list {
-                PendingShareStore.clear()
+            if let pending = PendingShareStore.load(),
+               ClipListHandoff.shouldSaveItems(pending: pending, incomingURL: url) {
+                autoSaveIncomingList = true
             }
             deferredAccountScopedLink = DeferredAccountScopedLink(
                 id: UUID(),
@@ -367,6 +372,8 @@ struct SaveApp: App {
         }
         openedList = nil
         openedReferral = nil
+        pendingClipListSave = nil
+        autoSaveIncomingList = false
         linkErrorMessage = nil
     }
 
@@ -428,7 +435,8 @@ struct SaveApp: App {
             return
         }
         do {
-            openedList = try activeCollaborativeListStore.join(from: link.url)
+            let joined = try activeCollaborativeListStore.join(from: link.url)
+            presentOpenedList(joined, incomingURL: link.url)
         } catch {
             openedList = SaveCollaborativeList(
                 title: languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單"),
@@ -476,7 +484,7 @@ struct SaveApp: App {
 
         if let joined {
             storeJoinedList(joined)
-            openedList = joined
+            presentOpenedList(joined, incomingURL: link.url)
         } else {
             openedList = SaveCollaborativeList(
                 title: languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單"),
@@ -485,6 +493,16 @@ struct SaveApp: App {
             )
         }
         deferredAccountScopedLink = nil
+    }
+
+    /// Clip “save all” already confirmed these items. Keep the journal until
+    /// ContentView stamps them, then clear.
+    private func presentOpenedList(_ list: SaveCollaborativeList, incomingURL: URL) {
+        openedList = list
+        if ClipListHandoff.shouldSaveItems(pending: PendingShareStore.load(), incomingURL: incomingURL) {
+            autoSaveIncomingList = true
+            pendingClipListSave = list
+        }
     }
 
     /// Persists a server-joined list into the active local store (cache) and
@@ -633,6 +651,8 @@ private struct AuthenticatedRootView: View {
     let sessionOrigin: AccountSessionOrigin
     @Binding var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     @Binding var autoSaveIncomingShare: Bool
+    @Binding var autoSaveIncomingList: Bool
+    @Binding var pendingClipListSave: SaveCollaborativeList?
     @Binding var pendingOnboardingClue: String
     @Binding var pendingOnboardingClueOwnerID: String
     let onVerificationChanged: (_ sourceGeneration: Int, _ verifiedGeneration: Int?) -> Void
@@ -687,6 +707,8 @@ private struct AuthenticatedRootView: View {
         ContentView(
             incomingPlaceReceipt: $incomingPlaceReceipt,
             autoSaveIncomingShare: $autoSaveIncomingShare,
+            autoSaveIncomingList: $autoSaveIncomingList,
+            pendingClipListSave: $pendingClipListSave,
             pendingOnboardingClue: pendingClueForVerifiedAccount,
             storageScope: authService.isReviewerDemo ? .reviewerDemo : .production
         )

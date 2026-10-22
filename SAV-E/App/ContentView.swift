@@ -176,6 +176,8 @@ struct ContentView: View {
     @StateObject private var planConversation = SavePlanConversation()
     @Binding private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     @Binding private var autoSaveIncomingShare: Bool
+    @Binding private var autoSaveIncomingList: Bool
+    @Binding private var pendingClipListSave: SaveCollaborativeList?
     @Binding private var pendingOnboardingClue: String
     private let storageScope: ContentStorageScope
     @Environment(\.appLanguageSettings) private var languageSettings
@@ -210,6 +212,8 @@ struct ContentView: View {
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
         autoSaveIncomingShare: Binding<Bool> = .constant(false),
+        autoSaveIncomingList: Binding<Bool> = .constant(false),
+        pendingClipListSave: Binding<SaveCollaborativeList?> = .constant(nil),
         pendingOnboardingClue: Binding<String> = .constant(""),
         storageScope: ContentStorageScope = .production
     ) {
@@ -217,6 +221,8 @@ struct ContentView: View {
         _tripStore = StateObject(wrappedValue: storageScope.makeTripPackStore())
         _incomingPlaceReceipt = incomingPlaceReceipt
         _autoSaveIncomingShare = autoSaveIncomingShare
+        _autoSaveIncomingList = autoSaveIncomingList
+        _pendingClipListSave = pendingClipListSave
         _pendingOnboardingClue = pendingOnboardingClue
         self.storageScope = storageScope
         let hasInitialReceipt = incomingPlaceReceipt.wrappedValue != nil
@@ -326,6 +332,13 @@ struct ContentView: View {
             if autoSaveIncomingShare, incomingPlaceReceipt != nil {
                 Task { await performPendingShareAutoSave() }
             }
+            if autoSaveIncomingList, pendingClipListSave != nil {
+                Task { await performPendingListStampImport() }
+            }
+        }
+        .onChange(of: pendingClipListSave?.id) { _, listID in
+            guard listID != nil, autoSaveIncomingList else { return }
+            Task { await performPendingListStampImport() }
         }
         .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
             guard receiptID != nil else { return }
@@ -1484,6 +1497,33 @@ struct ContentView: View {
             }
         }
         presentAfterClearingExclusiveChrome(.plan)
+    }
+
+    private func performPendingListStampImport() async {
+        guard autoSaveIncomingList, let list = pendingClipListSave else { return }
+        for item in list.items {
+            do {
+                _ = try await mapVM.saveListItemAsPlace(item, includeSenderMemory: false)
+            } catch {
+                continue
+            }
+        }
+        PendingShareStore.clear()
+        pendingClipListSave = nil
+        autoSaveIncomingList = false
+        let count = list.items.count
+        handoffToastText = languageSettings.localized(
+            english: count == 1
+                ? "Saved 1 place from the list."
+                : String(format: "Saved %d places from the list.", count),
+            traditionalChinese: count == 1
+                ? "已從清單存好 1 家。"
+                : String(format: "已從清單存好 %d 家。", count)
+        )
+        try? await Task.sleep(for: .seconds(3))
+        if handoffToastText != nil {
+            handoffToastText = nil
+        }
     }
 
     private func performPendingShareAutoSave() async {
