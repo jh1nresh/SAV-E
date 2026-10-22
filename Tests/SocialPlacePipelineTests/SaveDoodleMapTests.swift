@@ -59,6 +59,8 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("shouldFocusOnUserLocation"))
         XCTAssertTrue(map.contains("focusOnUserLocationOnLaunch()"))
         XCTAssertTrue(map.contains("map.providerBackedPlaces"))
+        XCTAssertTrue(map.contains("ForEach(providerBackedPlaces)"))
+        XCTAssertTrue(map.contains("map.providerBackedPlaces.\\(place.id.uuidString)"))
         XCTAssertTrue(map.contains("openDirections(for: place)"))
         XCTAssertTrue(map.contains("place.providerMapDestinationURL"))
         XCTAssertTrue(map.contains("openingCityID("))

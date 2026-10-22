@@ -52,31 +52,8 @@ struct SaveDoodleMapView: View {
                 mapCanvas
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                if let providerPlace = providerBackedPlaces.first {
-                    Button {
-                        mapViewModel.selectPlace(providerPlace)
-                    } label: {
-                        Label(
-                            languageSettings.localized(
-                                english: providerBackedPlaces.count == 1
-                                    ? "1 saved Amap place"
-                                    : "\(providerBackedPlaces.count) saved Amap places",
-                                traditionalChinese: "已保存 \(providerBackedPlaces.count) 個高德地點"
-                            ),
-                            systemImage: "map.fill"
-                        )
-                        .font(SaveAtlasType.strong(11))
-                        .foregroundStyle(SaveAtlasPalette.forest)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(SaveAtlasPalette.paper.opacity(0.96), in: Capsule())
-                        .overlay(Capsule().stroke(SaveAtlasPalette.forest.opacity(0.34), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.leading, SaveLayout.screenMargin)
-                    .padding(.top, SaveSpace.sm)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("map.providerBackedPlaces")
+                if !providerBackedPlaces.isEmpty {
+                    providerBackedPlacesControl
                 }
 
                 if mapViewModel.showsLocationDeniedNotice {
@@ -787,6 +764,51 @@ struct SaveDoodleMapView: View {
         mapViewModel.places.filter {
             !$0.isMapKitMappable && $0.providerMapDestinationURL != nil
         }
+    }
+
+    @ViewBuilder
+    private var providerBackedPlacesControl: some View {
+        let chip = Label(
+            languageSettings.localized(
+                english: providerBackedPlaces.count == 1
+                    ? "1 saved Amap place"
+                    : "\(providerBackedPlaces.count) saved Amap places",
+                traditionalChinese: "已保存 \(providerBackedPlaces.count) 個高德地點"
+            ),
+            systemImage: "map.fill"
+        )
+        .font(SaveAtlasType.strong(11))
+        .foregroundStyle(SaveAtlasPalette.forest)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(SaveAtlasPalette.paper.opacity(0.96), in: Capsule())
+        .overlay(Capsule().stroke(SaveAtlasPalette.forest.opacity(0.34), lineWidth: 1))
+
+        Group {
+            if providerBackedPlaces.count == 1, let place = providerBackedPlaces.first {
+                Button {
+                    mapViewModel.selectPlace(place)
+                } label: {
+                    chip
+                }
+            } else {
+                Menu {
+                    ForEach(providerBackedPlaces) { place in
+                        Button(place.name) {
+                            mapViewModel.selectPlace(place)
+                        }
+                        .accessibilityIdentifier("map.providerBackedPlaces.\(place.id.uuidString)")
+                    }
+                } label: {
+                    chip
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.leading, SaveLayout.screenMargin)
+        .padding(.top, SaveSpace.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("map.providerBackedPlaces")
     }
 
     private func cityOpeningFallback() -> CLLocationCoordinate2D? {
