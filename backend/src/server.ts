@@ -1615,11 +1615,7 @@ async function handlePlaces(
       try {
         await client.query("begin");
         await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
-        const existingReceipt = await client.query(
-          "select id from places where user_id = $1 and origin_shared_place_link_id = $2",
-          [userId, link.id],
-        );
-        if (!existingReceipt.rows[0]) await assertNewSavedPlaceAllowed(client, userId, receiptBody);
+        const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
         const { rows } = await client.query(
           `${insert.sql}
            ${friendSharePlaceOriginConflictClause}
@@ -1644,6 +1640,7 @@ async function handlePlaces(
            on conflict do nothing`,
           [link.id, link.user_id, userId, canonicalPlace.id, terminalEvent],
         );
+        await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
         await client.query("commit");
         return sendJson(response, {
           place: formatPlace(canonicalPlace),
@@ -1662,15 +1659,7 @@ async function handlePlaces(
     try {
       await client.query("begin");
       await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
-      let isNewPlace = true;
-      if (typeof body.id === "string" && body.id) {
-        const existing = await client.query(
-          "select id from places where id = $1 and user_id = $2",
-          [body.id, userId],
-        );
-        isNewPlace = existing.rows.length === 0;
-      }
-      if (isNewPlace) await assertNewSavedPlaceAllowed(client, userId, body);
+      const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
       const { rows } = await client.query(
         `${insert.sql}
          on conflict (id) do update
@@ -1683,6 +1672,9 @@ async function handlePlaces(
         await client.query("rollback");
         return sendJson(response, { error: "Place id conflict" }, 409);
       }
+      // PostgreSQL may coerce accepted JSON fields (for example string float8
+      // coordinates). Gate actual stored rows, not a raw-request approximation.
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
       await client.query("commit");
       return sendJson(response, formatPlace(rows[0]), 201);
     } catch (error) {

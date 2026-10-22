@@ -121,7 +121,9 @@ test("place create and shared-post save enforce the cap after dedup", () => {
   );
 
   assert.match(places, /pg_advisory_xact_lock/);
-  assert.match(places, /assertNewSavedPlaceAllowed/);
+  assert.match(places, /savedPlaceGrowthSnapshot/);
+  assert.match(places, /assertSavedPlaceGrowthAllowed/);
+  assert.doesNotMatch(places, /assertNewSavedPlaceAllowed/);
   assert.match(posts, /assertNewSavedPlaceAllowed/);
   assert.match(ratings, /assertNewSavedPlaceAllowed/);
   const workflowDecision = server.slice(server.indexOf("async function recordPlaceRecoveryDecision"), server.indexOf("async function insertFinalPlaceForDecision"));
@@ -244,8 +246,10 @@ test("A3 same-id retry is not a new insert", () => {
     server.indexOf("async function handlePlaces"),
     server.indexOf("function providerCoordinateFieldError"),
   );
-  assert.match(places, /if \(isNewPlace\) await assertNewSavedPlaceAllowed/);
-  assert.match(places, /if \(!existingReceipt\.rows\[0\]\) await assertNewSavedPlaceAllowed/);
+  assert.match(places, /on conflict \(id\) do update\s+set id = excluded.id\s+where places.user_id = excluded.user_id/);
+  assert.match(places, /friendSharePlaceOriginConflictClause/);
+  assert.equal((places.match(/savedPlaceGrowthSnapshot/g) ?? []).length, 2);
+  assert.equal((places.match(/assertSavedPlaceGrowthAllowed/g) ?? []).length, 2);
 });
 
 test("C3 direct API writes nothing and returns over_free_limit", () => {
@@ -898,4 +902,155 @@ test("legacy exact-row rollback serializes with POST and PATCH without freeing a
   assert.equal(db.rows.find(row => row.id === "place-0")?.note, "Still saved");
   assert.equal(consolidatedSavedPlaces(db.rows).length, 50);
   assert.equal(db.releases, 3);
+});
+
+const coercedInsertSQL = `insert into places
+  (id, user_id, name, address, latitude, longitude, created_at, origin_shared_place_link_id)
+  values ($1,$2,$3,$4,$5,$6,$7,$8)
+  on conflict (id) do update set id = excluded.id where places.user_id = excluded.user_id returning *`;
+const fixtureReceiptEventSQL = "insert into friend_share_events (recipient_place_id) values ($1)";
+function coercedInsertDatabase(count: number, tier: "free" | "pro" = "free"): PlacePatchDatabase {
+  const db = new PlacePatchDatabase(venues(count), tier);
+  db.onQuery = (sql, values, working) => {
+    if (sql === fixtureReceiptEventSQL) {
+      working.push({ fixtureTable: "friend_share_events", recipient_place_id: values[0] });
+      return { rows: [] };
+    }
+    if (sql !== coercedInsertSQL) return undefined;
+    const [id, owner, name, address, latitude, longitude, createdAt, origin] = values;
+    const existing = working.find(row => origin != null && row.user_id === owner && row.origin_shared_place_link_id === origin)
+      ?? working.find(row => row.id === id);
+    if (existing) return { rows: existing.user_id === owner ? [{ ...existing }] : [] };
+    // Database boundary only: fixtures model PostgreSQL float8/timestamptz/text
+    // conversion. Production counting must inspect these actual stored values,
+    // never rely on this narrow test coercion model as input normalization.
+    const numeric = (value: unknown) => value == null ? value : Number(value);
+    const row = { id, user_id: owner, name: String(name), address,
+      latitude: numeric(latitude), longitude: numeric(longitude),
+      created_at: new Date(String(createdAt)), origin_shared_place_link_id: origin };
+    if (Number.isNaN(row.latitude) || Number.isNaN(row.longitude)) throw new Error("invalid float8 input");
+    working.push(row);
+    return { rows: [{ ...row }] };
+  };
+  return db;
+}
+
+async function executeCoercedInsert(
+  db: PlacePatchDatabase, raw: SavedPlaceIdentity, options: { legacyPrecheck?: boolean; receipt?: boolean } = {},
+): Promise<Record<string, unknown> | undefined> {
+  const client = await db.connect();
+  try {
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", ["owner"]);
+    const before = options.legacyPrecheck ? undefined : await savedPlaceGrowthSnapshot(client as never, "owner");
+    if (options.legacyPrecheck) await assertNewSavedPlaceAllowed(client as never, "owner", raw);
+    const result = await client.query(coercedInsertSQL, [raw.id, "owner", raw.name, raw.address,
+      raw.latitude, raw.longitude, raw.created_at ?? "2026-01-02", options.receipt ? "receipt-link" : null]);
+    if (!result.rows[0]) {
+      await client.query("rollback");
+      return undefined; // Existing HTTP branch maps the foreign-id conflict to409.
+    }
+    if (options.receipt) await client.query(fixtureReceiptEventSQL, [result.rows[0].id]);
+    if (!options.legacyPrecheck) await assertSavedPlaceGrowthAllowed(client as never, "owner", before);
+    await client.query("commit");
+    return result.rows[0];
+  } catch (error) { await client.query("rollback"); throw error; }
+  finally { client.release(); }
+}
+
+const stringCoordinateInput = { ...venues(1)[0], id: "coerced-new", latitude: "26", longitude: "121" };
+
+test("reproduction: raw-coordinate precheck accepts50 but database float conversion commits51", async () => {
+  const db = coercedInsertDatabase(50);
+  assert.equal(savedPlacesMatch(db.rows[0], stringCoordinateInput), true, "raw strings fall back to matching name/address");
+  const saved = await executeCoercedInsert(db, stringCoordinateInput, { legacyPrecheck: true });
+  assert.equal(saved?.latitude, 26);
+  assert.equal(consolidatedSavedPlaces(db.rows).length, 51, "reproduces the old unsafe transaction before the actual-row guard");
+});
+
+test("plain and receipt actual-row guards rollback coerced51st and any tentative receipt event", async () => {
+  for (const receipt of [false, true]) {
+    const db = coercedInsertDatabase(50);
+    const original = structuredClone(db.rows);
+    await assert.rejects(() => executeCoercedInsert(db, stringCoordinateInput, { receipt }), SavedPlaceLimitError);
+    assert.deepEqual(db.rows, original);
+    assert.equal(db.commits, 0);
+    assert.equal(db.rollbacks, 1);
+    assert.equal(db.releases, 1);
+    assert.equal(db.calls.filter(call => call.sql.includes("subscription_entitlements")).length, 1);
+    assert.equal(db.calls[1].sql, "select pg_advisory_xact_lock(hashtextextended($1, 0))");
+  }
+});
+
+test("coerced coordinates preserve49-to50, true duplicates at50 and Pro compatibility", async () => {
+  for (const receipt of [false, true]) {
+    for (const [count, tier, latitude, expected] of [[49, "free", "26", 50], [50, "free", "25", 50], [50, "pro", "26", 51]] as const) {
+      const db = coercedInsertDatabase(count, tier);
+      const row = await executeCoercedInsert(db, { ...stringCoordinateInput, latitude }, { receipt });
+      assert.equal(row?.latitude, Number(latitude));
+      assert.equal(consolidatedSavedPlaces(db.rows.filter(row => !row.fixtureTable)).length, expected);
+      assert.equal(db.commits, 1);
+    }
+  }
+});
+
+test("actual database no-op rows preserve same-id and receipt retries above the cap", async () => {
+  const db = coercedInsertDatabase(60);
+  const original = structuredClone(db.rows);
+  const row = await executeCoercedInsert(db, { ...stringCoordinateInput, id: "place-0", name: "Ignored conflict update" });
+  assert.equal(row?.name, original[0].name);
+  assert.deepEqual(db.rows, original);
+  const receipts = coercedInsertDatabase(60);
+  receipts.rows[0].origin_shared_place_link_id = "receipt-link";
+  const receipt = await executeCoercedInsert(receipts, { ...stringCoordinateInput, name: "Ignored receipt retry" }, { receipt: true });
+  assert.equal(receipt?.id, "place-0");
+  assert.equal(consolidatedSavedPlaces(receipts.rows.filter(value => !value.fixtureTable)).length, 60);
+});
+
+test("coerced insert foreign-id conflict and invalid database input rollback and release", async () => {
+  const db = coercedInsertDatabase(50);
+  db.rows.push({ ...venues(1)[0], id: "foreign", user_id: "other" });
+  const original = structuredClone(db.rows);
+  assert.equal(await executeCoercedInsert(db, { ...stringCoordinateInput, id: "foreign" }), undefined);
+  assert.deepEqual(db.rows, original);
+  await assert.rejects(() => executeCoercedInsert(db, { ...stringCoordinateInput, latitude: "not-a-number" }), /invalid float8 input/);
+  assert.deepEqual(db.rows, original);
+  assert.equal(db.commits, 0);
+  assert.equal(db.rollbacks, 2);
+  assert.equal(db.releases, 2);
+});
+
+test("concurrent coerced inserts share the owner lock and admit only one final slot", async () => {
+  const db = coercedInsertDatabase(49);
+  const results = await Promise.allSettled([
+    executeCoercedInsert(db, stringCoordinateInput),
+    executeCoercedInsert(db, { ...stringCoordinateInput, id: "second-coerced", latitude: "27" }),
+  ]);
+  assert.equal(results.filter(value => value.status === "fulfilled").length, 1);
+  const rejected = results.find(value => value.status === "rejected");
+  assert.ok(rejected?.status === "rejected" && rejected.reason instanceof SavedPlaceLimitError);
+  assert.equal(consolidatedSavedPlaces(db.rows).length, 50);
+  assert.equal(db.commits, 1);
+  assert.equal(db.rollbacks, 1);
+  assert.equal(db.releases, 2);
+});
+
+
+test("both raw place POST branches gate actual database rows before committing", () => {
+  const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+  const start = server.indexOf("async function handlePlaces");
+  const end = server.indexOf('if (request.method === "PATCH" && placeId)', start);
+  const post = server.slice(start, end);
+  const split = post.indexOf('const insert = buildInsert("places", body, [...placeFields, "user_id"])');
+  for (const branch of [post.slice(0, split), post.slice(split)]) {
+    const lock = branch.indexOf("pg_advisory_xact_lock");
+    const snapshot = branch.indexOf("savedPlaceGrowthSnapshot");
+    const insert = branch.indexOf("${insert.sql}");
+    const actualRows = branch.indexOf("assertSavedPlaceGrowthAllowed");
+    const commit = branch.indexOf('await client.query("commit")');
+    assert.ok(lock >= 0 && snapshot > lock && insert > snapshot && actualRows > insert && commit > actualRows);
+    assert.doesNotMatch(branch, /assertNewSavedPlaceAllowed/);
+  }
+  assert.ok(post.indexOf("insert into friend_share_events") < post.indexOf("assertSavedPlaceGrowthAllowed"),
+    "receipt event and tentative place must be rolled back together");
 });
