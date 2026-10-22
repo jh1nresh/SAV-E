@@ -51,6 +51,9 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertFalse(clip.contains("free 50") || clip.contains("Free 50"))
         XCTAssertFalse(clip.contains("Save All") || clip.contains("Save this list"))
         XCTAssertTrue(clip.contains("saveWholeList"))
+        XCTAssertTrue(clip.contains("pendingSaveDraft"))
+        XCTAssertTrue(clip.contains("ClipListSavePlanner.onePlaceItem"))
+        XCTAssertTrue(clip.contains("ClipListSavePlanner.visiblePage"))
         XCTAssertTrue(clip.contains("clip.list.saveAll"))
         XCTAssertTrue(clip.contains("clip.listPartial.body"))
         XCTAssertTrue(clip.contains("signInScreen"))
@@ -86,6 +89,8 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(planner.contains("enum ClipSignInKind"))
         XCTAssertTrue(planner.contains("enum ClipListSaveFailure: Error"))
         XCTAssertTrue(planner.contains("recipientOwnedPlaceID"))
+        XCTAssertTrue(planner.contains("static func onePlaceItem"))
+        XCTAssertTrue(planner.contains("static func visiblePage"))
         XCTAssertFalse(planner.contains("return placeId.lowercased()"))
         XCTAssertFalse(planner.contains("body[\"note\"]"))
         XCTAssertFalse(planner.contains("body[\"rating\"]"))
@@ -246,6 +251,19 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertEqual(parse(403, json: #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#), "cap")
         XCTAssertEqual(parse(409, json: #"{"error":"Place id conflict"}"#), "duplicate")
         XCTAssertEqual(parse(500, json: #"{"error":"no"}"#), "failed")
+    }
+
+    func testClipScreenshotRailForcesDarkBeforeFirstPaint() throws {
+        let clipApp = try source(at: "SAV-EClip/SAV-EClipApp.swift")
+        XCTAssertTrue(clipApp.contains("--uitest-force-dark"))
+        XCTAssertTrue(clipApp.contains("--uitest-force-light"))
+        XCTAssertTrue(clipApp.contains("overrideUserInterfaceStyle"))
+        XCTAssertTrue(clipApp.contains("preferredColorScheme"))
+        let shots = try source(at: "Tests/SAVEClipUITests/SAVEClipScreenshotTests.swift")
+        XCTAssertTrue(shots.contains("-AppleInterfaceStyle"))
+        XCTAssertTrue(shots.contains("--uitest-force-dark"))
+        XCTAssertTrue(shots.contains("assertDarkCanvas"))
+        XCTAssertTrue(shots.contains("place-zh-Hant-dark"))
     }
 
     func testClipCoralStaysF26B4AInDark() throws {

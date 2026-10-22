@@ -1,8 +1,13 @@
+import CoreGraphics
+import UIKit
 import XCTest
 
 final class SAVEClipScreenshotTests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
     }
 
     func test01PlaceZhHantShortCodeWithSender() {
@@ -197,7 +202,7 @@ final class SAVEClipScreenshotTests: XCTestCase {
     ) {
         let app = launchClip(appearance: appearance, language: language, locale: locale, screen: screen)
         XCTAssertTrue(app.descendants(matching: .any)[identifier].waitForExistence(timeout: 20), identifier)
-        attachScreenshot(app.screenshot(), name: name)
+        attachScreenshot(app.screenshot(), name: name, appearance: appearance)
         app.terminate()
     }
 
@@ -211,9 +216,13 @@ final class SAVEClipScreenshotTests: XCTestCase {
     ) -> XCUIApplication {
         XCUIDevice.shared.appearance = appearance
         let app = XCUIApplication()
+        let style = appearance == .dark ? "Dark" : "Light"
+        let force = appearance == .dark ? "--uitest-force-dark" : "--uitest-force-light"
         app.launchArguments += [
             "-AppleLanguages", "(\(language))",
             "-AppleLocale", locale,
+            "-AppleInterfaceStyle", style,
+            force,
         ]
         if let screen {
             app.launchArguments += ["--uitest-clip-screen", screen]
@@ -226,11 +235,70 @@ final class SAVEClipScreenshotTests: XCTestCase {
         return app
     }
 
-    private func attachScreenshot(_ screenshot: XCUIScreenshot, name: String) {
+    private func attachScreenshot(
+        _ screenshot: XCUIScreenshot,
+        name: String,
+        appearance: XCUIDevice.Appearance? = nil
+    ) {
         let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+        if (appearance == .dark || name.contains("dark")), !name.contains("skoverlay") {
+            assertDarkCanvas(screenshot, name: name)
+        }
+    }
+
+    /// Named-dark captures must actually resolve `ClipCanvas` dark `#1E1C17`.
+    /// `XCUIDevice.appearance` alone left CI shots on light paper.
+    private func assertDarkCanvas(_ screenshot: XCUIScreenshot, name: String) {
+        guard let image = screenshot.image.cgImage else {
+            XCTFail("\(name): missing CGImage")
+            return
+        }
+        let points = [(0.03, 0.72), (0.97, 0.72), (0.03, 0.88), (0.97, 0.88)]
+        var luminances: [Double] = []
+        var samples: [(Int, Int, Int)] = []
+        for (nx, ny) in points {
+            let x = min(max(Int((Double(image.width) * nx).rounded()), 0), image.width - 1)
+            let y = min(max(Int((Double(image.height) * ny).rounded()), 0), image.height - 1)
+            guard let rgb = samplePixel(image, x: x, y: y) else { continue }
+            samples.append(rgb)
+            luminances.append(0.2126 * Double(rgb.0) + 0.7152 * Double(rgb.1) + 0.0722 * Double(rgb.2))
+        }
+        XCTAssertFalse(luminances.isEmpty, "\(name): no canvas samples")
+        let median = luminances.sorted()[luminances.count / 2]
+        let note = XCTAttachment(string: "\(name) canvas luminance=\(Int(median.rounded())) samples=\(samples)")
+        note.name = "\(name)-canvas-luminance"
+        note.lifetime = .keepAlways
+        add(note)
+        let looksLikeLightPaper = samples.contains { $0.0 > 220 && $0.1 > 210 && $0.2 > 200 }
+        XCTAssertFalse(looksLikeLightPaper, "\(name) is labeled dark but sampled light paper #FFF9EB")
+        XCTAssertLessThan(
+            median,
+            90,
+            "\(name) is labeled dark but canvas luminance \(Int(median.rounded())) is not near #1E1C17"
+        )
+    }
+
+    private func samplePixel(_ image: CGImage, x: Int, y: Int) -> (Int, Int, Int)? {
+        guard let crop = image.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)) else { return nil }
+        var pixel = [UInt8](repeating: 0, count: 4)
+        let ok = pixel.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(
+                data: bytes.baseAddress,
+                width: 1,
+                height: 1,
+                bitsPerComponent: 8,
+                bytesPerRow: 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(crop, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            return true
+        }
+        guard ok else { return nil }
+        return (Int(pixel[0]), Int(pixel[1]), Int(pixel[2]))
     }
 
     private static let placeInvokeURL =

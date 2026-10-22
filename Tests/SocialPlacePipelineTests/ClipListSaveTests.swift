@@ -145,6 +145,28 @@ final class ClipListSaveTests: XCTestCase {
         XCTAssertNotEqual(again?.first?["id"] as? String, id)
     }
 
+    func testListSignInUsesTappedDraftNotStaleListPage() {
+        let page0 = item("page0", "Onibus Coffee", lat: 35.644, lng: 139.699)
+        let page2 = item("page2", "Katsu Midori", lat: 35.690, lng: 139.700)
+        XCTAssertEqual(
+            ClipListSavePlanner.onePlaceItem(pending: page2, pageItem: page0)?.placeId,
+            "page2",
+            "SIWA must save the tapped shop even if listPage drifted to 0"
+        )
+        XCTAssertNotEqual(
+            ClipListSavePlanner.onePlaceItem(pending: page2, pageItem: page0)?.placeId,
+            page0.placeId
+        )
+        XCTAssertEqual(
+            ClipListSavePlanner.onePlaceItem(pending: nil, pageItem: page0)?.placeId,
+            "page0"
+        )
+        XCTAssertNil(ClipListSavePlanner.onePlaceItem(pending: nil, pageItem: nil))
+        XCTAssertEqual(ClipListSavePlanner.visiblePage(current: 2, incoming: nil), 2)
+        XCTAssertEqual(ClipListSavePlanner.visiblePage(current: 2, incoming: 3), 3)
+        XCTAssertEqual(ClipListSavePlanner.visiblePage(current: 0, incoming: 0), 0)
+    }
+
     func testSL5AlreadySavedPlacesCountOnce() {
         let items = [
             item("place1", "Onibus Coffee", lat: 35.644, lng: 139.699),

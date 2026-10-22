@@ -79,6 +79,8 @@ struct ClipContentView: View {
     @State private var signInHint = false
     @State private var isSaving = false
     @State private var lastSaveWasList = false
+    @State private var pendingSaveDraft: ClipPlaceDraft?
+    @State private var pendingSaveListTitle: String?
     @State private var listPage = 0
     @State private var showListSwipeHint = !ClipListSwipeHint.isDismissed()
     @State private var presentsAppClipOverlay = false
@@ -249,7 +251,7 @@ struct ClipContentView: View {
                             GeometryReader { itemProxy in
                                 Color.clear.preference(
                                     key: ClipListPageKey.self,
-                                    value: abs(itemProxy.frame(in: .named("clip.list")).minY) < 80 ? index : listPage
+                                    value: abs(itemProxy.frame(in: .named("clip.list")).minY) < 80 ? index : nil
                                 )
                             }
                         }
@@ -262,7 +264,8 @@ struct ClipContentView: View {
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize)
             .coordinateSpace(name: "clip.list")
-            .onPreferenceChange(ClipListPageKey.self) { page in
+            .onPreferenceChange(ClipListPageKey.self) { incoming in
+                let page = ClipListSavePlanner.visiblePage(current: listPage, incoming: incoming)
                 if page > 0 {
                     ClipListSwipeHint.dismiss()
                     showListSwipeHint = false
@@ -579,16 +582,40 @@ struct ClipContentView: View {
     }
 
     private func saveCurrentPlace() async {
-        if let receipt = placeReceipt {
-            await save(draft: .from(place: receipt.payload, shareCode: receipt.code), listTitle: nil)
-        } else if let list = listData, list.items.indices.contains(listPage) {
-            await save(draft: .from(item: list.items[listPage]), listTitle: list.title)
+        if let draft = pendingOnePlaceDraft() {
+            await save(draft: draft.draft, listTitle: draft.listTitle)
         }
+    }
+
+    /// SIWA / retry keep the tapped draft. `listPage` can drift while
+    /// off-screen PreferenceKey children reduce last-writer-wins.
+    private func pendingOnePlaceDraft() -> (draft: ClipPlaceDraft, listTitle: String?)? {
+        if let draft = pendingSaveDraft {
+            return (draft, pendingSaveListTitle)
+        }
+        if let receipt = placeReceipt {
+            return (.from(place: receipt.payload, shareCode: receipt.code), nil)
+        }
+        guard let list = listData else { return nil }
+        let pageItem = list.items.indices.contains(listPage)
+            ? ClipPlaceDraft.from(item: list.items[listPage]).listSaveItem
+            : nil
+        guard let chosen = ClipListSavePlanner.onePlaceItem(pending: nil, pageItem: pageItem) else {
+            return nil
+        }
+        if let match = list.items.first(where: {
+            ClipPlaceDraft.from(item: $0).listSaveItem == chosen
+        }) {
+            return (.from(item: match), list.title)
+        }
+        return nil
     }
 
     private func retryLastSave() async {
         if lastSaveWasList {
             beginSaveWholeList()
+        } else if let draft = pendingSaveDraft {
+            beginSave(draft: draft, listTitle: pendingSaveListTitle)
         } else {
             await saveCurrentPlace()
         }
@@ -597,6 +624,8 @@ struct ClipContentView: View {
     private func beginSave(draft: ClipPlaceDraft, listTitle: String?) {
         signInHint = false
         lastSaveWasList = false
+        pendingSaveDraft = draft
+        pendingSaveListTitle = listTitle
         if ClipFullApp.isInstalled {
             Task { await save(draft: draft, listTitle: listTitle) }
             return
@@ -883,6 +912,8 @@ struct ClipContentView: View {
         mySavesData = nil
         mySavesSourceURL = nil
         listPage = 0
+        pendingSaveDraft = nil
+        pendingSaveListTitle = nil
     }
 
     private func apply(list: SharedListData) {
@@ -962,9 +993,11 @@ struct ClipContentView: View {
 }
 
 private struct ClipListPageKey: PreferenceKey {
-    static var defaultValue = 0
-    static func reduce(value: inout Int, nextValue: () -> Int) {
-        value = nextValue()
+    static var defaultValue: Int? = nil
+    static func reduce(value: inout Int?, nextValue: () -> Int?) {
+        if let next = nextValue() {
+            value = next
+        }
     }
 }
 

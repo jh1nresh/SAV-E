@@ -108,6 +108,20 @@ enum ClipListSavePlanner {
         ["places": uniqueItems(from: items).map(placeBody(from:))]
     }
 
+    /// After SIWA, save the shop the user tapped — not `list.items[listPage]`.
+    /// Off-screen `PreferenceKey` children can last-write `listPage` back to 0.
+    static func onePlaceItem(
+        pending: ClipListSaveItem?,
+        pageItem: ClipListSaveItem?
+    ) -> ClipListSaveItem? {
+        pending ?? pageItem
+    }
+
+    /// Only a currently visible page may move the tracked index.
+    static func visiblePage(current: Int, incoming: Int?) -> Int {
+        incoming ?? current
+    }
+
     static func allocate(
         novelCount: Int,
         alreadySaved: Int,
