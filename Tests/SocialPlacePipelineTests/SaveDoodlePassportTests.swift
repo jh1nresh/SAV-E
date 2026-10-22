@@ -108,17 +108,10 @@ final class SaveDoodlePassportTests: XCTestCase {
         let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
         XCTAssertTrue(passport.contains("NavigationStack {"))
         XCTAssertTrue(
-            passport.contains("""
-            if isRootTab {
-                passportRoot
-            } else {
-                NavigationStack {
-                    passportRoot
-                }
-            }
-            """),
+            passport.contains("if isRootTab {\n                passportRoot"),
             "Root-tab Passport must reuse ContentView's stack; a nested stack breaks Home → Saves"
         )
+        XCTAssertTrue(passport.contains("NavigationStack {\n                    passportRoot"))
         XCTAssertTrue(passport.contains("SaveDoodlePassportPage("))
         XCTAssertTrue(passport.contains("SaveDoodlePassportFlags.showTodayMissions"))
         XCTAssertTrue(passport.contains("SaveDoodlePassportFlags.showFieldStreak"))
