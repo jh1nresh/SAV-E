@@ -331,6 +331,20 @@ enum ClipListHandoff {
         return .unconfirmed
     }
 
+    /// Recipient cache row only. A reconstructed share snapshot is not a Map Stamp.
+    static func cachedAlreadySavedPlace(
+        places: [Place],
+        already: [SavedRow],
+        fallback: Place
+    ) -> Place? {
+        for row in already {
+            if let match = places.first(where: { $0.id == row.id }) {
+                return match
+            }
+        }
+        return places.first { $0.matches(fallback) }
+    }
+
     enum OnePlaceImport: Equatable {
         case saved
         case alreadySaved
@@ -430,7 +444,11 @@ enum ClipListHandoff {
     static func isGooglePlaceID(_ raw: String) -> Bool {
         let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty, UUID(uuidString: value) == nil else { return false }
-        return value.hasPrefix("ChIJ") || value.hasPrefix("GhIJ")
+        let lowered = value.lowercased()
+        return lowered.hasPrefix("chij")
+            || lowered.hasPrefix("ghij")
+            || lowered.hasPrefix("eic")
+            || lowered.hasPrefix("iho")
     }
 
     static func toastEnglish(counts: ClipListHandoffCounts, confirmedCount: Int) -> String {

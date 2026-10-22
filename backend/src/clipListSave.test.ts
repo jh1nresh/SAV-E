@@ -60,6 +60,18 @@ test("primary Google provider id is promoted to google_place_id", () => {
   ]);
   assert.equal(unique[0]?.google_place_id, "ChIJ123");
   assert.equal(
+    uniqueClipListItems([
+      { provider_place_id: "EicABC", name: "Onibus Coffee", latitude: 35.644, longitude: 139.699 },
+    ])[0]?.google_place_id,
+    "EicABC",
+  );
+  assert.equal(
+    uniqueClipListItems([
+      { provider_place_id: "IhoXYZ", name: "Onibus Coffee", latitude: 35.644, longitude: 139.699 },
+    ])[0]?.google_place_id,
+    "IhoXYZ",
+  );
+  assert.equal(
     promoteGooglePlaceId({ provider_place_id: "id-a", name: "Onibus Coffee" }).google_place_id,
     undefined,
   );
@@ -84,6 +96,12 @@ test("every merged extra identity is used for account dedupe", () => {
   assert.equal(isGooglePlaceId("id-b"), false);
   assert.equal(isGooglePlaceId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), false);
   assert.equal(isGooglePlaceId("ChIJ123"), true);
+  assert.equal(isGooglePlaceId("GhIJ456"), true);
+  assert.equal(isGooglePlaceId("EicABC"), true);
+  assert.equal(isGooglePlaceId("IhoXYZ"), true);
+  assert.equal(isGooglePlaceId("eicabc"), true);
+  assert.equal(isGooglePlaceId("ihoXYZ"), true);
+  assert.equal(isGooglePlaceId("id-c"), false);
   const existing = {
     id: "owned",
     google_place_id: "ChIJ123",

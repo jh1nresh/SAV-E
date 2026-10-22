@@ -314,6 +314,11 @@ final class ClipListSaveTests: XCTestCase {
         XCTAssertFalse(ClipListSavePlanner.isGooglePlaceID("id-c"))
         XCTAssertFalse(ClipListSavePlanner.isGooglePlaceID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"))
         XCTAssertTrue(ClipListSavePlanner.isGooglePlaceID("ChIJ123"))
+        XCTAssertTrue(ClipListSavePlanner.isGooglePlaceID("GhIJ456"))
+        XCTAssertTrue(ClipListSavePlanner.isGooglePlaceID("EicABC"))
+        XCTAssertTrue(ClipListSavePlanner.isGooglePlaceID("IhoXYZ"))
+        XCTAssertTrue(ClipListSavePlanner.isGooglePlaceID("eicabc"))
+        XCTAssertTrue(ClipListSavePlanner.isGooglePlaceID("ihoXYZ"))
     }
 
     func testPlaceBodySerializesEveryMergedIdentity() {
@@ -358,6 +363,18 @@ final class ClipListSaveTests: XCTestCase {
             (ClipListSavePlanner.requestBody(items: [
                 item("id-a", "Onibus Coffee", lat: 35.644, lng: 139.699),
             ])["places"] as? [[String: Any]])?.first?["google_place_id"]
+        )
+        XCTAssertEqual(
+            (ClipListSavePlanner.requestBody(items: [
+                item("EicABC", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            ])["places"] as? [[String: Any]])?.first?["google_place_id"] as? String,
+            "EicABC"
+        )
+        XCTAssertEqual(
+            (ClipListSavePlanner.requestBody(items: [
+                item("IhoXYZ", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            ])["places"] as? [[String: Any]])?.first?["google_place_id"] as? String,
+            "IhoXYZ"
         )
     }
 

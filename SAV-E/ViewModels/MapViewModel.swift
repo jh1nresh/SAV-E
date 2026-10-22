@@ -2158,7 +2158,7 @@ final class MapViewModel: ObservableObject {
                 guard let remote = ClipListHandoff.parseRemote(status: status, data: data) else {
                     throw ClipListHandoffError.unconfirmed
                 }
-                return try importSharedPlaceHandoff(
+                return try await importSharedPlaceHandoff(
                     item: item,
                     fallback: place,
                     counts: remote.counts,
@@ -2175,7 +2175,7 @@ final class MapViewModel: ObservableObject {
             alreadySaved: { $0.alreadySaved(in: places) },
             savedPlaceCount: places.count
         )
-        return try importSharedPlaceHandoff(
+        return try await importSharedPlaceHandoff(
             item: item,
             fallback: place,
             counts: planned.counts,
@@ -2210,15 +2210,27 @@ final class MapViewModel: ObservableObject {
         counts: ClipListHandoffCounts,
         saved: [ClipListHandoff.SavedRow],
         already: [ClipListHandoff.SavedRow]
-    ) throws -> SharedPlaceSaveOutcome {
+    ) async throws -> SharedPlaceSaveOutcome {
         switch ClipListHandoff.onePlaceImport(counts: counts) {
         case .capReached:
             throw ClipListHandoffError.capReached
         case .unconfirmed:
             throw ClipListHandoffError.unconfirmed
         case .alreadySaved:
-            if let existing = ClipListHandoff.placesFromRemoteRows(confirmed: [item], rows: already)?.first
-                ?? existingSavedPlace(matching: fallback) {
+            if let existing = ClipListHandoff.cachedAlreadySavedPlace(
+                places: places,
+                already: already,
+                fallback: fallback
+            ) {
+                focusSavedPlace(existing, showStampMoment: false)
+                return .alreadySaved(existing)
+            }
+            await loadPlaces(force: true)
+            if let existing = ClipListHandoff.cachedAlreadySavedPlace(
+                places: places,
+                already: already,
+                fallback: fallback
+            ) {
                 focusSavedPlace(existing, showStampMoment: false)
                 return .alreadySaved(existing)
             }

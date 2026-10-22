@@ -293,6 +293,52 @@ final class PendingShareStoreTests: XCTestCase {
         )
     }
 
+    func testAlreadySavedHandoffUsesCanonicalCacheRow() {
+        let item = PendingConfirmedPlace(
+            placeId: "ChIJ123",
+            name: "Onibus Coffee",
+            address: "Tokyo",
+            latitude: 35.644,
+            longitude: 139.699,
+            category: "Cafe",
+            sourceURL: nil
+        ).asListItem()
+        var snapshot = item.asPlace(includeSenderMemory: false)
+        snapshot.note = "sender note"
+        snapshot.rating = 5
+        let serverID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+        var canonical = snapshot.rekeyed(to: serverID)
+        canonical.note = "my note"
+        canonical.rating = 2
+        canonical.status = .visited
+        let row = ClipListHandoff.SavedRow(
+            id: serverID,
+            providerPlaceId: "ChIJ123",
+            name: "Onibus Coffee",
+            latitude: 35.644,
+            longitude: 139.699
+        )
+        let reconstructed = ClipListHandoff.placesFromRemoteRows(confirmed: [item], rows: [row])?.first
+        XCTAssertNotEqual(reconstructed?.note, "my note")
+        let found = ClipListHandoff.cachedAlreadySavedPlace(
+            places: [canonical],
+            already: [row],
+            fallback: snapshot
+        )
+        XCTAssertEqual(found?.id, serverID)
+        XCTAssertEqual(found?.note, "my note")
+        XCTAssertEqual(found?.rating, 2)
+        XCTAssertEqual(found?.status, .visited)
+        XCTAssertNil(
+            ClipListHandoff.cachedAlreadySavedPlace(
+                places: [],
+                already: [row],
+                fallback: snapshot
+            ),
+            "empty cache must not invent a stamp from the share snapshot"
+        )
+    }
+
     func testSameNameDifferentCityDoesNotCountAsVisibleDuplicate() {
         let tokyo = PendingConfirmedPlace(
             placeId: "shop-tokyo",
@@ -592,6 +638,9 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertEqual(googleBody["google_place_id"] as? String, "ChIJ123")
         XCTAssertEqual(googleOnly.asListItem().asPlace(includeSenderMemory: false).googlePlaceId, "ChIJ123")
         XCTAssertTrue(ClipListHandoff.isGooglePlaceID("ChIJ123"))
+        XCTAssertTrue(ClipListHandoff.isGooglePlaceID("EicABC"))
+        XCTAssertTrue(ClipListHandoff.isGooglePlaceID("IhoXYZ"))
+        XCTAssertTrue(ClipListHandoff.isGooglePlaceID("eicabc"))
         XCTAssertFalse(ClipListHandoff.isGooglePlaceID("id-c"))
         let aliasOnly = PendingConfirmedPlace(
             placeId: "id-a",
