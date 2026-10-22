@@ -3104,40 +3104,37 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         if saves.exists { return }
         dismissSavedPlaceLimitPaywallIfPresent(app: app)
 
-        // Tile-town Home (DESIGN): the library is More → Manage saved places
-        // (`home.more.saves`). Header `home.saves` stays in the tree after More
-        // opens; tapping it again hits the header under the sheet and never
-        // pushes Saves. Do not query `home.saves` while the sheet is up.
+        // Live Home (SaveTileTownHomeView): header `home.saves` is a 44pt
+        // button that calls onOpenSaves — the same identifier main's rail
+        // taps. CI 39662538679: the button existed but was not hittable
+        // under a leftover paywall, and a center coordinate tap missed.
+        // CI 39686119161: the label "Manage saved places" matches both the
+        // header and the merged More sheet, so tap() throws. Identifiers
+        // only, and only tap a hittable control.
+        let headerSaves = app.descendants(matching: .any)["home.saves"]
+        let clues = app.descendants(matching: .any)["home.review"]
+        if tapHittableSavesEntry([headerSaves, clues], saves: saves) {
+            return
+        }
+
         let moreActions = app.descendants(matching: .any)["home.more"]
         if moreActions.waitForExistence(timeout: timeout(2)) {
             tapReachable(moreActions)
         }
-        if app.descendants(matching: .any)["home.more.sheet"].waitForExistence(timeout: timeout(5)) {
-            // Identifiers only. The header's accessibility label is also
-            // "Manage saved places"; a label query matches both and tap() throws.
-            let manage = firstExisting([
-                app.descendants(matching: .any)["home.more.saves"],
-                app.descendants(matching: .any)["home.reviewAll"],
-            ], timeout: stepTimeout)
-            if manage.exists {
-                tapReachable(manage)
-                if saves.waitForExistence(timeout: timeout(5)) { return }
-            }
+        _ = app.descendants(matching: .any)["home.more.sheet"].waitForExistence(timeout: timeout(3))
+        if tapHittableSavesEntry([
+            app.descendants(matching: .any)["home.more.saves"],
+            headerSaves,
+            clues,
+        ], saves: saves) {
+            return
         }
 
-        // Resting Home clues bar (`onReviewAll`) still opens Saves.
-        let clues = firstExisting([
-            app.descendants(matching: .any)["home.review"],
-            app.buttons["Review clues"],
-        ], timeout: timeout(2))
-        if clues.exists {
-            tapReachable(clues)
-            if saves.waitForExistence(timeout: timeout(5)) { return }
-        }
-
-        let headerSaves = app.buttons["home.saves"]
-        if headerSaves.waitForExistence(timeout: timeout(2)), headerSaves.isHittable {
-            headerSaves.tap()
+        // ReferenceViewport can report exists && !isHittable with no overlay.
+        // Main's rail then coordinate-taps `home.saves`. Safe only after the
+        // paywall is gone — a covered header's center tap misses.
+        if headerSaves.exists {
+            tapReachable(headerSaves)
         }
 
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to
@@ -3147,6 +3144,18 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             saves.waitForExistence(timeout: stepTimeout),
             "Home Saves entry did not open Saves"
         )
+    }
+
+    @MainActor
+    private func tapHittableSavesEntry(
+        _ candidates: [XCUIElement],
+        saves: XCUIElement
+    ) -> Bool {
+        guard let entry = firstHittable(candidates, timeout: timeout(2)) else { return false }
+        entry.tap()
+        if saves.waitForExistence(timeout: timeout(5)) { return true }
+        entry.tap()
+        return saves.waitForExistence(timeout: timeout(5))
     }
 
     @MainActor
@@ -3221,6 +3230,18 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         }
         return elements.first(where: \.exists) ?? elements[0]
+    }
+
+    @MainActor
+    private func firstHittable(_ elements: [XCUIElement], timeout: TimeInterval) -> XCUIElement? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let found = elements.first(where: { $0.exists && $0.isHittable }) {
+                return found
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+        return elements.first(where: { $0.exists && $0.isHittable })
     }
 
     /// Live Home paints hybrid / Look Around covers asynchronously. The Atlas

@@ -139,8 +139,16 @@ final class SAVEProductionConfigTests: XCTestCase {
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("func testFreeCapE4Screenshots()"))
         XCTAssertTrue(
+            rail.contains("home.saves"),
+            "E4 taps the live Home header Saves control (SaveTileTownHomeView)"
+        )
+        XCTAssertTrue(
             rail.contains("home.more.saves"),
-            "E4 opens Saves from More → Manage saved places, not a header tap under the sheet"
+            "More → Manage remains a fallback after the in-flow sheet opens"
+        )
+        XCTAssertTrue(
+            rail.contains("firstHittable"),
+            "Do not coordinate-tap a covered header; wait for a hittable Saves control"
         )
         XCTAssertFalse(
             rail.contains("app.buttons[\"Manage saved places\"]"),
