@@ -335,7 +335,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.locationAllow"].exists)
         XCTAssertTrue(
             app.descendants(matching: .any)["home.saves"].waitForExistence(timeout: stepTimeout),
-            "Empty Home still exposes the saved-places entry when no clues are waiting."
+            "Empty Home still exposes the HoP home.saves entry"
         )
         XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
         attach(app, name: "review-flow-home-empty")

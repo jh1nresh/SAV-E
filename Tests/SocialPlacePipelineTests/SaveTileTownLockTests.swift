@@ -191,7 +191,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(home.contains("SaveDoodleMiniMap"))
         XCTAssertTrue(home.contains("home.miniMap"))
         XCTAssertTrue(home.contains("home.review"))
-        XCTAssertTrue(home.contains("home.saves"))
+        XCTAssertTrue(home.contains("accessibilityIdentifier(\"home.saves\")"))
         XCTAssertFalse(home.contains("home.openSaves"))
         XCTAssertTrue(home.contains("home.collected"))
         XCTAssertTrue(home.contains("home.empty.capture"))
