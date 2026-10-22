@@ -829,6 +829,116 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == candidate.id })
     }
 
+    /// P2 4348075539: a duplicate pending share must not consume the 50th slot.
+    @MainActor
+    func testLocalPendingImportDuplicateDoesNotConsumeAFreeSlot() throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        let owner = "did:privy:dup-cap"
+        PrivyAuthService.shared.authState = .authenticated(userId: owner)
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pending-dup-cap-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.dup-cap.\(UUID().uuidString)")
+        let saved = makeCappedPlaces(49)
+        let duplicateOfFirst = saved[0]
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([
+            PendingSharedPlace(
+                ownerSubject: owner,
+                googlePlaceId: duplicateOfFirst.googlePlaceId,
+                name: duplicateOfFirst.name,
+                address: duplicateOfFirst.address,
+                category: "food",
+                latitude: duplicateOfFirst.latitude,
+                longitude: duplicateOfFirst.longitude,
+                dishes: [],
+                savedAt: Date()
+            ),
+            PendingSharedPlace(
+                ownerSubject: owner,
+                googlePlaceId: "cap-place-new-50",
+                name: "Fiftieth Unique Cafe",
+                address: "50 New Street",
+                category: "food",
+                latitude: 25.5,
+                longitude: 121.9,
+                dishes: [],
+                savedAt: Date()
+            )
+        ])
+        let map = MapViewModel(
+            pendingImportService: queue,
+            saveLocalVaultService: SaveLocalVaultService(
+                overrideVaultURL: directory.appendingPathComponent("vault.json")
+            ),
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: false
+        )
+        map.places = saved
+
+        map.importPendingPlacesForLocalUse()
+
+        XCTAssertEqual(map.places.count, 50)
+        XCTAssertTrue(map.places.contains { $0.name == "Fiftieth Unique Cafe" })
+        XCTAssertTrue(
+            map.reviewCandidates.isEmpty,
+            "a matching duplicate must not park the legitimate 50th place"
+        )
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    /// P2 4348222437: unknown/loading membership must not block a local import.
+    @MainActor
+    func testLocalPendingImportAllowsWhileEntitlementUnresolved() throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        let owner = "did:privy:unresolved-tier"
+        PrivyAuthService.shared.authState = .authenticated(userId: owner)
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pending-unresolved-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.unresolved-tier.\(UUID().uuidString)")
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([
+            PendingSharedPlace(
+                ownerSubject: owner,
+                googlePlaceId: "cap-place-unresolved",
+                name: "Offline Import Cafe",
+                address: "1 Loading Street",
+                category: "food",
+                latitude: 25.6,
+                longitude: 121.8,
+                dishes: [],
+                savedAt: Date()
+            )
+        ])
+        let map = MapViewModel(
+            pendingImportService: queue,
+            saveLocalVaultService: SaveLocalVaultService(
+                overrideVaultURL: directory.appendingPathComponent("vault.json")
+            ),
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { false },
+            usesRemotePersistence: false
+        )
+        map.places = makeCappedPlaces(50)
+
+        map.importPendingPlacesForLocalUse()
+
+        XCTAssertEqual(map.places.count, 51)
+        XCTAssertTrue(map.places.contains { $0.name == "Offline Import Cafe" })
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
     @MainActor
     func testLocalOnlyParkedCandidateConfirmsWithoutRemoteCandidateRow() async throws {
         let previousAuth = PrivyAuthService.shared.authState
@@ -1483,6 +1593,22 @@ final class SAVEProductionConfigTests: XCTestCase {
             "deleteAllRecords wipes every account on this device"
         )
         XCTAssertTrue(
+            map.contains("let uniqueNewCount = Place.consolidated(importedPlaces + [place]).count"),
+            "P2 4348075539: local pending-import cap must count unique new stamps"
+        )
+        XCTAssertFalse(
+            map.contains("if isNewKey { importedPlaces.append(place) }"),
+            "P2 4348075539: a matching duplicate must not inflate importedPlaces"
+        )
+        XCTAssertTrue(
+            map.contains("if entitlementResolvedProvider(),"),
+            "P2 4348222437: unresolved membership must fail open on local pending import"
+        )
+        XCTAssertTrue(
+            map.contains("authService.currentUserId == startedBy,\n               authService.sessionGeneration == generation {\n                places = previousPlaces"),
+            "deletePlace catch must not restore A's list onto B after a mid-call switch"
+        )
+        XCTAssertTrue(
             map.contains("saveConfirmedPlace(place, ownerSubject: authService.currentUserId)"),
             "local-only confirm must stamp the active owner so a signed-in reload keeps the Map Stamp"
         )
@@ -1763,6 +1889,18 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(SAVEProAccessPolicy.unplacedInboxMarker, "Unplaced inbox")
         let inboxMarker = PlaceReviewCandidate.unplacedInboxMarker
         XCTAssertEqual(inboxMarker, SAVEProAccessPolicy.unplacedInboxMarker)
+        XCTAssertTrue(
+            share.contains("saveReviewCandidates([candidate], markSavedPlaceLimitPaywall: true)"),
+            "P2 4348222446: over-cap share parks first, then may mark the paywall"
+        )
+        XCTAssertTrue(
+            share.contains("guard appendPendingItems(stamped, to: fileURL, as: PendingReviewCandidate.self) else { return }\n        if markSavedPlaceLimitPaywall {\n            SavePlaceLimitHandoff.markPaywallPending()"),
+            "P2 4348222446: paywall handoff only after the Unplaced append succeeds"
+        )
+        XCTAssertFalse(
+            share.contains("SavePlaceLimitHandoff.markPaywallPending()\n            saveReviewCandidates([candidate])"),
+            "do not persist a paywall for a failed Share Extension save"
+        )
     }
 
     func testEntitlementRefreshResyncsAppGroupCacheInSource() throws {
@@ -1897,6 +2035,7 @@ final class SAVEProductionConfigTests: XCTestCase {
 
         let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
         map.places = [placeA]
+        map.selectedPlace = placeA
 
         do {
             try await map.deletePlace(placeA)
@@ -1904,6 +2043,11 @@ final class SAVEProductionConfigTests: XCTestCase {
         } catch ReviewCandidateError.sessionChangedAfterCommit {
             // Expected: A's remote work must not delete B's local row.
         }
+        XCTAssertTrue(
+            map.places.isEmpty,
+            "deletePlace catch must not restore A's list onto B's screen"
+        )
+        XCTAssertNil(map.selectedPlace, "A's selected stamp must not reappear after the switch")
 
         XCTAssertEqual(
             try vault.confirmedPlaces(belongingTo: "did:privy:b").map(\.id),

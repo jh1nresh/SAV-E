@@ -1084,7 +1084,6 @@ final class MapViewModel: ObservableObject {
             let isNewKey = importedPendingKeys.insert(pendingPlace.deduplicationKey).inserted
             if existingSavedPlace(matching: place) != nil
                 || importedPlaces.contains(where: { $0.matches(place) }) {
-                if isNewKey { importedPlaces.append(place) }
                 keepQueued.append(pendingPlace)
                 continue
             }
@@ -1092,11 +1091,15 @@ final class MapViewModel: ObservableObject {
                 keepQueued.append(pendingPlace)
                 continue
             }
-            let projectedCount = savedPlaceCountForLimit + importedPlaces.count
-            if SavePlaceLimitGate.decide(
-                tier: currentSavedPlaceTier,
-                savedPlaceCount: projectedCount
-            ) == .overFreeLimit {
+            let uniqueNewCount = Place.consolidated(importedPlaces + [place]).count
+            let projectedCount = savedPlaceCountForLimit + uniqueNewCount
+            // Unresolved / loading entitlement must fail open. Default `.free`
+            // would park a Pro account that has not refreshed this session.
+            if entitlementResolvedProvider(),
+               SavePlaceLimitGate.decide(
+                    tier: currentSavedPlaceTier,
+                    savedPlaceCount: projectedCount
+               ) == .overFreeLimit {
                 do {
                     try parkPlaceInUnplacedInbox(place)
                 } catch {
@@ -4041,11 +4044,14 @@ final class MapViewModel: ObservableObject {
             syncSavedPlaceLimitCache()
         } catch {
             _ = try? saveLocalVaultService.saveConfirmedPlace(place, ownerSubject: startedBy)
-            places = previousPlaces
-            selectedPlace = place
-            authoritativeSavedPlaceCount = previousAuthoritativeCount
-            authoritativeSavedPlaceOwner = previousAuthoritativeOwner
-            syncSavedPlaceLimitCache()
+            if authService.currentUserId == startedBy,
+               authService.sessionGeneration == generation {
+                places = previousPlaces
+                selectedPlace = place
+                authoritativeSavedPlaceCount = previousAuthoritativeCount
+                authoritativeSavedPlaceOwner = previousAuthoritativeOwner
+                syncSavedPlaceLimitCache()
+            }
             throw error
         }
     }

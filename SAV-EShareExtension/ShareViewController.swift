@@ -3679,8 +3679,7 @@ struct ShareExtensionView: View {
                 latitude: latitude,
                 longitude: longitude
             )
-            SavePlaceLimitHandoff.markPaywallPending()
-            saveReviewCandidates([candidate])
+            saveReviewCandidates([candidate], markSavedPlaceLimitPaywall: true)
             return
         }
 
@@ -3717,7 +3716,11 @@ struct ShareExtensionView: View {
         saveReviewCandidates(candidates)
     }
 
-    private func saveReviewCandidates(_ candidates: [PendingReviewCandidate], sourceFallback: Bool = false) {
+    private func saveReviewCandidates(
+        _ candidates: [PendingReviewCandidate],
+        sourceFallback: Bool = false,
+        markSavedPlaceLimitPaywall: Bool = false
+    ) {
         guard !isSaved else { return }
         bindShareSessionOwnerIfNeeded()
         if !sourceFallback && !shareSessionStillMatches() { return }
@@ -3736,6 +3739,9 @@ struct ShareExtensionView: View {
             return next
         }
         guard appendPendingItems(stamped, to: fileURL, as: PendingReviewCandidate.self) else { return }
+        if markSavedPlaceLimitPaywall {
+            SavePlaceLimitHandoff.markPaywallPending()
+        }
 
         savedReviewCandidateCount = candidates.count
         isSaved = true
