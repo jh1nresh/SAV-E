@@ -693,6 +693,9 @@ mini-map opens Map with the same filter and city.
 Near you header, Collected, and Passport share one city: the nearest
 save across every category, not the nearest Eat/Go row. Fallback
 addresses use the locality (Berkeley), not a state+ZIP fragment.
+European postcode-first lines (`8001 Zürich`) parse as the city.
+Stable city IDs keep a region qualifier so Springfield IL and
+Springfield MA stay apart; the picker still shows the locality.
 Collected X/Y is visited / all saved places in the current city scope,
 every category. Eat/Go and the listed row count do not change it;
 switching city does. When the Eat/Go list is empty but the city still
