@@ -894,6 +894,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         let parityRunner = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
         XCTAssertTrue(parityRunner.contains("home-mask.png"))
         XCTAssertTrue(parityRunner.contains("--mask"))
+        XCTAssertTrue(parityRunner.contains("compare_args"))
+        XCTAssertFalse(parityRunner.contains("mask_args"))
         let mapPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png"
         ))
@@ -940,7 +942,13 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertFalse(rail.contains("confirmed places"))
         let location = try source(at: "SAV-E/Services/LocationService.swift")
         XCTAssertTrue(location.contains("--uitest-location-allowed"))
+        XCTAssertTrue(location.contains("--uitest-location-tiantan"))
+        XCTAssertTrue(location.contains("uiTestTiantan"))
+        XCTAssertTrue(location.contains("39.882192"))
         XCTAssertTrue(location.contains("simulatesAllowedAuthorization"))
+        XCTAssertTrue(rail.contains("func captureFiveTabHomeParityRaster"))
+        XCTAssertTrue(rail.contains("--uitest-location-tiantan"))
+        XCTAssertTrue(rail.contains("attach(app, name: \"five-tab-home\")"))
         let seed = try source(at: "SAV-E/Services/ReviewDemoService.swift")
         XCTAssertTrue(seed.contains("--uitest-doodle-parity-fixture"))
         XCTAssertTrue(seed.contains("Codex packet / spec §8"))

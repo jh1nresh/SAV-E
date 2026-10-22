@@ -353,16 +353,16 @@ for screen in home saves plan map; do
         exit 2
     fi
 
-    mask_args=()
+    compare_args=(
+        --target "$ARTIFACT_DIR/reference/$screen.png"
+        --actual "$actual"
+        --diff "$ARTIFACT_DIR/diff/$screen.png"
+        --threshold "$THRESHOLD"
+    )
     if [[ "$screen" == home && -f "$ARTIFACT_DIR/reference/home-mask.png" ]]; then
-        mask_args+=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
+        compare_args+=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
     fi
-    if xcrun swift "$PARITY_SCRIPT" \
-        --target "$ARTIFACT_DIR/reference/$screen.png" \
-        --actual "$actual" \
-        --diff "$ARTIFACT_DIR/diff/$screen.png" \
-        "${mask_args[@]}" \
-        --threshold "$THRESHOLD" \
+    if xcrun swift "$PARITY_SCRIPT" "${compare_args[@]}" \
         >"$ARTIFACT_DIR/results/$screen.json"
     then
         status="PASS"

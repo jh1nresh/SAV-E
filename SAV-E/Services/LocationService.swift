@@ -18,9 +18,13 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         .contains("--uitest-location-denied")
     /// Deterministic allowed-state with a Taipei fix so Home can show
     /// Near you without a springboard permission alert.
+    private let simulatesTiantanFix = ProcessInfo.processInfo.arguments
+        .contains("--uitest-location-tiantan")
     private let simulatesAllowedAuthorization = ProcessInfo.processInfo.arguments
-        .contains("--uitest-location-allowed")
+        .contains("--uitest-location-allowed") || simulatesTiantanFix
     private static let uiTestTaipei = CLLocation(latitude: 25.0330, longitude: 121.5654)
+    /// Codex / spec §8 Tiantan face: 450 m / 800 m / 1.1 km from the three Eat rows.
+    private static let uiTestTiantan = CLLocation(latitude: 39.882192, longitude: 116.4066)
 #else
     private let simulatesDeniedAuthorization = false
     private let simulatesAllowedAuthorization = false
@@ -50,7 +54,7 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
 #if DEBUG
         if simulatesAllowedAuthorization {
-            currentLocation = Self.uiTestTaipei
+            currentLocation = simulatesTiantanFix ? Self.uiTestTiantan : Self.uiTestTaipei
         }
 #endif
     }
