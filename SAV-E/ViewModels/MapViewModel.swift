@@ -890,6 +890,18 @@ final class MapViewModel: ObservableObject {
         ) == .overFreeLimit
     }
 
+    private func parkLocalFallbackIfNeeded(
+        _ place: Place, startedBy owner: String?, generation: Int
+    ) throws -> Bool {
+        try Task.checkCancellation()
+        guard authService.currentUserId == owner, authService.sessionGeneration == generation else {
+            throw ReviewCandidateError.sessionChangedAfterCommit
+        }
+        guard localFallbackExceedsSavedPlaceLimit(place) else { return false }
+        try parkPlaceInUnplacedInbox(place)
+        return true
+    }
+
     private func rememberAuthoritativeSavedPlaceCount(_ count: Int, owner: String) {
         authoritativeSavedPlaceOwner = owner
         authoritativeSavedPlaceCount = count
@@ -1109,7 +1121,7 @@ final class MapViewModel: ObservableObject {
         var importedPlaces: [Place] = []
         for pendingPlace in pending {
             let place = Place.from(pendingPlace)
-            let isNewKey = importedPendingKeys.insert(pendingPlace.deduplicationKey).inserted
+            let isNewKey = !importedPendingKeys.contains(pendingPlace.deduplicationKey)
             if existingSavedPlace(matching: place) != nil
                 || importedPlaces.contains(where: { $0.matches(place) }) {
                 keepQueued.append(pendingPlace)
@@ -1119,8 +1131,8 @@ final class MapViewModel: ObservableObject {
                 keepQueued.append(pendingPlace)
                 continue
             }
-            let uniqueNewCount = Place.consolidated(importedPlaces).count
-            let projectedCount = savedPlaceCountForLimit + uniqueNewCount
+            // Local-only confirmations do not consume authoritative server quota.
+            let projectedCount = Place.consolidated(places + importedPlaces).count
             // Unresolved / loading entitlement must fail open. Default `.free`
             // would park a Pro account that has not refreshed this session.
             if entitlementResolvedProvider(),
@@ -1130,21 +1142,19 @@ final class MapViewModel: ObservableObject {
                ) == .overFreeLimit {
                 do {
                     try parkPlaceInUnplacedInbox(place)
+                    importedPendingKeys.insert(pendingPlace.deduplicationKey)
                 } catch {
                     keepQueued.append(pendingPlace)
                 }
                 continue
             }
+            importedPendingKeys.insert(pendingPlace.deduplicationKey)
             importedPlaces.append(place)
             keepQueued.append(pendingPlace)
         }
         places = Place.consolidated(places + importedPlaces)
         let newPlaces = places.filter { !previousIDs.contains($0.id) }
         if !newPlaces.isEmpty {
-            if let count = authoritativeSavedPlaceCount,
-               authoritativeSavedPlaceOwner == authService.currentUserId {
-                authoritativeSavedPlaceCount = count + newPlaces.count
-            }
             revealImportedPlaces(newPlaces)
         }
 
@@ -2116,16 +2126,20 @@ final class MapViewModel: ObservableObject {
                         // reached the backend; keep both items available to retry.
                         throw error
                     }
-                    if localFallbackExceedsSavedPlaceLimit(place) {
-                        guard !Task.isCancelled, saveUserId == authService.currentUserId,
-                              saveGeneration == authService.sessionGeneration else { throw CancellationError() }
-                        try parkPlaceInUnplacedInbox(place)
-                        mapCandidates.removeAll { $0.id == candidate.id }
-                        selectedMapCandidate = nil
-                        throw SavePlaceLimitError.parkedInUnplacedInbox
-                    }
-                    syncFailedPlaceName = place.name
+                    guard !Task.isCancelled, saveUserId == authService.currentUserId,
+                          saveGeneration == authService.sessionGeneration else { throw CancellationError() }
+                    if !localFallbackExceedsSavedPlaceLimit(place) { syncFailedPlaceName = place.name }
                 }
+            }
+
+            if !insertedRemotely, localFallbackExceedsSavedPlaceLimit(place) {
+                guard !Task.isCancelled, saveUserId == authService.currentUserId,
+                      saveGeneration == authService.sessionGeneration else { throw CancellationError() }
+                if exactResolution == nil { try parkPlaceInUnplacedInbox(place) }
+                else { requestSavedPlaceLimitPaywall() }
+                mapCandidates.removeAll { $0.id == candidate.id }
+                selectedMapCandidate = nil
+                throw SavePlaceLimitError.parkedInUnplacedInbox
             }
 
             let resolvedExactSearch: Bool
@@ -2524,15 +2538,16 @@ final class MapViewModel: ObservableObject {
                     generation: receiptGeneration
                 ) { throw error }
                 print("MapViewModel: failed to sync friend share receipt \(place.name): \(error)")
-                if localFallbackExceedsSavedPlaceLimit(place) {
-                    try ensureConfirmationSession(receiptUserId, receiptGeneration)
-                    try parkPlaceInUnplacedInbox(place)
-                    throw SavePlaceLimitError.parkedInUnplacedInbox
-                }
-                syncFailedPlaceName = place.name
+                try Task.checkCancellation()
+                try ensureConfirmationSession(receiptUserId, receiptGeneration)
+                if !localFallbackExceedsSavedPlaceLimit(place) { syncFailedPlaceName = place.name }
             }
         }
 
+        if !insertedRemotely,
+           try parkLocalFallbackIfNeeded(place, startedBy: receiptUserId, generation: receiptGeneration) {
+            throw SavePlaceLimitError.parkedInUnplacedInbox
+        }
         try mirrorToLocalVault(savedPlace, startedBy: receiptUserId, generation: receiptGeneration)
         places.removeAll { $0.matches(savedPlace) }
         places = [savedPlace] + places
@@ -2609,9 +2624,14 @@ final class MapViewModel: ObservableObject {
 
         let userId = authService.currentUserId
         let saveGeneration = authService.sessionGeneration
+        var insertedRemotely = false
         if let userId {
             do {
-                try await supabaseService.savePlace(place, userId: userId)
+                try await SAVEPendingImportSessionScope.$current.withValue((saveGeneration, userId)) {
+                    try await supabaseService.savePlace(place, userId: userId)
+                }
+                try ensureConfirmationSession(userId, saveGeneration)
+                insertedRemotely = usesRemotePersistence
                 recordPassportFieldActionAfterSavingPlace()
             } catch {
                 if try parkIfServerSavedPlaceLimit(
@@ -2628,9 +2648,15 @@ final class MapViewModel: ObservableObject {
             }
         }
 
+        if !insertedRemotely,
+           try parkLocalFallbackIfNeeded(place, startedBy: userId, generation: saveGeneration) {
+            socialPlaces.removeAll { $0.id == socialPlace.id }
+            selectedSocialPlace = nil
+            throw SavePlaceLimitError.parkedInUnplacedInbox
+        }
         try mirrorToLocalVault(place, startedBy: userId, generation: saveGeneration)
         places = [place] + places
-        incrementAuthoritativeSavedPlaceCountIfNeeded()
+        if insertedRemotely { incrementAuthoritativeSavedPlaceCountIfNeeded() }
         socialPlaces.removeAll { $0.id == socialPlace.id }
         selectedSocialPlace = nil
         revealImportedPlaces([place])
@@ -2876,9 +2902,14 @@ final class MapViewModel: ObservableObject {
 
         let userId = authService.currentUserId
         let saveGeneration = authService.sessionGeneration
+        var insertedRemotely = false
         if let userId {
             do {
-                try await supabaseService.savePlace(place, userId: userId)
+                try await SAVEPendingImportSessionScope.$current.withValue((saveGeneration, userId)) {
+                    try await supabaseService.savePlace(place, userId: userId)
+                }
+                try ensureConfirmationSession(userId, saveGeneration)
+                insertedRemotely = usesRemotePersistence
                 recordPassportFieldActionAfterSavingPlace()
             } catch {
                 if try parkIfServerSavedPlaceLimit(
@@ -2891,9 +2922,13 @@ final class MapViewModel: ObservableObject {
             }
         }
 
+        if !insertedRemotely,
+           try parkLocalFallbackIfNeeded(place, startedBy: userId, generation: saveGeneration) {
+            throw SavePlaceLimitError.parkedInUnplacedInbox
+        }
         try mirrorToLocalVault(place, startedBy: userId, generation: saveGeneration)
         places = [place] + places
-        incrementAuthoritativeSavedPlaceCountIfNeeded()
+        if insertedRemotely { incrementAuthoritativeSavedPlaceCountIfNeeded() }
         revealImportedPlaces([place])
         return place
     }

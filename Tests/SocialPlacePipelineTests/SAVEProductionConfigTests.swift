@@ -892,6 +892,76 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
     }
 
+    @MainActor
+    func testPendingOfflineParkingFailureRetriesSameModelWithoutConsumingRemoteSlot() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        let owner = "pending-offline-owner"
+        auth.authState = .authenticated(userId: owner)
+        defer { auth.authState = original; AnalysisRequestURLProtocol.reset() }
+        let rows = makeCappedPlaces(49).enumerated().map { index, place in
+            cappedPlaceRowJSON(id: place.id, index: index, name: place.name, googlePlaceID: place.googlePlaceId)
+        }.joined(separator: ",")
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET", request.url?.path == "/places" { return (200, "[\(rows)]") }
+            if request.httpMethod == "POST" { throw URLError(.notConnectedToInternet) }
+            return (200, "[]")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.pending-offline-retry.\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(apiBaseURL: "https://pending.test", session: URLSession(configuration: configuration),
+            accessTokenProvider: { "fixture-token" })
+        let map = MapViewModel(supabaseService: service, pendingImportService: queue, saveLocalVaultService: vault,
+            entitlementTierProvider: { .free }, entitlementResolvedProvider: { true }, usesRemotePersistence: true)
+        await map.loadPlaces()
+        let pending = (50...51).map { number in
+            PendingSharedPlace(ownerSubject: owner, googlePlaceId: "pending-\(number)", name: "Pending \(number)",
+                address: "\(number) Offline Road", category: "cafe", latitude: 25.8 + Double(number) * 0.001,
+                longitude: 121.9, dishes: [], sourceURL: "https://example.com/venue/\(number)",
+                sourceText: "Saved capture \(number)", savedAt: Date())
+        }
+        queue.restorePendingPlaces(pending)
+        vault.saveReviewCandidateError = SaveLocalVaultError.storageUnavailable
+        map.importPendingPlacesForLocalUse()
+        XCTAssertEqual(Place.consolidated(map.places).count, 50)
+        XCTAssertTrue(map.places.contains { $0.name == "Pending 50" })
+        XCTAssertFalse(map.places.contains { $0.name == "Pending 51" })
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+        let retained = queue.consumePendingPlaces(ownerSubject: owner)
+        XCTAssertEqual(Set(retained.map(\.deduplicationKey)), Set(pending.map(\.deduplicationKey)))
+        XCTAssertEqual(retained.first { $0.name == "Pending 51" }?.sourceText, "Saved capture 51")
+        queue.restorePendingPlaces(retained)
+        map.syncSavedPlaceLimitCache()
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed, "Local confirmation cannot consume authoritative server slot49")
+
+        vault.saveReviewCandidateError = nil
+        map.importPendingPlacesForLocalUse()
+        XCTAssertEqual(Place.consolidated(map.places).count, 50)
+        let parked = try XCTUnwrap(map.reviewCandidates.first)
+        XCTAssertEqual(map.reviewCandidates.count, 1)
+        XCTAssertEqual(parked.name, "Pending 51")
+        XCTAssertEqual(parked.ownerSubject, owner)
+        XCTAssertEqual(parked.googlePlaceId, "pending-51")
+        XCTAssertTrue(parked.evidence.joined(separator: " ").contains("https://example.com/venue/51"))
+        XCTAssertEqual(try vault.reviewCandidates().map(\.id), [parked.id])
+        let stillQueued = queue.consumePendingPlaces(ownerSubject: owner)
+        XCTAssertEqual(stillQueued.map(\.name), ["Pending 50"], "Only durably parked51 is removed; local50 still awaits remote sync")
+        queue.restorePendingPlaces(stillQueued)
+        map.importPendingPlacesForLocalUse()
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [parked.id])
+        XCTAssertEqual(Place.consolidated(map.places).count, 50)
+        map.syncSavedPlaceLimitCache()
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed)
+    }
+
     /// P2 4348222437: unknown/loading membership must not block a local import.
     @MainActor
     func testLocalPendingImportAllowsWhileEntitlementUnresolved() throws {
@@ -1293,6 +1363,206 @@ final class SAVEProductionConfigTests: XCTestCase {
                 XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed, "Offline fallbacks never consume server quota")
             }
         }
+    }
+
+    @MainActor
+    func testSocialAndListOfflineFallbackHonorProjectedUniqueCapAndRemoteCount() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original; AnalysisRequestURLProtocol.reset() }
+        for route in ["social", "list"] {
+            for (tier, resolved) in [(SaveProTier.free, true), (.free, false), (.pro, true)] {
+                auth.authState = .authenticated(userId: "fallback-owner")
+                let rows = makeCappedPlaces(49).enumerated().map { index, place in
+                    cappedPlaceRowJSON(id: place.id, index: index, name: place.name, googlePlaceID: place.googlePlaceId)
+                }.joined(separator: ",")
+                var posts = 0
+                AnalysisRequestURLProtocol.reset()
+                AnalysisRequestURLProtocol.handler = { request in
+                    if request.httpMethod == "GET", request.url?.path == "/places" { return (200, "[\(rows)]") }
+                    if request.httpMethod == "POST", request.url?.path == "/places" {
+                        posts += 1
+                        throw URLError(.notConnectedToInternet)
+                    }
+                    if request.httpMethod == "PATCH" { return (200, "{}") }
+                    return (200, "[]")
+                }
+                SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.offline-surfaces.\(UUID())")
+                let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                defer { try? FileManager.default.removeItem(at: directory) }
+                let vaultURL = directory.appendingPathComponent("vault.json")
+                let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+                let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault, tier: tier, resolved: resolved)
+                await map.loadPlaces()
+                let fixtures = makeCappedPlaces(2, indexOffset: 80)
+                let first = try await saveFallbackFixture(fixtures[0], route: route, map: map)
+                XCTAssertEqual(Place.consolidated(map.places).count, 50)
+                let duplicate = try await saveFallbackFixture(fixtures[0], route: route, map: map)
+                XCTAssertEqual(duplicate.id, first.id)
+                XCTAssertEqual(posts, 1, "Duplicate updates the existing row instead of consuming a slot")
+                XCTAssertTrue(map.reviewCandidates.isEmpty)
+                let capped = tier == .free && resolved
+                if route == "social" {
+                    map.socialPlaces = [fixtures[1]]
+                    map.selectedSocialPlace = fixtures[1]
+                }
+                do {
+                    _ = try await saveFallbackFixture(fixtures[1], route: route, map: map)
+                    XCTAssertFalse(capped, "Resolved Free must park the 51st unique offline venue")
+                } catch is SavePlaceLimitError { XCTAssertTrue(capped) }
+                XCTAssertEqual(posts, 2, "The server still gets first opportunity to decide both new saves")
+                XCTAssertEqual(Place.consolidated(map.places).count, capped ? 50 : 51)
+                XCTAssertEqual(try vault.confirmedPlaces(belongingTo: "fallback-owner").count, capped ? 1 : 2)
+                XCTAssertEqual(map.reviewCandidates.map(\.name), capped ? [fixtures[1].name] : [])
+                XCTAssertEqual(try vault.reviewCandidates().map(\.name), capped ? [fixtures[1].name] : [])
+                XCTAssertEqual(map.shouldPresentSavedPlaceLimitPaywall, capped)
+                if route == "social" {
+                    XCTAssertTrue(map.socialPlaces.isEmpty)
+                    XCTAssertNil(map.selectedSocialPlace)
+                }
+                map.syncSavedPlaceLimitCache()
+                XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed,
+                    "Failed remote inserts must not increment the authoritative49 count")
+            }
+        }
+    }
+
+    @MainActor
+    func testSocialAndListFallbackCannotLeakAcrossTokenAccountChange() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original; AnalysisRequestURLProtocol.reset() }
+        for route in ["social", "list"] {
+            for signOut in [false, true] {
+                auth.authState = .authenticated(userId: "fallback-owner-a")
+                let generation = auth.sessionGeneration
+                var scopes: [(generation: Int, owner: String)] = []
+                AnalysisRequestURLProtocol.reset()
+                AnalysisRequestURLProtocol.handler = { request in
+                    if request.httpMethod == "GET" { return (200, "[]") }
+                    throw URLError(.notConnectedToInternet)
+                }
+                let configuration = URLSessionConfiguration.ephemeral
+                configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+                let service = SupabaseService(apiBaseURL: "https://fallback.test", session: URLSession(configuration: configuration),
+                    accessTokenProvider: {
+                        guard let scope = SAVEPendingImportSessionScope.current else { return "background-token" }
+                        await MainActor.run {
+                            scopes.append(scope)
+                            auth.authState = signOut ? .unauthenticated : .authenticated(userId: "fallback-owner-b")
+                        }
+                        return "replacement-token"
+                    })
+                SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.fallback-account.\(UUID())")
+                let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                defer { try? FileManager.default.removeItem(at: directory) }
+                let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+                let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault,
+                    entitlementTierProvider: { .free }, entitlementResolvedProvider: { true }, usesRemotePersistence: true)
+                map.places = makeCappedPlaces(50)
+                let initialIDs = map.places.map(\.id)
+                do {
+                    _ = try await saveFallbackFixture(makeCappedPlaces(1, indexOffset: 80)[0], route: route, map: map)
+                    XCTFail("Account switch must cancel rather than confirm or park")
+                } catch is CancellationError {} catch ReviewCandidateError.sessionChangedAfterCommit {}
+                XCTAssertEqual(scopes.count, 1)
+                XCTAssertEqual(scopes.first?.owner, "fallback-owner-a")
+                XCTAssertEqual(scopes.first?.generation, generation)
+                XCTAssertTrue(AnalysisRequestURLProtocol.requests.filter { $0.httpMethod == "POST" && $0.url?.path == "/places" }.isEmpty)
+                XCTAssertEqual(map.places.map(\.id), initialIDs)
+                XCTAssertTrue(map.reviewCandidates.isEmpty)
+                XCTAssertTrue(try vault.confirmedPlaceRecords().isEmpty)
+                XCTAssertTrue(try vault.reviewCandidates().isEmpty)
+                XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+            }
+        }
+    }
+
+    @MainActor
+    func testSocialAndListFailedOfflineParkingRetainsRetryableSelection() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original; AnalysisRequestURLProtocol.reset() }
+        auth.authState = .authenticated(userId: "fallback-park-owner")
+        for route in ["social", "list"] {
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { request in
+                if request.httpMethod == "POST" { throw URLError(.notConnectedToInternet) }
+                return (200, "[]")
+            }
+            SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.fallback-park.\(UUID())")
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let vaultURL = directory.appendingPathComponent("vault.json")
+            let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            vault.saveReviewCandidateError = SaveLocalVaultError.storageUnavailable
+            let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+            map.places = makeCappedPlaces(50)
+            let fixture = makeCappedPlaces(1, indexOffset: 80)[0]
+            map.socialPlaces = [fixture]
+            map.selectedSocialPlace = fixture
+            do {
+                _ = try await saveFallbackFixture(fixture, route: route, map: map)
+                XCTFail("Failed durable parking cannot report cap completion")
+            } catch SaveLocalVaultError.storageUnavailable {}
+            XCTAssertEqual(map.places.count, 50)
+            XCTAssertTrue(map.reviewCandidates.isEmpty)
+            XCTAssertTrue(try vault.reviewCandidates().isEmpty)
+            XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+            XCTAssertEqual(map.selectedSocialPlace?.id, fixture.id)
+            XCTAssertEqual(map.socialPlaces.map(\.id), [fixture.id])
+            vault.saveReviewCandidateError = nil
+            do {
+                _ = try await saveFallbackFixture(fixture, route: route, map: map)
+                XCTFail("Retry should park, not confirm")
+            } catch is SavePlaceLimitError {}
+            XCTAssertEqual(map.reviewCandidates.map(\.name), [fixture.name])
+            XCTAssertEqual(try vault.reviewCandidates().map(\.name), [fixture.name])
+            XCTAssertTrue(try vault.confirmedPlaceRecords().isEmpty)
+            if route == "social" { XCTAssertNil(map.selectedSocialPlace); XCTAssertTrue(map.socialPlaces.isEmpty) }
+        }
+    }
+
+    @MainActor
+    func testSignedOutRemoteModeFallbacksStillApplyLocalFreeCap() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        auth.authState = .unauthenticated
+        defer { auth.authState = original; AnalysisRequestURLProtocol.reset() }
+        for route in ["social", "list", "map", "receipt"] {
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { _ in (200, "[]") }
+            SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.signed-out-fallback.\(UUID())")
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let vaultURL = directory.appendingPathComponent("vault.json")
+            let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+            // Complete signed-out loading before establishing the visible local snapshot.
+            await map.loadPlaces()
+            map.places = makeCappedPlaces(50)
+            do {
+                if route == "map" {
+                    _ = try await map.saveMapCandidateAsPlace(SaveMapCandidate(id: "signed-out-new", title: "Signed Out New", subtitle: "Taipei", latitude: 25.9, longitude: 121.9, category: .cafe))
+                } else if route == "receipt" {
+                    _ = try await map.saveSharedPlaceReceipt(.embedded(makeShortCodeReceipt(name: "Signed Out Receipt", code: "unused").payload))
+                } else {
+                    _ = try await saveFallbackFixture(makeCappedPlaces(1, indexOffset: 80)[0], route: route, map: map)
+                }
+                XCTFail("No token path must not bypass the local free cap")
+            } catch is SavePlaceLimitError {}
+            XCTAssertEqual(Place.consolidated(map.places).count, 50)
+            XCTAssertEqual(map.reviewCandidates.count, 1)
+            XCTAssertEqual(try vault.reviewCandidates().count, 1)
+            XCTAssertTrue(try vault.confirmedPlaceRecords().isEmpty)
+            XCTAssertTrue(AnalysisRequestURLProtocol.requests.filter { $0.httpMethod == "POST" }.isEmpty)
+        }
+    }
+
+    @MainActor
+    private func saveFallbackFixture(_ place: Place, route: String, map: MapViewModel) async throws -> Place {
+        if route == "social" { return try await map.saveSocialPlaceToMySave(place) }
+        return try await map.saveListItemAsPlace(SaveListItem.from(place: place))
     }
 
     @MainActor
@@ -1864,10 +2134,9 @@ final class SAVEProductionConfigTests: XCTestCase {
             profile.contains("deleteAllRecords()"),
             "deleteAllRecords wipes every account on this device"
         )
-        XCTAssertTrue(
-            map.contains("let uniqueNewCount = Place.consolidated(importedPlaces).count"),
-            "P2 4348075539: local pending-import cap must count unique new stamps"
-        )
+        // Pending-import deduplication and the projected local cap are exercised by
+        // testPendingOfflineParkingFailureRetriesSameModelWithoutConsumingRemoteSlot.
+        // Keep this source check independent of temporary variable spelling.
         XCTAssertFalse(
             map.contains("if isNewKey { importedPlaces.append(place) }"),
             "P2 4348075539: a matching duplicate must not inflate importedPlaces"
