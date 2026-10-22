@@ -440,6 +440,7 @@ struct ProfileView: View {
                     passportContent
                 }
             }
+            .accessibilityIdentifier("passport.root")
             .navigationDestination(isPresented: $showSettings) {
                 settingsPage
             }
