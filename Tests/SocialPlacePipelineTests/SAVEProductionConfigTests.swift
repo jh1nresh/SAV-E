@@ -3981,7 +3981,9 @@ final class SAVEProductionConfigTests: XCTestCase {
         let service = SupabaseService(apiBaseURL: "https://delete-account.test",
             session: URLSession(configuration: configuration), accessTokenProvider: { "account-a-token" })
         let profile = ProfileViewModel(supabaseService: service, accountDeletionService: service,
-            avatarStore: avatars, saveLocalVaultService: vault, reviewerDemoProvider: { false })
+            avatarStore: avatars, saveLocalVaultService: vault,
+            pendingPlaceImportService: PendingPlaceImportService(overrideContainerURL: directory),
+            reviewerDemoProvider: { false })
         let deletion = Task {
             await SAVEPendingImportSessionScope.$current.withValue((generation, owner)) {
                 await profile.deleteAccount()

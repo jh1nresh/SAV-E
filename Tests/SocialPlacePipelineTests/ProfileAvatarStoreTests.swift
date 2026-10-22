@@ -175,6 +175,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
             accountDeletionService: StubAccountDeletionService(),
             avatarStore: ProfileAvatarStore(baseDirectory: directory),
             saveLocalVaultService: vault,
+            pendingPlaceImportService: PendingPlaceImportService(overrideContainerURL: directory),
             currentUserIDProvider: { "did:privy:b" },
             reviewerDemoProvider: { false }
         )
@@ -214,6 +215,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
                 try vault.append(later)
             },
             avatarStore: store, saveLocalVaultService: vault,
+            pendingPlaceImportService: PendingPlaceImportService(overrideContainerURL: directory),
             currentUserIDProvider: { currentOwner }, reviewerDemoProvider: { false }
         )
         let deleted = await model.deleteAccount()
@@ -390,7 +392,15 @@ final class ProfileAvatarStoreTests: XCTestCase {
     func testFreshProfileRecoversSuccessfulRemoteReceiptAndPreservesB() async throws {
         let auth = PrivyAuthService.shared
         let oldAuth = auth.authState
-        defer { auth.authState = oldAuth }
+        let oldDefaults = SavePlaceLimitHandoff.testDefaults
+        let suite = "known-deleted-a-current-b-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        SavePlaceLimitHandoff.testDefaults = defaults
+        defer {
+            auth.authState = oldAuth
+            SavePlaceLimitHandoff.testDefaults = oldDefaults
+            defaults.removePersistentDomain(forName: suite)
+        }
         let url = directory.appendingPathComponent("vault.json")
         let vault = SaveLocalVaultService(overrideVaultURL: url)
         let b = SaveMemoryRecord(state: .sourceOnly, title: "B clue", ownerSubject: "account-b")
@@ -400,6 +410,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
         _ = try vault.recordRemoteAccountDeletionSuccess(intentID: prepared.id)
         // A fresh VM must recover using disk, without a usable A session.
         auth.authState = .authenticated(userId: "account-b")
+        SavePlaceLimitHandoff.syncActiveOwner("account-b")
         var requests = 0
         let fresh = deletionModel(vault: SaveLocalVaultService(overrideVaultURL: url), currentOwner: { "account-b" }) {
             requests += 1
@@ -409,6 +420,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
         XCTAssertEqual(fresh.errorMessage, "Previous account’s local cleanup is complete. Retry to delete this account.")
         XCTAssertEqual(requests, 0)
         XCTAssertEqual(auth.currentUserId, "account-b")
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedActiveOwner(), "account-b")
         XCTAssertEqual(try vault.recentRecords().map(\.id), [b.id])
         XCTAssertNil(try vault.pendingAccountDeletionIntent())
     }
@@ -526,6 +538,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
             supabaseService: SupabaseService(apiBaseURL: nil),
             accountDeletionService: ClosureAccountDeletionService { requests += 1 },
             avatarStore: store, saveLocalVaultService: vault,
+            pendingPlaceImportService: PendingPlaceImportService(overrideContainerURL: directory),
             currentUserIDProvider: { "account-a" }, reviewerDemoProvider: { false }
         )
         let result = await model.deleteAccount()
@@ -543,6 +556,538 @@ final class ProfileAvatarStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testDeletionAndKnownSuccessRecoveryKeepQuarantineThroughLogout() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        let previousSuspension = auth.signOutSuspension
+        let suite = "delete-quarantine-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        SavePlaceLimitHandoff.testDefaults = defaults
+        defer {
+            auth.authState = previousAuth
+            auth.signOutSuspension = previousSuspension
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+            defaults.removePersistentDomain(forName: suite)
+        }
+        for recovering in [false, true] {
+            auth.authState = .authenticated(userId: "account-a")
+            SavePlaceLimitHandoff.syncActiveOwner("account-a")
+            let snapshot = ShareOwnerSnapshot(cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner())
+            let url = directory.appendingPathComponent("quarantine-\(recovering).json")
+            let vault = SaveLocalVaultService(overrideVaultURL: url)
+            let b = SaveMemoryRecord(state: .sourceOnly, title: "B stays", ownerSubject: "account-b")
+            try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Legacy private clue"))
+            try vault.append(b)
+            if recovering {
+                let intent = try vault.prepareAccountDeletion(belongingTo: "account-a")
+                _ = try vault.recordRemoteAccountDeletionSuccess(intentID: intent.id)
+            }
+            var remoteRequests = 0
+            var suspensionCalls = 0
+            var shareWriteRejected = false
+            var coalescedSignOut: Task<Void, Never>?
+            var coalescedSignOutFinished = false
+            auth.signOutSuspension = {
+                suspensionCalls += 1
+                coalescedSignOut = Task {
+                    await auth.signOut()
+                    coalescedSignOutFinished = true
+                }
+                await Task.yield()
+                XCTAssertFalse(coalescedSignOutFinished, "A second caller must wait for the existing logout")
+                do {
+                    XCTAssertNil(SavePlaceLimitHandoff.cachedActiveOwner())
+                    XCTAssertEqual(try vault.pendingAccountDeletionIntent()?.remoteOutcome, .succeeded)
+                    let fresh = self.deletionModel(vault: SaveLocalVaultService(overrideVaultURL: url), currentOwner: { auth.currentUserId }) {
+                        XCTFail("A concurrent recovery must not send DELETE")
+                    }
+                    await fresh.loadProfile()
+                    let duplicate = await fresh.deleteAccount()
+                    XCTAssertFalse(duplicate)
+                    XCTAssertTrue(fresh.errorMessage?.contains("already in progress") == true)
+                    var coordinationError: NSError?
+                    NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
+                        do {
+                            // Same production binding used by the Share writer after
+                            // its coordinated lock is granted, with no analysis token.
+                            try snapshot.validate(cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner(), credential: nil)
+                            let row = ["state": "source_only", "ownerSubject": "account-a", "sourceText": "Must not append"]
+                            try SaveMemoryVaultAppender.appending(row, to: Data(contentsOf: coordinatedURL)).write(to: coordinatedURL)
+                            XCTFail("An open A Share must reject during logout")
+                        } catch ShareAnalysisError.sessionChanged { shareWriteRejected = true }
+                        catch { XCTFail("Unexpected error: \(error)") }
+                    }
+                    XCTAssertNil(coordinationError)
+                    // A previously admitted writer may complete late. The retained
+                    // intent hides it, and completion must re-purge after the await.
+                    try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Late A", ownerSubject: "account-a"))
+                    XCTAssertTrue(try vault.recentRecords(belongingTo: "account-a").isEmpty)
+                } catch { XCTFail("Unexpected error: \(error)") }
+            }
+            let model = deletionModel(vault: vault, currentOwner: { auth.currentUserId }) { remoteRequests += 1 }
+            if recovering { await model.loadProfile() }
+            else {
+                let deleted = await model.deleteAccount()
+                XCTAssertTrue(deleted)
+            }
+            await coalescedSignOut?.value
+            XCTAssertTrue(coalescedSignOutFinished)
+            XCTAssertEqual(suspensionCalls, 1)
+            XCTAssertTrue(shareWriteRejected)
+            XCTAssertEqual(remoteRequests, recovering ? 0 : 1)
+            XCTAssertNil(auth.currentUserId)
+            XCTAssertNil(try vault.pendingAccountDeletionIntent())
+            XCTAssertEqual(try vault.recentRecords().map(\.id), [b.id])
+        }
+    }
+
+    @MainActor
+    func testSwitchToBDuringDeletionLogoutKeepsBSessionCacheAndNewRows() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        let previousSuspension = auth.signOutSuspension
+        let suite = "delete-switch-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        SavePlaceLimitHandoff.testDefaults = defaults
+        defer {
+            auth.authState = previousAuth
+            auth.signOutSuspension = previousSuspension
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+            defaults.removePersistentDomain(forName: suite)
+        }
+        auth.authState = .authenticated(userId: "account-a")
+        SavePlaceLimitHandoff.syncActiveOwner("account-a")
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("switch.json"))
+        let b = SaveMemoryRecord(state: .sourceOnly, title: "B private", ownerSubject: "account-b")
+        let later = SaveMemoryRecord(state: .sourceOnly, title: "New ownerless")
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Initial ownerless"))
+        try vault.append(b)
+        auth.signOutSuspension = {
+            await Task.yield()
+            XCTAssertNil(SavePlaceLimitHandoff.cachedActiveOwner())
+            auth.authState = .authenticated(userId: "account-b")
+            SavePlaceLimitHandoff.syncActiveOwner("account-b")
+            do { try vault.append(later) } catch { XCTFail("Unexpected error: \(error)") }
+        }
+        let model = deletionModel(vault: vault, currentOwner: { auth.currentUserId }) {}
+        let deleted = await model.deleteAccount()
+        XCTAssertTrue(deleted, "The completed request deleted A")
+        XCTAssertEqual(auth.currentUserId, "account-b")
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedActiveOwner(), "account-b")
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+        XCTAssertEqual(Set(try vault.recentRecords().map(\.id)), [b.id, later.id])
+    }
+
+    @MainActor
+    func testFinalCleanupFailureAfterLogoutRetainsReceiptForFreshSignedOutRecovery() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        let previousSuspension = auth.signOutSuspension
+        let suite = "delete-final-failure-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        SavePlaceLimitHandoff.testDefaults = defaults
+        defer {
+            auth.authState = previousAuth
+            auth.signOutSuspension = previousSuspension
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+            defaults.removePersistentDomain(forName: suite)
+        }
+        auth.authState = .authenticated(userId: "account-a")
+        SavePlaceLimitHandoff.syncActiveOwner("account-a")
+        let url = directory.appendingPathComponent("failure.json")
+        let backup = directory.appendingPathComponent("failure-backup.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Legacy private"))
+        auth.signOutSuspension = {
+            await Task.yield()
+            do {
+                try FileManager.default.moveItem(at: url, to: backup)
+                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            } catch { XCTFail("Unexpected error: \(error)") }
+        }
+        var remoteRequests = 0
+        let model = deletionModel(vault: vault, currentOwner: { auth.currentUserId }) { remoteRequests += 1 }
+        let deleted = await model.deleteAccount()
+        XCTAssertFalse(deleted)
+        XCTAssertNil(auth.currentUserId)
+        XCTAssertNil(SavePlaceLimitHandoff.cachedActiveOwner())
+        XCTAssertTrue(model.errorMessage?.contains("Account deleted, but local data cleanup failed") == true)
+        XCTAssertEqual(try vault.pendingAccountDeletionIntent()?.remoteOutcome, .succeeded)
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.moveItem(at: backup, to: url)
+        auth.signOutSuspension = { XCTFail("Signed-out recovery must not log out a new session") }
+        let fresh = deletionModel(vault: SaveLocalVaultService(overrideVaultURL: url), currentOwner: { auth.currentUserId }) {
+            remoteRequests += 1
+            XCTFail("Recovery must not retry remote DELETE")
+        }
+        await fresh.loadProfile()
+        XCTAssertEqual(remoteRequests, 1)
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+        XCTAssertTrue(try vault.recentRecords().isEmpty)
+    }
+
+    @MainActor
+    func testUnknownDeletionRecoveryKeepsCurrentOwnerCacheAndDoesNotLogout() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        let previousSuspension = auth.signOutSuspension
+        let suite = "delete-unknown-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        SavePlaceLimitHandoff.testDefaults = defaults
+        defer {
+            auth.authState = previousAuth
+            auth.signOutSuspension = previousSuspension
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+            defaults.removePersistentDomain(forName: suite)
+        }
+        auth.authState = .authenticated(userId: "account-a")
+        SavePlaceLimitHandoff.syncActiveOwner("account-a")
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("unknown.json"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Legacy private"))
+        _ = try vault.prepareAccountDeletion(belongingTo: "account-a")
+        auth.signOutSuspension = { XCTFail("Unknown remote outcome must not log out A") }
+        let fresh = deletionModel(vault: vault, currentOwner: { auth.currentUserId }) {
+            XCTFail("Unknown receipt recovery must not send DELETE")
+        }
+        await fresh.loadProfile()
+        XCTAssertEqual(auth.currentUserId, "account-a")
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedActiveOwner(), "account-a")
+        XCTAssertTrue(fresh.errorMessage?.contains("remote account deletion result could not be confirmed") == true)
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+    }
+
+    @MainActor
+    func testBothPendingQueuesPurgeAdmittedLateWritersBeforeClearingIntent() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        let previousSuspension = auth.signOutSuspension
+        let suite = "delete-pending-writer-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        SavePlaceLimitHandoff.testDefaults = defaults
+        let release = DispatchSemaphore(value: 0)
+        defer {
+            release.signal(); release.signal()
+            auth.authState = previousAuth
+            auth.signOutSuspension = previousSuspension
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+            defaults.removePersistentDomain(forName: suite)
+        }
+        auth.authState = .authenticated(userId: "account-a")
+        SavePlaceLimitHandoff.syncActiveOwner("account-a")
+        let snapshot = ShareOwnerSnapshot(cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner())
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("pending-vault.json"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A private", ownerSubject: "account-a"))
+        let retained: [[String: String]] = [
+            ["ownerSubject": "account-b", "futureField": "B preserved"],
+            ["futureField": "Ownerless preserved"]
+        ]
+        let original = try JSONEncoder().encode(retained)
+        let late = ["ownerSubject": "account-a", "futureField": "Late A admitted before invalidation"]
+        let admittedData = try SaveMemoryVaultAppender.appending(late, to: original)
+        let urls = [SAVEProductionConfig.pendingPlacesFileName, SAVEProductionConfig.pendingReviewCandidatesFileName]
+            .map { directory.appendingPathComponent($0) }
+        var writers: [Task<Void, Error>] = []
+        for url in urls {
+            try original.write(to: url)
+            // The writer has passed its final owner check, then is paused while
+            // holding exactly the per-queue lock used by Share append.
+            try snapshot.validate(cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner(), credential: nil)
+            let (events, ready) = AsyncStream<Void>.makeStream()
+            let writer = Task.detached {
+                defer { ready.finish() }
+                var coordinationError: NSError?
+                var writeError: Error?
+                NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
+                    ready.yield(())
+                    guard release.wait(timeout: .now() + 15) == .success else {
+                        writeError = CocoaError(.fileWriteUnknown)
+                        return
+                    }
+                    do { try admittedData.write(to: coordinatedURL, options: .atomic) }
+                    catch { writeError = error }
+                }
+                if let coordinationError { throw coordinationError }
+                if let writeError { throw writeError }
+            }
+            writers.append(writer)
+            var iterator = events.makeAsyncIterator()
+            let readyValue = await iterator.next()
+            XCTAssertNotNil(readyValue)
+        }
+        auth.signOutSuspension = {
+            await Task.yield()
+            XCTAssertNil(SavePlaceLimitHandoff.cachedActiveOwner())
+            auth.authState = .authenticated(userId: "account-b")
+            SavePlaceLimitHandoff.syncActiveOwner("account-b")
+            release.signal(); release.signal()
+        }
+        let model = deletionModel(vault: vault, currentOwner: { auth.currentUserId }) {}
+        let deleted = await model.deleteAccount()
+        XCTAssertTrue(deleted)
+        for writer in writers { try await writer.value }
+        XCTAssertEqual(auth.currentUserId, "account-b")
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedActiveOwner(), "account-b")
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+        for url in urls {
+            XCTAssertEqual(try JSONDecoder().decode([[String: String]].self, from: Data(contentsOf: url)), retained)
+            // A writer admitted only after cleanup sees B under the same lock
+            // and cannot recreate the deleted A queue entry.
+            var rejected = false
+            var error: NSError?
+            NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &error) { coordinatedURL in
+                do {
+                    try snapshot.validate(cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner(), credential: nil)
+                    try admittedData.write(to: coordinatedURL, options: .atomic)
+                } catch ShareAnalysisError.sessionChanged { rejected = true }
+                catch { XCTFail("Unexpected error: \(error)") }
+            }
+            XCTAssertNil(error)
+            XCTAssertTrue(rejected)
+            XCTAssertEqual(try JSONDecoder().decode([[String: String]].self, from: Data(contentsOf: url)), retained)
+        }
+    }
+
+    @MainActor
+    func testPendingQueueCorruptionOrWriteFailureRetainsReceiptUntilRetry() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        let previousSuspension = auth.signOutSuspension
+        let suite = "delete-pending-failure-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        SavePlaceLimitHandoff.testDefaults = defaults
+        defer {
+            auth.authState = previousAuth
+            auth.signOutSuspension = previousSuspension
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+            defaults.removePersistentDomain(forName: suite)
+        }
+        for corrupt in [true, false] {
+            let container = directory.appendingPathComponent("queue-failure-\(corrupt)")
+            let url = container.appendingPathComponent("vault.json")
+            let vault = SaveLocalVaultService(overrideVaultURL: url)
+            try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Legacy"))
+            let pending = PendingPlaceImportService(overrideContainerURL: container)
+            let queueURLs = [SAVEProductionConfig.pendingPlacesFileName, SAVEProductionConfig.pendingReviewCandidatesFileName]
+                .map { container.appendingPathComponent($0) }
+            let queue = queueURLs[corrupt ? 1 : 0]
+            let rows = [["ownerSubject": "account-a", "futureField": "A"], ["ownerSubject": "account-b", "futureField": "B"]]
+            let valid = try JSONEncoder().encode(rows)
+            for queueURL in queueURLs { try valid.write(to: queueURL) }
+            if corrupt { try Data("broken-json".utf8).write(to: queue) }
+            auth.authState = .authenticated(userId: "account-a")
+            SavePlaceLimitHandoff.syncActiveOwner("account-a")
+            auth.signOutSuspension = {
+                if !corrupt {
+                    do { try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: container.path) }
+                    catch { XCTFail("Unexpected error: \(error)") }
+                }
+            }
+            defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: container.path) }
+            var requests = 0
+            let model = ProfileViewModel(
+                supabaseService: SupabaseService(apiBaseURL: nil),
+                accountDeletionService: ClosureAccountDeletionService { requests += 1 },
+                avatarStore: ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("avatars")),
+                saveLocalVaultService: vault, pendingPlaceImportService: pending,
+                currentUserIDProvider: { auth.currentUserId }, reviewerDemoProvider: { false })
+            let deleted = await model.deleteAccount()
+            XCTAssertFalse(deleted)
+            XCTAssertEqual(try vault.pendingAccountDeletionIntent()?.remoteOutcome, .succeeded)
+            XCTAssertNil(SavePlaceLimitHandoff.cachedActiveOwner())
+            XCTAssertEqual(requests, 1)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: container.path)
+            if corrupt { try valid.write(to: queue) }
+            auth.authState = .authenticated(userId: "account-b")
+            SavePlaceLimitHandoff.syncActiveOwner("account-b")
+            let fresh = ProfileViewModel(
+                supabaseService: SupabaseService(apiBaseURL: nil),
+                accountDeletionService: ClosureAccountDeletionService { XCTFail("Retry must not delete B remotely") },
+                avatarStore: ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("avatars")),
+                saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: url), pendingPlaceImportService: pending,
+                currentUserIDProvider: { auth.currentUserId }, reviewerDemoProvider: { false })
+            await fresh.loadProfile()
+            XCTAssertNil(try vault.pendingAccountDeletionIntent())
+            XCTAssertEqual(auth.currentUserId, "account-b")
+            XCTAssertEqual(SavePlaceLimitHandoff.cachedActiveOwner(), "account-b")
+            for queueURL in queueURLs {
+                XCTAssertEqual(try JSONDecoder().decode([[String: String]].self, from: Data(contentsOf: queueURL)), [rows[1]])
+            }
+        }
+    }
+
+    @MainActor
+    func testSDKOwnerMismatchRetainsDeletionReceiptUntilSignedOutOrBRecovery() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        let previousSuspension = auth.signOutSuspension
+        let previousSDKProvider = auth.signOutSDKUserIDProvider
+        let suite = "delete-sdk-owner-mismatch-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        SavePlaceLimitHandoff.testDefaults = defaults
+        defer {
+            auth.authState = previousAuth
+            auth.signOutSuspension = previousSuspension
+            auth.signOutSDKUserIDProvider = previousSDKProvider
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+            defaults.removePersistentDomain(forName: suite)
+        }
+        for recoveryOwner in [nil, "account-b"] as [String?] {
+            let url = directory.appendingPathComponent("sdk-mismatch-\(recoveryOwner ?? "signedout").json")
+            let vault = SaveLocalVaultService(overrideVaultURL: url)
+            let b = SaveMemoryRecord(state: .sourceOnly, title: "B private", ownerSubject: "account-b")
+            try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Initial legacy"))
+            try vault.append(b)
+            auth.authState = .authenticated(userId: "account-a")
+            SavePlaceLimitHandoff.syncActiveOwner("account-a")
+            var lookups = 0
+            var logoutCalls = 0
+            auth.signOutSDKUserIDProvider = {
+                await Task.yield()
+                lookups += 1
+                // The SDK has B while its auth-state stream still reports A.
+                return "account-b"
+            }
+            auth.signOutSuspension = { logoutCalls += 1 }
+            var remoteRequests = 0
+            let model = deletionModel(vault: vault, currentOwner: { auth.currentUserId }) { remoteRequests += 1 }
+            let deleted = await model.deleteAccount()
+            XCTAssertFalse(deleted)
+            XCTAssertEqual(lookups, 1)
+            XCTAssertEqual(logoutCalls, 0, "The shared production identity guard must not log out SDK B")
+            XCTAssertEqual(auth.currentUserId, "account-a")
+            XCTAssertTrue(model.errorMessage?.contains("session is still active") == true)
+            XCTAssertEqual(try vault.pendingAccountDeletionIntent()?.remoteOutcome, .succeeded)
+            let late = SaveMemoryRecord(state: .sourceOnly, title: "Late A remains quarantined", ownerSubject: "account-a")
+            try vault.append(late)
+            XCTAssertTrue(try vault.recentRecords(belongingTo: "account-a").isEmpty)
+            XCTAssertTrue(try SaveLocalVaultService(overrideVaultURL: url).recentRecords(belongingTo: nil).isEmpty)
+            // Recover locally once the real app session has caught up. Neither
+            // missing A credentials nor a current B account requires another DELETE.
+            auth.authState = recoveryOwner.map { .authenticated(userId: $0) } ?? .unauthenticated
+            SavePlaceLimitHandoff.syncActiveOwner(recoveryOwner)
+            let fresh = deletionModel(vault: SaveLocalVaultService(overrideVaultURL: url), currentOwner: { auth.currentUserId }) {
+                remoteRequests += 1
+                XCTFail("Recovery must not repeat remote DELETE")
+            }
+            await fresh.loadProfile()
+            XCTAssertEqual(remoteRequests, 1)
+            XCTAssertEqual(lookups, 1)
+            XCTAssertEqual(logoutCalls, 0)
+            XCTAssertEqual(auth.currentUserId, recoveryOwner)
+            XCTAssertEqual(SavePlaceLimitHandoff.cachedActiveOwner(), recoveryOwner)
+            XCTAssertNil(try vault.pendingAccountDeletionIntent())
+            XCTAssertEqual(try vault.recentRecords().map(\.id), [b.id])
+        }
+    }
+
+    @MainActor
+    func testConsumedBatchesCannotRestoreDeletedOwnerButNewSameOwnerBatchCan() throws {
+        let container = directory.appendingPathComponent("consumed-batches")
+        let vault = SaveLocalVaultService(overrideVaultURL: container.appendingPathComponent("vault.json"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A private", ownerSubject: "account-a"))
+        let service = PendingPlaceImportService(overrideContainerURL: container)
+        let placeA = pendingDeletionPlace(owner: "account-a", name: "A")
+        let placeB = pendingDeletionPlace(owner: "account-b", name: "B")
+        let placeLegacy = pendingDeletionPlace(owner: nil, name: "Legacy")
+        let reviewA = pendingDeletionReview(owner: "account-a", name: "A")
+        let reviewB = pendingDeletionReview(owner: "account-b", name: "B")
+        let reviewLegacy = pendingDeletionReview(owner: nil, name: "Legacy")
+        service.restorePendingPlaces([placeA, placeB, placeLegacy])
+        service.restorePendingReviewCandidates([reviewA, reviewB, reviewLegacy])
+        let oldToken = try XCTUnwrap(service.restorationToken())
+        let consumedPlaces = service.consumePendingPlaces(ownerSubject: "account-a") + service.consumePendingPlaces(ownerSubject: "account-b")
+        let consumedReviews = service.consumePendingReviewCandidates(ownerSubject: "account-a") + service.consumePendingReviewCandidates(ownerSubject: "account-b")
+        let intent = try vault.prepareAccountDeletion(belongingTo: "account-a")
+        _ = try vault.recordRemoteAccountDeletionSuccess(intentID: intent.id)
+        try service.purgeAccountDeletionItems(belongingTo: "account-a")
+        try vault.purgeAccountDeletionRecords(intentID: intent.id)
+        try vault.completeAccountDeletionCleanup(intentID: intent.id)
+        // A different service object and a canonical-equivalent path must share
+        // invalidation; the old batch outlives both disk purge and intent removal.
+        let fresh = PendingPlaceImportService(overrideContainerURL: container.appendingPathComponent("../consumed-batches"))
+        fresh.restorePendingPlaces(consumedPlaces, restorationToken: oldToken)
+        fresh.restorePendingReviewCandidates(consumedReviews, restorationToken: oldToken)
+        XCTAssertEqual(fresh.consumePendingPlaces(ownerSubject: "account-a").map(\.name), ["Legacy"])
+        XCTAssertEqual(fresh.consumePendingReviewCandidates(ownerSubject: "account-a").map(\.candidateName), ["Legacy"])
+        XCTAssertEqual(fresh.consumePendingPlaces(ownerSubject: "account-b").map(\.name), ["B"])
+        XCTAssertEqual(fresh.consumePendingReviewCandidates(ownerSubject: "account-b").map(\.candidateName), ["B"])
+        // A later account recreation/new batch, even with identical payloads,
+        // captures the new epoch and is not permanently blacklisted.
+        fresh.restorePendingPlaces([placeA])
+        fresh.restorePendingReviewCandidates([reviewA])
+        let newToken = try XCTUnwrap(fresh.restorationToken())
+        let newPlaces = fresh.consumePendingPlaces(ownerSubject: "account-a")
+        let newReviews = fresh.consumePendingReviewCandidates(ownerSubject: "account-a")
+        fresh.restorePendingPlaces(newPlaces, restorationToken: newToken)
+        fresh.restorePendingReviewCandidates(newReviews, restorationToken: newToken)
+        XCTAssertEqual(fresh.consumePendingPlaces(ownerSubject: "account-a").map(\.name), ["A"])
+        XCTAssertEqual(fresh.consumePendingReviewCandidates(ownerSubject: "account-a").map(\.candidateName), ["A"])
+    }
+
+    @MainActor
+    func testOrdinaryAccountSwitchAndDifferentContainerDoNotInvalidateConsumedBatches() throws {
+        let suite = "pending-normal-switch-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let container = directory.appendingPathComponent("normal")
+        let service = PendingPlaceImportService(overrideContainerURL: container)
+        service.restorePendingPlaces([pendingDeletionPlace(owner: "account-a", name: "A")])
+        service.restorePendingReviewCandidates([pendingDeletionReview(owner: "account-a", name: "A")])
+        SavePlaceLimitHandoff.syncActiveOwner("account-a", defaults: defaults)
+        let token = try XCTUnwrap(service.restorationToken())
+        let places = service.consumePendingPlaces(ownerSubject: "account-a")
+        let reviews = service.consumePendingReviewCandidates(ownerSubject: "account-a")
+        SavePlaceLimitHandoff.syncActiveOwner("account-b", defaults: defaults)
+        let otherContainer = directory.appendingPathComponent("independent")
+        try FileManager.default.createDirectory(at: otherContainer, withIntermediateDirectories: true)
+        try PendingPlaceImportService(overrideContainerURL: otherContainer).purgeAccountDeletionItems(belongingTo: "account-a")
+        service.restorePendingPlaces(places, restorationToken: token)
+        service.restorePendingReviewCandidates(reviews, restorationToken: token)
+        XCTAssertEqual(service.consumePendingPlaces(ownerSubject: "account-a").map(\.name), ["A"])
+        XCTAssertEqual(service.consumePendingReviewCandidates(ownerSubject: "account-a").map(\.candidateName), ["A"])
+    }
+
+    @MainActor
+    func testFailedKnownSuccessQueuePurgeStillInvalidatesPreviouslyConsumedBatch() throws {
+        let service = PendingPlaceImportService(overrideContainerURL: directory)
+        service.restorePendingPlaces([pendingDeletionPlace(owner: "account-a", name: "A")])
+        service.restorePendingReviewCandidates([pendingDeletionReview(owner: "account-a", name: "A")])
+        let token = try XCTUnwrap(service.restorationToken())
+        let places = service.consumePendingPlaces(ownerSubject: "account-a")
+        let reviews = service.consumePendingReviewCandidates(ownerSubject: "account-a")
+        let corruptQueue = directory.appendingPathComponent(SAVEProductionConfig.pendingReviewCandidatesFileName)
+        try Data("broken-json".utf8).write(to: corruptQueue)
+        XCTAssertThrowsError(try service.purgeAccountDeletionItems(belongingTo: "account-a"))
+        try Data("[]".utf8).write(to: corruptQueue)
+        let fresh = PendingPlaceImportService(overrideContainerURL: directory)
+        fresh.restorePendingPlaces(places, restorationToken: token)
+        fresh.restorePendingReviewCandidates(reviews, restorationToken: token)
+        XCTAssertTrue(fresh.consumePendingPlaces(ownerSubject: "account-a").isEmpty)
+        XCTAssertTrue(fresh.consumePendingReviewCandidates(ownerSubject: "account-a").isEmpty)
+    }
+
+    @MainActor
+    private func pendingDeletionPlace(owner: String?, name: String) -> PendingSharedPlace {
+        PendingSharedPlace(ownerSubject: owner, name: name, address: "Fixture address", category: "cafe",
+            latitude: 25, longitude: 121, dishes: [], priceRange: nil,
+            sourceURL: "https://example.test/fixture", sourceText: "Private clue", savedAt: Date())
+    }
+
+    @MainActor
+    private func pendingDeletionReview(owner: String?, name: String) -> PendingReviewCandidate {
+        PendingReviewCandidate(ownerSubject: owner, candidateName: name, address: "", category: "other",
+            sourceURL: "https://example.test/fixture", sourceText: "Private clue", evidence: [],
+            confidence: 0, missingInfo: ["Address"], savedAt: Date())
+    }
+
+    @MainActor
     private func deletionModel(
         vault: SaveLocalVaultService,
         currentOwner: @escaping () -> String?,
@@ -553,6 +1098,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
             accountDeletionService: ClosureAccountDeletionService(action: delete),
             avatarStore: ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("avatars")),
             saveLocalVaultService: vault,
+            pendingPlaceImportService: PendingPlaceImportService(overrideContainerURL: directory),
             currentUserIDProvider: currentOwner, reviewerDemoProvider: { false }
         )
     }

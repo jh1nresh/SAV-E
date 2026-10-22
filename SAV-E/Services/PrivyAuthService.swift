@@ -54,6 +54,12 @@ final class PrivyAuthService: ObservableObject {
     private var shareSessionOwner: String?
     private var shareSessionAttempt: UUID?
     private var interactiveAuthAttempts: Set<UUID> = []
+    private var signingOutOwners = Set<String>()
+    private var signOutWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
+#if DEBUG
+    var signOutSuspension: (() async -> Void)?
+    var signOutSDKUserIDProvider: (() async -> String?)?
+#endif
 
     // MARK: App Review Demo
 
@@ -273,7 +279,40 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Sign Out
 
     func signOut() async {
+        let owner = currentUserId
+        let generation = sessionGeneration
+        if let owner, signingOutOwners.contains(owner) {
+            await withCheckedContinuation { signOutWaiters[owner, default: []].append($0) }
+            return
+        }
+        if let owner { signingOutOwners.insert(owner) }
+        defer {
+            if let owner {
+                signingOutOwners.remove(owner)
+                let waiters = signOutWaiters.removeValue(forKey: owner) ?? []
+                for waiter in waiters { waiter.resume() }
+            }
+        }
         invalidateShareAnalysisSession()
+        // All active-owner writers are on this MainActor. Invalidate before any
+        // SDK suspension so an already-open Share cannot append as this owner.
+        if SavePlaceLimitHandoff.cachedActiveOwner() == owner {
+            SavePlaceLimitHandoff.syncActiveOwner(nil)
+        }
+#if DEBUG
+        if signOutSDKUserIDProvider != nil || signOutSuspension != nil {
+            let sdkUserID: String?
+            if let signOutSDKUserIDProvider { sdkUserID = await signOutSDKUserIDProvider() }
+            else { sdkUserID = owner }
+            guard canLogOutSDKUser(sdkUserID, startedBy: owner, generation: generation) else { return }
+            if let signOutSuspension { await signOutSuspension() }
+            guard currentUserId == owner, sessionGeneration == generation else { return }
+            sessionOrigin = .restored
+            transitionToUnauthenticated()
+            return
+        }
+#endif
+        guard currentUserId == owner, sessionGeneration == generation else { return }
         if isReviewerDemo {
             clearReviewerDemoState()
             sessionOrigin = .restored
@@ -286,9 +325,16 @@ final class PrivyAuthService: ObservableObject {
             return
         }
         let user = await privy.getUser()
+        guard canLogOutSDKUser(user?.id, startedBy: owner, generation: generation) else { return }
         await user?.logout()
+        guard currentUserId == owner, sessionGeneration == generation else { return }
         sessionOrigin = .restored
         transitionToUnauthenticated()
+    }
+
+    private func canLogOutSDKUser(_ sdkUserID: String?, startedBy owner: String?, generation: Int) -> Bool {
+        currentUserId == owner && sessionGeneration == generation &&
+            (sdkUserID == nil || sdkUserID == owner)
     }
 
     func accessToken() async throws -> String {
@@ -349,6 +395,9 @@ final class PrivyAuthService: ObservableObject {
     }
 
     private func transitionToAuthenticated(userId: String) {
+        // Ignore a stale SDK replay for the account whose logout is suspended.
+        // A different account is still allowed to establish its own session.
+        guard !signingOutOwners.contains(userId) else { return }
         if currentUserId != userId {
             sessionGeneration &+= 1
             SaveStoreKitService.shared.resetForSessionChange()

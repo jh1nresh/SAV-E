@@ -1133,6 +1133,7 @@ final class MapViewModel: ObservableObject {
     }
 
     func importPendingPlacesForLocalUse() {
+        let restorationToken = pendingImportService.restorationToken()
         let pending = pendingImportService.consumePendingPlaces(ownerSubject: authService.currentUserId)
         guard !pending.isEmpty else { return }
 
@@ -1178,7 +1179,7 @@ final class MapViewModel: ObservableObject {
             revealImportedPlaces(newPlaces)
         }
 
-        pendingImportService.restorePendingPlaces(keepQueued)
+        pendingImportService.restorePendingPlaces(keepQueued, restorationToken: restorationToken)
     }
 
     private func localConfirmedPlaces() -> [Place] {
@@ -1257,6 +1258,7 @@ final class MapViewModel: ObservableObject {
 
     private func importPendingPlacesForSession(for userId: String) async throws {
         let importGeneration = authService.sessionGeneration
+        let restorationToken = pendingImportService.restorationToken()
         let pending = pendingImportService.consumePendingPlaces(ownerSubject: userId)
         guard !pending.isEmpty else { return }
 
@@ -1266,7 +1268,8 @@ final class MapViewModel: ObservableObject {
         var completedIndices: Set<Int> = []
         defer {
             pendingImportService.restorePendingPlaces(
-                pending.enumerated().compactMap { completedIndices.contains($0.offset) ? nil : $0.element }
+                pending.enumerated().compactMap { completedIndices.contains($0.offset) ? nil : $0.element },
+                restorationToken: restorationToken
             )
         }
         var importedPlaces: [Place] = []
@@ -1338,6 +1341,7 @@ final class MapViewModel: ObservableObject {
 
     private func importPendingReviewCandidatesForSession(for userId: String, runSourceRecovery: Bool) async throws {
         let importGeneration = authService.sessionGeneration
+        let restorationToken = pendingImportService.restorationToken()
         var failedCandidates: [PendingReviewCandidate] = []
 
         while authService.sessionGeneration == importGeneration, authService.currentUserId == userId {
@@ -1348,7 +1352,7 @@ final class MapViewModel: ObservableObject {
             // Persist the tail before this batch runs so a crash mid-batch
             // cannot drop places 5...N. Then keep draining that tail here —
             // do not wait for the next scene-active callback.
-            pendingImportService.restorePendingReviewCandidates(remainder)
+            pendingImportService.restorePendingReviewCandidates(remainder, restorationToken: restorationToken)
 
             for var candidate in currentBatch {
                 do {
@@ -1426,7 +1430,7 @@ final class MapViewModel: ObservableObject {
             await Task.yield()
         }
 
-        pendingImportService.restorePendingReviewCandidates(failedCandidates)
+        pendingImportService.restorePendingReviewCandidates(failedCandidates, restorationToken: restorationToken)
     }
 
     private func invalidateCorrectionSuggestions(placeIDs: Set<UUID>? = nil, scopeKey: String? = nil, discard: Bool = false) {

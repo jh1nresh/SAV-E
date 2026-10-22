@@ -885,8 +885,17 @@ struct ProviderPlaceLocation: Hashable {
     var mapURL: URL
 }
 
+struct PendingImportRestorationToken {
+    fileprivate let containerURL: URL
+    fileprivate let ownerGenerations: [String: Int]
+}
+
 final class PendingPlaceImportService {
     static let shared = PendingPlaceImportService()
+    // Only in-memory consumed batches need invalidation; they cannot survive a
+    // process restart. A new batch captures the new generation, even for the
+    // same owner recreated after deletion.
+    private static var restorationGenerations: [URL: [String: Int]] = [:]
 
     private let fileManager: FileManager
     private let overrideContainerURL: URL?
@@ -896,14 +905,26 @@ final class PendingPlaceImportService {
         self.overrideContainerURL = overrideContainerURL
     }
 
+    func restorationToken() -> PendingImportRestorationToken? {
+        guard let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return nil }
+        let container = Self.canonicalContainer(for: url)
+        return PendingImportRestorationToken(containerURL: container,
+            ownerGenerations: Self.restorationGenerations[container] ?? [:])
+    }
+
+    private static func canonicalContainer(for queueURL: URL) -> URL {
+        queueURL.deletingLastPathComponent().standardizedFileURL.resolvingSymlinksInPath()
+    }
+
     func consumePendingPlaces(ownerSubject: String? = nil) -> [PendingSharedPlace] {
         consumePendingArray(named: SAVEProductionConfig.pendingPlacesFileName, as: PendingSharedPlace.self) {
             $0.ownerSubject == nil || $0.ownerSubject == ownerSubject
         }
     }
 
-    func restorePendingPlaces(_ places: [PendingSharedPlace]) {
-        appendPendingArray(places, named: SAVEProductionConfig.pendingPlacesFileName)
+    func restorePendingPlaces(_ places: [PendingSharedPlace], restorationToken: PendingImportRestorationToken? = nil) {
+        appendPendingArray(places, named: SAVEProductionConfig.pendingPlacesFileName,
+            restorationToken: restorationToken, ownerSubject: { $0.ownerSubject })
     }
 
     func consumePendingReviewCandidates(ownerSubject: String? = nil) -> [PendingReviewCandidate] {
@@ -912,8 +933,40 @@ final class PendingPlaceImportService {
         }
     }
 
-    func restorePendingReviewCandidates(_ candidates: [PendingReviewCandidate]) {
-        appendPendingArray(candidates, named: SAVEProductionConfig.pendingReviewCandidatesFileName)
+    func restorePendingReviewCandidates(_ candidates: [PendingReviewCandidate], restorationToken: PendingImportRestorationToken? = nil) {
+        appendPendingArray(candidates, named: SAVEProductionConfig.pendingReviewCandidatesFileName,
+            restorationToken: restorationToken, ownerSubject: { $0.ownerSubject })
+    }
+
+    /// Runs after the deleted owner's Share cache is invalidated. The same
+    /// per-file lock as Share append orders already-admitted writers before this
+    /// purge. Keep legacy ownerless rows, other owners and unrecognized fields.
+    func purgeAccountDeletionItems(belongingTo owner: String) throws {
+        guard let firstURL = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else {
+            throw SaveLocalVaultError.storageUnavailable
+        }
+        let container = Self.canonicalContainer(for: firstURL)
+        Self.restorationGenerations[container, default: [:]][owner, default: 0] += 1
+        for name in [SAVEProductionConfig.pendingPlacesFileName, SAVEProductionConfig.pendingReviewCandidatesFileName] {
+            guard let url = pendingFileURL(named: name) else { throw SaveLocalVaultError.storageUnavailable }
+            var coordinationError: NSError?
+            var writeError: Error?
+            NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
+                do {
+                    guard fileManager.fileExists(atPath: coordinatedURL.path) else { return }
+                    let data = try Data(contentsOf: coordinatedURL)
+                    guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                        throw CocoaError(.fileReadCorruptFile)
+                    }
+                    let retained = rows.filter { ($0["ownerSubject"] as? String) != owner }
+                    guard retained.count != rows.count else { return }
+                    try JSONSerialization.data(withJSONObject: retained, options: [.sortedKeys])
+                        .write(to: coordinatedURL, options: .atomic)
+                } catch { writeError = error }
+            }
+            if let coordinationError { throw coordinationError }
+            if let writeError { throw writeError }
+        }
     }
 
     private func consumePendingArray<Element: Codable>(named fileName: String, as elementType: Element.Type, accepts: (Element) -> Bool) -> [Element] {
@@ -938,13 +991,24 @@ final class PendingPlaceImportService {
         return result
     }
 
-    private func appendPendingArray<Element: Codable>(_ items: [Element], named fileName: String) {
+    private func appendPendingArray<Element: Codable>(
+        _ items: [Element], named fileName: String,
+        restorationToken: PendingImportRestorationToken?, ownerSubject: (Element) -> String?
+    ) {
         guard !items.isEmpty, let url = pendingFileURL(named: fileName) else { return }
         coordinate(url: url, purpose: "append \(fileName)") {
             do {
+                let container = Self.canonicalContainer(for: url)
+                let retained = items.filter { item in
+                    guard let token = restorationToken, let owner = ownerSubject(item) else { return true }
+                    return token.containerURL == container &&
+                        token.ownerGenerations[owner, default: 0] ==
+                        Self.restorationGenerations[container, default: [:]][owner, default: 0]
+                }
+                guard !retained.isEmpty else { return }
                 try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
                 let existing = try loadArray([Element].self, from: url)
-                let data = try JSONEncoder().encode(existing + items)
+                let data = try JSONEncoder().encode(existing + retained)
                 try data.write(to: url, options: [.atomic])
             } catch {
                 print("PendingPlaceImportService: failed to append \(fileName): \(error)")
