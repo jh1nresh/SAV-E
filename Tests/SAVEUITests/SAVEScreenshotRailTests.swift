@@ -564,21 +564,32 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout))
+        // `home.savedPlaces` is the library container and exists while empty.
+        // The Pro row is `if !passportPlaces.isEmpty`. CI 39697020308 opened
+        // Settings before a stamp loaded, so profile.pro never entered the tree.
+        XCTAssertTrue(
+            app.staticTexts["home.featuredName"].waitForExistence(timeout: stepTimeout),
+            "Settings Pro row requires a confirmed Map Stamp on Home first."
+        )
         openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         let settings = app.buttons["profile.settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: stepTimeout), "Passport settings opens the B7 Pro row.")
         tapReachable(settings)
+        XCTAssertTrue(app.navigationBars["Passport settings"].waitForExistence(timeout: stepTimeout))
+
+        let disclosure = app.descendants(matching: .any)["profile.controlsDisclosure"]
+        XCTAssertTrue(disclosure.waitForExistence(timeout: stepTimeout))
+        tapReachable(disclosure)
 
         let pro = app.descendants(matching: .any)["profile.pro"]
-        if !pro.waitForExistence(timeout: timeout(3)) {
-            let disclosure = app.descendants(matching: .any)["profile.controlsDisclosure"]
-            XCTAssertTrue(disclosure.waitForExistence(timeout: stepTimeout))
-            tapReachable(disclosure)
-        }
+        XCTAssertTrue(
+            pro.waitForExistence(timeout: stepTimeout),
+            "Settings must expose Savvy Pro after a Map Stamp exists."
+        )
         XCTAssertTrue(
             scrollUntilHittable(pro, in: app.scrollViews.firstMatch, maxSwipes: 8),
-            "Settings must expose Savvy Pro after a Map Stamp exists."
+            "Settings must scroll Savvy Pro on screen."
         )
         tapReachable(pro)
 

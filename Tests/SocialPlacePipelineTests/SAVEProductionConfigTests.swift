@@ -165,6 +165,10 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(rail.contains("You've saved 50 places. Keep going."))
         XCTAssertTrue(rail.contains("Review Candidate"))
         XCTAssertTrue(
+            rail.contains("Settings Pro row requires a confirmed Map Stamp on Home first."),
+            "E4 Settings waits for home.featuredName before opening the gated Pro row"
+        )
+        XCTAssertTrue(
             rail.contains("Q1: Settings uses the Passport trigger, not the saved-50 line."),
             "Settings still must prove the keep-going line is absent"
         )
