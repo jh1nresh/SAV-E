@@ -280,9 +280,10 @@ private extension SaveHomeSearch {
 
         func matches(address: String) -> Bool {
             let normalizedAddress = SaveHomeSearch.normalize(address)
+            let aliasHit: Bool
             switch self {
             case .taipei:
-                return aliases.contains { alias in
+                aliasHit = aliases.contains { alias in
                     SaveHomeSearch.contains(alias: alias, in: normalizedAddress) &&
                         !SaveHomeSearch.contains(alias: "new taipei", in: normalizedAddress) &&
                         !normalizedAddress.contains("新北")
@@ -290,9 +291,55 @@ private extension SaveHomeSearch {
             case .kyoto:
                 // 東京都 contains 京都 as a substring, but is a Tokyo address.
                 guard !normalizedAddress.contains("東京都"), !normalizedAddress.contains("东京都") else { return false }
-                return aliases.contains { SaveHomeSearch.contains(alias: $0, in: normalizedAddress) }
+                aliasHit = aliases.contains { SaveHomeSearch.contains(alias: $0, in: normalizedAddress) }
             default:
-                return aliases.contains { SaveHomeSearch.contains(alias: $0, in: normalizedAddress) }
+                aliasHit = aliases.contains { SaveHomeSearch.contains(alias: $0, in: normalizedAddress) }
+            }
+            return aliasHit && fitsAdministrativeRegion(address)
+        }
+
+        /// Allowlisted aliases stay canonical unless the address names a
+        /// different country or a US state (Paris, TX vs Paris, France).
+        private func fitsAdministrativeRegion(_ address: String) -> Bool {
+            if SaveHomeSearch.addressSignalsUnitedStates(address), !isUnitedStatesMetro {
+                return false
+            }
+            guard let country = SaveHomeSearch.addressCountryToken(address),
+                  let home = homeCountryTokens
+            else { return true }
+            return home.contains(country)
+        }
+
+        private var isUnitedStatesMetro: Bool {
+            switch self {
+            case .losAngeles, .newYork, .sanFrancisco: return true
+            default: return false
+            }
+        }
+
+        private var homeCountryTokens: Set<String>? {
+            switch self {
+            case .losAngeles, .newYork, .sanFrancisco:
+                return ["usa", "us", "united states", "united states of america"]
+            case .taipei, .newTaipei, .taoyuan, .taichung, .tainan, .kaohsiung,
+                 .keelung, .hsinchu, .chiayi:
+                return ["taiwan"]
+            case .tokyo, .kyoto, .osaka:
+                return ["japan"]
+            case .bangkok:
+                return ["thailand"]
+            case .seoul:
+                return ["korea", "south korea"]
+            case .singapore:
+                return ["singapore"]
+            case .hongKong:
+                return ["hong kong", "china"]
+            case .paris:
+                return ["france"]
+            case .london:
+                return ["uk", "u.k.", "united kingdom", "england", "britain"]
+            case .shanghai, .beijing, .guangzhou, .shenzhen, .chengdu:
+                return ["china"]
             }
         }
     }
@@ -406,4 +453,69 @@ private extension SaveHomeSearch {
             Array(haystack[start..<(start + needle.count)]) == needle
         }
     }
+
+    /// `Paris, TX 75460, USA` and `Paris, Texas` are US; `Paris, France` is not.
+    static func addressSignalsUnitedStates(_ address: String) -> Bool {
+        let parts = address
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if let last = parts.last, countryTokens.contains(normalize(last)),
+           ["usa", "us", "united states", "united states of america"].contains(normalize(last)) {
+            return true
+        }
+        return parts.contains { isUnitedStatesStatePart($0) }
+    }
+
+    static func addressCountryToken(_ address: String) -> String? {
+        let parts = address
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard let last = parts.last else { return nil }
+        let token = normalize(last)
+        return countryTokens.contains(token) ? token : nil
+    }
+
+    private static func isUnitedStatesStatePart(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let folded = normalize(trimmed)
+        if usStateNames.contains(folded) { return true }
+        if folded.range(of: #"^[a-z]{2}$"#, options: .regularExpression) != nil {
+            return usStateCodes.contains(folded)
+        }
+        if let match = folded.range(of: #"^[a-z]{2}(?=\s)"#, options: .regularExpression) {
+            return usStateCodes.contains(String(folded[match]))
+        }
+        return false
+    }
+
+    private static let countryTokens: Set<String> = [
+        "usa", "us", "united states", "united states of america",
+        "uk", "u.k.", "united kingdom", "england", "britain",
+        "taiwan", "japan", "china", "canada", "australia", "france",
+        "germany", "italy", "spain", "korea", "south korea", "thailand",
+        "singapore", "hong kong",
+    ]
+
+    private static let usStateCodes: Set<String> = [
+        "al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga", "hi",
+        "id", "il", "in", "ia", "ks", "ky", "la", "me", "md", "ma", "mi",
+        "mn", "ms", "mo", "mt", "ne", "nv", "nh", "nj", "nm", "ny", "nc",
+        "nd", "oh", "ok", "or", "pa", "ri", "sc", "sd", "tn", "tx", "ut",
+        "vt", "va", "wa", "wv", "wi", "wy", "dc",
+    ]
+
+    private static let usStateNames: Set<String> = [
+        "alabama", "alaska", "arizona", "arkansas", "california", "colorado",
+        "connecticut", "delaware", "florida", "georgia", "hawaii", "idaho",
+        "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana",
+        "maine", "maryland", "massachusetts", "michigan", "minnesota",
+        "mississippi", "missouri", "montana", "nebraska", "nevada",
+        "new hampshire", "new jersey", "new mexico", "new york",
+        "north carolina", "north dakota", "ohio", "oklahoma", "oregon",
+        "pennsylvania", "rhode island", "south carolina", "south dakota",
+        "tennessee", "texas", "utah", "vermont", "virginia", "washington",
+        "west virginia", "wisconsin", "wyoming", "district of columbia",
+    ]
 }

@@ -970,6 +970,7 @@ struct ContentView: View {
                     mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
                 } ?? false
                 let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+                endExactSearchSessionAfterCandidateSave()
                 if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
                     requestTripAssignment(for: place)
@@ -1359,6 +1360,7 @@ struct ContentView: View {
                     mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
                 } ?? false
                 let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+                endExactSearchSessionAfterCandidateSave()
                 if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
                     requestTripAssignment(for: place)
@@ -1484,6 +1486,14 @@ struct ContentView: View {
                 openMapDetail(.savedPlace(resolved))
             }
         }
+    }
+
+    /// Saving a new map candidate resolves the clue in MapViewModel but
+    /// must also drop the ContentView session so the next saved-row tap
+    /// opens the stamp instead of `chooseSavedStampFromExactSearch`.
+    private func endExactSearchSessionAfterCandidateSave() {
+        exactSearchClueID = nil
+        isExactSearchSessionActive = false
     }
 
     private func invalidateExactSearchRequest() {

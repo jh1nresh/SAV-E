@@ -2084,9 +2084,10 @@ final class MapViewModel: ObservableObject {
         return (true, committed)
     }
 
-    /// Retire the originating clue and same-place leftovers (seed + recapture).
-    /// Same-name clues in another city, or same-city branches far enough to
-    /// have their own coordinates, stay.
+    /// Retire the originating clue and proven same-place leftovers (seed +
+    /// recapture). Same-name clues in the same city without coordinates are
+    /// distinct branches until a shared source identity or a <250 m pair
+    /// proves otherwise.
     private func retireResolvedReviewClue(
         _ clue: PlaceReviewCandidate,
         committed: Bool = true
@@ -2123,11 +2124,25 @@ final class MapViewModel: ObservableObject {
         if let meters = reviewClueDistanceMeters(leftover, resolved) {
             return meters < 250
         }
-        let leftoverCity = leftover.city?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-        let resolvedCity = resolved.city?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-        // No coordinates to prove they are different places. Only collapse a
-        // nameless-city leftover when both name the same city (seed + recapture).
-        return !leftoverCity.isEmpty && leftoverCity == resolvedCity
+        return sharesReviewSourceIdentity(leftover, resolved)
+    }
+
+    /// Capture / workflow / semantic source — not name and city alone.
+    private func sharesReviewSourceIdentity(
+        _ leftover: PlaceReviewCandidate,
+        _ resolved: PlaceReviewCandidate
+    ) -> Bool {
+        if let capture = leftover.captureId, capture == resolved.captureId {
+            return true
+        }
+        if let workflow = leftover.workflowRunId, workflow == resolved.workflowRunId {
+            return true
+        }
+        if leftover.semanticSource != nil,
+           leftover.semanticSource == resolved.semanticSource {
+            return true
+        }
+        return false
     }
 
     private func reviewClueDistanceMeters(

@@ -6283,6 +6283,138 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual("臺北市信義區", "臺北市信義區")
     }
 
+    func testRetireResolvedReviewClueDoesNotUseNameAndCityAlone() throws {
+        let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
+        XCTAssertTrue(map.contains("sharesReviewSourceIdentity"))
+        XCTAssertFalse(map.contains("leftoverCity == resolvedCity"))
+        XCTAssertTrue(map.contains("not name and city alone"))
+    }
+
+    @MainActor
+    func testRetireResolvedReviewClueKeepsSameNameCityLeftoverWithoutCoordinates() async throws {
+        let search = RecordingMapCandidateSearchService()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("retire-leftover-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            mapCandidateSearchService: search,
+            usesRemotePersistence: false
+        )
+        let resolved = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Starbucks",
+            address: "Los Angeles",
+            city: "Los Angeles",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Synthetic public fixture"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        let leftover = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Starbucks",
+            address: "Los Angeles",
+            city: "Los Angeles",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Another branch"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        map.reviewCandidates = [resolved, leftover]
+        map.updateVisibleMapRegion(region(around: taipei))
+        map.beginExactSearchResolution(for: resolved)
+        search.nextMatchingResults = [
+            SaveMapCandidate(
+                id: "resolved-starbucks",
+                title: "Starbucks Sunset",
+                subtitle: "Los Angeles, CA",
+                latitude: 34.0979,
+                longitude: -118.3287,
+                category: .cafe
+            )
+        ]
+        await map.searchMapPlaces("Starbucks Sunset", preservesExactSearchClue: true)
+        let candidate = try XCTUnwrap(map.mapCandidates.first)
+        _ = try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == leftover.id },
+            "A second coordinate-less Starbucks in the same city must stay"
+        )
+    }
+
+    @MainActor
+    func testRetireResolvedReviewClueStillCollapsesSharedCaptureLeftover() async throws {
+        let search = RecordingMapCandidateSearchService()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("retire-shared-capture-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            mapCandidateSearchService: search,
+            usesRemotePersistence: false
+        )
+        let capture = UUID()
+        let resolved = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: capture,
+            name: "Starbucks",
+            address: "Los Angeles",
+            city: "Los Angeles",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Seed"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        let leftover = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: capture,
+            name: "Starbucks",
+            address: "Los Angeles",
+            city: "Los Angeles",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Recapture"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        map.reviewCandidates = [resolved, leftover]
+        map.updateVisibleMapRegion(region(around: taipei))
+        map.beginExactSearchResolution(for: resolved)
+        search.nextMatchingResults = [
+            SaveMapCandidate(
+                id: "shared-capture-starbucks",
+                title: "Starbucks Sunset",
+                subtitle: "Los Angeles, CA",
+                latitude: 34.0979,
+                longitude: -118.3287,
+                category: .cafe
+            )
+        ]
+        await map.searchMapPlaces("Starbucks Sunset", preservesExactSearchClue: true)
+        let candidate = try XCTUnwrap(map.mapCandidates.first)
+        _ = try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertFalse(
+            map.reviewCandidates.contains { $0.id == leftover.id },
+            "A recapture that shares captureId is the same source identity"
+        )
+    }
+
     func testSavedPlaceSearchMatchesTaipeiVariants() {
         let map = MapViewModel(usesRemotePersistence: false)
         map.places = [
