@@ -2057,22 +2057,16 @@ final class MapViewModel: ObservableObject {
         let clue = resolution.clue
         var committed = false
         if usesRemotePersistence {
-            var updatedClue = clue
-            updatedClue.name = place.name
-            updatedClue.address = place.address
-            updatedClue.latitude = place.latitude
-            updatedClue.longitude = place.longitude
-            updatedClue.status = "saved"
-            // The place row is already saved or PATCHed above. Send only the
-            // id so the backend never inserts `final_place` a second time
-            // (409 "final_place.id already exists").
-            try await recordCorrectionEvent(
-                for: clue,
-                eventType: .confirmCandidate,
-                afterCandidate: updatedClue,
-                userFinalPlaceId: place.id,
-                reason: "User resolved review candidate to an exact map place."
-            )
+            // Persist leftovers first so a leftover failure cannot leave the
+            // originating decision committed while extras remain remote-review
+            // and the next refresh restores them.
+            let leftovers = reviewCandidates.filter {
+                $0.id != clue.id && isDuplicateReviewClue($0, of: clue)
+            }
+            for leftover in leftovers {
+                try await persistExactSearchResolution(for: leftover, to: place)
+            }
+            try await persistExactSearchResolution(for: clue, to: place)
             committed = true
         }
 
@@ -2082,6 +2076,27 @@ final class MapViewModel: ObservableObject {
         try retireResolvedReviewClue(clue, committed: committed)
         if usesRemotePersistence { await refreshReviewCandidatesLoggingFailures() }
         return (true, committed)
+    }
+
+    /// The place row is already saved or PATCHed above. Send only the id so
+    /// the backend never inserts `final_place` a second time (409).
+    private func persistExactSearchResolution(
+        for candidate: PlaceReviewCandidate,
+        to place: Place
+    ) async throws {
+        var updated = candidate
+        updated.name = place.name
+        updated.address = place.address
+        updated.latitude = place.latitude
+        updated.longitude = place.longitude
+        updated.status = "saved"
+        try await recordCorrectionEvent(
+            for: candidate,
+            eventType: .confirmCandidate,
+            afterCandidate: updated,
+            userFinalPlaceId: place.id,
+            reason: "User resolved review candidate to an exact map place."
+        )
     }
 
     /// Retire the originating clue and proven same-place leftovers (seed +

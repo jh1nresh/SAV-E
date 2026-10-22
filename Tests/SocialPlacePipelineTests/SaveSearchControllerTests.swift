@@ -3342,6 +3342,83 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testExactSearchResolutionPersistsEveryRetiredLeftoverBeforeRefresh() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-persist-leftovers-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-persist-leftovers-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        let resolvedID = UUID()
+        let leftoverID = UUID()
+        let resolved = PlaceReviewCandidate(
+            id: resolvedID,
+            captureId: nil,
+            workflowRunId: UUID(),
+            name: "Starbucks",
+            address: "123 Sunset Blvd",
+            city: "Los Angeles",
+            latitude: 34.0979,
+            longitude: -118.3287,
+            evidence: ["Seed"],
+            confidence: 0.6,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        let leftover = PlaceReviewCandidate(
+            id: leftoverID,
+            captureId: nil,
+            workflowRunId: UUID(),
+            name: "Starbucks",
+            address: "125 Sunset Boulevard",
+            city: "Los Angeles",
+            latitude: 34.0980,
+            longitude: -118.3288,
+            evidence: ["Nearby recapture"],
+            confidence: 0.6,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        supabase.remoteReviewCandidates = [resolved, leftover]
+        let map = MapViewModel(
+            supabaseService: supabase,
+            mapCandidatePlaceSaver: { _, _ in },
+            mapCandidateUserIDProvider: { "owner" },
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.reviewCandidates = [resolved, leftover]
+        map.mapCandidates = [
+            SaveMapCandidate(
+                id: "nearby-starbucks",
+                title: "Starbucks Sunset",
+                subtitle: "Los Angeles, CA",
+                latitude: 34.0979,
+                longitude: -118.3287,
+                category: .cafe
+            )
+        ]
+        map.beginExactSearchResolution(for: resolved)
+
+        let candidate = try XCTUnwrap(map.mapCandidates.first)
+        _ = try await map.saveMapCandidateAsPlace(candidate)
+
+        let decidedIDs = Set(supabase.recoveryDecisions.compactMap(\.candidateId))
+        XCTAssertEqual(decidedIDs, [resolvedID, leftoverID])
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolvedID })
+        XCTAssertFalse(
+            map.reviewCandidates.contains { $0.id == leftoverID },
+            "A leftover within 250 m must stay retired after remote refresh"
+        )
+    }
+
+    @MainActor
     func testNewRowConfirmStillSendsFinalPlace() async throws {
         let auth = PrivyAuthService.shared
         let previousAuth = auth.authState
@@ -6518,6 +6595,7 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
 
     private(set) var fetchPlacesCalls = 0
     private(set) var savedPlaces: [Place] = []
+    var remoteReviewCandidates: [PlaceReviewCandidate] = []
 
     func startAnalysis(id: UUID) async throws -> UUID? { nil }
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {}
@@ -6557,7 +6635,10 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?, explicitRetry: Bool) async throws -> SourceSearchRecoveryResult {
         SourceSearchRecoveryResult(createdCandidates: [], sourceResolution: nil)
     }
-    func fetchReviewCandidates() async throws -> [PlaceReviewCandidate] { [] }
+    func fetchReviewCandidates() async throws -> [PlaceReviewCandidate] {
+        let decided = Set(recoveryDecisions.compactMap(\.candidateId))
+        return remoteReviewCandidates.filter { !decided.contains($0.id) }
+    }
     func updatePlaceCandidateStatus(_ candidateId: UUID, status: String, placeId: UUID?) async throws {}
     func createPlaceRecoveryWorkOrder(sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkOrder {
         throw SupabaseError.notConfigured
