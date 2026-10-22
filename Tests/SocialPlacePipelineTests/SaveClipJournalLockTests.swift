@@ -127,7 +127,7 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(pending.contains("data.count <= journalByteLimit"))
         XCTAssertTrue(app.contains("Preview-only AppStorage URL is not a Clip save intent."))
         XCTAssertTrue(appPending.contains("matchesIncomingList"))
-        XCTAssertTrue(appPending.contains("ClipListHandoff.shouldSaveItems"))
+        XCTAssertTrue(appPending.contains("static func shouldSaveItems"))
         XCTAssertTrue(app.contains("pendingClipListSave"))
         XCTAssertTrue(app.contains("ClipListHandoff.stampList"))
         XCTAssertTrue(app.contains("presentListJoinFailure"))
