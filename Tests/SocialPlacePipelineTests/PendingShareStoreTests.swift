@@ -497,6 +497,7 @@ final class PendingShareStoreTests: XCTestCase {
         let body = ClipListHandoff.placeBody(from: item)
         XCTAssertEqual(body["provider_place_id"] as? String, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
         XCTAssertEqual(body["google_place_id"] as? String, "ChIJ123")
+        XCTAssertEqual(body["extra_place_ids"] as? [String], ["ChIJ123"])
         let encoded = try? JSONEncoder().encode(snapshot)
         let decoded = encoded.flatMap { try? JSONDecoder().decode(PendingConfirmedPlace.self, from: $0) }
         XCTAssertEqual(decoded?.extraPlaceIds, ["ChIJ123"])

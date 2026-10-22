@@ -304,7 +304,11 @@ enum ClipListSavePlanner {
         ]
         if let sourceURL = item.sourceURL { body["source_url"] = sourceURL }
         if let placeId = item.placeId, !placeId.isEmpty { body["provider_place_id"] = placeId }
-        if let google = item.extraPlaceIds.first, !google.isEmpty { body["google_place_id"] = google }
+        let extras = item.extraPlaceIds
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if let google = extras.first { body["google_place_id"] = google }
+        if !extras.isEmpty { body["extra_place_ids"] = extras }
         return body
     }
 

@@ -8,6 +8,7 @@ import {
   clipSavedPlaceLimitBody,
   FREE_LIST_SAVE_LIMIT,
   planClipListSave,
+  uniqueClipListItems,
 } from "./clipListSave.js";
 
 const cafe = (id: string, name = "Onibus Coffee") => ({
@@ -49,6 +50,33 @@ test("google and provider place ids share one identity", () => {
   });
   assert.equal(plan.alreadySaved, 1);
   assert.equal(plan.newlySaved, 0);
+});
+
+test("every merged extra identity is used for account dedupe", () => {
+  const items = [
+    { id: "id-a", name: "Onibus Coffee", latitude: 35.644, longitude: 139.699 },
+    { id: "id-b", name: "Onibus Coffee", latitude: 35.644, longitude: 139.699 },
+    { id: "ChIJ123", name: "Onibus Coffee", latitude: 35.644, longitude: 139.699 },
+  ];
+  const unique = uniqueClipListItems(items);
+  assert.equal(unique.length, 1);
+  assert.deepEqual(unique[0]?.extra_place_ids, ["id-b", "ChIJ123"]);
+  const existing = {
+    id: "owned",
+    google_place_id: "ChIJ123",
+    name: "Renamed Stamp",
+    latitude: 1,
+    longitude: 2,
+  };
+  const plan = planClipListSave({
+    items,
+    existingIdentities: clipListPlaceIdentities(existing),
+    existingPlaces: [existing],
+    savedPlaceCount: 1,
+  });
+  assert.deepEqual(plan.toInsert, []);
+  assert.equal(plan.newlySaved, 0);
+  assert.equal(plan.alreadySaved, 3);
 });
 
 test("SL1 merges every group a later item bridges", () => {
@@ -236,6 +264,7 @@ test("SL4 POST /places list writes are one transactional call", () => {
   const planner = readFileSync(new URL("../src/clipListSave.ts", import.meta.url), "utf8");
   assert.match(planner, /export function uniqueClipListItems/);
   assert.match(planner, /matched\.slice\(1\)/);
+  assert.match(planner, /extra_place_ids/);
   assert.match(handler, /begin/);
   assert.match(handler, /commit/);
   assert.match(handler, /rollback/);

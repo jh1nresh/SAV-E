@@ -10,6 +10,42 @@ export type ClipListSavePlan = {
   limit: number;
 };
 
+function extraPlaceIdsFrom(place: Record<string, unknown> | {
+  extra_place_ids?: unknown;
+  extraPlaceIds?: unknown;
+}): string[] {
+  const raw = "extra_place_ids" in place ? place.extra_place_ids : "extraPlaceIds" in place ? place.extraPlaceIds : undefined;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((value): value is string => typeof value === "string" && value.trim() !== "")
+    .map((value) => value.trim());
+}
+
+function sourcePlaceIds(place: {
+  id?: unknown;
+  google_place_id?: unknown;
+  provider_place_id?: unknown;
+  extra_place_ids?: unknown;
+  extraPlaceIds?: unknown;
+}): string[] {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const value of [
+    place.provider_place_id,
+    place.google_place_id,
+    place.id,
+    ...extraPlaceIdsFrom(place),
+  ]) {
+    if (typeof value !== "string" || !value.trim()) continue;
+    const trimmed = value.trim();
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    ids.push(trimmed);
+  }
+  return ids;
+}
+
 export function clipListPlaceIdentities(place: {
   id?: unknown;
   name?: unknown;
@@ -17,20 +53,17 @@ export function clipListPlaceIdentities(place: {
   longitude?: unknown;
   google_place_id?: unknown;
   provider_place_id?: unknown;
+  extra_place_ids?: unknown;
+  extraPlaceIds?: unknown;
 }): string[] {
   const keys: string[] = [];
   if (typeof place.id === "string" && place.id.trim()) {
     keys.push(`id:${place.id.trim().toLowerCase()}`);
   }
-  const google = typeof place.google_place_id === "string" ? place.google_place_id.trim() : "";
-  const provider = typeof place.provider_place_id === "string" ? place.provider_place_id.trim() : "";
-  if (google) {
-    keys.push(`g:${google}`);
-    keys.push(`p:${google}`);
-  }
-  if (provider) {
-    keys.push(`p:${provider}`);
-    keys.push(`g:${provider}`);
+  for (const id of sourcePlaceIds(place)) {
+    const lower = id.toLowerCase();
+    keys.push(`g:${lower}`);
+    keys.push(`p:${lower}`);
   }
   const name = String(place.name ?? "").trim().toLowerCase();
   const lat = Number(place.latitude);
@@ -50,29 +83,18 @@ export function mergeClipListPlace(
   incoming: Record<string, unknown>,
 ): Record<string, unknown> {
   const result = { ...kept };
-  const taken = new Set(
-    [result.id, result.provider_place_id, result.google_place_id]
-      .filter((value): value is string => typeof value === "string" && value.trim() !== "")
-      .map((value) => value.trim()),
-  );
-  for (const field of ["provider_place_id", "google_place_id", "id"] as const) {
-    const value = incoming[field];
-    if (typeof value !== "string" || !value.trim()) continue;
-    const trimmed = value.trim();
-    if (taken.has(trimmed)) continue;
-    if (
-      (typeof result.provider_place_id !== "string" || !String(result.provider_place_id).trim())
-      && (typeof result.id !== "string" || !String(result.id).trim())
-    ) {
-      result.provider_place_id = trimmed;
-      taken.add(trimmed);
-      continue;
-    }
+  const extras = extraPlaceIdsFrom(result);
+  const taken = new Set(sourcePlaceIds(result).map((value) => value.toLowerCase()));
+  for (const trimmed of sourcePlaceIds(incoming)) {
+    const key = trimmed.toLowerCase();
+    if (taken.has(key)) continue;
+    extras.push(trimmed);
+    taken.add(key);
     if (typeof result.google_place_id !== "string" || !String(result.google_place_id).trim()) {
       result.google_place_id = trimmed;
-      taken.add(trimmed);
     }
   }
+  if (extras.length > 0) result.extra_place_ids = extras;
   return result;
 }
 
