@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   clipListPlaceIdentities,
+  isGooglePlaceId,
   clipListSaveResponse,
   clipOnePlaceQuotaDecision,
   clipSavedPlaceLimitBody,
@@ -61,6 +62,10 @@ test("every merged extra identity is used for account dedupe", () => {
   const unique = uniqueClipListItems(items);
   assert.equal(unique.length, 1);
   assert.deepEqual(unique[0]?.extra_place_ids, ["id-b", "ChIJ123"]);
+  assert.equal(unique[0]?.google_place_id, "ChIJ123");
+  assert.equal(isGooglePlaceId("id-b"), false);
+  assert.equal(isGooglePlaceId("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"), false);
+  assert.equal(isGooglePlaceId("ChIJ123"), true);
   const existing = {
     id: "owned",
     google_place_id: "ChIJ123",
@@ -91,7 +96,8 @@ test("SL1 merges every group a later item bridges", () => {
   });
   assert.equal(plan.toInsert.length, 1);
   assert.equal(plan.toInsert[0]?.id, "id-a");
-  assert.equal(plan.toInsert[0]?.google_place_id, "id-c");
+  assert.equal(plan.toInsert[0]?.google_place_id, undefined);
+  assert.deepEqual(plan.toInsert[0]?.extra_place_ids, ["id-c"]);
   assert.equal(plan.newlySaved, 1);
   assert.equal(plan.alreadySaved, 2);
 });

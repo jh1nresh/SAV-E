@@ -307,9 +307,15 @@ enum ClipListSavePlanner {
         let extras = item.extraPlaceIds
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        if let google = extras.first { body["google_place_id"] = google }
+        if let google = extras.first(where: isGooglePlaceID) { body["google_place_id"] = google }
         if !extras.isEmpty { body["extra_place_ids"] = extras }
         return body
+    }
+
+    static func isGooglePlaceID(_ raw: String) -> Bool {
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty, UUID(uuidString: value) == nil else { return false }
+        return value.hasPrefix("ChIJ") || value.hasPrefix("GhIJ")
     }
 
     /// Fresh row id. Source UUIDs stay in `provider_place_id` so a copy

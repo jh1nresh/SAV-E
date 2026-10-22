@@ -309,8 +309,11 @@ final class ClipListSaveTests: XCTestCase {
         let places = ClipListSavePlanner.requestBody(items: items)["places"] as? [[String: Any]]
         XCTAssertEqual(places?.count, 1)
         XCTAssertEqual(places?.first?["provider_place_id"] as? String, "id-a")
-        XCTAssertEqual(places?.first?["google_place_id"] as? String, "id-c")
+        XCTAssertNil(places?.first?["google_place_id"], "ordinary aliases must not become google_place_id")
         XCTAssertEqual(places?.first?["extra_place_ids"] as? [String], ["id-c"])
+        XCTAssertFalse(ClipListSavePlanner.isGooglePlaceID("id-c"))
+        XCTAssertFalse(ClipListSavePlanner.isGooglePlaceID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"))
+        XCTAssertTrue(ClipListSavePlanner.isGooglePlaceID("ChIJ123"))
     }
 
     func testPlaceBodySerializesEveryMergedIdentity() {
@@ -325,6 +328,7 @@ final class ClipListSaveTests: XCTestCase {
         XCTAssertEqual(unique.first?.extraPlaceIds, ["ChIJ123", "id-b"])
         let places = ClipListSavePlanner.requestBody(items: items)["places"] as? [[String: Any]]
         XCTAssertEqual(places?.first?["provider_place_id"] as? String, "id-a")
+        XCTAssertEqual(places?.first?["google_place_id"] as? String, "ChIJ123")
         XCTAssertEqual(places?.first?["extra_place_ids"] as? [String], ["ChIJ123", "id-b"])
     }
 

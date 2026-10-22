@@ -232,7 +232,7 @@ enum ClipSaveService {
         draft: ClipPlaceDraft,
         handoffURL: URL,
         sender: String?,
-        openURL: @escaping (URL, @escaping (Bool) -> Void) -> Void = openInstalledApp,
+        openURL: @MainActor @escaping (URL, @escaping (Bool) -> Void) -> Void = openInstalledApp,
         signIn: @escaping () async throws -> String = { try await ClipAppleAuth.signIn() },
         postPlace: @escaping (ClipPlaceDraft, String) async throws -> (Int, Data) = postPlace
     ) async -> ClipSaveOutcome {
@@ -263,7 +263,7 @@ enum ClipSaveService {
         shareCode: String?,
         handoffURL: URL,
         sender: String?,
-        openURL: @escaping (URL, @escaping (Bool) -> Void) -> Void = openInstalledApp,
+        openURL: @MainActor @escaping (URL, @escaping (Bool) -> Void) -> Void = openInstalledApp,
         signIn: @escaping () async throws -> String = { try await ClipAppleAuth.signIn() },
         postPlaces: @escaping ([ClipListSaveItem], String) async throws -> (Int, Data) = postPlaces
     ) async -> ClipSaveOutcome {

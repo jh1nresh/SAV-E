@@ -78,6 +78,15 @@ function isPlaceObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+export function isGooglePlaceId(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trimmed)) {
+    return false;
+  }
+  return /^ChIJ/i.test(trimmed) || /^GhIJ/i.test(trimmed);
+}
+
 export function mergeClipListPlace(
   kept: Record<string, unknown>,
   incoming: Record<string, unknown>,
@@ -90,7 +99,10 @@ export function mergeClipListPlace(
     if (taken.has(key)) continue;
     extras.push(trimmed);
     taken.add(key);
-    if (typeof result.google_place_id !== "string" || !String(result.google_place_id).trim()) {
+    if (
+      isGooglePlaceId(trimmed)
+      && (typeof result.google_place_id !== "string" || !String(result.google_place_id).trim())
+    ) {
       result.google_place_id = trimmed;
     }
   }

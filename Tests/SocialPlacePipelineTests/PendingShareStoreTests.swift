@@ -504,6 +504,21 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertEqual(body["provider_place_id"] as? String, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
         XCTAssertEqual(body["google_place_id"] as? String, "ChIJ123")
         XCTAssertEqual(body["extra_place_ids"] as? [String], ["ChIJ123"])
+        XCTAssertTrue(ClipListHandoff.isGooglePlaceID("ChIJ123"))
+        XCTAssertFalse(ClipListHandoff.isGooglePlaceID("id-c"))
+        let aliasOnly = PendingConfirmedPlace(
+            placeId: "id-a",
+            name: "Onibus Coffee",
+            address: "Tokyo",
+            latitude: 35.644,
+            longitude: 139.699,
+            category: "Cafe",
+            sourceURL: nil,
+            extraPlaceIds: ["id-c", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"]
+        )
+        let aliasBody = ClipListHandoff.placeBody(from: aliasOnly.asListItem())
+        XCTAssertNil(aliasBody["google_place_id"], "ordinary aliases must not become google_place_id")
+        XCTAssertEqual(aliasBody["extra_place_ids"] as? [String], ["id-c", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"])
         let encoded = try? JSONEncoder().encode(snapshot)
         let decoded = encoded.flatMap { try? JSONDecoder().decode(PendingConfirmedPlace.self, from: $0) }
         XCTAssertEqual(decoded?.extraPlaceIds, ["ChIJ123"])
