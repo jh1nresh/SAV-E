@@ -3241,8 +3241,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     /// Live Home is the Doodle Eat/Go list plus mini-map. The Atlas gate still
-    /// compares `five-tab-home` to DESIGN v2 `ProductionTargets/home.png` at
-    /// 0.90 with `home-mask.png`. Capture that raster from the Codex Tiantan
+    /// compares `five-tab-home` to `ProductionTargets/home.png` unmasked at
+    /// 0.90. Capture that raster from the Codex Tiantan
     /// fixture at the Tiantan fix; a denied-location Taipei Home is a
     /// different state and scores ~0.66. Do not retune the gate script here.
     @MainActor
