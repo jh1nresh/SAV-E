@@ -5,7 +5,8 @@ on:
     branches: [main]
   pull_request:
     # Keep required checks on the existing PR stack rooted in the #279 UI.
-    # Fast lane only. The required `ios` suite lives in ios.yml.
+    # Fast lane: ios-build + ios-fast. The full `ios` UI suite is manual
+    # (ios.yml workflow_dispatch).
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches:
       - main
@@ -72,8 +73,9 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO \
             build-for-testing
 
-  # Fast lane: compile already ran in ios-build, then SAVETests. Not a
-  # required check. Name is `ios-fast` so it cannot satisfy ruleset `ios`.
+  # Fast lane: compile already ran in ios-build, then SAVETests.
+  # Automatic required checks are `ios-build` and `ios-fast`. Name stays
+  # `ios-fast` so it cannot satisfy a leftover ruleset check named `ios`.
   ios-fast:
     name: ios-fast
     if: github.event_name == 'pull_request'

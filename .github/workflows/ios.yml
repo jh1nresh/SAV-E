@@ -1,8 +1,8 @@
 name: iOS
 
-# Full UI + snapshot + 0.90 parity suite. The job named `ios` never skips:
-# a skipped required check counts as passed. Drafts without ready-for-merge
-# fail the first step; ready PRs and labeled merge-gate runs execute the suite.
+# Full UI + snapshot + 0.90 parity suite. Automatic PR/push runs keep
+# ios-gate + ios-build. The job named `ios` is manual only
+# (workflow_dispatch) so the slow macOS UI queue is not a PR gate.
 on:
   push:
     branches: [main]
@@ -44,13 +44,18 @@ concurrency:
 
 jobs:
   # Cheap ubuntu gate so drafts without ready-for-merge fail before the
-  # duplicate macOS ios-build. The required `ios` job still always runs
-  # and fails when this gate or ios-build did not succeed.
+  # duplicate macOS ios-build. Automatic required checks are ios-build
+  # and ios-fast; this gate still blocks draft ios-build.
   ios-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Require full iOS suite
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify CI test selection
+        run: python3 -B -m unittest discover -s Tests/ci -p 'test_*.py' -v
+
+      - name: Require merge-ready iOS build
         env:
           EVENT_NAME: ${{ github.event_name }}
           PR_DRAFT: ${{ github.event.pull_request.draft }}
@@ -58,7 +63,7 @@ jobs:
           UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus }}
         run: |
           if [[ "$EVENT_NAME" == 'workflow_dispatch' && -n "${UI_TEST_FOCUS:-}" ]]; then
-            echo '::error::workflow_dispatch ui_test_focus cannot satisfy the required ios check. Leave the input empty to run the full suite.'
+            echo '::error::workflow_dispatch ui_test_focus is not the full ios suite. Leave the input empty to run the full suite.'
             exit 1
           fi
           if [[ "$EVENT_NAME" != 'pull_request' ]]; then
@@ -70,7 +75,7 @@ jobs:
           case ",$PR_LABELS," in
             *,ready-for-merge,*) exit 0 ;;
           esac
-          echo '::error::add ready-for-merge to run full suite (or mark the PR ready for review).'
+          echo '::error::add ready-for-merge (or mark the PR ready for review) to run ios-build.'
           exit 1
 
   # Compile-only gate so an iOS compile error fails in ~10 min instead of
@@ -145,16 +150,17 @@ jobs:
           retention-days: 1
           overwrite: true
 
-  # Required check name `ios` (ruleset 19331432). Never skipped. This job
-  # is the full UI + snapshot + 0.90 parity suite and can succeed only when
-  # that suite actually ran.
+  # Manual full suite only. Not an automatic required check. Founder will
+  # move the ruleset (19331432) from `ios` to `ios-build` + `ios-fast`.
+  # This job is the full UI + snapshot + 0.90 parity suite and can succeed
+  # only when that suite actually ran.
   ios:
-    if: always()
+    if: always() && github.event_name == 'workflow_dispatch'
     needs: [ios-build]
     runs-on: macos-26
     # Products come from ios-build (no second compile). Setup + units +
     # simulator is ~15-20m; UI step 60; Trip 15; slack for parity/teardown
-    # and the main-only Release compile. Run 39497842970: 75m job wall cut
+    # and the dispatch-only Release compile. Run 39497842970: 75m job wall cut
     # the 55m UI step at 52m50s after ~20m of rebuild and setup.
     timeout-minutes: 100
     env:
@@ -288,7 +294,7 @@ jobs:
           xcrun simctl bootstatus "$udid" -b
 
       # HoP A2: real SpringBoard screenshot of the installed Savvy icon.
-      # This Linux checkout cannot boot a simulator, so the required ios
+      # This Linux checkout cannot boot a simulator, so the manual ios
       # job installs SAVE.app on the already-booted device, returns to the
       # home screen, and uploads light/dark captures.
       - name: Capture simulator home-screen app icon
@@ -516,7 +522,7 @@ jobs:
           retention-days: 14
 
       - name: Build unsigned release candidate without a simulator
-        if: github.event_name == 'push'
+        if: github.event_name == 'workflow_dispatch'
         run: |
           release_plist="$RUNNER_TEMP/CI-Release-Secrets.plist"
           trap 'rm -f "$release_plist"' EXIT
@@ -537,7 +543,7 @@ jobs:
             build
 
   release-readiness:
-    if: github.event_name == 'push'
+    if: github.event_name == 'workflow_dispatch'
     needs: [ios]
     runs-on: ubuntu-latest
     timeout-minutes: 5

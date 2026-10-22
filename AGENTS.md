@@ -114,10 +114,12 @@ that blurs those states fails review even if it compiles.
   renames consider both paths. An unavailable or empty diff runs full coverage.
   Unit-test-only changes build and run units without UI. Existing non-iOS
   exclusions remain in effect.
-- Main pushes and manual `CI` workflow dispatches run full integration coverage.
-  PR success on a focused route is not full integration or release evidence.
-  Review the `save-test-selection-<sha>` artifact and Actions step summary for
-  the selected profile. The required job names and main release gate stay fixed.
+- Automatic PR/push iOS gates are `ios-build` and `ios-fast`. The full UI +
+  snapshot + 0.90 parity job named `ios` runs only on manual
+  `workflow_dispatch` of the iOS workflow; it is not an automatic required
+  check. PR success on those gates is not full integration or release
+  evidence. Review the `save-test-selection-<sha>` artifact (from a manual
+  `ios` run) and Actions step summary for the selected profile.
 - Coverage-map changes must pass
   `python3 -B -m unittest discover -s Tests/ci -p 'test_*.py' -v`.
   The frozen baseline prevents accidentally dropping existing full-suite tests;
@@ -163,9 +165,11 @@ current head, required CI green, and no blocking findings. Production schema or
 secrets changes, deployment, signing, App Store Connect, TestFlight, external
 messages, and destructive cleanup require their own explicit authorization.
 
-The main-branch CI builds an unsigned generic-device Release configuration with
-a synthetic non-secret Google key and emits a release-readiness receipt only
-after every required job passes. The binary is not uploaded as an artifact.
+A manual iOS workflow dispatch builds an unsigned generic-device Release
+configuration with a synthetic non-secret Google key and emits a
+release-readiness receipt only after the full `ios` suite passes. Automatic
+required checks are `ios-build` and `ios-fast`. The binary is not uploaded as
+an artifact.
 That receipt is evidence of code readiness, not a signed archive or deployment.
 Before `railway up`, `vercel --prod`, archive/upload or TestFlight publication,
 verify that explicit approval covers the exact pending operation, artifact and

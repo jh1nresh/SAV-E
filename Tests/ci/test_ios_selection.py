@@ -208,8 +208,20 @@ class CoverageTests(unittest.TestCase):
         ios_workflow = (ROOT / ".github/workflows/ios.yml").read_text()
         ci_workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         self.assertRegex(ios_workflow, r"(?m)^  ios:\s*$")
+        self.assertRegex(ios_workflow, r"(?m)^  ios-gate:\s*$")
+        self.assertRegex(ios_workflow, r"(?m)^  ios-build:\s*$")
+        self.assertRegex(
+            ios_workflow,
+            r"(?m)^    if: always\(\) && github\.event_name == 'workflow_dispatch'\s*$",
+        )
+        self.assertIn("Manual full suite only. Not an automatic required check.", ios_workflow)
+        self.assertIn("python3 -B -m unittest discover -s Tests/ci -p 'test_*.py' -v", ios_workflow)
         self.assertNotRegex(ci_workflow, r"(?m)^  ios:\s*$")
         self.assertRegex(ci_workflow, r"(?m)^  ios-fast:\s*$")
+        self.assertIn("if: github.event_name == 'pull_request'", ci_workflow)
+        self.assertIn("needs: [ios-build]", ci_workflow)
+        self.assertNotIn("needs: [ios]", ci_workflow)
+        self.assertNotRegex(ci_workflow, r"(?m)^    if: github\.event_name == 'workflow_dispatch'\s*$")
         self.assertIn("run-visual-parity.sh", ios_workflow)
         self.assertIn("--threshold 0.90", ios_workflow)
         self.assertIn("xcrun simctl io booted screenshot", ios_workflow)
