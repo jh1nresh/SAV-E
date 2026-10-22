@@ -165,6 +165,19 @@ final class PendingShareStoreTests: XCTestCase {
             incomingURL: URL(string: "https://sav-e-app.vercel.app/list?c=other")!,
             liveItems: liveAfterOwnerEdit
         ).isEmpty)
+
+        let stampedWithoutJoin = ClipListHandoff.stampList(
+            pending: loaded,
+            incomingURL: listURL,
+            joined: nil
+        )
+        XCTAssertEqual(stampedWithoutJoin?.items.map(\.sourceID), ["shop-1", "shop-2", "shop-3", "shop-4", "shop-5"])
+        XCTAssertEqual(stampedWithoutJoin?.id, UUID(uuidString: "22222222-2222-2222-2222-222222222222"))
+        XCTAssertNil(ClipListHandoff.stampList(
+            pending: loaded,
+            incomingURL: URL(string: "https://sav-e-app.vercel.app/list?c=other")!,
+            joined: nil
+        ))
     }
 
     func testQuotaAwareHandoffSavesFirstTwoOfFiveNearCap() {

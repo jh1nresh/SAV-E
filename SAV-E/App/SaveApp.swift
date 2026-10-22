@@ -453,11 +453,7 @@ struct SaveApp: App {
             let joined = try activeCollaborativeListStore.join(from: link.url)
             presentOpenedList(joined, incomingURL: link.url)
         } catch {
-            openedList = SaveCollaborativeList(
-                title: languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單"),
-                note: error.localizedDescription,
-                viewerRole: .viewer
-            )
+            presentListJoinFailure(error, incomingURL: link.url)
         }
         if deferredAccountScopedLink?.id == link.id {
             deferredAccountScopedLink = nil
@@ -501,19 +497,21 @@ struct SaveApp: App {
             storeJoinedList(joined)
             presentOpenedList(joined, incomingURL: link.url)
         } else {
-            openedList = SaveCollaborativeList(
-                title: languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單"),
-                note: (joinError ?? SaveCollaborativeListError.invalidLink).localizedDescription,
-                viewerRole: .viewer
+            presentListJoinFailure(
+                joinError ?? SaveCollaborativeListError.invalidLink,
+                incomingURL: link.url
             )
         }
         deferredAccountScopedLink = nil
     }
 
     /// Clip “save all” already confirmed a snapshot. Join may show the live
-    /// list; stamping uses only those confirmed placeIds.
-    private func presentOpenedList(_ list: SaveCollaborativeList, incomingURL: URL) {
-        openedList = list
+    /// list; stamping uses only those confirmed placeIds — including when
+    /// the optional live join fails.
+    private func presentOpenedList(_ list: SaveCollaborativeList?, incomingURL: URL) {
+        if let list {
+            openedList = list
+        }
         if let stamp = ClipListHandoff.stampList(
             pending: PendingShareStore.load(),
             incomingURL: incomingURL,
@@ -522,6 +520,15 @@ struct SaveApp: App {
             autoSaveIncomingList = true
             pendingClipListSave = stamp
         }
+    }
+
+    private func presentListJoinFailure(_ error: Error, incomingURL: URL) {
+        openedList = SaveCollaborativeList(
+            title: languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單"),
+            note: error.localizedDescription,
+            viewerRole: .viewer
+        )
+        presentOpenedList(nil, incomingURL: incomingURL)
     }
 
     /// Persists a server-joined list into the active local store (cache) and

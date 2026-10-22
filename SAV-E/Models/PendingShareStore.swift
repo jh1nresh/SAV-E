@@ -241,11 +241,23 @@ enum ClipListHandoff {
     static func stampList(
         pending: PendingSharePayload?,
         incomingURL: URL,
-        joined: SaveCollaborativeList
+        joined: SaveCollaborativeList?
     ) -> SaveCollaborativeList? {
-        let items = itemsToStamp(pending: pending, incomingURL: incomingURL, liveItems: joined.items)
+        let items = itemsToStamp(
+            pending: pending,
+            incomingURL: incomingURL,
+            liveItems: joined?.items ?? []
+        )
         guard !items.isEmpty else { return nil }
-        var list = joined
+        var list = joined ?? SaveCollaborativeList(
+            id: pending?.listId.flatMap(UUID.init(uuidString:)) ?? UUID(),
+            title: pending?.sender?.isEmpty == false
+                ? "\(pending?.sender ?? "")'s list"
+                : "Shared list",
+            ownerDisplayName: pending?.sender ?? "",
+            viewerRole: .viewer,
+            items: items
+        )
         list.items = items
         return list
     }
