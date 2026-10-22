@@ -691,6 +691,17 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(profile.contains("localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces"))
         XCTAssertTrue(profile.contains("cityProgress.visited)/\\(cityProgress.saved)"))
         XCTAssertTrue(profile.contains("profile.stampProgress"))
+        XCTAssertTrue(
+            profile.contains("""
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("profile.stampGrid")
+            """),
+            "stampGrid without contain overwrites child stampProgress (AX: 4/12 becomes profile.stampGrid)"
+        )
+        XCTAssertFalse(
+            profile.contains("accessibilityAddTraits(.isStaticText)"),
+            "combine+traits on the progress HStack still lose to a flattening stampGrid parent"
+        )
         XCTAssertTrue(profile.contains("try await onUpdatePlace(updated)"))
         XCTAssertTrue(profile.contains("SaveDoodleVisitStore().recordVisit"))
         XCTAssertFalse(profile.contains("markIveBeenHere(place)"))
