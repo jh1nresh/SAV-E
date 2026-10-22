@@ -196,6 +196,40 @@ enum SaveDoodleHomeCatalog {
         return localityLabel(in: place.address)
     }
 
+    /// Passport city switcher is metro-level (Beijing), not the Home Near you
+    /// area (Tiantan). Prefer a recognized metro from the fix or address.
+    static func passportCityTitle(
+        places: [Place],
+        location: CLLocation?,
+        language: AppLanguage
+    ) -> String? {
+        let traditionalChinese = language == .traditionalChinese
+        if let location,
+           let metro = SaveHomeSearch.metroName(
+            at: location.coordinate.latitude,
+            longitude: location.coordinate.longitude,
+            traditionalChinese: traditionalChinese
+           ) {
+            return metro
+        }
+        for place in places {
+            if let metro = SaveHomeSearch.metroName(
+                in: place.address,
+                traditionalChinese: traditionalChinese
+            ) {
+                return metro
+            }
+            if let metro = SaveHomeSearch.metroName(
+                at: place.latitude,
+                longitude: place.longitude,
+                traditionalChinese: traditionalChinese
+            ) {
+                return metro
+            }
+        }
+        return places.first.flatMap { cityDisplayName(for: $0, language: language) }
+    }
+
     /// Locality for Home city scope. Do not reuse `shareAreaLabel` — that
     /// takes the second-to-last comma part and turns
     /// `Berkeley, CA 94704, USA` into `CA 94704`, splitting one city by ZIP.

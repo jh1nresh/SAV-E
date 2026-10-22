@@ -84,6 +84,7 @@ struct GoogleTakeoutImportView: View {
         ) { response in
             Task { await handleFileImporter(response) }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("takeout.import.root")
     }
 

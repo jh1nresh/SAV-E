@@ -46,7 +46,10 @@ struct SaveCaptureFlowView: View {
         .presentationDetents([.medium, .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationBackground(SaveAtlasPalette.paper)
-        .accessibilityIdentifier(isGoogleTakeoutPresented ? "takeout.import.root" : "capture.flow")
+        // Keep capture.flow on the cover root. Postal Import owns
+        // takeout.import.root on its own accessibility container so XCUI
+        // can find it after the in-sheet swap.
+        .accessibilityIdentifier("capture.flow")
         .onAppear {
             if sharedText.isEmpty {
                 sharedText = initialText
@@ -99,6 +102,18 @@ struct SaveCaptureFlowView: View {
             .background(SaveAtlasPalette.paper.ignoresSafeArea())
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: SaveSpace.sm) {
+                    if isAIQuotaExhausted {
+                        Text(localized(
+                            "AI assist is unavailable right now. You can still save a link or import a file.",
+                            "目前無法使用 AI 協助。仍可從連結或檔案存地點。"
+                        ))
+                        .font(SaveAtlasType.body(13))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("ai.quotaExhausted")
+                    }
+
                     Button(action: analyze) {
                         HStack(spacing: SaveSpace.xs) {
                             if isAnalyzing { ProgressView().tint(.white) }
@@ -115,8 +130,8 @@ struct SaveCaptureFlowView: View {
                             in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
                         )
                     }
-                    .disabled(trimmedText.isEmpty || isBusy)
-                    .opacity(trimmedText.isEmpty || isBusy ? 0.48 : 1)
+                    .disabled(trimmedText.isEmpty || isBusy || isAIQuotaExhausted)
+                    .opacity(trimmedText.isEmpty || isBusy || isAIQuotaExhausted ? 0.48 : 1)
                     .accessibilityIdentifier("capture.analyze")
 
                     Text(savedCountText)
@@ -291,6 +306,21 @@ struct SaveCaptureFlowView: View {
 
     private var isBusy: Bool { isAnalyzing || isReadingPhoto }
 
+#if DEBUG
+    private var forcesQuotaExhausted: Bool {
+        ProcessInfo.processInfo.arguments.contains("--uitest-ai-quota-exhausted")
+    }
+#else
+    private var forcesQuotaExhausted: Bool { false }
+#endif
+
+    /// Exhausted AI assist is a neutral hint on this surface. It never
+    /// opens `paywall.root` — Pro is sold for unlimited saved places only.
+    private var isAIQuotaExhausted: Bool {
+        if forcesQuotaExhausted { return true }
+        return SaveEntitlementStore.shared.decideAIAssist().isRefusal
+    }
+
     private func readSelectedPhoto() async {
         guard let photo = selectedPhoto else { return }
         isReadingPhoto = true
@@ -325,7 +355,7 @@ struct SaveCaptureFlowView: View {
     }
 
     private func analyze() {
-        guard !trimmedText.isEmpty, !isBusy else { return }
+        guard !trimmedText.isEmpty, !isBusy, !isAIQuotaExhausted else { return }
         isAnalyzing = true
         errorMessage = nil
         Task {

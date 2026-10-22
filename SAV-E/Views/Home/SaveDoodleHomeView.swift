@@ -90,7 +90,7 @@ struct SaveDoodleHomeView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("home.openSaves")
+        .accessibilityIdentifier("home.saves")
         .accessibilityLabel(localized("Open Saves", "開啟收藏"))
     }
 

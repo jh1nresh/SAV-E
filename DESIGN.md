@@ -740,7 +740,8 @@ Opened from Settings / Passport, the supporting note is neutral
 count. The 51st-save trigger uses "You've saved 50 places. Keep going."
 / "已存 50 個地點，繼續存下去". StoreKit prices appear only after products
 load; a failed load shows retry, never a hardcoded $6.99. An exhausted
-AI assist never opens this wall. Product navigation does not mount
+AI assist never opens this wall; the assist surface shows a neutral
+`ai.quotaExhausted` message instead. Product navigation does not mount
 TileTown Home, RootMap, or Canvas.
 The 200pt hero uses official DESIGN outline stickers as the primary marks,
 with at most one color die-cut plus a stamp ring. Do not use SF Symbols

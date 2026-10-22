@@ -374,14 +374,11 @@ struct SaveDoodlePassportPage: View {
         }
         switch resolvedSelection {
         case .nearYou:
-            if let first = cityPlaces.first,
-               let name = SaveDoodleHomeCatalog.cityDisplayName(
-                for: first,
+            return SaveDoodleHomeCatalog.passportCityTitle(
+                places: cityPlaces,
+                location: passportLocation,
                 language: languageSettings.language
-               ) {
-                return name
-            }
-            return languageSettings.localized(english: "Nearby", traditionalChinese: "附近")
+            ) ?? languageSettings.localized(english: "Nearby", traditionalChinese: "附近")
         case .city(let id):
             if let group = cityGroups.first(where: { $0.id == id }) {
                 return group.displayName(language: languageSettings.language)

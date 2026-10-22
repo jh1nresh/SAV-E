@@ -333,7 +333,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Denied + empty Home must keep the Settings recovery prompt"
         )
         XCTAssertTrue(app.buttons["home.locationAllow"].exists)
-        XCTAssertFalse(app.descendants(matching: .any)["home.saves"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["home.saves"].waitForExistence(timeout: stepTimeout),
+            "Empty Home still exposes the saved-places entry when no clues are waiting."
+        )
         XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
         attach(app, name: "review-flow-home-empty")
         attach(app, name: "doodle-home-empty")
@@ -991,9 +994,45 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "The 51st-save entry must open the same places-only wall."
         )
         XCTAssertEqual(capApp.descendants(matching: .any)["paywall.root"].value as? String, "savedPlacesCap")
-        XCTAssertTrue(capApp.staticTexts["You've saved 50 places. Keep going."].waitForExistence(timeout: stepTimeout))
+        let savedNote = capApp.descendants(matching: .any)["paywall.savedNote"]
+        XCTAssertTrue(savedNote.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(savedNote.label, "You've saved 50 places. Keep going.")
+        XCTAssertTrue(capApp.staticTexts["You've saved 50 places. Keep going."].exists)
         XCTAssertFalse(capApp.staticTexts["Upgrade to Savvy Pro"].exists)
         XCTAssertFalse(rootTabButton("Home", app: capApp).exists)
+    }
+
+    @MainActor
+    func testAIQuotaExhaustedStaysOffThePaywall() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-ai-quota-exhausted",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.root"].exists)
+
+        let capture = rootTabButton("Save", app: app)
+        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
+        capture.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["ai.quotaExhausted"].waitForExistence(timeout: stepTimeout),
+            "Exhausted AI assist must show a neutral message on the assist surface."
+        )
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.root"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.savedNote"].exists)
+        XCTAssertFalse(app.buttons["paywall.retry"].exists)
     }
 
     /// Capture sheet over the Doodle Home map, matching the DESIGN mock.
@@ -3569,7 +3608,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
         let review = app.descendants(matching: .any)["home.review"]
-        let fallback = app.buttons["home.openSaves"]
+        let fallback = app.buttons["home.saves"]
         XCTAssertTrue(
             review.waitForExistence(timeout: timeout(2))
                 || fallback.waitForExistence(timeout: stepTimeout),

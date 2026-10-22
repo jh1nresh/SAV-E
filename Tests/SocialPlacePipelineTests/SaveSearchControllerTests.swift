@@ -6313,6 +6313,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(content.contains("preserveExactSearchClue"))
         XCTAssertTrue(content.contains("exactSearchClueID"))
         XCTAssertTrue(mapModel.contains("retireResolvedReviewClue"))
+        XCTAssertTrue(mapModel.contains("isDuplicateReviewClue"))
         XCTAssertFalse(mapModel.contains("isIndependentSameNameBranch"))
         XCTAssertFalse(mapModel.contains("shouldRetire"))
         XCTAssertFalse(mapModel.contains("retireSameNameReviewClues"))

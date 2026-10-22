@@ -57,6 +57,33 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertEqual(SaveDoodlePassportCatalog.columnCount(availableGridWidth: 0), 1)
     }
 
+    func testPassportCityTitleUsesMetroNotTiantanLocality() {
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+        let places = ReviewDemoSeed.doodleParityPlaces(now: now)
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityDisplayName(for: places[0], language: .english), "Tiantan")
+        let location = CLLocation(latitude: 39.882192, longitude: 116.4066)
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.passportCityTitle(
+                places: places,
+                location: location,
+                language: .english
+            ),
+            "Beijing"
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.passportCityTitle(
+                places: places,
+                location: nil,
+                language: .english
+            ),
+            "Beijing"
+        )
+        XCTAssertEqual(
+            SaveHomeSearch.metroName(at: 39.882192, longitude: 116.4066, traditionalChinese: false),
+            "Beijing"
+        )
+    }
+
     func testDoodleFaceSlotsMatchThePassportMockGrid() {
         let slots = SaveDoodlePassportCatalog.doodleFaceSlots()
         XCTAssertEqual(slots.count, 12)
