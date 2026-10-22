@@ -156,6 +156,40 @@ Reuse the task-owned DerivedData root and verify Shutdown
 afterward. For a borrowed device, shutdown is the cleanup boundary. Remove a
 temporary device only when this task created it and removal is authorized.
 
+### Deterministic `./verify`
+
+`./verify` is the repo-root QA tool for HoP flows V1–V8. Same argv must emit
+the same JSON on Linux and in CI. It pins clock (`2026-10-21T00:00:00+00:00`),
+locale (`en_US_POSIX`), timezone (`UTC`), and location (Taipei Xinyi). Seeds
+are synthetic public-place fixtures. A flow whose dependency PR is not in this
+checkout returns `SKIP：依賴 #xxx 未合併` and must never be reported as PASS.
+
+- Seeds: `empty-free`, `taipei-12`, `free-49`, `free-50`, `pro-50`,
+  `ai-exhausted`, `offline-taipei-12`, `friends-f1`, `friends-none`, `clip-*`.
+- Screenshot pages reuse doodle-parity references under
+  `Prototypes/AtlasPostcard/Reference/ProductionTargets/` when the page is
+  `home`, `saves`, `plan`, or `map`. Other HoP pages record a planned path.
+- V5 paywall and V7 App Clip cap (mockup 15) assert the copy `已存 50 個`.
+- Implementation: `scripts/save_verify.py`. Tests: `Tests/ci/test_verify.py`.
+
+Local and CI run the same Linux commands. Isolate a run with
+`SAVE_VERIFY_DIR`. Default workspace is `.verify/` (gitignored). Output is
+one JSON object on stdout plus an exit code: `0` no FAIL, `1` failed check,
+`2` usage. Screenshot paths are repo-relative so QA can attach them.
+
+```bash
+python3 -B -m unittest discover -s Tests/ci -p 'test_verify.py' -v
+./verify seed taipei-12
+./verify run V2
+./verify screenshot home
+./verify check
+```
+
+CI is the ubuntu `verify` job in `.github/workflows/verify.yml` (also
+`workflow_dispatch`). It is not a macOS job and must not grow one: live
+simulator capture stays manual on the existing `ios.yml` `workflow_dispatch`.
+A required `ios` fail on a draft is the existing ios-gate, not this tool.
+
 ## Approval And Release Boundaries
 
 Merge requires explicit approval for the target, independent review PASS on the
