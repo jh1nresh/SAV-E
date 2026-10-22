@@ -211,6 +211,7 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(backend.contains("overCap"))
         XCTAssertTrue(try source(at: "backend/src/server.ts").contains("clipListSaveResponse(plan, inserted)"))
         XCTAssertTrue(try source(at: "backend/src/server.ts").contains("existingPlaces: existing.rows"))
+        XCTAssertTrue(try source(at: "backend/src/server.ts").contains("readJson(request, clipListPlacesBodyMaxBytes)"))
         XCTAssertTrue(try source(at: "backend/src/server.ts").contains("items.length > listMaxItems"))
         XCTAssertFalse(try source(at: "backend/src/server.ts").contains("items.length > 100"))
         XCTAssertTrue(try source(at: "backend/src/server.ts").contains("verifiedAppleIdentitySubject"))

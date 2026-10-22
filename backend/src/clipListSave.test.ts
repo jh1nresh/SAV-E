@@ -278,6 +278,7 @@ test("SL4 POST /places list writes are one transactional call", () => {
     server.indexOf("function providerCoordinateFieldError"),
   );
 
+  assert.match(handler, /readJson\(request, clipListPlacesBodyMaxBytes\)/);
   assert.match(handler, /Array\.isArray\(rawBody\.places\)/);
   assert.match(
     handler,

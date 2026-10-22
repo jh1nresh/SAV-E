@@ -135,6 +135,7 @@ import {
   formatListRow,
   formatPublicListPreview,
   formatShareCodeRow,
+  clipListPlacesBodyMaxBytes,
   listBodyMaxBytes,
   listForMember,
   listMaxItems,
@@ -1579,7 +1580,7 @@ async function handlePlaces(
   }
 
   if (request.method === "POST" && !placeId) {
-    const rawBody = await readJson(request);
+    const rawBody = await readJson(request, clipListPlacesBodyMaxBytes);
     if (Array.isArray(rawBody.places)) {
       return await saveClipListPlaces(response, userId, rawBody.places);
     }

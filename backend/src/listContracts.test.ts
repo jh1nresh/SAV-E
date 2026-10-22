@@ -7,6 +7,7 @@ import {
   formatListRow,
   formatPublicListPreview,
   formatShareCodeRow,
+  clipListPlacesBodyMaxBytes,
   listBodyMaxBytes,
   listForMember,
   listItemPayloadMaxBytes,
@@ -83,6 +84,7 @@ test("list item normalizer requires an object payload under the byte cap", () =>
   assert.equal(listItemPayloadMaxBytes, 8 * 1024);
   assert.equal(listBodyMaxBytes, 16 * 1024);
   assert.equal(listMaxItems, 200);
+  assert.equal(clipListPlacesBodyMaxBytes, listMaxItems * listItemPayloadMaxBytes);
 });
 
 test("list join normalizer revalidates the share code shape", () => {

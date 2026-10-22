@@ -4,6 +4,7 @@ export const listTitleMaxLength = 120;
 export const listNoteMaxLength = 500;
 export const listItemPayloadMaxBytes = 8 * 1024;
 export const listMaxItems = 200;
+export const clipListPlacesBodyMaxBytes = listMaxItems * listItemPayloadMaxBytes;
 export const listBodyMaxBytes = 16 * 1024;
 export const listShareCodePattern = /^[A-Za-z0-9_-]{6,32}$/;
 export const listMemberUserIdMaxLength = 128;
