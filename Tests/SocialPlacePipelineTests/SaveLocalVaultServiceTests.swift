@@ -531,6 +531,41 @@ final class SaveLocalVaultServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testExplicitLocalDecisionCannotMintOrMutateStaleForeignConfirmedOrQuarantinedRows() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        var candidate = PlaceReviewCandidate(id: UUID(), captureId: nil, name: "Local clue", address: "1 Road", city: "Taipei",
+            latitude: 25, longitude: 121, evidence: ["Original source clue"], confidence: 0.6,
+            missingInfo: ["Analysis pending"], status: "source_only", createdAt: Date(), ownerSubject: "account-a")
+        try vault.append(SaveMemoryRecord(id: candidate.id, state: .reviewCandidate, sourceText: "Original private input",
+            title: candidate.name, ownerSubject: "account-a"))
+        let before = try Data(contentsOf: url)
+        let original = candidate
+        for failure in ["absent", "foreign", "remote", "invalid-status"] {
+            candidate = original
+            if failure == "absent" { candidate.id = UUID() }
+            if failure == "foreign" { candidate.ownerSubject = "account-b" }
+            if failure == "remote" { candidate.captureId = UUID() }
+            if failure == "invalid-status" { candidate.status = "saved" }
+            XCTAssertThrowsError(try vault.saveLocalReviewDecision(candidate))
+            XCTAssertEqual(try Data(contentsOf: url), before)
+        }
+        candidate = original
+        _ = try vault.prepareAccountDeletion(belongingTo: "account-a")
+        XCTAssertThrowsError(try vault.saveLocalReviewDecision(candidate))
+        XCTAssertEqual(try Data(contentsOf: url), before)
+        let intent = try XCTUnwrap(vault.pendingAccountDeletionIntent())
+        try vault.completeAccountDeletionCleanup(intentID: intent.id)
+        try vault.append(SaveMemoryRecord(id: candidate.id, state: .confirmedPlace, title: "Confirmed stamp", ownerSubject: "account-a"))
+        let confirmed = try Data(contentsOf: url)
+        XCTAssertThrowsError(try vault.saveLocalReviewDecision(candidate))
+        XCTAssertEqual(try Data(contentsOf: url), confirmed)
+        XCTAssertTrue(try vault.reviewCandidates().isEmpty)
+    }
+
+    @MainActor
     func testDurableDeletionIntentQuarantinesExactScopeAcrossReloadAndPreservesNewRows() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

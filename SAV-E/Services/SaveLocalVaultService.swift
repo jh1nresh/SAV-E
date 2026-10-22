@@ -3,6 +3,7 @@ import Foundation
 enum SaveLocalVaultError: LocalizedError {
     case storageUnavailable
     case accountDeletionScopeChanged
+    case invalidLocalReviewDecision
 
     var errorDescription: String? {
         switch self {
@@ -10,6 +11,8 @@ enum SaveLocalVaultError: LocalizedError {
             return "Savvy local memory storage is unavailable."
         case .accountDeletionScopeChanged:
             return "The pending account cleanup changed. Retry to reload its saved scope."
+        case .invalidLocalReviewDecision:
+            return "The local review candidate changed. Reload it before making this decision."
         }
     }
 }
@@ -404,6 +407,42 @@ final class SaveLocalVaultService: Sendable {
             record.parkedReviewCandidate = candidate
         }
         return try upsertReviewRecord(record, matchSourceIdentity: false)
+    }
+
+    /// Explicit user decisions may downgrade a review to a source clue. Normal
+    /// evidence merges must still keep their existing protection against regressions.
+    func saveLocalReviewDecision(_ candidate: PlaceReviewCandidate) throws {
+        guard candidate.captureId == nil, candidate.workflowRunId == nil,
+              ["source_only", "needs_more_evidence"].contains(candidate.status) else {
+            throw SaveLocalVaultError.invalidLocalReviewDecision
+        }
+#if DEBUG
+        if let saveReviewCandidateError { throw saveReviewCandidateError }
+#endif
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                if let deletion = try loadAccountDeletionIntent(vaultURL: url),
+                   deletion.includes(recordID: candidate.id, ownerSubject: candidate.ownerSubject) {
+                    throw SaveLocalVaultError.accountDeletionScopeChanged
+                }
+                var records = try loadRecords(from: url)
+                guard let index = records.firstIndex(where: {
+                    $0.id == candidate.id && $0.ownerSubject == candidate.ownerSubject
+                        && ($0.state == .reviewCandidate || $0.state == .sourceOnly)
+                }) else { throw SaveLocalVaultError.invalidLocalReviewDecision }
+                // Keep the record's source payload, date, venue and merged context;
+                // replace the old parked snapshot so it cannot undo this decision.
+                records[index].state = candidate.status == "source_only" ? .sourceOnly : .reviewCandidate
+                records[index].parkedReviewCandidate = candidate
+                for evidence in candidate.evidence where !records[index].evidence.contains(evidence) {
+                    records[index].evidence.append(evidence)
+                }
+                records[index].evidenceDiagnostic = preservingMissingInfo(
+                    candidate.missingInfo, diagnostic: records[index].evidenceDiagnostic
+                )
+                try save(records, to: url)
+            }
+        }
     }
 
     private func preservingMissingInfo(_ fields: [String], diagnostic: SocialPlaceEvidenceDiagnostic?) -> SocialPlaceEvidenceDiagnostic? {
@@ -817,7 +856,9 @@ private extension SaveMemoryRecord {
             ownerSubject: ownerSubject
         )
         if let parked = parkedReviewCandidate,
-           parked.id == id, parked.ownerSubject == ownerSubject, parked.isUnplacedInbox {
+           parked.id == id, parked.ownerSubject == ownerSubject,
+           parked.isUnplacedInbox || (parked.captureId == nil && parked.workflowRunId == nil
+                && ["source_only", "needs_more_evidence"].contains(parked.status)) {
             // The record owns merged venue/evidence fields; the validated snapshot
             // supplies context the generic vault projection cannot represent.
             candidate.captureId = parked.captureId

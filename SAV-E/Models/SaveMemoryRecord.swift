@@ -41,7 +41,7 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
     var businessPhotoUrls: [String]?
     var mergedPlaceIDs: [UUID]?
     var ownerSubject: String?
-    // Only a durably parked existing review candidate needs its workflow context.
+    // Parked candidates and explicit local review decisions retain their full context.
     var parkedReviewCandidate: PlaceReviewCandidate? = nil
 
     init(

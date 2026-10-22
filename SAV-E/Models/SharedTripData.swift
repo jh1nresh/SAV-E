@@ -34,7 +34,10 @@ struct SharedPlaceData: Codable {
 
     var embeddedReceiptID: String {
         let payload = sanitizedForReceipt()
-        guard let data = try? JSONEncoder().encode(payload) else {
+        let encoder = JSONEncoder()
+        // Identity must not depend on a fresh encoder's dictionary iteration order.
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(payload) else {
             return "embedded:invalid"
         }
         let digest = SHA256.hash(data: data)

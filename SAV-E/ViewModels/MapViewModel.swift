@@ -2139,8 +2139,8 @@ final class MapViewModel: ObservableObject {
             if isOverFreeSavedPlaceLimit {
                 if exactResolution == nil {
                     try parkPlaceInUnplacedInbox(place)
-                } else {
-                    requestSavedPlaceLimitPaywall()
+                } else if let exactResolution {
+                    try parkExistingReviewCandidate(exactResolution.clue, startedBy: saveUserId, generation: saveGeneration)
                 }
                 mapCandidates.removeAll { $0.id == candidate.id }
                 selectedMapCandidate = nil
@@ -2162,7 +2162,9 @@ final class MapViewModel: ObservableObject {
                         guard saveUserId == authService.currentUserId, saveGeneration == authService.sessionGeneration else {
                             throw CancellationError()
                         }
-                        requestSavedPlaceLimitPaywall()
+                        if let exactResolution {
+                            try parkExistingReviewCandidate(exactResolution.clue, startedBy: saveUserId, generation: saveGeneration)
+                        }
                         throw error
                     }
                     if try parkIfServerSavedPlaceLimit(
@@ -2192,7 +2194,9 @@ final class MapViewModel: ObservableObject {
                 guard !Task.isCancelled, saveUserId == authService.currentUserId,
                       saveGeneration == authService.sessionGeneration else { throw CancellationError() }
                 if exactResolution == nil { try parkPlaceInUnplacedInbox(place) }
-                else { requestSavedPlaceLimitPaywall() }
+                else if let exactResolution {
+                    try parkExistingReviewCandidate(exactResolution.clue, startedBy: saveUserId, generation: saveGeneration)
+                }
                 mapCandidates.removeAll { $0.id == candidate.id }
                 selectedMapCandidate = nil
                 throw SavePlaceLimitError.parkedInUnplacedInbox
@@ -3084,6 +3088,13 @@ final class MapViewModel: ObservableObject {
     ) async throws {
         let userId = authService.currentUserId
         let generation = authService.sessionGeneration
+        let localDecision = candidate.captureId == nil && candidate.workflowRunId == nil
+            && afterCandidate.map { ["source_only", "needs_more_evidence"].contains($0.status) } == true
+        if localDecision {
+            guard Self.localVaultRecordBelongsToActiveAccount(candidate.ownerSubject, currentUserId: userId) else {
+                throw ReviewCandidateError.sessionChangedAfterCommit
+            }
+        }
         var event = SavePlaceCorrectionEvent(
             userId: userId,
             candidate: candidate,
@@ -3093,6 +3104,11 @@ final class MapViewModel: ObservableObject {
             userReasonText: reason
         )
         try correctionEventStore.append(event)
+        if localDecision, let afterCandidate {
+            // A pending receipt is not a successful decision. Persist first so a
+            // failed vault write retains the original UI and cannot commit learning.
+            try saveLocalVaultService.saveLocalReviewDecision(afterCandidate)
+        }
         if ![.confirmCandidate, .editPlaceIdentity, .mergeExisting].contains(eventType),
            let scopeKey = candidate.correctionScopeKey {
             invalidateCorrectionSuggestions(scopeKey: scopeKey)

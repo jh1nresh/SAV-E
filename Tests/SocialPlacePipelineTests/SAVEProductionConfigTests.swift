@@ -424,6 +424,186 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
+    func testExplicitLocalReviewDecisionsSurviveVaultAndMapReloadWithFullContext() async throws {
+        let auth = PrivyAuthService.shared
+        let oldAuth = auth.authState
+        defer { auth.authState = oldAuth }
+        for owner in [nil, "local-decision-owner"] as [String?] {
+            auth.authState = owner.map { .authenticated(userId: $0) } ?? .unauthenticated
+            for status in ["source_only", "needs_more_evidence"] {
+                for parked in [false, true] {
+                    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                    defer { try? FileManager.default.removeItem(at: directory) }
+                    let url = directory.appendingPathComponent("vault.json")
+                    let vault = SaveLocalVaultService(overrideVaultURL: url)
+                    let candidate = localReviewDecisionFixture(owner: owner, parked: parked)
+                    var record = try vault.saveReviewCandidate(candidate, preservingParkedContext: true)
+                    record.sourceURL = "https://example.com/private-original"
+                    record.sourceText = "Original private caption and input"
+                    try vault.deleteAllRecords()
+                    try vault.append(record)
+                    let events = SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("events.json"))
+                    let map = MapViewModel(supabaseService: SupabaseService(apiBaseURL: nil), saveLocalVaultService: vault,
+                        correctionEventStore: events, usesRemotePersistence: owner != nil)
+                    map.reviewCandidates = [candidate]
+                    map.selectedReviewCandidate = candidate
+                    if status == "source_only" { try await map.saveReviewCandidateAsSourceOnly(candidate) }
+                    else { try await map.investigateReviewCandidateMore(candidate) }
+                    XCTAssertEqual(map.reviewCandidates.first?.status, status)
+                    XCTAssertEqual(map.selectedReviewCandidate?.status, status)
+                    XCTAssertTrue(map.places.isEmpty)
+                    let reloaded = SaveLocalVaultService(overrideVaultURL: url)
+                    let persisted = try XCTUnwrap(reloaded.reviewCandidates(belongingTo: owner).first)
+                    XCTAssertEqual(persisted.id, candidate.id)
+                    XCTAssertEqual(persisted.ownerSubject, owner)
+                    XCTAssertEqual(persisted.status, status)
+                    XCTAssertEqual(persisted.name, candidate.name)
+                    XCTAssertEqual(persisted.address, candidate.address)
+                    XCTAssertEqual(persisted.city, candidate.city)
+                    XCTAssertEqual(persisted.confidence, candidate.confidence)
+                    XCTAssertEqual(persisted.createdAt, candidate.createdAt)
+                    XCTAssertEqual(persisted.placeHighlights, candidate.placeHighlights)
+                    XCTAssertEqual(persisted.recommendedItems, candidate.recommendedItems)
+                    XCTAssertEqual(persisted.vibeTags, candidate.vibeTags)
+                    XCTAssertEqual(persisted.accessNotes, candidate.accessNotes)
+                    XCTAssertEqual(persisted.sourceHandle, candidate.sourceHandle)
+                    XCTAssertEqual(persisted.correctionScopeKey, candidate.correctionScopeKey)
+                    XCTAssertEqual(persisted.missingInfo, candidate.missingInfo)
+                    XCTAssertNil(persisted.captureId)
+                    XCTAssertNil(persisted.workflowRunId)
+                    XCTAssertTrue(candidate.evidence.allSatisfy { persisted.evidence.contains($0) })
+                    XCTAssertEqual(try reloaded.recentRecords().first?.sourceText, record.sourceText)
+                    XCTAssertEqual(try reloaded.recentRecords().first?.sourceURL, record.sourceURL)
+                    XCTAssertTrue(try reloaded.confirmedPlaces().isEmpty)
+                    XCTAssertTrue(try reloaded.reviewCandidates(belongingTo: "different-account").isEmpty)
+                    if owner != nil { XCTAssertTrue(try reloaded.reviewCandidates(belongingTo: nil).isEmpty) }
+                    let fresh = MapViewModel(supabaseService: SupabaseService(apiBaseURL: nil), saveLocalVaultService: reloaded,
+                        correctionEventStore: events, usesRemotePersistence: owner != nil)
+                    try await fresh.refreshReviewCandidates()
+                    XCTAssertEqual(fresh.reviewCandidates.first?.status, status, "Refresh must not resurrect the old parked review status")
+                    XCTAssertEqual(fresh.reviewCandidates.first?.isUnplacedInbox, parked)
+                }
+            }
+        }
+    }
+
+    @MainActor
+    func testLocalReviewDecisionWriteFailureKeepsInputAndPendingEventUntilRetry() async throws {
+        let auth = PrivyAuthService.shared
+        let oldAuth = auth.authState
+        defer { auth.authState = oldAuth }
+        auth.authState = .authenticated(userId: "decision-owner")
+        for status in ["source_only", "needs_more_evidence"] {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let url = directory.appendingPathComponent("vault.json")
+            let vault = SaveLocalVaultService(overrideVaultURL: url)
+            let candidate = localReviewDecisionFixture(owner: "decision-owner", parked: true)
+            try vault.saveReviewCandidate(candidate, preservingParkedContext: true)
+            let before = try Data(contentsOf: url)
+            let events = SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("events.json"))
+            let map = MapViewModel(supabaseService: SupabaseService(apiBaseURL: nil), saveLocalVaultService: vault,
+                correctionEventStore: events, usesRemotePersistence: true)
+            map.reviewCandidates = [candidate]
+            map.selectedReviewCandidate = candidate
+            vault.saveReviewCandidateError = SaveLocalVaultError.storageUnavailable
+            do {
+                if status == "source_only" { try await map.saveReviewCandidateAsSourceOnly(candidate) }
+                else { try await map.investigateReviewCandidateMore(candidate) }
+                XCTFail("Failed durable write cannot report a successful decision")
+            } catch SaveLocalVaultError.storageUnavailable {}
+            XCTAssertEqual(map.reviewCandidates, [candidate])
+            XCTAssertEqual(map.selectedReviewCandidate, candidate)
+            XCTAssertEqual(try Data(contentsOf: url), before)
+            let pending = try events.recentEvents()
+            XCTAssertEqual(pending.count, 1)
+            XCTAssertEqual(pending.first?.learningCommitted, false)
+            vault.saveReviewCandidateError = nil
+            if status == "source_only" { try await map.saveReviewCandidateAsSourceOnly(candidate) }
+            else { try await map.investigateReviewCandidateMore(candidate) }
+            XCTAssertEqual(map.reviewCandidates.first?.status, status)
+            XCTAssertEqual(try SaveLocalVaultService(overrideVaultURL: url).reviewCandidates(belongingTo: "decision-owner").first?.status, status)
+            XCTAssertTrue(map.places.isEmpty)
+        }
+    }
+
+    @MainActor
+    func testLocalReviewDecisionRejectsForeignOwnerBeforeWritingReceiptOrVault() async throws {
+        let auth = PrivyAuthService.shared
+        let oldAuth = auth.authState
+        defer { auth.authState = oldAuth }
+        auth.authState = .authenticated(userId: "account-b")
+        for owner in [nil, "account-a"] as [String?] {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let url = directory.appendingPathComponent("vault.json")
+            let vault = SaveLocalVaultService(overrideVaultURL: url)
+            let candidate = localReviewDecisionFixture(owner: owner, parked: true)
+            try vault.saveReviewCandidate(candidate, preservingParkedContext: true)
+            let before = try Data(contentsOf: url)
+            let events = SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("events.json"))
+            let map = MapViewModel(supabaseService: SupabaseService(apiBaseURL: nil), saveLocalVaultService: vault,
+                correctionEventStore: events, usesRemotePersistence: true)
+            map.reviewCandidates = [candidate]
+            do { try await map.saveReviewCandidateAsSourceOnly(candidate); XCTFail("No ownerless or A-to-B reassignment") }
+            catch ReviewCandidateError.sessionChangedAfterCommit {}
+            XCTAssertEqual(map.reviewCandidates, [candidate])
+            XCTAssertEqual(try Data(contentsOf: url), before)
+            XCTAssertTrue(try events.recentEvents().isEmpty)
+        }
+    }
+
+    @MainActor
+    func testRemoteWorkflowReviewDecisionsStillUseServerAndDoNotUseLocalDecisionWriter() async throws {
+        let auth = PrivyAuthService.shared
+        let oldAuth = auth.authState
+        defer { auth.authState = oldAuth; AnalysisRequestURLProtocol.reset() }
+        auth.authState = .authenticated(userId: "remote-decision-owner")
+        for status in ["source_only", "needs_more_evidence"] {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+            vault.saveReviewCandidateError = SaveLocalVaultError.storageUnavailable
+            var candidate = localReviewDecisionFixture(owner: "remote-decision-owner", parked: true)
+            let run = UUID()
+            candidate.workflowRunId = run
+            let workflow = "{\"id\":\"\(run)\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"source_type\":\"social_url\",\"status\":\"pending\",\"evidence_tier\":\"weak\",\"result_evidence_refs\":[],\"result_candidate_refs\":[],\"credit_reserved\":1,\"credit_settlement\":\"pending\"}"
+            let receipt = "{\"id\":\"\(UUID())\",\"run_id\":\"\(run)\",\"workflow_id\":\"fixture\",\"verdict\":\"\(status)\",\"settlement\":\"pending\",\"evaluator_summary\":\"fixture\",\"evidence_refs\":[],\"candidate_refs\":[],\"receipt_hash\":\"fixture\",\"anchor_status\":\"none\"}"
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { request in
+                if request.httpMethod == "GET", request.url?.path == "/v0/lists" { return (200, "[]") }
+                XCTAssertEqual(request.httpMethod, "POST")
+                XCTAssertEqual(request.url?.path, "/v0/workflows/place-recovery/runs/\(run.uuidString)/decision")
+                let body = try AnalysisRequestURLProtocol.body(request)
+                XCTAssertEqual(body["action"] as? String, status == "source_only" ? "source_only" : "investigate_more")
+                return (200, "{\"run\":\(workflow),\"receipt\":\(receipt)}")
+            }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+            let service = SupabaseService(apiBaseURL: "https://local-decision.test", session: URLSession(configuration: configuration), accessTokenProvider: { "fixture-token" })
+            let events = SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("events.json"))
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault, correctionEventStore: events)
+            map.reviewCandidates = [candidate]
+            if status == "source_only" { try await map.saveReviewCandidateAsSourceOnly(candidate) }
+            else { try await map.investigateReviewCandidateMore(candidate) }
+            XCTAssertEqual(map.reviewCandidates.first?.status, status)
+            XCTAssertEqual(AnalysisRequestURLProtocol.requests.filter { $0.httpMethod == "POST" }.count, 1)
+            XCTAssertEqual(try events.recentEvents().first?.learningCommitted, true)
+        }
+    }
+
+    @MainActor
+    private func localReviewDecisionFixture(owner: String?, parked: Bool) -> PlaceReviewCandidate {
+        var candidate = contextualReviewCandidate(owner: owner ?? "unused", workflow: false)
+        candidate.captureId = nil
+        candidate.ownerSubject = owner
+        candidate.correctionScopeKey = "instagram:local-review-fixture"
+        candidate.missingInfo = ["Analysis pending", "Original unknown field"]
+        if parked { candidate.missingInfo.append(PlaceReviewCandidate.unplacedInboxMarker) }
+        return candidate
+    }
+
+    @MainActor
     private func contextualReviewCandidate(owner: String, workflow: Bool) -> PlaceReviewCandidate {
         PlaceReviewCandidate(id: UUID(), captureId: UUID(), workflowRunId: workflow ? UUID() : nil,
             name: "Original Review Cafe", address: "1 Context Road", city: "Taipei",
@@ -2766,30 +2946,85 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
-    func testServerCapKeepsExactSearchOnItsOriginalClue() async throws {
-        let previousAuth = PrivyAuthService.shared.authState
-        PrivyAuthService.shared.authState = .authenticated(userId: "exact-owner")
-        defer { PrivyAuthService.shared.authState = previousAuth }
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let map = MapViewModel(
-            mapCandidatePlaceSaver: { _, _ in throw SavePlaceLimitError.parkedInUnplacedInbox },
-            mapCandidateUserIDProvider: { "exact-owner" },
-            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json")),
-            entitlementTierProvider: { .free }, entitlementResolvedProvider: { true }, usesRemotePersistence: false)
-        let clue = PlaceReviewCandidate(id: UUID(), captureId: UUID(), name: "Cafe", address: "1 Road", city: nil,
-            latitude: nil, longitude: nil, evidence: ["Original clue"], confidence: nil, missingInfo: [], status: "review", createdAt: Date())
-        let candidate = SaveMapCandidate(id: "exact-cafe", title: "Cafe", subtitle: "1 Road", latitude: 25, longitude: 121, category: .cafe)
-        map.reviewCandidates = [clue]
-        map.mapCandidates = [candidate]
-        map.beginExactSearchResolution(for: clue)
-        do {
-            _ = try await map.saveMapCandidateAsPlace(candidate)
-            XCTFail("The cap must leave the original clue pending")
-        } catch is SavePlaceLimitError {}
-        XCTAssertEqual(map.reviewCandidates.map(\.id), [clue.id])
-        XCTAssertTrue(map.places.isEmpty)
-        XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+    func testExactSearchCapDurablyParksOriginalClueAcrossLocalRemoteAndFallbackPaths() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        defer { auth.authState = previousAuth; SavePlaceLimitHandoff.testDefaults = previousDefaults; AnalysisRequestURLProtocol.reset() }
+        for route in ["local-precheck", "remote-cap", "local-fallback"] {
+            for failWriteFirst in [false, true] {
+                let owner: String? = route == "local-fallback" ? nil : "exact-owner"
+                auth.authState = owner.map { .authenticated(userId: $0) } ?? .unauthenticated
+                SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.exact-cap.\(UUID())")
+                let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                defer { try? FileManager.default.removeItem(at: directory) }
+                let url = directory.appendingPathComponent("vault.json")
+                let vault = SaveLocalVaultService(overrideVaultURL: url)
+                var clue = contextualReviewCandidate(owner: owner ?? "unused", workflow: true)
+                clue.ownerSubject = owner
+                clue.latitude = nil
+                clue.longitude = nil
+                try vault.saveReviewCandidate(clue)
+                let before = try Data(contentsOf: url)
+                AnalysisRequestURLProtocol.reset()
+                AnalysisRequestURLProtocol.handler = { request in
+                    if request.httpMethod == "GET", request.url?.path == "/v0/lists" { return (200, "[]") }
+                    XCTAssertEqual(request.httpMethod, "POST")
+                    XCTAssertEqual(request.url?.path, "/places")
+                    return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#)
+                }
+                let configuration = URLSessionConfiguration.ephemeral
+                configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+                let service = SupabaseService(apiBaseURL: "https://exact-cap.test", session: URLSession(configuration: configuration), accessTokenProvider: { "fixture-token" })
+                let map = MapViewModel(supabaseService: service, mapCandidateUserIDProvider: { owner },
+                    saveLocalVaultService: vault,
+                    correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("events.json")),
+                    entitlementTierProvider: { .free }, entitlementResolvedProvider: { true }, usesRemotePersistence: route != "local-precheck")
+                let candidate = SaveMapCandidate(id: "exact-cafe", title: "Refined Search Cafe", subtitle: "1 Refined Road",
+                    latitude: 25, longitude: 121, category: .cafe)
+                map.places = makeCappedPlaces(50)
+                map.reviewCandidates = [clue]
+                map.selectedReviewCandidate = clue
+                map.mapCandidates = [candidate]
+                map.selectedMapCandidate = candidate
+                map.beginExactSearchResolution(for: clue)
+                if failWriteFirst {
+                    vault.saveReviewCandidateError = SaveLocalVaultError.storageUnavailable
+                    do { _ = try await map.saveMapCandidateAsPlace(candidate); XCTFail("No parked success without durable storage") }
+                    catch SaveLocalVaultError.storageUnavailable {}
+                    XCTAssertEqual(map.reviewCandidates, [clue])
+                    XCTAssertEqual(map.selectedReviewCandidate, clue)
+                    XCTAssertEqual(map.mapCandidates.map(\.id), [candidate.id])
+                    XCTAssertEqual(map.selectedMapCandidate?.id, candidate.id)
+                    XCTAssertTrue(map.mapCandidate(candidate, resolvesReviewCandidateID: clue.id))
+                    XCTAssertEqual(try Data(contentsOf: url), before)
+                    XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+                    XCTAssertFalse(SavePlaceLimitHandoff.consumePaywallPending())
+                    vault.saveReviewCandidateError = nil
+                }
+                do { _ = try await map.saveMapCandidateAsPlace(candidate); XCTFail("The cap must park the original clue") }
+                catch is SavePlaceLimitError {}
+                XCTAssertEqual(map.reviewCandidates.map(\.id), [clue.id])
+                XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+                XCTAssertEqual(map.reviewCandidates.first?.name, clue.name, "Do not replace the clue with the refined place")
+                XCTAssertTrue(map.mapCandidate(candidate, resolvesReviewCandidateID: clue.id))
+                XCTAssertEqual(map.places.count, 50)
+                XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+                let persisted = try XCTUnwrap(SaveLocalVaultService(overrideVaultURL: url).reviewCandidates(belongingTo: owner).first)
+                XCTAssertTrue(persisted.isUnplacedInbox)
+                XCTAssertEqual(persisted.id, clue.id)
+                XCTAssertEqual(persisted.ownerSubject, owner)
+                XCTAssertEqual(persisted.captureId, clue.captureId)
+                XCTAssertEqual(persisted.workflowRunId, clue.workflowRunId)
+                XCTAssertEqual(persisted.city, clue.city)
+                XCTAssertEqual(persisted.confidence, clue.confidence)
+                XCTAssertEqual(persisted.createdAt, clue.createdAt)
+                XCTAssertTrue(clue.evidence.allSatisfy { persisted.evidence.contains($0) })
+                XCTAssertTrue(try vault.confirmedPlaces().isEmpty)
+                XCTAssertEqual(AnalysisRequestURLProtocol.requests.filter { $0.httpMethod == "POST" }.count,
+                    route == "remote-cap" ? (failWriteFirst ? 2 : 1) : 0)
+            }
+        }
     }
 
     @MainActor
