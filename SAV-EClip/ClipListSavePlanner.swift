@@ -100,6 +100,8 @@ enum ClipListSavePlanner {
         if let placeId = item.placeId?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
            !placeId.isEmpty {
             keys.append("id:\(placeId)")
+            keys.append("p:\(placeId)")
+            keys.append("g:\(placeId)")
         }
         let name = item.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if !name.isEmpty {

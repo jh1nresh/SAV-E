@@ -33,6 +33,22 @@ test("SL1 dedupes the list first and keeps list order", () => {
   assert.equal(plan.overCap, 0);
 });
 
+test("google and provider place ids share one identity", () => {
+  const existing = clipListPlaceIdentities({
+    google_place_id: "ChIJ123",
+    name: "Renamed Stamp",
+    latitude: 35.0,
+    longitude: 139.0,
+  });
+  const plan = planClipListSave({
+    items: [{ provider_place_id: "ChIJ123", name: "Starbucks", latitude: 40.7, longitude: -74.0 }],
+    existingIdentities: existing,
+    savedPlaceCount: 1,
+  });
+  assert.equal(plan.alreadySaved, 1);
+  assert.equal(plan.newlySaved, 0);
+});
+
 test("SL1 records skipped identities so transitive duplicates collapse", () => {
   const plan = planClipListSave({
     items: [

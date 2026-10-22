@@ -439,7 +439,11 @@ enum ClipListHandoff {
     private static func identities(of item: SaveListItem) -> [String] {
         var keys: [String] = []
         let sourceID = item.sourceID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if !sourceID.isEmpty { keys.append("id:\(sourceID)") }
+        if !sourceID.isEmpty {
+            keys.append("id:\(sourceID)")
+            keys.append("p:\(sourceID)")
+            keys.append("g:\(sourceID)")
+        }
         let name = item.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if !name.isEmpty {
             keys.append("n:\(name)|\(String(format: "%.4f", item.latitude))|\(String(format: "%.4f", item.longitude))")

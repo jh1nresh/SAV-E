@@ -22,11 +22,15 @@ export function clipListPlaceIdentities(place: {
   if (typeof place.id === "string" && place.id.trim()) {
     keys.push(`id:${place.id.trim().toLowerCase()}`);
   }
-  if (typeof place.google_place_id === "string" && place.google_place_id.trim()) {
-    keys.push(`g:${place.google_place_id.trim()}`);
+  const google = typeof place.google_place_id === "string" ? place.google_place_id.trim() : "";
+  const provider = typeof place.provider_place_id === "string" ? place.provider_place_id.trim() : "";
+  if (google) {
+    keys.push(`g:${google}`);
+    keys.push(`p:${google}`);
   }
-  if (typeof place.provider_place_id === "string" && place.provider_place_id.trim()) {
-    keys.push(`p:${place.provider_place_id.trim()}`);
+  if (provider) {
+    keys.push(`p:${provider}`);
+    keys.push(`g:${provider}`);
   }
   const name = String(place.name ?? "").trim().toLowerCase();
   const lat = Number(place.latitude);

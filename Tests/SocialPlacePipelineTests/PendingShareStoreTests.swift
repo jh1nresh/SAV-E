@@ -258,6 +258,10 @@ final class PendingShareStoreTests: XCTestCase {
         seattle.longitude = -122.33
         seattle.providerPlaceId = "shop-seattle"
         XCTAssertFalse(tokyo.alreadySaved(in: [seattle]))
+        var googleOnly = seattle
+        googleOnly.googlePlaceId = "shop-tokyo"
+        googleOnly.providerPlaceId = nil
+        XCTAssertTrue(tokyo.alreadySaved(in: [googleOnly]))
         XCTAssertTrue(
             ClipListHandoff.needsPlaceRefresh(
                 confirmed: [tokyo],

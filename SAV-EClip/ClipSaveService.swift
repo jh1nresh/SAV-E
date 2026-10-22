@@ -221,9 +221,7 @@ enum ClipSaveService {
         draft: ClipPlaceDraft,
         handoffURL: URL,
         sender: String?,
-        openURL: @escaping (URL, @escaping (Bool) -> Void) -> Void = { url, completion in
-            UIApplication.shared.open(url, options: [:], completionHandler: completion)
-        },
+        openURL: @escaping (URL, @escaping (Bool) -> Void) -> Void = openInstalledApp,
         signIn: @escaping () async throws -> String = { try await ClipAppleAuth.signIn() },
         postPlace: @escaping (ClipPlaceDraft, String) async throws -> (Int, Data) = postPlace
     ) async -> ClipSaveOutcome {
@@ -254,9 +252,7 @@ enum ClipSaveService {
         shareCode: String?,
         handoffURL: URL,
         sender: String?,
-        openURL: @escaping (URL, @escaping (Bool) -> Void) -> Void = { url, completion in
-            UIApplication.shared.open(url, options: [:], completionHandler: completion)
-        },
+        openURL: @escaping (URL, @escaping (Bool) -> Void) -> Void = openInstalledApp,
         signIn: @escaping () async throws -> String = { try await ClipAppleAuth.signIn() },
         postPlaces: @escaping ([ClipListSaveItem], String) async throws -> (Int, Data) = postPlaces
     ) async -> ClipSaveOutcome {
@@ -294,6 +290,14 @@ enum ClipSaveService {
         } catch {
             return .listFailed(nil)
         }
+    }
+
+    private static func openInstalledApp(_ url: URL, completion: @escaping (Bool) -> Void) {
+        UIApplication.shared.open(
+            url,
+            options: [.universalLinksOnly: true],
+            completionHandler: completion
+        )
     }
 
     private static func postPlace(_ draft: ClipPlaceDraft, token: String) async throws -> (Int, Data) {

@@ -105,10 +105,15 @@ struct SaveListItem: Identifiable, Codable, Hashable {
 
     func alreadySaved(in places: [Place]) -> Bool {
         places.contains { place in
-            if let provider = place.providerPlaceId, !provider.isEmpty,
-               !sourceID.isEmpty,
-               sourceID.caseInsensitiveCompare(provider) == .orderedSame {
-                return true
+            if !sourceID.isEmpty {
+                if let provider = place.providerPlaceId, !provider.isEmpty,
+                   sourceID.caseInsensitiveCompare(provider) == .orderedSame {
+                    return true
+                }
+                if let google = place.googlePlaceId, !google.isEmpty,
+                   sourceID.caseInsensitiveCompare(google) == .orderedSame {
+                    return true
+                }
             }
             return place.matchesMapFeature(title: title, coordinate: coordinate)
         }
