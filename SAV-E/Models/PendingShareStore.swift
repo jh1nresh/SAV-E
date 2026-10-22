@@ -196,6 +196,34 @@ enum ClipListHandoff {
         pending?.matchesIncomingList(url: incomingURL) == true
     }
 
+    static let listURLMaxBytes = 8 * 1024
+
+    static func compactHandoffURL(incoming: URL?, shareCode: String?, listId: String?) -> URL {
+        _ = listId
+        let code = (shareCode ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !code.isEmpty, let url = URL(string: "https://sav-e-app.vercel.app/list?c=\(code)") {
+            return url
+        }
+        if let incoming, incoming.absoluteString.utf8.count <= listURLMaxBytes {
+            return incoming
+        }
+        return URL(string: "https://sav-e-app.vercel.app/list")!
+    }
+
+    /// Oversized embedded list URLs are still accepted when a matching
+    /// confirmed journal exists, then rewritten to a compact handoff.
+    static func acceptedListURL(pending: PendingSharePayload?, incomingURL: URL) -> URL? {
+        if incomingURL.absoluteString.utf8.count <= listURLMaxBytes {
+            return incomingURL
+        }
+        guard pending?.matchesIncomingList(url: incomingURL) == true else { return nil }
+        return compactHandoffURL(
+            incoming: incomingURL,
+            shareCode: pending?.shareCode,
+            listId: pending?.listId
+        )
+    }
+
     /// Stamp the confirmed snapshot only. `liveItems` is the joined server
     /// list after sign-in and must not add or drop shops.
     static func itemsToStamp(

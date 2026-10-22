@@ -739,14 +739,14 @@ struct ClipContentView: View {
             lat: draft.latitude,
             lng: draft.longitude,
             category: draft.category,
-            rating: draft.rating,
+            rating: nil,
             reviewCount: nil,
             priceRange: nil,
             hours: nil,
             sourceLabel: "Savvy",
             sourceURL: draft.sourceURL,
             photoURLs: [],
-            note: draft.note
+            note: nil
         ).toURL() {
             return encoded
         }

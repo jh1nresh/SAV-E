@@ -304,7 +304,23 @@ struct SaveApp: App {
             return
         }
 #endif
-        if SaveReferralLink.target(from: url) != nil || SaveSharedListPayload.isListLink(url) {
+        if SaveSharedListPayload.isListLink(url) {
+            guard let accepted = ClipListHandoff.acceptedListURL(
+                pending: PendingShareStore.load(),
+                incomingURL: url
+            ) else { return }
+            autoSaveIncomingShare = false
+            deferredAccountScopedLink = DeferredAccountScopedLink(
+                id: UUID(),
+                url: accepted,
+                ownerGeneration: isCurrentAccountVerified ? authService.sessionGeneration : nil
+            )
+            accountScopedURLProcessingID = nil
+            processDeferredAccountURLIfVerified()
+            return
+        }
+
+        if SaveReferralLink.target(from: url) != nil {
             guard url.absoluteString.utf8.count <= accountScopedURLMaxBytes else { return }
             autoSaveIncomingShare = false
             deferredAccountScopedLink = DeferredAccountScopedLink(

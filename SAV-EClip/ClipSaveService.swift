@@ -257,17 +257,22 @@ enum ClipSaveService {
         signIn: @escaping () async throws -> String = { try await ClipAppleAuth.signIn() },
         postPlaces: @escaping ([ClipListSaveItem], String) async throws -> (Int, Data) = postPlaces
     ) async -> ClipSaveOutcome {
+        let handoff = ClipListSavePlanner.compactHandoffURL(
+            incoming: handoffURL,
+            shareCode: shareCode,
+            listId: listId
+        )
         let written = persistList(
             listId: listId,
             shareCode: shareCode,
-            url: handoffURL,
+            url: handoff,
             sender: sender,
             drafts: drafts
         )
         guard written else { return .failed }
         if ClipFullApp.isInstalled {
             return await withCheckedContinuation { continuation in
-                openURL(handoffURL) { opened in
+                openURL(handoff) { opened in
                     let handedOff = ClipListSavePlanner.handoffAfterPersist(written: written, opened: opened)
                     continuation.resume(returning: handedOff ? .handedOff : .failed)
                 }

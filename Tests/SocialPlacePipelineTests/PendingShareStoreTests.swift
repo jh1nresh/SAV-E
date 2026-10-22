@@ -345,6 +345,36 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertEqual(bar.asPlace(includeSenderMemory: false).category, .bar)
     }
 
+    func testOversizedListURLIsAcceptedWhenJournalMatches() {
+        let blob = String(repeating: "A", count: 9000)
+        let oversized = URL(string: "https://sav-e-app.vercel.app/list?d=\(blob)&c=LiSt99_z")!
+        XCTAssertGreaterThan(oversized.absoluteString.utf8.count, ClipListHandoff.listURLMaxBytes)
+        let journal = PendingSharePayload(
+            kind: .list,
+            shareCode: "LiSt99_z",
+            placeId: nil,
+            listId: "22222222-2222-2222-2222-222222222222",
+            sender: "Mina",
+            url: oversized.absoluteString
+        )
+        let accepted = ClipListHandoff.acceptedListURL(pending: journal, incomingURL: oversized)
+        XCTAssertEqual(accepted?.absoluteString, "https://sav-e-app.vercel.app/list?c=LiSt99_z")
+        XCTAssertNil(ClipListHandoff.acceptedListURL(pending: nil, incomingURL: oversized))
+        XCTAssertNil(ClipListHandoff.acceptedListURL(
+            pending: PendingSharePayload(
+                kind: .list,
+                shareCode: "other99",
+                placeId: nil,
+                listId: nil,
+                sender: nil,
+                url: "https://sav-e-app.vercel.app/list?c=other99"
+            ),
+            incomingURL: oversized
+        ))
+        let small = URL(string: "https://sav-e-app.vercel.app/list?c=LiSt99_z")!
+        XCTAssertEqual(ClipListHandoff.acceptedListURL(pending: nil, incomingURL: small), small)
+    }
+
     func testUnrelatedPlaceLinkDoesNotInheritAutoSave() {
         let urlA = URL(string: "https://sav-e-app.vercel.app/p/AbC123_x")!
         let urlB = URL(string: "https://sav-e-app.vercel.app/p/ZzOther99")!

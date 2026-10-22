@@ -138,6 +138,26 @@ enum ClipListSavePlanner {
         written && opened
     }
 
+    /// Full-app list links are rejected above 8 KiB. Prefer a short-code
+    /// handoff so the journal can still be consumed.
+    static let fullAppListURLMaxBytes = 8 * 1024
+
+    static func compactHandoffURL(
+        incoming: URL?,
+        shareCode: String?,
+        listId: String?
+    ) -> URL {
+        _ = listId
+        let code = (shareCode ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if !code.isEmpty, let url = URL(string: "https://sav-e-app.vercel.app/list?c=\(code)") {
+            return url
+        }
+        if let incoming, incoming.absoluteString.utf8.count <= fullAppListURLMaxBytes {
+            return incoming
+        }
+        return URL(string: "https://sav-e-app.vercel.app/list")!
+    }
+
     static func allocate(
         novelCount: Int,
         alreadySaved: Int,

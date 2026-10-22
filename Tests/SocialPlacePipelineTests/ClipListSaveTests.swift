@@ -192,6 +192,36 @@ final class ClipListSaveTests: XCTestCase {
         XCTAssertEqual(ClipListSavePlanner.visiblePage(current: 0, incoming: 0), 0)
     }
 
+    func testCompactHandoffURLFitsFullAppListGate() {
+        let blob = String(repeating: "A", count: 9000)
+        let oversized = URL(string: "https://sav-e-app.vercel.app/list?d=\(blob)")!
+        XCTAssertGreaterThan(oversized.absoluteString.utf8.count, ClipListSavePlanner.fullAppListURLMaxBytes)
+        let compact = ClipListSavePlanner.compactHandoffURL(
+            incoming: oversized,
+            shareCode: "LiSt99_z",
+            listId: "22222222-2222-2222-2222-222222222222"
+        )
+        XCTAssertEqual(compact.absoluteString, "https://sav-e-app.vercel.app/list?c=LiSt99_z")
+        XCTAssertLessThanOrEqual(compact.absoluteString.utf8.count, ClipListSavePlanner.fullAppListURLMaxBytes)
+        XCTAssertEqual(
+            ClipListSavePlanner.compactHandoffURL(
+                incoming: oversized,
+                shareCode: nil,
+                listId: nil
+            ).absoluteString,
+            "https://sav-e-app.vercel.app/list"
+        )
+        let small = URL(string: "https://sav-e-app.vercel.app/list?c=LiSt99_z")!
+        XCTAssertEqual(
+            ClipListSavePlanner.compactHandoffURL(
+                incoming: small,
+                shareCode: nil,
+                listId: nil
+            ),
+            small
+        )
+    }
+
     func testHandoffRequiresJournalWrite() {
         XCTAssertFalse(ClipListSavePlanner.handoffAfterPersist(written: false, opened: true))
         XCTAssertFalse(ClipListSavePlanner.handoffAfterPersist(written: true, opened: false))
