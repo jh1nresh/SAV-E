@@ -181,7 +181,25 @@ enum ClipSaveService {
         )
     }
 
-    static func persistList(listId: String?, shareCode: String?, url: URL, sender: String?) {
+    static func persistList(
+        listId: String?,
+        shareCode: String?,
+        url: URL,
+        sender: String?,
+        drafts: [ClipPlaceDraft]
+    ) {
+        let unique = ClipListSavePlanner.uniqueItems(from: drafts.map(\.listSaveItem))
+        let places = unique.map {
+            PendingConfirmedPlace(
+                placeId: $0.placeId ?? "",
+                name: $0.name,
+                address: $0.address,
+                latitude: $0.latitude,
+                longitude: $0.longitude,
+                category: $0.category,
+                sourceURL: $0.sourceURL
+            )
+        }
         PendingShareStore.write(
             PendingSharePayload(
                 kind: .list,
@@ -189,7 +207,11 @@ enum ClipSaveService {
                 placeId: nil,
                 listId: listId,
                 sender: sender,
-                url: url.absoluteString
+                url: url.absoluteString,
+                confirmedPlaceIds: unique.compactMap { id in
+                    id.placeId?.trimmingCharacters(in: .whitespacesAndNewlines)
+                }.filter { !$0.isEmpty },
+                confirmedPlaces: places
             )
         )
     }
@@ -235,7 +257,7 @@ enum ClipSaveService {
         signIn: @escaping () async throws -> String = { try await ClipAppleAuth.signIn() },
         postPlaces: @escaping ([ClipListSaveItem], String) async throws -> (Int, Data) = postPlaces
     ) async -> ClipSaveOutcome {
-        persistList(listId: listId, shareCode: shareCode, url: handoffURL, sender: sender)
+        persistList(listId: listId, shareCode: shareCode, url: handoffURL, sender: sender, drafts: drafts)
         if ClipFullApp.isInstalled {
             return await withCheckedContinuation { continuation in
                 openURL(handoffURL) { opened in
@@ -245,7 +267,10 @@ enum ClipSaveService {
         }
         do {
             let token = try await signIn()
-            let unique = ClipListSavePlanner.uniqueItems(from: drafts.map(\.listSaveItem))
+            let unique = ClipListSavePlanner.itemsToSave(
+                confirmed: drafts.map(\.listSaveItem),
+                liveList: []
+            )
             let (status, data) = try await postPlaces(unique, token)
             return ClipSaveAPI.parseListOutcome(status: status, data: data)
         } catch let error as ClipSaveError {

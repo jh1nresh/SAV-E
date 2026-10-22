@@ -122,6 +122,17 @@ enum ClipListSavePlanner {
         incoming ?? current
     }
 
+    /// After the user confirms “save all”, POST only that snapshot.
+    /// `liveList` is the owner’s current server list and must never replace
+    /// a shop the user already confirmed, or add one they never saw.
+    static func itemsToSave(
+        confirmed: [ClipListSaveItem],
+        liveList: [ClipListSaveItem]
+    ) -> [ClipListSaveItem] {
+        _ = liveList
+        return uniqueItems(from: confirmed)
+    }
+
     static func allocate(
         novelCount: Int,
         alreadySaved: Int,

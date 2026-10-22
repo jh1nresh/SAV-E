@@ -109,6 +109,64 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertFalse(ClipListHandoff.shouldSaveItems(pending: place, incomingURL: listURL))
     }
 
+    func testConfirmedListHandoffStampsOriginalFiveAfterOwnerAddAndDelete() {
+        let listURL = URL(string: "https://sav-e-app.vercel.app/list?c=LiSt99_z")!
+        let confirmed = (1...5).map { index in
+            PendingConfirmedPlace(
+                placeId: "shop-\(index)",
+                name: "Shop \(index)",
+                address: "Tokyo",
+                latitude: 35.6 + Double(index) * 0.01,
+                longitude: 139.7,
+                category: "Cafe",
+                sourceURL: nil
+            )
+        }
+        let journal = PendingSharePayload(
+            kind: .list,
+            shareCode: "LiSt99_z",
+            placeId: nil,
+            listId: "22222222-2222-2222-2222-222222222222",
+            sender: "Mina",
+            url: listURL.absoluteString,
+            confirmedPlaceIds: confirmed.map(\.placeId),
+            confirmedPlaces: confirmed
+        )
+        PendingShareStore.write(journal, to: store)
+        let loaded = PendingShareStore.load(from: store)
+        XCTAssertEqual(loaded?.confirmedPlaceIds, ["shop-1", "shop-2", "shop-3", "shop-4", "shop-5"])
+
+        let liveAfterOwnerEdit = [
+            confirmed[0],
+            confirmed[1],
+            confirmed[2],
+            confirmed[3],
+            PendingConfirmedPlace(
+                placeId: "shop-6",
+                name: "Owner Added",
+                address: "Tokyo",
+                latitude: 35.65,
+                longitude: 139.71,
+                category: "Cafe",
+                sourceURL: nil
+            ),
+        ].map { $0.asListItem() }
+        let stamped = ClipListHandoff.itemsToStamp(
+            pending: loaded,
+            incomingURL: listURL,
+            liveItems: liveAfterOwnerEdit
+        )
+        XCTAssertEqual(stamped.map(\.sourceID), ["shop-1", "shop-2", "shop-3", "shop-4", "shop-5"])
+        XCTAssertFalse(stamped.contains(where: { $0.sourceID == "shop-6" }))
+        XCTAssertTrue(stamped.contains(where: { $0.sourceID == "shop-5" }))
+        XCTAssertEqual(stamped.count, 5)
+        XCTAssertTrue(ClipListHandoff.itemsToStamp(
+            pending: loaded,
+            incomingURL: URL(string: "https://sav-e-app.vercel.app/list?c=other")!,
+            liveItems: liveAfterOwnerEdit
+        ).isEmpty)
+    }
+
     func testListPayloadKeepsShareCodeAndListId() {
         let payload = PendingSharePayload(
             kind: .list,

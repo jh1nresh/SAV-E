@@ -1,5 +1,37 @@
 import Foundation
 
+/// Compact list snapshot written at Clip “save all” tap. Stamp only these
+/// after SIWA / handoff — never the live joined list.
+struct PendingConfirmedPlace: Codable, Equatable {
+    var placeId: String
+    var name: String
+    var address: String
+    var latitude: Double
+    var longitude: Double
+    var category: String
+    var sourceURL: String?
+
+    func asListItem() -> SaveListItem {
+        SaveListItem(
+            id: UUID(),
+            source: .savedPlace,
+            sourceID: placeId,
+            title: name,
+            subtitle: address,
+            latitude: latitude,
+            longitude: longitude,
+            category: nil,
+            rating: nil,
+            reviewCount: nil,
+            sourceURL: sourceURL,
+            photoURLs: [],
+            note: nil,
+            addedByDisplayName: "",
+            addedAt: Date(timeIntervalSince1970: 0)
+        )
+    }
+}
+
 /// App Group payload written by the Clip at “Save to my Savvy” tap time.
 /// The full app reads `pendingShare` on first launch, auto-saves, then clears.
 struct PendingSharePayload: Codable, Equatable {
@@ -14,6 +46,8 @@ struct PendingSharePayload: Codable, Equatable {
     var listId: String?
     var sender: String?
     var url: String
+    var confirmedPlaceIds: [String]? = nil
+    var confirmedPlaces: [PendingConfirmedPlace]? = nil
 
     /// Auto-save only the place the Clip journal actually confirmed.
     /// A leftover failed/cancelled journal, or a list payload, must not
@@ -87,7 +121,7 @@ enum PendingShareStore {
     static func write(_ payload: PendingSharePayload, to store: UserDefaults? = nil) {
         guard let defaults = defaults(store),
               let data = try? JSONEncoder().encode(payload),
-              data.count <= 8 * 1024
+              data.count <= 64 * 1024
         else { return }
         defaults.set(data, forKey: key)
     }
@@ -128,9 +162,35 @@ enum PendingShareStore {
 }
 
 /// A matching Clip “save all” journal is user confirmation to stamp the
-/// joined list items. A list link without that journal is join-only.
+/// confirmed snapshot. A list link without that journal is join-only.
 enum ClipListHandoff {
     static func shouldSaveItems(pending: PendingSharePayload?, incomingURL: URL) -> Bool {
         pending?.matchesIncomingList(url: incomingURL) == true
+    }
+
+    /// Stamp the confirmed snapshot only. `liveItems` is the joined server
+    /// list after sign-in and must not add or drop shops.
+    static func itemsToStamp(
+        pending: PendingSharePayload?,
+        incomingURL: URL,
+        liveItems: [SaveListItem]
+    ) -> [SaveListItem] {
+        _ = liveItems
+        guard shouldSaveItems(pending: pending, incomingURL: incomingURL),
+              let places = pending?.confirmedPlaces, !places.isEmpty
+        else { return [] }
+        return places.map { $0.asListItem() }
+    }
+
+    static func stampList(
+        pending: PendingSharePayload?,
+        incomingURL: URL,
+        joined: SaveCollaborativeList
+    ) -> SaveCollaborativeList? {
+        let items = itemsToStamp(pending: pending, incomingURL: incomingURL, liveItems: joined.items)
+        guard !items.isEmpty else { return nil }
+        var list = joined
+        list.items = items
+        return list
     }
 }

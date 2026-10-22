@@ -80,6 +80,7 @@ struct ClipContentView: View {
     @State private var isSaving = false
     @State private var lastSaveWasList = false
     @State private var pendingSaveDraft: ClipPlaceDraft?
+    @State private var pendingListDrafts: [ClipPlaceDraft]?
     @State private var pendingSaveListTitle: String?
     @State private var listPage = 0
     @State private var showListSwipeHint = !ClipListSwipeHint.isDismissed()
@@ -635,14 +636,17 @@ struct ClipContentView: View {
     }
 
     private func beginSaveWholeList() {
-        guard listData != nil else { return }
+        guard let list = listData else { return }
         signInHint = false
         lastSaveWasList = true
+        if pendingListDrafts == nil {
+            pendingListDrafts = list.items.map(ClipPlaceDraft.from(item:))
+        }
         if ClipFullApp.isInstalled {
             Task { await saveWholeList() }
             return
         }
-        surface = .signIn(.wholeList(listData?.items.count ?? 0))
+        surface = .signIn(.wholeList(pendingListDrafts?.count ?? list.items.count))
     }
 
     private func continueSignIn() async {
@@ -657,20 +661,19 @@ struct ClipContentView: View {
     }
 
     private func saveWholeList() async {
-        guard let list = listData else { return }
+        guard let drafts = pendingListDrafts, !drafts.isEmpty else { return }
         signInHint = false
         lastSaveWasList = true
         isSaving = true
         defer { isSaving = false }
-        let drafts = list.items.map(ClipPlaceDraft.from(item:))
         let url = lastIncomingURL ?? URL(string: "https://sav-e-app.vercel.app/list")!
         let shareCode = lastIncomingURL.flatMap(SharedListPayload.shareCode(from:))
         let outcome = await ClipSaveService.saveList(
             drafts: drafts,
-            listId: list.id.uuidString,
+            listId: listData?.id.uuidString,
             shareCode: shareCode,
             handoffURL: url,
-            sender: list.ownerDisplayName.isEmpty ? nil : list.ownerDisplayName
+            sender: listData?.ownerDisplayName.isEmpty == false ? listData?.ownerDisplayName : nil
         )
         switch outcome {
         case .handedOff:
@@ -915,6 +918,9 @@ struct ClipContentView: View {
         listPage = 0
         pendingSaveDraft = nil
         pendingSaveListTitle = nil
+        if !lastSaveWasList {
+            pendingListDrafts = nil
+        }
     }
 
     private func apply(list: SharedListData) {

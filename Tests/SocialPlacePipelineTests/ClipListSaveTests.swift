@@ -145,6 +145,31 @@ final class ClipListSaveTests: XCTestCase {
         XCTAssertNotEqual(again?.first?["id"] as? String, id)
     }
 
+    func testConfirmedSnapshotIgnoresOwnerAddAndDeleteAfterSignIn() {
+        let confirmed = [
+            item("shop-1", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("shop-2", "Katsu Midori", lat: 35.690, lng: 139.700),
+            item("shop-3", "Kagari", lat: 35.671, lng: 139.767),
+            item("shop-4", "Yanaka Coffee", lat: 35.727, lng: 139.768),
+            item("shop-5", "Little Nap", lat: 35.668, lng: 139.705),
+        ]
+        let liveAfterOwnerEdit = [
+            confirmed[0],
+            confirmed[1],
+            confirmed[2],
+            confirmed[3],
+            item("shop-6", "New Shop Owner Added", lat: 35.650, lng: 139.710),
+        ]
+        let saved = ClipListSavePlanner.itemsToSave(
+            confirmed: confirmed,
+            liveList: liveAfterOwnerEdit
+        )
+        XCTAssertEqual(saved.map(\.placeId), ["shop-1", "shop-2", "shop-3", "shop-4", "shop-5"])
+        XCTAssertFalse(saved.contains(where: { $0.placeId == "shop-6" }))
+        XCTAssertTrue(saved.contains(where: { $0.placeId == "shop-5" }))
+        XCTAssertEqual(saved.count, 5)
+    }
+
     func testListSignInUsesTappedDraftNotStaleListPage() {
         let page0 = item("page0", "Onibus Coffee", lat: 35.644, lng: 139.699)
         let page2 = item("page2", "Katsu Midori", lat: 35.690, lng: 139.700)

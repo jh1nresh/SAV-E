@@ -14,6 +14,20 @@ struct PendingSharePayload: Codable, Equatable {
     var listId: String?
     var sender: String?
     var url: String
+    var confirmedPlaceIds: [String]? = nil
+    var confirmedPlaces: [PendingConfirmedPlace]? = nil
+}
+
+/// Compact list snapshot written at “save all” tap. The full app stamps
+/// these rows after SIWA / handoff and must not re-fetch the live list.
+struct PendingConfirmedPlace: Codable, Equatable {
+    var placeId: String
+    var name: String
+    var address: String
+    var latitude: Double
+    var longitude: Double
+    var category: String
+    var sourceURL: String?
 }
 
 enum PendingShareStore {
@@ -28,7 +42,7 @@ enum PendingShareStore {
     static func write(_ payload: PendingSharePayload, to store: UserDefaults? = nil) {
         guard let defaults = defaults(store),
               let data = try? JSONEncoder().encode(payload),
-              data.count <= 8 * 1024
+              data.count <= 64 * 1024
         else { return }
         defaults.set(data, forKey: key)
     }

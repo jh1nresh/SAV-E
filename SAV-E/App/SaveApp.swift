@@ -306,10 +306,6 @@ struct SaveApp: App {
 #endif
         if SaveReferralLink.target(from: url) != nil || SaveSharedListPayload.isListLink(url) {
             guard url.absoluteString.utf8.count <= accountScopedURLMaxBytes else { return }
-            if let pending = PendingShareStore.load(),
-               ClipListHandoff.shouldSaveItems(pending: pending, incomingURL: url) {
-                autoSaveIncomingList = true
-            }
             deferredAccountScopedLink = DeferredAccountScopedLink(
                 id: UUID(),
                 url: url,
@@ -495,13 +491,17 @@ struct SaveApp: App {
         deferredAccountScopedLink = nil
     }
 
-    /// Clip “save all” already confirmed these items. Keep the journal until
-    /// ContentView stamps them, then clear.
+    /// Clip “save all” already confirmed a snapshot. Join may show the live
+    /// list; stamping uses only those confirmed placeIds.
     private func presentOpenedList(_ list: SaveCollaborativeList, incomingURL: URL) {
         openedList = list
-        if ClipListHandoff.shouldSaveItems(pending: PendingShareStore.load(), incomingURL: incomingURL) {
+        if let stamp = ClipListHandoff.stampList(
+            pending: PendingShareStore.load(),
+            incomingURL: incomingURL,
+            joined: list
+        ) {
             autoSaveIncomingList = true
-            pendingClipListSave = list
+            pendingClipListSave = stamp
         }
     }
 
