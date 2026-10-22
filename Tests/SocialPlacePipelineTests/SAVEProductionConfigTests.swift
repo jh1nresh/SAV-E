@@ -424,6 +424,300 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
+    private func contextualReviewCandidate(owner: String, workflow: Bool) -> PlaceReviewCandidate {
+        PlaceReviewCandidate(id: UUID(), captureId: UUID(), workflowRunId: workflow ? UUID() : nil,
+            name: "Original Review Cafe", address: "1 Context Road", city: "Taipei",
+            latitude: 25.15, longitude: 121.56,
+            evidence: ["Source URL: https://example.com/context", "Original caption and user clue"],
+            confidence: 0.83, missingInfo: ["User confirmation"], status: "review",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            placeHighlights: ["Original highlight"], recommendedItems: [RecommendedItem(name: "Tea", price: "$50")],
+            vibeTags: ["quiet"], accessNotes: ["upstairs"], sourceHandle: "@context",
+            googlePlaceId: "context-place", category: .cafe, ownerSubject: owner)
+    }
+
+    @MainActor
+    func testExistingReviewCapPersistsUnplacedContextAcrossReloadAndRefresh() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        defer { auth.authState = originalAuth; SavePlaceLimitHandoff.testDefaults = originalDefaults; AnalysisRequestURLProtocol.reset() }
+        for route in ["local", "legacy", "workflow"] {
+            let owner = "context-owner-\(route)"
+            auth.authState = .authenticated(userId: owner)
+            SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.context.\(UUID())")
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let vaultURL = directory.appendingPathComponent("vault.json")
+            let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            let candidate = contextualReviewCandidate(owner: owner, workflow: route == "workflow")
+            try vault.saveReviewCandidate(candidate)
+            let capPath = route == "workflow"
+                ? "/v0/workflows/place-recovery/runs/\(candidate.workflowRunId!.uuidString)/decision" : "/places"
+            var refusalCount = 0
+            var remoteStatus = "review"
+            var superseded = false
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { request in
+                if request.httpMethod == "POST", request.url?.path == capPath {
+                    refusalCount += 1
+                    return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#)
+                }
+                if request.url?.path == "/memory/candidates" {
+                    // Fresh venue data must win; missing local workflow/source context and marker must survive.
+                    var row: [String: Any] = ["id": candidate.id.uuidString, "name": "Updated Remote Cafe",
+                        "address": "2 New Road", "city": "New City", "latitude": 26.2, "longitude": 122.3,
+                        "confidence": 0.97, "evidence": [["text": "Fresh server venue evidence", "google_place_id": "new-context-place", "google_types": ["cafe"]]],
+                        "missing_info": [], "status": remoteStatus, "created_at": "2023-11-14T22:13:20Z"]
+                    if superseded { row["superseded_by_candidate_id"] = UUID().uuidString }
+                    return (200, String(data: try JSONSerialization.data(withJSONObject: [row]), encoding: .utf8)!)
+                }
+                return (200, request.httpMethod == "GET" ? "[]" : "{}")
+            }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+            let service = SupabaseService(apiBaseURL: "https://context.test", session: URLSession(configuration: configuration), accessTokenProvider: { "fixture-token" })
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault,
+                correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("events.json")),
+                entitlementTierProvider: { .free }, entitlementResolvedProvider: { true }, usesRemotePersistence: route != "local")
+            map.places = makeCappedPlaces(50)
+            map.reviewCandidates = [candidate]
+            map.selectedReviewCandidate = candidate
+            do { _ = try await map.saveReviewCandidateAsPlace(candidate); XCTFail("Cap must keep this item unconfirmed") }
+            catch is SavePlaceLimitError {}
+            var expected = candidate
+            expected.missingInfo.append(PlaceReviewCandidate.unplacedInboxMarker)
+            XCTAssertEqual(map.reviewCandidates, [expected])
+            XCTAssertEqual(map.selectedReviewCandidate, expected)
+            XCTAssertTrue(map.reviewCandidates[0].isUnplacedInbox, "SaveRootViews uses this property for its Unplaced section")
+            XCTAssertEqual(map.places.count, 50)
+            XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+            XCTAssertEqual(refusalCount, route == "local" ? 0 : 1)
+            let reloaded = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            XCTAssertEqual(try reloaded.reviewCandidates(belongingTo: owner), [expected], "Disk reload must preserve all original context")
+            XCTAssertTrue(try reloaded.confirmedPlaces(belongingTo: owner).isEmpty)
+
+            // A new VM proves the refresh overlay comes from durable state, not the old array.
+            let refreshedMap = MapViewModel(supabaseService: service, saveLocalVaultService: reloaded)
+            try await refreshedMap.refreshReviewCandidates()
+            let refreshed = try XCTUnwrap(refreshedMap.reviewCandidates.first)
+            XCTAssertTrue(refreshed.isUnplacedInbox)
+            XCTAssertEqual(refreshed.id, candidate.id)
+            XCTAssertEqual(refreshed.ownerSubject, owner)
+            XCTAssertEqual(refreshed.captureId, candidate.captureId)
+            XCTAssertEqual(refreshed.workflowRunId, candidate.workflowRunId)
+            XCTAssertEqual(refreshed.name, "Updated Remote Cafe")
+            XCTAssertEqual(refreshed.latitude, 26.2)
+            XCTAssertEqual(refreshed.city, "New City")
+            XCTAssertEqual(refreshed.confidence, 0.97)
+            XCTAssertEqual(refreshed.googlePlaceId, "new-context-place")
+            XCTAssertTrue(candidate.evidence.allSatisfy { refreshed.evidence.contains($0) })
+            XCTAssertTrue(refreshed.evidence.contains("Fresh server venue evidence"))
+            remoteStatus = "saved"
+            try await refreshedMap.refreshReviewCandidates()
+            XCTAssertTrue(refreshedMap.reviewCandidates.isEmpty, "A local park cannot resurrect a terminal remote candidate")
+            remoteStatus = "review"
+            superseded = true
+            try await refreshedMap.refreshReviewCandidates()
+            XCTAssertTrue(refreshedMap.reviewCandidates.isEmpty, "A local park cannot resurrect a superseded candidate")
+        }
+    }
+
+    @MainActor
+    func testExistingReviewFailedParkingKeepsOriginalAndAllowsRetry() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        defer { auth.authState = originalAuth; SavePlaceLimitHandoff.testDefaults = originalDefaults; AnalysisRequestURLProtocol.reset() }
+        for route in ["local", "legacy", "workflow"] {
+            let owner = "failed-context-owner"
+            auth.authState = .authenticated(userId: owner)
+            SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.failed-context.\(UUID())")
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+            let candidate = contextualReviewCandidate(owner: owner, workflow: route == "workflow")
+            try vault.saveReviewCandidate(candidate)
+            let before = try Data(contentsOf: directory.appendingPathComponent("vault.json"))
+            vault.saveReviewCandidateError = SaveLocalVaultError.storageUnavailable
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { request in
+                if request.httpMethod == "POST" { return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#) }
+                return (200, "[]")
+            }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+            let service = SupabaseService(apiBaseURL: "https://failed-context.test", session: URLSession(configuration: configuration), accessTokenProvider: { "fixture-token" })
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault,
+                correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("events.json")),
+                entitlementTierProvider: { .free }, entitlementResolvedProvider: { true }, usesRemotePersistence: route != "local")
+            map.places = makeCappedPlaces(50)
+            map.reviewCandidates = [candidate]
+            map.selectedReviewCandidate = candidate
+            do { _ = try await map.saveReviewCandidateAsPlace(candidate); XCTFail("Storage failure cannot report a parked result") }
+            catch SaveLocalVaultError.storageUnavailable {}
+            XCTAssertEqual(map.reviewCandidates, [candidate])
+            XCTAssertEqual(map.selectedReviewCandidate, candidate)
+            XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+            XCTAssertFalse(SavePlaceLimitHandoff.consumePaywallPending())
+            XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent("vault.json")), before)
+            XCTAssertEqual(map.places.count, 50)
+            vault.saveReviewCandidateError = nil
+            do { _ = try await map.saveReviewCandidateAsPlace(candidate); XCTFail("Still over the cap") }
+            catch is SavePlaceLimitError {}
+            XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+            XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+            XCTAssertEqual(try vault.reviewCandidates(belongingTo: owner).first?.captureId, candidate.captureId)
+        }
+    }
+
+    @MainActor
+    func testExistingReviewCapResponseAfterAccountSwitchDoesNotParkForNewOwner() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        defer { auth.authState = originalAuth; SavePlaceLimitHandoff.testDefaults = originalDefaults; AnalysisRequestURLProtocol.reset() }
+        for workflow in [false, true] {
+            let owner = "context-session-A"
+            auth.authState = .authenticated(userId: owner)
+            SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.context-session.\(UUID())")
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+            let candidate = contextualReviewCandidate(owner: owner, workflow: workflow)
+            try vault.saveReviewCandidate(candidate)
+            let before = try Data(contentsOf: directory.appendingPathComponent("vault.json"))
+            let arrived = expectation(description: "candidate cap response in flight")
+            let release = DispatchSemaphore(value: 0)
+            var hold = true
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { request in
+                if request.httpMethod == "POST", request.url?.path == "/places" || request.url?.path.hasSuffix("/decision") == true {
+                    if hold { arrived.fulfill(); _ = release.wait(timeout: .now() + 10) }
+                    return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#)
+                }
+                return (200, "[]")
+            }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+            let service = SupabaseService(apiBaseURL: "https://context-session.test", session: URLSession(configuration: configuration), accessTokenProvider: { "fixture-token" })
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault,
+                correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("events.json")),
+                entitlementTierProvider: { .free }, entitlementResolvedProvider: { true }, usesRemotePersistence: true)
+            map.reviewCandidates = [candidate]
+            let task = Task { try await map.saveReviewCandidateAsPlace(candidate) }
+            await fulfillment(of: [arrived], timeout: 5)
+            auth.authState = .authenticated(userId: "context-session-B")
+            release.signal()
+            do { _ = try await task.value; XCTFail("The old session must stop") }
+            catch is CancellationError {}
+            XCTAssertEqual(map.reviewCandidates, [candidate])
+            XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+            XCTAssertTrue(map.places.isEmpty)
+            XCTAssertTrue(try vault.reviewCandidates(belongingTo: "context-session-B").isEmpty)
+            XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent("vault.json")), before)
+            auth.authState = .authenticated(userId: owner)
+            hold = false
+            do { _ = try await map.saveReviewCandidateAsPlace(candidate); XCTFail("Still capped for A") }
+            catch is SavePlaceLimitError {}
+            XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+            XCTAssertEqual(try vault.reviewCandidates(belongingTo: owner).first?.workflowRunId, candidate.workflowRunId)
+        }
+    }
+
+    @MainActor
+    func testParkedCandidateSnapshotIsBackwardCompatibleAndCannotCrossRecordIdentity() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let owner = "snapshot-owner"
+        var parked = contextualReviewCandidate(owner: owner, workflow: true)
+        parked.missingInfo.append(PlaceReviewCandidate.unplacedInboxMarker)
+        var record = SaveMemoryRecord(id: parked.id, state: .reviewCandidate, title: "Generic Record", ownerSubject: owner)
+        let encoded = try JSONEncoder().encode(record)
+        var legacyJSON = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        legacyJSON.removeValue(forKey: "parkedReviewCandidate")
+        let legacy = try JSONDecoder().decode(SaveMemoryRecord.self, from: JSONSerialization.data(withJSONObject: legacyJSON))
+        XCTAssertNil(legacy.parkedReviewCandidate)
+        try vault.append(legacy)
+        XCTAssertEqual(try vault.reviewCandidates(belongingTo: owner).first?.name, "Generic Record")
+        XCTAssertNil(try vault.reviewCandidates(belongingTo: owner).first?.captureId)
+        try vault.deleteAllRecords()
+        parked.correctionLearningPlaceID = UUID()
+        parked.correctionLearningUserID = owner
+        parked.sourceFailureReason = SourceSearchFailureReason(kind: .providerFailure, reason: nil, stage: "source")
+        try vault.saveReviewCandidate(parked, preservingParkedContext: true)
+        let persisted = try XCTUnwrap(vault.reviewCandidates(belongingTo: owner).first)
+        XCTAssertNil(persisted.correctionLearningPlaceID)
+        XCTAssertNil(persisted.correctionLearningUserID)
+        XCTAssertNil(persisted.sourceFailureReason)
+        XCTAssertEqual(persisted.captureId, parked.captureId)
+        var refreshed = contextualReviewCandidate(owner: owner, workflow: false)
+        refreshed.id = parked.id
+        refreshed.name = "Vault Updated Venue"
+        refreshed.latitude = 27.5
+        refreshed.evidence = ["New merged evidence"]
+        try vault.saveReviewCandidate(refreshed)
+        let merged = try XCTUnwrap(vault.reviewCandidates(belongingTo: owner).first)
+        XCTAssertTrue(merged.isUnplacedInbox)
+        XCTAssertEqual(merged.captureId, parked.captureId)
+        XCTAssertEqual(merged.workflowRunId, parked.workflowRunId)
+        XCTAssertEqual(merged.name, refreshed.name)
+        XCTAssertEqual(merged.latitude, refreshed.latitude)
+        XCTAssertTrue(merged.evidence.contains("New merged evidence"))
+        XCTAssertTrue(parked.evidence.allSatisfy { merged.evidence.contains($0) })
+        try vault.deleteAllRecords()
+        for mismatch in ["owner", "id", "confirmed"] {
+            record.state = mismatch == "confirmed" ? .confirmedPlace : .reviewCandidate
+            record.parkedReviewCandidate = parked
+            if mismatch == "owner" { record.parkedReviewCandidate?.ownerSubject = "different-owner" }
+            if mismatch == "id" { record.parkedReviewCandidate?.id = UUID() }
+            try vault.append(record)
+            let projected = try vault.reviewCandidates(belongingTo: owner)
+            if mismatch == "confirmed" { XCTAssertTrue(projected.isEmpty) }
+            else {
+                XCTAssertEqual(projected.count, 1)
+                XCTAssertNil(projected.first?.captureId)
+                XCTAssertNil(projected.first?.workflowRunId)
+                XCTAssertFalse(projected.first?.isUnplacedInbox == true)
+            }
+            try vault.deleteAllRecords()
+        }
+    }
+
+    @MainActor
+    func testProAndDuplicateConfirmationRemoveParkedCandidateSnapshot() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        defer { auth.authState = originalAuth }
+        let owner = "snapshot-confirm-owner"
+        auth.authState = .authenticated(userId: owner)
+        for duplicate in [false, true] {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let vaultURL = directory.appendingPathComponent("vault.json")
+            let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            var candidate = contextualReviewCandidate(owner: owner, workflow: true)
+            candidate.missingInfo.append(PlaceReviewCandidate.unplacedInboxMarker)
+            try vault.saveReviewCandidate(candidate, preservingParkedContext: true)
+            let map = MapViewModel(saveLocalVaultService: vault,
+                entitlementTierProvider: { duplicate ? .free : .pro }, entitlementResolvedProvider: { true }, usesRemotePersistence: false)
+            map.reviewCandidates = [candidate]
+            if duplicate {
+                let existing = Place.from(candidate)
+                try vault.saveConfirmedPlace(existing, ownerSubject: owner)
+                map.places = [existing] + makeCappedPlaces(49)
+            } else { map.places = makeCappedPlaces(50) }
+            _ = try await map.saveReviewCandidateAsPlace(candidate)
+            XCTAssertEqual(map.places.count, duplicate ? 50 : 51)
+            XCTAssertTrue(map.reviewCandidates.isEmpty)
+            let reloaded = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            XCTAssertTrue(try reloaded.reviewCandidates(belongingTo: owner).isEmpty)
+            XCTAssertTrue(try reloaded.recentRecords(belongingTo: owner).allSatisfy { $0.parkedReviewCandidate == nil })
+        }
+    }
+
+    @MainActor
     func testUnresolvedEntitlementDoesNotParkThe51stLocally() async throws {
         let map = makeCappedMap(tier: .free, resolved: false)
         map.places = makeCappedPlaces(50)

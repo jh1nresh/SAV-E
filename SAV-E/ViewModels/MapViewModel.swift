@@ -983,6 +983,26 @@ final class MapViewModel: ObservableObject {
         _ = try saveLocalVaultService.saveReviewCandidate(stamped)
     }
 
+    /// Park the original review item, retaining its workflow and source context.
+    private func parkExistingReviewCandidate(
+        _ candidate: PlaceReviewCandidate, startedBy owner: String?, generation: Int
+    ) throws {
+        guard !Task.isCancelled,
+              authService.currentUserId == owner, authService.sessionGeneration == generation else {
+            throw CancellationError()
+        }
+        guard candidate.ownerSubject == nil || candidate.ownerSubject == owner else {
+            throw SupabaseError.notAuthenticated
+        }
+        var parked = candidate
+        parked.ownerSubject = candidate.ownerSubject ?? owner
+        if !parked.isUnplacedInbox { parked.missingInfo.append(PlaceReviewCandidate.unplacedInboxMarker) }
+        _ = try saveLocalVaultService.saveReviewCandidate(parked, preservingParkedContext: true)
+        reviewCandidates = [parked] + reviewCandidates.filter { $0.id != parked.id }
+        if selectedReviewCandidate?.id == parked.id { selectedReviewCandidate = parked }
+        requestSavedPlaceLimitPaywall()
+    }
+
     // MARK: - Actions
 
     func loadPlaces(force: Bool = false) async {
@@ -1460,12 +1480,41 @@ final class MapViewModel: ObservableObject {
                 candidate.status == "needs_more_evidence" || candidate.status == "source_only"
             )
         }
-        let remoteIDs = Set(remote.map(\.id))
-        let confirmedIDs = Set(places.map(\.id))
-        let localOnly = localReviewCandidates().filter { local in
-            !remoteIDs.contains(local.id) && !confirmedIDs.contains(local.id)
+        let local = localReviewCandidates()
+        let parkedByID = Dictionary(local.filter(\.isUnplacedInbox).map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first })
+        let remoteWithParking = remote.map { remoteCandidate in
+            guard let parked = parkedByID[remoteCandidate.id], parked.ownerSubject == userId,
+                  remoteCandidate.ownerSubject == nil || remoteCandidate.ownerSubject == parked.ownerSubject else {
+                return remoteCandidate
+            }
+            var candidate = remoteCandidate
+            candidate.ownerSubject = parked.ownerSubject
+            if !candidate.isUnplacedInbox { candidate.missingInfo.append(PlaceReviewCandidate.unplacedInboxMarker) }
+            candidate.captureId = candidate.captureId ?? parked.captureId
+            candidate.workflowRunId = candidate.workflowRunId ?? parked.workflowRunId
+            candidate.correctionScopeKey = candidate.correctionScopeKey ?? parked.correctionScopeKey
+            // Fresh server venue fields remain authoritative. Retain original
+            // source context without reactivating obsolete provider coordinates.
+            let providerPrefixes = ["Amap POI id:", "Amap reference coordinates (GCJ-02):", "Provider map URL:"]
+            for evidence in parked.evidence where !candidate.evidence.contains(evidence) {
+                if candidate.hasSavableLocation && providerPrefixes.contains(where: {
+                    evidence.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix($0.lowercased())
+                }) { continue }
+                candidate.evidence.append(evidence)
+            }
+            return candidate
         }
-        reviewCandidates = (localOnly + remote).sorted(by: PlaceReviewCandidate.newestFirst)
+        let remoteIDs = Set(remote.map(\.id))
+        let terminalIDs = Set(candidates.filter {
+            !$0.replacementCandidateIDs.isEmpty || !["review", "confirmed", "needs_more_evidence", "source_only"].contains($0.status)
+        }.map(\.id))
+        let confirmedIDs = Set(places.map(\.id))
+        let localOnly = local.filter { local in
+            !remoteIDs.contains(local.id) && !confirmedIDs.contains(local.id)
+                && !(local.isUnplacedInbox && terminalIDs.contains(local.id))
+        }
+        reviewCandidates = (localOnly + remoteWithParking).sorted(by: PlaceReviewCandidate.newestFirst)
         if let id = selectedReviewCandidate?.id {
             selectedReviewCandidate = reviewCandidates.first { $0.id == id }
         }
@@ -1861,7 +1910,8 @@ final class MapViewModel: ObservableObject {
                 return existing
             }
             if isOverFreeSavedPlaceLimit {
-                requestSavedPlaceLimitPaywall()
+                try parkExistingReviewCandidate(candidate, startedBy: authService.currentUserId,
+                    generation: authService.sessionGeneration)
                 throw SavePlaceLimitError.parkedInUnplacedInbox
             }
             _ = try saveLocalVaultService.saveConfirmedPlace(place, ownerSubject: authService.currentUserId)
@@ -1937,7 +1987,7 @@ final class MapViewModel: ObservableObject {
         }
 
         if isOverFreeSavedPlaceLimit {
-            requestSavedPlaceLimitPaywall()
+            try parkExistingReviewCandidate(candidate, startedBy: userId, generation: confirmationGeneration)
             throw SavePlaceLimitError.parkedInUnplacedInbox
         }
 
@@ -1983,7 +2033,7 @@ final class MapViewModel: ObservableObject {
             }
         } catch {
             if error is SavePlaceLimitError {
-                requestSavedPlaceLimitPaywall()
+                try parkExistingReviewCandidate(candidate, startedBy: userId, generation: confirmationGeneration)
             }
             throw error
         }

@@ -237,11 +237,11 @@ final class SaveLocalVaultService: Sendable {
         }
     }
 
-    func saveReviewCandidate(_ candidate: PlaceReviewCandidate) throws -> SaveMemoryRecord {
+    func saveReviewCandidate(_ candidate: PlaceReviewCandidate, preservingParkedContext: Bool = false) throws -> SaveMemoryRecord {
 #if DEBUG
         if let saveReviewCandidateError { throw saveReviewCandidateError }
 #endif
-        let record = SaveMemoryRecord(
+        var record = SaveMemoryRecord(
             id: candidate.id,
             state: candidate.status == "source_only" ? .sourceOnly : .reviewCandidate,
             title: candidate.name,
@@ -262,6 +262,9 @@ final class SaveLocalVaultService: Sendable {
             semanticSource: candidate.semanticSource,
             ownerSubject: candidate.ownerSubject
         )
+        if preservingParkedContext && candidate.isUnplacedInbox {
+            record.parkedReviewCandidate = candidate
+        }
         return try upsertReviewRecord(record, matchSourceIdentity: false)
     }
 
@@ -339,6 +342,7 @@ final class SaveLocalVaultService: Sendable {
             ?? SaveSourceHandle.stored(incoming.sourceHandle)
             ?? SaveSourceHandle.stored(existing.sourceHandle)
         merged.ownerSubject = existing.ownerSubject ?? incoming.ownerSubject
+        merged.parkedReviewCandidate = incoming.parkedReviewCandidate ?? existing.parkedReviewCandidate
         return merged
     }
 
@@ -648,7 +652,7 @@ private extension SaveMemoryRecord {
         let name = displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return nil }
 
-        return PlaceReviewCandidate(
+        var candidate = PlaceReviewCandidate(
             id: id,
             captureId: nil,
             name: name,
@@ -674,6 +678,23 @@ private extension SaveMemoryRecord {
             semanticSource: semanticSource,
             ownerSubject: ownerSubject
         )
+        if let parked = parkedReviewCandidate,
+           parked.id == id, parked.ownerSubject == ownerSubject, parked.isUnplacedInbox {
+            // The record owns merged venue/evidence fields; the validated snapshot
+            // supplies context the generic vault projection cannot represent.
+            candidate.captureId = parked.captureId
+            candidate.workflowRunId = parked.workflowRunId
+            candidate.city = parked.city
+            candidate.confidence = parked.confidence
+            candidate.correctionScopeKey = parked.correctionScopeKey
+            candidate.supersededByCandidateID = parked.supersededByCandidateID
+            candidate.supersededByCandidateIDs = parked.supersededByCandidateIDs
+            candidate.status = state == .sourceOnly ? "source_only" : parked.status
+            for field in parked.missingInfo where !candidate.missingInfo.contains(field) {
+                candidate.missingInfo.append(field)
+            }
+        }
+        return candidate
     }
 
     var confirmedPlace: Place? {

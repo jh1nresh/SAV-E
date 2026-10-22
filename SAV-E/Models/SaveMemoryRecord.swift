@@ -41,6 +41,8 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
     var businessPhotoUrls: [String]?
     var mergedPlaceIDs: [UUID]?
     var ownerSubject: String?
+    // Only a durably parked existing review candidate needs its workflow context.
+    var parkedReviewCandidate: PlaceReviewCandidate? = nil
 
     init(
         id: UUID = UUID(),
@@ -132,6 +134,7 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         case businessPhotoUrls
         case mergedPlaceIDs
         case ownerSubject
+        case parkedReviewCandidate
     }
 
     init(from decoder: Decoder) throws {
@@ -169,5 +172,6 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
             try container.decodeIfPresent([String].self, forKey: .businessPhotoUrls)
         )
         ownerSubject = try container.decodeIfPresent(String.self, forKey: .ownerSubject)
+        parkedReviewCandidate = try container.decodeIfPresent(PlaceReviewCandidate.self, forKey: .parkedReviewCandidate)
     }
 }
