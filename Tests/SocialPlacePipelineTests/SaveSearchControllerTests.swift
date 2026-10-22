@@ -6444,8 +6444,8 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(mapModel.contains("reviewCandidates.first(where: { $0.id == candidate.id }) ?? candidate"))
         XCTAssertFalse(mapModel.contains("retireSameNameReviewClues"))
         XCTAssertTrue(mapModel.contains("reviewClueDistanceMeters"))
-        XCTAssertTrue(mapModel.contains("return !leftoverCity.isEmpty && leftoverCity == resolvedCity"))
-        XCTAssertFalse(mapModel.contains("leftoverCity.isEmpty || resolvedCity.isEmpty"))
+        XCTAssertTrue(mapModel.contains("sharesReviewSourceIdentity"))
+        XCTAssertFalse(mapModel.contains("leftoverCity == resolvedCity"))
         XCTAssertEqual(
             mapModel.components(separatedBy: "var hasActiveExactSearchResolution: Bool { exactSearchResolution != nil }").count - 1,
             1
