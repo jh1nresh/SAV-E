@@ -196,6 +196,15 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(pin.contains("accessibilityAction(.escape"))
         XCTAssertTrue(pin.contains("traditionalChinese: \"看細節\""))
         XCTAssertTrue(pin.contains("map.peek.name"))
+        XCTAssertTrue(pin.contains("traditionalChinese: \"我來過了\""))
+        XCTAssertTrue(
+            pin.contains("accessibilityIdentifier(\"map.card.beenHere\")"),
+            "HoP: 我來過了 on the map place card must use map.card.beenHere"
+        )
+        XCTAssertTrue(
+            pin.range(of: "traditionalChinese: \"我來過了\"")!.lowerBound
+                < pin.range(of: "accessibilityIdentifier(\"map.card.beenHere\")")!.lowerBound
+        )
     }
 
     func testP11ThirtyPinsStayIndividualAnnotations() throws {
