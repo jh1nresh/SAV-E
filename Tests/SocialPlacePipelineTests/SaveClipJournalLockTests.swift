@@ -164,6 +164,19 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(appPending.contains("body[\"extra_place_ids\"] = extras"))
         XCTAssertTrue(appPending.contains("static func uniqueItems(_ items: [SaveListItem])"))
         XCTAssertTrue(app.contains("autoSaveIncomingList"))
+        let generationReset = app[
+            app.range(of: "private func handleAccountGenerationChange")!.lowerBound
+            ..< (app.range(of: "private func storeUnclaimedOnboardingClue")?.lowerBound ?? app.endIndex)
+        ]
+        XCTAssertTrue(generationReset.contains("incomingPlaceReceipt = nil"))
+        XCTAssertTrue(generationReset.contains("autoSaveIncomingShare = false"))
+        XCTAssertTrue(generationReset.contains("pendingFriendShareURL = \"\""))
+        XCTAssertTrue(generationReset.contains("ClipPlaceHandoff.resetPlaceHandoffOnAccountChange()"))
+        XCTAssertTrue(appPending.contains("shouldKeepPlaceHandoff(ownerGeneration:"))
+        XCTAssertTrue(appPending.contains("static func resetPlaceHandoffOnAccountChange"))
+        XCTAssertTrue(appPending.contains("PendingShareStore.clear()"))
+        XCTAssertTrue(content.contains("mapVM.sessionGeneration"))
+        XCTAssertTrue(content.contains("guard mapVM.sessionGeneration == generation else { return }"))
         XCTAssertFalse(app.contains("if PendingShareStore.load()?.kind == .list {\n                PendingShareStore.clear()"))
         XCTAssertFalse(clip.contains("PendingSharePayload(\n                    kind: .place"))
         let design = try source(at: "DESIGN.md")

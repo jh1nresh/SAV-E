@@ -1501,8 +1501,10 @@ struct ContentView: View {
 
     private func performPendingListStampImport() async {
         guard autoSaveIncomingList, let list = pendingClipListSave else { return }
+        let generation = mapVM.sessionGeneration
         do {
             let result = try await mapVM.saveClipListHandoff(list)
+            guard mapVM.sessionGeneration == generation else { return }
             PendingShareStore.clear()
             pendingClipListSave = nil
             autoSaveIncomingList = false
@@ -1530,6 +1532,7 @@ struct ContentView: View {
 
     private func performPendingShareAutoSave() async {
         guard autoSaveIncomingShare, let destination = incomingPlaceReceipt else { return }
+        let generation = mapVM.sessionGeneration
         let receipt: SharedPlaceReceipt
         switch destination {
         case .embedded(let payload):
@@ -1549,7 +1552,10 @@ struct ContentView: View {
         }
 
         do {
+            guard autoSaveIncomingShare,
+                  mapVM.sessionGeneration == generation else { return }
             let outcome = try await mapVM.saveSharedPlaceReceipt(receipt)
+            guard mapVM.sessionGeneration == generation else { return }
             PendingShareStore.clear()
             incomingPlaceReceipt = nil
             autoSaveIncomingShare = false

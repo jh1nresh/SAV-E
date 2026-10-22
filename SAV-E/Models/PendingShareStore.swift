@@ -173,6 +173,15 @@ enum ClipPlaceHandoff {
     static func shouldAutoSavePlace(pending: PendingSharePayload?, incomingURL: URL) -> Bool {
         pending?.matchesIncomingPlace(url: incomingURL) == true
     }
+
+    /// Sign-out / account switch must not stamp the previous user's pending place.
+    static func shouldKeepPlaceHandoff(ownerGeneration: Int?, currentGeneration: Int) -> Bool {
+        ownerGeneration == currentGeneration
+    }
+
+    static func resetPlaceHandoffOnAccountChange() {
+        PendingShareStore.clear()
+    }
 }
 
 struct ClipListHandoffCounts: Equatable {

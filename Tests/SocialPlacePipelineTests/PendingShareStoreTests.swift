@@ -17,6 +17,12 @@ final class PendingShareStoreTests: XCTestCase {
         super.tearDown()
     }
 
+    func testAccountGenerationChangeClearsPlaceHandoffJournal() {
+        XCTAssertTrue(ClipPlaceHandoff.shouldKeepPlaceHandoff(ownerGeneration: 4, currentGeneration: 4))
+        XCTAssertFalse(ClipPlaceHandoff.shouldKeepPlaceHandoff(ownerGeneration: 4, currentGeneration: 5))
+        XCTAssertFalse(ClipPlaceHandoff.shouldKeepPlaceHandoff(ownerGeneration: nil, currentGeneration: 5))
+    }
+
     func testWriteLoadAndClearRoundTrip() throws {
         let payload = PendingSharePayload(
             kind: .place,

@@ -683,6 +683,7 @@ final class MapViewModel: ObservableObject {
     private let mapCandidateUserIDProvider: () -> String?
     private let relatedPlaceSourcesService: RelatedPlaceSourcesProviding
     private let authService: PrivyAuthService
+    var sessionGeneration: Int { authService.sessionGeneration }
     private let pendingImportService: PendingPlaceImportService
     private let locationService: LocationService
     private let mapCandidateDistanceLocationProvider: () async -> CLLocation?

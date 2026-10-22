@@ -389,6 +389,10 @@ struct SaveApp: App {
         openedReferral = nil
         pendingClipListSave = nil
         autoSaveIncomingList = false
+        incomingPlaceReceipt = nil
+        autoSaveIncomingShare = false
+        pendingFriendShareURL = ""
+        ClipPlaceHandoff.resetPlaceHandoffOnAccountChange()
         linkErrorMessage = nil
     }
 
