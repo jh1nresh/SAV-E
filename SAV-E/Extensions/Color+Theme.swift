@@ -196,12 +196,22 @@ extension Color {
 
 enum SaveAtlasPalette {
     /// Doodle journal lock 2026-10-19. Warm paper, warm charcoal dark.
-    static let canvas = Color(light: "FFF9EB", dark: "1E1C19")
-    static let paper = Color(light: "FFF9EB", dark: "1E1C19")
+    /// Landing / Atlas cream. Canvas and paper light columns use this hex.
+    nonisolated static let creamHex = "FFF9EB"
+    static let cream = Color(hex: creamHex)
+    /// Non-adaptive #F26B4A. Icon, wordmark, and the tile-town pin. Do not recolor assets.
+    nonisolated static let brandCoralHex = "F26B4A"
+    static let brandCoral = Color(hex: brandCoralHex)
+    /// Postage accent: primary CTA and source-clue fill. Matches landing `--coral`.
+    nonisolated static let coralLightHex = brandCoralHex
+    nonisolated static let coralDarkHex = "D97861"
+
+    static let canvas = Color(light: creamHex, dark: "1E1C19")
+    static let paper = Color(light: creamHex, dark: "1E1C19")
     static let forest = Color(light: "0E4A33", dark: "B9E0C9")
     static let ink = Color(light: "2F2E23", dark: "F4F1E4")
     static let muted = Color(light: "62594F", dark: "CFC4B8")
-    static let coral = Color(light: "F26B4A", dark: "D97861")
+    static let coral = Color(light: coralLightHex, dark: coralDarkHex)
     static let mint = Color(light: "D6E8C4", dark: "4F7258")
     static let sky = Color(light: "B5E3F5", dark: "3F758B")
     static let lavender = Color(light: "E3D6F7", dark: "57466F")
