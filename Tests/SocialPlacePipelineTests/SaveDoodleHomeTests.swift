@@ -936,8 +936,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         let parityRunner = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
         XCTAssertTrue(parityRunner.contains("home-mask.png"))
         XCTAssertTrue(parityRunner.contains("--mask"))
-        XCTAssertTrue(parityRunner.contains("compare_args"))
-        XCTAssertFalse(parityRunner.contains("mask_args"))
+        XCTAssertTrue(parityRunner.contains("${#mask_args[@]} -gt 0"))
+        XCTAssertTrue(parityRunner.contains("${#extra_args[@]} -gt 0"))
+        XCTAssertFalse(parityRunner.contains("compare_args"))
         let mapPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png"
         ))
@@ -1000,11 +1001,14 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(profile.contains("SaveDoodleHomeProgressCatalog.cityPlaces"))
         XCTAssertTrue(profile.contains("guard !isRootTab else { return source }"))
         XCTAssertTrue(profile.contains("return scoped.isEmpty ? source : scoped"))
-        XCTAssertTrue(profile.contains("SaveDoodleVisitStore().recordVisit"))
+        XCTAssertTrue(profile.contains("SaveDoodleVisitStore().markIveBeenHere"))
         XCTAssertTrue(profile.contains("try await onUpdatePlace(updated)"))
-        let map = try source(at: "SAV-E/Views/TileTown/SaveTileTownRootMap.swift")
-        XCTAssertTrue(map.contains("cityGroups.first(where: { $0.id == id })"))
-        XCTAssertTrue(map.contains("group.englishName"))
+        XCTAssertFalse(profile.contains("SaveDoodleVisitStore().recordVisit"))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent(
+                "SAV-E/Views/TileTown/SaveTileTownRootMap.swift"
+            ).path
+        ))
         let contentView = try source(at: "SAV-E/App/ContentView.swift")
         XCTAssertTrue(contentView.contains(".environmentObject(doodleSession)"))
     }
@@ -1101,7 +1105,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(seed.contains("Temple of Heaven"))
         let locationSource = try source(at: "SAV-E/Services/LocationService.swift")
         XCTAssertTrue(locationSource.contains("uiTestTiantan"))
-        XCTAssertTrue(locationSource.contains("39.8822"))
+        XCTAssertTrue(locationSource.contains("39.882192"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("XCTAssertFalse(app.descendants(matching: .any)[\"home.locationPrompt\"].exists)"))
         XCTAssertTrue(rail.contains("Temple of Heaven Park"))

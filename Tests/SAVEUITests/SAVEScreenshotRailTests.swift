@@ -1604,6 +1604,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
         attach(app, name: "atlas-production-saves")
 
+        let resolvedClueIdentifier = savedCandidate.identifier
+        XCTAssertTrue(
+            resolvedClueIdentifier.hasPrefix("saves.reviewCandidate."),
+            "The opened Harbor Oven row must expose a stable Review Candidate id."
+        )
         savedCandidate.tap()
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
@@ -1667,15 +1672,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
-        let leftoverClue = app.buttons.matching(
-            NSPredicate(
-                format: "identifier BEGINSWITH 'saves.reviewCandidate.' AND label CONTAINS[c] %@",
-                "Harbor Oven Pizza"
-            )
-        ).firstMatch
         XCTAssertFalse(
-            leftoverClue.exists,
-            "Choosing a saved Map Stamp during Review correction must retire the clue."
+            app.descendants(matching: .any)[resolvedClueIdentifier].exists,
+            "Choosing a saved Map Stamp during Review correction must retire that clue id."
         )
     }
 

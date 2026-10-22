@@ -2085,61 +2085,24 @@ final class MapViewModel: ObservableObject {
         return (true, committed)
     }
 
-    /// Retire the originating clue and same-place leftovers (seed + recapture).
-    /// Same-name clues in another city, or same-city branches far enough to
-    /// have their own coordinates, stay.
+    /// Confirming one clue retires that id only. Same-name leftovers
+    /// (seed + recapture, or another city) stay until resolved by id.
     private func retireResolvedReviewClue(
         _ clue: PlaceReviewCandidate,
         committed: Bool = true
     ) throws {
-        let retiring = reviewCandidates.filter { isDuplicateReviewClue($0, of: clue) }
-        let ids = Set(retiring.map(\.id) + [clue.id])
         if committed {
-            for id in ids {
-                try? saveLocalVaultService.removeReviewCandidate(id)
-            }
+            try? saveLocalVaultService.removeReviewCandidate(clue.id)
         } else {
             try saveLocalVaultService.removeReviewCandidate(clue.id)
-            for id in ids where id != clue.id {
-                try? saveLocalVaultService.removeReviewCandidate(id)
-            }
         }
-        reviewCandidates.removeAll { ids.contains($0.id) }
-        if selectedReviewCandidate.map({ ids.contains($0.id) }) == true {
+        reviewCandidates.removeAll { $0.id == clue.id }
+        if selectedReviewCandidate?.id == clue.id {
             selectedReviewCandidate = nil
         }
-        if exactSearchResolution.map({ ids.contains($0.clue.id) }) == true {
+        if exactSearchResolution?.clue.id == clue.id {
             exactSearchResolution = nil
         }
-    }
-
-    private func isDuplicateReviewClue(
-        _ leftover: PlaceReviewCandidate,
-        of resolved: PlaceReviewCandidate
-    ) -> Bool {
-        if leftover.id == resolved.id { return true }
-        guard leftover.name.localizedCaseInsensitiveCompare(resolved.name) == .orderedSame else {
-            return false
-        }
-        if let meters = reviewClueDistanceMeters(leftover, resolved) {
-            return meters < 250
-        }
-        let leftoverCity = leftover.city?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-        let resolvedCity = resolved.city?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-        // No coordinates to prove they are different places. Only collapse a
-        // nameless-city leftover when both name the same city (seed + recapture).
-        return !leftoverCity.isEmpty && leftoverCity == resolvedCity
-    }
-
-    private func reviewClueDistanceMeters(
-        _ leftover: PlaceReviewCandidate,
-        _ resolved: PlaceReviewCandidate
-    ) -> CLLocationDistance? {
-        guard let lat1 = leftover.latitude, let lon1 = leftover.longitude,
-              let lat2 = resolved.latitude, let lon2 = resolved.longitude
-        else { return nil }
-        return CLLocation(latitude: lat1, longitude: lon1)
-            .distance(from: CLLocation(latitude: lat2, longitude: lon2))
     }
 
     /// Terminal actions for this clue (reject / archive / source-only / confirm)
