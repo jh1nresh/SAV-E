@@ -81,6 +81,19 @@ final class SAVEClipScreenshotTests: XCTestCase {
         capture(screen: "list", appearance: .dark, language: "en", locale: "en_US", name: "list-en-dark", identifier: "clip.list.preview")
     }
 
+    func testEmptyListShowsExplanationAndPlaceholderOwnerIsHidden() {
+        let empty = launchClip(appearance: .light, language: "en", locale: "en_US", screen: "list-empty")
+        XCTAssertTrue(empty.descendants(matching: .any)["clip.error.empty"].waitForExistence(timeout: 20))
+        XCTAssertFalse(empty.descendants(matching: .any)["clip.list.preview"].exists)
+        attachScreenshot(empty.screenshot(), name: "list-empty-en")
+        empty.terminate()
+        let placeholder = launchClip(appearance: .light, language: "en", locale: "en_US", screen: "list-placeholder-owner")
+        XCTAssertTrue(placeholder.descendants(matching: .any)["clip.list.preview"].waitForExistence(timeout: 20))
+        XCTAssertFalse(placeholder.staticTexts["Shared list shared with you"].exists)
+        attachScreenshot(placeholder.screenshot(), name: "list-placeholder-owner-en")
+        placeholder.terminate()
+    }
+
     func test05LinkStatesZhHant() {
         for screen in ["loading", "expired", "offline", "server", "malformed"] {
             let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: screen)

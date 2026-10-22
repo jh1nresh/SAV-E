@@ -84,6 +84,15 @@ test("primary Google provider id is promoted to google_place_id", () => {
   assert.equal(plan.toInsert[0]?.google_place_id, undefined);
 });
 
+test("explicit opaque Google provenance survives planning without a prefix allowlist", () => {
+  const known = { ...cafe("source-id"), google_place_id: "opaque-google-venue" };
+  assert.equal(promoteGooglePlaceId(known).google_place_id, "opaque-google-venue");
+  const planned = uniqueClipListItems([cafe("first-id"), known]);
+  assert.equal(planned.length, 1);
+  assert.equal(planned[0]?.google_place_id, "opaque-google-venue");
+  assert.equal(promoteGooglePlaceId({ google_place_id: "11111111-1111-4111-8111-111111111111" }).google_place_id, undefined);
+});
+
 test("merged Clip items keep a later GCJ-02 provider reference", () => {
   const unique = uniqueClipListItems([
     { id: "id-a", name: "Onibus Coffee", latitude: 35.644, longitude: 139.699 },

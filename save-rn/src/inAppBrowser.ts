@@ -3,9 +3,11 @@ export const smartAppBannerContent =
   `app-id=6769216556, app-clip-bundle-id=${clipBundleId}`;
 
 export function isInAppShareBrowser(userAgent: string): boolean {
-  return /\bLine\//i.test(userAgent)
+  const isIOS = /\b(iPhone|iPad|iPod)\b/i.test(userAgent)
+    || (/\bMacintosh\b/i.test(userAgent) && /\bMobile\//i.test(userAgent));
+  return isIOS && (/\bLine\//i.test(userAgent)
     || /\bInstagram\b/i.test(userAgent)
-    || /\bMicroMessenger\b/i.test(userAgent);
+    || /\bMicroMessenger\b/i.test(userAgent));
 }
 
 export function isShareFallbackPath(href: string): boolean {
@@ -28,7 +30,10 @@ export function usesTraditionalChinese(language: string): boolean {
     || value.startsWith("zh_hk");
 }
 
-export function safariOpenURL(href: string, userAgent: string): string {
+export function safariOpenURL(href: string, userAgent: string): string | null {
+  // Only LINE exposes the supported external-browser parameter. Other
+  // webviews need their browser menu; reloading their URL cannot open Safari.
+  if (!isInAppShareBrowser(userAgent) || !/\bLine\//i.test(userAgent)) return null;
   try {
     const url = new URL(href);
     if (/\bLine\//i.test(userAgent)) {
@@ -36,7 +41,7 @@ export function safariOpenURL(href: string, userAgent: string): string {
     }
     return url.toString();
   } catch {
-    return href;
+    return null;
   }
 }
 

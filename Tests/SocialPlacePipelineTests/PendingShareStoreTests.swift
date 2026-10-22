@@ -39,6 +39,74 @@ final class PendingShareStoreTests: XCTestCase {
         )
     }
 
+    func testFailedHandoffOffersRetryAndSerializesRepeatedTaps() {
+        let attempt = ClipListHandoffAttempt()
+        XCTAssertTrue(attempt.begin())
+        XCTAssertFalse(attempt.begin(), "A second tap must not send another bulk request")
+        attempt.finish(succeeded: false)
+        XCTAssertTrue(attempt.canRetry)
+        XCTAssertTrue(attempt.begin(), "Retry works without relaunching or changing the journal ID")
+        XCTAssertFalse(attempt.canRetry)
+        attempt.finish(succeeded: true)
+        XCTAssertFalse(attempt.canRetry)
+        XCTAssertFalse(attempt.isSaving)
+    }
+
+    func testHandoffCountsHaveTraditionalChineseMessages() {
+        let duplicate = ClipListHandoffCounts(newlySaved: 0, alreadySaved: 2, overCap: 0, remaining: 0, limit: 50)
+        XCTAssertEqual(ClipListHandoff.toastTraditionalChinese(counts: duplicate, confirmedCount: 2), "之前已收藏。")
+        let partial = ClipListHandoffCounts(newlySaved: 2, alreadySaved: 0, overCap: 3, remaining: 0, limit: 50)
+        XCTAssertEqual(ClipListHandoff.toastTraditionalChinese(counts: partial, confirmedCount: 5), "已收藏 2／5 家，另有 3 家超過免費 50 家上限。")
+        let saved = ClipListHandoffCounts(newlySaved: 1, alreadySaved: 0, overCap: 0, remaining: 49, limit: 50)
+        XCTAssertEqual(ClipListHandoff.toastTraditionalChinese(counts: saved, confirmedCount: 1), "已從清單收藏 1 家。")
+    }
+
+    func testCaseDistinctShareCodesCannotAuthorizeAnotherSave() {
+        let place = PendingSharePayload(kind: .place, shareCode: "AbC123_x", placeId: nil, listId: nil, sender: nil,
+                                        url: "https://sav-e-app.vercel.app/p/AbC123_x")
+        XCTAssertFalse(place.matchesIncomingPlace(url: URL(string: "https://sav-e-app.vercel.app/p/abc123_x")!))
+        XCTAssertTrue(place.matchesIncomingPlace(url: URL(string: "https://SAV-E-APP.VERCEL.APP/p/AbC123_x")!))
+        let list = PendingSharePayload(kind: .list, shareCode: "LiSt99_z", placeId: nil, listId: nil, sender: nil,
+                                       url: "https://sav-e-app.vercel.app/list?c=LiSt99_z")
+        XCTAssertFalse(list.matchesIncomingList(url: URL(string: "https://sav-e-app.vercel.app/list?c=list99_z")!))
+        XCTAssertTrue(list.matchesIncomingList(url: URL(string: "https://sav-e-app.vercel.app/list?c=LiSt99_z")!))
+    }
+
+    func testJournalRetainsOpaqueGoogleProvenanceAndRejectsUnrelatedMetadata() throws {
+        let snapshot = PendingConfirmedPlace(placeId: "source-uuid", name: "Confirmed cafe", address: "Taipei",
+                                             latitude: 25.0, longitude: 121.0, category: "cafe", sourceURL: nil,
+                                             coordinateSystem: "GCJ-02", locationProvider: "amap",
+                                             googlePlaceId: "opaque-google-id")
+        let decoded = try JSONDecoder().decode(PendingConfirmedPlace.self, from: JSONEncoder().encode(snapshot))
+        let item = decoded.asListItem()
+        XCTAssertEqual(item.googlePlaceId, "opaque-google-id")
+        XCTAssertEqual(ClipListHandoff.placeBody(from: item)["google_place_id"] as? String, "opaque-google-id")
+        var first = item
+        first.googlePlaceId = nil
+        var later = item
+        later.sourceID = "other-provider-id"
+        let merged = ClipListHandoff.uniqueItems([first, later])
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged.first?.googlePlaceId, "opaque-google-id")
+        XCTAssertEqual(ClipListHandoff.placeBody(from: merged[0])["google_place_id"] as? String, "opaque-google-id")
+        var moved = item.asPlace()
+        moved.name = "Renamed cafe"
+        moved.latitude = 35
+        moved.longitude = 139
+        moved.providerPlaceId = nil
+        XCTAssertTrue(item.alreadySaved(in: [moved]))
+        let journal = PendingSharePayload(kind: .place, shareCode: nil, placeId: nil, listId: nil, sender: nil,
+                                          url: "https://sav-e-app.vercel.app/p", confirmedPlaces: [decoded])
+        var matching = item.asPlace()
+        matching.coordinateSystem = nil
+        matching.googlePlaceId = nil
+        XCTAssertEqual(ClipPlaceHandoff.applyingJournalCoordinates(matching, pending: journal).coordinateSystem, .gcj02)
+        matching.name = "Unrelated venue"
+        let unrelated = ClipPlaceHandoff.applyingJournalCoordinates(matching, pending: journal)
+        XCTAssertNil(unrelated.coordinateSystem)
+        XCTAssertNil(unrelated.googlePlaceId)
+    }
+
     func testWriteLoadAndClearRoundTrip() throws {
         let payload = PendingSharePayload(
             kind: .place,

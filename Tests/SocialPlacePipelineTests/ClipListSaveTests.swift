@@ -408,6 +408,36 @@ final class ClipListSaveTests: XCTestCase {
         XCTAssertEqual(ClipListSavePlanner.uniqueItems(from: [kept, far]).count, 2)
     }
 
+    func testOpaqueGoogleProvenanceSurvivesMergedRequest() {
+        var google = item("source-uuid", "Onibus Coffee", lat: 35.644, lng: 139.699)
+        google.googlePlaceId = "opaque-google-venue-without-known-prefix"
+        let first = item("other-source-uuid", "Onibus Coffee", lat: 35.644, lng: 139.699)
+        let merged = ClipListSavePlanner.uniqueItems(from: [first, google])
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged.first?.googlePlaceId, google.googlePlaceId)
+        let body = ClipListSavePlanner.requestBody(items: merged)["places"] as? [[String: Any]]
+        XCTAssertEqual(body?.first?["google_place_id"] as? String, google.googlePlaceId)
+        XCTAssertTrue(ClipListSavePlanner.identities(of: merged[0]).contains("g:opaque-google-venue-without-known-prefix"))
+    }
+
+    func testPlaceholderListOwnerDoesNotClaimAttribution() {
+        XCTAssertNil(ClipPreviewPolicy.senderLabel("Shared list"))
+        XCTAssertNil(ClipPreviewPolicy.senderLabel("  shared LIST  "))
+        XCTAssertNil(ClipPreviewPolicy.senderLabel(" "))
+        XCTAssertEqual(ClipPreviewPolicy.senderLabel(" Mina "), "Mina")
+    }
+
+    func testOverlayDismissesAndCanPresentForTheNextConfirmedSave() {
+        var overlay = ClipOverlayPresentationState()
+        XCTAssertEqual(overlay.update(requested: false, hasScene: true), .none)
+        XCTAssertEqual(overlay.update(requested: true, hasScene: false), .none)
+        XCTAssertEqual(overlay.update(requested: true, hasScene: true), .present)
+        XCTAssertEqual(overlay.update(requested: true, hasScene: true), .none)
+        XCTAssertEqual(overlay.update(requested: false, hasScene: false), .dismiss)
+        XCTAssertFalse(overlay.didPresent)
+        XCTAssertEqual(overlay.update(requested: true, hasScene: true), .present)
+    }
+
     private func item(
         _ placeId: String?,
         _ name: String,

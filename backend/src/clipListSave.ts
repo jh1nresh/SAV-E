@@ -143,12 +143,17 @@ export function mergeClipListPlace(
       result[key] = next;
     }
   }
+  if (!result.google_place_id && typeof incoming.google_place_id === "string") {
+    result.google_place_id = incoming.google_place_id;
+  }
   return promoteGooglePlaceId(result);
 }
 
 export function promoteGooglePlaceId(place: Record<string, unknown>): Record<string, unknown> {
   const current = typeof place.google_place_id === "string" ? place.google_place_id.trim() : "";
-  if (isGooglePlaceId(current)) return place;
+  // Explicit provenance is authoritative; Google IDs are opaque and do not
+  // have an exhaustive prefix grammar. UUID aliases are never Google IDs.
+  if (current && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(current)) return place;
   const google = sourcePlaceIds(place).find((id) => isGooglePlaceId(id));
   if (google) return { ...place, google_place_id: google };
   if (!current) return place;

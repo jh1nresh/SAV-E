@@ -77,6 +77,32 @@ struct ClipListSaveItem: Equatable, Sendable {
     var coordinateSystem: String? = nil
     var locationProvider: String? = nil
     var providerMapURL: String? = nil
+    var googlePlaceId: String? = nil
+}
+
+/// Presentation decisions shared with the real Clip view and its unit tests.
+enum ClipPreviewPolicy {
+    static func senderLabel(_ value: String?) -> String? {
+        let label = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !label.isEmpty, label.caseInsensitiveCompare("Shared list") != .orderedSame else { return nil }
+        return label
+    }
+}
+
+struct ClipOverlayPresentationState {
+    enum Action: Equatable { case none, present, dismiss }
+    private(set) var didPresent = false
+
+    mutating func update(requested: Bool, hasScene: Bool) -> Action {
+        if !requested {
+            guard didPresent else { return .none }
+            didPresent = false
+            return .dismiss
+        }
+        guard !didPresent, hasScene else { return .none }
+        didPresent = true
+        return .present
+    }
 }
 
 enum ClipListSavePlanner {
@@ -142,6 +168,10 @@ enum ClipListSavePlanner {
                 extras.insert(trimmed)
             }
         }
+        for google in [kept.googlePlaceId, incoming.googlePlaceId].compactMap({ $0 }) {
+            if google != result.placeId { extras.insert(google) }
+        }
+        result.googlePlaceId = kept.googlePlaceId ?? incoming.googlePlaceId
         result.extraPlaceIds = extras.sorted()
         if result.coordinateSystem == nil { result.coordinateSystem = incoming.coordinateSystem }
         if result.locationProvider == nil { result.locationProvider = incoming.locationProvider }
@@ -160,7 +190,7 @@ enum ClipListSavePlanner {
            !placeId.isEmpty {
             placeIds.append(placeId)
         }
-        for extra in item.extraPlaceIds {
+        for extra in item.extraPlaceIds + [item.googlePlaceId].compactMap({ $0 }) {
             let trimmed = extra.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             if !trimmed.isEmpty { placeIds.append(trimmed) }
         }
@@ -318,7 +348,7 @@ enum ClipListSavePlanner {
         let extras = item.extraPlaceIds
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        if let google = ([item.placeId ?? ""] + extras).first(where: isGooglePlaceID) {
+        if let google = item.googlePlaceId ?? ([item.placeId ?? ""] + extras).first(where: isGooglePlaceID) {
             body["google_place_id"] = google
         }
         if !extras.isEmpty { body["extra_place_ids"] = extras }

@@ -243,7 +243,7 @@ struct ClipContentView: View {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                         placePage(
                             draft: .from(item: item),
-                            sender: list.ownerDisplayName.isEmpty ? nil : list.ownerDisplayName,
+                            sender: ClipPreviewPolicy.senderLabel(list.ownerDisplayName),
                             photoURL: ClipOwnedPhotoPolicy.url(from: item.photoURLs),
                             listTitle: list.title,
                             pageIndex: index,
@@ -949,6 +949,10 @@ struct ClipContentView: View {
 
     private func apply(list: SharedListData) {
         clearContent()
+        guard !list.items.isEmpty else {
+            presentFailure(.empty)
+            return
+        }
         listData = list
         showListSwipeHint = !ClipListSwipeHint.isDismissed()
         listPage = 0
@@ -1062,12 +1066,19 @@ private struct ClipSKOverlayHost: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ controller: UIViewController, context: Context) {
-        guard isPresented, !context.coordinator.didPresent,
-              let scene = activeScene()
-        else { return }
-        context.coordinator.didPresent = true
-        let overlay = SKOverlay(configuration: SKOverlay.AppClipConfiguration(position: .bottom))
-        overlay.present(in: scene)
+        let scene = activeScene()
+        switch context.coordinator.presentation.update(requested: isPresented, hasScene: scene != nil) {
+        case .none:
+            break
+        case .present:
+            guard let scene else { return }
+            context.coordinator.scene = scene
+            let overlay = SKOverlay(configuration: SKOverlay.AppClipConfiguration(position: .bottom))
+            overlay.present(in: scene)
+        case .dismiss:
+            if let presentedScene = context.coordinator.scene { SKOverlay.dismiss(in: presentedScene) }
+            context.coordinator.scene = nil
+        }
     }
 
     private func activeScene() -> UIWindowScene? {
@@ -1076,8 +1087,15 @@ private struct ClipSKOverlayHost: UIViewControllerRepresentable {
             .first { $0.activationState == .foregroundActive }
     }
 
+    static func dismantleUIViewController(_ controller: UIViewController, coordinator: Coordinator) {
+        if let scene = coordinator.scene { SKOverlay.dismiss(in: scene) }
+        coordinator.scene = nil
+        _ = coordinator.presentation.update(requested: false, hasScene: false)
+    }
+
     final class Coordinator {
-        var didPresent = false
+        var presentation = ClipOverlayPresentationState()
+        weak var scene: UIWindowScene?
     }
 }
 
@@ -1131,6 +1149,14 @@ extension ClipContentView {
             ClipListSwipeHint.reset()
             apply(list: ClipPreviewFixtures.sampleList())
             showListSwipeHint = true
+        case "list-empty", "list-placeholder-owner":
+            let list = ClipPreviewFixtures.sampleList()
+            apply(list: SharedListData(
+                id: list.id, title: list.title, note: list.note,
+                ownerDisplayName: screen == "list-placeholder-owner" ? "Shared list" : list.ownerDisplayName,
+                viewerRole: list.viewerRole, items: screen == "list-empty" ? [] : list.items,
+                createdAt: list.createdAt, updatedAt: list.updatedAt
+            ))
         case "list-swiped":
             ClipListSwipeHint.dismiss()
             apply(list: ClipPreviewFixtures.sampleList())

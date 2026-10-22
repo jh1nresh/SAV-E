@@ -51,6 +51,7 @@ struct SaveListItem: Identifiable, Codable, Hashable {
     var coordinateSystem: PlaceCoordinateSystem? = nil
     var locationProvider: PlaceMatchProvider? = nil
     var providerMapUrl: String? = nil
+    var googlePlaceId: String? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -79,7 +80,8 @@ struct SaveListItem: Identifiable, Codable, Hashable {
             addedAt: addedAt,
             coordinateSystem: place.coordinateSystem,
             locationProvider: place.locationProvider,
-            providerMapUrl: place.providerMapUrl
+            providerMapUrl: place.providerMapUrl,
+            googlePlaceId: place.googlePlaceId
         )
     }
 
@@ -99,7 +101,8 @@ struct SaveListItem: Identifiable, Codable, Hashable {
             photoURLs: GooglePlacesPhotoURL.persistableStrings(candidate.businessPhotoURLStrings) ?? [],
             note: candidate.shareNote,
             addedByDisplayName: addedByDisplayName,
-            addedAt: addedAt
+            addedAt: addedAt,
+            googlePlaceId: candidate.sourcePlatform == .googleMaps ? candidate.id : nil
         )
     }
 
@@ -111,7 +114,7 @@ struct SaveListItem: Identifiable, Codable, Hashable {
     }
 
     func alreadySaved(in places: [Place]) -> Bool {
-        let ids = ([sourceID] + (extraPlaceIds ?? []))
+        let ids = ([sourceID] + (extraPlaceIds ?? []) + [googlePlaceId].compactMap({ $0 }))
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         return places.contains { place in
@@ -137,7 +140,7 @@ struct SaveListItem: Identifiable, Codable, Hashable {
             address: subtitle,
             latitude: latitude,
             longitude: longitude,
-            googlePlaceId: ([sourceID] + (extraPlaceIds ?? [])).first(where: ClipListHandoff.isGooglePlaceID),
+            googlePlaceId: googlePlaceId ?? ([sourceID] + (extraPlaceIds ?? [])).first(where: ClipListHandoff.isGooglePlaceID),
             category: category ?? .food,
             status: .wantToGo,
             rating: nil,
@@ -458,7 +461,7 @@ private extension SaveCollaborativeList {
         var copy = self
         copy.items = items.map { item in
             var safeItem = item
-            safeItem.photoURLs = ShareRoutePayloadSanitizer.persistablePhotoURLs(item.photoURLs)
+            safeItem.photoURLs = GooglePlacesPhotoURL.persistableStrings(item.photoURLs) ?? []
             return safeItem
         }
         return copy
@@ -469,6 +472,7 @@ private extension SaveCollaborativeList {
         copy.items = copy.items.map { item in
             var safeItem = item
             safeItem.sourceURL = ShareRoutePayloadSanitizer.publicURL(from: item.sourceURL)?.absoluteString
+            safeItem.photoURLs = ShareRoutePayloadSanitizer.persistablePhotoURLs(item.photoURLs)
             return safeItem
         }
         return copy

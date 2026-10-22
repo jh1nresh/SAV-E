@@ -286,6 +286,18 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
+    func testListRetainsExplicitGoogleProvenanceWithoutPrefixInference() {
+        var saved = place(name: "Known Google venue", category: .cafe)
+        saved.googlePlaceId = "opaque-google-venue"
+        let savedItem = SaveListItem.from(place: saved)
+        XCTAssertEqual(savedItem.googlePlaceId, saved.googlePlaceId)
+        XCTAssertEqual(savedItem.asPlace().googlePlaceId, saved.googlePlaceId)
+        let candidate = SaveMapCandidate(id: "another-opaque-id", title: "Google result", subtitle: "Tokyo",
+                                         latitude: 35.6, longitude: 139.7, sourcePlatform: .googleMaps)
+        XCTAssertEqual(SaveListItem.from(candidate: candidate).googlePlaceId, candidate.id)
+    }
+
+    @MainActor
     func testPersistedMemoryAndSharedListsStripLegacyGooglePhotoKeys() throws {
         let legacyURL = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref&key=TEST_ONLY_NON_SECRET_VALUE"
         let record = SaveMemoryRecord(
@@ -303,7 +315,17 @@ final class SaveCollaborativeListTests: XCTestCase {
         var list = SaveCollaborativeList(title: "Safe list")
         list.add(.from(place: legacyPlace))
 
-        let shareURL = try XCTUnwrap(list.shareURL())
+        let suiteName = "clip-private-photos-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = SaveCollaborativeListStore(defaults: defaults)
+        store.save([list])
+        let restored = try XCTUnwrap(store.load().first)
+        let privatePhoto = try XCTUnwrap(restored.items.first?.photoURLs.first)
+        XCTAssertTrue(privatePhoto.contains("photo_reference=legacy-ref"))
+        XCTAssertFalse(privatePhoto.contains("key="))
+
+        let shareURL = try XCTUnwrap(restored.shareURL())
         let payload = try XCTUnwrap(SaveSharedListPayload.from(url: shareURL))
         XCTAssertTrue(payload.list.items.first?.photoURLs.isEmpty == true)
     }

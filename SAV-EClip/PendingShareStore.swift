@@ -32,6 +32,7 @@ struct PendingConfirmedPlace: Codable, Equatable {
     var coordinateSystem: String? = nil
     var locationProvider: String? = nil
     var providerMapUrl: String? = nil
+    var googlePlaceId: String? = nil
 }
 
 enum PendingShareStore {

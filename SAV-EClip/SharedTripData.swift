@@ -730,7 +730,8 @@ struct SharedListPayload: Codable {
                         addedAt: item.addedAt,
                         coordinateSystem: item.coordinateSystem,
                         locationProvider: item.locationProvider,
-                        providerMapUrl: item.providerMapUrl
+                        providerMapUrl: item.providerMapUrl,
+                        googlePlaceId: item.googlePlaceId
                     )
                 },
                 createdAt: list.createdAt,
@@ -808,6 +809,7 @@ struct SharedListItem: Codable, Identifiable {
     var coordinateSystem: String? = nil
     var locationProvider: String? = nil
     var providerMapUrl: String? = nil
+    var googlePlaceId: String? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)

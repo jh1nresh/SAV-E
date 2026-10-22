@@ -32,6 +32,7 @@ struct ClipPlaceDraft: Equatable {
     var coordinateSystem: String? = nil
     var locationProvider: String? = nil
     var providerMapURL: String? = nil
+    var googlePlaceId: String? = nil
 
         var listSaveItem: ClipListSaveItem {
             ClipListSaveItem(
@@ -46,7 +47,8 @@ struct ClipPlaceDraft: Equatable {
                 placeId: placeId,
                 coordinateSystem: coordinateSystem,
                 locationProvider: locationProvider,
-                providerMapURL: providerMapURL
+                providerMapURL: providerMapURL,
+                googlePlaceId: googlePlaceId
             )
         }
 
@@ -104,7 +106,8 @@ struct ClipPlaceDraft: Equatable {
             friendShareCode: nil,
             coordinateSystem: item.coordinateSystem,
             locationProvider: item.locationProvider,
-            providerMapURL: item.providerMapUrl
+            providerMapURL: item.providerMapUrl,
+            googlePlaceId: item.googlePlaceId
         )
     }
 }
@@ -201,9 +204,10 @@ enum ClipSaveService {
             extraPlaceIds: nil,
             coordinateSystem: draft.coordinateSystem,
             locationProvider: draft.locationProvider,
-            providerMapUrl: draft.providerMapURL
+            providerMapUrl: draft.providerMapURL,
+            googlePlaceId: draft.googlePlaceId
         )
-        PendingShareStore.write(
+        return PendingShareStore.write(
             PendingSharePayload(
                 kind: .place,
                 shareCode: draft.friendShareCode,
@@ -236,7 +240,8 @@ enum ClipSaveService {
                 extraPlaceIds: $0.extraPlaceIds.isEmpty ? nil : $0.extraPlaceIds,
                 coordinateSystem: $0.coordinateSystem,
                 locationProvider: $0.locationProvider,
-                providerMapUrl: $0.providerMapURL
+                providerMapUrl: $0.providerMapURL,
+                googlePlaceId: $0.googlePlaceId
             )
         }
         return PendingShareStore.write(

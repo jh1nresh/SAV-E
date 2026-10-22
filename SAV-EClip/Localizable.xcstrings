@@ -57,8 +57,8 @@
     },
     "clip.listPartial.body" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "The free plan saves up to 50 places, in list order. %d could not be added. Open the full app to tidy your Savvy later — no paywall. (The “50” copy is pending #293 Q1.)" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "免費版最多50個，依清單順序先存得下的。沒存的%d家，下載完整版整理後可以再存，不會跳付費牆。（「50個」文案待#293 Q1）" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The free plan saves up to 50 unique places, in list order. %d could not be added. Manage your saved places in Savvy, then try again." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "免費版最多收藏 50 個不重複地點，依清單順序儲存。還有 %d 家未加入；到 Savvy 整理收藏後，再試一次。" } }
       }
     },
     "clip.openMaps" : {

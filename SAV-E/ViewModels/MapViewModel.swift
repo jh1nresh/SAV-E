@@ -2545,11 +2545,32 @@ final class MapViewModel: ObservableObject {
     }
 
     func saveClipListHandoff(_ list: SaveCollaborativeList) async throws -> (toStamp: [SaveListItem], counts: ClipListHandoffCounts) {
+        let owner = authService.currentUserId
+        let generation = authService.sessionGeneration
+        if let owner {
+            return try await SAVEPendingImportSessionScope.$current.withValue((generation, owner)) {
+                try await saveClipListHandoff(list, owner: owner, generation: generation)
+            }
+        }
+        return try await saveClipListHandoff(list, owner: nil, generation: generation)
+    }
+
+    private func saveClipListHandoff(
+        _ list: SaveCollaborativeList, owner: String?, generation: Int
+    ) async throws -> (toStamp: [SaveListItem], counts: ClipListHandoffCounts) {
+        func requireSession() throws {
+            try Task.checkCancellation()
+            guard authService.currentUserId == owner, authService.sessionGeneration == generation else {
+                throw CancellationError()
+            }
+        }
+        try requireSession()
         let confirmed = list.items
-        if authService.currentUserId != nil {
+        if let owner {
             do {
                 let payload = confirmed.map(ClipListHandoff.placeBody)
                 let (status, data) = try await supabaseService.saveClipListPlaces(payload)
+                try requireSession()
                 guard let remote = ClipListHandoff.parseRemote(status: status, data: data),
                       let insertedPlaces = ClipListHandoff.placesFromRemoteRows(
                         confirmed: confirmed,
@@ -2565,7 +2586,11 @@ final class MapViewModel: ObservableObject {
                     newlySaved: remote.counts.newlySaved,
                     alreadySaved: remote.counts.alreadySaved
                 ) {
-                    await loadPlaces(force: true)
+                    // Refresh only the canonical rows needed by this handoff. The
+                    // broad loader also imports clues and must not run in this scope.
+                    let remotePlaces = try await supabaseService.fetchPlaces(for: owner)
+                    try requireSession()
+                    places = mergeRemotePlaces(remotePlaces, withLocalPlaces: localConfirmedPlaces())
                 }
                 if ClipListHandoff.needsPlaceRefresh(
                     confirmed: confirmed,
@@ -2577,9 +2602,11 @@ final class MapViewModel: ObservableObject {
                 }
                 return (Self.stampedHandoffItems(confirmed: confirmed, imported: insertedPlaces), remote.counts)
             } catch SupabaseError.notConfigured {
+                try requireSession()
                 // Unconfigured builds keep the local quota plan.
             }
         }
+        try requireSession()
         let planned = ClipListHandoff.planStamps(
             confirmed: confirmed,
             alreadySaved: { $0.alreadySaved(in: places) },

@@ -208,6 +208,7 @@ struct ContentView: View {
     @State private var suppressChromeDismissSideEffects = false
     @State private var pendingChromePresentation: PendingChromePresentation? = nil
     @State private var handoffToastText: String?
+    @State private var listHandoffAttempt = ClipListHandoffAttempt()
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
@@ -248,7 +249,16 @@ struct ContentView: View {
                 mapDrawerPanel.zIndex(1)
             }
             if let handoffToastText {
-                Text(handoffToastText)
+                VStack(spacing: 4) {
+                    Text(handoffToastText)
+                    if listHandoffAttempt.canRetry, autoSaveIncomingList, pendingClipListSave != nil {
+                        Button(languageSettings.localized(english: "Retry", traditionalChinese: "重試")) {
+                            Task { await performPendingListStampImport() }
+                        }
+                        .frame(minWidth: 44, minHeight: 44)
+                        .accessibilityIdentifier("app.handoff.retry")
+                    }
+                }
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(SaveAtlasPalette.ink)
                     .multilineTextAlignment(.center)
@@ -1500,32 +1510,28 @@ struct ContentView: View {
     }
 
     private func performPendingListStampImport() async {
-        guard autoSaveIncomingList, let list = pendingClipListSave else { return }
-        let generation = mapVM.sessionGeneration
-        do {
-            let result = try await mapVM.saveClipListHandoff(list)
-            guard mapVM.sessionGeneration == generation else { return }
-            PendingShareStore.clear()
-            pendingClipListSave = nil
-            autoSaveIncomingList = false
-            handoffToastText = languageSettings.localized(
-                english: ClipListHandoff.toastEnglish(
-                    counts: result.counts,
-                    confirmedCount: list.items.count
-                ),
-                traditionalChinese: ClipListHandoff.toastEnglish(
-                    counts: result.counts,
-                    confirmedCount: list.items.count
+        await listHandoffAttempt.runLatest(
+            pending: { autoSaveIncomingList ? pendingClipListSave : nil },
+            save: { try await mapVM.saveClipListHandoff($0) },
+            succeeded: { list, counts in
+                PendingShareStore.clear()
+                pendingClipListSave = nil
+                autoSaveIncomingList = false
+                handoffToastText = languageSettings.localized(
+                    english: ClipListHandoff.toastEnglish(counts: counts, confirmedCount: list.items.count),
+                    traditionalChinese: ClipListHandoff.toastTraditionalChinese(counts: counts, confirmedCount: list.items.count)
                 )
-            )
-        } catch {
-            handoffToastText = languageSettings.localized(
-                english: "Couldn't save the list. Try again.",
-                traditionalChinese: "清單沒存好，請再試一次。"
-            )
-        }
+            },
+            failed: { error in
+                guard !(error is CancellationError) else { return }
+                handoffToastText = languageSettings.localized(
+                    english: "Couldn't save the list. Try again.",
+                    traditionalChinese: "清單沒存好，請再試一次。"
+                )
+            }
+        )
         try? await Task.sleep(for: .seconds(3))
-        if handoffToastText != nil {
+        if !listHandoffAttempt.isSaving, !listHandoffAttempt.canRetry, handoffToastText != nil {
             handoffToastText = nil
         }
     }

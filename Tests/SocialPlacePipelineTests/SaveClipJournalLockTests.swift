@@ -226,10 +226,9 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(backend.contains("clipListSaveResponse"))
         XCTAssertTrue(backend.contains("saved: inserted.map"))
         XCTAssertTrue(backend.contains("already: plan.alreadyExisting.map"))
-        XCTAssertTrue(backend.contains("keys.push(`p:${google}`)"))
-        XCTAssertTrue(backend.contains("keys.push(`g:${provider}`)"))
+        // Cross-provider identity and transitive deduplication are exercised by
+        // clipListSave.test.ts; local variable names are not a behavior contract.
         XCTAssertTrue(backend.contains("existingPlaces"))
-        XCTAssertTrue(backend.contains("alreadySaved += 1;\n      for (const key of identities) seen.add(key);"))
         XCTAssertTrue(backend.contains("clipListPlacesAreNearbyDuplicate"))
         XCTAssertTrue(backend.contains("CLIP_LIST_NEARBY_DUPLICATE_METERS"))
         XCTAssertTrue(backend.contains("overCap"))
@@ -337,10 +336,9 @@ final class SaveClipJournalLockTests: XCTestCase {
         let listModel = try source(at: "SAV-E/Models/SaveCollaborativeList.swift")
         XCTAssertTrue(listModel.contains("matchesMapFeature(title: title, coordinate: coordinate)"))
         XCTAssertFalse(listModel.contains("place.name.localizedCaseInsensitiveCompare(title)"))
-        XCTAssertGreaterThanOrEqual(
-            appPending.components(separatedBy: "keys.forEach { seen.insert($0) }").count - 1,
-            2
-        )
+        // PendingShareStoreTests.testPlanStampsRecordsSkippedIdentities verifies
+        // the retained alias chain against the actual planner, independent of
+        // whether the implementation uses a seen set or merges identity groups.
         let carry = try source(at: "SAV-E/Services/ClipSignInCarryOver.swift")
         let appleStore = try source(at: "SAV-E/Models/ClipAppleAccountStore.swift")
         let auth = try source(at: "SAV-E/Services/PrivyAuthService.swift")

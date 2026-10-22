@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import Observation
 
 /// Compact list snapshot written at Clip “save all” tap. Stamp only these
 /// after SIWA / handoff — never the live joined list.
@@ -15,6 +16,7 @@ struct PendingConfirmedPlace: Codable, Equatable {
     var coordinateSystem: String? = nil
     var locationProvider: String? = nil
     var providerMapUrl: String? = nil
+    var googlePlaceId: String? = nil
 
     func asListItem() -> SaveListItem {
         SaveListItem(
@@ -36,7 +38,8 @@ struct PendingConfirmedPlace: Codable, Equatable {
             extraPlaceIds: extraPlaceIds,
             coordinateSystem: coordinateSystem.flatMap(PlaceCoordinateSystem.init(rawValue:)),
             locationProvider: locationProvider.flatMap(PlaceMatchProvider.init(rawValue:)),
-            providerMapUrl: providerMapUrl
+            providerMapUrl: providerMapUrl,
+            googlePlaceId: googlePlaceId
         )
     }
 }
@@ -68,11 +71,11 @@ struct PendingSharePayload: Codable, Equatable {
         }
         let incomingToken = Self.pathToken(url.absoluteString)
         if let shareCode, !shareCode.isEmpty,
-           incomingToken.caseInsensitiveCompare(shareCode) == .orderedSame {
+           incomingToken == shareCode {
             return true
         }
         if let placeId, !placeId.isEmpty,
-           incomingToken.caseInsensitiveCompare(placeId) == .orderedSame {
+           Self.samePlaceIdentifier(incomingToken, placeId) {
             return true
         }
         return false
@@ -88,28 +91,35 @@ struct PendingSharePayload: Codable, Equatable {
         let incomingCode = SaveSharedListPayload.shareCode(from: url)
             ?? Self.pathToken(url.absoluteString)
         if let shareCode, !shareCode.isEmpty,
-           incomingCode.caseInsensitiveCompare(shareCode) == .orderedSame {
+           incomingCode == shareCode {
             return true
         }
         if let listId, !listId.isEmpty,
-           url.absoluteString.range(of: listId, options: .caseInsensitive) != nil {
+           Self.samePlaceIdentifier(incomingCode, listId) {
             return true
         }
         return false
+    }
+
+    private static func samePlaceIdentifier(_ left: String, _ right: String) -> Bool {
+        if let leftUUID = UUID(uuidString: left), let rightUUID = UUID(uuidString: right) {
+            return leftUUID == rightUUID
+        }
+        return left == right
     }
 
     private static func normalizedLink(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: trimmed),
               var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        else { return trimmed.lowercased() }
+        else { return trimmed }
         components.fragment = nil
         components.scheme = components.scheme?.lowercased()
         components.host = components.host?.lowercased()
         if components.path.count > 1, components.path.hasSuffix("/") {
             components.path.removeLast()
         }
-        return (components.string ?? trimmed).lowercased()
+        return components.string ?? trimmed
     }
 
     private static func pathToken(_ raw: String) -> String {
@@ -200,8 +210,12 @@ enum ClipPlaceHandoff {
 
     /// One-place Clip journals carry provider coordinates the `/p` URL may omit.
     static func applyingJournalCoordinates(_ place: Place, pending: PendingSharePayload?) -> Place {
-        guard pending?.kind == .place, let snapshot = pending?.confirmedPlaces?.first else { return place }
+        guard pending?.kind == .place, let snapshot = pending?.confirmedPlaces?.first,
+              snapshot.name.localizedCaseInsensitiveCompare(place.name) == .orderedSame,
+              snapshot.latitude == place.latitude, snapshot.longitude == place.longitude
+        else { return place }
         var next = place
+        if next.googlePlaceId == nil { next.googlePlaceId = snapshot.googlePlaceId }
         if next.coordinateSystem == nil {
             next.coordinateSystem = snapshot.coordinateSystem.flatMap(PlaceCoordinateSystem.init(rawValue:))
         }
@@ -232,6 +246,51 @@ enum ClipListHandoffError: Error, Equatable {
 
 /// A matching Clip “save all” journal is user confirmation to stamp the
 /// confirmed snapshot. A list link without that journal is join-only.
+@MainActor
+@Observable
+final class ClipListHandoffAttempt {
+    private(set) var isSaving = false
+    private(set) var canRetry = false
+
+    func begin() -> Bool {
+        guard !isSaving else { return false }
+        isSaving = true
+        canRetry = false
+        return true
+    }
+
+    func finish(succeeded: Bool) {
+        isSaving = false
+        canRetry = !succeeded
+    }
+
+    /// The pending binding is the latest confirmed invocation. A trigger during
+    /// an in-flight save is coalesced; the current runner drains its replacement.
+    func runLatest(
+        pending: () -> SaveCollaborativeList?,
+        save: (SaveCollaborativeList) async throws -> (toStamp: [SaveListItem], counts: ClipListHandoffCounts),
+        succeeded: (SaveCollaborativeList, ClipListHandoffCounts) -> Void,
+        failed: (Error) -> Void
+    ) async {
+        guard begin() else { return }
+        while let list = pending() {
+            do {
+                let result = try await save(list)
+                guard pending()?.id == list.id else { continue }
+                finish(succeeded: true)
+                succeeded(list, result.counts)
+                return
+            } catch {
+                guard pending()?.id == list.id else { continue }
+                finish(succeeded: false)
+                failed(error)
+                return
+            }
+        }
+        finish(succeeded: true)
+    }
+}
+
 enum ClipListHandoff {
     static let freeLimit = 50
 
@@ -457,7 +516,7 @@ enum ClipListHandoff {
         let extras = (item.extraPlaceIds ?? [])
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        if let google = ([item.sourceID] + extras).first(where: isGooglePlaceID) {
+        if let google = item.googlePlaceId ?? ([item.sourceID] + extras).first(where: isGooglePlaceID) {
             body["google_place_id"] = google
         }
         if !extras.isEmpty { body["extra_place_ids"] = extras }
@@ -488,6 +547,16 @@ enum ClipListHandoff {
             return "Saved 1 place from the list."
         }
         return "Saved \(counts.newlySaved) places from the list."
+    }
+
+    static func toastTraditionalChinese(counts: ClipListHandoffCounts, confirmedCount: Int) -> String {
+        if counts.newlySaved == 0, counts.alreadySaved > 0, counts.overCap == 0 {
+            return "之前已收藏。"
+        }
+        if counts.overCap > 0 {
+            return "已收藏 \(counts.newlySaved)／\(confirmedCount) 家，另有 \(counts.overCap) 家超過免費 \(counts.limit) 家上限。"
+        }
+        return "已從清單收藏 \(counts.newlySaved) 家。"
     }
 
     private static func parseSavedRows(_ rawValue: Any?) -> [SavedRow]? {
@@ -575,6 +644,10 @@ enum ClipListHandoff {
                 extras.insert(trimmed)
             }
         }
+        for google in [kept.googlePlaceId, incoming.googlePlaceId].compactMap({ $0 }) {
+            if google != result.sourceID { extras.insert(google) }
+        }
+        result.googlePlaceId = kept.googlePlaceId ?? incoming.googlePlaceId
         result.extraPlaceIds = extras.isEmpty ? nil : extras.sorted()
         if result.coordinateSystem == nil { result.coordinateSystem = incoming.coordinateSystem }
         if result.locationProvider == nil { result.locationProvider = incoming.locationProvider }
@@ -603,7 +676,7 @@ enum ClipListHandoff {
         var placeIds: [String] = []
         let sourceID = item.sourceID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if !sourceID.isEmpty { placeIds.append(sourceID) }
-        for extra in item.extraPlaceIds ?? [] {
+        for extra in (item.extraPlaceIds ?? []) + [item.googlePlaceId].compactMap({ $0 }) {
             let trimmed = extra.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             if !trimmed.isEmpty { placeIds.append(trimmed) }
         }

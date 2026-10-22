@@ -5,6 +5,7 @@ const { execFileSync } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const repoRoot = path.resolve(__dirname, "..");
 const workspaceRoot = path.resolve(__dirname, "../..");
@@ -41,9 +42,9 @@ const {
   smartAppBannerContent,
 } = require(path.join(outDir, "inAppBrowser.js"));
 
-assert.equal(isInAppShareBrowser("Mozilla/5.0 Line/14.0.0"), true);
-assert.equal(isInAppShareBrowser("Mozilla/5.0 Instagram 192.168.1.2"), true);
-assert.equal(isInAppShareBrowser("Mozilla/5.0 MicroMessenger/8.0"), true);
+assert.equal(isInAppShareBrowser("Mozilla/5.0 (iPhone) Line/14.0.0"), true);
+assert.equal(isInAppShareBrowser("Mozilla/5.0 (iPhone) Instagram 192.168.1.2"), true);
+assert.equal(isInAppShareBrowser("Mozilla/5.0 (iPad) MicroMessenger/8.0"), true);
 assert.equal(isInAppShareBrowser("Mozilla/5.0 Safari/605.1.15"), false);
 assert.equal(isInAppShareBrowser("Mozilla/5.0 iPhone Messages"), false);
 
@@ -52,13 +53,20 @@ assert.equal(isShareFallbackPath("https://sav-e-app.vercel.app/list?c=AbC123_x")
 assert.equal(isShareFallbackPath("https://sav-e-app.vercel.app/trip/abc"), false);
 
 assert.equal(
-  safariOpenURL("https://sav-e-app.vercel.app/p/AbC123_x", "Line/14.0.0"),
+  safariOpenURL("https://sav-e-app.vercel.app/p/AbC123_x", "Mozilla/5.0 (iPhone) Line/14.0.0"),
   "https://sav-e-app.vercel.app/p/AbC123_x?openExternalBrowser=1",
 );
 assert.equal(
   safariOpenURL("https://sav-e-app.vercel.app/p/AbC123_x", "Safari/605"),
-  "https://sav-e-app.vercel.app/p/AbC123_x",
+  null,
 );
+for (const app of ["Line/14.0.0", "Instagram", "MicroMessenger/8.0"]) {
+  assert.equal(isInAppShareBrowser(`Mozilla/5.0 (Linux; Android 14) ${app}`), false);
+}
+for (const app of ["Instagram", "MicroMessenger/8.0"]) {
+  assert.equal(safariOpenURL("https://sav-e-app.vercel.app/p/AbC123_x", `Mozilla/5.0 (iPhone) ${app}`), null);
+}
+assert.equal(isInAppShareBrowser("Mozilla/5.0 (Macintosh) Mobile/15E148 Instagram"), true);
 
 assert.equal(usesTraditionalChinese("zh-Hant-TW"), true);
 assert.match(shareFallbackCopy("zh-Hant").button, /Safari/);
@@ -83,7 +91,22 @@ assert.doesNotMatch(smartAppBannerContent, /app-clip-display/);
 const patch = fs.readFileSync(path.join(repoRoot, "scripts/patch-web-bundle.js"), "utf8");
 assert.match(patch, /app-clip-bundle-id=\$\{smartBannerAppClipBundleId\}/);
 assert.match(patch, /const appClipBundleId = "com\.wanderly\.app\.Clip"/);
-assert.match(patch, /path\.join\(distRoot, "p", "index\.html"\)/);
+const routeWriter = patch.slice(
+  patch.indexOf("function writeShareRouteFallbacks()"),
+  patch.indexOf("function writeAppClipSmartBanner()"),
+);
+const copiedRoutes = [];
+vm.runInNewContext(`${routeWriter}\nwriteShareRouteFallbacks();`, {
+  path,
+  distRoot: "/fixture-export",
+  fs: {
+    existsSync: () => true,
+    mkdirSync: () => {},
+    copyFileSync: (source, destination) => copiedRoutes.push([source, destination]),
+  },
+});
+assert.ok(copiedRoutes.some(([source, destination]) =>
+  source === "/fixture-export/index.html" && destination === "/fixture-export/p/index.html"));
 assert.doesNotMatch(patch, /app-clip-display=card/);
 
 const fallback = fs.readFileSync(path.join(repoRoot, "src/ShareClipFallback.tsx"), "utf8");

@@ -30,6 +30,7 @@ export function ShareClipFallback({
   listTitle,
 }: Props) {
   const copy = shareFallbackCopy(language);
+  const externalBrowserURL = safariOpenURL(href, userAgent);
   const zh = usesTraditionalChinese(language);
   const title = placeName || listTitle || "Savvy";
   const meta = [area, category].filter(Boolean).join(" · ");
@@ -64,19 +65,19 @@ export function ShareClipFallback({
         {meta ? <Text style={styles.meta}>{meta}</Text> : null}
         {note ? <Text style={styles.note}>{note}</Text> : null}
         <View style={styles.card}>
-          <Pressable
+          {externalBrowserURL ? <Pressable
             accessibilityRole="button"
             testID="web.clip.openSafari"
             onPress={() => {
               if (typeof window !== "undefined") {
-                window.location.href = safariOpenURL(href, userAgent);
+                window.location.href = externalBrowserURL;
               }
             }}
             style={styles.button}
           >
             <Text style={styles.buttonText}>{copy.button}</Text>
-          </Pressable>
-          <Text style={styles.step}>{copy.step}</Text>
+          </Pressable> : null}
+          <Text style={styles.step} testID="web.clip.browserInstructions">{copy.step}</Text>
           <Text style={styles.noteMuted}>{copy.note}</Text>
         </View>
       </View>
