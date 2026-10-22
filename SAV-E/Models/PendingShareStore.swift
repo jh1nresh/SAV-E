@@ -262,6 +262,17 @@ enum ClipListHandoff {
         return list
     }
 
+    static func needsPlaceRefresh(
+        confirmed: [SaveListItem],
+        places: [Place],
+        newlySaved: Int,
+        alreadySaved: Int
+    ) -> Bool {
+        let claimed = newlySaved + alreadySaved
+        guard claimed > 0 else { return false }
+        return confirmed.filter { $0.alreadySaved(in: places) }.count < claimed
+    }
+
     /// Quota-aware bulk plan. Only `toStamp` may become local Map Stamps.
     static func planStamps(
         confirmed: [SaveListItem],

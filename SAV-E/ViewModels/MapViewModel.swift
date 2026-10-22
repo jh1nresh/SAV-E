@@ -2468,12 +2468,20 @@ final class MapViewModel: ObservableObject {
                     throw ClipListHandoffError.unconfirmed
                 }
                 applyHandoffPlaces(insertedPlaces)
-                if remote.counts.alreadySaved > 0,
-                   !confirmed.contains(where: { $0.alreadySaved(in: places) }) {
+                if ClipListHandoff.needsPlaceRefresh(
+                    confirmed: confirmed,
+                    places: places,
+                    newlySaved: remote.counts.newlySaved,
+                    alreadySaved: remote.counts.alreadySaved
+                ) {
                     await loadPlaces(force: true)
                 }
-                if remote.counts.alreadySaved > 0,
-                   !confirmed.contains(where: { $0.alreadySaved(in: places) }) {
+                if ClipListHandoff.needsPlaceRefresh(
+                    confirmed: confirmed,
+                    places: places,
+                    newlySaved: remote.counts.newlySaved,
+                    alreadySaved: remote.counts.alreadySaved
+                ) {
                     throw ClipListHandoffError.unconfirmed
                 }
                 return (Self.stampedHandoffItems(confirmed: confirmed, imported: insertedPlaces), remote.counts)
@@ -2511,14 +2519,29 @@ final class MapViewModel: ObservableObject {
 
     private func applyHandoffPlaces(_ imported: [Place]) {
         var added: [Place] = []
+        var replaced: [Place] = []
         for place in imported {
-            if existingSavedPlace(matching: place) != nil { continue }
+            if let existing = existingSavedPlace(matching: place) {
+                if existing.id != place.id {
+                    var reconciled = existing.rekeyed(to: place.id)
+                    if reconciled.providerPlaceId == nil {
+                        reconciled.providerPlaceId = place.providerPlaceId
+                    }
+                    mirrorToLocalVault(reconciled)
+                    places = places.map { $0.id == existing.id ? reconciled : $0 }
+                    replaced.append(reconciled)
+                }
+                continue
+            }
             mirrorToLocalVault(place)
             added.append(place)
         }
         if !added.isEmpty {
             places = added + places
-            revealImportedPlaces(added)
+        }
+        let revealed = added + replaced
+        if !revealed.isEmpty {
+            revealImportedPlaces(revealed)
         }
     }
 

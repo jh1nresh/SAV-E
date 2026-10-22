@@ -209,6 +209,40 @@ final class PendingShareStoreTests: XCTestCase {
         )
     }
 
+    func testMixedHandoffStillRefreshesWhenOnlyInsertedRowsAreLocal() {
+        let confirmed = (1...5).map { index in
+            PendingConfirmedPlace(
+                placeId: "shop-\(index)",
+                name: "Shop \(index)",
+                address: "Tokyo",
+                latitude: 35.6 + Double(index) * 0.01,
+                longitude: 139.7,
+                category: "Cafe",
+                sourceURL: nil
+            ).asListItem()
+        }
+        let insertedOnly = [
+            confirmed[0].asPlace(includeSenderMemory: false),
+            confirmed[1].asPlace(includeSenderMemory: false),
+        ]
+        XCTAssertTrue(
+            ClipListHandoff.needsPlaceRefresh(
+                confirmed: confirmed,
+                places: insertedOnly,
+                newlySaved: 2,
+                alreadySaved: 3
+            )
+        )
+        XCTAssertFalse(
+            ClipListHandoff.needsPlaceRefresh(
+                confirmed: confirmed,
+                places: confirmed.map { $0.asPlace(includeSenderMemory: false) },
+                newlySaved: 2,
+                alreadySaved: 3
+            )
+        )
+    }
+
     func testRemoteHandoffStampsServerRowsNotStaleLocalPrefix() {
         let confirmed = (1...5).map { index in
             PendingConfirmedPlace(
