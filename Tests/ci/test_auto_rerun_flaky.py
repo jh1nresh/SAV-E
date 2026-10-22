@@ -78,7 +78,7 @@ class AutoRerunFlakyTests(unittest.TestCase):
     def test_new_marker_is_a_timeout_rerun(self):
         ok, reason = rerun.should_rerun(jobs("backend / validate"), NEW_MARKER_LOG, 2)
         self.assertTrue(ok)
-        self.assertIn("npm audit network timeout", reason)
+        self.assertEqual(reason, "matched npm audit network timeout, attempt 2")
 
     def test_attempt_3_does_not_rerun(self):
         ok, reason = rerun.should_rerun(jobs("backend / validate"), TIMEOUT_LOG, 3)
@@ -114,6 +114,28 @@ class AutoRerunFlakyTests(unittest.TestCase):
         ok, reason = rerun.should_rerun(jobs("backend / validate"), log, 1)
         self.assertFalse(ok)
         self.assertIn("vulnerability", reason)
+
+    def test_cancelled_run_never_reruns(self):
+        ok, reason = rerun.should_rerun(
+            jobs("backend / validate"), TIMEOUT_LOG, 1, "cancelled"
+        )
+        self.assertFalse(ok)
+        self.assertEqual(reason, "cancelled run; never rerun")
+        self.assertIsNone(
+            rerun.backend_validate_job_id(jobs("backend / validate"), "cancelled")
+        )
+
+    def test_cancelled_job_never_reruns(self):
+        payload = jobs("backend / validate")
+        payload["jobs"][1]["conclusion"] = "cancelled"
+        ok, reason = rerun.should_rerun(payload, TIMEOUT_LOG, 1, "failure")
+        self.assertFalse(ok)
+        self.assertEqual(reason, "cancelled run; never rerun")
+
+    def test_rerun_reason_records_match_and_attempt(self):
+        ok, reason = rerun.should_rerun(jobs("backend / validate"), TIMEOUT_LOG, 1)
+        self.assertTrue(ok)
+        self.assertEqual(reason, "matched npm audit network timeout, attempt 1")
 
     def test_backend_job_id_only_when_sole_failure(self):
         payload = jobs("backend / validate")
@@ -163,6 +185,16 @@ class AutoRerunFlakyTests(unittest.TestCase):
                 rerun.main(["--jobs-json", str(jobs_path), "--print-backend-job-id"]),
                 0,
             )
+
+
+    def test_workflow_records_rerun_reason_and_excludes_cancelled(self):
+        workflow = (ROOT / ".github/workflows/auto-rerun-flaky.yml").read_text()
+        self.assertIn("github.event.workflow_run.conclusion == 'failure'", workflow)
+        self.assertIn('"$RUN_CONCLUSION" == "cancelled"', workflow)
+        self.assertIn('"$api_conclusion" == "cancelled"', workflow)
+        self.assertIn("Rerunning: ${reason}", workflow)
+        self.assertIn("GITHUB_STEP_SUMMARY", workflow)
+        self.assertIn("rerun-failed-jobs", workflow)
 
 
 if __name__ == "__main__":

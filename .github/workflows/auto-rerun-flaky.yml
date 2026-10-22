@@ -20,6 +20,7 @@ concurrency:
 
 jobs:
   rerun-npm-audit-timeout:
+    # Completed cancelled runs also fire workflow_run. Never inspect or rerun them.
     if: github.event.workflow_run.conclusion == 'failure'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -32,16 +33,26 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RUN_ID: ${{ github.event.workflow_run.id }}
           RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
           set -euo pipefail
+          summary="${GITHUB_STEP_SUMMARY:-/dev/null}"
+          record() { tee -a "$summary"; }
+
+          if [[ "$RUN_CONCLUSION" == "cancelled" ]]; then
+            echo "cancelled run; never rerun" | record
+            exit 0
+          fi
           if (( RUN_ATTEMPT >= 3 )); then
-            echo "run_attempt=${RUN_ATTEMPT}; not rerunning"
+            echo "run_attempt=${RUN_ATTEMPT}; not rerunning" | record
             exit 0
           fi
 
-          status="$(gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}" --jq .status)"
-          if [[ "$status" != "completed" ]]; then
-            echo "run ${RUN_ID} status=${status}; not rerunning"
+          run_json="$(gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}")"
+          status="$(jq -r .status <<<"$run_json")"
+          api_conclusion="$(jq -r .conclusion <<<"$run_json")"
+          if [[ "$status" != "completed" || "$api_conclusion" == "cancelled" ]]; then
+            echo "run ${RUN_ID} status=${status} conclusion=${api_conclusion}; not rerunning" | record
             exit 0
           fi
 
@@ -50,37 +61,41 @@ jobs:
           job_id="$(
             python3 scripts/ci/should_rerun_npm_audit_timeout.py \
               --jobs-json jobs.json \
+              --run-conclusion "${api_conclusion}" \
               --print-backend-job-id
           )"
           job_lookup=$?
           set -e
           if (( job_lookup != 0 )) || [[ -z "${job_id}" ]]; then
-            echo "failed jobs are not only backend / validate; not rerunning"
+            echo "failed jobs are not only backend / validate, or run was cancelled; not rerunning" | record
             exit 0
           fi
 
           if ! gh run view "${RUN_ID}" --repo "${GH_REPO}" --job "${job_id}" --log > backend.log; then
             if ! gh api --follow --allow-escape-sequences \
               "repos/${GH_REPO}/actions/jobs/${job_id}/logs" > backend.log; then
-              echo "could not fetch backend / validate logs; not rerunning"
+              echo "could not fetch backend / validate logs; not rerunning" | record
               exit 0
             fi
           fi
           set +e
-          python3 scripts/ci/should_rerun_npm_audit_timeout.py \
-            --jobs-json jobs.json \
-            --backend-log backend.log \
-            --run-attempt "${RUN_ATTEMPT}"
+          reason="$(
+            python3 scripts/ci/should_rerun_npm_audit_timeout.py \
+              --jobs-json jobs.json \
+              --backend-log backend.log \
+              --run-attempt "${RUN_ATTEMPT}" \
+              --run-conclusion "${api_conclusion}"
+          )"
           decision=$?
           set -e
           if (( decision == 2 )); then
-            echo "classifier skipped rerun"
+            echo "classifier skipped rerun: ${reason}" | record
             exit 0
           fi
           if (( decision != 0 )); then
-            echo "classifier failed with ${decision}" >&2
+            echo "classifier failed with ${decision}: ${reason}" >&2
             exit "$decision"
           fi
 
-          echo "Calling rerun-failed-jobs once for run ${RUN_ID} attempt ${RUN_ATTEMPT}"
+          echo "Rerunning: ${reason}" | record
           gh api --method POST "repos/${GH_REPO}/actions/runs/${RUN_ID}/rerun-failed-jobs"

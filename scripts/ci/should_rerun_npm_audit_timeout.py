@@ -2,8 +2,8 @@
 """Decide whether a completed CI run may call rerun-failed-jobs.
 
 Only the required `backend / validate` job, and only when that job failed
-because npm audit could not reach the registry. Test failures, vulnerability
-findings, and any iOS job failure must never rerun.
+because npm audit could not reach the registry. Test failures, builds,
+vulnerability findings, ios* jobs, and cancelled runs must never rerun.
 """
 
 from __future__ import annotations
@@ -38,6 +38,12 @@ def failed_jobs(payload):
     return [job for job in load_jobs(payload) if job.get("conclusion") == "failure"]
 
 
+def has_cancelled(payload, run_conclusion=None):
+    if run_conclusion == "cancelled":
+        return True
+    return any(job.get("conclusion") == "cancelled" for job in load_jobs(payload))
+
+
 def audit_section(log: str) -> str:
     for marker in ("audit:production", "scripts/audit-production.mjs"):
         index = log.find(marker)
@@ -62,7 +68,9 @@ def has_test_failure(log: str) -> bool:
     return bool(match and int(match.group(1)) > 0)
 
 
-def backend_validate_job_id(jobs_payload):
+def backend_validate_job_id(jobs_payload, run_conclusion=None):
+    if has_cancelled(jobs_payload, run_conclusion):
+        return None
     failed = failed_jobs(jobs_payload)
     if any(str(job.get("name") or "").startswith("ios") for job in failed):
         return None
@@ -72,7 +80,10 @@ def backend_validate_job_id(jobs_payload):
     return match[0].get("id")
 
 
-def should_rerun(jobs_payload, backend_log: str, run_attempt: int):
+def should_rerun(jobs_payload, backend_log: str, run_attempt: int, run_conclusion=None):
+    if run_conclusion == "cancelled" or has_cancelled(jobs_payload, run_conclusion):
+        return False, "cancelled run; never rerun"
+
     if run_attempt >= MAX_RUN_ATTEMPT:
         return False, f"run_attempt {run_attempt} is not < {MAX_RUN_ATTEMPT}"
 
@@ -93,7 +104,7 @@ def should_rerun(jobs_payload, backend_log: str, run_attempt: int):
     if not has_timeout(backend_log):
         return False, "no npm audit network timeout marker"
 
-    return True, "npm audit network timeout"
+    return True, f"matched npm audit network timeout, attempt {run_attempt}"
 
 
 def main(argv=None) -> int:
@@ -101,6 +112,7 @@ def main(argv=None) -> int:
     parser.add_argument("--jobs-json", required=True)
     parser.add_argument("--backend-log")
     parser.add_argument("--run-attempt", type=int)
+    parser.add_argument("--run-conclusion")
     parser.add_argument(
         "--print-backend-job-id",
         action="store_true",
@@ -110,7 +122,7 @@ def main(argv=None) -> int:
 
     jobs = json.loads(Path(args.jobs_json).read_text())
     if args.print_backend_job_id:
-        job_id = backend_validate_job_id(jobs)
+        job_id = backend_validate_job_id(jobs, args.run_conclusion)
         if job_id is None:
             return 2
         print(job_id)
@@ -120,7 +132,7 @@ def main(argv=None) -> int:
         parser.error("--backend-log and --run-attempt are required unless --print-backend-job-id")
 
     log = Path(args.backend_log).read_text(errors="replace")
-    rerun, reason = should_rerun(jobs, log, args.run_attempt)
+    rerun, reason = should_rerun(jobs, log, args.run_attempt, args.run_conclusion)
     print(reason)
     return 0 if rerun else 2
 
