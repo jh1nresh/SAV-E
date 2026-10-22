@@ -153,10 +153,10 @@ jobs:
     needs: [ios-build]
     runs-on: macos-26
     # Products come from ios-build (no second compile). Setup + units +
-    # simulator is ~15-20m; UI step 60; Trip 15; slack for parity/teardown
-    # and the main-only Release compile. Run 39497842970: 75m job wall cut
-    # the 55m UI step at 52m50s after ~20m of rebuild and setup.
-    timeout-minutes: 100
+    # simulator is ~15-20m; UI step 60; Trip 15; T3 screens 15; slack for
+    # parity/teardown and the main-only Release compile. Run 39497842970:
+    # 75m job wall cut the 55m UI step at 52m50s after ~20m of rebuild.
+    timeout-minutes: 120
     env:
       # Re-enabled for the 2026-10-15 pixel-art pass. Disable again after the
       # focused set is green, then run one full suite as the merge gate.
@@ -449,6 +449,58 @@ jobs:
           xcrun xcresulttool export attachments \
             --path "$RUNNER_TEMP/SAVE-Trip-Sheets.xcresult" \
             --output-path "$RUNNER_TEMP/SAVE-Trip-Sheets"
+
+      - name: Reset focused simulator before T3 screenshot rail
+        if: always() && steps.scope.outputs.ui == 'true'
+        run: |
+          xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
+          xcrun simctl erase '${{ steps.simulator.outputs.udid }}'
+          xcrun simctl bootstatus '${{ steps.simulator.outputs.udid }}' -b
+
+      - name: Capture T3 coral-token screens
+        id: t3_screens
+        timeout-minutes: 15
+        if: always() && steps.scope.outputs.ui == 'true'
+        env:
+          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-T3-screens-tests.log
+        run: |
+          printf '%s\n' \
+            '-only-testing:SAVEUITests/SAVEScreenshotRailTests/testCoralTokenContrastScreens' \
+            > "$RUNNER_TEMP/ios-t3-args.txt"
+          scripts/run-ios-xcodebuild-retry.sh \
+            --max-attempts 3 \
+            --result-bundle "$RUNNER_TEMP/SAVE-T3-screens.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-T3-screens-tests.log" \
+            --only-testing-file "$RUNNER_TEMP/ios-t3-args.txt" \
+            -- \
+            -xctestrun '${{ steps.products.outputs.xctestrun }}' \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            test-without-building
+          raw="$RUNNER_TEMP/SAVE-T3-raw"
+          out="$RUNNER_TEMP/SAVE-T3-screens"
+          mkdir -p "$out"
+          xcrun xcresulttool export attachments \
+            --path "$RUNNER_TEMP/SAVE-T3-screens.xcresult" \
+            --output-path "$raw"
+          python3 scripts/extract-named-ui-screenshots.py "$raw" "$out" \
+            --also-prefix t3-main \
+            --expect t3-home-light --expect t3-home-dark \
+            --expect t3-map-saved-unsaved-light --expect t3-map-saved-unsaved-dark \
+            --expect t3-saves-light --expect t3-saves-dark \
+            --expect t3-friends-light --expect t3-friends-dark \
+            --expect t3-passport-light --expect t3-passport-dark \
+            --expect t3-settings-light --expect t3-settings-dark \
+            --expect t3-paywall-light --expect t3-paywall-dark
+
+      - name: Upload T3 coral-token screenshots
+        if: always() && steps.scope.outputs.ui == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: save-coral-t3-screens-${{ github.sha }}
+          path: ${{ runner.temp }}/SAVE-T3-screens
+          if-no-files-found: error
+          retention-days: 14
 
       # A retried test reports as a pass, which is the point — but silently
       # passing on the second attempt is exactly how ambient flake hides. Name

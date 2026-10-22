@@ -69,6 +69,16 @@ struct ProfileView: View {
         localSavedPlaces
     }
 
+    /// DEBUG rail only. Production still requires `purchasingIsAvailable`.
+    private var offersProForUITest: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall")
+            && !passportPlaces.isEmpty
+#else
+        false
+#endif
+    }
+
     private var todayMissions: [SavePassportTodayMission] {
         guard isRootTab else { return [] }
         return SavePassportTodayCatalog.missions(
@@ -188,7 +198,7 @@ struct ProfileView: View {
 
                     if SAVEProAccessPolicy.shouldOfferProFromPassport(
                         hasConfirmedMapStamp: !passportPlaces.isEmpty
-                    ) {
+                    ) || offersProForUITest {
                         SettingsRow(
                             icon: "sparkles",
                             title: languageSettings.localized(

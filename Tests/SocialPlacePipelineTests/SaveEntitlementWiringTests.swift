@@ -187,6 +187,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
         let policy = try source(at: "SAV-EShared/SAVEProAccessPolicy.swift")
         XCTAssertTrue(profile.contains("shouldOfferProFromPassport"))
         XCTAssertTrue(profile.contains("hasConfirmedMapStamp: !passportPlaces.isEmpty"))
+        XCTAssertTrue(profile.contains("--uitest-show-paywall"))
         XCTAssertFalse(profile.contains("SaveEntitlementStore"))
         XCTAssertTrue(policy.contains("shouldOfferProFromPassport"))
         XCTAssertTrue(policy.contains("purchasingIsAvailable && hasConfirmedMapStamp"))
