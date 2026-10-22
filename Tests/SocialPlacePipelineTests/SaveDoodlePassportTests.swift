@@ -131,7 +131,13 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(passport.contains("opensCollected"))
         XCTAssertTrue(passport.contains("if opensCollected"))
         XCTAssertFalse(passport.contains("navigationDestination(isPresented: $opensCollected)"))
-        XCTAssertTrue(passport.contains("passport.root"))
+        XCTAssertTrue(
+            passport.contains("""
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("passport.root")
+            """),
+            "passport.root without contain flattens stampProgress and profile.root"
+        )
         XCTAssertTrue(passport.contains("profile.collected.root"))
         XCTAssertTrue(passport.contains("SharedPostsGrid"))
         XCTAssertTrue(page.contains("SaveHaptics.stamp()"))
