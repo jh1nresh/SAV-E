@@ -531,6 +531,66 @@ final class SaveLocalVaultServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testDurableDeletionIntentQuarantinesExactScopeAcrossReloadAndPreservesNewRows() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        let old = SaveMemoryRecord(state: .confirmedPlace, sourceText: "Private note", title: "Legacy name", latitude: 25, longitude: 121)
+        let a = SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a")
+        let b = SaveMemoryRecord(state: .sourceOnly, title: "B clue", ownerSubject: "account-b")
+        for row in [old, a, b] { try vault.append(row) }
+        let rawBefore = try Data(contentsOf: url)
+        let intent = try vault.prepareAccountDeletion(belongingTo: "account-a")
+        XCTAssertEqual(try Data(contentsOf: url), rawBefore, "Intent must not discard recoverable payload")
+        XCTAssertEqual(intent.initialOwnerlessRecordIDs, [old.id])
+        let later = SaveMemoryRecord(state: .sourceOnly, title: "Later ownerless")
+        try vault.append(later)
+        let reloaded = SaveLocalVaultService(overrideVaultURL: url)
+        XCTAssertEqual(try reloaded.pendingAccountDeletionIntent(), intent)
+        XCTAssertEqual(Set(try reloaded.recentRecords().map(\.id)), [b.id, later.id])
+        XCTAssertEqual(try reloaded.recentRecords(belongingTo: nil).map(\.id), [later.id])
+        XCTAssertTrue(try reloaded.confirmedPlaces(belongingTo: nil).isEmpty)
+        XCTAssertTrue(try reloaded.confirmedPlaceRecords().isEmpty)
+        XCTAssertTrue(try reloaded.reviewCandidates(belongingTo: "account-a").isEmpty)
+        XCTAssertThrowsError(try reloaded.prepareAccountDeletion(belongingTo: "account-b"))
+        try reloaded.purgeAccountDeletionRecords(intentID: intent.id)
+        XCTAssertNotNil(try reloaded.pendingAccountDeletionIntent(), "Purge alone must not clear avatar cleanup intent")
+        // Cross-process append between purge and completion is included for A only.
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Late A", ownerSubject: "account-a"))
+        try reloaded.completeAccountDeletionCleanup(intentID: intent.id)
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+        XCTAssertEqual(Set(try vault.recentRecords().map(\.id)), [b.id, later.id])
+    }
+
+    @MainActor
+    func testCorruptDeletionReceiptFailsClosedAndOldIDsCannotModifyNewIntent() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Private legacy clue"))
+        let first = try vault.prepareAccountDeletion(belongingTo: "account-a")
+        let receiptURL = url.appendingPathExtension("account-deletion.json")
+        let receipt = try Data(contentsOf: receiptURL)
+        try Data("corrupt".utf8).write(to: receiptURL, options: .atomic)
+        let fresh = SaveLocalVaultService(overrideVaultURL: url)
+        XCTAssertThrowsError(try fresh.recentRecords())
+        XCTAssertThrowsError(try fresh.reviewCandidates())
+        XCTAssertThrowsError(try fresh.confirmedPlaces())
+        XCTAssertThrowsError(try fresh.confirmedPlaceRecords())
+        XCTAssertThrowsError(try fresh.purgeAccountDeletionRecords(intentID: first.id))
+        try receipt.write(to: receiptURL, options: .atomic)
+        try fresh.purgeAccountDeletionRecords(intentID: first.id)
+        try fresh.completeAccountDeletionCleanup(intentID: first.id)
+        let second = try fresh.prepareAccountDeletion(belongingTo: "account-b")
+        XCTAssertThrowsError(try vault.recordRemoteAccountDeletionSuccess(intentID: first.id))
+        XCTAssertThrowsError(try vault.purgeAccountDeletionRecords(intentID: first.id))
+        XCTAssertThrowsError(try vault.completeAccountDeletionCleanup(intentID: first.id))
+        XCTAssertEqual(try fresh.pendingAccountDeletionIntent(), second)
+    }
+
+    @MainActor
     func testAccountDeletionPurgesLegacySnapshotWithoutClaimingOrDeletingOtherOwners() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

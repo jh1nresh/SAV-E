@@ -2,12 +2,31 @@ import Foundation
 
 enum SaveLocalVaultError: LocalizedError {
     case storageUnavailable
+    case accountDeletionScopeChanged
 
     var errorDescription: String? {
         switch self {
         case .storageUnavailable:
             return "Savvy local memory storage is unavailable."
+        case .accountDeletionScopeChanged:
+            return "The pending account cleanup changed. Retry to reload its saved scope."
         }
+    }
+}
+
+/// Minimal durable intent; no names, notes, tokens or other private payload.
+nonisolated struct SaveAccountDeletionIntent: Codable, Sendable, Equatable {
+    enum RemoteOutcome: String, Codable, Sendable {
+        case awaitingRemoteResult
+        case succeeded
+    }
+    let id: UUID
+    let owner: String
+    let initialOwnerlessRecordIDs: Set<UUID>
+    var remoteOutcome: RemoteOutcome
+
+    func includes(recordID: UUID, ownerSubject: String?) -> Bool {
+        ownerSubject == owner || (ownerSubject == nil && initialOwnerlessRecordIDs.contains(recordID))
     }
 }
 
@@ -54,7 +73,7 @@ final class SaveLocalVaultService: Sendable {
     ) throws -> [SaveMemoryRecord] {
         try withLock {
             try withCoordinatedVaultRead { url in
-                let records = try loadRecords(from: url)
+                let records = try visibleRecords(from: url)
                 let scoped = scopedToActiveAccount
                     ? records.filter {
                         MapViewModel.localVaultRecordBelongsToActiveAccount(
@@ -88,7 +107,7 @@ final class SaveLocalVaultService: Sendable {
             try withCoordinatedVaultRead { url in
                 Array(
                     Place.consolidated(
-                        try loadRecords(from: url).compactMap { record -> Place? in
+                        try visibleRecords(from: url).compactMap { record -> Place? in
                             guard record.state == .confirmedPlace else { return nil }
                             if scopedToActiveAccount,
                                !MapViewModel.localVaultRecordBelongsToActiveAccount(
@@ -108,7 +127,7 @@ final class SaveLocalVaultService: Sendable {
     func confirmedPlaceRecords(limit: Int = 250) throws -> [SaveMemoryRecord] {
         try withLock {
             try withCoordinatedVaultRead { url in
-                Array(try loadRecords(from: url).filter { $0.state == .confirmedPlace }.prefix(limit))
+                Array(try visibleRecords(from: url).filter { $0.state == .confirmedPlace }.prefix(limit))
             }
         }
     }
@@ -131,7 +150,7 @@ final class SaveLocalVaultService: Sendable {
     ) throws -> [PlaceReviewCandidate] {
         try withLock {
             try withCoordinatedVaultRead { url in
-                let candidates = try loadRecords(from: url)
+                let candidates = try visibleRecords(from: url)
                     .compactMap(\.reviewCandidate)
                     .filter { candidate in
                         !scopedToActiveAccount
@@ -192,6 +211,97 @@ final class SaveLocalVaultService: Sendable {
                 try save(records, to: url)
             }
         }
+    }
+
+    func pendingAccountDeletionIntent() throws -> SaveAccountDeletionIntent? {
+        try withLock {
+            try withCoordinatedVaultRead { try loadAccountDeletionIntent(vaultURL: $0) }
+        }
+    }
+
+    /// The receipt and snapshot are committed under the same cross-process lock
+    /// used by vault writers/readers, before any remote DELETE may be sent.
+    func prepareAccountDeletion(belongingTo owner: String) throws -> SaveAccountDeletionIntent {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                guard try loadAccountDeletionIntent(vaultURL: url) == nil else {
+                    throw SaveLocalVaultError.accountDeletionScopeChanged
+                }
+                let records = try loadRecords(from: url)
+                let intent = SaveAccountDeletionIntent(
+                    id: UUID(), owner: owner,
+                    initialOwnerlessRecordIDs: Set(records.filter { $0.ownerSubject == nil }.map(\.id)),
+                    remoteOutcome: .awaitingRemoteResult
+                )
+                try JSONEncoder().encode(intent).write(to: accountDeletionIntentURL(for: url), options: .atomic)
+                return intent
+            }
+        }
+    }
+
+    func recordRemoteAccountDeletionSuccess(intentID: UUID) throws -> SaveAccountDeletionIntent {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                var intent = try matchingAccountDeletionIntent(intentID, vaultURL: url)
+                intent.remoteOutcome = .succeeded
+                try JSONEncoder().encode(intent).write(to: accountDeletionIntentURL(for: url), options: .atomic)
+                return intent
+            }
+        }
+    }
+
+    func purgeAccountDeletionRecords(intentID: UUID) throws {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                let intent = try matchingAccountDeletionIntent(intentID, vaultURL: url)
+                var records = try loadRecords(from: url)
+                records.removeAll { intent.includes(recordID: $0.id, ownerSubject: $0.ownerSubject) }
+                try save(records, to: url)
+            }
+        }
+    }
+
+    /// Caller must finish both vault and avatar cleanup first. Matching the ID
+    /// prevents an old process/response from clearing a newer deletion intent.
+    func completeAccountDeletionCleanup(intentID: UUID) throws {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                let intent = try matchingAccountDeletionIntent(intentID, vaultURL: url)
+                // Recheck after avatar cleanup: an extension may have appended an
+                // A-owned row since the first purge. Later ownerless/B rows stay.
+                var records = try loadRecords(from: url)
+                records.removeAll { intent.includes(recordID: $0.id, ownerSubject: $0.ownerSubject) }
+                try save(records, to: url)
+                try FileManager.default.removeItem(at: accountDeletionIntentURL(for: url))
+            }
+        }
+    }
+
+    private func accountDeletionIntentURL(for vaultURL: URL) -> URL {
+        vaultURL.appendingPathExtension("account-deletion.json")
+    }
+
+    private func loadAccountDeletionIntent(vaultURL: URL) throws -> SaveAccountDeletionIntent? {
+        let url = accountDeletionIntentURL(for: vaultURL)
+        do {
+            return try JSONDecoder().decode(SaveAccountDeletionIntent.self, from: Data(contentsOf: url))
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            return nil
+        }
+    }
+
+    private func matchingAccountDeletionIntent(_ id: UUID, vaultURL: URL) throws -> SaveAccountDeletionIntent {
+        guard let intent = try loadAccountDeletionIntent(vaultURL: vaultURL), intent.id == id else {
+            throw SaveLocalVaultError.accountDeletionScopeChanged
+        }
+        return intent
+    }
+
+    private func visibleRecords(from url: URL) throws -> [SaveMemoryRecord] {
+        let intent = try loadAccountDeletionIntent(vaultURL: url)
+        let records = try loadRecords(from: url)
+        guard let intent else { return records }
+        return records.filter { !intent.includes(recordID: $0.id, ownerSubject: $0.ownerSubject) }
     }
 
     func saveSourceOnly(url: URL, note: String? = nil, ownerSubject: String? = nil) throws -> SaveMemoryRecord {

@@ -243,7 +243,10 @@ final class ProfileAvatarStoreTests: XCTestCase {
         XCTAssertFalse(deleted)
         XCTAssertEqual(requests, 1)
         XCTAssertEqual(try Data(contentsOf: url), before)
-        XCTAssertEqual(model.errorMessage, "Offline")
+        XCTAssertTrue(model.errorMessage?.contains("Offline") == true)
+        XCTAssertTrue(try vault.recentRecords(belongingTo: nil).isEmpty)
+        XCTAssertTrue(try vault.recentRecords(belongingTo: "account-a").isEmpty)
+        XCTAssertEqual(try vault.pendingAccountDeletionIntent()?.remoteOutcome, .awaitingRemoteResult)
         XCTAssertFalse(model.isDeletingAccount)
     }
 
@@ -340,7 +343,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
         let stillUnavailableRetry = await model.deleteAccount()
         XCTAssertFalse(stillUnavailableRetry)
         XCTAssertEqual(requests, 1)
-        XCTAssertTrue(model.errorMessage?.contains("Account deleted, but local data cleanup failed") == true)
+        XCTAssertTrue(model.errorMessage?.contains("could not be completed") == true)
         XCTAssertEqual(PrivyAuthService.shared.currentUserId, "account-b")
         try FileManager.default.removeItem(at: parent)
         try FileManager.default.moveItem(at: backup, to: parent)
@@ -348,7 +351,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
         try vault.append(later)
         let cleanupRetried = await model.deleteAccount()
         XCTAssertFalse(cleanupRetried, "Finishing A cleanup must not claim that B was deleted")
-        XCTAssertEqual(model.errorMessage, "Previous account’s local cleanup is complete. Retry to delete this account.")
+        XCTAssertTrue(model.errorMessage?.contains("remote account deletion result could not be confirmed") == true)
         XCTAssertEqual(requests, 1)
         XCTAssertEqual(PrivyAuthService.shared.currentUserId, "account-b")
         XCTAssertEqual(Set(try vault.recentRecords().map(\.id)), [b.id, later.id])
@@ -357,6 +360,186 @@ final class ProfileAvatarStoreTests: XCTestCase {
         XCTAssertTrue(bDeleted)
         XCTAssertEqual(requests, 2)
         XCTAssertTrue(try vault.recentRecords().isEmpty)
+    }
+
+    @MainActor
+    func testFreshProfileLoadRecoversUnknownDeletionWhileSignedOutWithoutRemoteRequest() async throws {
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        let old = SaveMemoryRecord(state: .sourceOnly, sourceText: "Old private note", title: "Old legacy clue")
+        let a = SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a")
+        let b = SaveMemoryRecord(state: .sourceOnly, title: "B clue", ownerSubject: "account-b")
+        for row in [old, a, b] { try vault.append(row) }
+        let prepared = try vault.prepareAccountDeletion(belongingTo: "account-a")
+        // Simulate crash after the request may have succeeded, before its receipt.
+        XCTAssertEqual(prepared.remoteOutcome, .awaitingRemoteResult)
+        let later = SaveMemoryRecord(state: .sourceOnly, title: "New ownerless clue")
+        try vault.append(later)
+        let reloadedVault = SaveLocalVaultService(overrideVaultURL: url)
+        XCTAssertEqual(try reloadedVault.recentRecords(belongingTo: nil).map(\.id), [later.id])
+        var remoteRequests = 0
+        let freshModel = deletionModel(vault: reloadedVault, currentOwner: { nil }) { remoteRequests += 1 }
+        await freshModel.loadProfile()
+        XCTAssertEqual(remoteRequests, 0)
+        XCTAssertTrue(freshModel.errorMessage?.contains("remote account deletion result could not be confirmed") == true)
+        XCTAssertNil(try reloadedVault.pendingAccountDeletionIntent())
+        XCTAssertEqual(Set(try reloadedVault.recentRecords().map(\.id)), [b.id, later.id])
+    }
+
+    @MainActor
+    func testFreshProfileRecoversSuccessfulRemoteReceiptAndPreservesB() async throws {
+        let auth = PrivyAuthService.shared
+        let oldAuth = auth.authState
+        defer { auth.authState = oldAuth }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        let b = SaveMemoryRecord(state: .sourceOnly, title: "B clue", ownerSubject: "account-b")
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Old legacy"))
+        try vault.append(b)
+        let prepared = try vault.prepareAccountDeletion(belongingTo: "account-a")
+        _ = try vault.recordRemoteAccountDeletionSuccess(intentID: prepared.id)
+        // A fresh VM must recover using disk, without a usable A session.
+        auth.authState = .authenticated(userId: "account-b")
+        var requests = 0
+        let fresh = deletionModel(vault: SaveLocalVaultService(overrideVaultURL: url), currentOwner: { "account-b" }) {
+            requests += 1
+        }
+        let result = await fresh.deleteAccount()
+        XCTAssertFalse(result, "A cleanup must not claim B was deleted")
+        XCTAssertEqual(fresh.errorMessage, "Previous account’s local cleanup is complete. Retry to delete this account.")
+        XCTAssertEqual(requests, 0)
+        XCTAssertEqual(auth.currentUserId, "account-b")
+        XCTAssertEqual(try vault.recentRecords().map(\.id), [b.id])
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+    }
+
+    @MainActor
+    func testDeletionIntentPersistenceFailureBlocksRemoteRequestAndPreservesRecords() async throws {
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Private legacy"))
+        let before = try Data(contentsOf: url)
+        // A directory at the receipt path is an actual unreadable/unwritable receipt.
+        try FileManager.default.createDirectory(at: url.appendingPathExtension("account-deletion.json"), withIntermediateDirectories: true)
+        var requests = 0
+        let model = deletionModel(vault: vault, currentOwner: { "account-a" }) { requests += 1 }
+        let result = await model.deleteAccount()
+        XCTAssertFalse(result)
+        XCTAssertEqual(requests, 0)
+        XCTAssertEqual(try Data(contentsOf: url), before)
+        XCTAssertThrowsError(try vault.recentRecords(belongingTo: nil), "Unreadable receipt must fail closed")
+        XCTAssertNotNil(model.errorMessage)
+    }
+
+    @MainActor
+    func testLiveDeletionCannotBeConsumedOrResentBySameOrFreshProfile() async throws {
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Old legacy"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a"))
+        let before = try Data(contentsOf: url)
+        var requests = 0
+        var original: ProfileViewModel!
+        var fresh: ProfileViewModel!
+        defer { original = nil; fresh = nil }
+        original = deletionModel(vault: vault, currentOwner: { "account-a" }) {
+            requests += 1
+            await Task.yield()
+            let intent = try XCTUnwrap(vault.pendingAccountDeletionIntent())
+            await original.loadProfile()
+            fresh = self.deletionModel(vault: SaveLocalVaultService(overrideVaultURL: url), currentOwner: { "account-b" }) {
+                XCTFail("Another Profile must not send DELETE during A's live request")
+            }
+            await fresh.loadProfile()
+            let duplicate = await fresh.deleteAccount()
+            XCTAssertFalse(duplicate)
+            XCTAssertTrue(fresh.errorMessage?.contains("already in progress") == true)
+            XCTAssertEqual(try vault.pendingAccountDeletionIntent(), intent)
+            XCTAssertEqual(try Data(contentsOf: url), before, "Neither live recovery path may purge before HTTP finishes")
+            throw ProfileUpdateTestError.offline
+        }
+        let result = await original.deleteAccount()
+        XCTAssertFalse(result)
+        XCTAssertEqual(requests, 1)
+        XCTAssertEqual(try Data(contentsOf: url), before, "Remote failure retains physical data")
+        XCTAssertEqual(try vault.pendingAccountDeletionIntent()?.remoteOutcome, .awaitingRemoteResult)
+        // The lease ends with the request. The explicitly authorized local scope
+        // is recoverable after failure, without sending a B deletion or claiming success.
+        await fresh.loadProfile()
+        XCTAssertEqual(requests, 1)
+        XCTAssertTrue(fresh.errorMessage?.contains("remote account deletion result could not be confirmed") == true)
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+        XCTAssertTrue(try vault.recentRecords().isEmpty)
+    }
+
+    @MainActor
+    func testFreshProfileLoadFinishesOnlyKnownDeletedSessionAndPreservesUnknownOrOtherOwner() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        defer { auth.authState = originalAuth }
+        for (currentOwner, remoteSucceeded) in [("account-a", true), ("account-b", true), ("account-a", false)] {
+            let url = directory.appendingPathComponent(currentOwner + String(remoteSucceeded) + ".json")
+            let vault = SaveLocalVaultService(overrideVaultURL: url)
+            try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Old legacy"))
+            let intent = try vault.prepareAccountDeletion(belongingTo: "account-a")
+            if remoteSucceeded { _ = try vault.recordRemoteAccountDeletionSuccess(intentID: intent.id) }
+            auth.authState = .authenticated(userId: currentOwner)
+            let fresh = deletionModel(vault: vault, currentOwner: { auth.currentUserId }) {
+                XCTFail("Known successful receipt requires no remote request")
+            }
+            await fresh.loadProfile()
+            XCTAssertNil(try vault.pendingAccountDeletionIntent())
+            if remoteSucceeded { XCTAssertEqual(fresh.errorMessage, "Previous account’s local cleanup is complete.") }
+            else { XCTAssertTrue(fresh.errorMessage?.contains("remote account deletion result could not be confirmed") == true) }
+            if currentOwner == "account-a" && remoteSucceeded { XCTAssertNil(auth.currentUserId) }
+            else { XCTAssertEqual(auth.currentUserId, currentOwner) }
+        }
+    }
+
+    @MainActor
+    func testIntentWriteFailurePreventsRemoteDelete() async throws {
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Private legacy"))
+        let before = try Data(contentsOf: url)
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path) }
+        var requests = 0
+        let model = deletionModel(vault: vault, currentOwner: { "account-a" }) { requests += 1 }
+        let result = await model.deleteAccount()
+        XCTAssertFalse(result)
+        XCTAssertEqual(requests, 0)
+        XCTAssertEqual(try Data(contentsOf: url), before)
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+    }
+
+    @MainActor
+    func testAvatarCleanupFailureKeepsDurableReceiptUntilFreshProfileRecovery() async throws {
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Legacy private clue"))
+        let avatars = directory.appendingPathComponent("avatars")
+        let store = ProfileAvatarStore(fileManager: FailingAvatarRemovalFileManager(), baseDirectory: avatars)
+        try store.save(Data([1]), for: "account-a")
+        var requests = 0
+        let model = ProfileViewModel(
+            supabaseService: SupabaseService(apiBaseURL: nil),
+            accountDeletionService: ClosureAccountDeletionService { requests += 1 },
+            avatarStore: store, saveLocalVaultService: vault,
+            currentUserIDProvider: { "account-a" }, reviewerDemoProvider: { false }
+        )
+        let result = await model.deleteAccount()
+        XCTAssertFalse(result)
+        XCTAssertEqual(requests, 1)
+        XCTAssertEqual(try vault.pendingAccountDeletionIntent()?.remoteOutcome, .succeeded)
+        XCTAssertNotNil(store.load(for: "account-a"))
+        let fresh = deletionModel(vault: SaveLocalVaultService(overrideVaultURL: url), currentOwner: { nil }) {
+            XCTFail("Fresh Profile must recover locally")
+        }
+        await fresh.loadProfile()
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+        XCTAssertNil(ProfileAvatarStore(baseDirectory: avatars).load(for: "account-a"))
+        XCTAssertEqual(fresh.errorMessage, "Previous account’s local cleanup is complete.")
     }
 
     @MainActor
@@ -438,6 +621,10 @@ private enum ProfileUpdateTestError: LocalizedError {
     case offline
 
     var errorDescription: String? { "Offline" }
+}
+
+private final class FailingAvatarRemovalFileManager: FileManager, @unchecked Sendable {
+    override func removeItem(at URL: URL) throws { throw ProfileUpdateTestError.offline }
 }
 
 private struct ClosureAccountDeletionService: AccountDeletionProviding {

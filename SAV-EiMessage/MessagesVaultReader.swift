@@ -45,24 +45,51 @@ nonisolated enum MessagesVaultReader {
     /// Same App Group key as `SavePlaceLimitHandoff.cachedOwnerKey`.
     static let cachedOwnerKey = "save.cachedActiveOwnerSubject"
 
+    // Mirrors only the minimal deletion receipt, never private record payload.
+    private struct PendingDeletion: Decodable {
+        enum RemoteOutcome: String, Decodable { case awaitingRemoteResult, succeeded }
+        let id: UUID
+        let owner: String
+        let initialOwnerlessRecordIDs: Set<UUID>
+        let remoteOutcome: RemoteOutcome
+    }
+
     static func confirmedPlaces(limit: Int = 250) -> [MessagesPlace] {
-        guard let url = vaultURL(),
-              FileManager.default.fileExists(atPath: url.path),
-              let data = try? Data(contentsOf: url) else {
-            return []
+        guard let url = vaultURL() else { return [] }
+        let currentOwner = UserDefaults(suiteName: appGroupSuiteName)?.string(forKey: cachedOwnerKey)
+        return confirmedPlaces(vaultURL: url, currentOwner: currentOwner, limit: limit)
+    }
+
+    /// Both files are read while holding the vault's coordination lock, matching
+    /// the app's receipt/purge writes. Malformed or inaccessible receipts fail closed.
+    static func confirmedPlaces(vaultURL: URL, currentOwner: String?, limit: Int = 250) -> [MessagesPlace] {
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        var coordinationError: NSError?
+        var result: [MessagesPlace] = []
+        coordinator.coordinate(readingItemAt: vaultURL, options: [], error: &coordinationError) { url in
+            result = (try? readConfirmedPlaces(vaultURL: url, currentOwner: currentOwner, limit: limit)) ?? []
         }
+        return coordinationError == nil ? result : []
+    }
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-
-        guard let records = try? decoder.decode([StoredRecord].self, from: data) else {
-            return []
+    private static func readConfirmedPlaces(vaultURL: URL, currentOwner: String?, limit: Int) throws -> [MessagesPlace] {
+        let pending: PendingDeletion?
+        do {
+            pending = try JSONDecoder().decode(
+                PendingDeletion.self,
+                from: Data(contentsOf: vaultURL.appendingPathExtension("account-deletion.json"))
+            )
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            pending = nil
         }
-
-        let currentOwner = UserDefaults(suiteName: appGroupSuiteName)?
-            .string(forKey: cachedOwnerKey)
+        let records = try JSONDecoder().decode([StoredRecord].self, from: Data(contentsOf: vaultURL))
         return Array(
             records
+            .filter { record in
+                guard let pending else { return true }
+                return record.ownerSubject != pending.owner
+                    && !(record.ownerSubject == nil && pending.initialOwnerlessRecordIDs.contains(record.id))
+            }
             .filter { $0.state == "confirmed_place" }
             .filter { belongsToActiveAccount($0.ownerSubject, currentUserId: currentOwner) }
             .compactMap { record -> MessagesPlace? in
