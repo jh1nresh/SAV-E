@@ -16,10 +16,14 @@ from pathlib import Path
 
 BACKEND_JOB = "backend / validate"
 MAX_RUN_ATTEMPT = 3
-TIMEOUT_MARKERS = (
-    "npm audit timed out talking to the registry",
-    "npm audit timed out after",
-    "transient npm audit failure (timeout",
+# Only exhausted terminal failures. Intermediate
+# `transient npm audit failure (timeout` lines are retries the process
+# moved past and must not trigger a rerun.
+TERMINAL_TIMEOUT_RE = re.compile(
+    r"npm audit timed out talking to the registry|npm audit timed out after \d+"
+)
+TERMINAL_NON_TIMEOUT_RE = re.compile(
+    r"npm audit failed \(|npm audit found production vulnerabilities"
 )
 FINDING_RE = re.compile(
     r"npm audit found production vulnerabilities|found \d+ (?:high|critical) severity",
@@ -48,16 +52,33 @@ def has_cancelled(payload, run_conclusion=None):
 
 
 def audit_section(log: str) -> str:
-    for marker in ("audit:production", "scripts/audit-production.mjs"):
-        index = log.find(marker)
-        if index >= 0:
-            return log[index:]
-    return ""
+    """Return only the final `npm run audit:production` section.
+
+    `validate` runs `audit:self-test` first. That invocation prints
+    synthetic timeout markers via `scripts/audit-production.mjs --self-test`.
+    A later TypeScript/build failure must not inherit those markers.
+    """
+    last = log.rfind("audit:production")
+    if last < 0:
+        return ""
+    line_start = log.rfind("\n", 0, last) + 1
+    return log[line_start:]
+
+
+def last_audit_decision(section: str):
+    for line in reversed(section.splitlines()):
+        text = line.strip()
+        if not text:
+            continue
+        if TERMINAL_NON_TIMEOUT_RE.search(text):
+            return "other"
+        if TERMINAL_TIMEOUT_RE.search(text):
+            return "timeout"
+    return None
 
 
 def has_timeout(log: str) -> bool:
-    section = audit_section(log) or log
-    return any(marker in section for marker in TIMEOUT_MARKERS)
+    return last_audit_decision(audit_section(log)) == "timeout"
 
 
 def parse_audit_reports(text: str):

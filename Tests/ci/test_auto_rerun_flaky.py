@@ -85,6 +85,25 @@ left-pad range <1.2.500 in a fixture
 npm audit timed out talking to the registry (timeout 90000ms, attempt 3/3)
 """
 
+SELF_TEST_THEN_TSC_FAIL = """
+> save-backend@0.1.0 audit:self-test
+> node scripts/audit-production.mjs --self-test
+transient npm audit failure (timeout 90000ms, attempt 1/3); retrying in 2000ms
+npm audit timed out talking to the registry (timeout 90000ms, attempt 3/3)
+audit-production self-test passed
+> save-backend@0.1.0 test
+> npm run build && node --test
+error TS2304: Cannot find name 'MissingType'.
+"""
+
+TIMEOUT_THEN_E401 = """
+> save-backend@0.1.0 audit:production
+> node scripts/audit-production.mjs
+transient npm audit failure (timeout 90000ms, attempt 1/3); retrying in 2000ms
+transient npm audit failure (timeout 90000ms, attempt 2/3); retrying in 4000ms
+npm audit failed (exit 1, attempt 3/3)
+"""
+
 
 def jobs(*names, extra=None):
     payload = {
@@ -160,6 +179,22 @@ class AutoRerunFlakyTests(unittest.TestCase):
         )
         self.assertTrue(ok)
         self.assertEqual(reason, "matched npm audit network timeout, attempt 1")
+
+    def test_self_test_timeout_does_not_rerun_later_tsc_failure(self):
+        self.assertEqual(rerun.audit_section(SELF_TEST_THEN_TSC_FAIL), "")
+        ok, reason = rerun.should_rerun(
+            jobs("backend / validate"), SELF_TEST_THEN_TSC_FAIL, 1
+        )
+        self.assertFalse(ok)
+        self.assertIn("no npm audit network timeout marker", reason)
+
+    def test_mid_run_timeout_then_e401_does_not_rerun(self):
+        self.assertEqual(rerun.last_audit_decision(TIMEOUT_THEN_E401), "other")
+        ok, reason = rerun.should_rerun(
+            jobs("backend / validate"), TIMEOUT_THEN_E401, 1
+        )
+        self.assertFalse(ok)
+        self.assertIn("no npm audit network timeout marker", reason)
 
     def test_timeout_plus_findings_never_reruns(self):
         log = FINDINGS_LOG + "\nnpm audit timed out talking to the registry\n"
@@ -247,6 +282,10 @@ class AutoRerunFlakyTests(unittest.TestCase):
         self.assertIn("Rerunning: ${reason}", workflow)
         self.assertIn("GITHUB_STEP_SUMMARY", workflow)
         self.assertIn("rerun-failed-jobs", workflow)
+        self.assertNotIn("gh api --follow", workflow)
+        self.assertNotIn("--allow-escape-sequences", workflow)
+        self.assertIn("curl -fsSL", workflow)
+        self.assertIn("-L", workflow)
 
 
 if __name__ == "__main__":

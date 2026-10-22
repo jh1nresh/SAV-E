@@ -72,8 +72,15 @@ jobs:
           fi
 
           if ! gh run view "${RUN_ID}" --repo "${GH_REPO}" --job "${job_id}" --log > backend.log; then
-            if ! gh api --follow --allow-escape-sequences \
-              "repos/${GH_REPO}/actions/jobs/${job_id}/logs" > backend.log; then
+            # gh api has no --follow. The logs endpoint 302s to a signed URL;
+            # curl -L follows that redirect.
+            if ! curl -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -L \
+              "https://api.github.com/repos/${GH_REPO}/actions/jobs/${job_id}/logs" \
+              > backend.log || [[ ! -s backend.log ]]; then
               echo "could not fetch backend / validate logs; not rerunning" | record
               exit 0
             fi
