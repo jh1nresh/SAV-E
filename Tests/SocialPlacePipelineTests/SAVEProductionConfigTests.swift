@@ -2698,10 +2698,10 @@ final class SAVEProductionConfigTests: XCTestCase {
             intent.contains("ownerSubject: PrivyAuthService.shared.currentUserId"),
             "do not re-read the signed-in account after the analysis await"
         )
-        XCTAssertTrue(share.contains("analysisCredential?.ownerSubject ?? ShareAnalysisKeychain.read()?.ownerSubject"))
+        XCTAssertTrue(share.contains("cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner()"))
         XCTAssertTrue(
             share.contains("ownerSubject: shareOwnerSubject"),
-            "locally parsed over-cap shares must keep the keychain owner"
+            "locally parsed over-cap shares must keep the captured active owner"
         )
         XCTAssertFalse(
             share.contains("ownerSubject: analysisCredential?.ownerSubject,"),
@@ -2712,14 +2712,21 @@ final class SAVEProductionConfigTests: XCTestCase {
             "capture the share owner before attachment and analysis awaits"
         )
         XCTAssertTrue(
-            share.contains("currentOwner != shareSessionOwner"),
+            share.contains("try snapshot.validate("),
             "a late share write must not stamp the next signed-in account"
         )
         XCTAssertTrue(
-            share.contains("if next.ownerSubject == nil"),
+            share.contains("try snapshot.ownerForNewItem(existingOwner: candidate.ownerSubject)"),
             "screenshot and Maps-list Review candidates must stamp the owner at persist"
         )
         XCTAssertTrue(share.contains("appendPendingItems(stamped"))
+        for purpose in ["append source-only memory", "append pending queue"] {
+            let accessor = "purpose: \"\(purpose)\") { coordinatedURL in\n            guard shareSessionStillMatches(requireAnalysisCredential: false)"
+            XCTAssertTrue(share.contains(accessor),
+                "Check the current account inside the file coordinator accessor, after any wait")
+        }
+        XCTAssertTrue(share.contains("guard shareSessionStillMatches(requireAnalysisCredential: !sourceFallback) else { return }"),
+            "Keeping a source must still validate the account even when its analysis token is unusable")
         XCTAssertTrue(map.contains("belongingTo: authService.currentUserId"))
         XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: userId)"))
         XCTAssertTrue(
@@ -5797,6 +5804,146 @@ private final class AnalysisRequestURLProtocol: URLProtocol {
         } catch { client?.urlProtocol(self, didFailWithError: error) }
     }
     override func stopLoading() {}
+}
+
+/// Exercises the same account binding used by local parsing, both pending
+/// queues, and source-only vault writes in the Share Extension.
+@MainActor
+final class ShareOwnerSnapshotTests: XCTestCase {
+    private let ownerA = "did:privy:share-a"
+    private let ownerB = "did:privy:share-b"
+
+    private func credential(owner: String, expired: Bool = false) -> ShareAnalysisCredential {
+        ShareAnalysisCredential(token: "synthetic-analysis-only-token", ownerSubject: owner,
+            expiresAt: Date().addingTimeInterval(expired ? -3600 : 3600),
+            apiBaseURL: "https://share.example.test")
+    }
+
+    func testMissingAnalysisCredentialKeepsAuthenticatedOwner() throws {
+        let snapshot = ShareOwnerSnapshot(cachedActiveOwner: ownerA)
+        try snapshot.validate(cachedActiveOwner: ownerA, credential: nil)
+        XCTAssertEqual(try snapshot.ownerForNewItem(existingOwner: nil), ownerA)
+    }
+
+    func testExpiredAnalysisCredentialDoesNotPreventLocalSourceSave() throws {
+        let expired = credential(owner: ownerA, expired: true)
+        XCTAssertFalse(expired.isUsable())
+        let snapshot = ShareOwnerSnapshot(cachedActiveOwner: ownerA)
+        try snapshot.validate(cachedActiveOwner: ownerA, credential: expired)
+        XCTAssertEqual(try snapshot.ownerForNewItem(existingOwner: nil), ownerA)
+    }
+
+    func testProvisioningAndRefreshingSameOwnerCredentialKeepsBinding() throws {
+        let snapshot = ShareOwnerSnapshot(cachedActiveOwner: ownerA)
+        for current in [nil, credential(owner: ownerA, expired: true), credential(owner: ownerA), nil] {
+            try snapshot.validate(cachedActiveOwner: ownerA, credential: current)
+            XCTAssertEqual(try snapshot.ownerForNewItem(existingOwner: nil), ownerA)
+        }
+    }
+
+    func testAnalysisValidatesTheCapturedCredentialAfterAnEarlierSessionCheck() throws {
+        let snapshot = ShareOwnerSnapshot(cachedActiveOwner: ownerA)
+        try snapshot.validate(cachedActiveOwner: ownerA, credential: credential(owner: ownerA))
+        // The keychain changes after the first session check. The actual
+        // credential selected for the request must not carry A's input to B.
+        let capturedForRequest = credential(owner: ownerB)
+        for cachedOwner in [ownerA, ownerB] {
+            XCTAssertThrowsError(try snapshot.validatedAnalysisCredential(
+                cachedActiveOwner: cachedOwner, credential: capturedForRequest)) { error in
+                guard case ShareAnalysisError.sessionChanged = error else {
+                    return XCTFail("Expected sessionChanged, got \(error)")
+                }
+            }
+        }
+    }
+
+    func testAnalysisReturnsExactUsableSameOwnerCredential() throws {
+        let snapshot = ShareOwnerSnapshot(cachedActiveOwner: ownerA)
+        let capturedForRequest = credential(owner: ownerA)
+        XCTAssertEqual(try snapshot.validatedAnalysisCredential(
+            cachedActiveOwner: ownerA, credential: capturedForRequest), capturedForRequest)
+        XCTAssertThrowsError(try snapshot.validatedAnalysisCredential(
+            cachedActiveOwner: ownerA, credential: nil))
+        XCTAssertThrowsError(try snapshot.validatedAnalysisCredential(
+            cachedActiveOwner: ownerA, credential: credential(owner: ownerA, expired: true)))
+    }
+
+    func testSignedOutSnapshotCannotBindToLaterSignIn() throws {
+        let snapshot = ShareOwnerSnapshot(cachedActiveOwner: nil)
+        try snapshot.validate(cachedActiveOwner: nil, credential: nil)
+        XCTAssertNil(try snapshot.ownerForNewItem(existingOwner: nil))
+        XCTAssertThrowsError(try snapshot.validate(cachedActiveOwner: ownerB, credential: nil))
+        XCTAssertThrowsError(try snapshot.validate(cachedActiveOwner: nil, credential: credential(owner: ownerB)))
+        XCTAssertNil(snapshot.ownerSubject)
+    }
+
+    func testAccountSwitchAndSignOutRejectEvenWithStaleAnalysisCredential() throws {
+        let snapshot = ShareOwnerSnapshot(cachedActiveOwner: ownerA)
+        for currentOwner in [nil, ownerB] {
+            XCTAssertThrowsError(try snapshot.validate(cachedActiveOwner: currentOwner, credential: nil))
+            XCTAssertThrowsError(try snapshot.validate(cachedActiveOwner: currentOwner,
+                credential: credential(owner: ownerA)))
+        }
+        XCTAssertThrowsError(try snapshot.validate(cachedActiveOwner: ownerA,
+            credential: credential(owner: ownerB)))
+        XCTAssertEqual(snapshot.ownerSubject, ownerA)
+    }
+
+    func testCandidateWithDifferentOwnerCannotBeRestamped() throws {
+        let snapshot = ShareOwnerSnapshot(cachedActiveOwner: ownerA)
+        XCTAssertEqual(try snapshot.ownerForNewItem(existingOwner: ownerA), ownerA)
+        XCTAssertThrowsError(try snapshot.ownerForNewItem(existingOwner: ownerB))
+        XCTAssertThrowsError(try ShareOwnerSnapshot(cachedActiveOwner: nil).ownerForNewItem(existingOwner: ownerA))
+    }
+
+    func testNewSourceVaultRowKeepsOwnerWithoutClaimingLegacyRow() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let legacy: [String: String] = ["id": UUID().uuidString, "state": "source_only", "sourceText": "Legacy private clue"]
+        try JSONEncoder().encode([legacy]).write(to: url)
+        let snapshot = ShareOwnerSnapshot(cachedActiveOwner: ownerA)
+        try snapshot.validate(cachedActiveOwner: ownerA, credential: nil)
+        let row = ["id": UUID().uuidString, "state": "source_only", "sourceText": "New private clue",
+                   "ownerSubject": try XCTUnwrap(snapshot.ownerForNewItem(existingOwner: nil))]
+        try SaveMemoryVaultAppender.appending(row, to: Data(contentsOf: url)).write(to: url, options: .atomic)
+        let reloaded = try JSONDecoder().decode([[String: String]].self, from: Data(contentsOf: url))
+        XCTAssertEqual(reloaded.first?["ownerSubject"], ownerA)
+        XCTAssertEqual(reloaded.last, legacy)
+        XCTAssertNil(reloaded.last?["ownerSubject"])
+    }
+
+    func testAccountSwitchWhileWaitingForFileCoordinationDoesNotAppend() throws {
+        let suite = "ShareOwnerSnapshotTests." + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let original = Data(#"[{"sourceText":"Existing private clue"}]"#.utf8)
+        try original.write(to: url)
+        SavePlaceLimitHandoff.syncActiveOwner(ownerA, defaults: defaults)
+        let snapshot = ShareOwnerSnapshot(cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner(defaults: defaults))
+        try snapshot.validate(cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner(defaults: defaults), credential: nil)
+        // A parse/save check passed, but another app process switches the owner
+        // before the coordinated accessor is granted access to the file.
+        SavePlaceLimitHandoff.syncActiveOwner(ownerB, defaults: defaults)
+        var rejected = false
+        var coordinationError: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
+            do {
+                try snapshot.validate(cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner(defaults: defaults), credential: nil)
+                let newData = try SaveMemoryVaultAppender.appending(["sourceText": "Must not append"], to: Data(contentsOf: coordinatedURL))
+                try newData.write(to: coordinatedURL, options: .atomic)
+                XCTFail("Account switch must reject the write")
+            } catch ShareAnalysisError.sessionChanged {
+                rejected = true
+            } catch {
+                XCTFail("Unexpected error: \(error)")
+            }
+        }
+        XCTAssertNil(coordinationError)
+        XCTAssertTrue(rejected)
+        XCTAssertEqual(try Data(contentsOf: url), original)
+    }
 }
 
 @MainActor
