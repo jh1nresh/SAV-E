@@ -109,7 +109,8 @@ struct ClipContentView: View {
                     badge: "50",
                     retry: nil,
                     back: ClipCopy.string("clip.cap50.back"),
-                    identifier: "clip.cap50"
+                    identifier: "clip.cap50",
+                    savedLine: ClipCopy.string("clip.cap50.saved")
                 )
             } else if surface == .duplicate {
                 outcomeScreen(
@@ -449,13 +450,21 @@ struct ClipContentView: View {
         badge: String,
         retry: (() -> Void)?,
         back: String?,
-        identifier: String
+        identifier: String,
+        savedLine: String? = nil
     ) -> some View {
         VStack(spacing: ClipJournalLayout.stateTitleGap) {
             ClipStateIllustration(sticker: sticker, badge: badge)
             VStack(spacing: ClipJournalLayout.stateBodyGap) {
                 ClipDisplayTitle(text: title, pointSize: 24, relativeTo: .title2)
                     .multilineTextAlignment(.center)
+                if let savedLine {
+                    Text(savedLine)
+                        .font(ClipJournalType.system(17, weight: .semibold, relativeTo: .headline))
+                        .foregroundStyle(ClipJournalPalette.ink)
+                        .multilineTextAlignment(.center)
+                        .accessibilityIdentifier("clip.cap50.saved")
+                }
                 Text(bodyText)
                     .font(ClipJournalType.system(15, weight: .regular, relativeTo: .body))
                     .foregroundStyle(ClipJournalPalette.muted)

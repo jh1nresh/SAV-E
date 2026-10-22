@@ -938,7 +938,8 @@ requests no name or email. `.revoked` or `.notFound` falls back to normal
 sign-in.
 
 Show **Saved** only after the backend succeeds. Free cap at 50 is an
-explanation page (no paywall, Pro, price, or overlay). A duplicate is
+explanation page (no paywall, Pro, price, or overlay). Mockup 15 must
+show the line 「已存 50 個」 / "Saved 50". A duplicate is
 “saved before, not counted twice” (no overlay). Sign-in cancel/fail
 returns to the place page with a top hint. Network/server save failure
 shows Retry (no Saved, no overlay).

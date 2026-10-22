@@ -92,6 +92,7 @@ final class SAVEClipScreenshotTests: XCTestCase {
     func testCap50ZhHantLight() {
         let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "cap50")
         XCTAssertTrue(app.descendants(matching: .any)["clip.cap50"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.cap50.saved"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["clip.cap50.back"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["clip.skoverlay"].exists)
         attachScreenshot(app.screenshot(), name: "cap50-zh-Hant-light")
@@ -99,7 +100,11 @@ final class SAVEClipScreenshotTests: XCTestCase {
     }
 
     func testCap50EnglishDark() {
-        capture(screen: "cap50", appearance: .dark, language: "en", locale: "en_US", name: "cap50-en-dark", identifier: "clip.cap50")
+        let app = launchClip(appearance: .dark, language: "en", locale: "en_US", screen: "cap50")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.cap50"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.cap50.saved"].exists)
+        attachScreenshot(app.screenshot(), name: "cap50-en-dark")
+        app.terminate()
     }
 
     func testDuplicateZhHantLight() {

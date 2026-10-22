@@ -127,6 +127,12 @@
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "免費額度已滿" } }
       }
     },
+    "clip.cap50.saved" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved 50" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "已存 50 個" } }
+      }
+    },
     "clip.cap50.body" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "The free plan saves up to 50 places. This one was not added. Open the full app to manage your Savvy." } },
