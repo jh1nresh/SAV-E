@@ -6229,7 +6229,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
             subtitle: "Taipei",
             latitude: taipei.latitude,
             longitude: taipei.longitude,
-            category: .restaurant
+            category: .food
         )
         search.nextMatchingResults = [refined]
         map.reviewCandidates = [clue]
