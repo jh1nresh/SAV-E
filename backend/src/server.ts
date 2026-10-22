@@ -1711,7 +1711,7 @@ async function saveClipListPlaces(
   if (!Array.isArray(items) || items.length === 0) {
     return sendJson(response, { error: "places required" }, 400);
   }
-  if (items.length > 100) {
+  if (items.length > listMaxItems) {
     return sendJson(response, { error: "Too many places" }, 400);
   }
 

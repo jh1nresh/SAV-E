@@ -165,6 +165,8 @@ test("SL4 POST /places list writes are one transactional call", () => {
   assert.match(handler, /clipListSaveResponse\(plan, inserted\)/);
   assert.match(handler, /existingPlaces: existing\.rows/);
   assert.match(handler, /saveClipListPlaces/);
+  assert.match(handler, /items\.length > listMaxItems/);
+  assert.doesNotMatch(handler, /items\.length > 100/);
   assert.match(handler, /inserted\.push\(rows\[0\]\)/);
   assert.doesNotMatch(
     handler.slice(handler.indexOf("Array.isArray(rawBody.places)")),
