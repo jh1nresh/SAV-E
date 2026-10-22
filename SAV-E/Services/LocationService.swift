@@ -23,7 +23,9 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         .contains("--uitest-location-tiantan")
         || ProcessInfo.processInfo.arguments.contains("--uitest-doodle-parity-face")
     private let simulatesAllowedAuthorization = ProcessInfo.processInfo.arguments
-        .contains("--uitest-location-allowed") || simulatesTiantanFix
+        .contains("--uitest-location-allowed")
+        || ProcessInfo.processInfo.arguments.contains("--uitest-location-tiantan")
+        || ProcessInfo.processInfo.arguments.contains("--uitest-doodle-parity-face")
     private static let uiTestTaipei = CLLocation(latitude: 25.0330, longitude: 121.5654)
     /// Codex / spec §8 Tiantan face: 450 m / 800 m / 1.1 km from the three Eat rows.
     private static let uiTestTiantan = CLLocation(latitude: 39.882192, longitude: 116.4066)
