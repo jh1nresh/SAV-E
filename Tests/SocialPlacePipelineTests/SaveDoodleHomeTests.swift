@@ -895,8 +895,10 @@ final class SaveDoodleHomeTests: XCTestCase {
         let parityRunner = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
         XCTAssertTrue(parityRunner.contains("home-mask.png"))
         XCTAssertTrue(parityRunner.contains("--mask"))
-        XCTAssertTrue(parityRunner.contains("compare_args"))
-        XCTAssertFalse(parityRunner.contains("mask_args"))
+        XCTAssertTrue(parityRunner.contains("mask_args"))
+        XCTAssertTrue(parityRunner.contains("extra_args"))
+        XCTAssertTrue(parityRunner.contains("${#mask_args[@]}"))
+        XCTAssertTrue(parityRunner.contains("${#extra_args[@]}"))
         let mapPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png"
         ))

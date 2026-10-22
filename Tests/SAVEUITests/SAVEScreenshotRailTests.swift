@@ -2283,7 +2283,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Exactly one surface should represent the selected place."
         )
         XCTAssertTrue(app.buttons["map.directions"].exists)
-        XCTAssertTrue(app.buttons["map.checkIn"].exists)
+        XCTAssertTrue(app.buttons["map.card.beenHere"].exists)
         XCTAssertTrue(app.buttons["map.peek.card"].exists)
         XCTAssertFalse(
             app.descendants(matching: .any)["place.detail.root"].exists,
@@ -3190,8 +3190,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let go = app.buttons["map.go"]
         let sheet = app.descendants(matching: .any)["map.placeSheet"]
         let directions = app.buttons["map.directions"]
-        let visit = app.buttons["map.checkIn"].exists
-            ? app.buttons["map.checkIn"] : app.buttons["map.checkIn.undo"]
+        let visit = app.buttons["map.card.beenHere"].exists
+            ? app.buttons["map.card.beenHere"] : app.buttons["map.card.beenHere.undo"]
         for control in [city, eat, go, directions, visit] {
             XCTAssertTrue(control.waitForExistence(timeout: stepTimeout))
             XCTAssertTrue(control.isHittable, "Map control must be accessible: \(control.identifier)")
@@ -3317,6 +3317,32 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-000000000002"].exists)
         XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-000000000003"].exists)
         attach(app, name: "five-tab-home")
+        // 298-3: Home and Map from the same Tiantan data, same launch.
+        attach(app, name: "298-3-home")
+        // 298-7: tap the Map tab directly — not the Home mini-map.
+        XCTAssertTrue(app.descendants(matching: .any)["home.miniMap"].exists)
+        openRootTab("Map", app: app)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout),
+            "298-7: tapping the Map tab directly must open Map"
+        )
+        XCTAssertTrue(app.buttons["map.city"].waitForExistence(timeout: stepTimeout))
+        let eatPin = "30000000-0000-0000-0000-000000000001"
+        let noodlePin = "30000000-0000-0000-0000-000000000002"
+        let cafePin = "30000000-0000-0000-0000-000000000003"
+        let parkPin = "30000000-0000-0000-0000-000000000004"
+        let lanternPin = "30000000-0000-0000-0000-000000000005"
+        let jingshanPin = "30000000-0000-0000-0000-000000000006"
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.tilePin.\(eatPin)"].waitForExistence(timeout: stepTimeout)
+        )
+        for pin in [noodlePin, cafePin, parkPin, lanternPin, jingshanPin] {
+            XCTAssertTrue(
+                app.descendants(matching: .any)["map.tilePin.\(pin)"].exists,
+                "298-3: Map must show all Tiantan stamps, not a two-pin slice"
+            )
+        }
+        attach(app, name: "298-3-map")
         terminate(app)
     }
 

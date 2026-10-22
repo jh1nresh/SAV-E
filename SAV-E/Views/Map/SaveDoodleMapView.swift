@@ -24,6 +24,7 @@ struct SaveDoodleMapView: View {
     let presentation: AtlasPresentation
     let onClearSelection: () -> Void
     let onPlanAroundPlace: (Place) -> Void
+    let shouldFocusOnUserLocation: Bool
 
     @Environment(\.appLanguageSettings) private var languageSettings
     @EnvironmentObject private var session: SaveDoodleSession
@@ -49,6 +50,33 @@ struct SaveDoodleMapView: View {
             ZStack(alignment: .top) {
                 mapCanvas
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                if let providerPlace = providerBackedPlaces.first {
+                    Button {
+                        mapViewModel.selectPlace(providerPlace)
+                    } label: {
+                        Label(
+                            languageSettings.localized(
+                                english: providerBackedPlaces.count == 1
+                                    ? "1 saved Amap place"
+                                    : "\(providerBackedPlaces.count) saved Amap places",
+                                traditionalChinese: "已保存 \(providerBackedPlaces.count) 個高德地點"
+                            ),
+                            systemImage: "map.fill"
+                        )
+                        .font(SaveAtlasType.strong(11))
+                        .foregroundStyle(SaveAtlasPalette.forest)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(SaveAtlasPalette.paper.opacity(0.96), in: Capsule())
+                        .overlay(Capsule().stroke(SaveAtlasPalette.forest.opacity(0.34), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, SaveLayout.screenMargin)
+                    .padding(.top, SaveSpace.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("map.providerBackedPlaces")
+                }
 
                 if mapViewModel.showsLocationDeniedNotice {
                     SaveLocationDeniedNotice(
@@ -127,6 +155,13 @@ struct SaveDoodleMapView: View {
         }
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
+        }
+        .task(id: shouldFocusOnUserLocation) {
+            guard shouldFocusOnUserLocation else { return }
+            await mapViewModel.focusOnUserLocationOnLaunch()
+            // Location request must not hide city stamps behind a tight
+            // user-span. Refit so every saved pin in the city stays visible.
+            fitVisiblePlaces()
         }
     }
 
@@ -212,7 +247,8 @@ struct SaveDoodleMapView: View {
                         SaveDisplayTitle(
                             text: cityTitle,
                             pointSize: 32,
-                            relativeTo: .title
+                            relativeTo: .title,
+                            locksPointSize: true
                         )
                         Capsule()
                             .fill(SaveAtlasPalette.coral)
@@ -393,7 +429,7 @@ struct SaveDoodleMapView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(checkIns.isPersisting(placeID: place.id))
-                    .accessibilityIdentifier("map.checkIn.undo")
+                    .accessibilityIdentifier("map.card.beenHere.undo")
                 } else {
                     Button {
                         performCheckIn(place)
@@ -419,7 +455,7 @@ struct SaveDoodleMapView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(checkIns.isPersisting(placeID: place.id))
-                    .accessibilityIdentifier("map.checkIn")
+                    .accessibilityIdentifier("map.card.beenHere")
                 }
             }
             .padding(.top, SaveSpace.md)
@@ -671,11 +707,21 @@ struct SaveDoodleMapView: View {
         }
     }
 
-    /// Pins in the current city (or nearby, when Near you has a fix).
+    /// Pins in the current city (or nearby, when a mini-map handoff still
+    /// follows Home's Eat/Go + Near you). Tab-direct Map fits every saved
+    /// stamp in that city — never the 3 km slice that left only two pins.
     /// Never fits the worldwide set — that opens over Europe/Africa.
     private func cityOpeningPins() -> [CLLocationCoordinate2D] {
         let denied = locationService.isAuthorizationDenied
         let location = denied ? nil : locationService.currentLocation
+        if !session.mapFollowsHomeFilter {
+            guard let cityID = openingCityID(denied: denied, location: location) else {
+                return mapViewModel.places.filter(\.isMapKitMappable).map(\.coordinate)
+            }
+            return mapViewModel.places
+                .filter { SaveDoodleHomeCatalog.cityID(for: $0) == cityID && $0.isMapKitMappable }
+                .map(\.coordinate)
+        }
         var selection = SaveDoodleHomeCatalog.resolvedSelection(
             session.city,
             places: mapViewModel.places,
@@ -687,22 +733,51 @@ struct SaveDoodleMapView: View {
                 selection = .city(id)
             }
         }
-        let lenses: [SaveDoodleLens] = session.mapFollowsHomeFilter
-            ? [session.lens]
-            : Array(SaveDoodleLens.allCases)
         var coords: [CLLocationCoordinate2D] = []
-        for lens in lenses {
-            for place in SaveDoodleHomeCatalog.visiblePlaces(
-                from: mapViewModel.places,
-                lens: lens,
-                selection: selection,
-                location: location,
-                locationDenied: denied
-            ) where place.isMapKitMappable {
-                coords.append(place.coordinate)
-            }
+        for place in SaveDoodleHomeCatalog.visiblePlaces(
+            from: mapViewModel.places,
+            lens: session.lens,
+            selection: selection,
+            location: location,
+            locationDenied: denied
+        ) where place.isMapKitMappable {
+            coords.append(place.coordinate)
         }
         return coords
+    }
+
+    private func openingCityID(denied: Bool, location: CLLocation?) -> String? {
+        let selection = SaveDoodleHomeCatalog.resolvedSelection(
+            session.city,
+            places: mapViewModel.places,
+            locationDenied: denied
+        )
+        switch selection {
+        case .city(let id):
+            return id
+        case .nearYou:
+            if let location {
+                let nearest = mapViewModel.places
+                    .compactMap { place -> (Place, CLLocationDistance)? in
+                        guard let meters = SaveDoodleHomeCatalog.distance(from: location, to: place) else {
+                            return nil
+                        }
+                        return (place, meters)
+                    }
+                    .min(by: { $0.1 < $1.1 })
+                if let nearest, let id = SaveDoodleHomeCatalog.cityID(for: nearest.0) {
+                    return id
+                }
+            }
+            return mapViewModel.places.sorted(by: SaveDoodleHomeCatalog.moreRecent).first
+                .flatMap { SaveDoodleHomeCatalog.cityID(for: $0) }
+        }
+    }
+
+    private var providerBackedPlaces: [Place] {
+        mapViewModel.places.filter {
+            !$0.isMapKitMappable && $0.providerMapDestinationURL != nil
+        }
     }
 
     private func cityOpeningFallback() -> CLLocationCoordinate2D? {

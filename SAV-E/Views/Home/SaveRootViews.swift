@@ -510,7 +510,8 @@ struct SaveMapRootView: View {
                 mapViewModel: mapViewModel,
                 presentation: atlasPresentation,
                 onClearSelection: mapViewModel.clearSelectedMapObject,
-                onPlanAroundPlace: onPlanAroundPlace
+                onPlanAroundPlace: onPlanAroundPlace,
+                shouldFocusOnUserLocation: shouldFocusOnUserLocation
             )
         }
         .toolbar(.hidden, for: .navigationBar)

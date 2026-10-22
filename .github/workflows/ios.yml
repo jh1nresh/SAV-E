@@ -475,7 +475,7 @@ jobs:
           names = [
               "five-tab-home", "light-home", "dark-home", "H1", "H2", "H3", "H4",
               "five-tab-map", "doodle-map-light", "light-map", "dark-map",
-              "doodle-map-dark",
+              "doodle-map-dark", "298-3-home", "298-3-map",
           ]
           newest = {}
           manifest = root / "manifest.json"
