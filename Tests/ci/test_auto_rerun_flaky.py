@@ -49,6 +49,42 @@ found 2 high severity vulnerabilities
 npm audit found production vulnerabilities (attempt 1/3)
 """
 
+NPM11_HIGH_WITH_VERSION_500 = {
+    "auditReportVersion": 2,
+    "metadata": {
+        "vulnerabilities": {
+            "info": 0,
+            "low": 0,
+            "moderate": 0,
+            "high": 1,
+            "critical": 0,
+            "total": 1,
+        }
+    },
+    "vulnerabilities": {
+        "leftpad": {
+            "name": "leftpad",
+            "severity": "high",
+            "range": "<1.2.500",
+            "via": [{"name": "leftpad", "range": "<1.2.500", "severity": "high"}],
+        }
+    },
+}
+
+NPM11_FINDINGS_LOG = f"""
+> save-backend@0.1.0 audit:production
+> node scripts/audit-production.mjs
+{json.dumps(NPM11_HIGH_WITH_VERSION_500)}
+npm audit found production vulnerabilities (1 high, 0 critical, attempt 1/3)
+"""
+
+TIMEOUT_WITH_VERSION_STRING = """
+left-pad range <1.2.500 in a fixture
+> save-backend@0.1.0 audit:production
+> node scripts/audit-production.mjs
+npm audit timed out talking to the registry (timeout 90000ms, attempt 3/3)
+"""
+
 
 def jobs(*names, extra=None):
     payload = {
@@ -108,6 +144,22 @@ class AutoRerunFlakyTests(unittest.TestCase):
         ok, reason = rerun.should_rerun(jobs("backend / validate"), FINDINGS_LOG, 1)
         self.assertFalse(ok)
         self.assertIn("vulnerability", reason)
+
+    def test_npm11_high_with_version_500_never_reruns(self):
+        self.assertEqual(rerun.high_critical_count(NPM11_HIGH_WITH_VERSION_500), 1)
+        ok, reason = rerun.should_rerun(
+            jobs("backend / validate"), NPM11_FINDINGS_LOG, 1
+        )
+        self.assertFalse(ok)
+        self.assertIn("vulnerability", reason)
+
+    def test_version_string_500_is_not_a_finding(self):
+        self.assertFalse(rerun.has_vulnerability_findings(TIMEOUT_WITH_VERSION_STRING))
+        ok, reason = rerun.should_rerun(
+            jobs("backend / validate"), TIMEOUT_WITH_VERSION_STRING, 1
+        )
+        self.assertTrue(ok)
+        self.assertEqual(reason, "matched npm audit network timeout, attempt 1")
 
     def test_timeout_plus_findings_never_reruns(self):
         log = FINDINGS_LOG + "\nnpm audit timed out talking to the registry\n"

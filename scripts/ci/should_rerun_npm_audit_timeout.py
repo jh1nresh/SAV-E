@@ -21,7 +21,10 @@ TIMEOUT_MARKERS = (
     "npm audit timed out after",
     "transient npm audit failure (timeout",
 )
-FINDING_RE = re.compile(r"found \d+ (?:high|critical) severity", re.I)
+FINDING_RE = re.compile(
+    r"npm audit found production vulnerabilities|found \d+ (?:high|critical) severity",
+    re.I,
+)
 TEST_FAIL_COUNT_RE = re.compile(r"^# fail (\d+)\s*$", re.M)
 TEST_NOT_OK_RE = re.compile(r"^not ok \d+", re.M)
 
@@ -57,8 +60,38 @@ def has_timeout(log: str) -> bool:
     return any(marker in section for marker in TIMEOUT_MARKERS)
 
 
+def parse_audit_reports(text: str):
+    reports = []
+    decoder = json.JSONDecoder()
+    index = 0
+    while index < len(text):
+        start = text.find("{", index)
+        if start < 0:
+            break
+        try:
+            obj, end = decoder.raw_decode(text, start)
+        except json.JSONDecodeError:
+            index = start + 1
+            continue
+        if isinstance(obj, dict):
+            reports.append(obj)
+        index = end
+    return reports
+
+
+def high_critical_count(report):
+    vulns = (report.get("metadata") or {}).get("vulnerabilities") or {}
+    try:
+        return int(vulns.get("high") or 0) + int(vulns.get("critical") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def has_vulnerability_findings(log: str) -> bool:
-    return bool(FINDING_RE.search(audit_section(log)))
+    section = audit_section(log)
+    if FINDING_RE.search(section):
+        return True
+    return any(high_critical_count(report) > 0 for report in parse_audit_reports(section))
 
 
 def has_test_failure(log: str) -> bool:
