@@ -384,6 +384,14 @@ final class SaveCollaborativeListTests: XCTestCase {
             "Parent root identifier overwrites Harbor Oven, the compact Button, and evidence.googleCarousel"
         )
         XCTAssertTrue(evidence.contains("GoogleMapsAttributionLogo()"))
+        XCTAssertTrue(
+            evidence.contains("LazyVGrid"),
+            "Scene chips must wrap. A horizontal ScrollView leaves Logo close-up off-screen"
+        )
+        XCTAssertFalse(
+            evidence.contains("ScrollView(.horizontal"),
+            "Horizontal scene picker makes logoCloseup exist but not hittable"
+        )
     }
 
     @MainActor

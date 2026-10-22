@@ -94,18 +94,22 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
     }
 
     private var scenePicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(Scene.allCases) { item in
-                    Button(item.title) { scene = item }
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(scene == item ? .saveCream : .saveInk)
-                        .padding(.horizontal, 10)
-                        .frame(minHeight: SaveLayout.minTap)
-                        .background(scene == item ? Color.saveInk : Color.saveNotebookPage)
-                        .clipShape(Capsule())
-                        .accessibilityIdentifier("evidence.scene.\(item.rawValue)")
-                }
+        // Wrap so Logo close-up / No author stay on-screen. A horizontal
+        // ScrollView left those chips at x=516+ where waitUntilHittable fails.
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 96), spacing: 8, alignment: .leading)],
+            alignment: .leading,
+            spacing: 8
+        ) {
+            ForEach(Scene.allCases) { item in
+                Button(item.title) { scene = item }
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(scene == item ? .saveCream : .saveInk)
+                    .padding(.horizontal, 10)
+                    .frame(maxWidth: .infinity, minHeight: SaveLayout.minTap)
+                    .background(scene == item ? Color.saveInk : Color.saveNotebookPage)
+                    .clipShape(Capsule())
+                    .accessibilityIdentifier("evidence.scene.\(item.rawValue)")
             }
         }
     }

@@ -115,7 +115,19 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
     @MainActor
     private func openScene(_ app: XCUIApplication, _ scene: String) {
         let button = app.buttons["evidence.scene.\(scene)"]
-        XCTAssertTrue(waitUntilHittable(button), "Scene \(scene) missing")
+        XCTAssertTrue(button.waitForExistence(timeout: stepTimeout), "Scene \(scene) missing")
+        if !button.isHittable {
+            for _ in 0..<4 where !button.isHittable {
+                app.swipeLeft()
+            }
+        }
+        if !waitUntilHittable(button) {
+            let tree = XCTAttachment(string: app.debugDescription)
+            tree.name = "ax-tree-missing-scene-\(scene)"
+            tree.lifetime = .keepAlways
+            add(tree)
+            XCTFail("Scene \(scene) missing")
+        }
         button.tap()
     }
 
