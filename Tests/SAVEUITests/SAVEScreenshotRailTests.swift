@@ -777,8 +777,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     /// HoP T3 evidence: one light and one dark capture of Home, Map (saved
-    /// tile-town pins), Saves, Friends, Passport, Settings, and Paywall.
-    /// Attachment names stay on the `t3-` prefix so CI can extract exactly 14.
+    /// and unsaved pins on the current product Map), Saves, Friends,
+    /// Passport, Settings, and Paywall. Attachment names stay on the `t3-`
+    /// prefix so CI can extract exactly 14.
     @MainActor
     func testCoralTokenContrastScreens() throws {
         addTeardownBlock {
@@ -835,14 +836,43 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
             locationNoticeDismiss.tap()
         }
+        // Doodle (2026-10-19) keeps Map as native Apple MapKit. This branch's
+        // live canvas still exposes `map.liveSurface` (not `map.tileTown`,
+        // which SaveTileTownCanvas sets and RootMap overwrites). Accept either
+        // surface so T3 records the current Map's coral pins.
+        let liveSurface = app.descendants(matching: .any)["map.liveSurface"]
+        let appleSearch = app.descendants(matching: .any)["map.command.search"]
+        let appleMap = app.maps.firstMatch
+        let mapDeadline = Date().addingTimeInterval(stepTimeout)
+        var showingLiveSurface = false
+        var showingAppleMap = false
+        while Date() < mapDeadline {
+            showingLiveSurface = liveSurface.exists
+            showingAppleMap = appleSearch.exists || appleMap.exists
+            if showingLiveSurface || showingAppleMap { break }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
         XCTAssertTrue(
-            app.descendants(matching: .any)["map.tileTown"].waitForExistence(timeout: stepTimeout),
-            "Product Map must show the tile-town base for T3 pin evidence."
+            showingLiveSurface || showingAppleMap,
+            "Product Map must show the live map surface for T3 pin evidence."
         )
-        let savedPins = app.buttons.matching(
+        let savedTilePins = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.'")
         )
-        XCTAssertGreaterThan(savedPins.count, 0, "Map should show at least one saved coral pin.")
+        let savedMapPins = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'map.pin.saved.'")
+        )
+        let unsavedMapPins = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'map.pin.unsaved.'")
+        )
+        let reviewMapPins = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'map.pin.review.'")
+        )
+        XCTAssertGreaterThan(
+            savedTilePins.count + savedMapPins.count + unsavedMapPins.count + reviewMapPins.count,
+            0,
+            "Map should show at least one saved or unsaved place pin for coral contrast."
+        )
         attach(app, name: "t3-map-saved-unsaved-\(suffix)")
 
         openSavesFromHome(app: app)
