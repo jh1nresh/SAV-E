@@ -2460,20 +2460,23 @@ final class MapViewModel: ObservableObject {
                 let payload = confirmed.map(ClipListHandoff.placeBody)
                 let (status, data) = try await supabaseService.saveClipListPlaces(payload)
                 guard let remote = ClipListHandoff.parseRemote(status: status, data: data),
-                      let importedPlaces = ClipListHandoff.placesFromRemoteRows(
+                      let insertedPlaces = ClipListHandoff.placesFromRemoteRows(
                         confirmed: confirmed,
-                        rows: remote.saved + remote.already
+                        rows: remote.saved
                       )
                 else {
                     throw ClipListHandoffError.unconfirmed
                 }
-                applyHandoffPlaces(importedPlaces)
+                applyHandoffPlaces(insertedPlaces)
                 if remote.counts.alreadySaved > 0,
-                   importedPlaces.isEmpty,
+                   !confirmed.contains(where: { $0.alreadySaved(in: places) }) {
+                    await loadPlaces(force: true)
+                }
+                if remote.counts.alreadySaved > 0,
                    !confirmed.contains(where: { $0.alreadySaved(in: places) }) {
                     throw ClipListHandoffError.unconfirmed
                 }
-                return (Self.stampedHandoffItems(confirmed: confirmed, imported: importedPlaces), remote.counts)
+                return (Self.stampedHandoffItems(confirmed: confirmed, imported: insertedPlaces), remote.counts)
             } catch SupabaseError.notConfigured {
                 // Unconfigured builds keep the local quota plan.
             }
