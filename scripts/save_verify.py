@@ -18,7 +18,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -41,8 +40,6 @@ USAGE = [
     "./verify screenshot <page>",
     "./verify check",
 ]
-PARITY_PAGES = ("home", "saves", "plan", "map")
-PARITY_SOURCE = Path("Prototypes/AtlasPostcard/Reference/ProductionTargets")
 SWIFT_ROOTS = (
     Path("SAV-E"),
     Path("SAV-EClip"),
@@ -163,6 +160,122 @@ LINK_STUBS = {
 EAT = frozenset({"food", "cafe", "bar"})
 GO = frozenset({"attraction", "stay", "shopping"})
 MULTI_CITIES = ("台北市", "台南市", "高雄市", "台中市", "新北市")
+SCREENSHOT_SKIP = "SKIP：simulator not wired; live capture is ios.yml workflow_dispatch"
+SCREENSHOT_NAME = "<flow>-<step>-<light|dark>-<lang>.png"
+
+# Every HoP assertion, even when the flow is SKIP.
+FLOW_ASSERTIONS = {
+    "V1": (
+        "saved-count-1",
+        "capture-footer-saved-1",
+        "dedup-two-sources",
+        "analyze-single-write",
+        "zh-hant-no-english",
+    ),
+    "V2": (
+        "eat-6",
+        "go-6",
+        "minimaps-pins-match",
+        "map-from-mini-inherits",
+        "map-tab-own-state",
+        "collected-4-12",
+        "passport-root-from-collected",
+        "home.saves",
+        "saves.trips",
+        "location-denied",
+        "empty-state",
+        "no-elephant-stickers",
+    ),
+    "V3": (
+        "saved-pins",
+        "unsaved-no-saved-pin",
+        "coral-hex",
+        "user-photo-pins",
+        "no-google-photo-on-pin",
+        "visited-ring",
+        "unsaved-tap-no-beenHere",
+        "no-saturation-overlay",
+    ),
+    "V4": (
+        "map.card.beenHere",
+        "visit-plus-one",
+        "same-day-no-double",
+        "passport-visit-plus-one",
+        "sticker-color-stamp",
+        "undo-and-relaunch",
+        "visit-tiers-1-3-5",
+        "passport-columns",
+        "no-missions-streak-ledger",
+        "no-location-prompt",
+        "passport.root",
+    ),
+    "V5": (
+        "save-50-ok",
+        "save-51-unplaced-paywall",
+        "paywall.benefit.unlimited",
+        "paywall.no-ai-copy",
+        "paywall.free-50-copy",
+        "paywall.no-free-unlimited",
+        "paywall.savedNote",
+        "dismiss-and-relaunch-unplaced",
+        "delete-then-promote",
+        "pro-51-allowed",
+        "ai.quotaExhausted",
+        "settings-same-paywall",
+        "paywall.retry",
+        "saves.unplaced",
+        "cold-start-no-paywall",
+        "onboarding-no-paywall",
+        "paywall.unavailable",
+    ),
+    "V6": (
+        "cold-start-12",
+        "no-locked-map-copy",
+        "no-infinite-spinner",
+        "offline-sync-15",
+        "over-cap-unplaced",
+    ),
+    "V7": (
+        "LS1",
+        "M1",
+        "M2",
+        "S3",
+        "G-a",
+        "G-d",
+        "S1'",
+        "SK1",
+        "SK2",
+        "SK3",
+        "LS3",
+        "LS4",
+        "S5",
+        "S6",
+        "S8",
+        "SL1",
+        "SL2",
+        "SL3",
+        "SL4",
+        "SL5",
+        "SL6",
+        "PR4",
+        "PR5",
+        "W1",
+        "W2",
+        "W3",
+        "Z1",
+        "clip-cap50-copy",
+    ),
+    "V8": (
+        "F-B1",
+        "F-B2",
+        "F-B3",
+        "F-B4",
+        "F-B6",
+        "F-B7",
+        "F-B9",
+        "F-B10",
+    ),
+}
 
 
 def pin_process_environment() -> None:
@@ -425,35 +538,33 @@ def assertion(item_id: str, ok: bool, detail: str) -> dict[str, Any]:
     }
 
 
+def skipped_row(item_id: str, reason: str) -> dict[str, Any]:
+    return {
+        "detail": reason,
+        "id": item_id,
+        "ok": False,
+        "status": "SKIP",
+    }
+
+
 def skipped_assertions(flow: str, reason: str) -> list[dict[str, Any]]:
-    planned = {
-        "V1": ["saved-count-1", "dedup-two-sources", "analyze-single-write"],
-        "V2": ["eat-6", "go-6", "collected-4-12", "home.saves"],
-        "V3": ["saved-pins", "no-google-photo-on-pin", "visited-ring"],
-        "V4": ["map.card.beenHere", "passport.root", "visit-tiers-1-3-5"],
-        "V5": [
-            "save-50-ok",
-            "save-51-unplaced-paywall",
-            "paywall.savedNote",
-            "paywall.retry",
-            "saves.unplaced",
-            "ai.quotaExhausted",
-        ],
-        "V6": ["cold-start-12", "offline-sync-15"],
-        "V7": ["clip-cap50-copy", "no-paywall-in-clip", "no-google-payload"],
-        "V8": ["friends-f1-two-rows", "friends-empty", "five-tabs"],
-    }[flow]
+    return [skipped_row(f"{flow}.{item_id}", reason) for item_id in FLOW_ASSERTIONS[flow]]
+
+
+def merge_assertions(
+    flow: str,
+    reason: str,
+    computed: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    by_id = {row["id"]: row for row in computed}
     rows = []
-    for item_id in planned:
-        extra = SAVED_50_COPY if item_id in {"paywall.savedNote", "clip-cap50-copy"} else reason
-        rows.append(
-            {
-                "detail": extra,
-                "id": f"{flow}.{item_id}",
-                "ok": False,
-                "status": "SKIP",
-            }
-        )
+    catalog = {f"{flow}.{item_id}" for item_id in FLOW_ASSERTIONS[flow]}
+    for item_id in FLOW_ASSERTIONS[flow]:
+        full = f"{flow}.{item_id}"
+        rows.append(by_id.get(full) or skipped_row(full, reason))
+    for row in computed:
+        if row["id"] not in catalog:
+            rows.append(row)
     return rows
 
 
@@ -541,13 +652,13 @@ def evaluate_v7(root: Path, cache: dict[str, str]) -> list[dict[str, Any]]:
 
 
 def evaluate_flow(flow: str, root: Path, cache: dict[str, str]) -> list[dict[str, Any]]:
+    ui_skip = "SKIP：UI 步驟需 macOS workflow_dispatch（無新增自動 macOS job）"
+    computed: list[dict[str, Any]] = []
     if flow == "V5":
-        return evaluate_v5(root, cache)
-    if flow == "V7":
-        return evaluate_v7(root, cache)
-    # Remaining HoP UI steps need the landed iOS surfaces. Source probes
-    # already passed; Linux records the catalog as FAIL until a runner exists.
-    return skipped_assertions(flow, "Linux skeleton: UI steps need the landed iOS surfaces")
+        computed = evaluate_v5(root, cache)
+    elif flow == "V7":
+        computed = evaluate_v7(root, cache)
+    return merge_assertions(flow, ui_skip, computed)
 
 
 def cmd_seed(root: Path, workspace: Path, name: str) -> tuple[int, dict[str, Any]]:
@@ -630,8 +741,15 @@ def cmd_run(root: Path, workspace: Path, flow: str) -> tuple[int, dict[str, Any]
     if flow in {"V5", "V7"}:
         assertions = evaluate_flow(flow, root, cache)
         failed = any(row["status"] == "FAIL" for row in assertions)
-        status = "FAIL" if failed else "PASS"
-        reason = None
+        if failed:
+            status = "FAIL"
+            reason = None
+        elif any(row["status"] == "SKIP" for row in assertions):
+            status = "SKIP"
+            reason = "SKIP：UI 步驟需 macOS workflow_dispatch（無新增自動 macOS job）"
+        else:
+            status = "PASS"
+            reason = None
     else:
         reason = "SKIP：UI 步驟需 macOS workflow_dispatch（無新增自動 macOS job）"
         assertions = skipped_assertions(flow, reason)
@@ -657,9 +775,14 @@ def cmd_run(root: Path, workspace: Path, flow: str) -> tuple[int, dict[str, Any]
 def screenshot_filename(page: str) -> str:
     theme = os.environ.get("SAVE_VERIFY_THEME", "light")
     lang = os.environ.get("SAVE_VERIFY_LANG", "en")
-    if re.fullmatch(r"V[1-8]-\d+-[A-Za-z0-9-]+", page):
-        return f"{page}-{theme}-{lang}.png"
-    return f"{page}.png"
+    if theme not in {"light", "dark"}:
+        theme = "light"
+    stem = page[:-4] if page.endswith(".png") else page
+    if re.fullmatch(r".+-.+-(light|dark)-[A-Za-z0-9-]+", stem):
+        return f"{stem}.png"
+    if re.fullmatch(r"V[1-8]-\d+-.+", stem):
+        return f"{stem}-{theme}-{lang}.png"
+    return f"{stem}-1-{theme}-{lang}.png"
 
 
 def cmd_screenshot(root: Path, workspace: Path, page: str) -> tuple[int, dict[str, Any]]:
@@ -667,27 +790,20 @@ def cmd_screenshot(root: Path, workspace: Path, page: str) -> tuple[int, dict[st
     dest_dir.mkdir(parents=True, exist_ok=True)
     filename = screenshot_filename(page)
     dest = dest_dir / filename
-    source = None
-    copied = False
-    if page in PARITY_PAGES:
-        source_path = root / PARITY_SOURCE / f"{page}.png"
-        if source_path.is_file():
-            shutil.copy2(source_path, dest)
-            source = PARITY_SOURCE.joinpath(f"{page}.png").as_posix()
-            copied = True
     result = {
         "command": "screenshot",
-        "ok": True,
+        "naming": SCREENSHOT_NAME,
+        "ok": False,
         "page": page,
-        "path": relpath(root, dest) if copied else relpath(root, dest),
+        "path": relpath(root, dest),
         "planned": filename,
-        "sha256": sha256_file(dest) if copied else None,
-        "source": source,
-        "status": "PASS" if copied else "SKIP",
+        "reason": SCREENSHOT_SKIP,
+        "sha256": None,
+        "source": None,
+        "status": "SKIP",
         "tool": TOOL,
     }
-    if not copied:
-        write_json(dest.with_suffix(".json"), result)
+    write_json(dest.with_suffix(".json"), result)
     write_json(workspace / "screenshots" / f"{page}.json", result)
     write_json(workspace / "last.json", result)
     return 0, result
@@ -790,8 +906,8 @@ def dispatch(argv: list[str], *, root: Path | None = None) -> tuple[int, dict[st
         if not args.target:
             return 2, {
                 "error": "usage",
+                "naming": SCREENSHOT_NAME,
                 "ok": False,
-                "pages": list(PARITY_PAGES),
                 "tool": TOOL,
                 "usage": USAGE,
             }
