@@ -153,10 +153,10 @@ jobs:
     needs: [ios-build]
     runs-on: macos-26
     # Products come from ios-build (no second compile). Setup + units +
-    # simulator is ~15-20m; UI step 60; Trip 15; slack for parity/teardown
-    # and the main-only Release compile. Run 39497842970: 75m job wall cut
-    # the 55m UI step at 52m50s after ~20m of rebuild and setup.
-    timeout-minutes: 100
+    # simulator is ~15-20m; UI step 80; Trip 15; slack for parity/teardown
+    # and the main-only Release compile. Run 39736743354: the 60m UI step
+    # cut a passing Passport/Home suite mid-test after ~18 greens.
+    timeout-minutes: 120
     env:
       # Re-enabled for the 2026-10-15 pixel-art pass. Disable again after the
       # focused set is green, then run one full suite as the merge gate.
@@ -364,9 +364,9 @@ jobs:
       # and stops before a third run. Retries are named by the next step.
       - name: Run selected UI regression tests
         id: ui_tests
-        # Job budget is 100. The step gets a real 60m of test time instead of
-        # whatever is left after a second compile (run 39497842970).
-        timeout-minutes: 60
+        # Job budget is 120. The step gets a real 80m of test time so a
+        # passing selected suite can finish (run 39736743354 hit 60m).
+        timeout-minutes: 80
         if: steps.scope.outputs.ui == 'true'
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-UI-tests.log
