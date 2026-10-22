@@ -192,6 +192,13 @@ final class ClipListSaveTests: XCTestCase {
         XCTAssertEqual(ClipListSavePlanner.visiblePage(current: 0, incoming: 0), 0)
     }
 
+    func testHandoffRequiresJournalWrite() {
+        XCTAssertFalse(ClipListSavePlanner.handoffAfterPersist(written: false, opened: true))
+        XCTAssertFalse(ClipListSavePlanner.handoffAfterPersist(written: true, opened: false))
+        XCTAssertFalse(ClipListSavePlanner.handoffAfterPersist(written: false, opened: false))
+        XCTAssertTrue(ClipListSavePlanner.handoffAfterPersist(written: true, opened: true))
+    }
+
     func testSL5AlreadySavedPlacesCountOnce() {
         let items = [
             item("place1", "Onibus Coffee", lat: 35.644, lng: 139.699),

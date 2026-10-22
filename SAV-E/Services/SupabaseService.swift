@@ -260,6 +260,13 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         try await request(path: "/places", method: "POST", body: body)
     }
 
+    func saveClipListPlaces(_ items: [[String: Any]]) async throws -> (Int, Data) {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        let body = try JSONSerialization.data(withJSONObject: ["places": items])
+        let (data, response) = try await requestWithResponse(path: "/places", method: "POST", body: body)
+        return (response.statusCode, data)
+    }
+
     func saveFriendSharedPlace(
         _ place: Place,
         code: String,

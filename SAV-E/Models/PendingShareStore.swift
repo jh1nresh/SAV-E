@@ -20,7 +20,7 @@ struct PendingConfirmedPlace: Codable, Equatable {
             subtitle: address,
             latitude: latitude,
             longitude: longitude,
-            category: nil,
+            category: PlaceCategory.fromClipSnapshot(category),
             rating: nil,
             reviewCount: nil,
             sourceURL: sourceURL,
@@ -118,13 +118,17 @@ enum PendingShareStore {
         store ?? UserDefaults(suiteName: suiteName)
     }
 
-    static func write(_ payload: PendingSharePayload, to store: UserDefaults? = nil) {
+    @discardableResult
+    static func write(_ payload: PendingSharePayload, to store: UserDefaults? = nil) -> Bool {
         guard let defaults = defaults(store),
               let data = try? JSONEncoder().encode(payload),
-              data.count <= 64 * 1024
-        else { return }
+              data.count <= journalByteLimit
+        else { return false }
         defaults.set(data, forKey: key)
+        return true
     }
+
+    static let journalByteLimit = 64 * 1024
 
     static func load(from store: UserDefaults? = nil) -> PendingSharePayload? {
         guard let defaults = defaults(store) else { return nil }
@@ -161,9 +165,33 @@ enum PendingShareStore {
     }
 }
 
+/// Always recompute from the incoming URL. A leftover true flag must not
+/// save an unrelated `/p` that arrived before sign-in finished.
+enum ClipPlaceHandoff {
+    static func shouldAutoSavePlace(pending: PendingSharePayload?, incomingURL: URL) -> Bool {
+        pending?.matchesIncomingPlace(url: incomingURL) == true
+    }
+}
+
+struct ClipListHandoffCounts: Equatable {
+    var newlySaved: Int
+    var alreadySaved: Int
+    var overCap: Int
+    var remaining: Int
+    var limit: Int
+
+    var addedAnything: Bool { newlySaved > 0 }
+}
+
+enum ClipListHandoffError: Error, Equatable {
+    case unconfirmed
+}
+
 /// A matching Clip “save all” journal is user confirmation to stamp the
 /// confirmed snapshot. A list link without that journal is join-only.
 enum ClipListHandoff {
+    static let freeLimit = 50
+
     static func shouldSaveItems(pending: PendingSharePayload?, incomingURL: URL) -> Bool {
         pending?.matchesIncomingList(url: incomingURL) == true
     }
@@ -192,5 +220,119 @@ enum ClipListHandoff {
         var list = joined
         list.items = items
         return list
+    }
+
+    /// Quota-aware bulk plan. Only `toStamp` may become local Map Stamps.
+    static func planStamps(
+        confirmed: [SaveListItem],
+        alreadySaved: (SaveListItem) -> Bool,
+        savedPlaceCount: Int,
+        limit: Int = freeLimit
+    ) -> (toStamp: [SaveListItem], counts: ClipListHandoffCounts) {
+        var seen = Set<String>()
+        var already = 0
+        var novel: [SaveListItem] = []
+        for item in confirmed {
+            let keys = identities(of: item)
+            guard !keys.isEmpty else { continue }
+            if keys.contains(where: { seen.contains($0) }) {
+                already += 1
+                continue
+            }
+            keys.forEach { seen.insert($0) }
+            if alreadySaved(item) {
+                already += 1
+                continue
+            }
+            novel.append(item)
+        }
+        let remainingSlots = max(0, limit - max(0, savedPlaceCount))
+        let toStamp = Array(novel.prefix(remainingSlots))
+        let counts = ClipListHandoffCounts(
+            newlySaved: toStamp.count,
+            alreadySaved: already,
+            overCap: max(0, novel.count - toStamp.count),
+            remaining: remainingSlots - toStamp.count,
+            limit: limit
+        )
+        return (toStamp, counts)
+    }
+
+    static func stampsFromRemoteCounts(
+        confirmed: [SaveListItem],
+        alreadySaved: (SaveListItem) -> Bool,
+        counts: ClipListHandoffCounts
+    ) -> [SaveListItem] {
+        let novel = planStamps(
+            confirmed: confirmed,
+            alreadySaved: alreadySaved,
+            savedPlaceCount: 0,
+            limit: confirmed.count
+        ).toStamp
+        return Array(novel.prefix(max(0, counts.newlySaved)))
+    }
+
+    static func parseCounts(status: Int, data: Data) -> ClipListHandoffCounts? {
+        guard (200...299).contains(status) else { return nil }
+        let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        guard let newlySaved = intValue(body, keys: ["newly_saved", "saved", "created"]),
+              let alreadySaved = intValue(body, keys: ["already_saved", "duplicates"]),
+              let overCap = intValue(body, keys: ["over_cap", "cap_reached", "over_free_limit_count"])
+        else { return nil }
+        return ClipListHandoffCounts(
+            newlySaved: newlySaved,
+            alreadySaved: alreadySaved,
+            overCap: overCap,
+            remaining: intValue(body, keys: ["remaining", "remaining_count"]) ?? 0,
+            limit: intValue(body, keys: ["limit"]) ?? freeLimit
+        )
+    }
+
+    static func placeBody(from item: SaveListItem) -> [String: Any] {
+        var body: [String: Any] = [
+            "id": UUID().uuidString.lowercased(),
+            "name": item.title,
+            "address": item.subtitle,
+            "latitude": item.latitude,
+            "longitude": item.longitude,
+            "category": (item.category ?? .food).rawValue,
+            "status": "wantToGo",
+            "source_platform": "other",
+        ]
+        if let sourceURL = item.sourceURL { body["source_url"] = sourceURL }
+        if !item.sourceID.isEmpty { body["provider_place_id"] = item.sourceID }
+        return body
+    }
+
+    static func toastEnglish(counts: ClipListHandoffCounts, confirmedCount: Int) -> String {
+        if counts.newlySaved == 0, counts.alreadySaved > 0, counts.overCap == 0 {
+            return "Already saved."
+        }
+        if counts.overCap > 0 {
+            return "Saved \(counts.newlySaved) of \(confirmedCount). \(counts.overCap) over the free \(counts.limit)."
+        }
+        if counts.newlySaved == 1 {
+            return "Saved 1 place from the list."
+        }
+        return "Saved \(counts.newlySaved) places from the list."
+    }
+
+    private static func identities(of item: SaveListItem) -> [String] {
+        var keys: [String] = []
+        let sourceID = item.sourceID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !sourceID.isEmpty { keys.append("id:\(sourceID)") }
+        let name = item.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !name.isEmpty {
+            keys.append("n:\(name)|\(String(format: "%.4f", item.latitude))|\(String(format: "%.4f", item.longitude))")
+        }
+        return keys
+    }
+
+    private static func intValue(_ body: [String: Any], keys: [String]) -> Int? {
+        for key in keys {
+            if let value = body[key] as? Int { return value }
+            if let value = body[key] as? NSNumber { return value.intValue }
+        }
+        return nil
     }
 }

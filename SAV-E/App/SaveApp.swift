@@ -306,6 +306,7 @@ struct SaveApp: App {
 #endif
         if SaveReferralLink.target(from: url) != nil || SaveSharedListPayload.isListLink(url) {
             guard url.absoluteString.utf8.count <= accountScopedURLMaxBytes else { return }
+            autoSaveIncomingShare = false
             deferredAccountScopedLink = DeferredAccountScopedLink(
                 id: UUID(),
                 url: url,
@@ -324,9 +325,11 @@ struct SaveApp: App {
                 return
             }
             pendingFriendShareURL = url.absoluteString
-            if let pending = PendingShareStore.load(), pending.matchesIncomingPlace(url: url) {
-                autoSaveIncomingShare = true
-            }
+            autoSaveIncomingList = false
+            autoSaveIncomingShare = ClipPlaceHandoff.shouldAutoSavePlace(
+                pending: PendingShareStore.load(),
+                incomingURL: url
+            )
             if let place = SharedPlaceData.from(url: url) {
                 incomingPlaceReceipt = .embedded(place)
             } else if SharedPlaceData.shortCode(from: url) != nil {

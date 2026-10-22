@@ -2453,6 +2453,45 @@ final class MapViewModel: ObservableObject {
         Task { await refreshSocialSignals() }
     }
 
+    func saveClipListHandoff(_ list: SaveCollaborativeList) async throws -> (toStamp: [SaveListItem], counts: ClipListHandoffCounts) {
+        let confirmed = list.items
+        if authService.currentUserId != nil, supabaseService.isConfigured {
+            let payload = confirmed.map(ClipListHandoff.placeBody)
+            let (status, data) = try await supabaseService.saveClipListPlaces(payload)
+            guard let counts = ClipListHandoff.parseCounts(status: status, data: data) else {
+                throw ClipListHandoffError.unconfirmed
+            }
+            let toStamp = ClipListHandoff.stampsFromRemoteCounts(
+                confirmed: confirmed,
+                alreadySaved: { $0.alreadySaved(in: places) },
+                counts: counts
+            )
+            applyHandoffStamps(toStamp)
+            return (toStamp, counts)
+        }
+        let planned = ClipListHandoff.planStamps(
+            confirmed: confirmed,
+            alreadySaved: { $0.alreadySaved(in: places) },
+            savedPlaceCount: places.count
+        )
+        applyHandoffStamps(planned.toStamp)
+        return planned
+    }
+
+    private func applyHandoffStamps(_ items: [SaveListItem]) {
+        var imported: [Place] = []
+        for item in items {
+            let place = item.asPlace(includeSenderMemory: false)
+            if existingSavedPlace(matching: place) != nil { continue }
+            mirrorToLocalVault(place)
+            imported.append(place)
+        }
+        if !imported.isEmpty {
+            places = imported + places
+            revealImportedPlaces(imported)
+        }
+    }
+
     @discardableResult
     func saveListItemAsPlace(_ item: SaveListItem, includeSenderMemory: Bool = true) async throws -> Place {
         let place = item.asPlace(includeSenderMemory: includeSenderMemory)

@@ -187,7 +187,7 @@ enum ClipSaveService {
         url: URL,
         sender: String?,
         drafts: [ClipPlaceDraft]
-    ) {
+    ) -> Bool {
         let unique = ClipListSavePlanner.uniqueItems(from: drafts.map(\.listSaveItem))
         let places = unique.map {
             PendingConfirmedPlace(
@@ -200,7 +200,7 @@ enum ClipSaveService {
                 sourceURL: $0.sourceURL
             )
         }
-        PendingShareStore.write(
+        return PendingShareStore.write(
             PendingSharePayload(
                 kind: .list,
                 shareCode: shareCode,
@@ -257,11 +257,19 @@ enum ClipSaveService {
         signIn: @escaping () async throws -> String = { try await ClipAppleAuth.signIn() },
         postPlaces: @escaping ([ClipListSaveItem], String) async throws -> (Int, Data) = postPlaces
     ) async -> ClipSaveOutcome {
-        persistList(listId: listId, shareCode: shareCode, url: handoffURL, sender: sender, drafts: drafts)
+        let written = persistList(
+            listId: listId,
+            shareCode: shareCode,
+            url: handoffURL,
+            sender: sender,
+            drafts: drafts
+        )
+        guard written else { return .failed }
         if ClipFullApp.isInstalled {
             return await withCheckedContinuation { continuation in
                 openURL(handoffURL) { opened in
-                    continuation.resume(returning: opened ? .handedOff : .failed)
+                    let handedOff = ClipListSavePlanner.handoffAfterPersist(written: written, opened: opened)
+                    continuation.resume(returning: handedOff ? .handedOff : .failed)
                 }
             }
         }

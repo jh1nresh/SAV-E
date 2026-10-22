@@ -133,6 +133,11 @@ enum ClipListSavePlanner {
         return uniqueItems(from: confirmed)
     }
 
+    /// Journal write is the App Group fallback. Do not report handoff if it failed.
+    static func handoffAfterPersist(written: Bool, opened: Bool) -> Bool {
+        written && opened
+    }
+
     static func allocate(
         novelCount: Int,
         alreadySaved: Int,

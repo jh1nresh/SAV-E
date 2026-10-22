@@ -1501,25 +1501,27 @@ struct ContentView: View {
 
     private func performPendingListStampImport() async {
         guard autoSaveIncomingList, let list = pendingClipListSave else { return }
-        for item in list.items {
-            do {
-                _ = try await mapVM.saveListItemAsPlace(item, includeSenderMemory: false)
-            } catch {
-                continue
-            }
+        do {
+            let result = try await mapVM.saveClipListHandoff(list)
+            PendingShareStore.clear()
+            pendingClipListSave = nil
+            autoSaveIncomingList = false
+            handoffToastText = languageSettings.localized(
+                english: ClipListHandoff.toastEnglish(
+                    counts: result.counts,
+                    confirmedCount: list.items.count
+                ),
+                traditionalChinese: ClipListHandoff.toastEnglish(
+                    counts: result.counts,
+                    confirmedCount: list.items.count
+                )
+            )
+        } catch {
+            handoffToastText = languageSettings.localized(
+                english: "Couldn't save the list. Try again.",
+                traditionalChinese: "清單沒存好，請再試一次。"
+            )
         }
-        PendingShareStore.clear()
-        pendingClipListSave = nil
-        autoSaveIncomingList = false
-        let count = list.items.count
-        handoffToastText = languageSettings.localized(
-            english: count == 1
-                ? "Saved 1 place from the list."
-                : String(format: "Saved %d places from the list.", count),
-            traditionalChinese: count == 1
-                ? "已從清單存好 1 家。"
-                : String(format: "已從清單存好 %d 家。", count)
-        )
         try? await Task.sleep(for: .seconds(3))
         if handoffToastText != nil {
             handoffToastText = nil

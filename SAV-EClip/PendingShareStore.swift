@@ -39,13 +39,17 @@ enum PendingShareStore {
         store ?? UserDefaults(suiteName: suiteName)
     }
 
-    static func write(_ payload: PendingSharePayload, to store: UserDefaults? = nil) {
+    @discardableResult
+    static func write(_ payload: PendingSharePayload, to store: UserDefaults? = nil) -> Bool {
         guard let defaults = defaults(store),
               let data = try? JSONEncoder().encode(payload),
-              data.count <= 64 * 1024
-        else { return }
+              data.count <= journalByteLimit
+        else { return false }
         defaults.set(data, forKey: key)
+        return true
     }
+
+    static let journalByteLimit = 64 * 1024
 
     static func load(from store: UserDefaults? = nil) -> PendingSharePayload? {
         guard let defaults = defaults(store) else { return nil }
