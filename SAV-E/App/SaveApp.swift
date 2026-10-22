@@ -553,9 +553,6 @@ struct SaveApp: App {
     private func restorePendingShare() {
         guard incomingPlaceReceipt == nil else { return }
         if let payload = PendingShareStore.load(), let url = URL(string: payload.url) {
-            if payload.kind == .place {
-                autoSaveIncomingShare = true
-            }
             handleIncomingURL(url)
             return
         }

@@ -717,16 +717,6 @@ struct ClipContentView: View {
             ?? tripData?.toURL(baseURL: "savvy://trip")
             ?? URL(string: "savvy://trip")
         if let url {
-            PendingShareStore.write(
-                PendingSharePayload(
-                    kind: .place,
-                    shareCode: nil,
-                    placeId: nil,
-                    listId: nil,
-                    sender: nil,
-                    url: url.absoluteString
-                )
-            )
             UIApplication.shared.open(url)
         }
     }

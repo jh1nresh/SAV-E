@@ -69,6 +69,15 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertFalse(place.matchesIncomingPlace(url: urlB))
         XCTAssertFalse(list.matchesIncomingPlace(url: urlA))
         XCTAssertFalse(list.matchesIncomingPlace(url: URL(string: "https://sav-e-app.vercel.app/l/LiSt99_z")!))
+        let leftoverTrip = PendingSharePayload(
+            kind: .place,
+            shareCode: nil,
+            placeId: nil,
+            listId: nil,
+            sender: nil,
+            url: "savvy://trip"
+        )
+        XCTAssertFalse(leftoverTrip.matchesIncomingPlace(url: urlA))
     }
 
     func testListPayloadKeepsShareCodeAndListId() {
