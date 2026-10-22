@@ -45,8 +45,8 @@ private enum SaveTheme {
     // import the main app target, so these values must stay aligned with
     // SaveAtlasPalette in Color+Theme.swift.
     static let cream = Color(hex: "FDF8F3")
-    static let yellow = Color(hex: "F26B4A")
     static let coral = Color(hex: "F26B4A")
+    static let yellow = coral
     static let sky = Color(hex: "B5E3F5")
     static let mint = Color(hex: "D6E8C4")
     static let pink = Color(hex: "F0CFA1")
