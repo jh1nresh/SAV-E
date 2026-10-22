@@ -760,7 +760,8 @@ struct ContentView: View {
                         mapViewModel: mapVM,
                         initialQuery: drawerLaunchRequest.initialQuery ?? "",
                         focusesSearch: drawerLaunchRequest.focusesSearch,
-                        preservesExactSearchClue: isExactSearchSessionActive,
+                        preservesExactSearchClue: isExactSearchSessionActive
+                            || exactSearchClueID != nil,
                         onClose: collapseMapPanel,
                         onOpenPlace: { openSavedPlaceFromMapSearch($0) },
                         onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
@@ -1014,7 +1015,8 @@ struct ContentView: View {
                 }
                 guard exactSearchRequestID == nil else { return }
                 // Launch/refine remounts wipe pins. Keep the live Review
-                // correction so a public-result save still retires the clue.
+                // correction so a public-result save or saved-stamp tap
+                // still retires the clue.
                 mapVM.clearMapSearchResults(
                     preservesExactSearchClue: !endsExactSearch
                         && (isExactSearchSessionActive

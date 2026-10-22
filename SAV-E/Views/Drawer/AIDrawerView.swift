@@ -116,7 +116,7 @@ struct AIDrawerView: View {
     /// saving one retires the clue from the queue.
     var onBeginExactSearchResolution: (PlaceReviewCandidate) -> Void = { _ in }
     /// `endsExactSearch` is true only for an explicit close. Launch/refine
-    /// remounts keep `exactSearchClueID` so the original clue stays linked.
+    /// remounts keep `exactSearchClueID` so the Review correction session stays linked.
     var onClearMapSearchResults: (_ endsExactSearch: Bool) -> Void = { _ in }
     var collaborativeLists: [SaveCollaborativeList] = []
     var onCreateList: (String, String?) -> SaveCollaborativeList = { title, note in
