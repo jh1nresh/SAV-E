@@ -109,6 +109,7 @@ private enum SaveFullScreenRoute: Identifiable {
 private enum PendingChromePresentation {
     case rootSheet
     case passport
+    case savedPlaceLimitPaywall
     case cover(SaveFullScreenRoute)
     case mapDrawer(DrawerLaunchRequest)
     case plan
@@ -119,6 +120,8 @@ private enum PendingChromePresentation {
             return .rootSheet
         case .passport:
             return .passport
+        case .savedPlaceLimitPaywall:
+            return .savedPlaceLimitPaywall
         case .cover:
             return .cover
         case .mapDrawer, .plan:
@@ -314,6 +317,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showSavedPlaceLimitPaywall, onDismiss: {
             mapVM.acknowledgeSavedPlaceLimitPaywall()
+            handleExclusiveChromeDismiss()
         }) {
             SaveProPaywallView(trigger: .savedPlaceLimit)
         }
@@ -367,7 +371,7 @@ struct ContentView: View {
             Task { await drawerVM.loadMemoryPreferences() }
         }
         .onReceive(NotificationCenter.default.publisher(for: SavePlaceLimitHandoff.paywallRequestedNotification)) { _ in
-            showSavedPlaceLimitPaywall = true
+            presentSavedPlaceLimitPaywall()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
@@ -376,7 +380,7 @@ struct ContentView: View {
         }
         .onChange(of: mapVM.shouldPresentSavedPlaceLimitPaywall) { _, shouldPresent in
             guard shouldPresent else { return }
-            showSavedPlaceLimitPaywall = true
+            presentSavedPlaceLimitPaywall()
         }
         .task {
             await loadInitialContent()
@@ -408,14 +412,19 @@ struct ContentView: View {
         runRapidChromeTransitionUITestFixtureIfNeeded()
 #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--uitest-show-saved-place-limit-paywall") {
-            showSavedPlaceLimitPaywall = true
+            presentSavedPlaceLimitPaywall()
         }
 #endif
     }
 
+    private func presentSavedPlaceLimitPaywall() {
+        guard !showSavedPlaceLimitPaywall else { return }
+        presentAfterClearingExclusiveChrome(.savedPlaceLimitPaywall)
+    }
+
     private func presentSavedPlaceLimitPaywallIfNeeded() {
         if mapVM.consumePendingSavedPlaceLimitPaywall() {
-            showSavedPlaceLimitPaywall = true
+            presentSavedPlaceLimitPaywall()
         }
     }
 
@@ -1137,7 +1146,8 @@ struct ContentView: View {
             hasCover: fullScreenRoute != nil,
             isTripComposerPresented: false,
             isPassportPresented: isPassportPresented,
-            isRootSheetPresented: isRootSheetPresented
+            isRootSheetPresented: isRootSheetPresented,
+            isSavedPlaceLimitPaywallPresented: showSavedPlaceLimitPaywall
         )
     }
 
@@ -1170,6 +1180,7 @@ struct ContentView: View {
             suppressChromeDismissSideEffects = true
             isRootSheetPresented = false
             isPassportPresented = false
+            showSavedPlaceLimitPaywall = false
             fullScreenRoute = nil
         }
     }
@@ -1180,6 +1191,8 @@ struct ContentView: View {
             isRootSheetPresented = true
         case .passport:
             isPassportPresented = true
+        case .savedPlaceLimitPaywall:
+            showSavedPlaceLimitPaywall = true
         case .cover(let route):
             fullScreenRoute = route
         case .plan:

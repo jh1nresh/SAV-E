@@ -1613,7 +1613,7 @@ async function handlePlaces(
           "select id from places where user_id = $1 and origin_shared_place_link_id = $2",
           [userId, link.id],
         );
-        if (!existingReceipt.rows[0]) await assertNewSavedPlaceAllowed(client, userId);
+        if (!existingReceipt.rows[0]) await assertNewSavedPlaceAllowed(client, userId, receiptBody);
         const { rows } = await client.query(
           `${insert.sql}
            ${friendSharePlaceOriginConflictClause}
@@ -1664,7 +1664,7 @@ async function handlePlaces(
         );
         isNewPlace = existing.rows.length === 0;
       }
-      if (isNewPlace) await assertNewSavedPlaceAllowed(client, userId);
+      if (isNewPlace) await assertNewSavedPlaceAllowed(client, userId, body);
       const { rows } = await client.query(
         `${insert.sql}
          on conflict (id) do update
@@ -6004,7 +6004,7 @@ async function insertFinalPlaceForDecision(
   if (existing.rows[0]) {
     throw new WorkflowConflictError("final_place.id already exists; use an existing-place decision without final_place");
   }
-  await assertNewSavedPlaceAllowed(client, userId);
+  await assertNewSavedPlaceAllowed(client, userId, decision.finalPlace);
 
   const body = withOwner(pickFields(decision.finalPlace, placeFields), userId);
   const insert = buildInsert("places", body, [...placeFields, "user_id"]);

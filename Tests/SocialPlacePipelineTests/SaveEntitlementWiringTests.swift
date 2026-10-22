@@ -58,6 +58,20 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertEqual(store.quota?.usedUnits, 12)
     }
 
+    @MainActor
+    func testUnrecognizedQuotaTierCannotEnableLocalSavedPlaceRefusal() async {
+        for value: String? in [nil, "", "platinum", "FREE"] {
+            let store = Self.makeStore(loadQuota: { Self.quota(tier: value, used: 0) })
+            await store.refresh()
+            XCTAssertFalse(store.hasAuthoritativeSavedPlaceTier)
+        }
+        for value in ["free", "pro"] {
+            let store = Self.makeStore(loadQuota: { Self.quota(tier: value, used: 0) })
+            await store.refresh()
+            XCTAssertTrue(store.hasAuthoritativeSavedPlaceTier)
+        }
+    }
+
     /// The server saying "free" must win even if a stale local receipt exists.
     /// Otherwise a refunded or expired subscription would keep working.
     @MainActor
@@ -272,7 +286,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private static func quota(tier: String, used: Int, limit: Int = 20) -> SaveUsageQuotaPreview {
+    private static func quota(tier: String?, used: Int, limit: Int = 20) -> SaveUsageQuotaPreview {
         SaveUsageQuotaPreview(
             policyVersion: "ai-assists-beta-v0",
             periodStart: "2026-08-01T00:00:00.000Z",

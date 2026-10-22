@@ -141,7 +141,7 @@ export async function saveSharedPost(pool: Pool, userId: string, placeID: string
       order by created_at, id limit 1`, [userId, source.google_place_id, source.provider_place_id, source.location_provider]);
     let place = existing.rows[0];
     if (!place) {
-      await assertNewSavedPlaceAllowed(client, userId);
+      await assertNewSavedPlaceAllowed(client, userId, source);
       const inserted = await client.query(`insert into places
         (user_id,name,address,latitude,longitude,google_place_id,category,coordinate_system,location_provider,provider_place_id,provider_map_url,status)
         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'wantToGo') returning *`,

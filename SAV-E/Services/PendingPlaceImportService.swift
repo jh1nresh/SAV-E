@@ -644,15 +644,22 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
 
     /// Keep a capped save in the Review / Unplaced inbox instead of dropping it.
     static func unplacedInboxItem(from place: Place, ownerSubject: String? = nil) -> PlaceReviewCandidate {
-        PlaceReviewCandidate(
+        var venueEvidence = place.sourceEvidence
+        if place.resolvedCoordinateSystem == .gcj02, place.locationProvider == .amap,
+           let providerID = place.providerPlaceId, let mapURL = place.providerMapDestinationURL {
+            venueEvidence += ["Amap POI id: \(providerID)",
+                              "Amap reference coordinates (GCJ-02): \(place.latitude), \(place.longitude)",
+                              "Provider map URL: \(mapURL.absoluteString)"]
+        }
+        return PlaceReviewCandidate(
             id: place.id,
             captureId: nil,
             name: place.name,
             address: place.address,
             city: nil,
-            latitude: place.hasValidCoordinate ? place.latitude : nil,
-            longitude: place.hasValidCoordinate ? place.longitude : nil,
-            evidence: place.sourceEvidence,
+            latitude: place.isMapKitMappable ? place.latitude : nil,
+            longitude: place.isMapKitMappable ? place.longitude : nil,
+            evidence: venueEvidence,
             confidence: 1,
             missingInfo: [unplacedInboxMarker],
             status: "review",

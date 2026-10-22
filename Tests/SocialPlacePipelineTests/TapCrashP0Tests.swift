@@ -118,6 +118,20 @@ final class TapCrashP0Tests: XCTestCase {
     }
 
     @MainActor
+    func testSavedPlaceLimitPaywallWaitsForEveryModalToDismiss() {
+        for modal: SaveChromeExclusive in [.rootSheet, .cover, .passport, .tripComposer] {
+            XCTAssertEqual(SaveChromeNavigation.transition(from: modal, to: .savedPlaceLimitPaywall), .dismissThenPresent)
+        }
+        XCTAssertEqual(SaveChromeNavigation.transition(from: .none, to: .savedPlaceLimitPaywall), .presentNow)
+        let occupancy = SaveChromeNavigation.occupyingExclusive(
+            hasCover: false, isTripComposerPresented: false, isPassportPresented: false,
+            isRootSheetPresented: false, isSavedPlaceLimitPaywallPresented: true
+        )
+        XCTAssertEqual(occupancy, .savedPlaceLimitPaywall)
+        XCTAssertEqual(SaveChromeNavigation.transition(from: occupancy, to: .cover), .dismissThenPresent)
+    }
+
+    @MainActor
     func testInvalidMapCoordinatesAreRejected() {
         XCTAssertFalse(
             SaveChromeNavigation.isSafeMapCoordinate(

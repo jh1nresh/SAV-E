@@ -44,6 +44,7 @@ type Queryable = Pick<Pool, "query">;
 export async function assertNewSavedPlaceAllowed(
   client: Queryable,
   userId: string,
+  incomingPlace?: SavedPlaceIdentity,
 ): Promise<void> {
   let tier: "free" | "pro" = "free";
   // Probe inside a savepoint. A missing entitlement table/column aborts the
@@ -60,16 +61,123 @@ export async function assertNewSavedPlaceAllowed(
     return;
   }
 
+  if (tier === "pro") return;
   const { rows } = await client.query(
-    "select count(*)::int as count from places where user_id = $1",
+    `select id, name, address, latitude, longitude, google_place_id,
+       coordinate_system, location_provider, provider_place_id, created_at
+     from places where user_id = $1 order by created_at, id`,
     [userId],
   );
-  const savedPlaceCount = Number(rows[0]?.count ?? 0);
-  if (decideSavedPlaceInsert({ tier, savedPlaceCount, isNewPlace: true }) === "over_free_limit") {
+  const canonicalCount = consolidatedSavedPlaces(rows).length;
+  // Compare the complete projected collection. A backdated incoming row can
+  // become the first representative and change which rows consolidate.
+  const projectedCount = incomingPlace
+    ? consolidatedSavedPlaces([...rows, { ...incomingPlace, created_at: incomingPlace.created_at ?? new Date() }]).length
+    : canonicalCount + 1;
+  const isNewPlace = projectedCount > canonicalCount;
+  const savedPlaceCount = Math.max(canonicalCount, projectedCount - 1);
+  if (decideSavedPlaceInsert({ tier, savedPlaceCount, isNewPlace }) === "over_free_limit") {
     throw new SavedPlaceLimitError();
   }
 }
 
 export function isSavedPlaceLimitError(error: unknown): error is SavedPlaceLimitError {
   return error instanceof SavedPlaceLimitError;
+}
+
+// Mirrors Place.matches / Place.consolidated: provider identity is authoritative;
+// only missing identity falls back to normalized name and location/address.
+export type SavedPlaceIdentity = {
+  id?: unknown; name?: unknown; address?: unknown;
+  latitude?: unknown; longitude?: unknown; google_place_id?: unknown;
+  coordinate_system?: unknown; location_provider?: unknown; provider_place_id?: unknown;
+  created_at?: unknown;
+};
+
+function nonEmpty(value: unknown): string | undefined {
+  return typeof value === "string" ? value.trim() || undefined : undefined;
+}
+
+function normalized(value: unknown): string {
+  return typeof value === "string"
+    ? value.normalize("NFKD").toLowerCase().replace(/ß/g, "ss").replace(/ς/g, "σ")
+      .replace(/[^\p{L}\p{N}]/gu, "")
+    : "";
+}
+
+function coordinate(place: SavedPlaceIdentity): [number, number] | undefined {
+  const { latitude, longitude } = place;
+  if (typeof latitude !== "number" || typeof longitude !== "number"
+    || !Number.isFinite(latitude) || !Number.isFinite(longitude)
+    || Math.abs(latitude) > 90 || Math.abs(longitude) > 180
+    || (latitude === 0 && longitude === 0)) return undefined;
+  return [latitude, longitude];
+}
+
+// WGS84 inverse geodesic (Vincenty). Unlike a spherical distance, this keeps
+// the app's 120 m boundary at high latitudes. Nonconvergent antipodal points
+// are necessarily far outside this identity radius.
+function distanceMeters(left: [number, number], right: [number, number]): number {
+  const radians = Math.PI / 180, a = 6378137, f = 1 / 298.257223563, b = (1 - f) * a;
+  const u1 = Math.atan((1 - f) * Math.tan(left[0] * radians));
+  const u2 = Math.atan((1 - f) * Math.tan(right[0] * radians));
+  const L = (right[1] - left[1]) * radians;
+  let lambda = L, sinSigma = 0, cosSigma = 0, sigma = 0, cosSqAlpha = 0, cos2SigmaM = 0;
+  for (let i = 0; i < 100; i++) {
+    const sinLambda = Math.sin(lambda), cosLambda = Math.cos(lambda);
+    sinSigma = Math.hypot(Math.cos(u2) * sinLambda,
+      Math.cos(u1) * Math.sin(u2) - Math.sin(u1) * Math.cos(u2) * cosLambda);
+    if (sinSigma === 0) return 0;
+    cosSigma = Math.sin(u1) * Math.sin(u2) + Math.cos(u1) * Math.cos(u2) * cosLambda;
+    sigma = Math.atan2(sinSigma, cosSigma);
+    const sinAlpha = Math.cos(u1) * Math.cos(u2) * sinLambda / sinSigma;
+    cosSqAlpha = 1 - sinAlpha * sinAlpha;
+    cos2SigmaM = cosSqAlpha === 0 ? 0 : cosSigma - 2 * Math.sin(u1) * Math.sin(u2) / cosSqAlpha;
+    const C = f / 16 * cosSqAlpha * (4 + f * (4 - 3 * cosSqAlpha));
+    const previous = lambda;
+    lambda = L + (1 - C) * f * sinAlpha * (sigma + C * sinSigma
+      * (cos2SigmaM + C * cosSigma * (-1 + 2 * cos2SigmaM * cos2SigmaM)));
+    if (Math.abs(lambda - previous) <= 1e-12) {
+      const uSq = cosSqAlpha * (a * a - b * b) / (b * b);
+      const A = 1 + uSq / 16384 * (4096 + uSq * (-768 + uSq * (320 - 175 * uSq)));
+      const B = uSq / 1024 * (256 + uSq * (-128 + uSq * (74 - 47 * uSq)));
+      const delta = B * sinSigma * (cos2SigmaM + B / 4 * (cosSigma
+        * (-1 + 2 * cos2SigmaM ** 2) - B / 6 * cos2SigmaM
+        * (-3 + 4 * sinSigma ** 2) * (-3 + 4 * cos2SigmaM ** 2)));
+      return b * A * (sigma - delta);
+    }
+  }
+  return Infinity;
+}
+
+export function savedPlacesMatch(left: SavedPlaceIdentity, right: SavedPlaceIdentity): boolean {
+  if (nonEmpty(left.id) && left.id === right.id) return true;
+  const lp = nonEmpty(left.provider_place_id), rp = nonEmpty(right.provider_place_id);
+  if (left.location_provider != null && left.location_provider === right.location_provider && lp && rp) return lp === rp;
+  const lg = nonEmpty(left.google_place_id), rg = nonEmpty(right.google_place_id);
+  if (lg && rg) return lg === rg;
+  const name = normalized(left.name);
+  if (!name || name !== normalized(right.name)) return false;
+  const lc = coordinate(left), rc = coordinate(right);
+  if (lc && rc) {
+    if ((left.coordinate_system ?? "WGS84") !== (right.coordinate_system ?? "WGS84")) return false;
+    return distanceMeters(lc, rc) < 120;
+  }
+  const address = normalized(left.address);
+  return !!address && address === normalized(right.address);
+}
+
+export function consolidatedSavedPlaces(places: SavedPlaceIdentity[]): SavedPlaceIdentity[] {
+  const result: SavedPlaceIdentity[] = [];
+  const timestamp = (value: unknown) => value instanceof Date ? value.getTime() : new Date(String(value)).getTime() || 0;
+  for (const place of [...places].sort((a, b) => timestamp(a.created_at) - timestamp(b.created_at)
+    || String(a.id).localeCompare(String(b.id)))) {
+    const existing = result.find(candidate => savedPlacesMatch(candidate, place));
+    if (existing) {
+      // Place.mergingSources retains the original venue fields and fills only
+      // a missing Google identity; empty strings are preserved just as in Swift.
+      existing.google_place_id ??= place.google_place_id;
+    } else result.push({ ...place });
+  }
+  return result;
 }

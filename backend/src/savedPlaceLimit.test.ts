@@ -6,6 +6,9 @@ import {
   assertNewSavedPlaceAllowed,
   decideSavedPlaceInsert,
   freeSavedPlaceLimit,
+  savedPlacesMatch,
+  consolidatedSavedPlaces,
+  type SavedPlaceIdentity,
 } from "./savedPlaceLimit.js";
 
 test("free tier allows the 50th place and parks the 51st", () => {
@@ -36,7 +39,7 @@ test("assertNewSavedPlaceAllowed counts after entitlement and rejects a free 51s
     query: async (sql: string) => {
       calls.push(sql);
       if (sql.includes("subscription_entitlements")) return { rows: [] };
-      if (sql.includes("count(*)")) return { rows: [{ count: 50 }] };
+      if (sql.includes("from places where user_id")) return { rows: venues(50) };
       return { rows: [] };
     },
   };
@@ -46,7 +49,7 @@ test("assertNewSavedPlaceAllowed counts after entitlement and rejects a free 51s
     (error: unknown) => error instanceof SavedPlaceLimitError,
   );
   assert.ok(calls.some((sql) => sql.includes("subscription_entitlements")));
-  assert.ok(calls.some((sql) => sql.includes("count(*)")));
+  assert.ok(calls.some((sql) => sql.includes("from places where user_id")));
 });
 
 test("assertNewSavedPlaceAllowed recovers when entitlement schema is missing inside a transaction", async () => {
@@ -67,7 +70,7 @@ test("assertNewSavedPlaceAllowed recovers when entitlement schema is missing ins
         aborted = true;
         throw Object.assign(new Error("relation does not exist"), { code: "42P01" });
       }
-      if (sql.includes("count(*)")) return { rows: [{ count: 50 }] };
+      if (sql.includes("from places where user_id")) return { rows: venues(50) };
       return { rows: [] };
     },
   };
@@ -76,7 +79,7 @@ test("assertNewSavedPlaceAllowed recovers when entitlement schema is missing ins
   assert.ok(calls.some((sql) => /savepoint saved_place_entitlement/i.test(sql)));
   assert.ok(calls.some((sql) => /rollback to savepoint saved_place_entitlement/i.test(sql)));
   assert.ok(
-    !calls.some((sql) => sql.includes("count(*)")),
+    !calls.some((sql) => sql.includes("from places where user_id")),
     "a missing entitlement schema must fail open instead of applying the free cap",
   );
 });
@@ -87,7 +90,7 @@ test("assertNewSavedPlaceAllowed lets Pro create past 50", async () => {
       if (sql.includes("subscription_entitlements")) {
         return { rows: [{ status: "active", expires_at: "2099-01-01T00:00:00Z" }] };
       }
-      if (sql.includes("count(*)")) return { rows: [{ count: 50 }] };
+      if (sql.includes("from places where user_id")) return { rows: venues(50) };
       return { rows: [] };
     },
   };
@@ -187,7 +190,7 @@ test("C2 concurrent 50th and 51st serialize to exactly one insert", async () => 
     query: async (sql: string) => {
       if (/^savepoint|^release savepoint|^rollback to savepoint/i.test(sql)) return { rows: [] };
       if (sql.includes("subscription_entitlements")) return { rows: [] };
-      if (sql.includes("count(*)")) return { rows: [{ count }] };
+      if (sql.includes("from places where user_id")) return { rows: venues(count) };
       return { rows: [] };
     },
   };
@@ -215,7 +218,7 @@ test("A1/D3 count is this account's places only", () => {
   const source = readFileSync(new URL("../src/savedPlaceLimit.ts", import.meta.url), "utf8");
   assert.match(
     source,
-    /select count\(\*\)::int as count from places where user_id = \$1/,
+    /from places where user_id = \$1 order by created_at, id/,
   );
   assert.doesNotMatch(source, /from cities|from lists|from place_candidates|from friend_/);
 });
@@ -272,4 +275,73 @@ test("D2 over-limit body is counts and codes only", () => {
     decideSavedPlaceInsert({ tier: "free", savedPlaceCount: 50, isNewPlace: true }),
     "over_free_limit",
   );
+});
+
+function venues(count: number): SavedPlaceIdentity[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `place-${index}`, name: `Venue ${index}`, address: `${index} Example Road`,
+    latitude: 25, longitude: 121, created_at: "2026-01-01T00:00:00Z",
+  }));
+}
+
+test("49 canonical venues with a duplicate row allow the 50th; canonical 51st is refused", async () => {
+  const rows = venues(49);
+  rows.push({ ...rows[0], id: "duplicate-row" });
+  const client = { query: async (sql: string, params?: unknown[]) => {
+    if (sql.includes("from places where user_id")) {
+      assert.deepEqual(params, ["owner"]);
+      return { rows };
+    }
+    return { rows: [] };
+  } };
+  const fiftieth = { ...venues(50)[49], id: "fiftieth" };
+  await assertNewSavedPlaceAllowed(client as never, "owner", fiftieth);
+  rows.push(fiftieth);
+  assert.equal(rows.length, 51);
+  assert.equal(consolidatedSavedPlaces(rows).length, 50);
+  await assertNewSavedPlaceAllowed(client as never, "owner", { ...fiftieth, id: "retry" });
+  await assert.rejects(() => assertNewSavedPlaceAllowed(client as never, "owner", venues(51)[50]), SavedPlaceLimitError);
+});
+
+test("canonical identity honors provider conflicts, coordinates, addresses and Unicode names", () => {
+  const base = { id: "a", name: "Ｃａｆé!", address: "1 Main St", latitude: 25, longitude: 121 };
+  assert.equal(savedPlacesMatch(base, { ...base, id: "b", name: "cafe", latitude: 25.0005 }), true);
+  assert.equal(savedPlacesMatch(base, { ...base, id: "b", latitude: 26 }), false);
+  assert.equal(savedPlacesMatch(base, { ...base, id: "b", coordinate_system: "GCJ-02" }), false);
+  assert.equal(savedPlacesMatch(base, { ...base, id: "b", latitude: 0, longitude: 0 }), true);
+  assert.equal(savedPlacesMatch(base, { ...base, id: "b", latitude: NaN, address: "other" }), false);
+  assert.equal(savedPlacesMatch({ ...base, google_place_id: "g1" }, { ...base, id: "b", google_place_id: "g2" }), false);
+  assert.equal(savedPlacesMatch({ ...base, google_place_id: "g1" }, { name: "other", google_place_id: "g1" }), true);
+  assert.equal(savedPlacesMatch({ ...base, location_provider: "amap", provider_place_id: "a1", google_place_id: "g1" },
+    { ...base, id: "b", location_provider: "amap", provider_place_id: "a2", google_place_id: "g1" }), false);
+  assert.equal(savedPlacesMatch({ name: "", address: "same" }, { name: "", address: "same" }), false);
+  // WGS84 meridional distances either side of 120 m, including high latitude.
+  assert.equal(savedPlacesMatch({ ...base, latitude: 80 }, { ...base, id: "b", latitude: 80.00107 }), true);
+  assert.equal(savedPlacesMatch({ ...base, latitude: 80 }, { ...base, id: "b", latitude: 80.00108 }), false);
+});
+
+test("canonical consolidation uses stable earliest identity and inherits missing Google identity", () => {
+  const base = { name: "Cafe", address: "Road", latitude: 25, longitude: 121 };
+  const rows: SavedPlaceIdentity[] = [
+    { ...base, id: "b", created_at: "2026-02-01", google_place_id: "g1" },
+    { ...base, id: "a", created_at: "2026-01-01" },
+    { ...base, id: "c", created_at: "2026-03-01", google_place_id: "g2" },
+  ];
+  const result = consolidatedSavedPlaces(rows);
+  assert.equal(result.length, 2);
+  assert.equal(result[0].id, "a");
+  assert.equal(result[0].google_place_id, "g1");
+  assert.equal(rows[1].google_place_id, undefined, "do not mutate fetched rows");
+});
+
+test("persisted WGS84 and omitted incoming coordinate system remain one venue at 50", async () => {
+  const rows = venues(50).map(place => ({ ...place, coordinate_system: "WGS84" }));
+  const client = { query: async (sql: string) => ({ rows: sql.includes("from places where user_id") ? rows : [] }) };
+  const duplicate = { ...venues(50)[0], id: "duplicate-with-default-coordinate-system" };
+  assert.equal(savedPlacesMatch(rows[0], duplicate), true);
+  await assertNewSavedPlaceAllowed(client as never, "owner", duplicate);
+  assert.equal(savedPlacesMatch(rows[0], { ...duplicate, coordinate_system: "GCJ-02" }), false);
+  await assert.rejects(() => assertNewSavedPlaceAllowed(client as never, "owner", {
+    ...duplicate, coordinate_system: "GCJ-02",
+  }), SavedPlaceLimitError);
 });

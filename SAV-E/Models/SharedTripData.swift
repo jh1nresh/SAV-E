@@ -301,9 +301,9 @@ struct SharedPlaceReceipt: Identifiable {
         return payload.toURL(baseURL: "savvy://p")
     }
 
-    func privatePlace() -> Place {
+    func privatePlace(ownerSubject: String? = nil) -> Place {
         Place(
-            id: UUID(),
+            id: SaveRecipientPlaceIdentity.id(source: "receipt:\(id)", ownerSubject: ownerSubject),
             name: payload.name,
             address: payload.address,
             latitude: payload.lat,
@@ -767,5 +767,24 @@ private extension Place {
             }
         }
         return nil
+    }
+}
+
+/// Stable recipient-owned identity makes repeated capped saves idempotent without
+/// reusing the sender's row ID or sharing a parked candidate across accounts.
+enum SaveRecipientPlaceIdentity {
+    static func id(source: String, ownerSubject: String?) -> UUID {
+        let owner = ownerSubject ?? ""
+        // UUID v5 in the URL namespace. This is a stable identifier, not an
+        // authentication or secrecy primitive; existing API UUID validators
+        // accept v5 across places, memories and friend-rating paths.
+        let namespace: [UInt8] = [0x6b, 0xa7, 0xb8, 0x11, 0x9d, 0xad, 0x11, 0xd1,
+                                  0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8]
+        let data = Data(namespace) + Data("recipient-place:\(owner.utf8.count):\(owner):\(source)".utf8)
+        var bytes = Array(Insecure.SHA1.hash(data: data).prefix(16))
+        bytes[6] = (bytes[6] & 0x0f) | 0x50
+        bytes[8] = (bytes[8] & 0x3f) | 0x80
+        return UUID(uuid: (bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+                           bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]))
     }
 }

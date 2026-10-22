@@ -217,7 +217,7 @@ final class SaveLocalVaultService: Sendable {
         return try withLock {
             try withCoordinatedVaultWrite { url in
                 var records = try loadRecords(from: url)
-                if let index = records.firstIndex(where: { $0.id == recordID }) {
+                if let index = records.firstIndex(where: { $0.id == recordID && $0.ownerSubject == record.ownerSubject }) {
                     // A retry must retain already-refined evidence or a user-confirmed place.
                     let existing = records[index]
                     if preservingExisting || existing.state == .confirmedPlace { return existing }
@@ -232,7 +232,7 @@ final class SaveLocalVaultService: Sendable {
                     records.insert(record, at: 0)
                 }
                 try save(records, to: url)
-                return records.first { $0.id == recordID } ?? record
+                return records.first { $0.id == recordID && $0.ownerSubject == record.ownerSubject } ?? record
             }
         }
     }
@@ -277,6 +277,7 @@ final class SaveLocalVaultService: Sendable {
             try withCoordinatedVaultWrite { url in
                 var records = try loadRecords(from: url)
                 let index = records.firstIndex { existing in
+                    guard existing.ownerSubject == incoming.ownerSubject else { return false }
                     if existing.id == incoming.id { return true }
                     guard matchSourceIdentity,
                           existing.ownerSubject == incoming.ownerSubject,
@@ -317,7 +318,19 @@ final class SaveLocalVaultService: Sendable {
         merged.createdAt = min(existing.createdAt, incoming.createdAt)
         merged.sourceURL = existing.sourceURL ?? incoming.sourceURL
         var seen = Set<String>()
-        merged.evidence = (existing.evidence + incoming.evidence).filter { seen.insert($0).inserted }
+        // Re-parking a stable recipient ID carries the current live venue. Old
+        // provider coordinates must not remain the first active location after
+        // an author corrects that venue (or switches it back to WGS84).
+        let replacesVenue = incoming.id == existing.id
+            && incoming.reviewCandidate?.isUnplacedInbox == true
+            && incoming.reviewCandidate?.hasSavableLocation == true
+        let activeProviderPrefixes = ["Amap POI id:", "Amap reference coordinates (GCJ-02):", "Provider map URL:"]
+        let previousEvidence = replacesVenue ? existing.evidence.filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !activeProviderPrefixes.contains { trimmed.lowercased().hasPrefix($0.lowercased()) }
+        } : existing.evidence
+        let evidence = replacesVenue ? incoming.evidence + previousEvidence : previousEvidence + incoming.evidence
+        merged.evidence = evidence.filter { seen.insert($0).inserted }
         let texts = [existing.sourceText, incoming.sourceText].compactMap { $0 }.filter { !$0.isEmpty }
         seen.removeAll()
         merged.sourceText = texts.filter { seen.insert($0).inserted }.joined(separator: "\n")
@@ -408,14 +421,14 @@ final class SaveLocalVaultService: Sendable {
         }
     }
 
-    func removeReviewCandidate(_ candidateID: UUID) throws {
+    func removeReviewCandidate(_ candidateID: UUID, ownerSubject: String? = nil) throws {
 #if DEBUG
         if let removeReviewCandidateError { throw removeReviewCandidateError }
 #endif
         try withLock {
             try withCoordinatedVaultWrite { url in
                 var records = try loadRecords(from: url)
-                records.removeAll { ($0.state == .reviewCandidate || $0.state == .sourceOnly) && $0.id == candidateID }
+                records.removeAll { ($0.state == .reviewCandidate || $0.state == .sourceOnly) && $0.id == candidateID && $0.ownerSubject == ownerSubject }
                 try save(records, to: url)
             }
         }

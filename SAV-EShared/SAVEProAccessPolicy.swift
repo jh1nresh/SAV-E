@@ -179,6 +179,14 @@ enum SavePlaceLimitHandoff {
         _ ownerSubject: String?,
         defaults: UserDefaults = makeDefaults()
     ) {
+        let owner = ownerSubject.flatMap { $0.isEmpty ? nil : $0 }
+        if cachedActiveOwner(defaults: defaults) != owner {
+            // Quota and pending UI belong to the account that produced them.
+            // A new owner starts unresolved until its own entitlement/count sync.
+            defaults.removeObject(forKey: cachedTierKey)
+            defaults.removeObject(forKey: cachedCountKey)
+            defaults.removeObject(forKey: pendingPaywallKey)
+        }
         if let ownerSubject, !ownerSubject.isEmpty {
             defaults.set(ownerSubject, forKey: cachedOwnerKey)
         } else {
@@ -234,7 +242,10 @@ nonisolated enum SaveShareExtensionPlaceDestination: Equatable, Sendable {
     static func resolve(
         cached: SavePlaceLimitDecision
     ) -> SaveShareExtensionPlaceDestination {
-        cached == .overFreeLimit ? .unplacedInbox : .pendingMapStamp
+        // The extension has no canonical venue list. A full cached count cannot
+        // distinguish a duplicate from a new venue; the app deduplicates this
+        // durable handoff before enforcing the limit and parking a new place.
+        .pendingMapStamp
     }
 }
 

@@ -25,7 +25,9 @@ final class SaveEntitlementStore {
     /// server quota. Unresolved and fail-open stay off so a Pro account is
     /// not parked as free before `refresh()`.
     var hasAuthoritativeSavedPlaceTier: Bool {
-        stateSession == currentSession() && quota != nil && !isFailingOpen
+        stateSession == currentSession()
+            && ["free", "pro"].contains(quota?.tier ?? "")
+            && !isFailingOpen
     }
     private(set) var quota: SaveUsageQuotaPreview?
     private(set) var isRefreshing = false

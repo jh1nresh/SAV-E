@@ -423,6 +423,39 @@ final class SaveLocalVaultServiceTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(stored.first { $0.ownerSubject == "did:privy:owner-a" }).evidence.contains("Account B caption"))
     }
 
+    @MainActor
+    func testExactIDUpsertsAndRemovalStayWithinTheOwningAccount() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let sharedID = UUID()
+        var a = makePendingCandidate(localID: sharedID)
+        a.ownerSubject = "owner-a"
+        a.isSourceOnly = false
+        a.candidateName = "Cafe A"
+        a.latitude = 25
+        a.longitude = 121
+        let savedA = try vault.saveReviewCandidate(a, recordID: sharedID)
+        var b = a
+        b.ownerSubject = "owner-b"
+        b.candidateName = "Cafe B"
+        b.evidence = ["B private clue"]
+        let savedB = try vault.saveReviewCandidate(b, recordID: sharedID, preservingExisting: true)
+        XCTAssertEqual(savedA.ownerSubject, "owner-a")
+        XCTAssertEqual(savedB.ownerSubject, "owner-b")
+        XCTAssertEqual(savedB.title, "Cafe B")
+        var bReview = try XCTUnwrap(vault.reviewCandidates(belongingTo: "owner-b").first)
+        XCTAssertEqual(bReview.id, savedB.id)
+        bReview.name = "B refined"
+        _ = try vault.saveReviewCandidate(bReview)
+        let stored = try vault.reviewCandidates()
+        XCTAssertEqual(stored.count, 2)
+        XCTAssertEqual(stored.first { $0.ownerSubject == "owner-a" }?.name, "Cafe A")
+        XCTAssertEqual(stored.first { $0.ownerSubject == "owner-b" }?.name, "B refined")
+        try vault.removeReviewCandidate(sharedID, ownerSubject: "owner-b")
+        XCTAssertEqual(try vault.reviewCandidates().map(\.ownerSubject), ["owner-a"])
+    }
+
     /// D3 / P1 4343590029: AskSaveMemoryIntent must not speak another account's
     /// recent titles. Filter by owner before applying the limit.
     @MainActor

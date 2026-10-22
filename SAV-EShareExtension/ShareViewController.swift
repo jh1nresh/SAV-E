@@ -444,6 +444,8 @@ private struct PendingReviewCandidate: Codable {
     var confidence: Double
     var missingInfo: [String]
     var savedAt: Date
+    // Shared queue key also decoded by the app PendingReviewCandidate model.
+    var googlePlaceId: String? = nil
     var evidenceDiagnostic: SocialPlaceEvidenceDiagnostic? = nil
     var isSourceOnly: Bool = false
     var reviewState: String? = nil
@@ -3298,7 +3300,8 @@ struct ShareExtensionView: View {
             ].compactMap { $0 },
             confidence: 0.9,
             missingInfo: [SAVEProAccessPolicy.unplacedInboxMarker],
-            savedAt: Date()
+            savedAt: Date(),
+            googlePlaceId: place.googlePlaceId
         )
     }
 

@@ -17,6 +17,9 @@ final class SharedPostsStore: ObservableObject {
     var saveSharedPost: (UUID) async throws -> Place = { id in
         try await SupabaseService.shared.saveSharedPost(id: id)
     }
+    var fetchSharedPostForParking: (UUID) async throws -> SharedPlacePost = { id in
+        try await SupabaseService.shared.fetchSharedPost(id: id)
+    }
     var parkOverLimitPlace: (Place) throws -> PlaceReviewCandidate = { place in
         let candidate = PlaceReviewCandidate.unplacedInboxItem(
             from: place,
@@ -146,16 +149,24 @@ final class SharedPostsStore: ObservableObject {
     func save(_ post: SharedPlacePost) async throws -> SharedPostSaveOutcome {
         guard !isDemo else { throw SupabaseError.notAuthenticated }
         let account = PrivyAuthService.shared.currentUserId
+        let generation = PrivyAuthService.shared.sessionGeneration
         do {
             _ = try await saveSharedPost(post.id)
-            guard account == PrivyAuthService.shared.currentUserId, !Task.isCancelled else { throw CancellationError() }
+            guard account == PrivyAuthService.shared.currentUserId,
+                  generation == PrivyAuthService.shared.sessionGeneration, !Task.isCancelled else { throw CancellationError() }
             return .saved
         } catch {
-            guard account == PrivyAuthService.shared.currentUserId, !Task.isCancelled else {
+            guard account == PrivyAuthService.shared.currentUserId,
+                  generation == PrivyAuthService.shared.sessionGeneration, !Task.isCancelled else {
                 throw CancellationError()
             }
             if error is SavePlaceLimitError {
-                _ = try parkOverLimitPlace(post.asUnplacedPlace())
+                let livePost = try await fetchSharedPostForParking(post.id)
+                guard account == PrivyAuthService.shared.currentUserId,
+                  generation == PrivyAuthService.shared.sessionGeneration, !Task.isCancelled else {
+                    throw CancellationError()
+                }
+                _ = try parkOverLimitPlace(livePost.asUnplacedPlace(ownerSubject: account))
                 return .parkedAtFreeLimit
             }
             throw error

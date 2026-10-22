@@ -320,6 +320,9 @@ final class ShareRouteCodecTests: XCTestCase {
 
         let receipt = try SharedPlaceReceipt.decode(data: data, code: "AbC123_x")
         let savedPlace = receipt.privatePlace()
+        XCTAssertEqual(receipt.privatePlace(ownerSubject: "a").id, receipt.privatePlace(ownerSubject: "a").id)
+        XCTAssertNotEqual(receipt.privatePlace(ownerSubject: "a").id, receipt.privatePlace(ownerSubject: "b").id)
+        XCTAssertNotEqual(receipt.privatePlace(ownerSubject: "a").id.uuidString.lowercased(), receipt.sourcePlaceID?.lowercased())
 
         XCTAssertEqual(receipt.verifiedSenderLabel, "Mina")
         XCTAssertEqual(receipt.sourcePlaceID, "11111111-2222-3333-4444-555555555555")
