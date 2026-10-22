@@ -46,9 +46,10 @@ struct SaveCaptureFlowView: View {
         .presentationDetents([.medium, .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationBackground(SaveAtlasPalette.paper)
-        // Keep capture.flow on the cover root. Postal Import owns
-        // takeout.import.root on its own accessibility container so XCUI
-        // can find it after the in-sheet swap.
+        // Keep capture.flow on the cover root. Without `.contain`, the
+        // identifier collapses this Group and hides takeout.import.root
+        // after the in-sheet swap. Do not remount Postal Import.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("capture.flow")
         .onAppear {
             if sharedText.isEmpty {

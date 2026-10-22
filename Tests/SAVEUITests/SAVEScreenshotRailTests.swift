@@ -1394,8 +1394,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected)
-        XCTAssertEqual(app.buttons["passport.citySwitcher"].label, "Beijing")
-        XCTAssertEqual(app.buttons["profile.stampProgress"].label, "4 of 12 visited")
+        let expectsChinese = language == "zh-Hant"
+        XCTAssertEqual(
+            app.buttons["passport.citySwitcher"].label,
+            expectsChinese ? "北京" : "Beijing"
+        )
+        XCTAssertEqual(
+            app.buttons["profile.stampProgress"].label,
+            expectsChinese ? "已拜訪 4 / 12" : "4 of 12 visited"
+        )
         let passportShot = app.screenshot()
         attach(app, name: passportName)
         if appearance == .dark {

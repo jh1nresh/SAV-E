@@ -27,6 +27,7 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(capture.contains("GoogleTakeoutImportView("))
         XCTAssertTrue(capture.contains("onClose: { isGoogleTakeoutPresented = false }"))
         XCTAssertTrue(capture.contains(".accessibilityIdentifier(\"capture.flow\")"))
+        XCTAssertTrue(capture.contains(".accessibilityElement(children: .contain)"))
         XCTAssertTrue(capture.contains("ai.quotaExhausted"))
         XCTAssertTrue(capture.contains("isAIQuotaExhausted"))
         XCTAssertTrue(capture.contains("SaveEntitlementStore.shared.decideAIAssist()"))

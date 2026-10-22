@@ -83,6 +83,14 @@ final class SaveDoodlePassportTests: XCTestCase {
             SaveHomeSearch.metroName(at: 39.882192, longitude: 116.4066, traditionalChinese: false),
             "Beijing"
         )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.passportCityTitle(
+                places: places,
+                location: location,
+                language: .traditionalChinese
+            ),
+            "北京"
+        )
     }
 
     func testDoodleFaceSlotsMatchThePassportMockGrid() {
@@ -236,6 +244,8 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(rail.contains("doodle-passport-light"))
         XCTAssertTrue(rail.contains("doodle-passport-dark"))
         XCTAssertTrue(rail.contains("4 of 12 visited"))
+        XCTAssertTrue(rail.contains("已拜訪 4 / 12"))
+        XCTAssertTrue(rail.contains("\"北京\""))
         XCTAssertTrue(rail.contains("passport.citySwitcher"))
         XCTAssertTrue(rail.contains("profile.close"))
         XCTAssertTrue(rail.contains("Collected is a Passport child; root.tab.home must stay in the five-tab bar"))
