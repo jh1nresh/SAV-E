@@ -115,6 +115,24 @@ final class ClipListSaveTests: XCTestCase {
         XCTAssertNotEqual(ClipSignInKind.onePlace.titleKey, ClipSignInKind.wholeList(5).titleKey)
     }
 
+    func testRecipientPlaceBodyOmitsSenderNoteAndRating() {
+        let item = ClipListSaveItem(
+            name: "Onibus Coffee",
+            address: "Tokyo",
+            latitude: 35.644,
+            longitude: 139.699,
+            category: "Cafe",
+            rating: 4.6,
+            note: "Mina's late-night pick",
+            placeId: "source-owner-id"
+        )
+        let body = ClipListSavePlanner.placeBody(from: item)
+        XCTAssertNil(body["note"])
+        XCTAssertNil(body["rating"])
+        XCTAssertEqual(body["provider_place_id"] as? String, "source-owner-id")
+        XCTAssertEqual(body["name"] as? String, "Onibus Coffee")
+    }
+
     func testRecipientOwnedPlaceIDDoesNotReuseSourceUUID() {
         let sourceId = UUID().uuidString
         let items = [item(sourceId, "Onibus Coffee", lat: 35.644, lng: 139.699)]

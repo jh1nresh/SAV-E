@@ -163,8 +163,6 @@ enum ClipListSavePlanner {
             "status": "wantToGo",
             "source_platform": "other",
         ]
-        if let rating = item.rating { body["rating"] = rating }
-        if let note = item.note { body["note"] = note }
         if let sourceURL = item.sourceURL { body["source_url"] = sourceURL }
         if let placeId = item.placeId, !placeId.isEmpty { body["provider_place_id"] = placeId }
         return body

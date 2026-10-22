@@ -45,6 +45,32 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertNil(store.string(forKey: PendingShareStore.legacyURLKey))
     }
 
+    func testPlaceJournalMatchesIncomingURLAndIgnoresUnrelated() {
+        let urlA = URL(string: "https://sav-e-app.vercel.app/p/AbC123_x")!
+        let urlB = URL(string: "https://sav-e-app.vercel.app/p/ZzOther99")!
+        let place = PendingSharePayload(
+            kind: .place,
+            shareCode: "AbC123_x",
+            placeId: "quarter-sheets-pizza-club",
+            listId: nil,
+            sender: "Mina",
+            url: urlA.absoluteString
+        )
+        let list = PendingSharePayload(
+            kind: .list,
+            shareCode: "LiSt99_z",
+            placeId: nil,
+            listId: "22222222-2222-2222-2222-222222222222",
+            sender: "Mina",
+            url: "https://sav-e-app.vercel.app/l/LiSt99_z"
+        )
+        XCTAssertTrue(place.matchesIncomingPlace(url: urlA))
+        XCTAssertTrue(place.matchesIncomingPlace(url: URL(string: "https://sav-e-app.vercel.app/p/AbC123_x/")!))
+        XCTAssertFalse(place.matchesIncomingPlace(url: urlB))
+        XCTAssertFalse(list.matchesIncomingPlace(url: urlA))
+        XCTAssertFalse(list.matchesIncomingPlace(url: URL(string: "https://sav-e-app.vercel.app/l/LiSt99_z")!))
+    }
+
     func testListPayloadKeepsShareCodeAndListId() {
         let payload = PendingSharePayload(
             kind: .list,

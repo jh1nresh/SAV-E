@@ -14,6 +14,45 @@ struct PendingSharePayload: Codable, Equatable {
     var listId: String?
     var sender: String?
     var url: String
+
+    /// Auto-save only the place the Clip journal actually confirmed.
+    /// A leftover failed/cancelled journal, or a list payload, must not
+    /// save an unrelated `/p` launch.
+    func matchesIncomingPlace(url: URL) -> Bool {
+        guard kind == .place else { return false }
+        if Self.normalizedLink(self.url) == Self.normalizedLink(url.absoluteString) {
+            return true
+        }
+        let incomingToken = Self.pathToken(url.absoluteString)
+        if let shareCode, !shareCode.isEmpty,
+           incomingToken.caseInsensitiveCompare(shareCode) == .orderedSame {
+            return true
+        }
+        if let placeId, !placeId.isEmpty,
+           incomingToken.caseInsensitiveCompare(placeId) == .orderedSame {
+            return true
+        }
+        return false
+    }
+
+    private static func normalizedLink(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return trimmed.lowercased() }
+        components.fragment = nil
+        components.scheme = components.scheme?.lowercased()
+        components.host = components.host?.lowercased()
+        if components.path.count > 1, components.path.hasSuffix("/") {
+            components.path.removeLast()
+        }
+        return (components.string ?? trimmed).lowercased()
+    }
+
+    private static func pathToken(_ raw: String) -> String {
+        guard let url = URL(string: raw) else { return "" }
+        return url.path.split(separator: "/").last.map(String.init) ?? ""
+    }
 }
 
 enum PendingShareStore {

@@ -323,7 +323,7 @@ struct SaveApp: App {
                 return
             }
             pendingFriendShareURL = url.absoluteString
-            if PendingShareStore.load() != nil {
+            if let pending = PendingShareStore.load(), pending.matchesIncomingPlace(url: url) {
                 autoSaveIncomingShare = true
             }
             if let place = SharedPlaceData.from(url: url) {
