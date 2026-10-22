@@ -4006,6 +4006,8 @@ final class MapViewModel: ObservableObject {
     }
 
     func deletePlace(_ place: Place) async throws {
+        let startedBy = authService.currentUserId
+        let generation = authService.sessionGeneration
         let previousPlaces = places
         invalidateCorrectionSuggestions(placeIDs: place.savedIDs)
         places.removeAll { $0.id == place.id }
@@ -4019,17 +4021,23 @@ final class MapViewModel: ObservableObject {
 
         do {
             if usesRemotePersistence {
-                guard let userID = authService.currentUserId else { throw SupabaseError.notAuthenticated }
+                guard let userID = startedBy else { throw SupabaseError.notAuthenticated }
+                try ensureConfirmationSession(userID, generation)
                 // The user's Delete action applies to the whole displayed venue.
                 // Only delete aliases that actually exist in this account.
                 let remote = try await supabaseService.fetchPlaces(for: userID)
+                try ensureConfirmationSession(userID, generation)
                 for record in remote where place.savedIDs.contains(record.id) {
                     try await supabaseService.deletePlace(record.id)
+                    try ensureConfirmationSession(userID, generation)
                 }
             }
-            try saveLocalVaultService.removeConfirmedPlace(place, belongingTo: authService.currentUserId)
+            if let userID = startedBy {
+                try ensureConfirmationSession(userID, generation)
+            }
+            try saveLocalVaultService.removeConfirmedPlace(place, belongingTo: startedBy)
         } catch {
-            _ = try? saveLocalVaultService.saveConfirmedPlace(place)
+            _ = try? saveLocalVaultService.saveConfirmedPlace(place, ownerSubject: startedBy)
             places = previousPlaces
             selectedPlace = place
             alignAuthoritativeSavedPlaceCountWithPlaces()

@@ -1440,8 +1440,16 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(map.contains("belongingTo: authService.currentUserId"))
         XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: userId)"))
         XCTAssertTrue(
-            map.contains("removeConfirmedPlace(place, belongingTo: authService.currentUserId)"),
-            "P1 4345427432: Delete must not erase another account's matching vault row"
+            map.contains("let startedBy = authService.currentUserId"),
+            "P1 4346852374: capture the initiating owner before fetchPlaces/deletePlace await"
+        )
+        XCTAssertTrue(
+            map.contains("removeConfirmedPlace(place, belongingTo: startedBy)"),
+            "P1 4346852374: Delete uses the owner captured before the network await"
+        )
+        XCTAssertTrue(
+            map.contains("saveConfirmedPlace(place, ownerSubject: startedBy)"),
+            "P1 4346852374: failed delete must restore the initiating owner's row"
         )
         XCTAssertTrue(
             map.contains("saveConfirmedPlace(place, ownerSubject: authService.currentUserId)"),
@@ -1820,6 +1828,106 @@ final class SAVEProductionConfigTests: XCTestCase {
                 return XCTFail("a late URL-intent write must not stamp the next account")
             }
         }
+    }
+
+    /// D3 / P1 4346852374: capture A before await; do not delete B's matching row.
+    @MainActor
+    func testDeletePlaceKeepsOtherOwnerAfterAccountSwitchMidCall() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:a")
+        defer {
+            PrivyAuthService.shared.authState = previousAuth
+            AnalysisRequestURLProtocol.reset()
+        }
+
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.url?.path == "/places" {
+                let group = DispatchGroup()
+                group.enter()
+                Task { @MainActor in
+                    PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:b")
+                    group.leave()
+                }
+                group.wait()
+                return (200, "[]")
+            }
+            return (200, "{}")
+        }
+
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.delete-switch.\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("delete-switch-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let placeA = makeSocialPlace(name: "Harbor Cafe")
+        let placeB = makeSocialPlace(name: "Harbor Cafe")
+        _ = try vault.saveConfirmedPlace(placeA, ownerSubject: "did:privy:a")
+        _ = try vault.saveConfirmedPlace(placeB, ownerSubject: "did:privy:b")
+
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+        map.places = [placeA]
+
+        do {
+            try await map.deletePlace(placeA)
+            XCTFail("a mid-delete account switch must abort the vault mutation")
+        } catch ReviewCandidateError.sessionChangedAfterCommit {
+            // Expected: A's remote work must not delete B's local row.
+        }
+
+        XCTAssertEqual(
+            try vault.confirmedPlaces(belongingTo: "did:privy:b").map(\.id),
+            [placeB.id],
+            "account B's matching venue must survive A's interrupted delete"
+        )
+        XCTAssertEqual(
+            try vault.confirmedPlaces(belongingTo: "did:privy:a").first?.id,
+            placeA.id,
+            "failed delete restores A's row for the initiating owner"
+        )
+        XCTAssertEqual(try vault.confirmedPlaceRecords().first { $0.id == placeA.id }?.ownerSubject, "did:privy:a")
+    }
+
+    /// D3 / P1 4346852374: offline delete rollback must keep the owner stamp.
+    @MainActor
+    func testFailedDeleteRestoresConfirmedPlaceWithInitiatingOwner() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:a")
+        defer {
+            PrivyAuthService.shared.authState = previousAuth
+            AnalysisRequestURLProtocol.reset()
+        }
+
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.url?.path == "/places" { return (500, #"{"error":"offline"}"#) }
+            return (200, "{}")
+        }
+
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.delete-restore.\(UUID().uuidString)")
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("delete-restore-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let place = makeSocialPlace(name: "Rollback Cafe")
+        _ = try vault.saveConfirmedPlace(place, ownerSubject: "did:privy:a")
+
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+        map.places = [place]
+
+        do {
+            try await map.deletePlace(place)
+            XCTFail("an offline remote delete must fail closed")
+        } catch {
+            XCTAssertFalse(error is ReviewCandidateError)
+        }
+
+        let restored = try vault.confirmedPlaces(belongingTo: "did:privy:a")
+        XCTAssertEqual(restored.count, 1)
+        XCTAssertEqual(restored.first?.id, place.id)
+        XCTAssertEqual(
+            try vault.confirmedPlaceRecords().first { $0.id == place.id }?.ownerSubject,
+            "did:privy:a",
+            "rollback must not persist an ownerless row that signed-in reload would hide"
+        )
     }
 
     @MainActor
