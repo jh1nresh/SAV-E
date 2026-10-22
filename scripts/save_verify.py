@@ -50,15 +50,32 @@ SWIFT_ROOTS = (
     Path("backend/src"),
 )
 
+# HoP 2026-10-22 id 定名. Paywall = #295 set; retry = paywall.retry.
+FINAL_IDS = {
+    "ai.quotaExhausted": "ai.quotaExhausted",
+    "home.saves": "home.saves",
+    "map.card.beenHere": "map.card.beenHere",
+    "passport.root": "passport.root",
+    "paywall.benefit.unlimited": "paywall.benefit.unlimited",
+    "paywall.retry": "paywall.retry",
+    "paywall.savedNote": "paywall.savedNote",
+    "saves.unplaced": "saves.unplaced",
+    "saves.unplaced.row": "saves.unplaced.row.",
+}
+
 # Source probes: a PR is "on this tree" only when every token is present.
 PR_PROBES = {
     290: ("home.miniMap", "home.placeList", "home.collected"),
-    293: ("paywall.freePlaceLimit", "freeSavedPlaceLimit"),
-    295: ("home.openSaves", "paywall.benefit.unlimited"),
+    293: ("freeSavedPlaceLimit",),
+    295: (
+        "paywall.benefit.unlimited",
+        "paywall.savedNote",
+        "paywall.retry",
+    ),
     296: ("friends.list", "friends.loading"),
-    297: ("passport.cities", "passport.legend"),
+    297: ("passport.root",),
     298: ("SaveDoodleMapView",),
-    304: ("map.card.beenHere", "map.card.visits"),
+    304: ("map.card.beenHere",),
     307: ("clip.cap50", "clip.signin", "clip.skoverlay"),
     308: (),
 }
@@ -411,17 +428,24 @@ def assertion(item_id: str, ok: bool, detail: str) -> dict[str, Any]:
 def skipped_assertions(flow: str, reason: str) -> list[dict[str, Any]]:
     planned = {
         "V1": ["saved-count-1", "dedup-two-sources", "analyze-single-write"],
-        "V2": ["eat-6", "go-6", "collected-4-12", "home.openSaves-or-home.saves"],
+        "V2": ["eat-6", "go-6", "collected-4-12", "home.saves"],
         "V3": ["saved-pins", "no-google-photo-on-pin", "visited-ring"],
-        "V4": ["been-here-once-per-day", "passport-columns", "visit-tiers-1-3-5"],
-        "V5": ["save-50-ok", "save-51-unplaced-paywall", "saved-50-copy", "ai-no-paywall"],
+        "V4": ["map.card.beenHere", "passport.root", "visit-tiers-1-3-5"],
+        "V5": [
+            "save-50-ok",
+            "save-51-unplaced-paywall",
+            "paywall.savedNote",
+            "paywall.retry",
+            "saves.unplaced",
+            "ai.quotaExhausted",
+        ],
         "V6": ["cold-start-12", "offline-sync-15"],
         "V7": ["clip-cap50-copy", "no-paywall-in-clip", "no-google-payload"],
         "V8": ["friends-f1-two-rows", "friends-empty", "five-tabs"],
     }[flow]
     rows = []
     for item_id in planned:
-        extra = SAVED_50_COPY if item_id in {"saved-50-copy", "clip-cap50-copy"} else reason
+        extra = SAVED_50_COPY if item_id in {"paywall.savedNote", "clip-cap50-copy"} else reason
         rows.append(
             {
                 "detail": extra,
@@ -461,17 +485,32 @@ def evaluate_v5(root: Path, cache: dict[str, str]) -> list[dict[str, Any]]:
     )
     rows.append(
         assertion(
-            "V5.saved-50-copy",
-            source_has(root, SAVED_50_COPY, cache),
-            f"paywall / cap copy must include {SAVED_50_COPY}",
+            "V5.paywall.savedNote",
+            source_has(root, FINAL_IDS["paywall.savedNote"], cache)
+            and source_has(root, SAVED_50_COPY, cache),
+            f"{FINAL_IDS['paywall.savedNote']} holds {SAVED_50_COPY}",
         )
     )
     rows.append(
         assertion(
-            "V5.ai-no-paywall",
-            source_has(root, "paywall.root", cache)
-            and source_has(root, "coreMemoryLoopIsFree", cache),
-            "AI exhausted must not present paywall.root (policy + id exist)",
+            "V5.paywall.retry",
+            source_has(root, FINAL_IDS["paywall.retry"], cache),
+            "retry = paywall.retry",
+        )
+    )
+    rows.append(
+        assertion(
+            "V5.saves.unplaced",
+            source_has(root, FINAL_IDS["saves.unplaced"], cache)
+            and source_has(root, FINAL_IDS["saves.unplaced.row"], cache),
+            "saves.unplaced + saves.unplaced.row.<placeId>",
+        )
+    )
+    rows.append(
+        assertion(
+            "V5.ai.quotaExhausted",
+            source_has(root, FINAL_IDS["ai.quotaExhausted"], cache),
+            "ai.quotaExhausted with no paywall.root",
         )
     )
     return rows

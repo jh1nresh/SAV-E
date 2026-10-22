@@ -118,7 +118,10 @@ class VerifyToolTests(unittest.TestCase):
             v7 = load_stdout(run_cli("run", "V7", workspace=workspace))
             v5_ids = [row["id"] for row in v5["assertions"]]
             v7_ids = [row["id"] for row in v7["assertions"]]
-            self.assertIn("V5.saved-50-copy", v5_ids)
+            self.assertIn("V5.paywall.savedNote", v5_ids)
+            self.assertIn("V5.paywall.retry", v5_ids)
+            self.assertIn("V5.saves.unplaced", v5_ids)
+            self.assertIn("V5.ai.quotaExhausted", v5_ids)
             self.assertIn("V7.clip-cap50-copy", v7_ids)
             self.assertTrue(any(row["detail"] == "已存 50 個" or "已存 50 個" in row["detail"] for row in v5["assertions"]))
             self.assertTrue(any("已存 50 個" in row["detail"] for row in v7["assertions"]))
