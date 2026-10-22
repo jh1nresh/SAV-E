@@ -33,6 +33,26 @@ test("SL1 dedupes the list first and keeps list order", () => {
   assert.equal(plan.overCap, 0);
 });
 
+test("SL1 records skipped identities so transitive duplicates collapse", () => {
+  const plan = planClipListSave({
+    items: [
+      { name: "Onibus Coffee", latitude: 35.644, longitude: 139.699 },
+      {
+        name: "Onibus Coffee",
+        latitude: 35.644,
+        longitude: 139.699,
+        provider_place_id: "shop-b",
+      },
+      { name: "Katsu Midori", latitude: 35.67, longitude: 139.77, provider_place_id: "shop-b" },
+    ],
+    existingIdentities: [],
+    savedPlaceCount: 0,
+  });
+  assert.deepEqual(plan.toInsert.map((item) => item.name), ["Onibus Coffee"]);
+  assert.equal(plan.alreadySaved, 2);
+  assert.equal(plan.newlySaved, 1);
+});
+
 test("SL1 skips places already on the account", () => {
   const existing = new Set(clipListPlaceIdentities(cafe("a")));
   const plan = planClipListSave({

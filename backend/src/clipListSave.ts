@@ -69,6 +69,7 @@ export function planClipListSave(input: {
     if (identities.length === 0) continue;
     if (identities.some((key) => seen.has(key))) {
       alreadySaved += 1;
+      for (const key of identities) seen.add(key);
       continue;
     }
     for (const key of identities) seen.add(key);

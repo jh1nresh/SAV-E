@@ -156,6 +156,7 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(backend.contains("saved: inserted.map"))
         XCTAssertTrue(backend.contains("already: plan.alreadyExisting.map"))
         XCTAssertTrue(backend.contains("existingPlaces"))
+        XCTAssertTrue(backend.contains("alreadySaved += 1;\n      for (const key of identities) seen.add(key);"))
         XCTAssertTrue(backend.contains("overCap"))
         XCTAssertTrue(try source(at: "backend/src/server.ts").contains("clipListSaveResponse(plan, inserted)"))
         XCTAssertTrue(try source(at: "backend/src/server.ts").contains("existingPlaces: existing.rows"))
@@ -231,6 +232,13 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(mapVM.contains("needsPlaceRefresh"))
         XCTAssertTrue(mapVM.contains("rekeyed(to: place.id)"))
         XCTAssertTrue(appPending.contains("static func needsPlaceRefresh"))
+        let listModel = try source(at: "SAV-E/Models/SaveCollaborativeList.swift")
+        XCTAssertTrue(listModel.contains("matchesMapFeature(title: title, coordinate: coordinate)"))
+        XCTAssertFalse(listModel.contains("place.name.localizedCaseInsensitiveCompare(title)"))
+        XCTAssertGreaterThanOrEqual(
+            appPending.components(separatedBy: "keys.forEach { seen.insert($0) }").count - 1,
+            2
+        )
         let carry = try source(at: "SAV-E/Services/ClipSignInCarryOver.swift")
         let appleStore = try source(at: "SAV-E/Models/ClipAppleAccountStore.swift")
         let auth = try source(at: "SAV-E/Services/PrivyAuthService.swift")

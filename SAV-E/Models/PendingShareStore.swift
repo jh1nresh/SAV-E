@@ -288,6 +288,7 @@ enum ClipListHandoff {
             guard !keys.isEmpty else { continue }
             if keys.contains(where: { seen.contains($0) }) {
                 already += 1
+                keys.forEach { seen.insert($0) }
                 continue
             }
             keys.forEach { seen.insert($0) }

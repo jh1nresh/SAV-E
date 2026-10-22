@@ -243,6 +243,69 @@ final class PendingShareStoreTests: XCTestCase {
         )
     }
 
+    func testSameNameDifferentCityDoesNotCountAsVisibleDuplicate() {
+        let tokyo = PendingConfirmedPlace(
+            placeId: "shop-tokyo",
+            name: "Starbucks",
+            address: "Tokyo",
+            latitude: 35.68,
+            longitude: 139.76,
+            category: "Cafe",
+            sourceURL: nil
+        ).asListItem()
+        var seattle = tokyo.asPlace(includeSenderMemory: false)
+        seattle.latitude = 47.61
+        seattle.longitude = -122.33
+        seattle.providerPlaceId = "shop-seattle"
+        XCTAssertFalse(tokyo.alreadySaved(in: [seattle]))
+        XCTAssertTrue(
+            ClipListHandoff.needsPlaceRefresh(
+                confirmed: [tokyo],
+                places: [seattle],
+                newlySaved: 0,
+                alreadySaved: 1
+            )
+        )
+    }
+
+    func testPlanStampsRecordsSkippedIdentities() {
+        let onibus = PendingConfirmedPlace(
+            placeId: "",
+            name: "Onibus Coffee",
+            address: "Tokyo",
+            latitude: 35.644,
+            longitude: 139.699,
+            category: "Cafe",
+            sourceURL: nil
+        ).asListItem()
+        let onibusWithProvider = PendingConfirmedPlace(
+            placeId: "shop-b",
+            name: "Onibus Coffee",
+            address: "Tokyo",
+            latitude: 35.644,
+            longitude: 139.699,
+            category: "Cafe",
+            sourceURL: nil
+        ).asListItem()
+        let katsu = PendingConfirmedPlace(
+            placeId: "shop-b",
+            name: "Katsu Midori",
+            address: "Tokyo",
+            latitude: 35.67,
+            longitude: 139.77,
+            category: "Cafe",
+            sourceURL: nil
+        ).asListItem()
+        let planned = ClipListHandoff.planStamps(
+            confirmed: [onibus, onibusWithProvider, katsu],
+            alreadySaved: { _ in false },
+            savedPlaceCount: 0
+        )
+        XCTAssertEqual(planned.toStamp.map(\.title), ["Onibus Coffee"])
+        XCTAssertEqual(planned.counts.alreadySaved, 2)
+        XCTAssertEqual(planned.counts.newlySaved, 1)
+    }
+
     func testRemoteHandoffStampsServerRowsNotStaleLocalPrefix() {
         let confirmed = (1...5).map { index in
             PendingConfirmedPlace(
