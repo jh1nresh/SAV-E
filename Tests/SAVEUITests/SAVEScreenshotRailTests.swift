@@ -531,6 +531,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     func testFreeCapE4Screenshots() throws {
         try captureE4FiftyFirstSavePaywall()
+        try captureE4PaywallRetry()
         try captureE4UnplacedCandidate()
         try captureE4SettingsPaywall()
         try captureE4AIQuotaNotice()
@@ -547,6 +548,28 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.staticTexts["You've saved 50 places. Keep going."].firstMatch.exists)
         XCTAssertTrue(app.staticTexts["Unlimited saved places"].firstMatch.exists)
         attach(app, name: "e4-51st-save-paywall")
+        terminate(app)
+    }
+
+    /// B6: QA reviews the E4 artifact. The 51st-save still is `notForSale`
+    /// while purchasing is off; this launch is the retry / product-load miss.
+    @MainActor
+    private func captureE4PaywallRetry() throws {
+        let app = makeE4App(extraArguments: [
+            "--uitest-show-saved-place-limit-paywall",
+            "--uitest-show-paywall-retry",
+        ])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        let retry = app.buttons["paywall.retry"]
+        XCTAssertTrue(retry.waitForExistence(timeout: stepTimeout), "B6: E4 must show paywall.retry, not notForSale")
+        XCTAssertEqual(retry.label, "Try again")
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.unavailable"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.savedNote"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.notForSale"].exists)
+        attach(app, name: "e4-paywall-retry")
         terminate(app)
     }
 

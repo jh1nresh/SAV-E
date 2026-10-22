@@ -365,11 +365,30 @@ final class SaveLocalVaultService: Sendable {
     }
 
     func removeConfirmedPlace(_ place: Place) throws {
+        try removeConfirmedPlace(place, belongingTo: nil, scopedToActiveAccount: false)
+    }
+
+    func removeConfirmedPlace(_ place: Place, belongingTo currentUserId: String?) throws {
+        try removeConfirmedPlace(place, belongingTo: currentUserId, scopedToActiveAccount: true)
+    }
+
+    private func removeConfirmedPlace(
+        _ place: Place,
+        belongingTo currentUserId: String?,
+        scopedToActiveAccount: Bool
+    ) throws {
         try withLock {
             try withCoordinatedVaultWrite { url in
                 var records = try loadRecords(from: url)
                 records.removeAll { record in
                     guard let confirmed = record.confirmedPlace else { return false }
+                    if scopedToActiveAccount,
+                       !MapViewModel.localVaultRecordBelongsToActiveAccount(
+                            record.ownerSubject,
+                            currentUserId: currentUserId
+                       ) {
+                        return false
+                    }
                     return place.savedIDs.contains(confirmed.id) || confirmed.matches(place)
                 }
                 try save(records, to: url)

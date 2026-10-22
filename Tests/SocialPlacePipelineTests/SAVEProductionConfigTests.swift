@@ -171,6 +171,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         for name in [
             "e4-51st-save-paywall",
+            "e4-paywall-retry",
             "e4-unplaced-candidate",
             "e4-settings-paywall",
             "e4-ai-quota-notice",
@@ -213,6 +214,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         let workflow = try source(at: ".github/workflows/ci.yml")
         XCTAssertTrue(workflow.contains("save-free-cap-e4-${{ github.sha }}"))
         XCTAssertTrue(workflow.contains("SAVEUITests/SAVEScreenshotRailTests/testFreeCapE4Screenshots"))
+        XCTAssertTrue(workflow.contains("e4-paywall-retry"))
         XCTAssertFalse(
             try source(at: "scripts/select-ios-tests.py").contains("testFreeCapE4Screenshots"),
             "E4 stays off FULL so the required ios job does not grow four launches"
@@ -1438,6 +1440,10 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(map.contains("belongingTo: authService.currentUserId"))
         XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: userId)"))
         XCTAssertTrue(
+            map.contains("removeConfirmedPlace(place, belongingTo: authService.currentUserId)"),
+            "P1 4345427432: Delete must not erase another account's matching vault row"
+        )
+        XCTAssertTrue(
             map.contains("saveConfirmedPlace(place, ownerSubject: authService.currentUserId)"),
             "local-only confirm must stamp the active owner so a signed-in reload keeps the Map Stamp"
         )
@@ -1723,6 +1729,18 @@ final class SAVEProductionConfigTests: XCTestCase {
     func testEntitlementRefreshResyncsAppGroupCacheInSource() throws {
         let store = try source(at: "SAV-E/Services/SaveEntitlementStore.swift")
         let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
+        let listing = try source(at: "specs/app-store-listing.md")
+        XCTAssertTrue(listing.contains("Monthly AI-assist allowance is higher on Pro (Free 20, Pro 500)."))
+        XCTAssertFalse(listing.contains("Monthly AI-assist allowance is the same on Free and Pro"))
+        let supabase = try source(at: "SAV-E/Services/SupabaseService.swift")
+        XCTAssertTrue(
+            supabase.contains("func saveFriendRestaurant(placeID: UUID) async throws -> Place"),
+            "P2 4346012936: friend-rating save must remap the server cap"
+        )
+        XCTAssertTrue(supabase.contains("/v0/friend-ratings/\\(placeID)/save"))
+        let friendSaveRange = try XCTUnwrap(supabase.range(of: "func saveFriendRestaurant(placeID: UUID) async throws -> Place"))
+        let mappedAfterFriendSave = supabase[friendSaveRange.lowerBound...].range(of: "throw mappedSavedPlaceLimit(error)")
+        XCTAssertNotNil(mappedAfterFriendSave, "saveFriendRestaurant must remap over_free_limit like shared-post save")
         XCTAssertTrue(store.contains("NotificationCenter.default.post(name: .saveEntitlementDidRefresh, object: nil)"))
         XCTAssertTrue(map.contains("publisher(for: .saveEntitlementDidRefresh)"))
         XCTAssertTrue(map.contains("self?.syncSavedPlaceLimitCache()"))

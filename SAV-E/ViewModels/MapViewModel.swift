@@ -2305,7 +2305,7 @@ final class MapViewModel: ObservableObject {
                     rollbackError = error
                 }
             }
-            try? saveLocalVaultService.removeConfirmedPlace(original)
+            try? saveLocalVaultService.removeConfirmedPlace(original, belongingTo: rollbackUserId)
             try mirrorToLocalVault(original, startedBy: rollbackUserId, generation: rollbackGeneration)
             places = Place.consolidated(places.filter { $0.id != original.id } + [original])
             if let rollbackError {
@@ -4027,7 +4027,7 @@ final class MapViewModel: ObservableObject {
                     try await supabaseService.deletePlace(record.id)
                 }
             }
-            try saveLocalVaultService.removeConfirmedPlace(place)
+            try saveLocalVaultService.removeConfirmedPlace(place, belongingTo: authService.currentUserId)
         } catch {
             _ = try? saveLocalVaultService.saveConfirmedPlace(place)
             places = previousPlaces

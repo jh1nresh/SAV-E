@@ -160,6 +160,38 @@ final class SaveLocalVaultServiceTests: XCTestCase {
         XCTAssertTrue(try service.confirmedPlaces().isEmpty)
     }
 
+    /// D3 / P1 4345427432: deleting A's stamp must not erase B's matching venue.
+    @MainActor
+    func testRemoveConfirmedPlaceKeepsAnotherAccountMatchingVenue() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let ownerA = makePlace(
+            id: UUID(),
+            name: "Harbor Cafe",
+            address: "1 Harbor Way",
+            googlePlaceId: "ChIJ-shared-harbor"
+        )
+        let ownerB = makePlace(
+            id: UUID(),
+            name: "Harbor Cafe",
+            address: "1 Harbor Way",
+            googlePlaceId: "ChIJ-shared-harbor"
+        )
+        _ = try vault.saveConfirmedPlace(ownerA, ownerSubject: "did:privy:a")
+        _ = try vault.saveConfirmedPlace(ownerB, ownerSubject: "did:privy:b")
+        XCTAssertEqual(try vault.confirmedPlaces(belongingTo: "did:privy:a").count, 1)
+        XCTAssertEqual(try vault.confirmedPlaces(belongingTo: "did:privy:b").count, 1)
+
+        try vault.removeConfirmedPlace(ownerA, belongingTo: "did:privy:a")
+
+        XCTAssertTrue(try vault.confirmedPlaces(belongingTo: "did:privy:a").isEmpty)
+        let remaining = try vault.confirmedPlaces(belongingTo: "did:privy:b")
+        XCTAssertEqual(remaining.count, 1, "account B must keep the shared-venue stamp after A deletes")
+        XCTAssertEqual(remaining.first?.id, ownerB.id)
+        XCTAssertEqual(remaining.first?.googlePlaceId, "ChIJ-shared-harbor")
+    }
+
     @MainActor
     func testDeleteAllRecordsClearsEveryLocalMemoryState() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
