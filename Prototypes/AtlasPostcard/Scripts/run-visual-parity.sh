@@ -411,10 +411,15 @@ for screen in home saves plan map passport; do
         exit 2
     fi
 
+    compare_args=(
+        --target "$ARTIFACT_DIR/reference/$screen.png"
+        --actual "$actual"
+        --diff "$ARTIFACT_DIR/diff/$screen.png"
+        --threshold "$THRESHOLD"
+    )
     extra_args=()
-    mask_args=()
     if [[ "$screen" == home && -f "$ARTIFACT_DIR/reference/home-mask.png" ]]; then
-        mask_args+=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
+        compare_args+=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
     fi
     if [[ "$screen" == "map" ]]; then
         if [[ ! -f "$MAP_MASK" ]]; then
@@ -424,22 +429,12 @@ for screen in home saves plan map passport; do
         echo "Map pixel coverage: DESIGN map-mask.png (white = Apple Maps)." >&2
         extra_args=(--ignore-mask "$MAP_MASK")
     fi
-    # macOS CI bash + set -u treats "${empty[@]}" as unbound. Only expand
-    # when the arrays have values (home mask / map ignore-mask).
-    parity_cmd=(
-        xcrun swift "$PARITY_SCRIPT"
-        --target "$ARTIFACT_DIR/reference/$screen.png"
-        --actual "$actual"
-        --diff "$ARTIFACT_DIR/diff/$screen.png"
-    )
-    if [[ ${#mask_args[@]} -gt 0 ]]; then
-        parity_cmd+=("${mask_args[@]}")
-    fi
-    parity_cmd+=(--threshold "$THRESHOLD")
+    # macOS CI bash + set -u treats "${empty[@]}" as unbound. compare_args
+    # always has the required flags; only expand extra_args when set.
     if [[ ${#extra_args[@]} -gt 0 ]]; then
-        parity_cmd+=("${extra_args[@]}")
+        compare_args+=("${extra_args[@]}")
     fi
-    if "${parity_cmd[@]}" \
+    if xcrun swift "$PARITY_SCRIPT" "${compare_args[@]}" \
         >"$ARTIFACT_DIR/results/$screen.json"
     then
         status="PASS"
