@@ -1,6 +1,6 @@
 # Savvy Design System
 
-> Last updated: 2026-10-20
+> Last updated: 2026-10-21
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** still governs paper, type, kraft, and coral
 > chrome, with the 2026-10-19 v5 cream/ink/stroke lock below. **Tile-town**
@@ -282,6 +282,16 @@ rules in this section.
 Hex values below are the `SaveAtlasPalette` values in code. If code and this
 table ever disagree, fix whichever one drifted in the same PR.
 
+Token consolidation map (`main` → this PR). Hex values are unchanged.
+
+| Old (`main`) | New token | Light | Dark |
+| --- | --- | --- | --- |
+| `coral` `Color(light: "F26B4A", dark: "D97861")` | `coralLightHex` / `coralDarkHex` → `coral` | `#F26B4A` | `#D97861` |
+| canvas / paper `Color(light: "FFF9EB", dark: "1E1C19")` | `creamHex` / `cream` → canvas / paper | `#FFF9EB` | `#1E1C19` |
+| — | `brandCoralHex` / `brandCoral` | `#F26B4A` | `#F26B4A` |
+| Pin `Color(red: 0.949, green: 0.420, blue: 0.290)` | `SaveAtlasPalette.brandCoral` | `#F26B4A` | `#F26B4A` |
+| Test / Share hex `"F26B4A"` | `SaveAtlasPalette.coralLightHex` | `#F26B4A` | — |
+
 | Role | Token | Light | Dark | Use |
 | --- | --- | --- | --- | --- |
 | Canvas | `SaveAtlasPalette.canvas` | `#FFF9EB` | `#11161C` | Full-screen Atlas background |
@@ -289,7 +299,9 @@ table ever disagree, fix whichever one drifted in the same PR.
 | Forest | `SaveAtlasPalette.forest` | `#0E4A33` | `#B9E0C9` | Display headings, ticket titles, confirmed accent |
 | Ink | `SaveAtlasPalette.ink` | `#2F2E23` | `#F4F1E4` | Primary text, shadows at low opacity |
 | Muted | `SaveAtlasPalette.muted` | `#62594F` | `#CFC4B8` | Supporting and secondary copy |
-| Coral | `SaveAtlasPalette.coral` | `#F26B4A` | `#D97861` | Postage accent: primary CTA, source-clue state |
+| Coral | `SaveAtlasPalette.coral` | `#F26B4A` | `#D97861` | Postage accent: primary CTA, source-clue state. Matches landing `--coral`. |
+| Brand coral | `SaveAtlasPalette.brandCoral` | `#F26B4A` | `#F26B4A` | Non-adaptive `#F26B4A`. App icon, wordmark, and the tile-town pin. Do not recolor assets. |
+| Cream | `SaveAtlasPalette.cream` | `#FFF9EB` | `#FFF9EB` | Landing / Atlas cream. Canvas and paper light columns. |
 | Mint | `SaveAtlasPalette.mint` | `#D6E8C4` | `#4F7258` | Confirmed / saved state fills |
 | Sky | `SaveAtlasPalette.sky` | `#B5E3F5` | `#3F758B` | Review state fills |
 | Lavender | `SaveAtlasPalette.lavender` | `#E3D6F7` | `#57466F` | Premium and soft brand accent |
@@ -650,7 +662,7 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 - Tab bible: flat full-width cream bar (`canvas`) with a hard 2px `stroke`
   top rule; 24pt hand-drawn template icons (`SaveDoodleTabIcon`: house,
   folded map, plus, people, booklet); coral on the active destination only,
-  muted when idle; the center `+` is a coral (`#F26B4A`) circle with no visible "Save" label, but VoiceOver and `root.tab.save` keep the capture
+  muted when idle; the center `+` is a coral (`SaveAtlasPalette.coral`) circle with no visible "Save" label, but VoiceOver and `root.tab.save` keep the capture
   name. **DESIGN question:** the 2026-10-19 packet asked for a red `+`
   circle; this PR keeps production coral until that token is decided. Do
   not use a mint selection pill or a floating glass capsule.
