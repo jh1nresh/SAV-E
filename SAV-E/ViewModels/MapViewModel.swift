@@ -2149,22 +2149,99 @@ final class MapViewModel: ObservableObject {
             return .alreadySaved(existing)
         }
 
-        let savedPlace = place
-        if let userId = authService.currentUserId {
+        let item = clipHandoffItem(from: place)
+        if authService.currentUserId != nil {
             do {
-                try await supabaseService.savePlace(place, userId: userId)
-                recordPassportFieldActionAfterSavingPlace()
-            } catch {
-                print("MapViewModel: failed to sync friend share receipt \(place.name): \(error)")
-                syncFailedPlaceName = place.name
+                let (status, data) = try await supabaseService.saveClipListPlaces(
+                    [ClipListHandoff.placeBody(from: item)]
+                )
+                guard let remote = ClipListHandoff.parseRemote(status: status, data: data) else {
+                    throw ClipListHandoffError.unconfirmed
+                }
+                return try importSharedPlaceHandoff(
+                    item: item,
+                    fallback: place,
+                    counts: remote.counts,
+                    saved: remote.saved,
+                    already: remote.already
+                )
+            } catch SupabaseError.notConfigured {
+                // Unconfigured builds keep the local quota plan.
             }
         }
 
+        let planned = ClipListHandoff.planStamps(
+            confirmed: [item],
+            alreadySaved: { $0.alreadySaved(in: places) },
+            savedPlaceCount: places.count
+        )
+        return try importSharedPlaceHandoff(
+            item: item,
+            fallback: place,
+            counts: planned.counts,
+            saved: [],
+            already: []
+        )
+    }
+
+    private func clipHandoffItem(from place: Place) -> SaveListItem {
+        var extras: [String] = []
+        for candidate in [place.googlePlaceId, place.providerPlaceId] {
+            guard let value = candidate?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !value.isEmpty,
+                  extras.contains(where: { $0.caseInsensitiveCompare(value) == .orderedSame }) == false
+            else { continue }
+            extras.append(value)
+        }
+        var item = SaveListItem.from(place: place)
+        item.extraPlaceIds = extras.isEmpty ? nil : extras
+        if let google = extras.first(where: ClipListHandoff.isGooglePlaceID) {
+            item.sourceID = google
+        } else if let provider = place.providerPlaceId?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !provider.isEmpty {
+            item.sourceID = provider
+        }
+        return item
+    }
+
+    private func importSharedPlaceHandoff(
+        item: SaveListItem,
+        fallback: Place,
+        counts: ClipListHandoffCounts,
+        saved: [ClipListHandoff.SavedRow],
+        already: [ClipListHandoff.SavedRow]
+    ) throws -> SharedPlaceSaveOutcome {
+        switch ClipListHandoff.onePlaceImport(counts: counts) {
+        case .capReached:
+            throw ClipListHandoffError.capReached
+        case .unconfirmed:
+            throw ClipListHandoffError.unconfirmed
+        case .alreadySaved:
+            if let existing = ClipListHandoff.placesFromRemoteRows(confirmed: [item], rows: already)?.first
+                ?? existingSavedPlace(matching: fallback) {
+                focusSavedPlace(existing, showStampMoment: false)
+                return .alreadySaved(existing)
+            }
+            throw ClipListHandoffError.unconfirmed
+        case .saved:
+            if saved.isEmpty {
+                acceptImportedSharedPlace(fallback)
+                return .saved(fallback)
+            }
+            guard let imported = ClipListHandoff.placesFromRemoteRows(confirmed: [item], rows: saved)?.first else {
+                throw ClipListHandoffError.unconfirmed
+            }
+            acceptImportedSharedPlace(imported)
+            return .saved(imported)
+        }
+    }
+
+    private func acceptImportedSharedPlace(_ savedPlace: Place) {
+        recordPassportFieldActionAfterSavingPlace()
         mirrorToLocalVault(savedPlace)
         places.removeAll { $0.matches(savedPlace) }
         places = [savedPlace] + places
         revealImportedPlaces([savedPlace])
-        return .saved(savedPlace)
     }
 
     /// Accept the authenticated server save result without importing any friend

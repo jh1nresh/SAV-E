@@ -226,6 +226,34 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertEqual(planned.counts.limit, 50)
         XCTAssertEqual(planned.toStamp.map(\.sourceID), ["novel-1", "novel-2"])
         XCTAssertEqual(
+            ClipListHandoff.onePlaceImport(counts: ClipListHandoffCounts(
+                newlySaved: 0,
+                alreadySaved: 0,
+                overCap: 1,
+                remaining: 0,
+                limit: 50
+            )),
+            .capReached
+        )
+        XCTAssertEqual(
+            ClipListHandoff.onePlaceImport(counts: ClipListHandoff.planStamps(
+                confirmed: [confirmed[0]],
+                alreadySaved: { _ in false },
+                savedPlaceCount: 50
+            ).counts),
+            .capReached
+        )
+        XCTAssertEqual(
+            ClipListHandoff.onePlaceImport(counts: ClipListHandoffCounts(
+                newlySaved: 1,
+                alreadySaved: 0,
+                overCap: 0,
+                remaining: 49,
+                limit: 50
+            )),
+            .saved
+        )
+        XCTAssertEqual(
             ClipListHandoff.toastEnglish(counts: planned.counts, confirmedCount: 5),
             "Saved 2 of 5. 3 over the free 50."
         )

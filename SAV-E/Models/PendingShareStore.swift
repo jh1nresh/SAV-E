@@ -204,6 +204,7 @@ struct ClipListHandoffCounts: Equatable {
 
 enum ClipListHandoffError: Error, Equatable {
     case unconfirmed
+    case capReached
 }
 
 /// A matching Clip “save all” journal is user confirmation to stamp the
@@ -320,6 +321,21 @@ enum ClipListHandoff {
             limit: limit
         )
         return (toStamp, counts)
+    }
+
+    /// One-place installed-app handoff uses the same three counts as Clip SIWA.
+    static func onePlaceImport(counts: ClipListHandoffCounts) -> OnePlaceImport {
+        if counts.newlySaved > 0 { return .saved }
+        if counts.alreadySaved > 0 { return .alreadySaved }
+        if counts.overCap > 0 { return .capReached }
+        return .unconfirmed
+    }
+
+    enum OnePlaceImport: Equatable {
+        case saved
+        case alreadySaved
+        case capReached
+        case unconfirmed
     }
 
     struct SavedRow: Equatable {

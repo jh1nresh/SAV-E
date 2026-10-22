@@ -138,6 +138,7 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(appPending.contains("shouldAutoSavePlace"))
         XCTAssertTrue(appPending.contains("fromClipSnapshot"))
         XCTAssertTrue(appPending.contains("planStamps"))
+        XCTAssertTrue(appPending.contains("case capReached"))
         XCTAssertTrue(appPending.contains("parseCounts"))
         XCTAssertTrue(appPending.contains("parseRemote"))
         XCTAssertTrue(appPending.contains("placesFromRemoteRows"))
@@ -286,6 +287,16 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(mapVM.contains("loadPlaces(force: true)"))
         XCTAssertTrue(mapVM.contains("needsPlaceRefresh"))
         XCTAssertTrue(mapVM.contains("rekeyed(to: place.id)"))
+        let receiptSave = mapVM[
+            mapVM.range(of: "func saveSharedPlaceReceipt")!.lowerBound
+            ..< (mapVM.range(of: "func acceptFriendRestaurantSave")?.lowerBound ?? mapVM.endIndex)
+        ]
+        XCTAssertTrue(receiptSave.contains("saveClipListPlaces"))
+        XCTAssertTrue(receiptSave.contains("ClipListHandoff.onePlaceImport"))
+        XCTAssertTrue(receiptSave.contains("ClipListHandoffError.capReached"))
+        XCTAssertFalse(receiptSave.contains("supabaseService.savePlace"))
+        XCTAssertTrue(content.contains("catch ClipListHandoffError.capReached"))
+        XCTAssertTrue(appPending.contains("static func onePlaceImport"))
         XCTAssertTrue(appPending.contains("static func needsPlaceRefresh"))
         let listModel = try source(at: "SAV-E/Models/SaveCollaborativeList.swift")
         XCTAssertTrue(listModel.contains("matchesMapFeature(title: title, coordinate: coordinate)"))

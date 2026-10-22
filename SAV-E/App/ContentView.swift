@@ -1569,6 +1569,16 @@ struct ContentView: View {
             if handoffToastText != nil {
                 handoffToastText = nil
             }
+        } catch ClipListHandoffError.capReached {
+            autoSaveIncomingShare = false
+            handoffToastText = languageSettings.localized(
+                english: "Free Savvy is full (50 places).",
+                traditionalChinese: "免費版 Savvy 已滿 50 個地點。"
+            )
+            try? await Task.sleep(for: .seconds(3))
+            if handoffToastText != nil {
+                handoffToastText = nil
+            }
         } catch {
             autoSaveIncomingShare = false
             presentExclusiveRootSheet()
@@ -2227,6 +2237,17 @@ private struct FriendShareReceiptView: View {
                   currentReceipt.id == receipt.id
             else { return }
             saveState = outcome.isDuplicate ? .alreadySaved : .saved
+        } catch ClipListHandoffError.capReached {
+            guard !Task.isCancelled,
+                  activeSaveID == saveID,
+                  case .loaded(let currentReceipt) = loadState,
+                  currentReceipt.id == receipt.id
+            else { return }
+            saveState = .idle
+            saveErrorMessage = localized(
+                "Free Savvy is full (50 places).",
+                "免費版 Savvy 已滿 50 個地點。"
+            )
         } catch {
             guard !Task.isCancelled,
                   activeSaveID == saveID,
