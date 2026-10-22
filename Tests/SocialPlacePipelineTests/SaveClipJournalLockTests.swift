@@ -101,13 +101,11 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(planner.contains("already_saved"))
         XCTAssertTrue(planner.contains("over_cap"))
         XCTAssertTrue(planner.contains("uniqueItems"))
+        XCTAssertTrue(planner.contains("mergingIdentities"))
+        XCTAssertTrue(planner.contains("extraPlaceIds"))
+        XCTAssertTrue(planner.contains("google_place_id"))
         XCTAssertTrue(planner.contains("keys.append(\"p:\\(placeId)\")"))
         XCTAssertTrue(planner.contains("keys.append(\"g:\\(placeId)\")"))
-        XCTAssertTrue(planner.contains("keys.contains(where: { seen.contains($0) })"))
-        XCTAssertGreaterThanOrEqual(
-            planner.components(separatedBy: "keys.forEach { seen.insert($0) }").count - 1,
-            2
-        )
         XCTAssertTrue(planner.contains("clipListSwipeHintDismissed"))
         XCTAssertTrue(planner.contains("group.com.wanderly.app"))
         XCTAssertFalse(planner.contains("PendingShareStore"))

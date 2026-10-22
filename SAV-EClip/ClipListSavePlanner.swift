@@ -72,23 +72,57 @@ struct ClipListSaveItem: Equatable, Sendable {
     var note: String?
     var sourceURL: String?
     var placeId: String?
+    var extraPlaceIds: [String] = []
 }
 
 enum ClipListSavePlanner {
     static func uniqueItems(from items: [ClipListSaveItem]) -> [ClipListSaveItem] {
-        var seen = Set<String>()
+        var indexByKey: [String: Int] = [:]
         var unique: [ClipListSaveItem] = []
         for item in items {
             let keys = identities(of: item)
             guard !keys.isEmpty else { continue }
-            if keys.contains(where: { seen.contains($0) }) {
-                keys.forEach { seen.insert($0) }
+            if let index = keys.compactMap({ indexByKey[$0] }).first {
+                unique[index] = mergingIdentities(unique[index], item)
+                for key in identities(of: unique[index]) {
+                    indexByKey[key] = index
+                }
                 continue
             }
-            keys.forEach { seen.insert($0) }
+            let index = unique.count
             unique.append(item)
+            for key in keys { indexByKey[key] = index }
         }
         return unique
+    }
+
+    static func mergingIdentities(_ kept: ClipListSaveItem, _ incoming: ClipListSaveItem) -> ClipListSaveItem {
+        var result = kept
+        var extras = Set(
+            kept.extraPlaceIds
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        )
+        if let incomingId = incoming.placeId?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !incomingId.isEmpty {
+            if let keptId = result.placeId?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !keptId.isEmpty {
+                if keptId.caseInsensitiveCompare(incomingId) != .orderedSame {
+                    extras.insert(incomingId)
+                }
+            } else {
+                result.placeId = incomingId
+            }
+        }
+        for extra in incoming.extraPlaceIds {
+            let trimmed = extra.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty,
+               result.placeId?.caseInsensitiveCompare(trimmed) != .orderedSame {
+                extras.insert(trimmed)
+            }
+        }
+        result.extraPlaceIds = extras.sorted()
+        return result
     }
 
     static func identity(of item: ClipListSaveItem) -> String {
@@ -97,8 +131,16 @@ enum ClipListSavePlanner {
 
     static func identities(of item: ClipListSaveItem) -> [String] {
         var keys: [String] = []
+        var placeIds: [String] = []
         if let placeId = item.placeId?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
            !placeId.isEmpty {
+            placeIds.append(placeId)
+        }
+        for extra in item.extraPlaceIds {
+            let trimmed = extra.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if !trimmed.isEmpty { placeIds.append(trimmed) }
+        }
+        for placeId in placeIds {
             keys.append("id:\(placeId)")
             keys.append("p:\(placeId)")
             keys.append("g:\(placeId)")
@@ -221,6 +263,7 @@ enum ClipListSavePlanner {
         ]
         if let sourceURL = item.sourceURL { body["source_url"] = sourceURL }
         if let placeId = item.placeId, !placeId.isEmpty { body["provider_place_id"] = placeId }
+        if let google = item.extraPlaceIds.first, !google.isEmpty { body["google_place_id"] = google }
         return body
     }
 

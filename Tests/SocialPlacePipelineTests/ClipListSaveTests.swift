@@ -252,6 +252,21 @@ final class ClipListSaveTests: XCTestCase {
         XCTAssertEqual(places?.count, 1)
     }
 
+    func testUniqueItemsPreservesBridgePlaceIds() {
+        let senderUUID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        let items = [
+            item(senderUUID, "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("ChIJ123", "Onibus Coffee", lat: 35.644, lng: 139.699),
+        ]
+        let unique = ClipListSavePlanner.uniqueItems(from: items)
+        XCTAssertEqual(unique.count, 1)
+        XCTAssertEqual(unique.first?.placeId, senderUUID)
+        XCTAssertEqual(unique.first?.extraPlaceIds, ["ChIJ123"])
+        let places = ClipListSavePlanner.requestBody(items: items)["places"] as? [[String: Any]]
+        XCTAssertEqual(places?.first?["provider_place_id"] as? String, senderUUID)
+        XCTAssertEqual(places?.first?["google_place_id"] as? String, "ChIJ123")
+    }
+
     private func item(
         _ placeId: String?,
         _ name: String,

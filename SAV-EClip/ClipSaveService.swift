@@ -209,8 +209,10 @@ enum ClipSaveService {
                 listId: listId,
                 sender: sender,
                 url: url.absoluteString,
-                confirmedPlaceIds: unique.compactMap { id in
-                    id.placeId?.trimmingCharacters(in: .whitespacesAndNewlines)
+                confirmedPlaceIds: unique.flatMap { item in
+                    ([item.placeId] + item.extraPlaceIds).compactMap { id in
+                        id?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    }
                 }.filter { !$0.isEmpty },
                 confirmedPlaces: places
             )
