@@ -1708,6 +1708,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(auth.contains("SavePlaceLimitHandoff.syncActiveOwner(nil)"))
     }
 
+    @MainActor
     func testShareExtensionUnplacedCandidateKeepsInboxMarker() throws {
         let share = try source(at: "SAV-EShareExtension/ShareViewController.swift")
         XCTAssertTrue(
@@ -1715,7 +1716,8 @@ final class SAVEProductionConfigTests: XCTestCase {
             "P2 4344606412: parked Share Extension saves must stay Unplaced, not ordinary Review"
         )
         XCTAssertEqual(SAVEProAccessPolicy.unplacedInboxMarker, "Unplaced inbox")
-        XCTAssertEqual(PlaceReviewCandidate.unplacedInboxMarker, SAVEProAccessPolicy.unplacedInboxMarker)
+        let inboxMarker = PlaceReviewCandidate.unplacedInboxMarker
+        XCTAssertEqual(inboxMarker, SAVEProAccessPolicy.unplacedInboxMarker)
     }
 
     func testEntitlementRefreshResyncsAppGroupCacheInSource() throws {
@@ -1737,7 +1739,7 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
-    func testEntitlementRefreshNotificationResyncsAppGroupCache() async throws {
+    func testEntitlementRefreshNotificationResyncsAppGroupCache() throws {
         let map = makeCappedMap(tier: .free)
         map.places = makeCappedPlaces(12)
         SavePlaceLimitHandoff.syncCache(tier: .free, savedPlaceCount: 50)
@@ -1746,7 +1748,6 @@ final class SAVEProductionConfigTests: XCTestCase {
         NotificationCenter.default.post(name: .saveEntitlementDidRefresh, object: nil)
         let deadline = Date().addingTimeInterval(1)
         while Date() < deadline, SavePlaceLimitHandoff.cachedDecision() != .allowed {
-            await Task.yield()
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))
         }
         XCTAssertEqual(
