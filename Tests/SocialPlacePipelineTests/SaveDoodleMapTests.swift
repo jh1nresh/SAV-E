@@ -269,6 +269,7 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(parity.contains("--ignore-mask"))
         XCTAssertTrue(script.contains("--threshold 0.90") || script.contains("THRESHOLD=\"0.90\""))
         XCTAssertTrue(script.contains("five-tab-map*)"))
+        XCTAssertTrue(script.contains("*-zh*)"))
         XCTAssertTrue(script.contains("map-doodle-similarity"))
         XCTAssertTrue(script.contains("--ignore-mask"))
         XCTAssertTrue(script.contains("map-mask.png"))

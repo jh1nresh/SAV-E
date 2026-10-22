@@ -278,6 +278,11 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                 plutil -extract "$prefix.timestamp" raw -o - "$manifest" 2>/dev/null
             )" || timestamp=0
             case "$human_name" in
+                *-zh*)
+                    # light-home-zh becomes light-map-zh in the warm-dark rail.
+                    # Do not let that timestamp win the English DESIGN map pick.
+                    continue
+                    ;;
                 five-tab-home*)
                     screen="home"
                     priority=1
