@@ -251,6 +251,44 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(Set(groups.map(\.englishName)), Set(["Springfield"]))
     }
 
+    /// Full state names must parse like `IL` / `MA`.
+    func testFallbackLocalityKeepsSpringfieldFromIllinoisName() {
+        let illinois = place(
+            "Cozy Dog",
+            "123 Main St, Springfield, Illinois, United States",
+            .food
+        )
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: illinois.address), "Springfield")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityDisplayName(for: illinois, language: .english), "Springfield")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: illinois), "springfield,il")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: illinois), "illinois")
+    }
+
+    /// Allowlisted `paris` is France, not Paris, TX.
+    func testAllowlistedParisDoesNotAbsorbParisTexas() {
+        let france = place(
+            "Café de Flore",
+            "172 Boulevard Saint-Germain, Paris, France",
+            .cafe
+        )
+        let texas = place(
+            "Paris Bakery",
+            "Paris, TX 75460, USA",
+            .food
+        )
+        XCTAssertEqual(SaveHomeSearch.metroKey(in: france.address), "paris")
+        XCTAssertNil(SaveHomeSearch.metroKey(in: texas.address))
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: france), "paris")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: texas), "paris,tx")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityDisplayName(for: texas, language: .english), "Paris")
+        XCTAssertNotEqual(
+            SaveDoodleHomeCatalog.cityID(for: france),
+            SaveDoodleHomeCatalog.cityID(for: texas)
+        )
+        let groups = SaveDoodleHomeCatalog.cityGroups(from: [france, texas])
+        XCTAssertEqual(Set(groups.map(\.id)), Set(["paris", "paris,tx"]))
+    }
+
     /// Closest pin without an address must not empty Near you / Collected.
     func testNearYouCitySkipsAddresslessClosestSave() {
         let here = CLLocation(latitude: 37.8796, longitude: -122.2697)
@@ -926,6 +964,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(attach.contains("pngRepresentation"))
         let workflow = try source(at: ".github/workflows/ios.yml")
         XCTAssertTrue(workflow.contains("SAVE_SCREENSHOT_DIR"))
+        XCTAssertTrue(workflow.contains("/tmp/SAVE-First-Run"))
+        XCTAssertTrue(workflow.contains("CoreSimulator/Devices"))
+        XCTAssertTrue(workflow.contains("copied simulator SAVE_SCREENSHOT_DIR"))
         XCTAssertTrue(workflow.contains("TestingEnvironmentVariables"))
         XCTAssertTrue(workflow.contains("five-tab-home"))
         XCTAssertTrue(workflow.contains("light-home"))
@@ -1085,6 +1126,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(content.contains("exactSearchClueID"))
         XCTAssertTrue(content.contains("activateExactSearchSession(for:"))
         XCTAssertTrue(content.contains("restoreExactSearchResolutionIfNeeded()"))
+        XCTAssertTrue(content.contains("endExactSearchSessionAfterCandidateSave()"))
         XCTAssertTrue(content.contains("onClearMapSearchResults: { endsExactSearch in"))
         let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
         XCTAssertTrue(drawer.contains("onClearMapSearchResults(false)"))

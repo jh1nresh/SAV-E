@@ -281,8 +281,37 @@ enum SaveDoodleHomeCatalog {
         if let match = trimmed.range(of: #"^[A-Za-z]{2}(?=\s)"#, options: .regularExpression) {
             return String(trimmed[match]).lowercased()
         }
-        return nil
+        let folded = normalizedCityToken(trimmed)
+        return usStateNames[folded] ?? canadianProvinceNames[folded]
     }
+
+    /// Full US state / DC names so `Springfield, Illinois` keeps `springfield,il`.
+    private static let usStateNames: [String: String] = [
+        "alabama": "al", "alaska": "ak", "arizona": "az", "arkansas": "ar",
+        "california": "ca", "colorado": "co", "connecticut": "ct",
+        "delaware": "de", "florida": "fl", "georgia": "ga", "hawaii": "hi",
+        "idaho": "id", "illinois": "il", "indiana": "in", "iowa": "ia",
+        "kansas": "ks", "kentucky": "ky", "louisiana": "la", "maine": "me",
+        "maryland": "md", "massachusetts": "ma", "michigan": "mi",
+        "minnesota": "mn", "mississippi": "ms", "missouri": "mo",
+        "montana": "mt", "nebraska": "ne", "nevada": "nv",
+        "new hampshire": "nh", "new jersey": "nj", "new mexico": "nm",
+        "new york": "ny", "north carolina": "nc", "north dakota": "nd",
+        "ohio": "oh", "oklahoma": "ok", "oregon": "or", "pennsylvania": "pa",
+        "rhode island": "ri", "south carolina": "sc", "south dakota": "sd",
+        "tennessee": "tn", "texas": "tx", "utah": "ut", "vermont": "vt",
+        "virginia": "va", "washington": "wa", "west virginia": "wv",
+        "wisconsin": "wi", "wyoming": "wy", "district of columbia": "dc",
+    ]
+
+    private static let canadianProvinceNames: [String: String] = [
+        "alberta": "ab", "british columbia": "bc", "manitoba": "mb",
+        "new brunswick": "nb", "newfoundland": "nl",
+        "newfoundland and labrador": "nl", "nova scotia": "ns",
+        "northwest territories": "nt", "nunavut": "nu", "ontario": "on",
+        "prince edward island": "pe", "quebec": "qc", "saskatchewan": "sk",
+        "yukon": "yt",
+    ]
 
     private static func isPostalOrAdminRegion(_ value: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -320,6 +349,9 @@ enum SaveDoodleHomeCatalog {
         }
         // Australia / generic 4-digit postcode.
         if trimmed.range(of: #"^\d{4}$"#, options: .regularExpression) != nil {
+            return true
+        }
+        if adminRegionCode(in: trimmed) != nil {
             return true
         }
         return false
