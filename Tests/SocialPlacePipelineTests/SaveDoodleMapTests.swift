@@ -291,6 +291,8 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(script.contains("${#mask_args[@]} -gt 0"))
         XCTAssertTrue(map.contains("cityOpeningPins()"))
         XCTAssertTrue(map.contains("openingCityID("))
+        XCTAssertTrue(map.contains("addresslessOpeningPins("))
+        XCTAssertTrue(map.contains("SaveDoodleHomeCatalog.nearbyRadius"))
         XCTAssertTrue(map.contains("min(max((maxLat - minLat) * 1.6, 0.012), 0.45)"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("attach(app, name: \"298-3-home\")"))

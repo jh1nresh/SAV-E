@@ -703,7 +703,7 @@ struct SaveDoodleMapView: View {
         let location = denied ? nil : locationService.currentLocation
         if !session.mapFollowsHomeFilter {
             guard let cityID = openingCityID(denied: denied, location: location) else {
-                return mapViewModel.places.filter(\.isMapKitMappable).map(\.coordinate)
+                return addresslessOpeningPins(location: location)
             }
             return mapViewModel.places
                 .filter { SaveDoodleHomeCatalog.cityID(for: $0) == cityID && $0.isMapKitMappable }
@@ -731,6 +731,32 @@ struct SaveDoodleMapView: View {
             coords.append(place.coordinate)
         }
         return coords
+    }
+
+    /// Coordinate-only imports have no city id. Fit the local cluster, or
+    /// one fallback pin — never the worldwide set capped at 0.45°.
+    private func addresslessOpeningPins(location: CLLocation?) -> [CLLocationCoordinate2D] {
+        let mappable = mapViewModel.places.filter(\.isMapKitMappable)
+        if let location {
+            let nearby = mappable.filter {
+                SaveDoodleHomeCatalog.distance(from: location, to: $0)
+                    .map { $0 <= SaveDoodleHomeCatalog.nearbyRadius } ?? false
+            }
+            if !nearby.isEmpty {
+                return nearby.map(\.coordinate)
+            }
+            if let nearest = mappable.min(by: { lhs, rhs in
+                let left = SaveDoodleHomeCatalog.distance(from: location, to: lhs) ?? .infinity
+                let right = SaveDoodleHomeCatalog.distance(from: location, to: rhs) ?? .infinity
+                return left < right
+            }) {
+                return [nearest.coordinate]
+            }
+        }
+        if let newest = mappable.sorted(by: SaveDoodleHomeCatalog.moreRecent).first {
+            return [newest.coordinate]
+        }
+        return []
     }
 
     private func openingCityID(denied: Bool, location: CLLocation?) -> String? {
