@@ -2455,27 +2455,23 @@ final class MapViewModel: ObservableObject {
 
     func saveClipListHandoff(_ list: SaveCollaborativeList) async throws -> (toStamp: [SaveListItem], counts: ClipListHandoffCounts) {
         let confirmed = list.items
-        if authService.currentUserId != nil, supabaseService.isConfigured {
-            let payload = confirmed.map(ClipListHandoff.placeBody)
-            let (status, data) = try await supabaseService.saveClipListPlaces(payload)
-            guard let remote = ClipListHandoff.parseRemote(status: status, data: data),
-                  let imported = ClipListHandoff.placesFromRemoteRows(
-                    confirmed: confirmed,
-                    rows: remote.saved
-                  )
-            else {
-                throw ClipListHandoffError.unconfirmed
-            }
-            applyHandoffPlaces(imported)
-            let stamped = confirmed.filter { item in
-                imported.contains { place in
-                    if let provider = place.providerPlaceId, !provider.isEmpty {
-                        return item.sourceID.caseInsensitiveCompare(provider) == .orderedSame
-                    }
-                    return place.matchesMapFeature(title: item.title, coordinate: item.coordinate)
+        if authService.currentUserId != nil {
+            do {
+                let payload = confirmed.map(ClipListHandoff.placeBody)
+                let (status, data) = try await supabaseService.saveClipListPlaces(payload)
+                guard let remote = ClipListHandoff.parseRemote(status: status, data: data),
+                      let importedPlaces = ClipListHandoff.placesFromRemoteRows(
+                        confirmed: confirmed,
+                        rows: remote.saved
+                      )
+                else {
+                    throw ClipListHandoffError.unconfirmed
                 }
+                applyHandoffPlaces(importedPlaces)
+                return (Self.stampedHandoffItems(confirmed: confirmed, imported: importedPlaces), remote.counts)
+            } catch SupabaseError.notConfigured {
+                // Unconfigured builds keep the local quota plan.
             }
-            return (stamped, remote.counts)
         }
         let planned = ClipListHandoff.planStamps(
             confirmed: confirmed,
@@ -2484,6 +2480,25 @@ final class MapViewModel: ObservableObject {
         )
         applyHandoffPlaces(planned.toStamp.map { $0.asPlace(includeSenderMemory: false) })
         return planned
+    }
+
+    private static func stampedHandoffItems(confirmed: [SaveListItem], imported: [Place]) -> [SaveListItem] {
+        var stamped: [SaveListItem] = []
+        for item in confirmed {
+            if imported.contains(where: { place in
+                Self.importedPlace(place, matches: item)
+            }) {
+                stamped.append(item)
+            }
+        }
+        return stamped
+    }
+
+    private static func importedPlace(_ place: Place, matches item: SaveListItem) -> Bool {
+        if let provider = place.providerPlaceId, !provider.isEmpty {
+            return item.sourceID.caseInsensitiveCompare(provider) == .orderedSame
+        }
+        return place.matchesMapFeature(title: item.title, coordinate: item.coordinate)
     }
 
     private func applyHandoffPlaces(_ imported: [Place]) {

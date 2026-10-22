@@ -208,6 +208,18 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(placeModel.contains("fromClipSnapshot"))
         let supabase = try source(at: "SAV-E/Services/SupabaseService.swift")
         XCTAssertTrue(supabase.contains("func saveClipListPlaces"))
+        guard let protoStart = supabase.range(of: "protocol SupabaseServiceProtocol"),
+              let implStart = supabase.range(of: "final class SupabaseService:") else {
+            return XCTFail("SupabaseServiceProtocol bounds")
+        }
+        let proto = String(supabase[protoStart.lowerBound..<implStart.lowerBound])
+        XCTAssertTrue(proto.contains("func saveClipListPlaces"))
+        XCTAssertFalse(mapVM.contains("supabaseService.isConfigured"))
+        XCTAssertTrue(mapVM.contains("catch SupabaseError.notConfigured"))
+        XCTAssertTrue(mapVM.contains("stampedHandoffItems"))
+        XCTAssertTrue(mapVM.contains("importedPlace(_ place: Place, matches item: SaveListItem)"))
+        XCTAssertTrue(mapVM.contains("contains(where:"))
+        XCTAssertFalse(mapVM.contains("imported.contains {"))
         let carry = try source(at: "SAV-E/Services/ClipSignInCarryOver.swift")
         let appleStore = try source(at: "SAV-E/Models/ClipAppleAccountStore.swift")
         let auth = try source(at: "SAV-E/Services/PrivyAuthService.swift")

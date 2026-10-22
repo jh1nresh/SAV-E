@@ -6396,6 +6396,9 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     func savePlace(_ place: Place, userId: String) async throws {
         savedPlaces.append(place)
     }
+    func saveClipListPlaces(_ items: [[String: Any]]) async throws -> (Int, Data) {
+        throw SupabaseError.notConfigured
+    }
     func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult {
         throw SupabaseError.notConfigured
     }
