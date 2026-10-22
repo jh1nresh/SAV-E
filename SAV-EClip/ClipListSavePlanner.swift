@@ -156,6 +156,34 @@ enum ClipListSavePlanner {
         ["places": uniqueItems(from: items).map(placeBody(from:))]
     }
 
+    /// Friend-share receipts stay on the scalar `/places` path. Every other
+    /// one-place Clip save must use the quota/dedupe planner (`{ places: [] }`).
+    static func onePlacePayload(item: ClipListSaveItem, friendShareCode: String?) -> [String: Any] {
+        let code = friendShareCode?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !code.isEmpty {
+            var body = placeBody(from: item)
+            body["friend_share_code"] = code
+            return body
+        }
+        return requestBody(items: [item])
+    }
+
+    enum OnePlaceResult: Equatable, Sendable {
+        case saved
+        case duplicate
+        case capReached
+        case failed
+    }
+
+    /// A 2xx list body is not Saved unless `newly_saved > 0`.
+    static func onePlaceResult(status: Int, data: Data) -> OnePlaceResult? {
+        guard let counts = parseCounts(status: status, data: data) else { return nil }
+        if counts.newlySaved > 0 { return .saved }
+        if counts.overCap > 0 { return .capReached }
+        if counts.alreadySaved > 0 { return .duplicate }
+        return .failed
+    }
+
     /// After SIWA, save the shop the user tapped — not `list.items[listPage]`.
     /// Off-screen `PreferenceKey` children can last-write `listPage` back to 0.
     static func onePlaceItem(

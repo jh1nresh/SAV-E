@@ -252,6 +252,50 @@ final class ClipListSaveTests: XCTestCase {
         XCTAssertEqual(places?.count, 1)
     }
 
+    func testOnePlacePayloadUsesPlannerUnlessFriendShare() {
+        let item = item("shop-1", "Onibus Coffee", lat: 35.644, lng: 139.699)
+        let planned = ClipListSavePlanner.onePlacePayload(item: item, friendShareCode: nil)
+        XCTAssertEqual(planned.keys.sorted(), ["places"])
+        let places = planned["places"] as? [[String: Any]]
+        XCTAssertEqual(places?.count, 1)
+        XCTAssertEqual(places?.first?["provider_place_id"] as? String, "shop-1")
+        XCTAssertNil(planned["friend_share_code"])
+        XCTAssertNil(places?.first?["note"])
+        XCTAssertNil(places?.first?["rating"])
+
+        let receipt = ClipListSavePlanner.onePlacePayload(item: item, friendShareCode: "AbC123")
+        XCTAssertNil(receipt["places"])
+        XCTAssertEqual(receipt["friend_share_code"] as? String, "AbC123")
+        XCTAssertEqual(receipt["provider_place_id"] as? String, "shop-1")
+        XCTAssertNil(receipt["note"])
+    }
+
+    func testOnePlaceResultDoesNotTreatQuotaOrDuplicateCountsAsSaved() {
+        func result(status: Int, json: String) -> ClipListSavePlanner.OnePlaceResult? {
+            ClipListSavePlanner.onePlaceResult(status: status, data: Data(json.utf8))
+        }
+        XCTAssertEqual(
+            result(status: 201, json: #"{"newly_saved":1,"already_saved":0,"over_cap":0,"remaining":49,"limit":50}"#),
+            .saved
+        )
+        XCTAssertEqual(
+            result(status: 201, json: #"{"newly_saved":0,"already_saved":1,"over_cap":0,"remaining":12,"limit":50}"#),
+            .duplicate
+        )
+        XCTAssertEqual(
+            result(status: 201, json: #"{"newly_saved":0,"already_saved":0,"over_cap":1,"remaining":0,"limit":50}"#),
+            .capReached
+        )
+        XCTAssertEqual(
+            result(status: 201, json: #"{"newly_saved":0,"already_saved":0,"over_cap":0,"remaining":0,"limit":50}"#),
+            .failed
+        )
+        XCTAssertNil(result(status: 201, json: #"{"id":"11111111-1111-1111-1111-111111111111","name":"Onibus"}"#))
+        XCTAssertNil(result(status: 201, json: #"{"outcome":"already_saved"}"#))
+        XCTAssertNil(result(status: 403, json: #"{"code":"over_free_limit"}"#))
+        XCTAssertNil(result(status: 500, json: #"{"newly_saved":0,"already_saved":0,"over_cap":1}"#))
+    }
+
     func testUniqueItemsPreservesBridgePlaceIds() {
         let senderUUID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
         let items = [

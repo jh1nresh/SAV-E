@@ -93,6 +93,9 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(save.contains("already_saved"))
         XCTAssertTrue(save.contains("saveList"))
         XCTAssertTrue(save.contains("postPlaces"))
+        XCTAssertTrue(save.contains("ClipListSavePlanner.onePlacePayload"))
+        XCTAssertTrue(save.contains("ClipListSavePlanner.onePlaceResult"))
+        XCTAssertFalse(save.contains("if let code = draft.friendShareCode { body[\"friend_share_code\"] = code }"))
         XCTAssertTrue(save.contains("universalLinksOnly"))
         XCTAssertTrue(save.contains("openInstalledApp"))
         XCTAssertFalse(save.contains("options: [:]"))
@@ -113,6 +116,12 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(planner.contains("enum ClipListSaveFailure: Error"))
         XCTAssertTrue(planner.contains("recipientOwnedPlaceID"))
         XCTAssertTrue(planner.contains("static func onePlaceItem"))
+        XCTAssertTrue(planner.contains("static func onePlacePayload"))
+        XCTAssertTrue(planner.contains("static func onePlaceResult"))
+        XCTAssertTrue(planner.contains("return requestBody(items: [item])"))
+        XCTAssertTrue(planner.contains("if counts.newlySaved > 0 { return .saved }"))
+        XCTAssertTrue(planner.contains("if counts.overCap > 0 { return .capReached }"))
+        XCTAssertTrue(planner.contains("if counts.alreadySaved > 0 { return .duplicate }"))
         XCTAssertTrue(planner.contains("static func visiblePage"))
         XCTAssertFalse(planner.contains("return placeId.lowercased()"))
         XCTAssertFalse(planner.contains("body[\"note\"]"))
@@ -356,6 +365,14 @@ final class SaveClipJournalLockTests: XCTestCase {
     func testClipSaveOutcomeParserMatches293AndFriendShare() {
         func parse(_ status: Int, json: String) -> String {
             let data = Data(json.utf8)
+            if let result = ClipListSavePlanner.onePlaceResult(status: status, data: data) {
+                switch result {
+                case .saved: return "saved"
+                case .duplicate: return "duplicate"
+                case .capReached: return "cap"
+                case .failed: return "failed"
+                }
+            }
             if status == 403,
                let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                (body["code"] as? String) == "over_free_limit" || (body["error"] as? String) == "saved_place_limit" {
@@ -376,6 +393,18 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertEqual(parse(403, json: #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#), "cap")
         XCTAssertEqual(parse(409, json: #"{"error":"Place id conflict"}"#), "duplicate")
         XCTAssertEqual(parse(500, json: #"{"error":"no"}"#), "failed")
+        XCTAssertEqual(
+            parse(201, json: #"{"newly_saved":0,"already_saved":0,"over_cap":1,"remaining":0,"limit":50}"#),
+            "cap"
+        )
+        XCTAssertEqual(
+            parse(201, json: #"{"newly_saved":0,"already_saved":1,"over_cap":0,"remaining":0,"limit":50}"#),
+            "duplicate"
+        )
+        XCTAssertNotEqual(
+            parse(201, json: #"{"newly_saved":0,"already_saved":0,"over_cap":1,"remaining":0,"limit":50}"#),
+            "saved"
+        )
     }
 
     func testClipScreenshotRailForcesDarkBeforeFirstPaint() throws {

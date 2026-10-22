@@ -135,6 +135,14 @@ enum ClipAppleAccountStore {
 
 enum ClipSaveAPI {
     static func parseOutcome(status: Int, data: Data) -> ClipSaveOutcome {
+        if let result = ClipListSavePlanner.onePlaceResult(status: status, data: data) {
+            switch result {
+            case .saved: return .saved
+            case .duplicate: return .duplicate
+            case .capReached: return .capReached
+            case .failed: return .failed
+            }
+        }
         if status == 403, let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             let code = body["code"] as? String
             let error = body["error"] as? String
@@ -307,8 +315,10 @@ enum ClipSaveService {
               let url = URL(string: "\(base)/places")
         else { throw ClipSaveError.failed }
 
-        var body = ClipListSavePlanner.placeBody(from: draft.listSaveItem)
-        if let code = draft.friendShareCode { body["friend_share_code"] = code }
+        let body = ClipListSavePlanner.onePlacePayload(
+            item: draft.listSaveItem,
+            friendShareCode: draft.friendShareCode
+        )
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"

@@ -101,6 +101,28 @@ test("SL2 fills remaining quota in list order and counts overflow", () => {
   assert.equal(plan.remaining, 0);
 });
 
+test("one-place Clip save uses the same planner as a list", () => {
+  const duplicate = planClipListSave({
+    items: [cafe("a")],
+    existingIdentities: clipListPlaceIdentities(cafe("a")),
+    savedPlaceCount: 12,
+  });
+  assert.deepEqual(duplicate.toInsert, []);
+  assert.equal(duplicate.newlySaved, 0);
+  assert.equal(duplicate.alreadySaved, 1);
+  assert.equal(duplicate.overCap, 0);
+
+  const atCap = planClipListSave({
+    items: [cafe("new", "Blue Bottle")],
+    existingIdentities: [],
+    savedPlaceCount: 50,
+  });
+  assert.deepEqual(atCap.toInsert, []);
+  assert.equal(atCap.newlySaved, 0);
+  assert.equal(atCap.alreadySaved, 0);
+  assert.equal(atCap.overCap, 1);
+});
+
 test("SL2 #293 section B: a full account saves none and reports remaining 0", () => {
   const plan = planClipListSave({
     items: [cafe("1", "One"), cafe("2", "Two")],
@@ -174,6 +196,11 @@ test("SL4 POST /places list writes are one transactional call", () => {
   );
 
   assert.match(handler, /Array\.isArray\(rawBody\.places\)/);
+  assert.match(
+    handler,
+    /if \(Array\.isArray\(rawBody\.places\)\) \{\s*return await saveClipListPlaces/,
+    "one-place Clip saves in { places: [item] } must use the quota planner",
+  );
   assert.match(handler, /planClipListSave/);
   assert.match(handler, /begin/);
   assert.match(handler, /commit/);
