@@ -324,7 +324,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Denied + empty Home must keep the Settings recovery prompt"
         )
         XCTAssertTrue(app.buttons["home.locationAllow"].exists)
-        XCTAssertFalse(app.descendants(matching: .any)["home.saves"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["home.saves"].waitForExistence(timeout: stepTimeout),
+            "Empty Home still exposes the HoP home.saves entry"
+        )
         XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
         attach(app, name: "review-flow-home-empty")
         attach(app, name: "doodle-home-empty")
@@ -748,6 +751,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     func testCaptureFiveTabLanding() throws {
         try assertFriendsComingSoonLanguages()
+        try captureFiveTabHomeParityRaster()
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
@@ -785,7 +789,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         waitForHomeCoverImagery(app)
         XCTAssertTrue(app.descendants(matching: .any)["home.locationPrompt"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["home.locationAllow"].waitForExistence(timeout: stepTimeout))
-        attach(app, name: "five-tab-home")
         attach(app, name: "doodle-home-light")
 
         openRootTab("Friends", app: app)
@@ -3208,7 +3211,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
         let review = app.descendants(matching: .any)["home.review"]
-        let fallback = app.buttons["home.openSaves"]
+        let fallback = app.buttons["home.saves"]
         XCTAssertTrue(
             review.waitForExistence(timeout: timeout(2))
                 || fallback.waitForExistence(timeout: stepTimeout),
@@ -3282,9 +3285,41 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         return elements.first(where: \.exists) ?? elements[0]
     }
 
-    /// Live Home is the Doodle Eat/Go list plus mini-map. DESIGN judges
-    /// `five-tab-home` against v2 `ProductionTargets/home.png` manually;
-    /// the 0.90 score is not a CI gate. Do not retune that comparison here.
+    /// Live Home is the Doodle Eat/Go list plus mini-map. Capture
+    /// `five-tab-home` from the Codex Tiantan fixture at the Tiantan fix;
+    /// a denied-location Taipei Home is a different state. DESIGN judges
+    /// Home and Map 0.90 scores manually; do not retune the gate script here.
+    @MainActor
+    private func captureFiveTabHomeParityRaster() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-tiantan",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-fixture",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        XCTAssertFalse(app.descendants(matching: .any)["home.locationPrompt"].exists)
+        let collected = app.descendants(matching: .any)["home.collected"]
+        XCTAssertTrue(collected.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(collected.label, "Collected 4/12")
+        XCTAssertTrue(
+            app.buttons["home.place.30000000-0000-0000-0000-000000000001"].waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-000000000002"].exists)
+        XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-000000000003"].exists)
+        attach(app, name: "five-tab-home")
+        terminate(app)
+    }
+
     @MainActor
     private func waitForHomeCoverImagery(_ app: XCUIApplication) {
         XCTAssertTrue(
