@@ -484,10 +484,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(app.staticTexts["Free: 50 places"].firstMatch.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.staticTexts["Save every place you love"].firstMatch.exists)
-        XCTAssertTrue(app.descendants(matching: .any)["paywall.freePlaceLimit"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["paywall.proBenefit"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.benefit.unlimited"].exists)
         XCTAssertTrue(app.staticTexts["Unlimited saved places"].firstMatch.exists)
-        XCTAssertTrue(app.descendants(matching: .any)["paywall.keepGoing"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.savedNote"].exists)
         XCTAssertTrue(app.staticTexts["You've saved 50 places. Keep going."].firstMatch.exists)
         XCTAssertFalse(app.staticTexts["Always free"].exists)
         XCTAssertFalse(app.staticTexts["Always free: unlimited saved places"].exists)
@@ -514,7 +513,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["paywall.keepGoing"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.savedNote"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.staticTexts["You've saved 50 places. Keep going."].firstMatch.exists)
         XCTAssertTrue(app.staticTexts["Unlimited saved places"].firstMatch.exists)
         attach(app, name: "e4-51st-save-paywall")
@@ -543,7 +542,16 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             tapReachable(reviewSegment)
         }
         XCTAssertTrue(
-            app.staticTexts["Unplaced Harbor Cafe"].firstMatch.waitForExistence(timeout: launchTimeout),
+            app.descendants(matching: .any)["saves.unplaced"].waitForExistence(timeout: launchTimeout),
+            "Parked Unplaced items use the HoP saves.unplaced section."
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["saves.unplaced.row.E4000000-0000-4000-8000-000000000051"]
+                .waitForExistence(timeout: stepTimeout),
+            "Unplaced Harbor Cafe must be the parked row, not a Map Stamp."
+        )
+        XCTAssertTrue(
+            app.staticTexts["Unplaced Harbor Cafe"].firstMatch.waitForExistence(timeout: stepTimeout),
             "Parked Unplaced Harbor Cafe must appear as a Review candidate."
         )
         XCTAssertTrue(app.staticTexts["Review Candidate"].firstMatch.exists)
@@ -597,7 +605,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.staticTexts["Free: 50 places"].firstMatch.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.staticTexts["Unlimited saved places"].firstMatch.exists)
         XCTAssertFalse(
-            app.descendants(matching: .any)["paywall.keepGoing"].exists,
+            app.descendants(matching: .any)["paywall.savedNote"].exists,
             "Q1: Settings uses the Passport trigger, not the saved-50 line."
         )
         attach(app, name: "e4-settings-paywall")

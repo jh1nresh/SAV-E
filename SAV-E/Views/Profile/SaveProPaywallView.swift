@@ -90,7 +90,6 @@ struct SaveProPaywallView: View {
                 .font(SaveAtlasType.body(14))
                 .foregroundStyle(SaveAtlasPalette.muted)
                 .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("paywall.freePlaceLimit")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("paywall.header")
@@ -110,9 +109,9 @@ struct SaveProPaywallView: View {
         )
     }
 
-    /// DESIGN §7.6: one free-tier line, one Pro benefit, and a keep-going note
-    /// only for the cap trigger. No AI-quota copy. The free-tier sentence
-    /// appears only in `subheadline`.
+    /// DESIGN §7.6: one free-tier line, one Pro benefit, and the saved-50
+    /// note (`paywall.savedNote`) only for the cap trigger. No AI-quota copy.
+    /// The free-tier sentence appears only in `subheadline`.
     private var boundaryPanel: some View {
         VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
             HStack(alignment: .top, spacing: SaveTheme.Spacing.sm) {
@@ -129,7 +128,7 @@ struct SaveProPaywallView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
-            .accessibilityIdentifier("paywall.proBenefit")
+            .accessibilityIdentifier("paywall.benefit.unlimited")
 
             if trigger == .savedPlaceLimit {
                 Text(languageSettings.localized(
@@ -139,7 +138,7 @@ struct SaveProPaywallView: View {
                 .font(SaveAtlasType.body(15))
                 .foregroundStyle(SaveAtlasPalette.muted)
                 .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("paywall.keepGoing")
+                .accessibilityIdentifier("paywall.savedNote")
             }
         }
         .padding(SaveTheme.Spacing.lg)
@@ -183,7 +182,7 @@ struct SaveProPaywallView: View {
             ProgressView()
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, SaveTheme.Spacing.xl)
-                .accessibilityIdentifier("paywall.loadingProducts")
+                .accessibilityIdentifier("paywall.loading")
         } else if storeKit.products.isEmpty {
             // StoreKit miss or load failure must not trap the user. The 51st
             // save is already in Review; this retry reloads products only.
@@ -194,6 +193,7 @@ struct SaveProPaywallView: View {
                 ))
                 .font(SaveTheme.Typography.cardTitle)
                 .foregroundStyle(SaveAtlasPalette.forest)
+                .accessibilityIdentifier("paywall.unavailable")
 
                 Button {
                     Task { await storeKit.loadProducts() }
@@ -201,13 +201,12 @@ struct SaveProPaywallView: View {
                     Text(languageSettings.localized(english: "Try again", traditionalChinese: "再試一次"))
                 }
                 .buttonStyle(SaveBrandPrimaryButtonStyle(fill: SaveAtlasPalette.honey))
-                .accessibilityIdentifier("paywall.retryProducts")
+                .accessibilityIdentifier("paywall.retry")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(SaveTheme.Spacing.lg)
             .background(SaveAtlasPalette.mint.opacity(0.22))
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .accessibilityIdentifier("paywall.productsRetry")
         } else {
             VStack(spacing: SaveTheme.Spacing.md) {
                 ForEach(storeKit.products, id: \.id) { product in

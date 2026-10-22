@@ -42,12 +42,21 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(paywall.contains("收藏地點不設限"))
         XCTAssertTrue(paywall.contains("You've saved 50 places. Keep going."))
         XCTAssertTrue(paywall.contains("已存 50 個地點，繼續存下去"))
-        XCTAssertTrue(paywall.contains("paywall.keepGoing"))
+        XCTAssertTrue(paywall.contains("paywall.savedNote"))
+        XCTAssertTrue(paywall.contains("paywall.benefit.unlimited"))
+        XCTAssertTrue(paywall.contains("paywall.loading"))
+        XCTAssertTrue(paywall.contains("paywall.unavailable"))
+        XCTAssertTrue(paywall.contains("paywall.retry"))
+        XCTAssertFalse(paywall.contains("paywall.keepGoing"))
+        XCTAssertFalse(paywall.contains("paywall.retryProducts"))
+        XCTAssertFalse(paywall.contains("paywall.productsRetry"))
+        XCTAssertFalse(paywall.contains("paywall.proBenefit"))
+        XCTAssertFalse(paywall.contains("paywall.freePlaceLimit"))
+        XCTAssertFalse(paywall.contains("paywall.loadingProducts"))
         XCTAssertTrue(
             paywall.contains("if trigger == .savedPlaceLimit"),
             "Q1: the saved-50 line belongs only on the 51st-save trigger"
         )
-        XCTAssertTrue(paywall.contains("paywall.retryProducts"))
         XCTAssertTrue(paywall.contains("Try again"))
         XCTAssertTrue(paywall.contains("再試一次"))
         XCTAssertFalse(paywall.contains("Always free"))
@@ -128,6 +137,10 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(content.contains("--uitest-show-unplaced-candidate"))
         XCTAssertTrue(content.contains("--uitest-show-ai-quota-notice"))
         XCTAssertTrue(content.contains("Unplaced Harbor Cafe"))
+        XCTAssertTrue(
+            content.contains("e4000000-0000-4000-8000-000000000051"),
+            "E4 Unplaced row id is saves.unplaced.row.<this placeId>"
+        )
         XCTAssertTrue(content.contains("parkPlaceInUnplacedInbox(place, requestPaywall: false)"))
         XCTAssertTrue(
             content.contains("consumePendingSavedPlaceLimitPaywall()"),
@@ -163,14 +176,26 @@ final class SAVEProductionConfigTests: XCTestCase {
             XCTAssertTrue(rail.contains("attach(app, name: \"\(name)\")"), name)
         }
         XCTAssertTrue(rail.contains("You've saved 50 places. Keep going."))
+        XCTAssertTrue(rail.contains("paywall.savedNote"))
+        XCTAssertFalse(rail.contains("paywall.keepGoing"))
         XCTAssertTrue(rail.contains("Review Candidate"))
         XCTAssertTrue(
             rail.contains("Settings Pro row requires a confirmed Map Stamp on Home first."),
             "E4 Settings waits for home.featuredName before opening the gated Pro row"
         )
+        let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        XCTAssertTrue(saves.contains("saves.unplaced"))
+        XCTAssertTrue(saves.contains("saves.unplaced.row.\\(candidate.id.uuidString)"))
+        let candidate = try source(at: "SAV-E/Services/PendingPlaceImportService.swift")
+        XCTAssertTrue(candidate.contains("unplacedInboxMarker"))
+        XCTAssertTrue(candidate.contains("isUnplacedInbox"))
+        XCTAssertTrue(candidate.contains("missingInfo: [unplacedInboxMarker]"))
+
+        XCTAssertTrue(rail.contains("saves.unplaced"))
+        XCTAssertTrue(rail.contains("saves.unplaced.row.E4000000-0000-4000-8000-000000000051"))
         XCTAssertTrue(
             rail.contains("Q1: Settings uses the Passport trigger, not the saved-50 line."),
-            "Settings still must prove the keep-going line is absent"
+            "Settings still must prove the saved-50 line is absent"
         )
         XCTAssertTrue(rail.contains("The analysis usage limit has been reached. Keep the source and try again later."))
         XCTAssertTrue(rail.contains("exhausted AI quota must not open the paywall."))

@@ -481,6 +481,12 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         status == "source_only" && missingInfo.contains { $0.caseInsensitiveCompare("Analysis pending") == .orderedSame }
     }
 
+    /// Parked at the free 50-place cap. Review keeps the item; it is not a Map Stamp.
+    static let unplacedInboxMarker = "Unplaced inbox"
+    var isUnplacedInbox: Bool {
+        missingInfo.contains { $0.caseInsensitiveCompare(Self.unplacedInboxMarker) == .orderedSame }
+    }
+
     // Transient display state; excluded from Codable/evidence/share payloads.
     var sourceFailureReason: SourceSearchFailureReason? = nil
     var supersededByCandidateID: UUID? = nil
@@ -648,7 +654,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
             longitude: place.hasValidCoordinate ? place.longitude : nil,
             evidence: place.sourceEvidence,
             confidence: 1,
-            missingInfo: [],
+            missingInfo: [unplacedInboxMarker],
             status: "review",
             createdAt: place.createdAt,
             placeHighlights: place.savedPlaceHighlights,

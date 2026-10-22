@@ -250,7 +250,8 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertTrue(map.contains("hasAuthoritativeSavedPlaceTier"))
         XCTAssertTrue(map.contains("entitlementResolvedProvider"))
         let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
-        XCTAssertTrue(paywall.contains("paywall.retryProducts"))
+        XCTAssertTrue(paywall.contains("paywall.retry"))
+        XCTAssertFalse(paywall.contains("paywall.retryProducts"))
         XCTAssertTrue(paywall.contains("if trigger == .savedPlaceLimit"))
     }
 

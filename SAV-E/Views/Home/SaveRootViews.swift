@@ -267,10 +267,25 @@ struct SaveLibraryView: View {
                 .accessibilityIdentifier("saves.review.empty")
             } else {
                 let candidates = sortedCandidates
+                let unplaced = candidates.filter(\.isUnplacedInbox)
+                let others = candidates.filter { !$0.isUnplacedInbox }
                 LazyVStack(spacing: 0) {
-                    ForEach(candidates) { candidate in
+                    if !unplaced.isEmpty {
+                        VStack(spacing: 0) {
+                            ForEach(unplaced) { candidate in
+                                reviewTicket(candidate)
+                                if candidate.id != unplaced.last?.id || !others.isEmpty {
+                                    Divider().overlay(SaveAtlasPalette.line.opacity(0.18))
+                                        .padding(.leading, 64)
+                                }
+                            }
+                        }
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("saves.unplaced")
+                    }
+                    ForEach(others) { candidate in
                         reviewTicket(candidate)
-                        if candidate.id != candidates.last?.id {
+                        if candidate.id != others.last?.id {
                             Divider().overlay(SaveAtlasPalette.line.opacity(0.18))
                                 .padding(.leading, 64)
                         }
@@ -428,7 +443,11 @@ struct SaveLibraryView: View {
             "Open this clue in Review",
             "在待確認中打開這個線索"
         ))
-        .accessibilityIdentifier("saves.reviewCandidate.\(candidate.id.uuidString)")
+        .accessibilityIdentifier(
+            candidate.isUnplacedInbox
+                ? "saves.unplaced.row.\(candidate.id.uuidString)"
+                : "saves.reviewCandidate.\(candidate.id.uuidString)"
+        )
     }
 
     private func mapStampTicket(_ place: Place) -> some View {
