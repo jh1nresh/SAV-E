@@ -1395,6 +1395,10 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(vault.contains("func saveSourceOnly(url: URL, note: String? = nil, ownerSubject: String? = nil)"))
         XCTAssertTrue(vault.contains("func saveConfirmedPlace(_ incoming: Place, ownerSubject: String? = nil)"))
         XCTAssertTrue(vault.contains("func confirmedPlaceRecords"))
+        XCTAssertTrue(
+            vault.contains("func deleteRecords(belongingTo ownerSubject: String)"),
+            "P1 4347594680: account deletion needs an owner-scoped vault purge"
+        )
         XCTAssertFalse(
             vault.contains("func claimOwnerlessRecords"),
             "auto-claiming ownerless rows assigns private notes to whoever signs in first"
@@ -1450,6 +1454,33 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(
             map.contains("saveConfirmedPlace(place, ownerSubject: startedBy)"),
             "P1 4346852374: failed delete must restore the initiating owner's row"
+        )
+        XCTAssertTrue(
+            map.contains("remainingAuthoritativeCount = Place.consolidated("),
+            "P2 4347594688: post-delete cap uses the owner-scoped remote remainder, not places.count"
+        )
+        XCTAssertFalse(
+            map.contains("alignAuthoritativeSavedPlaceCountWithPlaces"),
+            "P2 4347594688: assigning places.count after delete keeps a stale vault row at 50"
+        )
+        let memoryInspector = try source(at: "SAV-E/Views/Profile/SaveMemoryDebugView.swift")
+        XCTAssertTrue(memoryInspector.contains("SaveMemoryInspector.records"))
+        XCTAssertTrue(
+            memoryInspector.contains("belongingTo: PrivyAuthService.shared.currentUserId"),
+            "P1 4347594673: Memory inspector must not show another account's vault rows"
+        )
+        XCTAssertFalse(
+            memoryInspector.contains("recentRecords(limit: 50)"),
+            "unscoped recentRecords(limit: 50) is the inspector leak Codex named"
+        )
+        let profile = try source(at: "SAV-E/ViewModels/ProfileViewModel.swift")
+        XCTAssertTrue(
+            profile.contains("deleteRecords(belongingTo: deletingUserID)"),
+            "P1 4347594680: account deletion must not wipe another owner's shared vault"
+        )
+        XCTAssertFalse(
+            profile.contains("deleteAllRecords()"),
+            "deleteAllRecords wipes every account on this device"
         )
         XCTAssertTrue(
             map.contains("saveConfirmedPlace(place, ownerSubject: authService.currentUserId)"),
@@ -1928,6 +1959,80 @@ final class SAVEProductionConfigTests: XCTestCase {
             "did:privy:a",
             "rollback must not persist an ownerless row that signed-in reload would hide"
         )
+    }
+
+    /// D3 / P2 4347594688: 50 server + 1 stale local; deleting a server stamp
+    /// must drop the authoritative count to 49, not assign places.count (50).
+    @MainActor
+    func testDeletePlaceCountComesFromOwnerScopedRemoteRemainder() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:count-owner")
+        defer {
+            PrivyAuthService.shared.authState = previousAuth
+            AnalysisRequestURLProtocol.reset()
+        }
+
+        let remotePlaces = makeCappedPlaces(50)
+        let stalePlace = makeCappedPlaces(1, indexOffset: 50)[0]
+        let rows = remotePlaces.enumerated().map { index, place in
+            cappedPlaceRowJSON(
+                id: place.id,
+                index: index,
+                name: place.name,
+                googlePlaceID: place.googlePlaceId
+            )
+        }.joined(separator: ",")
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET", request.url?.path == "/places" {
+                return (200, "[\(rows)]")
+            }
+            if request.httpMethod == "DELETE", request.url?.path.hasPrefix("/places/") == true {
+                return (200, "{}")
+            }
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                return (201, "{}")
+            }
+            if request.url?.path.contains("/memory/candidates") == true { return (200, "[]") }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(
+            suiteName: "save.delete-count.\(UUID().uuidString)"
+        )
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("delete-count-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        for place in remotePlaces + [stalePlace] {
+            _ = try vault.saveConfirmedPlace(place, ownerSubject: "did:privy:count-owner")
+        }
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+
+        await map.loadPlaces(force: true)
+        XCTAssertEqual(map.places.count, 51, "merge keeps the extra stale vault row")
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .overFreeLimit)
+
+        let removed = try XCTUnwrap(remotePlaces.first)
+        try await map.deletePlace(removed)
+        XCTAssertEqual(map.places.count, 50, "display still includes the stale vault-only row")
+        XCTAssertEqual(
+            SavePlaceLimitHandoff.cachedDecision(),
+            .allowed,
+            "authoritative count must be 49 from the owner-scoped remote remainder"
+        )
+
+        let saved = try await map.saveMapCandidateAsPlace(
+            SaveMapCandidate(
+                id: "cap-after-stale-delete",
+                title: "Freed After Delete Cafe",
+                subtitle: "Taipei",
+                latitude: 25.45,
+                longitude: 121.85,
+                category: .cafe
+            )
+        )
+        XCTAssertEqual(saved.name, "Freed After Delete Cafe")
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
     }
 
     @MainActor

@@ -15,6 +15,7 @@ final class ProfileViewModel: ObservableObject {
     private let authService: PrivyAuthService
     private let accountDeletionService: AccountDeletionProviding
     private let avatarStore: ProfileAvatarStore
+    private let saveLocalVaultService: SaveLocalVaultService
     private let updateProfileRemotely: (UserProfile) async throws -> Void
     private let currentUserIDProvider: () -> String?
     private let reviewerDemoProvider: () -> Bool
@@ -24,6 +25,7 @@ final class ProfileViewModel: ObservableObject {
         supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
         accountDeletionService: AccountDeletionProviding = SupabaseService.shared,
         avatarStore: ProfileAvatarStore = .shared,
+        saveLocalVaultService: SaveLocalVaultService = .shared,
         updateProfileRemotely: ((UserProfile) async throws -> Void)? = nil,
         currentUserIDProvider: @escaping () -> String? = { PrivyAuthService.shared.currentUserId },
         reviewerDemoProvider: @escaping () -> Bool = { PrivyAuthService.shared.isReviewerDemo }
@@ -31,6 +33,7 @@ final class ProfileViewModel: ObservableObject {
         self.supabaseService = supabaseService
         self.accountDeletionService = accountDeletionService
         self.avatarStore = avatarStore
+        self.saveLocalVaultService = saveLocalVaultService
         self.updateProfileRemotely = updateProfileRemotely ?? { profile in
             try await supabaseService.updateProfile(profile)
         }
@@ -177,7 +180,7 @@ final class ProfileViewModel: ObservableObject {
             try await accountDeletionService.deleteAccount()
             try? avatarStore.remove(for: deletingUserID)
             guard currentUserIDProvider() == deletingUserID, !reviewerDemoProvider() else { return true }
-            try? SaveLocalVaultService.shared.deleteAllRecords()
+            try? saveLocalVaultService.deleteRecords(belongingTo: deletingUserID)
             try? KeychainAccountReferenceStore.shared.clear()
             await authService.signOut()
             resetForCurrentSession()

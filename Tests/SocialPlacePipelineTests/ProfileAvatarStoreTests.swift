@@ -160,6 +160,34 @@ final class ProfileAvatarStoreTests: XCTestCase {
     }
 
     @MainActor
+    func testDeleteAccountRemovesOnlyTheDeletingOwnerVaultRecords() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("delete-account-vault-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A stays", ownerSubject: "did:privy:a"))
+        try vault.append(SaveMemoryRecord(state: .confirmedPlace, title: "B goes", ownerSubject: "did:privy:b"))
+
+        let model = ProfileViewModel(
+            supabaseService: SupabaseService(apiBaseURL: nil),
+            accountDeletionService: StubAccountDeletionService(),
+            avatarStore: ProfileAvatarStore(baseDirectory: directory),
+            saveLocalVaultService: vault,
+            currentUserIDProvider: { "did:privy:b" },
+            reviewerDemoProvider: { false }
+        )
+
+        let deleted = await model.deleteAccount()
+
+        XCTAssertTrue(deleted)
+        XCTAssertEqual(try vault.recentRecords(limit: 10).map(\.title), ["A stays"])
+        XCTAssertEqual(try vault.recentRecords(limit: 10, belongingTo: "did:privy:a").map(\.title), ["A stays"])
+        XCTAssertTrue(try vault.recentRecords(limit: 10, belongingTo: "did:privy:b").isEmpty)
+    }
+
+    @MainActor
     func testAccountChangeAfterPhotoPersistenceDoesNotPublishOldAccountState() async {
         var currentUserID = "account-a"
         let store = ProfileAvatarStore(baseDirectory: directory)
@@ -223,6 +251,10 @@ private enum ProfileUpdateTestError: LocalizedError {
     case offline
 
     var errorDescription: String? { "Offline" }
+}
+
+private struct StubAccountDeletionService: AccountDeletionProviding {
+    func deleteAccount() async throws {}
 }
 
 @MainActor

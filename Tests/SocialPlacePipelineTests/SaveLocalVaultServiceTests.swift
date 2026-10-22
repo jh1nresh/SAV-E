@@ -445,6 +445,58 @@ final class SaveLocalVaultServiceTests: XCTestCase {
         XCTAssertTrue(try vault.recentRecords(limit: 5, belongingTo: nil).isEmpty, "signed-in scope with nil owner hides stamped rows")
     }
 
+    /// D3 / P1 4347594673: Memory & Preferences must hide the previous owner.
+    @MainActor
+    func testMemoryInspectorShowsOnlyTheCurrentOwnerRecords() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        try vault.append(SaveMemoryRecord(
+            state: .confirmedPlace,
+            title: "A Harbor Cafe",
+            address: "1 Harbor Way",
+            evidence: ["Source URL: https://example.com/a"],
+            ownerSubject: "did:privy:a"
+        ))
+        try vault.append(SaveMemoryRecord(
+            state: .sourceOnly,
+            title: "B secret clue",
+            address: "9 Private Road",
+            evidence: ["Source URL: https://example.com/b"],
+            ownerSubject: "did:privy:b"
+        ))
+
+        let visibleToB = try SaveMemoryInspector.records(in: vault, belongingTo: "did:privy:b")
+        XCTAssertEqual(visibleToB.map(\.title), ["B secret clue"])
+        XCTAssertEqual(visibleToB.first?.address, "9 Private Road")
+        XCTAssertFalse(visibleToB.contains { $0.ownerSubject == "did:privy:a" })
+        XCTAssertEqual(
+            try SaveMemoryInspector.records(in: vault, belongingTo: "did:privy:a").map(\.title),
+            ["A Harbor Cafe"]
+        )
+        XCTAssertTrue(
+            try SaveMemoryInspector.records(in: vault, belongingTo: nil).isEmpty,
+            "signed-in inspector with no owner must not dump the shared vault"
+        )
+    }
+
+    /// D3 / P1 4347594680: deleting B must not erase A's shared-device rows.
+    @MainActor
+    func testDeleteRecordsBelongingToOwnerLeavesOtherAccounts() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "did:privy:a"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "B clue", ownerSubject: "did:privy:b"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Ownerless clue"))
+
+        try vault.deleteRecords(belongingTo: "did:privy:b")
+
+        let remaining = try vault.recentRecords(limit: 10)
+        XCTAssertEqual(Set(remaining.compactMap(\.title)), ["A clue", "Ownerless clue"])
+        XCTAssertFalse(remaining.contains { $0.ownerSubject == "did:privy:b" })
+    }
+
     /// D3 / P2 4343590036: Review 500-row cap is per account, not the shared file.
     @MainActor
     func testReviewCandidatesBelongingToActiveAccountFilterBeforeLimit() throws {

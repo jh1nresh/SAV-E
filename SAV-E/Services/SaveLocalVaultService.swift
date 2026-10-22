@@ -154,6 +154,18 @@ final class SaveLocalVaultService: Sendable {
         }
     }
 
+    /// Removes only rows stamped with `ownerSubject`. Ownerless rows and every
+    /// other account stay in the shared device vault.
+    func deleteRecords(belongingTo ownerSubject: String) throws {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                var records = try loadRecords(from: url)
+                records.removeAll { $0.ownerSubject == ownerSubject }
+                try save(records, to: url)
+            }
+        }
+    }
+
     func saveSourceOnly(url: URL, note: String? = nil, ownerSubject: String? = nil) throws -> SaveMemoryRecord {
         let diagnostic = sourceOnlyDiagnostic(url: url, note: note)
         let record = SaveMemoryRecord(

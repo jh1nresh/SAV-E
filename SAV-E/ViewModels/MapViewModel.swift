@@ -885,12 +885,6 @@ final class MapViewModel: ObservableObject {
         authoritativeSavedPlaceCount = nil
     }
 
-    private func alignAuthoritativeSavedPlaceCountWithPlaces() {
-        guard authoritativeSavedPlaceCount != nil,
-              authoritativeSavedPlaceOwner == authService.currentUserId else { return }
-        authoritativeSavedPlaceCount = places.count
-    }
-
     private func incrementAuthoritativeSavedPlaceCountIfNeeded() {
         guard let count = authoritativeSavedPlaceCount,
               authoritativeSavedPlaceOwner == authService.currentUserId else { return }
@@ -4009,6 +4003,8 @@ final class MapViewModel: ObservableObject {
         let startedBy = authService.currentUserId
         let generation = authService.sessionGeneration
         let previousPlaces = places
+        let previousAuthoritativeCount = authoritativeSavedPlaceCount
+        let previousAuthoritativeOwner = authoritativeSavedPlaceOwner
         invalidateCorrectionSuggestions(placeIDs: place.savedIDs)
         places.removeAll { $0.id == place.id }
         if selectedPlace?.id == place.id {
@@ -4016,10 +4012,10 @@ final class MapViewModel: ObservableObject {
         }
         activeFilter?.remove(place.id)
         clearRoute()
-        alignAuthoritativeSavedPlaceCountWithPlaces()
         syncSavedPlaceLimitCache()
 
         do {
+            var remainingAuthoritativeCount: Int?
             if usesRemotePersistence {
                 guard let userID = startedBy else { throw SupabaseError.notAuthenticated }
                 try ensureConfirmationSession(userID, generation)
@@ -4031,16 +4027,24 @@ final class MapViewModel: ObservableObject {
                     try await supabaseService.deletePlace(record.id)
                     try ensureConfirmationSession(userID, generation)
                 }
+                remainingAuthoritativeCount = Place.consolidated(
+                    remote.filter { !place.savedIDs.contains($0.id) }
+                ).count
             }
             if let userID = startedBy {
                 try ensureConfirmationSession(userID, generation)
             }
             try saveLocalVaultService.removeConfirmedPlace(place, belongingTo: startedBy)
+            if let remainingAuthoritativeCount, let userID = startedBy {
+                rememberAuthoritativeSavedPlaceCount(remainingAuthoritativeCount, owner: userID)
+            }
+            syncSavedPlaceLimitCache()
         } catch {
             _ = try? saveLocalVaultService.saveConfirmedPlace(place, ownerSubject: startedBy)
             places = previousPlaces
             selectedPlace = place
-            alignAuthoritativeSavedPlaceCountWithPlaces()
+            authoritativeSavedPlaceCount = previousAuthoritativeCount
+            authoritativeSavedPlaceOwner = previousAuthoritativeOwner
             syncSavedPlaceLimitCache()
             throw error
         }
