@@ -156,7 +156,7 @@ final class SaveDoodleMapTests: XCTestCase {
         // attempt's undo baseline.
         XCTAssertTrue(store.checkIn(placeID: placeID))
         var restoredAfterForeignVisit: PlaceStatus?
-        let undoneForeign = await store.applyUndo { restoredAfterForeignVisit = $0 }
+        let undoneForeign = await store.applyUndo(placeID: placeID) { restoredAfterForeignVisit = $0 }
         XCTAssertTrue(undoneForeign)
         XCTAssertEqual(restoredAfterForeignVisit, .wantToGo)
 
