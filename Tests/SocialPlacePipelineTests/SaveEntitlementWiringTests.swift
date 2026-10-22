@@ -210,6 +210,10 @@ final class SaveEntitlementWiringTests: XCTestCase {
         let content = try source(at: "SAV-E/App/ContentView.swift")
         XCTAssertTrue(profile.contains("if !passportPlaces.isEmpty"))
         XCTAssertTrue(profile.contains("accessibilityIdentifier: \"profile.pro\""))
+        XCTAssertTrue(
+            profile.contains(".accessibilityElement(children: .contain)"),
+            "CI 39703881022: parent identifier flattened Savvy Pro off profile.pro"
+        )
         XCTAssertTrue(profile.contains("SaveProPaywallView(trigger: .passport)"))
         XCTAssertFalse(profile.contains("shouldOfferProFromPassport"))
         XCTAssertFalse(profile.contains("if SAVEProAccessPolicy.purchasingIsAvailable"))
