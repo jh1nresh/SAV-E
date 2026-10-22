@@ -410,6 +410,42 @@ final class SaveCollaborativeListTests: XCTestCase {
             logoScene.contains("}\n            .accessibilityIdentifier(\"evidence.logoCloseup\")"),
             "Parent evidence.logoCloseup overwrites place.photo.attribution.logo"
         )
+        XCTAssertTrue(
+            sheet.contains("enum GooglePlacesPhotoCardLayout"),
+            "Carousel must size the photo before overlaying the logo row"
+        )
+        XCTAssertTrue(sheet.contains("GooglePlacesPhotoCardLayout.overlayCard"))
+        XCTAssertTrue(evidence.contains("GooglePlacesPhotoCardLayout.overlayCard"))
+        XCTAssertFalse(
+            evidence.contains("url.host?.contains(\"contrib\")"),
+            "Author URLs put contrib in the path. Host maps.google.com never matches."
+        )
+        XCTAssertTrue(evidence.contains("isAuthorDestination"))
+        XCTAssertTrue(evidence.contains("Color(hex: \"3A2415\")"))
+        XCTAssertTrue(evidence.contains("evidence.openedPage.author"))
+        XCTAssertTrue(evidence.contains("evidence.openedPage.maps"))
+        XCTAssertTrue(evidence.contains("evidence.mixedCard"))
+        XCTAssertTrue(evidence.contains("evidence.mapPins"))
+        XCTAssertTrue(evidence.contains("evidence.cityPage"))
+        XCTAssertTrue(evidence.contains("evidence.reportEntry"))
+        XCTAssertTrue(uiTest.contains("evidence.openedPage.author"))
+        XCTAssertTrue(uiTest.contains("appearance)-mixed-card"))
+        XCTAssertTrue(uiTest.contains("appearance)-map-pins"))
+        XCTAssertTrue(uiTest.contains("appearance)-city-page"))
+        XCTAssertTrue(uiTest.contains("appearance)-report-entry"))
+    }
+
+    @MainActor
+    func testDestinationPageInkMeetsContrastOnWhite() {
+        let ratio = GoogleMapsAttributionContrast.ratio(
+            foreground: (r: 0x3A / 255.0, g: 0x24 / 255.0, b: 0x15 / 255.0),
+            background: (r: 1, g: 1, b: 1)
+        )
+        XCTAssertGreaterThanOrEqual(
+            ratio,
+            4.5,
+            "Maps/author page title on white must stay WCAG 4.5:1 in Dark Mode"
+        )
     }
 
     @MainActor

@@ -1,6 +1,6 @@
 import XCTest
 
-/// Real iOS Simulator evidence for PR #306 Google photo attribution (G1–G4).
+/// Real iOS Simulator evidence for PR #306 Google photo attribution (G1–G8).
 final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
     @MainActor
     func testCaptureLightAndDarkEvidence() {
@@ -59,10 +59,17 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         let author = app.buttons["place.photo.attribution.author"]
         XCTAssertTrue(waitUntilHittable(author), "Author tap target missing on viewer")
         author.tap()
-        XCTAssertTrue(
-            app.descendants(matching: .any)["evidence.openedPage"]
-                .waitForExistence(timeout: stepTimeout),
-            "Author tap did not open a destination page"
+        if !app.descendants(matching: .any)["evidence.openedPage.author"]
+            .waitForExistence(timeout: stepTimeout) {
+            let tree = XCTAttachment(string: app.debugDescription)
+            tree.name = "ax-tree-author-opened-maps"
+            tree.lifetime = .keepAlways
+            add(tree)
+            XCTFail("Author tap must open the author page, not Maps. Route on /contrib path, not host.")
+        }
+        XCTAssertFalse(
+            app.descendants(matching: .any)["evidence.openedPage.maps"].exists,
+            "Author page screenshot must not be the Maps tab"
         )
         saveEvidence(app, name: "\(appearance)-author-page")
 
@@ -71,9 +78,13 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         XCTAssertTrue(waitUntilHittable(maps), "View on Google Maps tap target missing")
         maps.tap()
         XCTAssertTrue(
-            app.descendants(matching: .any)["evidence.openedPage"]
+            app.descendants(matching: .any)["evidence.openedPage.maps"]
                 .waitForExistence(timeout: stepTimeout),
-            "Maps tap did not open a destination page"
+            "Maps tap did not open the Maps page"
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["evidence.openedPage.author"].exists,
+            "Maps page must not show the author destination"
         )
         saveEvidence(app, name: "\(appearance)-maps-page")
 
@@ -117,6 +128,49 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         )
         XCTAssertFalse(app.buttons["place.photo.attribution.author"].exists)
         saveEvidence(app, name: "\(appearance)-no-author")
+
+        openScene(app, "mixedCard")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.mixedCard"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertTrue(app.buttons["place.photo.attribution.row"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["evidence.userPhoto"].exists)
+        saveEvidence(app, name: "\(appearance)-mixed-card")
+
+        openScene(app, "mapPins")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.mapPins"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.pin.saved.10000000-0000-0000-0000-000000000306"]
+                .waitForExistence(timeout: stepTimeout),
+            "Map pins must be symbol markers, not Google photos"
+        )
+        saveEvidence(app, name: "\(appearance)-map-pins")
+
+        openScene(app, "cityPage")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.cityPage"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertFalse(
+            app.buttons["place.photo.attribution.row"].exists,
+            "City cards must not show an unattributed Google photo row"
+        )
+        saveEvidence(app, name: "\(appearance)-city-page")
+
+        openScene(app, "reportEntry")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.reportEntry"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertTrue(
+            waitUntilHittable(app.buttons["place.photo.attribution.viewOnMaps"]),
+            "G8 report entry is View on Google Maps on the viewer"
+        )
+        saveEvidence(app, name: "\(appearance)-report-entry")
     }
 
     @MainActor

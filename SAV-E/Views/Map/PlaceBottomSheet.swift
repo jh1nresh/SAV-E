@@ -525,7 +525,7 @@ struct PlaceBusinessPhotoCarousel: View {
             } else {
                 TabView {
                     ForEach(Array(photoPages.enumerated()), id: \.offset) { index, page in
-                        ZStack(alignment: .bottom) {
+                        GooglePlacesPhotoCardLayout.overlayCard {
                             photoImage(page.url)
                                 .onTapGesture {
                                     if page.isGooglePlacesPhoto {
@@ -533,6 +533,7 @@ struct PlaceBusinessPhotoCarousel: View {
                                     }
                                 }
                                 .accessibilityIdentifier("place.photo.carousel.page")
+                        } overlay: {
                             if page.isGooglePlacesPhoto {
                                 GooglePlacesPhotoAttributionBar(
                                     authors: page.authors,
@@ -542,9 +543,6 @@ struct PlaceBusinessPhotoCarousel: View {
                                 )
                             }
                         }
-                        .frame(height: GoogleMapsAttributionMetrics.carouselHeight)
-                        .frame(maxWidth: .infinity)
-                        .clipped()
                         .tag(index)
                     }
                 }
@@ -670,6 +668,28 @@ struct PlacePhotoPage: Identifiable, Hashable {
                 mapsURI: isGoogle ? mapsURI : nil
             )
         }
+    }
+}
+
+/// Sized photo first, then the attribution overlay. A `scaledToFill` image
+/// must not expand the ZStack or `.clipped()` on the outer frame drops the
+/// author + Google Maps logo off the bottom of the card.
+enum GooglePlacesPhotoCardLayout {
+    @ViewBuilder
+    static func overlayCard<Photo: View, Overlay: View>(
+        @ViewBuilder photo: () -> Photo,
+        @ViewBuilder overlay: () -> Overlay
+    ) -> some View {
+        ZStack(alignment: .bottom) {
+            photo()
+                .frame(maxWidth: .infinity)
+                .frame(height: GoogleMapsAttributionMetrics.carouselHeight)
+                .clipped()
+            overlay()
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: GoogleMapsAttributionMetrics.carouselHeight)
+        .clipped()
     }
 }
 
