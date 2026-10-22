@@ -2,6 +2,7 @@ export const FREE_LIST_SAVE_LIMIT = 50;
 
 export type ClipListSavePlan = {
   toInsert: Record<string, unknown>[];
+  alreadyExisting: Record<string, unknown>[];
   newlySaved: number;
   alreadySaved: number;
   overCap: number;
@@ -45,13 +46,21 @@ function isPlaceObject(value: unknown): value is Record<string, unknown> {
 export function planClipListSave(input: {
   items: unknown[];
   existingIdentities: Iterable<string>;
+  existingPlaces?: Record<string, unknown>[];
   savedPlaceCount: number;
   limit?: number;
 }): ClipListSavePlan {
   const limit = input.limit ?? FREE_LIST_SAVE_LIMIT;
   const existing = new Set(input.existingIdentities);
+  const rowByKey = new Map<string, Record<string, unknown>>();
+  for (const row of input.existingPlaces ?? []) {
+    for (const key of clipListPlaceIdentities(row)) {
+      if (!rowByKey.has(key)) rowByKey.set(key, row);
+    }
+  }
   const seen = new Set<string>();
   let alreadySaved = 0;
+  const alreadyExisting: Record<string, unknown>[] = [];
   const novel: Record<string, unknown>[] = [];
 
   for (const raw of input.items) {
@@ -65,6 +74,10 @@ export function planClipListSave(input: {
     for (const key of identities) seen.add(key);
     if (identities.some((key) => existing.has(key))) {
       alreadySaved += 1;
+      const matched = identities.map((key) => rowByKey.get(key)).find(Boolean);
+      if (matched && !alreadyExisting.includes(matched)) {
+        alreadyExisting.push(matched);
+      }
       continue;
     }
     novel.push(raw);
@@ -74,6 +87,7 @@ export function planClipListSave(input: {
   const toInsert = novel.slice(0, remainingSlots);
   return {
     toInsert,
+    alreadyExisting,
     newlySaved: toInsert.length,
     alreadySaved,
     overCap: novel.length - toInsert.length,
@@ -119,6 +133,7 @@ export function clipListSaveResponse(
   remaining: number;
   limit: number;
   saved: ClipListSavedIdentity[];
+  already: ClipListSavedIdentity[];
 } {
   return {
     newly_saved: plan.newlySaved,
@@ -127,5 +142,6 @@ export function clipListSaveResponse(
     remaining: plan.remaining,
     limit: plan.limit,
     saved: inserted.map(clipListSavedIdentity),
+    already: plan.alreadyExisting.map(clipListSavedIdentity),
   };
 }

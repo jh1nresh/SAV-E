@@ -79,9 +79,11 @@ test("SL2 #293 section B: a full account saves none and reports remaining 0", ()
 });
 
 test("SL3 response exposes the three real counts", () => {
+  const owned = cafe("11111111-1111-1111-1111-111111111111");
   const plan = planClipListSave({
-    items: [cafe("owned"), cafe("new", "Blue Bottle"), cafe("overflow", "Tsukiji")],
-    existingIdentities: clipListPlaceIdentities(cafe("owned")),
+    items: [owned, cafe("new", "Blue Bottle"), cafe("overflow", "Tsukiji")],
+    existingIdentities: clipListPlaceIdentities(owned),
+    existingPlaces: [owned],
     savedPlaceCount: 49,
   });
   const body = clipListSaveResponse(plan);
@@ -92,6 +94,8 @@ test("SL3 response exposes the three real counts", () => {
   assert.equal(body.remaining, 0);
   assert.equal(body.limit, 50);
   assert.deepEqual(body.saved, []);
+  assert.equal(body.already[0]?.id, "11111111-1111-1111-1111-111111111111");
+  assert.equal(body.already[0]?.name, "Onibus Coffee");
 
   const withRows = clipListSaveResponse(plan, [
     {
@@ -108,6 +112,24 @@ test("SL3 response exposes the three real counts", () => {
   assert.equal(withRows.newly_saved, 1);
 });
 
+test("zero-insert duplicates return canonical already rows", () => {
+  const owned = cafe("11111111-1111-1111-1111-111111111111");
+  const plan = planClipListSave({
+    items: [owned, { ...owned, provider_place_id: "11111111-1111-1111-1111-111111111111" }],
+    existingIdentities: clipListPlaceIdentities(owned),
+    existingPlaces: [owned],
+    savedPlaceCount: 12,
+  });
+  assert.equal(plan.newlySaved, 0);
+  assert.equal(plan.alreadySaved, 2);
+  assert.equal(plan.overCap, 0);
+  const body = clipListSaveResponse(plan);
+  assert.deepEqual(body.saved, []);
+  assert.equal(body.already.length, 1);
+  assert.equal(body.already[0]?.id, "11111111-1111-1111-1111-111111111111");
+  assert.equal(body.already[0]?.name, "Onibus Coffee");
+});
+
 test("SL4 POST /places list writes are one transactional call", () => {
   const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
   const handler = server.slice(
@@ -121,6 +143,7 @@ test("SL4 POST /places list writes are one transactional call", () => {
   assert.match(handler, /commit/);
   assert.match(handler, /rollback/);
   assert.match(handler, /clipListSaveResponse\(plan, inserted\)/);
+  assert.match(handler, /existingPlaces: existing\.rows/);
   assert.match(handler, /saveClipListPlaces/);
   assert.match(handler, /inserted\.push\(rows\[0\]\)/);
   assert.doesNotMatch(

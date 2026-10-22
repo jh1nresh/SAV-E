@@ -253,9 +253,61 @@ final class PendingShareStoreTests: XCTestCase {
         let remote = ClipListHandoff.parseRemote(status: 201, data: payload)
         XCTAssertEqual(remote?.counts.newlySaved, 2)
         XCTAssertEqual(remote?.saved.map(\.id), [id2, id3])
+        XCTAssertEqual(remote?.already, [])
         XCTAssertNil(ClipListHandoff.placesFromRemoteRows(
             confirmed: Array(confirmed.prefix(1)),
             rows: rows
+        ))
+    }
+
+    func testZeroInsertAlreadySavedRowsImportCanonicalIds() {
+        let confirmed = (1...5).map { index in
+            PendingConfirmedPlace(
+                placeId: "shop-\(index)",
+                name: "Shop \(index)",
+                address: "Tokyo",
+                latitude: 35.6 + Double(index) * 0.01,
+                longitude: 139.7,
+                category: "Cafe",
+                sourceURL: nil
+            ).asListItem()
+        }
+        let ids = [
+            UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
+            UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
+            UUID(uuidString: "44444444-4444-4444-4444-444444444444")!,
+            UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
+        ]
+        let alreadyJSON = (1...5).map { index in
+            """
+            {"id":"\(ids[index - 1].uuidString)","provider_place_id":"shop-\(index)","name":"Shop \(index)","latitude":\(35.6 + Double(index) * 0.01),"longitude":139.7}
+            """
+        }.joined(separator: ",")
+        let payload = Data(#"""
+        {"newly_saved":0,"already_saved":5,"over_cap":0,"remaining":0,"limit":50,"saved":[],"already":[\#(alreadyJSON)]}
+        """#.utf8)
+        let remote = ClipListHandoff.parseRemote(status: 201, data: payload)
+        XCTAssertEqual(remote?.counts.alreadySaved, 5)
+        XCTAssertEqual(remote?.saved, [])
+        XCTAssertEqual(remote?.already.map(\.id), ids)
+        let imported = ClipListHandoff.placesFromRemoteRows(
+            confirmed: confirmed,
+            rows: (remote?.saved ?? []) + (remote?.already ?? [])
+        )
+        XCTAssertEqual(imported?.map(\.id), ids)
+        XCTAssertEqual(imported?.map(\.name), ["Shop 1", "Shop 2", "Shop 3", "Shop 4", "Shop 5"])
+
+        let staleEmpty = Data(#"{"newly_saved":0,"already_saved":5,"over_cap":0,"remaining":0,"limit":50,"saved":[]}"#.utf8)
+        let stale = ClipListHandoff.parseRemote(status: 201, data: staleEmpty)
+        XCTAssertEqual(stale?.already, [])
+        XCTAssertEqual(
+            ClipListHandoff.placesFromRemoteRows(confirmed: confirmed, rows: stale?.saved ?? []),
+            []
+        )
+        XCTAssertNil(ClipListHandoff.parseRemote(
+            status: 201,
+            data: Data(#"{"newly_saved":0,"already_saved":5,"over_cap":0,"already":[{"name":"Shop 1"}]}"#.utf8)
         ))
     }
 

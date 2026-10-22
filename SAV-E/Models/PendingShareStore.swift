@@ -306,16 +306,27 @@ enum ClipListHandoff {
         var longitude: Double
     }
 
-    /// Stamp exactly the rows the server inserted. A count-only prefix of
+    /// Stamp inserted rows plus account duplicates. A count-only prefix of
     /// locally novel items can pick a different set when the cache is stale.
-    static func parseRemote(status: Int, data: Data) -> (counts: ClipListHandoffCounts, saved: [SavedRow])? {
+    static func parseRemote(
+        status: Int,
+        data: Data
+    ) -> (counts: ClipListHandoffCounts, saved: [SavedRow], already: [SavedRow])? {
         guard let counts = parseCounts(status: status, data: data) else { return nil }
-        let rows = parseSavedRows(data)
-        if counts.newlySaved == 0 {
-            return (counts, rows ?? [])
+        let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        let saved = parseSavedRows(body["saved"])
+        let already: [SavedRow]
+        if body["already"] == nil {
+            already = []
+        } else {
+            guard let parsedAlready = parseSavedRows(body["already"]) else { return nil }
+            already = parsedAlready
         }
-        guard let rows, rows.count == counts.newlySaved else { return nil }
-        return (counts, rows)
+        if counts.newlySaved == 0 {
+            return (counts, saved ?? [], already)
+        }
+        guard let saved, saved.count == counts.newlySaved else { return nil }
+        return (counts, saved, already)
     }
 
     static func placesFromRemoteRows(
@@ -382,9 +393,8 @@ enum ClipListHandoff {
         return "Saved \(counts.newlySaved) places from the list."
     }
 
-    private static func parseSavedRows(_ data: Data) -> [SavedRow]? {
-        let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-        guard let raw = body["saved"] as? [[String: Any]] else { return nil }
+    private static func parseSavedRows(_ rawValue: Any?) -> [SavedRow]? {
+        guard let raw = rawValue as? [[String: Any]] else { return nil }
         var rows: [SavedRow] = []
         for item in raw {
             guard let id = uuidValue(item["id"]) else { return nil }

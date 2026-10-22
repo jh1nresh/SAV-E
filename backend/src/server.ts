@@ -1727,6 +1727,7 @@ async function saveClipListPlaces(
     const plan = planClipListSave({
       items,
       existingIdentities,
+      existingPlaces: existing.rows,
       savedPlaceCount: existing.rows.length,
     });
 

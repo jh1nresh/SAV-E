@@ -2462,12 +2462,17 @@ final class MapViewModel: ObservableObject {
                 guard let remote = ClipListHandoff.parseRemote(status: status, data: data),
                       let importedPlaces = ClipListHandoff.placesFromRemoteRows(
                         confirmed: confirmed,
-                        rows: remote.saved
+                        rows: remote.saved + remote.already
                       )
                 else {
                     throw ClipListHandoffError.unconfirmed
                 }
                 applyHandoffPlaces(importedPlaces)
+                if remote.counts.alreadySaved > 0,
+                   importedPlaces.isEmpty,
+                   !confirmed.contains(where: { $0.alreadySaved(in: places) }) {
+                    throw ClipListHandoffError.unconfirmed
+                }
                 return (Self.stampedHandoffItems(confirmed: confirmed, imported: importedPlaces), remote.counts)
             } catch SupabaseError.notConfigured {
                 // Unconfigured builds keep the local quota plan.
