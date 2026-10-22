@@ -98,7 +98,7 @@ final class SaveDoodleMapTests: XCTestCase {
         let pinSource = try source(at: "SAV-E/Views/Map/MapView.swift")
         XCTAssertTrue(map.contains("routePolyline"))
         XCTAssertTrue(map.contains("MapPolyline(polyline)"))
-        XCTAssertTrue(map.contains("if mapViewModel.routePolyline != nil"))
+        XCTAssertTrue(map.contains("if !mapViewModel.routeCoordinates.isEmpty"))
         XCTAssertTrue(pinSource.contains("if let polyline = viewModel.routePolyline"))
         XCTAssertTrue(pinSource.contains("dash: [7, 5]"))
     }

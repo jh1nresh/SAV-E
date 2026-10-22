@@ -664,9 +664,10 @@ struct SaveDoodleMapView: View {
     }
 
     private func fitVisiblePlaces() {
-        // Show-on-Map for a collaborative list already aimed the camera at
-        // `routePolyline`. Do not snap back to personal city stamps.
-        if mapViewModel.routePolyline != nil {
+        // Show-on-Map for a collaborative list already aimed the camera.
+        // A single mappable stop sets one routeCoordinate and no polyline.
+        // Do not snap back to personal city stamps.
+        if !mapViewModel.routeCoordinates.isEmpty {
             return
         }
         if let selected = mapViewModel.selectedPlace, selected.isMapKitMappable {
