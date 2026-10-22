@@ -324,7 +324,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Denied + empty Home must keep the Settings recovery prompt"
         )
         XCTAssertTrue(app.buttons["home.locationAllow"].exists)
-        XCTAssertFalse(app.descendants(matching: .any)["home.saves"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["home.saves"].waitForExistence(timeout: stepTimeout),
+            "Empty Home still exposes the HoP home.saves entry"
+        )
         XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
         attach(app, name: "review-flow-home-empty")
         attach(app, name: "doodle-home-empty")
@@ -3163,7 +3166,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
         let review = app.descendants(matching: .any)["home.review"]
-        let fallback = app.buttons["home.openSaves"]
+        let fallback = app.buttons["home.saves"]
         XCTAssertTrue(
             review.waitForExistence(timeout: timeout(2))
                 || fallback.waitForExistence(timeout: stepTimeout),
