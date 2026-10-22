@@ -1,0 +1,86 @@
+name: Auto-rerun flaky
+
+# Listens for the CI workflow that hosts the required `backend / validate`
+# check. Root retries live in backend `audit:production`; this only reruns
+# that job after an npm audit registry/network timeout.
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: auto-rerun-flaky-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  rerun-npm-audit-timeout:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Rerun backend validate only for npm audit network timeout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          set -euo pipefail
+          if (( RUN_ATTEMPT >= 3 )); then
+            echo "run_attempt=${RUN_ATTEMPT}; not rerunning"
+            exit 0
+          fi
+
+          status="$(gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}" --jq .status)"
+          if [[ "$status" != "completed" ]]; then
+            echo "run ${RUN_ID} status=${status}; not rerunning"
+            exit 0
+          fi
+
+          gh api "repos/${GH_REPO}/actions/runs/${RUN_ID}/attempts/${RUN_ATTEMPT}/jobs" > jobs.json
+          set +e
+          job_id="$(
+            python3 scripts/ci/should_rerun_npm_audit_timeout.py \
+              --jobs-json jobs.json \
+              --print-backend-job-id
+          )"
+          job_lookup=$?
+          set -e
+          if (( job_lookup != 0 )) || [[ -z "${job_id}" ]]; then
+            echo "failed jobs are not only backend / validate; not rerunning"
+            exit 0
+          fi
+
+          if ! gh run view "${RUN_ID}" --repo "${GH_REPO}" --job "${job_id}" --log > backend.log; then
+            if ! gh api --follow --allow-escape-sequences \
+              "repos/${GH_REPO}/actions/jobs/${job_id}/logs" > backend.log; then
+              echo "could not fetch backend / validate logs; not rerunning"
+              exit 0
+            fi
+          fi
+          set +e
+          python3 scripts/ci/should_rerun_npm_audit_timeout.py \
+            --jobs-json jobs.json \
+            --backend-log backend.log \
+            --run-attempt "${RUN_ATTEMPT}"
+          decision=$?
+          set -e
+          if (( decision == 2 )); then
+            echo "classifier skipped rerun"
+            exit 0
+          fi
+          if (( decision != 0 )); then
+            echo "classifier failed with ${decision}" >&2
+            exit "$decision"
+          fi
+
+          echo "Calling rerun-failed-jobs once for run ${RUN_ID} attempt ${RUN_ATTEMPT}"
+          gh api --method POST "repos/${GH_REPO}/actions/runs/${RUN_ID}/rerun-failed-jobs"
