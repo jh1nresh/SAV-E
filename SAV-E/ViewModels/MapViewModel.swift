@@ -1240,18 +1240,20 @@ final class MapViewModel: ObservableObject {
         let pending = pendingImportService.consumePendingPlaces(ownerSubject: userId)
         guard !pending.isEmpty else { return }
 
-        var importedPlaces: [Place] = []
-        var failedImports: [PendingSharedPlace] = []
-        var persistedPlaces: [Place]
-        do {
-            persistedPlaces = Place.consolidated(try await supabaseService.fetchPlaces(for: userId))
-            rememberAuthoritativeSavedPlaceCount(persistedPlaces.count, owner: userId)
-        } catch {
-            pendingImportService.restorePendingPlaces(pending)
-            throw error
+        // Consuming removes the entire batch from disk. Keep every unfinished
+        // input until its save or durable park completes, including when parking
+        // itself throws from the catch below or the importing session changes.
+        var completedIndices: Set<Int> = []
+        defer {
+            pendingImportService.restorePendingPlaces(
+                pending.enumerated().compactMap { completedIndices.contains($0.offset) ? nil : $0.element }
+            )
         }
+        var importedPlaces: [Place] = []
+        var persistedPlaces = Place.consolidated(try await supabaseService.fetchPlaces(for: userId))
+        rememberAuthoritativeSavedPlaceCount(persistedPlaces.count, owner: userId)
 
-        for pendingPlace in pending {
+        for (index, pendingPlace) in pending.enumerated() {
             let place = Place.from(pendingPlace)
             let remote = persistedPlaces.first { $0.matches(place) }
             let existing = remote ?? existingSavedPlace(matching: place)
@@ -1262,6 +1264,7 @@ final class MapViewModel: ObservableObject {
                     try await supabaseService.updatePlace(merged, previous: existing)
                 } else if isOverFreeSavedPlaceLimit {
                     try parkPlaceInUnplacedInbox(merged)
+                    completedIndices.insert(index)
                     continue
                 } else {
                     try await supabaseService.savePlace(merged, userId: userId)
@@ -1276,6 +1279,7 @@ final class MapViewModel: ObservableObject {
                     importedPlaces.append(merged)
                     incrementAuthoritativeSavedPlaceCountIfNeeded()
                 }
+                completedIndices.insert(index)
             } catch {
                 if try parkIfServerSavedPlaceLimit(
                     error,
@@ -1283,9 +1287,9 @@ final class MapViewModel: ObservableObject {
                     startedBy: userId,
                     generation: importGeneration
                 ) {
+                    completedIndices.insert(index)
                     continue
                 }
-                failedImports.append(pendingPlace)
                 if authService.sessionGeneration == importGeneration, authService.currentUserId == userId {
                     syncFailedPlaceName = pendingPlace.name
                 }
@@ -1293,7 +1297,6 @@ final class MapViewModel: ObservableObject {
         }
         if authService.sessionGeneration == importGeneration, authService.currentUserId == userId,
            !importedPlaces.isEmpty { revealImportedPlaces(importedPlaces) }
-        pendingImportService.restorePendingPlaces(failedImports)
     }
 
     /// One-activation drain plan for a queued Add-all list. The first slice is

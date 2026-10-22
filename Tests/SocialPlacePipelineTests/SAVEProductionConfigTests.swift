@@ -962,6 +962,159 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed)
     }
 
+    /// P1 4351218392: a throwing cap park must restore every unfinished input,
+    /// including an earlier generic failure, but never replay completed inputs.
+    @MainActor
+    func testPendingRemoteParkingFailureRestoresUnfinishedBatchInOrder() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        let owner = "pending-parking-owner"
+        auth.authState = .authenticated(userId: owner)
+        defer {
+            auth.authState = originalAuth
+            SavePlaceLimitHandoff.testDefaults = originalDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.pending-restore.\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let names = ["Remote Success", "Generic Failure", "Durable Park", "Failed Park", "Untouched Tail"]
+        let pending = names.enumerated().map { index, name in
+            PendingSharedPlace(ownerSubject: owner, googlePlaceId: "restore-\(index)", name: name,
+                address: "\(index) Restore Road", category: "food", latitude: 25 + Double(index) * 0.01,
+                longitude: 121, dishes: ["Dish \(index)"], priceRange: "$$",
+                sourceURL: "https://example.com/restore/\(index)", sourceText: "Original clue \(index)",
+                savedAt: Date(timeIntervalSince1970: 1_700_000_000 + Double(index)))
+        }
+        queue.restorePendingPlaces(pending)
+        var retry = false
+        var submittedNames: [String] = []
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                let name = try XCTUnwrap(AnalysisRequestURLProtocol.body(request)["name"] as? String)
+                submittedNames.append(name)
+                if !retry && name == "Generic Failure" { return (500, #"{"error":"temporary_failure"}"#) }
+                if name == "Durable Park" || (!retry && name == "Failed Park") {
+                    if name == "Failed Park" { vault.saveReviewCandidateError = SaveLocalVaultError.storageUnavailable }
+                    return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#)
+                }
+                return (201, "{}")
+            }
+            return (200, "[]")
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(apiBaseURL: "https://pending-restore.test",
+            session: URLSession(configuration: configuration), accessTokenProvider: { "owner-token" })
+        let map = MapViewModel(supabaseService: service, pendingImportService: queue, saveLocalVaultService: vault,
+            entitlementTierProvider: { .free }, entitlementResolvedProvider: { true }, usesRemotePersistence: true)
+
+        await map.loadPlaces()
+
+        XCTAssertEqual(submittedNames, Array(names.prefix(4)), "The parking throw must leave the tail unprocessed")
+        XCTAssertEqual(try vault.confirmedPlaces(belongingTo: owner).map(\.name), ["Remote Success"])
+        XCTAssertEqual(try vault.reviewCandidates(belongingTo: owner).map(\.name), ["Durable Park"])
+        let retained = queue.consumePendingPlaces(ownerSubject: owner)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        XCTAssertEqual(try encoder.encode(retained), try encoder.encode([pending[1], pending[3], pending[4]]),
+            "Restore the original full payloads in input order, excluding only completed save/park")
+        queue.restorePendingPlaces(retained)
+
+        vault.saveReviewCandidateError = nil
+        retry = true
+        await map.handleSceneDidBecomeActive()
+        XCTAssertEqual(submittedNames, Array(names.prefix(4)) + [names[1], names[3], names[4]])
+        XCTAssertTrue(queue.consumePendingPlaces(ownerSubject: owner).isEmpty)
+        XCTAssertEqual(Set(try vault.confirmedPlaces(belongingTo: owner).map(\.name)),
+            Set([names[0], names[1], names[3], names[4]]))
+        XCTAssertEqual(try vault.reviewCandidates(belongingTo: owner).map(\.name), [names[2]])
+        await map.handleSceneDidBecomeActive()
+        XCTAssertEqual(submittedNames.count, 7, "A further activation must not duplicate any completed input")
+    }
+
+    @MainActor
+    func testPendingRemoteImportAccountSwitchRetainsOriginalOwnerForRetry() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        let owner = "pending-session-owner"
+        let otherOwner = "pending-session-other"
+        auth.authState = .authenticated(userId: owner)
+        defer {
+            auth.authState = originalAuth
+            SavePlaceLimitHandoff.testDefaults = originalDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.pending-session-restore.\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let pending = (0..<3).map { index in
+            PendingSharedPlace(ownerSubject: owner, googlePlaceId: "session-\(index)", name: "Session \(index)",
+                address: "\(index) Session Road", category: "food", latitude: 26 + Double(index) * 0.01,
+                longitude: 122, dishes: [], sourceText: "Original session clue \(index)",
+                savedAt: Date(timeIntervalSince1970: 1_700_000_100 + Double(index)))
+        }
+        queue.restorePendingPlaces(pending)
+        var scopedTokenLookups = 0
+        var didSwitch = false
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "POST", request.url?.path == "/places" { return (201, "{}") }
+            return (200, "[]")
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(apiBaseURL: "https://pending-session.test",
+            session: URLSession(configuration: configuration), accessTokenProvider: {
+                if let scope = SAVEPendingImportSessionScope.current, scope.owner == owner {
+                    await MainActor.run {
+                        scopedTokenLookups += 1
+                        // Scoped GET, first POST, then suspend the second POST's token lookup.
+                        if scopedTokenLookups == 3 {
+                            didSwitch = true
+                            auth.authState = .authenticated(userId: otherOwner)
+                        }
+                    }
+                }
+                return "fixture-token"
+            })
+        let map = MapViewModel(supabaseService: service, pendingImportService: queue, saveLocalVaultService: vault,
+            entitlementTierProvider: { .free }, entitlementResolvedProvider: { true }, usesRemotePersistence: true)
+
+        await map.loadPlaces()
+        XCTAssertTrue(didSwitch, "The account switch must occur inside the real import token lookup")
+        let writesBeforeRetry = AnalysisRequestURLProtocol.requests.filter { $0.httpMethod == "POST" && $0.url?.path == "/places" }
+        XCTAssertEqual(writesBeforeRetry.count, 1)
+        XCTAssertTrue(queue.consumePendingPlaces(ownerSubject: otherOwner).isEmpty)
+        let retained = queue.consumePendingPlaces(ownerSubject: owner)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        XCTAssertEqual(try encoder.encode(retained), try encoder.encode(Array(pending.dropFirst())))
+        queue.restorePendingPlaces(retained)
+        await map.handleSceneDidBecomeActive()
+        XCTAssertEqual(AnalysisRequestURLProtocol.requests.filter { $0.httpMethod == "POST" && $0.url?.path == "/places" }.count, 1,
+            "B's activation must not submit A's retained records")
+        XCTAssertTrue(try vault.confirmedPlaces(belongingTo: otherOwner).isEmpty)
+        XCTAssertTrue(try vault.reviewCandidates(belongingTo: otherOwner).isEmpty)
+
+        auth.authState = .authenticated(userId: owner)
+        await map.handleSceneDidBecomeActive()
+        let writes = AnalysisRequestURLProtocol.requests.filter { $0.httpMethod == "POST" && $0.url?.path == "/places" }
+        XCTAssertEqual(try writes.map { try AnalysisRequestURLProtocol.body($0)["name"] as? String }, pending.map { Optional($0.name) })
+        XCTAssertTrue(try writes.allSatisfy { try AnalysisRequestURLProtocol.body($0)["user_id"] as? String == owner })
+        XCTAssertEqual(Set(try vault.confirmedPlaces(belongingTo: owner).map(\.name)), Set(pending.map(\.name)))
+        XCTAssertTrue(queue.consumePendingPlaces(ownerSubject: owner).isEmpty)
+    }
+
     /// P2 4348222437: unknown/loading membership must not block a local import.
     @MainActor
     func testLocalPendingImportAllowsWhileEntitlementUnresolved() throws {
