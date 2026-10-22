@@ -21,6 +21,22 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertTrue(ClipPlaceHandoff.shouldKeepPlaceHandoff(ownerGeneration: 4, currentGeneration: 4))
         XCTAssertFalse(ClipPlaceHandoff.shouldKeepPlaceHandoff(ownerGeneration: 4, currentGeneration: 5))
         XCTAssertFalse(ClipPlaceHandoff.shouldKeepPlaceHandoff(ownerGeneration: nil, currentGeneration: 5))
+        XCTAssertFalse(
+            ClipPlaceHandoff.shouldResetHandoffOnAccountChange(previousUserId: nil, currentUserId: "user-a"),
+            "initial restore must keep an unowned Clip journal"
+        )
+        XCTAssertFalse(
+            ClipPlaceHandoff.shouldResetHandoffOnAccountChange(previousUserId: nil, currentUserId: nil)
+        )
+        XCTAssertTrue(
+            ClipPlaceHandoff.shouldResetHandoffOnAccountChange(previousUserId: "user-a", currentUserId: "user-b")
+        )
+        XCTAssertTrue(
+            ClipPlaceHandoff.shouldResetHandoffOnAccountChange(previousUserId: "user-a", currentUserId: nil)
+        )
+        XCTAssertFalse(
+            ClipPlaceHandoff.shouldResetHandoffOnAccountChange(previousUserId: "user-a", currentUserId: "user-a")
+        )
     }
 
     func testWriteLoadAndClearRoundTrip() throws {
@@ -478,7 +494,7 @@ final class PendingShareStoreTests: XCTestCase {
     }
 
     func testOversizedListJournalWriteFailsClosed() throws {
-        let blob = String(repeating: "x", count: 900)
+        let blob = String(repeating: "x", count: 4000)
         let places = (0..<200).map { index in
             PendingConfirmedPlace(
                 placeId: "shop-\(index)",

@@ -130,7 +130,8 @@ enum PendingShareStore {
         return true
     }
 
-    static let journalByteLimit = 256 * 1024
+    /// Matches `listMaxItems * listItemPayloadMaxBytes` so a supported list can journal.
+    static let journalByteLimit = 200 * 8 * 1024
 
     static func load(from store: UserDefaults? = nil) -> PendingSharePayload? {
         guard let defaults = defaults(store) else { return nil }
@@ -177,6 +178,13 @@ enum ClipPlaceHandoff {
     /// Sign-out / account switch must not stamp the previous user's pending place.
     static func shouldKeepPlaceHandoff(ownerGeneration: Int?, currentGeneration: Int) -> Bool {
         ownerGeneration == currentGeneration
+    }
+
+    /// `nil` → first user is session restoration, not an account switch.
+    /// Keep the unowned Clip journal so universal-link launch can still stamp.
+    static func shouldResetHandoffOnAccountChange(previousUserId: String?, currentUserId: String?) -> Bool {
+        guard let previousUserId else { return false }
+        return previousUserId != currentUserId
     }
 
     static func resetPlaceHandoffOnAccountChange() {

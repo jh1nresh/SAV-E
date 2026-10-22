@@ -84,6 +84,7 @@ struct SaveApp: App {
     @State private var verifiedAccountGeneration: Int?
     @State private var deferredAccountScopedLink: DeferredAccountScopedLink?
     @State private var accountScopedURLProcessingID: UUID?
+    @State private var lastAccountUserId: String?
     @State private var minimumOpeningAnimationCompleted = false
     /// A real clue typed during onboarding is handed to the explicit capture
     /// screen after sign-in. It is not queued or saved until the user taps
@@ -379,6 +380,9 @@ struct SaveApp: App {
 
     @MainActor
     private func handleAccountGenerationChange(_ generation: Int) {
+        let previousUserId = lastAccountUserId
+        let currentUserId = authService.currentUserId
+        lastAccountUserId = currentUserId
         verifiedAccountGeneration = nil
         accountScopedURLProcessingID = nil
         if let ownerGeneration = deferredAccountScopedLink?.ownerGeneration,
@@ -387,13 +391,18 @@ struct SaveApp: App {
         }
         openedList = nil
         openedReferral = nil
+        linkErrorMessage = nil
+        guard ClipPlaceHandoff.shouldResetHandoffOnAccountChange(
+            previousUserId: previousUserId,
+            currentUserId: currentUserId
+        ) else { return }
         pendingClipListSave = nil
         autoSaveIncomingList = false
         incomingPlaceReceipt = nil
         autoSaveIncomingShare = false
         pendingFriendShareURL = ""
+        deferredAccountScopedLink = nil
         ClipPlaceHandoff.resetPlaceHandoffOnAccountChange()
-        linkErrorMessage = nil
     }
 
     private func storeUnclaimedOnboardingClue(_ clue: String) {
@@ -599,6 +608,9 @@ struct SaveApp: App {
     }
 
     private func restorePendingShare() {
+        if lastAccountUserId == nil {
+            lastAccountUserId = authService.currentUserId
+        }
         guard incomingPlaceReceipt == nil else { return }
         if let payload = PendingShareStore.load(), let url = URL(string: payload.url) {
             handleIncomingURL(url)

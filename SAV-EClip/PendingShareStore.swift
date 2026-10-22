@@ -50,7 +50,8 @@ enum PendingShareStore {
         return true
     }
 
-    static let journalByteLimit = 256 * 1024
+    /// Matches `listMaxItems * listItemPayloadMaxBytes` so a supported list can journal.
+    static let journalByteLimit = 200 * 8 * 1024
 
     static func load(from store: UserDefaults? = nil) -> PendingSharePayload? {
         guard let defaults = defaults(store) else { return nil }
