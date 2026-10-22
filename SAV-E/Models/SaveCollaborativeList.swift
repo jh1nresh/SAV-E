@@ -110,9 +110,9 @@ struct SaveListItem: Identifiable, Codable, Hashable {
         }
     }
 
-    func asPlace(createdAt: Date = Date(), includeSenderMemory: Bool = true) -> Place {
+    func asPlace(id: UUID = UUID(), createdAt: Date = Date(), includeSenderMemory: Bool = true) -> Place {
         Place(
-            id: UUID(),
+            id: id,
             name: title,
             address: subtitle,
             latitude: latitude,

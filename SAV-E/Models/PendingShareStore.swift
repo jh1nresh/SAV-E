@@ -258,18 +258,43 @@ enum ClipListHandoff {
         return (toStamp, counts)
     }
 
-    static func stampsFromRemoteCounts(
+    struct SavedRow: Equatable {
+        var id: UUID
+        var providerPlaceId: String
+        var name: String
+        var latitude: Double
+        var longitude: Double
+    }
+
+    /// Stamp exactly the rows the server inserted. A count-only prefix of
+    /// locally novel items can pick a different set when the cache is stale.
+    static func parseRemote(status: Int, data: Data) -> (counts: ClipListHandoffCounts, saved: [SavedRow])? {
+        guard let counts = parseCounts(status: status, data: data) else { return nil }
+        let rows = parseSavedRows(data)
+        if counts.newlySaved == 0 {
+            return (counts, rows ?? [])
+        }
+        guard let rows, rows.count == counts.newlySaved else { return nil }
+        return (counts, rows)
+    }
+
+    static func placesFromRemoteRows(
         confirmed: [SaveListItem],
-        alreadySaved: (SaveListItem) -> Bool,
-        counts: ClipListHandoffCounts
-    ) -> [SaveListItem] {
-        let novel = planStamps(
-            confirmed: confirmed,
-            alreadySaved: alreadySaved,
-            savedPlaceCount: 0,
-            limit: confirmed.count
-        ).toStamp
-        return Array(novel.prefix(max(0, counts.newlySaved)))
+        rows: [SavedRow]
+    ) -> [Place]? {
+        var remaining = confirmed
+        var places: [Place] = []
+        for row in rows {
+            guard let index = remaining.firstIndex(where: { matches($0, row) }) else { return nil }
+            let item = remaining.remove(at: index)
+            var place = item.asPlace(id: row.id, includeSenderMemory: false)
+            if place.providerPlaceId == nil {
+                let provider = row.providerPlaceId.isEmpty ? item.sourceID : row.providerPlaceId
+                place.providerPlaceId = provider.isEmpty ? nil : provider
+            }
+            places.append(place)
+        }
+        return places
     }
 
     static func parseCounts(status: Int, data: Data) -> ClipListHandoffCounts? {
@@ -317,6 +342,38 @@ enum ClipListHandoff {
         return "Saved \(counts.newlySaved) places from the list."
     }
 
+    private static func parseSavedRows(_ data: Data) -> [SavedRow]? {
+        let body = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+        guard let raw = body["saved"] as? [[String: Any]] else { return nil }
+        var rows: [SavedRow] = []
+        for item in raw {
+            guard let id = uuidValue(item["id"]) else { return nil }
+            rows.append(
+                SavedRow(
+                    id: id,
+                    providerPlaceId: stringValue(item["provider_place_id"]),
+                    name: stringValue(item["name"]),
+                    latitude: doubleValue(item["latitude"]) ?? 0,
+                    longitude: doubleValue(item["longitude"]) ?? 0
+                )
+            )
+        }
+        return rows
+    }
+
+    private static func matches(_ item: SaveListItem, _ row: SavedRow) -> Bool {
+        let sourceID = item.sourceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !sourceID.isEmpty, !row.providerPlaceId.isEmpty,
+           sourceID.caseInsensitiveCompare(row.providerPlaceId) == .orderedSame {
+            return true
+        }
+        let name = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rowName = row.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.caseInsensitiveCompare(rowName) == .orderedSame else { return false }
+        return String(format: "%.4f", item.latitude) == String(format: "%.4f", row.latitude)
+            && String(format: "%.4f", item.longitude) == String(format: "%.4f", row.longitude)
+    }
+
     private static func identities(of item: SaveListItem) -> [String] {
         var keys: [String] = []
         let sourceID = item.sourceID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -333,6 +390,22 @@ enum ClipListHandoff {
             if let value = body[key] as? Int { return value }
             if let value = body[key] as? NSNumber { return value.intValue }
         }
+        return nil
+    }
+
+    private static func uuidValue(_ raw: Any?) -> UUID? {
+        if let value = raw as? String { return UUID(uuidString: value) }
+        return nil
+    }
+
+    private static func stringValue(_ raw: Any?) -> String {
+        (raw as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private static func doubleValue(_ raw: Any?) -> Double? {
+        if let value = raw as? Double { return value }
+        if let value = raw as? NSNumber { return value.doubleValue }
+        if let value = raw as? String { return Double(value) }
         return nil
     }
 }

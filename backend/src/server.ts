@@ -1730,6 +1730,7 @@ async function saveClipListPlaces(
       savedPlaceCount: existing.rows.length,
     });
 
+    const inserted: Record<string, unknown>[] = [];
     for (const item of plan.toInsert) {
       const body = withOwner(item, userId);
       if (typeof body.id !== "string" || !body.id) body.id = randomUUID();
@@ -1745,10 +1746,11 @@ async function saveClipListPlaces(
       if (!rows[0]) {
         throw new Error("Place id conflict");
       }
+      inserted.push(rows[0]);
     }
 
     await client.query("commit");
-    return sendJson(response, clipListSaveResponse(plan), 201);
+    return sendJson(response, clipListSaveResponse(plan, inserted), 201);
   } catch (error) {
     await client.query("rollback");
     throw error;

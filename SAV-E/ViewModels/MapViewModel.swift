@@ -2458,37 +2458,44 @@ final class MapViewModel: ObservableObject {
         if authService.currentUserId != nil, supabaseService.isConfigured {
             let payload = confirmed.map(ClipListHandoff.placeBody)
             let (status, data) = try await supabaseService.saveClipListPlaces(payload)
-            guard let counts = ClipListHandoff.parseCounts(status: status, data: data) else {
+            guard let remote = ClipListHandoff.parseRemote(status: status, data: data),
+                  let imported = ClipListHandoff.placesFromRemoteRows(
+                    confirmed: confirmed,
+                    rows: remote.saved
+                  )
+            else {
                 throw ClipListHandoffError.unconfirmed
             }
-            let toStamp = ClipListHandoff.stampsFromRemoteCounts(
-                confirmed: confirmed,
-                alreadySaved: { $0.alreadySaved(in: places) },
-                counts: counts
-            )
-            applyHandoffStamps(toStamp)
-            return (toStamp, counts)
+            applyHandoffPlaces(imported)
+            let stamped = confirmed.filter { item in
+                imported.contains { place in
+                    if let provider = place.providerPlaceId, !provider.isEmpty {
+                        return item.sourceID.caseInsensitiveCompare(provider) == .orderedSame
+                    }
+                    return place.matchesMapFeature(title: item.title, coordinate: item.coordinate)
+                }
+            }
+            return (stamped, remote.counts)
         }
         let planned = ClipListHandoff.planStamps(
             confirmed: confirmed,
             alreadySaved: { $0.alreadySaved(in: places) },
             savedPlaceCount: places.count
         )
-        applyHandoffStamps(planned.toStamp)
+        applyHandoffPlaces(planned.toStamp.map { $0.asPlace(includeSenderMemory: false) })
         return planned
     }
 
-    private func applyHandoffStamps(_ items: [SaveListItem]) {
-        var imported: [Place] = []
-        for item in items {
-            let place = item.asPlace(includeSenderMemory: false)
+    private func applyHandoffPlaces(_ imported: [Place]) {
+        var added: [Place] = []
+        for place in imported {
             if existingSavedPlace(matching: place) != nil { continue }
             mirrorToLocalVault(place)
-            imported.append(place)
+            added.append(place)
         }
-        if !imported.isEmpty {
-            places = imported + places
-            revealImportedPlaces(imported)
+        if !added.isEmpty {
+            places = added + places
+            revealImportedPlaces(added)
         }
     }
 

@@ -91,6 +91,21 @@ test("SL3 response exposes the three real counts", () => {
   assert.equal(body.over_cap, 1);
   assert.equal(body.remaining, 0);
   assert.equal(body.limit, 50);
+  assert.deepEqual(body.saved, []);
+
+  const withRows = clipListSaveResponse(plan, [
+    {
+      id: "22222222-2222-2222-2222-222222222222",
+      provider_place_id: "new",
+      name: "Blue Bottle",
+      latitude: 35.682,
+      longitude: 139.798,
+      category: "cafe",
+    },
+  ]);
+  assert.equal(withRows.saved[0]?.id, "22222222-2222-2222-2222-222222222222");
+  assert.equal(withRows.saved[0]?.provider_place_id, "new");
+  assert.equal(withRows.newly_saved, 1);
 });
 
 test("SL4 POST /places list writes are one transactional call", () => {
@@ -105,8 +120,9 @@ test("SL4 POST /places list writes are one transactional call", () => {
   assert.match(handler, /begin/);
   assert.match(handler, /commit/);
   assert.match(handler, /rollback/);
-  assert.match(handler, /clipListSaveResponse/);
+  assert.match(handler, /clipListSaveResponse\(plan, inserted\)/);
   assert.match(handler, /saveClipListPlaces/);
+  assert.match(handler, /inserted\.push\(rows\[0\]\)/);
   assert.doesNotMatch(
     handler.slice(handler.indexOf("Array.isArray(rawBody.places)")),
     /for \(const .+ of rawBody\.places\)[\s\S]{0,80}await fetch/,

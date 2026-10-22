@@ -194,21 +194,56 @@ final class PendingShareStoreTests: XCTestCase {
             ClipListHandoff.toastEnglish(counts: planned.counts, confirmedCount: 5),
             "Saved 2 of 5. 3 over the free 50."
         )
-        let remote = ClipListHandoffCounts(
-            newlySaved: 2,
-            alreadySaved: 0,
-            overCap: 3,
-            remaining: 0,
-            limit: 50
-        )
-        XCTAssertEqual(
-            ClipListHandoff.stampsFromRemoteCounts(
-                confirmed: confirmed,
-                alreadySaved: { _ in false },
-                counts: remote
-            ).map(\.sourceID),
-            ["novel-1", "novel-2"]
-        )
+    }
+
+    func testRemoteHandoffStampsServerRowsNotStaleLocalPrefix() {
+        let confirmed = (1...5).map { index in
+            PendingConfirmedPlace(
+                placeId: "shop-\(index)",
+                name: "Shop \(index)",
+                address: "Tokyo",
+                latitude: 35.6 + Double(index) * 0.01,
+                longitude: 139.7,
+                category: "Cafe",
+                sourceURL: nil
+            ).asListItem()
+        }
+        let id2 = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+        let id3 = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
+        let rows = [
+            ClipListHandoff.SavedRow(
+                id: id2,
+                providerPlaceId: "shop-2",
+                name: "Shop 2",
+                latitude: 35.62,
+                longitude: 139.7
+            ),
+            ClipListHandoff.SavedRow(
+                id: id3,
+                providerPlaceId: "shop-3",
+                name: "Shop 3",
+                latitude: 35.63,
+                longitude: 139.7
+            ),
+        ]
+        let stamped = ClipListHandoff.placesFromRemoteRows(confirmed: confirmed, rows: rows)
+        XCTAssertEqual(stamped?.map(\.id), [id2, id3])
+        XCTAssertEqual(stamped?.map(\.name), ["Shop 2", "Shop 3"])
+        XCTAssertEqual(stamped?.map(\.providerPlaceId), ["shop-2", "shop-3"])
+        XCTAssertFalse(stamped?.contains(where: { $0.name == "Shop 1" }) == true)
+
+        let missingRows = Data(#"{"newly_saved":2,"already_saved":0,"over_cap":3,"remaining":0,"limit":50}"#.utf8)
+        XCTAssertNil(ClipListHandoff.parseRemote(status: 201, data: missingRows))
+        let payload = Data(#"""
+        {"newly_saved":2,"already_saved":1,"over_cap":2,"remaining":0,"limit":50,"saved":[{"id":"22222222-2222-2222-2222-222222222222","provider_place_id":"shop-2","name":"Shop 2","latitude":35.62,"longitude":139.7},{"id":"33333333-3333-3333-3333-333333333333","provider_place_id":"shop-3","name":"Shop 3","latitude":35.63,"longitude":139.7}]}
+        """#.utf8)
+        let remote = ClipListHandoff.parseRemote(status: 201, data: payload)
+        XCTAssertEqual(remote?.counts.newlySaved, 2)
+        XCTAssertEqual(remote?.saved.map(\.id), [id2, id3])
+        XCTAssertNil(ClipListHandoff.placesFromRemoteRows(
+            confirmed: Array(confirmed.prefix(1)),
+            rows: rows
+        ))
     }
 
     func testRemoteFailureDoesNotReportListHandoffSuccess() {

@@ -82,12 +82,43 @@ export function planClipListSave(input: {
   };
 }
 
-export function clipListSaveResponse(plan: ClipListSavePlan): {
+export type ClipListSavedIdentity = {
+  id: string;
+  provider_place_id?: string;
+  name?: string;
+  latitude?: number;
+  longitude?: number;
+  category?: string;
+};
+
+export function clipListSavedIdentity(row: Record<string, unknown>): ClipListSavedIdentity {
+  const identity: ClipListSavedIdentity = { id: String(row.id ?? "") };
+  if (typeof row.provider_place_id === "string" && row.provider_place_id.trim()) {
+    identity.provider_place_id = row.provider_place_id;
+  }
+  if (typeof row.name === "string" && row.name.trim()) {
+    identity.name = row.name;
+  }
+  const lat = Number(row.latitude);
+  const lng = Number(row.longitude);
+  if (Number.isFinite(lat)) identity.latitude = lat;
+  if (Number.isFinite(lng)) identity.longitude = lng;
+  if (typeof row.category === "string" && row.category.trim()) {
+    identity.category = row.category;
+  }
+  return identity;
+}
+
+export function clipListSaveResponse(
+  plan: ClipListSavePlan,
+  inserted: Record<string, unknown>[] = [],
+): {
   newly_saved: number;
   already_saved: number;
   over_cap: number;
   remaining: number;
   limit: number;
+  saved: ClipListSavedIdentity[];
 } {
   return {
     newly_saved: plan.newlySaved,
@@ -95,5 +126,6 @@ export function clipListSaveResponse(plan: ClipListSavePlan): {
     over_cap: plan.overCap,
     remaining: plan.remaining,
     limit: plan.limit,
+    saved: inserted.map(clipListSavedIdentity),
   };
 }
