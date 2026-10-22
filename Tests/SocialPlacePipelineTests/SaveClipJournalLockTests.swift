@@ -83,6 +83,8 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(theme.contains("case .seal:"))
         XCTAssertTrue(theme.contains("nonisolated private func jitteredPath"))
         XCTAssertTrue(theme.contains("nonisolated struct ClipJitterRoundedRect"))
+        XCTAssertTrue(theme.contains("ClipJitterRoundedRect(radius: 14, seed: 21)"))
+        XCTAssertFalse(theme.contains("ClipJitterRoundedRect(seed:"))
         XCTAssertFalse(clip.contains("ClipGooglePhoto"))
         XCTAssertFalse(FileManager.default.fileExists(atPath: repositoryRoot.appendingPathComponent("SAV-EClip/ClipGooglePhotoView.swift").path))
         XCTAssertTrue(save.contains("POST"))
