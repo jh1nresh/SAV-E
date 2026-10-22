@@ -145,12 +145,20 @@ final class SaveDoodleMapTests: XCTestCase {
         let placeID = UUID()
         struct OfflineError: Error {}
 
-        let failed = await store.applyCheckIn(placeID: placeID) {
+        let failed = await store.applyCheckIn(placeID: placeID, priorStatus: .visited) {
             throw OfflineError()
         }
         XCTAssertFalse(failed)
         XCTAssertEqual(store.visitCount(for: placeID), 0)
         XCTAssertTrue(store.canCheckIn(placeID: placeID))
+
+        // A later visit from shared history must not inherit the failed
+        // attempt's undo baseline.
+        XCTAssertTrue(store.checkIn(placeID: placeID))
+        var restoredAfterForeignVisit: PlaceStatus?
+        let undoneForeign = await store.applyUndo { restoredAfterForeignVisit = $0 }
+        XCTAssertTrue(undoneForeign)
+        XCTAssertEqual(restoredAfterForeignVisit, .wantToGo)
 
         let succeeded = await store.applyCheckIn(placeID: placeID) {}
         XCTAssertTrue(succeeded)

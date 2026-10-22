@@ -46,12 +46,16 @@ final class SaveDoodleCheckInStore: ObservableObject {
         guard beginPersist(placeID) else { return false }
         defer { endPersist(placeID) }
         history.rememberPriorStatus(priorStatus, for: placeID)
-        guard checkIn(placeID: placeID) else { return false }
+        guard checkIn(placeID: placeID) else {
+            history.clearPriorStatus(for: placeID)
+            return false
+        }
         do {
             try await persist()
             return true
         } catch {
             _ = undoTodaysCheckIn(placeID: placeID)
+            history.clearPriorStatus(for: placeID)
             return false
         }
     }
