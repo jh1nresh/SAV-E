@@ -392,6 +392,24 @@ final class SaveCollaborativeListTests: XCTestCase {
             evidence.contains("ScrollView(.horizontal"),
             "Horizontal scene picker makes logoCloseup exist but not hittable"
         )
+        guard let sceneBodyStart = evidence.range(of: "private var sceneBody: some View"),
+              let carouselPageStart = evidence.range(of: "private var googleCarouselPage: some View") else {
+            return XCTFail("Missing evidence sceneBody")
+        }
+        let sceneBody = String(evidence[sceneBodyStart.lowerBound..<carouselPageStart.lowerBound])
+        guard let logoStart = sceneBody.range(of: "case .logoCloseup:"),
+              let noAuthorStart = sceneBody.range(of: "case .noAuthor:") else {
+            return XCTFail("Missing logoCloseup scene")
+        }
+        let logoScene = String(sceneBody[logoStart.lowerBound..<noAuthorStart.lowerBound])
+        XCTAssertTrue(logoScene.contains("GoogleMapsAttributionLogo()"))
+        XCTAssertTrue(
+            logoScene.contains(".accessibilityIdentifier(\"evidence.logoCloseup\")")
+        )
+        XCTAssertFalse(
+            logoScene.contains("}\n            .accessibilityIdentifier(\"evidence.logoCloseup\")"),
+            "Parent evidence.logoCloseup overwrites place.photo.attribution.logo"
+        )
     }
 
     @MainActor

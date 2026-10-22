@@ -99,7 +99,14 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
             app.descendants(matching: .any)["evidence.logoCloseup"]
                 .waitForExistence(timeout: stepTimeout)
         )
-        XCTAssertTrue(app.images["place.photo.attribution.logo"].exists)
+        let logo = app.descendants(matching: .any)["place.photo.attribution.logo"]
+        if !logo.waitForExistence(timeout: stepTimeout) {
+            let tree = XCTAttachment(string: app.debugDescription)
+            tree.name = "ax-tree-missing-attribution-logo"
+            tree.lifetime = .keepAlways
+            add(tree)
+            XCTFail("Standalone logo identifier must not be overwritten by evidence.logoCloseup")
+        }
         saveEvidence(app, name: "\(appearance)-logo-closeup")
 
         openScene(app, "noAuthor")

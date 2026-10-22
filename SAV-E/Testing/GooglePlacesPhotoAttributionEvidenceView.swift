@@ -147,8 +147,10 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
                 Text("Logo 18dp · clear space 10/10/10/5")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.saveInk)
-                // Compact row hides the nested logo from AX so the 44pt control
-                // stays one hittable button. Keep a standalone logo here.
+                    .accessibilityIdentifier("evidence.logoCloseup")
+                // Compact row has no nested logo identifier. Keep a standalone
+                // logo here. Do not put evidence.logoCloseup on this VStack —
+                // a parent id overwrites place.photo.attribution.logo.
                 GoogleMapsAttributionLogo()
                 ZStack(alignment: .bottom) {
                     lightPhoto
@@ -167,7 +169,6 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .accessibilityIdentifier("evidence.logoCloseup")
         case .noAuthor:
             evidenceCard(title: "Harbor Oven") {
                 PlaceBusinessPhotoCarousel(
