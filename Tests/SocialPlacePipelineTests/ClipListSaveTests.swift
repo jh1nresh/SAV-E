@@ -241,6 +241,17 @@ final class ClipListSaveTests: XCTestCase {
         )
     }
 
+    func testUniqueItemsRecordsSkippedIdentities() {
+        let items = [
+            item(nil, "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("shop-b", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("shop-b", "Katsu Midori", lat: 35.67, lng: 139.77),
+        ]
+        XCTAssertEqual(ClipListSavePlanner.uniqueItems(from: items).map(\.name), ["Onibus Coffee"])
+        let places = ClipListSavePlanner.requestBody(items: items)["places"] as? [[String: Any]]
+        XCTAssertEqual(places?.count, 1)
+    }
+
     private func item(
         _ placeId: String?,
         _ name: String,

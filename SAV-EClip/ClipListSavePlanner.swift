@@ -80,7 +80,11 @@ enum ClipListSavePlanner {
         var unique: [ClipListSaveItem] = []
         for item in items {
             let keys = identities(of: item)
-            guard !keys.isEmpty, !keys.contains(where: { seen.contains($0) }) else { continue }
+            guard !keys.isEmpty else { continue }
+            if keys.contains(where: { seen.contains($0) }) {
+                keys.forEach { seen.insert($0) }
+                continue
+            }
             keys.forEach { seen.insert($0) }
             unique.append(item)
         }
