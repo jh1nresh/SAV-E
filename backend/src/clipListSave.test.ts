@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import {
   clipListPlaceIdentities,
   clipListSaveResponse,
+  clipOnePlaceQuotaDecision,
+  clipSavedPlaceLimitBody,
   FREE_LIST_SAVE_LIMIT,
   planClipListSave,
 } from "./clipListSave.js";
@@ -121,6 +123,18 @@ test("one-place Clip save uses the same planner as a list", () => {
   assert.equal(atCap.newlySaved, 0);
   assert.equal(atCap.alreadySaved, 0);
   assert.equal(atCap.overCap, 1);
+  assert.equal(clipOnePlaceQuotaDecision(duplicate), "duplicate");
+  assert.equal(clipOnePlaceQuotaDecision(atCap), "cap");
+  assert.equal(
+    clipOnePlaceQuotaDecision(planClipListSave({
+      items: [cafe("new")],
+      existingIdentities: [],
+      savedPlaceCount: 12,
+    })),
+    "insert",
+  );
+  assert.equal(clipSavedPlaceLimitBody.code, "over_free_limit");
+  assert.equal(clipSavedPlaceLimitBody.limit, 50);
 });
 
 test("SL2 #293 section B: a full account saves none and reports remaining 0", () => {

@@ -101,6 +101,21 @@ export function planClipListSave(input: {
   };
 }
 
+/// One confirmed place: insert, already saved, or cap. Fail closed.
+export function clipOnePlaceQuotaDecision(
+  plan: ClipListSavePlan,
+): "insert" | "duplicate" | "cap" {
+  if (plan.newlySaved > 0) return "insert";
+  if (plan.alreadySaved > 0) return "duplicate";
+  return "cap";
+}
+
+export const clipSavedPlaceLimitBody = {
+  error: "saved_place_limit",
+  code: "over_free_limit",
+  limit: FREE_LIST_SAVE_LIMIT,
+} as const;
+
 export type ClipListSavedIdentity = {
   id: string;
   provider_place_id?: string;

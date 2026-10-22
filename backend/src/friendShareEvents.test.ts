@@ -378,6 +378,21 @@ test("place create route wraps only receipt saves and keeps origin internal", ()
   assert.match(handler, /insert into friend_share_events[\s\S]*'server'/);
   assert.match(handler, /place: formatPlace\(canonicalPlace\)/);
   assert.match(handler, /outcome: created === true \? "saved" : "already_saved"/);
+  const friendBranch = handler.slice(
+    handler.indexOf("if (friendShareCode)"),
+    handler.indexOf("const insert = buildInsert(\"places\", body, [...placeFields, \"user_id\"])"),
+  );
+  assert.match(friendBranch, /planClipListSave/);
+  assert.match(friendBranch, /clipOnePlaceQuotaDecision/);
+  assert.match(friendBranch, /clipSavedPlaceLimitBody/);
+  assert.match(friendBranch, /clip-list-save:/);
+  assert.match(friendBranch, /origin_shared_place_link_id: link\.id/);
+  assert.match(friendBranch, /friend_share_duplicate_blocked/);
+  assert.doesNotMatch(
+    friendBranch,
+    /decision === "cap"[\s\S]{0,200}friend_share_saved/,
+    "a cap refusal must not record a successful friend-share save",
+  );
   assert.match(handler, /on conflict \(id\) do update[\s\S]*where places\.user_id = excluded\.user_id/i,
     "generic POST /places must make a same-account client id idempotent");
   assert.match(handler, /Place id conflict/,

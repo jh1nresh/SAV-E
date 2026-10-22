@@ -108,7 +108,13 @@ import {
   type FriendShareRecipientMetricsRow,
   type FriendShareShareMetricsRow,
 } from "./friendShareEvents.js";
-import { clipListPlaceIdentities, clipListSaveResponse, planClipListSave } from "./clipListSave.js";
+import {
+  clipListPlaceIdentities,
+  clipListSaveResponse,
+  clipOnePlaceQuotaDecision,
+  clipSavedPlaceLimitBody,
+  planClipListSave,
+} from "./clipListSave.js";
 import {
   communityRecommendationSignal,
   normalizeFollowRequest,
@@ -1612,6 +1618,53 @@ async function handlePlaces(
       const client = await pool.connect();
       try {
         await client.query("begin");
+        await client.query("select pg_advisory_xact_lock(hashtext($1))", [`clip-list-save:${userId}`]);
+        const existing = await client.query(
+          "select id, name, latitude, longitude, google_place_id, provider_place_id from places where user_id = $1",
+          [userId],
+        );
+        const plan = planClipListSave({
+          items: [body],
+          existingIdentities: existing.rows.flatMap((row) => clipListPlaceIdentities(row)),
+          existingPlaces: existing.rows,
+          savedPlaceCount: existing.rows.length,
+        });
+        const decision = clipOnePlaceQuotaDecision(plan);
+        if (decision === "cap") {
+          await client.query("rollback");
+          return sendJson(response, clipSavedPlaceLimitBody, 403);
+        }
+        if (decision === "duplicate") {
+          const existingId = plan.alreadyExisting[0]?.id;
+          const existingRow = typeof existingId === "string"
+            ? (await client.query(
+              "select * from places where id = $1 and user_id = $2 limit 1",
+              [existingId, userId],
+            )).rows[0]
+            : undefined;
+          if (!existingRow) {
+            await client.query("rollback");
+            return sendJson(response, clipSavedPlaceLimitBody, 403);
+          }
+          await client.query(
+            `insert into friend_share_events (
+               shared_place_link_id,
+               sender_user_id,
+               recipient_user_id,
+               recipient_place_id,
+               event_type,
+               surface
+             )
+             values ($1, $2, $3, $4, $5, 'server')
+             on conflict do nothing`,
+            [link.id, link.user_id, userId, existingRow.id, "friend_share_duplicate_blocked"],
+          );
+          await client.query("commit");
+          return sendJson(response, {
+            place: formatPlace(asObject(existingRow)),
+            outcome: "already_saved",
+          }, 201);
+        }
         const { rows } = await client.query(
           `${insert.sql}
            ${friendSharePlaceOriginConflictClause}
