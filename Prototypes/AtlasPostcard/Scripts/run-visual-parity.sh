@@ -455,7 +455,7 @@ for screen in home saves plan map passport capture paywall; do
     fi
     mask_args=()
     if [[ "$screen" == home && -f "$ARTIFACT_DIR/reference/home-mask.png" ]]; then
-        mask_args+=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
+        mask_args=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
     fi
     if [[ "$screen" == "map" ]]; then
         if [[ ! -f "$MAP_MASK" ]]; then

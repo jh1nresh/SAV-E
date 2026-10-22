@@ -175,9 +175,14 @@ enum SaveDoodleHomeCatalog {
             return key
         }
         guard let area = localityLabel(in: place.address) else { return nil }
-        return area
-            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-            .lowercased()
+        let locality = normalizedCityToken(area)
+        guard !locality.isEmpty else { return nil }
+        // Locality alone merges Springfield IL with Springfield MA.
+        // Keep the displayed name as the city; qualify the stable ID.
+        if let qualifier = regionQualifier(in: place.address) {
+            return "\(locality),\(qualifier)"
+        }
+        return locality
     }
 
     static func cityDisplayName(for place: Place, language: AppLanguage) -> String? {
@@ -210,7 +215,7 @@ enum SaveDoodleHomeCatalog {
             local.removeLast()
         }
         guard let city = local.last, !city.isEmpty else { return nil }
-        return city
+        return stripLeadingPostalCode(from: city)
     }
 
     private static let countryTokens: Set<String> = [
@@ -218,7 +223,66 @@ enum SaveDoodleHomeCatalog {
         "uk", "u.k.", "united kingdom", "taiwan", "japan", "china",
         "canada", "australia", "france", "germany", "italy", "spain",
         "korea", "south korea", "thailand", "singapore",
+        "switzerland", "schweiz", "suisse", "svizzera",
+        "austria", "österreich", "osterreich",
+        "netherlands", "nederland", "holland",
+        "belgium", "belgie", "belgië", "belgique",
+        "portugal", "ireland", "sweden", "norway", "denmark", "finland",
+        "poland", "hungary", "greece", "romania", "mexico", "brazil",
+        "india", "new zealand", "czech republic", "czechia", "south africa",
     ]
+
+    /// `8001 Zürich` / `69001 Lyon` — postcode is a prefix, not the city.
+    private static func stripLeadingPostalCode(from token: String) -> String {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let match = trimmed.range(
+            of: #"^\d{4,6}\s+"#,
+            options: .regularExpression
+        ) else { return trimmed }
+        let name = trimmed[match.upperBound...]
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? trimmed : String(name)
+    }
+
+    private static func normalizedCityToken(_ value: String) -> String {
+        value
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Admin region or country after the locality. Display stays the city.
+    static func regionQualifier(in address: String) -> String? {
+        let parts = address
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        var local = parts
+        var country: String?
+        if let last = local.last, countryTokens.contains(last.lowercased()) {
+            country = normalizedCityToken(last)
+            local.removeLast()
+        }
+        var admin: String?
+        while let last = local.last, isPostalOrAdminRegion(last) {
+            if admin == nil, let code = adminRegionCode(in: last) {
+                admin = code
+            }
+            local.removeLast()
+        }
+        return admin ?? country
+    }
+
+    private static func adminRegionCode(in value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.range(of: #"^[A-Za-z]{2}$"#, options: .regularExpression) != nil {
+            return trimmed.lowercased()
+        }
+        if let match = trimmed.range(of: #"^[A-Za-z]{2}(?=\s)"#, options: .regularExpression) {
+            return String(trimmed[match]).lowercased()
+        }
+        return nil
+    }
 
     private static func isPostalOrAdminRegion(_ value: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -232,6 +296,30 @@ enum SaveDoodleHomeCatalog {
             return true
         }
         if trimmed.range(of: #"^\d{5}(?:-\d{4})?$"#, options: .regularExpression) != nil {
+            return true
+        }
+        // Canada: "BC V8W 1P6" or "V8W 1P6" — not the city.
+        if trimmed.range(
+            of: #"^[A-Za-z]{2}\s+[A-Za-z]\d[A-Za-z]\s*\d[A-Za-z]\d$"#,
+            options: .regularExpression
+        ) != nil {
+            return true
+        }
+        if trimmed.range(
+            of: #"^[A-Za-z]\d[A-Za-z]\s*\d[A-Za-z]\d$"#,
+            options: .regularExpression
+        ) != nil {
+            return true
+        }
+        // UK outward+inward: "SW1A 1AA", "M1 1AE".
+        if trimmed.range(
+            of: #"^[A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d[A-Za-z]{2}$"#,
+            options: .regularExpression
+        ) != nil {
+            return true
+        }
+        // Australia / generic 4-digit postcode.
+        if trimmed.range(of: #"^\d{4}$"#, options: .regularExpression) != nil {
             return true
         }
         return false
@@ -283,8 +371,10 @@ enum SaveDoodleHomeCatalog {
         locationDenied: Bool
     ) -> SaveDoodleCitySelection {
         guard locationDenied, case .nearYou = selection else { return selection }
-        let newest = places.sorted(by: moreRecent).first
-        if let newest, let id = cityID(for: newest) {
+        // Coordinate-only imports have no locality. Walk recency until a
+        // save actually resolves, so denied Near you does not stay empty.
+        if let match = places.sorted(by: moreRecent).first(where: { cityID(for: $0) != nil }),
+           let id = cityID(for: match) {
             return .city(id)
         }
         return selection
@@ -369,20 +459,9 @@ enum SaveDoodleHomeCatalog {
     ) -> (place: Place, distance: CLLocationDistance?)? {
         let excluded = Set(visible.map(\.id))
         let remaining = places.filter { !excluded.contains($0.id) }
-        guard !remaining.isEmpty else { return nil }
-        if let location {
-            let ranked = remaining.compactMap { place -> (Place, CLLocationDistance)? in
-                guard let meters = distance(from: location, to: place) else { return nil }
-                return (place, meters)
-            }.sorted { $0.1 < $1.1 }
-            if let first = ranked.first {
-                return (first.0, first.1)
-            }
-        }
-        if let newest = remaining.sorted(by: moreRecent).first {
-            return (newest, location.flatMap { distance(from: $0, to: newest) })
-        }
-        return nil
+        // Home labels this “Latest save”. Recency wins; distance is metadata.
+        guard let newest = remaining.sorted(by: moreRecent).first else { return nil }
+        return (newest, location.flatMap { distance(from: $0, to: newest) })
     }
 
     /// All saved places in the current city, every category. Independent of
@@ -412,7 +491,12 @@ enum SaveDoodleHomeCatalog {
     static func nearYouCityPlace(from places: [Place], location: CLLocation?) -> Place? {
         guard let location else { return nil }
         let nearby = places.filter { distance(from: location, to: $0).map { $0 <= nearbyRadius } ?? false }
-        return nearby.sorted { closer($0, $1, to: location) }.first
+        // An addressless closest pin must not hide Collected when another
+        // nearby save has a resolvable city.
+        return nearby
+            .filter { cityID(for: $0) != nil }
+            .sorted { closer($0, $1, to: location) }
+            .first
     }
 
     static func nearYouCityName(
