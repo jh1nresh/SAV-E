@@ -3149,8 +3149,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "The center Save flow should expose Postal Import."
         )
         importButton.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["takeout.import.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.buttons["takeout.import.chooseFile"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.buttons["takeout.import.chooseFile"].waitForExistence(timeout: stepTimeout),
+            "Postal Import empty state must expose the choose-file leaf after the in-sheet swap."
+        )
+        XCTAssertTrue(app.buttons["takeout.import.folder"].exists)
         attach(app, name: "atlas-postal-import-empty")
     }
 
