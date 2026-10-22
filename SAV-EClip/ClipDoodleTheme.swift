@@ -310,71 +310,337 @@ struct ClipStickerDrawing: View {
             let coral = ClipJournalPalette.coral
             let cream = ClipJournalPalette.cream
             let kraft = ClipJournalPalette.kraft
+            let forest = ClipJournalPalette.forest
             switch kind {
             case .noodle:
-                var plate = Path()
-                plate.addEllipse(in: CGRect(x: size.width * 0.08, y: size.height * 0.52, width: size.width * 0.84, height: size.height * 0.36))
-                context.fill(plate, with: .color(kraft))
-                context.stroke(plate, with: .color(ink), lineWidth: 1.2)
-                var bowl = Path()
-                bowl.addEllipse(in: CGRect(x: size.width * 0.18, y: size.height * 0.28, width: size.width * 0.64, height: size.height * 0.46))
-                context.fill(bowl, with: .color(coral))
-                var noodle = Path()
-                noodle.move(to: CGPoint(x: size.width * 0.3, y: size.height * 0.36))
-                noodle.addQuadCurve(to: CGPoint(x: size.width * 0.7, y: size.height * 0.42), control: CGPoint(x: size.width * 0.5, y: size.height * 0.12))
-                noodle.addQuadCurve(to: CGPoint(x: size.width * 0.36, y: size.height * 0.52), control: CGPoint(x: size.width * 0.62, y: size.height * 0.64))
-                context.stroke(noodle, with: .color(cream), lineWidth: 2.2)
+                drawNoodleBowl(context: context, size: size, ink: ink, coral: coral, cream: cream, kraft: kraft)
             case .coffee:
-                var saucer = Path()
-                saucer.addEllipse(in: CGRect(x: size.width * 0.12, y: size.height * 0.62, width: size.width * 0.76, height: size.height * 0.24))
-                context.fill(saucer, with: .color(kraft))
-                context.stroke(saucer, with: .color(ink), lineWidth: 1.2)
-                var cup = Path(roundedRect: CGRect(x: size.width * 0.24, y: size.height * 0.2, width: size.width * 0.42, height: size.height * 0.46), cornerRadius: 6)
-                context.fill(cup, with: .color(coral))
-                var handle = Path()
-                handle.addArc(center: CGPoint(x: size.width * 0.72, y: size.height * 0.42), radius: size.width * 0.12, startAngle: .degrees(-70), endAngle: .degrees(70), clockwise: false)
-                context.stroke(handle, with: .color(ink), lineWidth: 2.2)
+                drawCoffeeCup(context: context, size: size, ink: ink, coral: coral, cream: cream, kraft: kraft)
             case .lantern:
-                context.fill(Path(roundedRect: CGRect(x: size.width * 0.3, y: size.height * 0.22, width: size.width * 0.4, height: size.height * 0.56), cornerRadius: 10), with: .color(coral))
-                context.stroke(Path(CGRect(x: size.width * 0.36, y: size.height * 0.08, width: size.width * 0.28, height: size.height * 0.12)), with: .color(ink), lineWidth: 2)
+                drawLantern(context: context, size: size, ink: ink, coral: coral, cream: cream)
             case .seal:
-                let ring = CGRect(x: size.width * 0.08, y: size.height * 0.08, width: size.width * 0.84, height: size.height * 0.84)
-                context.stroke(Path(ellipseIn: ring.insetBy(dx: 3, dy: 3)), with: .color(coral), lineWidth: 3)
-                context.stroke(Path(ellipseIn: ring.insetBy(dx: 10, dy: 10)), with: .color(coral), lineWidth: 1.2)
-                var mark = Path()
-                mark.move(to: CGPoint(x: size.width * 0.32, y: size.height * 0.38))
-                mark.addLine(to: CGPoint(x: size.width * 0.68, y: size.height * 0.38))
-                mark.move(to: CGPoint(x: size.width * 0.38, y: size.height * 0.30))
-                mark.addLine(to: CGPoint(x: size.width * 0.38, y: size.height * 0.70))
-                mark.move(to: CGPoint(x: size.width * 0.50, y: size.height * 0.30))
-                mark.addLine(to: CGPoint(x: size.width * 0.50, y: size.height * 0.70))
-                mark.move(to: CGPoint(x: size.width * 0.62, y: size.height * 0.30))
-                mark.addLine(to: CGPoint(x: size.width * 0.62, y: size.height * 0.70))
-                mark.move(to: CGPoint(x: size.width * 0.32, y: size.height * 0.62))
-                mark.addLine(to: CGPoint(x: size.width * 0.68, y: size.height * 0.62))
-                context.stroke(mark, with: .color(coral), lineWidth: 2.4)
+                drawPostageStamp(context: context, size: size, ink: ink, coral: coral, cream: cream, kraft: kraft, forest: forest)
             case .place:
-                var pin = Path()
-                let radius = size.width * 0.28
-                let center = CGPoint(x: size.width * 0.5, y: size.height * 0.38)
-                pin.addArc(center: center, radius: radius, startAngle: .degrees(200), endAngle: .degrees(-20), clockwise: false)
-                pin.addQuadCurve(to: CGPoint(x: size.width * 0.5, y: size.height * 0.92), control: CGPoint(x: size.width * 0.86, y: size.height * 0.62))
-                pin.addQuadCurve(to: CGPoint(x: center.x - radius * 0.78, y: center.y + radius * 0.42), control: CGPoint(x: size.width * 0.14, y: size.height * 0.62))
-                pin.closeSubpath()
-                if lineArtPin {
-                    context.stroke(pin, with: .color(ink), lineWidth: 2.2)
-                    context.stroke(
-                        Path(ellipseIn: CGRect(x: size.width * 0.42, y: size.height * 0.28, width: size.width * 0.16, height: size.height * 0.16)),
-                        with: .color(ink),
-                        lineWidth: 1.6
-                    )
-                } else {
-                    context.fill(pin, with: .color(coral))
-                    context.fill(Path(ellipseIn: CGRect(x: size.width * 0.42, y: size.height * 0.28, width: size.width * 0.16, height: size.height * 0.16)), with: .color(cream))
-                }
+                drawMapPin(
+                    context: context,
+                    size: size,
+                    ink: ink,
+                    coral: coral,
+                    cream: cream,
+                    lineArt: lineArtPin
+                )
             }
         }
         .accessibilityHidden(true)
+    }
+
+    /// DESIGN v3.1: restaurant = noodle bowl + plate (not a temple or duck).
+    private func drawNoodleBowl(
+        context: GraphicsContext,
+        size: CGSize,
+        ink: Color,
+        coral: Color,
+        cream: Color,
+        kraft: Color
+    ) {
+        var plate = Path()
+        plate.addEllipse(in: CGRect(x: size.width * 0.06, y: size.height * 0.58, width: size.width * 0.88, height: size.height * 0.30))
+        context.fill(plate, with: .color(kraft))
+        context.stroke(plate, with: .color(ink), lineWidth: 1.4)
+
+        var bowl = Path()
+        bowl.move(to: CGPoint(x: size.width * 0.18, y: size.height * 0.42))
+        bowl.addQuadCurve(
+            to: CGPoint(x: size.width * 0.82, y: size.height * 0.42),
+            control: CGPoint(x: size.width * 0.50, y: size.height * 0.28)
+        )
+        bowl.addQuadCurve(
+            to: CGPoint(x: size.width * 0.74, y: size.height * 0.72),
+            control: CGPoint(x: size.width * 0.88, y: size.height * 0.62)
+        )
+        bowl.addQuadCurve(
+            to: CGPoint(x: size.width * 0.26, y: size.height * 0.72),
+            control: CGPoint(x: size.width * 0.50, y: size.height * 0.84)
+        )
+        bowl.addQuadCurve(
+            to: CGPoint(x: size.width * 0.18, y: size.height * 0.42),
+            control: CGPoint(x: size.width * 0.12, y: size.height * 0.62)
+        )
+        context.fill(bowl, with: .color(coral))
+        context.stroke(bowl, with: .color(ink), lineWidth: 1.6)
+
+        var broth = Path()
+        broth.addEllipse(in: CGRect(x: size.width * 0.24, y: size.height * 0.36, width: size.width * 0.52, height: size.height * 0.18))
+        context.fill(broth, with: .color(cream.opacity(0.35)))
+
+        for (start, control, end) in [
+            (CGPoint(x: size.width * 0.30, y: size.height * 0.40), CGPoint(x: size.width * 0.48, y: size.height * 0.18), CGPoint(x: size.width * 0.70, y: size.height * 0.44)),
+            (CGPoint(x: size.width * 0.28, y: size.height * 0.50), CGPoint(x: size.width * 0.52, y: size.height * 0.30), CGPoint(x: size.width * 0.68, y: size.height * 0.56)),
+            (CGPoint(x: size.width * 0.34, y: size.height * 0.58), CGPoint(x: size.width * 0.56, y: size.height * 0.40), CGPoint(x: size.width * 0.64, y: size.height * 0.64)),
+        ] {
+            var noodle = Path()
+            noodle.move(to: start)
+            noodle.addQuadCurve(to: end, control: control)
+            context.stroke(noodle, with: .color(cream), lineWidth: 2.4)
+        }
+
+        var chopstickA = Path()
+        chopstickA.move(to: CGPoint(x: size.width * 0.58, y: size.height * 0.10))
+        chopstickA.addLine(to: CGPoint(x: size.width * 0.78, y: size.height * 0.46))
+        var chopstickB = Path()
+        chopstickB.move(to: CGPoint(x: size.width * 0.66, y: size.height * 0.08))
+        chopstickB.addLine(to: CGPoint(x: size.width * 0.84, y: size.height * 0.42))
+        context.stroke(chopstickA, with: .color(ink), lineWidth: 2.0)
+        context.stroke(chopstickB, with: .color(ink), lineWidth: 2.0)
+    }
+
+    /// DESIGN v3.1: cafe = coffee cup + saucer. Not a rounded-rect block.
+    private func drawCoffeeCup(
+        context: GraphicsContext,
+        size: CGSize,
+        ink: Color,
+        coral: Color,
+        cream: Color,
+        kraft: Color
+    ) {
+        var saucer = Path()
+        saucer.addEllipse(in: CGRect(x: size.width * 0.10, y: size.height * 0.64, width: size.width * 0.80, height: size.height * 0.22))
+        context.fill(saucer, with: .color(kraft))
+        context.stroke(saucer, with: .color(ink), lineWidth: 1.4)
+        var well = Path()
+        well.addEllipse(in: CGRect(x: size.width * 0.28, y: size.height * 0.70, width: size.width * 0.44, height: size.height * 0.10))
+        context.stroke(well, with: .color(ink.opacity(0.45)), lineWidth: 1.0)
+
+        var cup = Path()
+        cup.move(to: CGPoint(x: size.width * 0.26, y: size.height * 0.30))
+        cup.addQuadCurve(
+            to: CGPoint(x: size.width * 0.70, y: size.height * 0.30),
+            control: CGPoint(x: size.width * 0.48, y: size.height * 0.24)
+        )
+        cup.addQuadCurve(
+            to: CGPoint(x: size.width * 0.64, y: size.height * 0.68),
+            control: CGPoint(x: size.width * 0.74, y: size.height * 0.52)
+        )
+        cup.addQuadCurve(
+            to: CGPoint(x: size.width * 0.32, y: size.height * 0.68),
+            control: CGPoint(x: size.width * 0.48, y: size.height * 0.76)
+        )
+        cup.addQuadCurve(
+            to: CGPoint(x: size.width * 0.26, y: size.height * 0.30),
+            control: CGPoint(x: size.width * 0.22, y: size.height * 0.52)
+        )
+        context.fill(cup, with: .color(coral))
+        context.stroke(cup, with: .color(ink), lineWidth: 1.6)
+
+        var lip = Path()
+        lip.addEllipse(in: CGRect(x: size.width * 0.26, y: size.height * 0.26, width: size.width * 0.44, height: size.height * 0.12))
+        context.fill(lip, with: .color(cream.opacity(0.28)))
+        context.stroke(lip, with: .color(ink), lineWidth: 1.2)
+
+        var handle = Path()
+        handle.addArc(
+            center: CGPoint(x: size.width * 0.76, y: size.height * 0.46),
+            radius: size.width * 0.13,
+            startAngle: .degrees(-80),
+            endAngle: .degrees(85),
+            clockwise: false
+        )
+        context.stroke(handle, with: .color(ink), lineWidth: 2.4)
+
+        for (x, controlX) in [(0.36, 0.32), (0.48, 0.50), (0.60, 0.64)] {
+            var steam = Path()
+            steam.move(to: CGPoint(x: size.width * x, y: size.height * 0.26))
+            steam.addQuadCurve(
+                to: CGPoint(x: size.width * x, y: size.height * 0.08),
+                control: CGPoint(x: size.width * controlX, y: size.height * 0.16)
+            )
+            context.stroke(steam, with: .color(ink.opacity(0.7)), lineWidth: 1.4)
+        }
+    }
+
+    private func drawLantern(
+        context: GraphicsContext,
+        size: CGSize,
+        ink: Color,
+        coral: Color,
+        cream: Color
+    ) {
+        var cap = Path(roundedRect: CGRect(x: size.width * 0.34, y: size.height * 0.10, width: size.width * 0.32, height: size.height * 0.10), cornerRadius: 3)
+        context.fill(cap, with: .color(ink.opacity(0.85)))
+
+        var body = Path()
+        body.addEllipse(in: CGRect(x: size.width * 0.22, y: size.height * 0.18, width: size.width * 0.56, height: size.height * 0.58))
+        context.fill(body, with: .color(coral))
+        context.stroke(body, with: .color(ink), lineWidth: 1.6)
+        for factor in [0.32, 0.44, 0.56] {
+            var ridge = Path()
+            ridge.addEllipse(in: CGRect(x: size.width * 0.26, y: size.height * factor, width: size.width * 0.48, height: size.height * 0.06))
+            context.stroke(ridge, with: .color(cream.opacity(0.55)), lineWidth: 1.2)
+        }
+
+        var tassel = Path()
+        tassel.move(to: CGPoint(x: size.width * 0.50, y: size.height * 0.74))
+        tassel.addQuadCurve(
+            to: CGPoint(x: size.width * 0.50, y: size.height * 0.92),
+            control: CGPoint(x: size.width * 0.58, y: size.height * 0.84)
+        )
+        context.stroke(tassel, with: .color(ink), lineWidth: 1.6)
+        context.fill(
+            Path(ellipseIn: CGRect(x: size.width * 0.46, y: size.height * 0.90, width: size.width * 0.08, height: size.height * 0.07)),
+            with: .color(coral)
+        )
+    }
+
+    /// Official Clip stamp: scalloped postage + coral map pin
+    /// (`design-assets/app-store/app-clip-header-1800x1200.png`). Not a '#' ring.
+    private func drawPostageStamp(
+        context: GraphicsContext,
+        size: CGSize,
+        ink: Color,
+        coral: Color,
+        cream: Color,
+        kraft: Color,
+        forest: Color
+    ) {
+        let stamp = ClipScallopedStamp().path(in: CGRect(origin: .zero, size: size).insetBy(dx: size.width * 0.06, dy: size.height * 0.06))
+        context.fill(stamp, with: .color(kraft))
+        context.stroke(stamp, with: .color(ink), lineWidth: 1.6)
+
+        // Official header: small coral postage + cream paper-airplane, then cancel ring.
+        let mini = CGRect(x: size.width * 0.62, y: size.height * 0.14, width: size.width * 0.22, height: size.height * 0.20)
+        let miniStamp = ClipScallopedStamp().path(in: mini)
+        context.fill(miniStamp, with: .color(coral))
+        drawPaperAirplane(context: context, in: mini.insetBy(dx: mini.width * 0.22, dy: mini.height * 0.22), cream: cream)
+        context.stroke(
+            Path(ellipseIn: CGRect(x: size.width * 0.54, y: size.height * 0.16, width: size.width * 0.24, height: size.height * 0.24)),
+            with: .color(ink.opacity(0.40)),
+            lineWidth: 1.0
+        )
+
+        drawMapPin(
+            context: context,
+            size: CGSize(width: size.width * 0.70, height: size.height * 0.70),
+            ink: ink,
+            coral: coral,
+            cream: cream,
+            lineArt: false,
+            origin: CGPoint(x: size.width * 0.12, y: size.height * 0.18)
+        )
+        context.stroke(
+            Path(ellipseIn: CGRect(x: size.width * 0.16, y: size.height * 0.74, width: size.width * 0.22, height: size.height * 0.08)),
+            with: .color(forest.opacity(0.45)),
+            lineWidth: 1.0
+        )
+    }
+
+    private func drawPaperAirplane(context: GraphicsContext, in rect: CGRect, cream: Color) {
+        var plane = Path()
+        plane.move(to: CGPoint(x: rect.minX, y: rect.minY + rect.height * 0.22))
+        plane.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + rect.height * 0.50))
+        plane.addLine(to: CGPoint(x: rect.minX + rect.width * 0.08, y: rect.maxY))
+        plane.addLine(to: CGPoint(x: rect.minX + rect.width * 0.38, y: rect.minY + rect.height * 0.56))
+        plane.closeSubpath()
+        context.fill(plane, with: .color(cream))
+        var fold = Path()
+        fold.move(to: CGPoint(x: rect.minX + rect.width * 0.38, y: rect.minY + rect.height * 0.56))
+        fold.addLine(to: CGPoint(x: rect.minX + rect.width * 0.18, y: rect.minY + rect.height * 0.42))
+        context.stroke(fold, with: .color(cream.opacity(0.55)), lineWidth: 0.8)
+    }
+
+    private func drawMapPin(
+        context: GraphicsContext,
+        size: CGSize,
+        ink: Color,
+        coral: Color,
+        cream: Color,
+        lineArt: Bool,
+        origin: CGPoint = .zero
+    ) {
+        var pin = Path()
+        let radius = size.width * 0.28
+        let center = CGPoint(x: origin.x + size.width * 0.5, y: origin.y + size.height * 0.36)
+        pin.addArc(center: center, radius: radius, startAngle: .degrees(200), endAngle: .degrees(-20), clockwise: false)
+        pin.addQuadCurve(
+            to: CGPoint(x: origin.x + size.width * 0.5, y: origin.y + size.height * 0.92),
+            control: CGPoint(x: origin.x + size.width * 0.86, y: origin.y + size.height * 0.62)
+        )
+        pin.addQuadCurve(
+            to: CGPoint(x: center.x - radius * 0.78, y: center.y + radius * 0.42),
+            control: CGPoint(x: origin.x + size.width * 0.14, y: origin.y + size.height * 0.62)
+        )
+        pin.closeSubpath()
+        let hole = Path(ellipseIn: CGRect(
+            x: origin.x + size.width * 0.42,
+            y: origin.y + size.height * 0.26,
+            width: size.width * 0.16,
+            height: size.height * 0.16
+        ))
+        if lineArt {
+            // Cream circle / kraft disk: ink line-art stays visible.
+            // DESIGN “cream line-art pin” is the cream-circle illustration, not
+            // a cream stroke on cream.
+            context.stroke(pin, with: .color(ink), lineWidth: 2.2)
+            context.stroke(hole, with: .color(ink), lineWidth: 1.6)
+        } else {
+            context.fill(pin, with: .color(coral))
+            context.stroke(pin, with: .color(ink), lineWidth: 1.4)
+            context.fill(hole, with: .color(cream))
+        }
+    }
+}
+
+nonisolated struct ClipScallopedStamp: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let pitch: CGFloat = 7
+        let depth: CGFloat = 3
+        path.move(to: CGPoint(x: rect.minX + depth, y: rect.minY))
+        var x = rect.minX + depth
+        var flip = false
+        while x < rect.maxX - depth {
+            let next = min(x + pitch, rect.maxX - depth)
+            path.addQuadCurve(
+                to: CGPoint(x: next, y: rect.minY),
+                control: CGPoint(x: (x + next) / 2, y: rect.minY + (flip ? depth : -depth))
+            )
+            x = next
+            flip.toggle()
+        }
+        var y = rect.minY + depth
+        flip = false
+        while y < rect.maxY - depth {
+            let next = min(y + pitch, rect.maxY - depth)
+            path.addQuadCurve(
+                to: CGPoint(x: rect.maxX, y: next),
+                control: CGPoint(x: rect.maxX + (flip ? depth : -depth), y: (y + next) / 2)
+            )
+            y = next
+            flip.toggle()
+        }
+        x = rect.maxX - depth
+        flip = false
+        while x > rect.minX + depth {
+            let next = max(x - pitch, rect.minX + depth)
+            path.addQuadCurve(
+                to: CGPoint(x: next, y: rect.maxY),
+                control: CGPoint(x: (x + next) / 2, y: rect.maxY + (flip ? depth : -depth))
+            )
+            x = next
+            flip.toggle()
+        }
+        y = rect.maxY - depth
+        flip = false
+        while y > rect.minY + depth {
+            let next = max(y - pitch, rect.minY + depth)
+            path.addQuadCurve(
+                to: CGPoint(x: rect.minX, y: next),
+                control: CGPoint(x: rect.minX - (flip ? depth : -depth), y: (y + next) / 2)
+            )
+            y = next
+            flip.toggle()
+        }
+        path.closeSubpath()
+        return path
     }
 }
 
@@ -529,29 +795,45 @@ struct ClipJournalSecondaryButton: View {
     }
 }
 
+struct ClipDashedInkLine: View {
+    var body: some View {
+        Canvas { context, size in
+            var path = Path()
+            path.move(to: CGPoint(x: 0, y: size.height / 2))
+            path.addLine(to: CGPoint(x: size.width, y: size.height / 2))
+            context.stroke(
+                path,
+                with: .color(ClipJournalPalette.ink),
+                style: StrokeStyle(lineWidth: 1.2, lineCap: .round, dash: [3.5, 4.5])
+            )
+        }
+        .frame(height: 8)
+        .accessibilityHidden(true)
+    }
+}
+
 struct ClipListSaveCountTable: View {
     let counts: ClipListSaveCounts
 
     var body: some View {
         VStack(spacing: 0) {
             row(ClipCopy.string("clip.listSaved.row.new"), counts.newlySaved, highlight: false)
-            divider
+            ClipDashedInkLine()
             row(ClipCopy.string("clip.listSaved.row.already"), counts.alreadySaved, highlight: false)
-            divider
+            ClipDashedInkLine()
             row(ClipCopy.string("clip.listSaved.row.over"), counts.overCap, highlight: counts.overCap > 0)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
-        .background(ClipJournalPalette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background {
+            ClipJitterRoundedRect(seed: 21, radius: 14)
+                .fill(ClipJournalPalette.card)
+        }
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(ClipJournalPalette.line, lineWidth: 1)
+            ClipJitterRoundedRect(seed: 21, radius: 14)
+                .stroke(ClipJournalPalette.ink, lineWidth: ClipJournalPalette.strokeWidth)
         }
         .accessibilityIdentifier("clip.list.counts")
-    }
-
-    private var divider: some View {
-        ClipJournalPalette.line.frame(height: 1)
     }
 
     private func row(_ title: String, _ value: Int, highlight: Bool) -> some View {

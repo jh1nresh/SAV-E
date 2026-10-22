@@ -229,6 +229,59 @@ jobs:
             find "$RUNNER_TEMP/SAVEClip-DerivedData" -name 'SAVEClip.app' -type d \
               -exec du -sh {} \; || true
           } >> "$RUNNER_TEMP/appclip-doodle-screenshots/10-size-report.md"
+          python3 - "$RUNNER_TEMP/appclip-doodle-screenshots" "$GITHUB_SHA" <<'PY'
+          from pathlib import Path
+          import sys
+          out = Path(sys.argv[1])
+          sha = sys.argv[2]
+          (out / "11-iansui-proof.md").write_text(
+              "# Iansui proof\n\n"
+              "This VM cannot copy into `/workspace/shared/eng/2026-10-22-pr307-shots/`.\n\n"
+              "- Bundled file path: `SAV-E/Resources/DisplayFont/Iansui-ClipTitles.ttf`\n"
+              "- SAVEClip resource in `SAV-E.xcodeproj/project.pbxproj`: "
+              "`Iansui-ClipTitles.ttf in SAVEClip Resources`\n"
+              "- UIFont / PostScript name in code: `Iansui-Regular` "
+              "(`ClipDisplayType.cjkName` in `SAV-EClip/ClipDoodleTheme.swift`)\n"
+              "- Register: `CTFontManagerRegisterFontsForURL` of `Iansui-ClipTitles.ttf` "
+              "in `ClipDisplayType.register`\n"
+              "- Used for: place name, list title, and state titles when locale is zh-Hant "
+              "(`ClipDisplayType.title`)\n"
+              "- Not shipped: `Iansui-SavvySubset.ttf` (3.48 MB)\n"
+          )
+          (out / "12-screenshot-manifest.md").write_text(
+              "# Screenshot attachment names\n\n"
+              f"Artifact: `appclip-doodle-screenshots-{sha}`\n\n"
+              "QA asked for a copy into `/workspace/shared/eng/2026-10-22-pr307-shots/`. "
+              "This runner cannot write that folder; XCTAttachment names below are the "
+              "files in this artifact / xcresult.\n\n"
+              "## Requested copies\n\n"
+              "- 01-place: `01-place-zh-Hant-sender`, `02-place-en-inline`, "
+              "`place-zh-Hant-dark`, `place-en-dark`\n"
+              "- 05-state: `05-state-loading`, `05-state-expired`, `05-state-offline`, "
+              "`05-state-server`, `05-state-malformed` plus `-dark` for each\n"
+              "- save-fail: `save-fail-zh-Hant-light`, `save-fail-en-dark`\n"
+              "- skoverlay: `skoverlay-zh-Hant-light`, `skoverlay-en-dark`\n\n"
+              "## Screens 01–18 (light + dark where captured)\n\n"
+              "01. `01-place-zh-Hant-sender` / `place-zh-Hant-dark`\n"
+              "02. `02-place-en-inline` / `place-en-dark`\n"
+              "03. `03-list-zh-Hant-five-places` / `list-en-dark`\n"
+              "04. `04-list-en-light` / `list-en-dark`\n"
+              "05. `05-state-*` light + `05-state-*-dark`\n"
+              "06. `06-place-max-dynamic-type`\n"
+              "07. `saved-zh-Hant-light` / `saved-en-dark`\n"
+              "08. `cap50-zh-Hant-light` / `cap50-en-dark`\n"
+              "09. `duplicate-zh-Hant-light` / `duplicate-en-dark`\n"
+              "10. `signin-one-zh-Hant` / `signin-one-en-dark`\n"
+              "11. `signin-list-en`\n"
+              "12. `signin-fail-zh-Hant-light` / `signin-fail-en-dark`\n"
+              "13. `save-fail-zh-Hant-light` / `save-fail-en-dark`\n"
+              "14. `skoverlay-zh-Hant-light` / `skoverlay-en-dark`\n"
+              "15. `offline-dark`\n"
+              "16. `19-list-saved-zh-Hant` / `19-list-saved-en-dark`\n"
+              "17. `19b-list-partial-zh-Hant`\n"
+              "18. `19b-list-partial-en-dark`\n"
+          )
+          PY
 
       - name: Upload App Clip screenshots
         if: always()

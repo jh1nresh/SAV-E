@@ -457,6 +457,8 @@ struct ClipContentView: View {
         savedLine: String? = nil
     ) -> some View {
         VStack(spacing: ClipJournalLayout.stateTitleGap) {
+            ClipWordmarkPlate()
+                .accessibilityIdentifier("clip.wordmark")
             ClipStateIllustration(sticker: sticker, badge: badge)
             VStack(spacing: ClipJournalLayout.stateBodyGap) {
                 ClipDisplayTitle(text: title, pointSize: 24, relativeTo: .title2)
@@ -503,6 +505,7 @@ struct ClipContentView: View {
             : ClipCopy.format("clip.signin.saveCount", kind.placeCount)
         return VStack(spacing: ClipJournalLayout.stateTitleGap) {
             ClipWordmarkPlate()
+                .accessibilityIdentifier("clip.wordmark")
             ClipStateIllustration(sticker: .seal, badge: "")
             VStack(spacing: ClipJournalLayout.stateBodyGap) {
                 ClipDisplayTitle(text: title, pointSize: 24, relativeTo: .title2)
@@ -538,10 +541,8 @@ struct ClipContentView: View {
         let partial = counts.overCap > 0
         let inSavvy = counts.newlySaved + counts.alreadySaved
         return VStack(spacing: ClipJournalLayout.stateTitleGap) {
-            HStack {
-                ClipWordmark()
-                Spacer(minLength: 0)
-            }
+            ClipWordmarkPlate()
+                .accessibilityIdentifier("clip.wordmark")
             ClipStateIllustration(
                 sticker: .seal,
                 badge: partial ? "50" : "✓"
