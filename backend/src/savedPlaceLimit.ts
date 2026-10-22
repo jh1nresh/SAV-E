@@ -46,20 +46,8 @@ export async function assertNewSavedPlaceAllowed(
   userId: string,
   incomingPlace?: SavedPlaceIdentity,
 ): Promise<void> {
-  let tier: "free" | "pro" = "free";
-  // Probe inside a savepoint. A missing entitlement table/column aborts the
-  // surrounding transaction in PostgreSQL; without this, every save 500s.
-  await client.query("savepoint saved_place_entitlement");
-  try {
-    tier = await entitlementTier(client, userId);
-    await client.query("release savepoint saved_place_entitlement");
-  } catch (error) {
-    await client.query("rollback to savepoint saved_place_entitlement");
-    if (!isEntitlementSchemaUnavailable(error)) throw error;
-    // Schema missing: cannot tell Pro from Free. Fail open like
-    // ai_usage_events — do not apply the free cap as if every account is free.
-    return;
-  }
+  const tier = await savedPlaceTierForTransaction(client, userId);
+  if (tier === undefined) return;
 
   if (tier === "pro") return;
   const { rows } = await client.query(
@@ -78,6 +66,98 @@ export async function assertNewSavedPlaceAllowed(
   const savedPlaceCount = Math.max(canonicalCount, projectedCount - 1);
   if (decideSavedPlaceInsert({ tier, savedPlaceCount, isNewPlace }) === "over_free_limit") {
     throw new SavedPlaceLimitError();
+  }
+}
+
+async function savedPlaceTierForTransaction(
+  client: Queryable, userId: string,
+): Promise<"free" | "pro" | undefined> {
+  let tier: "free" | "pro" = "free";
+  // Probe inside a savepoint. A missing entitlement table/column aborts the
+  // surrounding transaction in PostgreSQL; without this, every save 500s.
+  await client.query("savepoint saved_place_entitlement");
+  try {
+    tier = await entitlementTier(client, userId);
+    await client.query("release savepoint saved_place_entitlement");
+  } catch (error) {
+    await client.query("rollback to savepoint saved_place_entitlement");
+    if (!isEntitlementSchemaUnavailable(error)) throw error;
+    // Schema missing: cannot tell Pro from Free. Fail open like
+    // ai_usage_events — do not apply the free cap as if every account is free.
+    return undefined;
+  }
+
+  return tier;
+}
+
+/** Caller holds the raw-owner advisory transaction lock before any row locks.
+ * Snapshot the canonical count so legacy over-limit accounts can still make
+ * changes that do not grow their collection. Undefined preserves Pro/fail-open. */
+export async function savedPlaceGrowthSnapshot(client: Queryable, userId: string): Promise<number | undefined> {
+  const tier = await savedPlaceTierForTransaction(client, userId);
+  if (tier !== "free") return undefined;
+  return consolidatedSavedPlaces((await client.query(
+    `select id, name, address, latitude, longitude, google_place_id,
+       coordinate_system, location_provider, provider_place_id, created_at
+     from places where user_id = $1 order by created_at, id`, [userId],
+  )).rows).length;
+}
+
+/** Check actual tentative database rows before the existing transaction commits.
+ * Any failure must roll back the whole transaction, including capture provenance. */
+export async function assertSavedPlaceGrowthAllowed(
+  client: Queryable, userId: string, previousCount: number | undefined,
+): Promise<void> {
+  if (previousCount === undefined) return;
+  const projectedCount = consolidatedSavedPlaces((await client.query(
+    `select id, name, address, latitude, longitude, google_place_id,
+       coordinate_system, location_provider, provider_place_id, created_at
+     from places where user_id = $1 order by created_at, id`, [userId],
+  )).rows).length;
+  if (projectedCount > previousCount && projectedCount > freeSavedPlaceLimit) throw new SavedPlaceLimitError();
+}
+
+/** Update under the same owner lock as inserts. Project from the database's
+ * RETURNING row, not raw request fields: SQL owns writable-field filtering,
+ * numeric coercion and earliest-created_at semantics. Rejection rolls back
+ * the tentative update before any commit or response. */
+export async function updateSavedPlaceWithinLimit(
+  database: Pick<Pool, "connect">,
+  userId: string,
+  placeId: string,
+  update: { sql: string; values: unknown[] },
+): Promise<Record<string, unknown> | undefined> {
+  const client = await database.connect();
+  try {
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+    const current = await client.query(
+      "select * from places where id = $1 and user_id = $2 for update",
+      [placeId, userId],
+    );
+    if (!current.rows[0]) {
+      await client.query("rollback");
+      return undefined;
+    }
+    const before = await savedPlaceGrowthSnapshot(client, userId);
+    const values = [...update.values, placeId, userId];
+    const result = await client.query(
+      `${update.sql} where id = $${values.length - 1} and user_id = $${values.length} returning *`,
+      values,
+    );
+    const replacement: Record<string, unknown> | undefined = result.rows[0];
+    if (!replacement) {
+      await client.query("rollback");
+      return undefined;
+    }
+    await assertSavedPlaceGrowthAllowed(client, userId, before);
+    await client.query("commit");
+    return replacement;
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
   }
 }
 
@@ -167,17 +247,60 @@ export function savedPlacesMatch(left: SavedPlaceIdentity, right: SavedPlaceIden
   return !!address && address === normalized(right.address);
 }
 
-export function consolidatedSavedPlaces(places: SavedPlaceIdentity[]): SavedPlaceIdentity[] {
-  const result: SavedPlaceIdentity[] = [];
+export type SavedPlaceGroup = { representative: SavedPlaceIdentity; memberIDs: string[] };
+
+// Keep membership alongside the exact same ordered representative matching used
+// for collection counts. Do not transitively merge groups through a later alias.
+export function consolidatedSavedPlaceGroups(places: SavedPlaceIdentity[]): SavedPlaceGroup[] {
+  const result: SavedPlaceGroup[] = [];
   const timestamp = (value: unknown) => value instanceof Date ? value.getTime() : new Date(String(value)).getTime() || 0;
   for (const place of [...places].sort((a, b) => timestamp(a.created_at) - timestamp(b.created_at)
     || String(a.id).localeCompare(String(b.id)))) {
-    const existing = result.find(candidate => savedPlacesMatch(candidate, place));
+    const existing = result.find(group => savedPlacesMatch(group.representative, place));
+    const memberID = typeof place.id === "string" ? place.id : undefined;
     if (existing) {
       // Place.mergingSources retains the original venue fields and fills only
       // a missing Google identity; empty strings are preserved just as in Swift.
-      existing.google_place_id ??= place.google_place_id;
-    } else result.push({ ...place });
+      existing.representative.google_place_id ??= place.google_place_id;
+      if (memberID !== undefined) existing.memberIDs.push(memberID);
+    } else result.push({ representative: { ...place }, memberIDs: memberID === undefined ? [] : [memberID] });
   }
   return result;
+}
+
+export function consolidatedSavedPlaces(places: SavedPlaceIdentity[]): SavedPlaceIdentity[] {
+  return consolidatedSavedPlaceGroups(places).map(group => group.representative);
+}
+
+/** Delete the displayed venue, including its saved aliases, atomically. The app
+ * already deletes every savedID in that venue. Missing/previously deleted IDs
+ * are successful no-ops so older clients can finish their sequential requests. */
+export async function deleteSavedPlaceGroup(
+  database: Pick<Pool, "connect">, userId: string, placeId: string,
+): Promise<void> {
+  const client = await database.connect();
+  try {
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+    const current = await client.query(
+      "select * from places where id = $1 and user_id = $2 for update", [placeId, userId],
+    );
+    if (current.rows[0]) {
+      const { rows } = await client.query(
+        `select id, name, address, latitude, longitude, google_place_id,
+           coordinate_system, location_provider, provider_place_id, created_at
+         from places where user_id = $1 order by created_at, id`, [userId],
+      );
+      // Use the database's canonical UUID spelling, not the raw request ID.
+      const group = consolidatedSavedPlaceGroups(rows).find(value => value.memberIDs.includes(current.rows[0].id));
+      if (!group) throw new Error("Owned saved place missing from its canonical group");
+      await client.query("delete from places where user_id = $1 and id = any($2::uuid[])", [userId, group.memberIDs]);
+    }
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
