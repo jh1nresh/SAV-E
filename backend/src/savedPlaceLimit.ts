@@ -272,12 +272,22 @@ export function consolidatedSavedPlaces(places: SavedPlaceIdentity[]): SavedPlac
   return consolidatedSavedPlaceGroups(places).map(group => group.representative);
 }
 
-/** Delete the displayed venue, including its saved aliases, atomically. The app
- * already deletes every savedID in that venue. Missing/previously deleted IDs
- * are successful no-ops so older clients can finish their sequential requests. */
-export async function deleteSavedPlaceGroup(
+export type SavedPlaceDeleteScope = "row" | "group";
+
+export function savedPlaceDeleteScope(values: string[]): SavedPlaceDeleteScope | undefined {
+  if (values.length === 0) return "row";
+  if (values.length !== 1) return undefined;
+  return values[0] === "row" || values[0] === "group" ? values[0] : undefined;
+}
+
+/** Legacy DELETE is exact-row compensation. Whole displayed-venue deletion
+ * requires explicit group scope so a failed new save cannot erase old aliases.
+ * Missing owned IDs remain successful no-ops in either scope. */
+export async function deleteSavedPlace(
   database: Pick<Pool, "connect">, userId: string, placeId: string,
+  scope: SavedPlaceDeleteScope = "row",
 ): Promise<void> {
+  if (scope !== "row" && scope !== "group") throw new Error("Invalid saved place delete scope");
   const client = await database.connect();
   try {
     await client.query("begin");
@@ -286,15 +296,22 @@ export async function deleteSavedPlaceGroup(
       "select * from places where id = $1 and user_id = $2 for update", [placeId, userId],
     );
     if (current.rows[0]) {
-      const { rows } = await client.query(
-        `select id, name, address, latitude, longitude, google_place_id,
-           coordinate_system, location_provider, provider_place_id, created_at
-         from places where user_id = $1 order by created_at, id`, [userId],
-      );
-      // Use the database's canonical UUID spelling, not the raw request ID.
-      const group = consolidatedSavedPlaceGroups(rows).find(value => value.memberIDs.includes(current.rows[0].id));
-      if (!group) throw new Error("Owned saved place missing from its canonical group");
-      await client.query("delete from places where user_id = $1 and id = any($2::uuid[])", [userId, group.memberIDs]);
+      const before = scope === "row" ? await savedPlaceGrowthSnapshot(client, userId) : undefined;
+      let ids: string[] = [current.rows[0].id];
+      if (scope === "group") {
+        const { rows } = await client.query(
+          `select id, name, address, latitude, longitude, google_place_id,
+             coordinate_system, location_provider, provider_place_id, created_at
+           from places where user_id = $1 order by created_at, id`, [userId],
+        );
+        const group = consolidatedSavedPlaceGroups(rows).find(value => value.memberIDs.includes(current.rows[0].id));
+        if (!group) throw new Error("Owned saved place missing from its canonical group");
+        ids = group.memberIDs;
+      }
+      await client.query("delete from places where user_id = $1 and id = any($2::uuid[])", [userId, ids]);
+      // Exact-row deletion can split a nontransitive canonical group. It must
+      // not create a 51st Free venue; reject atomically, never widen deletion.
+      await assertSavedPlaceGrowthAllowed(client, userId, before);
     }
     await client.query("commit");
   } catch (error) {
@@ -303,4 +320,8 @@ export async function deleteSavedPlaceGroup(
   } finally {
     client.release();
   }
+}
+
+export async function deleteSavedPlaceGroup(database: Pick<Pool, "connect">, userId: string, placeId: string): Promise<void> {
+  return deleteSavedPlace(database, userId, placeId, "group");
 }

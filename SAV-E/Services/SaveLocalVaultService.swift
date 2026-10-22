@@ -166,6 +166,34 @@ final class SaveLocalVaultService: Sendable {
         }
     }
 
+    /// Capture legacy private data before the remote deletion suspends. This does
+    /// not infer ownership, and must read the entire vault rather than a UI page.
+    func ownerlessRecordIDsForAccountDeletion() throws -> Set<UUID> {
+        try withLock {
+            try withCoordinatedVaultRead { url in
+                Set(try loadRecords(from: url).filter { $0.ownerSubject == nil }.map(\.id))
+            }
+        }
+    }
+
+    /// Delete the account's rows and its initial legacy cleanup scope atomically.
+    /// A later owner stamp or newly created ownerless row is never swept up.
+    func deleteAccountRecords(
+        belongingTo ownerSubject: String,
+        initialOwnerlessRecordIDs: Set<UUID>
+    ) throws {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                var records = try loadRecords(from: url)
+                records.removeAll {
+                    $0.ownerSubject == ownerSubject
+                        || ($0.ownerSubject == nil && initialOwnerlessRecordIDs.contains($0.id))
+                }
+                try save(records, to: url)
+            }
+        }
+    }
+
     func saveSourceOnly(url: URL, note: String? = nil, ownerSubject: String? = nil) throws -> SaveMemoryRecord {
         let diagnostic = sourceOnlyDiagnostic(url: url, note: note)
         let record = SaveMemoryRecord(

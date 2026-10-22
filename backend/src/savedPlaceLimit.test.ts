@@ -7,6 +7,8 @@ import {
   assertNewSavedPlaceAllowed,
   updateSavedPlaceWithinLimit,
   deleteSavedPlaceGroup,
+  deleteSavedPlace,
+  savedPlaceDeleteScope,
   consolidatedSavedPlaceGroups,
   savedPlaceGrowthSnapshot,
   assertSavedPlaceGrowthAllowed,
@@ -733,7 +735,7 @@ test("DELETE legacy sequential savedIDs and repeated requests are idempotent", a
   assert.equal(db.releases, 3);
   const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
   const route = server.slice(server.indexOf('if (request.method === "DELETE" && placeId)'), server.indexOf('return sendJson(response, { error: "Unsupported places route"'));
-  assert.match(route, /await deleteSavedPlaceGroup\(pool, userId, placeId\)/);
+  assert.match(route, /await deleteSavedPlace\(pool, userId, placeId, scope\)/);
   assert.match(route, /return sendJson\(response, null, 204\)/);
   assert.doesNotMatch(route, /404/);
 });
@@ -797,5 +799,103 @@ test("DELETE serializes with POST and PATCH using the same owner lock and expose
   assert.deepEqual(db.calls.filter(call => call.sql.includes("pg_advisory_xact_lock")).map(call => call.values), [["owner"], ["owner"], ["owner"]]);
   assert.equal(db.commits, 3);
   assert.equal(db.rollbacks, 0);
+  assert.equal(db.releases, 3);
+});
+
+test("legacy default row DELETE compensates a committed duplicate POST without deleting existing aliases", async () => {
+  const db = new PlacePatchDatabase(duplicateCollection(50));
+  const original = structuredClone(db.rows);
+  const incoming = { ...db.rows[0], id: "new-review-alias" };
+  db.onQuery = (sql, values, working) => {
+    if (sql !== "insert fixture saved place") return undefined;
+    assert.deepEqual(values, [incoming]);
+    working.push({ ...incoming });
+    return { rows: [incoming] };
+  };
+  const client = await db.connect();
+  await client.query("begin");
+  await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", ["owner"]);
+  await assertNewSavedPlaceAllowed(client as never, "owner", incoming);
+  await client.query("insert fixture saved place", [incoming]);
+  await client.query("commit");
+  client.release();
+  assert.equal(db.rows.length, original.length + 1);
+  // The separate correction request fails after POST committed. The old client
+  // sends an unqualified DELETE for only the row created by that POST.
+  await deleteSavedPlace(db as never, "owner", "new-review-alias");
+  assert.deepEqual(db.rows, original);
+  assert.equal(consolidatedSavedPlaces(db.rows).length, 50);
+  assert.deepEqual(db.calls.find(call => call.sql.startsWith("delete from places"))?.values, ["owner", ["new-review-alias"]]);
+});
+
+test("exact-row bridge deletion preserves Free cap without widening the requested deletion", async () => {
+  for (const count of [49, 50]) {
+    const db = chronologyFixture(count);
+    db.rows = db.rows.filter(row => !row.fixtureTable);
+    const before = structuredClone(db.rows);
+    if (count === 50) {
+      await assert.rejects(() => deleteSavedPlace(db as never, "owner", "middle"), SavedPlaceLimitError);
+      assert.deepEqual(db.rows, before);
+      assert.equal(db.rollbacks, 1);
+    } else {
+      await deleteSavedPlace(db as never, "owner", "middle");
+      assert.equal(consolidatedSavedPlaces(db.rows).length, 50);
+      assert.equal(db.rows.some(row => row.id === "middle"), false);
+      assert.ok(db.rows.some(row => row.id === "north") && db.rows.some(row => row.id === "south"));
+    }
+  }
+});
+
+test("exact-row deletion permits Pro regrouping and no-growth legacy over-limit compensation", async () => {
+  const bridge = chronologyFixture(50).rows.filter(row => !row.fixtureTable);
+  const pro = new PlacePatchDatabase(bridge, "pro");
+  await deleteSavedPlace(pro as never, "owner", "middle");
+  assert.equal(consolidatedSavedPlaces(pro.rows).length, 51);
+  const legacy = new PlacePatchDatabase(duplicateCollection(60));
+  await deleteSavedPlace(legacy as never, "owner", "duplicate-row");
+  assert.equal(legacy.rows.length, 60);
+  assert.equal(consolidatedSavedPlaces(legacy.rows).length, 60);
+});
+
+test("exact-row missing and foreign deletion is idempotent with no entitlement check or mutation", async () => {
+  const db = new PlacePatchDatabase([{ ...venues(1)[0], user_id: "foreign-owner" } as SavedPlaceIdentity]);
+  const before = structuredClone(db.rows);
+  for (const id of ["place-0", "missing"]) await deleteSavedPlace(db as never, "owner", id);
+  assert.deepEqual(db.rows, before);
+  assert.equal(db.calls.some(call => call.sql.includes("subscription_entitlements") || call.sql.startsWith("delete from")), false);
+});
+
+test("delete scope defaults to legacy row, accepts explicit group and rejects unknown or repeated scopes", async () => {
+  assert.equal(savedPlaceDeleteScope([]), "row");
+  assert.equal(savedPlaceDeleteScope(["row"]), "row");
+  assert.equal(savedPlaceDeleteScope(["group"]), "group");
+  for (const values of [[""], ["all"], ["GROUP"], ["row", "group"], ["group", "group"]]) assert.equal(savedPlaceDeleteScope(values), undefined);
+  const db = new PlacePatchDatabase(duplicateCollection(1));
+  await assert.rejects(() => deleteSavedPlace(db as never, "owner", "place-0", "all" as never), /Invalid saved place delete scope/);
+  assert.deepEqual(db.calls, [], "invalid scope must fail before connection or mutation");
+});
+
+test("legacy exact-row rollback serializes with POST and PATCH without freeing a canonical slot", async () => {
+  const db = new PlacePatchDatabase(duplicateCollection(50));
+  const post = async () => {
+    const client = await db.connect();
+    try {
+      await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", ["owner"]);
+      await assertNewSavedPlaceAllowed(client as never, "owner", { id: "new", name: "New venue" });
+      await client.query("insert into places (id, name, user_id) values ($1, $2, $3)", ["new", "New venue", "owner"]);
+      await client.query("commit");
+    } catch (error) { await client.query("rollback"); throw error; }
+    finally { client.release(); }
+  };
+  const results = await Promise.allSettled([
+    deleteSavedPlace(db as never, "owner", "duplicate-row"), post(),
+    updateSavedPlaceWithinLimit(db as never, "owner", "place-0", { sql: "update places set note = $1", values: ["Still saved"] }),
+  ]);
+  assert.equal(results[0].status, "fulfilled");
+  assert.ok(results[1].status === "rejected" && results[1].reason instanceof SavedPlaceLimitError);
+  assert.equal(results[2].status, "fulfilled");
+  assert.equal(db.rows.find(row => row.id === "place-0")?.note, "Still saved");
+  assert.equal(consolidatedSavedPlaces(db.rows).length, 50);
   assert.equal(db.releases, 3);
 });

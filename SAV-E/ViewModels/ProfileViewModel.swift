@@ -20,6 +20,13 @@ final class ProfileViewModel: ObservableObject {
     private let currentUserIDProvider: () -> String?
     private let reviewerDemoProvider: () -> Bool
     private var loadedUserID: String?
+    private struct AccountDeletionCleanup {
+        let owner: String
+        let initialOwnerlessRecordIDs: Set<UUID>
+        let sessionGeneration: Int
+    }
+    // Retain only after remote success: retries must not require the deleted identity.
+    private var pendingAccountDeletionCleanup: AccountDeletionCleanup?
 
     init(
         supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
@@ -171,22 +178,60 @@ final class ProfileViewModel: ObservableObject {
     }
 
     func deleteAccount() async -> Bool {
-        guard !reviewerDemoProvider(), let deletingUserID = currentUserIDProvider() else { return false }
+        guard !isDeletingAccount, !reviewerDemoProvider() else { return false }
+        let isPreviousAccountCleanup: Bool
+        if let pending = pendingAccountDeletionCleanup, let currentOwner = currentUserIDProvider() {
+            isPreviousAccountCleanup = currentOwner != pending.owner
+        } else {
+            isPreviousAccountCleanup = false
+        }
+        guard pendingAccountDeletionCleanup != nil || currentUserIDProvider() != nil else { return false }
         isDeletingAccount = true
         errorMessage = nil
         defer { isDeletingAccount = false }
 
         do {
-            try await accountDeletionService.deleteAccount()
-            try? avatarStore.remove(for: deletingUserID)
-            guard currentUserIDProvider() == deletingUserID, !reviewerDemoProvider() else { return true }
-            try? saveLocalVaultService.deleteRecords(belongingTo: deletingUserID)
+            let cleanup: AccountDeletionCleanup
+            if let pending = pendingAccountDeletionCleanup {
+                cleanup = pending
+            } else {
+                guard let deletingUserID = currentUserIDProvider() else { return false }
+                cleanup = AccountDeletionCleanup(
+                    owner: deletingUserID,
+                    initialOwnerlessRecordIDs: try saveLocalVaultService.ownerlessRecordIDsForAccountDeletion(),
+                    sessionGeneration: authService.sessionGeneration
+                )
+                try await accountDeletionService.deleteAccount(
+                    startedBy: cleanup.owner,
+                    generation: cleanup.sessionGeneration
+                )
+                pendingAccountDeletionCleanup = cleanup
+            }
+            // Always clean the captured owner, even if another account signed in
+            // while the remote request was suspended. Never resnapshot on retry.
+            try saveLocalVaultService.deleteAccountRecords(
+                belongingTo: cleanup.owner,
+                initialOwnerlessRecordIDs: cleanup.initialOwnerlessRecordIDs
+            )
+            try avatarStore.remove(for: cleanup.owner)
+            pendingAccountDeletionCleanup = nil
+            if isPreviousAccountCleanup {
+                errorMessage = "Previous account’s local cleanup is complete. Retry to delete this account."
+                return false
+            }
+            guard currentUserIDProvider() == cleanup.owner,
+                  authService.sessionGeneration == cleanup.sessionGeneration,
+                  !reviewerDemoProvider() else { return true }
             try? KeychainAccountReferenceStore.shared.clear()
             await authService.signOut()
             resetForCurrentSession()
             return true
         } catch {
-            errorMessage = error.localizedDescription
+            if pendingAccountDeletionCleanup != nil {
+                errorMessage = "Account deleted, but local data cleanup failed. Retry to finish removing data from this device. \(error.localizedDescription)"
+            } else {
+                errorMessage = error.localizedDescription
+            }
             return false
         }
     }

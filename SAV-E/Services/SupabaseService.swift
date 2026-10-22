@@ -16,6 +16,7 @@ protocol SupabaseServiceProtocol {
     func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult
     func updatePlace(_ place: Place, previous: Place?) async throws
     func deletePlace(_ placeId: UUID) async throws
+    func deletePlaceGroup(_ placeId: UUID) async throws
     func createMemoryCapture(from candidate: PendingReviewCandidate, userId: String) async throws -> UUID
     func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID?) async throws -> UUID
     func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?, explicitRetry: Bool) async throws -> SourceSearchRecoveryResult
@@ -87,6 +88,13 @@ protocol RelatedPlaceSourcesProviding {
 
 protocol AccountDeletionProviding {
     func deleteAccount() async throws
+    func deleteAccount(startedBy userId: String, generation: Int) async throws
+}
+
+extension AccountDeletionProviding {
+    func deleteAccount(startedBy userId: String, generation: Int) async throws {
+        try await deleteAccount()
+    }
 }
 
 // MARK: - Errors
@@ -113,6 +121,10 @@ enum SupabaseError: LocalizedError {
 
 // Existing service fakes opt out; production always creates a server session.
 extension SupabaseServiceProtocol {
+    func deletePlaceGroup(_ placeId: UUID) async throws {
+        try await deletePlace(placeId)
+    }
+
     func updatePlace(_ place: Place) async throws {
         try await updatePlace(place, previous: nil)
     }
@@ -232,8 +244,17 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     }
 
     func deleteAccount() async throws {
+        let session = await MainActor.run {
+            (PrivyAuthService.shared.currentUserId, PrivyAuthService.shared.sessionGeneration)
+        }
+        guard let owner = session.0 else { throw SupabaseError.notAuthenticated }
+        try await deleteAccount(startedBy: owner, generation: session.1)
+    }
+
+    func deleteAccount(startedBy userId: String, generation: Int) async throws {
         guard isConfigured else { throw SupabaseError.notConfigured }
-        try await request(path: "/v0/account", method: "DELETE")
+        try await request(path: "/v0/account", method: "DELETE",
+            accountDeletionSession: (generation, userId))
     }
 
     // MARK: - Places
@@ -388,6 +409,11 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     func deletePlace(_ placeId: UUID) async throws {
         guard isConfigured else { return }
         try await request(path: "/places/\(placeId)", method: "DELETE")
+    }
+
+    func deletePlaceGroup(_ placeId: UUID) async throws {
+        guard isConfigured else { return }
+        try await request(path: "/places/\(placeId)?scope=group", method: "DELETE")
     }
 
     func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws {
@@ -1242,14 +1268,16 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         method: String = "GET",
         body: Data? = nil,
         requiresAuth: Bool = true,
-        additionalHeaders: [String: String] = [:]
+        additionalHeaders: [String: String] = [:],
+        accountDeletionSession: (generation: Int, owner: String)? = nil
     ) async throws -> Data {
         let (data, _) = try await requestWithResponse(
             path: path,
             method: method,
             body: body,
             requiresAuth: requiresAuth,
-            additionalHeaders: additionalHeaders
+            additionalHeaders: additionalHeaders,
+            accountDeletionSession: accountDeletionSession
         )
         return data
     }
@@ -1260,13 +1288,18 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         body: Data? = nil,
         requiresAuth: Bool = true,
         additionalHeaders: [String: String] = [:],
-        baseURLOverride: String? = nil
+        baseURLOverride: String? = nil,
+        accountDeletionSession: (generation: Int, owner: String)? = nil
     ) async throws -> (Data, HTTPURLResponse) {
         let isSocialRequest = ["/v0/friend-ratings", "/v0/shared-posts", "/v0/passports", "/v0/social-profile", "/v0/follows", "/v0/followers"].contains { path.hasPrefix($0) }
         let sessionBound = isSocialRequest || path.hasPrefix("/v0/analysis")
             || path.hasPrefix("/v0/entitlements/") || path == "/v0/usage/quota"
         let friendSession: (Int, String?)?
-        if let importing = SAVEPendingImportSessionScope.current {
+        if accountDeletionSession != nil {
+            // A successful deletion must still reach owner-scoped local cleanup
+            // after the account changes while the response is in flight.
+            friendSession = nil
+        } else if let importing = SAVEPendingImportSessionScope.current {
             friendSession = (importing.generation, importing.owner)
         } else {
             friendSession = sessionBound
@@ -1299,6 +1332,15 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             } catch {
                 throw SupabaseError.notAuthenticated
             }
+        }
+
+        if let accountDeletionSession {
+            let stillCurrent = await MainActor.run {
+                PrivyAuthService.shared.sessionGeneration == accountDeletionSession.generation
+                    && PrivyAuthService.shared.currentUserId == accountDeletionSession.owner
+            }
+            guard stillCurrent else { throw CancellationError() }
+            try Task.checkCancellation()
         }
 
         if let friendSession {

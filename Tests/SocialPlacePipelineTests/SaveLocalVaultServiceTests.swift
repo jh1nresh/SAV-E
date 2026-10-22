@@ -530,6 +530,57 @@ final class SaveLocalVaultServiceTests: XCTestCase {
         XCTAssertFalse(remaining.contains { $0.ownerSubject == "did:privy:b" })
     }
 
+    @MainActor
+    func testAccountDeletionPurgesLegacySnapshotWithoutClaimingOrDeletingOtherOwners() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("vault.json")
+        // The old on-disk schema has no ownerSubject key, not an assigned account.
+        let legacyIDs = (0..<30).map { _ in UUID() }
+        let legacyRows: [[String: Any]] = legacyIDs.enumerated().map { index, id in
+            ["id": id.uuidString, "state": index == 0 ? "confirmed_place" : "source_only",
+             "title": "Legacy private name \(index)", "sourceText": "Legacy private note \(index)",
+             "evidence": ["Legacy private clue \(index)"], "createdAt": "2026-01-01T00:00:00Z"]
+        }
+        try JSONSerialization.data(withJSONObject: legacyRows).write(to: url)
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        let a = SaveMemoryRecord(state: .sourceOnly, title: "A private clue", ownerSubject: "account-a")
+        let b = SaveMemoryRecord(state: .sourceOnly, title: "B private clue", ownerSubject: "account-b")
+        try vault.append(a)
+        try vault.append(b)
+        let snapshot = try vault.ownerlessRecordIDsForAccountDeletion()
+        XCTAssertEqual(snapshot, Set(legacyIDs), "Snapshot must not use the 25-row UI limit")
+        XCTAssertEqual(try vault.recentRecords(limit: 100, belongingTo: nil).count, 30)
+        XCTAssertEqual(try vault.recentRecords(belongingTo: "account-a").map(\.id), [a.id])
+
+        // Simulate an independently proven stamp arriving after the snapshot.
+        // Deletion must recheck the current row, not delete IDs indiscriminately.
+        var rows = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [[String: Any]])
+        let stampedIndex = try XCTUnwrap(rows.firstIndex { $0["id"] as? String == legacyIDs[0].uuidString })
+        rows[stampedIndex]["ownerSubject"] = "account-b"
+        try JSONSerialization.data(withJSONObject: rows).write(to: url, options: .atomic)
+        let later = SaveMemoryRecord(state: .sourceOnly, sourceText: "Later note", title: "Later ownerless clue")
+        try vault.append(later)
+
+        try vault.deleteAccountRecords(belongingTo: "account-a", initialOwnerlessRecordIDs: snapshot)
+
+        let reloaded = SaveLocalVaultService(overrideVaultURL: url)
+        XCTAssertEqual(Set(try reloaded.recentRecords(limit: 100).map(\.id)), [b.id, legacyIDs[0], later.id])
+        XCTAssertEqual(try reloaded.recentRecords(belongingTo: nil).map(\.id), [later.id])
+        XCTAssertEqual(Set(try reloaded.recentRecords(belongingTo: "account-b").map(\.id)), [b.id, legacyIDs[0]])
+        XCTAssertTrue(try reloaded.recentRecords(belongingTo: "account-a").isEmpty)
+        let persisted = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [[String: Any]])
+        let signedOutMessageRows = persisted.filter {
+            SaveVaultOwnerScope.belongsToActiveAccount($0["ownerSubject"] as? String, currentUserId: nil)
+        }
+        XCTAssertEqual(signedOutMessageRows.compactMap { $0["id"] as? String }, [later.id.uuidString])
+        XCTAssertFalse(try String(contentsOf: url, encoding: .utf8).contains("Legacy private note 1\""))
+        // The operation is locally idempotent; retry preserves later ownerless data.
+        try reloaded.deleteAccountRecords(belongingTo: "account-a", initialOwnerlessRecordIDs: snapshot)
+        XCTAssertEqual(try reloaded.recentRecords(belongingTo: nil).map(\.id), [later.id])
+    }
+
     /// D3 / P2 4343590036: Review 500-row cap is per account, not the shared file.
     @MainActor
     func testReviewCandidatesBelongingToActiveAccountFilterBeforeLimit() throws {

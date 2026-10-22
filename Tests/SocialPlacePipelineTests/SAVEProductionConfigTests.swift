@@ -2573,10 +2573,8 @@ final class SAVEProductionConfigTests: XCTestCase {
             "unscoped recentRecords(limit: 50) is the inspector leak Codex named"
         )
         let profile = try source(at: "SAV-E/ViewModels/ProfileViewModel.swift")
-        XCTAssertTrue(
-            profile.contains("deleteRecords(belongingTo: deletingUserID)"),
-            "P1 4347594680: account deletion must not wipe another owner's shared vault"
-        )
+        // Owner isolation and legacy cleanup are exercised through real vaults
+        // by the ProfileAvatarStoreTests account-deletion scenarios.
         XCTAssertFalse(
             profile.contains("deleteAllRecords()"),
             "deleteAllRecords wipes every account on this device"
@@ -3528,6 +3526,238 @@ final class SAVEProductionConfigTests: XCTestCase {
             expiresAt: nil,
             sender: nil
         )
+    }
+
+    @MainActor
+    func testLegacyReviewFailureRollsBackOnlyNewRowAndPinsRollbackSession() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        defer {
+            auth.authState = originalAuth
+            SavePlaceLimitHandoff.testDefaults = originalDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        for switchMode in ["unchanged", "other-account", "signed-out"] {
+            let owner = "legacy-rollback-owner"
+            auth.authState = .authenticated(userId: owner)
+            let generation = auth.sessionGeneration
+            SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "rollback-row.\(UUID())")
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+            let candidate = contextualReviewCandidate(owner: owner, workflow: false)
+            let existing = Place.from(candidate)
+            var remoteIDs: Set<UUID> = [existing.id]
+            var createdID: UUID?
+            var correctionRequests = 0
+            var rollbackTokenRequests = 0
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { request in
+                if request.httpMethod == "POST", request.url?.path == "/places" {
+                    let body = try AnalysisRequestURLProtocol.body(request)
+                    let id = try XCTUnwrap((body["id"] as? String).flatMap(UUID.init(uuidString:)))
+                    XCTAssertEqual(body["google_place_id"] as? String, existing.googlePlaceId)
+                    createdID = id
+                    remoteIDs.insert(id)
+                    return (201, "{}")
+                }
+                if request.httpMethod == "PATCH", request.url?.path == "/memory/candidates/\(candidate.id)" {
+                    correctionRequests += 1
+                    return (500, #"{"error":"fixture_correction_failed"}"#)
+                }
+                if request.httpMethod == "DELETE", let url = request.url {
+                    let id = try XCTUnwrap(UUID(uuidString: url.lastPathComponent))
+                    if URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.contains(where: { $0.name == "scope" && $0.value == "group" }) == true {
+                        remoteIDs.removeAll() // This reproduces the destructive old endpoint.
+                    } else {
+                        remoteIDs.remove(id)
+                    }
+                    return (204, "")
+                }
+                // A stale/unloaded client does not yet know the saved alias.
+                return (200, request.httpMethod == "GET" ? "[]" : "{}")
+            }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+            let service = SupabaseService(apiBaseURL: "https://row-rollback.test",
+                session: URLSession(configuration: configuration), accessTokenProvider: {
+                    if let scope = SAVEPendingImportSessionScope.current {
+                        XCTAssertEqual(scope.owner, owner)
+                        XCTAssertEqual(scope.generation, generation)
+                        await MainActor.run {
+                            rollbackTokenRequests += 1
+                            if switchMode == "other-account" { auth.authState = .authenticated(userId: "other-owner") }
+                            if switchMode == "signed-out" { auth.authState = .unauthenticated }
+                        }
+                    }
+                    return "fixture-token"
+                })
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault,
+                correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("events.json")),
+                entitlementTierProvider: { .free }, entitlementResolvedProvider: { true }, usesRemotePersistence: true)
+            map.places = []
+            map.reviewCandidates = [candidate]
+            do {
+                _ = try await map.saveReviewCandidateAsPlace(candidate)
+                XCTFail("Correction failure must remain a failure")
+            } catch {}
+            let inserted = try XCTUnwrap(createdID)
+            XCTAssertNotEqual(inserted, existing.id)
+            XCTAssertEqual(correctionRequests, 1)
+            XCTAssertEqual(rollbackTokenRequests, 1)
+            let deletes = AnalysisRequestURLProtocol.requests.filter { $0.httpMethod == "DELETE" }
+            XCTAssertEqual(deletes.count, switchMode == "unchanged" ? 1 : 0)
+            if switchMode == "unchanged" {
+                XCTAssertNil(try XCTUnwrap(deletes.first?.url).query, "Legacy rollback must use exact-row default")
+                XCTAssertEqual(remoteIDs, [existing.id])
+                XCTAssertTrue(map.reviewCandidates.contains { $0.id == candidate.id })
+            } else {
+                XCTAssertEqual(remoteIDs, [existing.id, inserted], "A switched token must not send the rollback")
+            }
+            XCTAssertFalse(map.places.contains { $0.id == inserted })
+            XCTAssertFalse(try vault.confirmedPlaces(belongingTo: owner).contains { $0.id == inserted })
+        }
+    }
+
+    @MainActor
+    func testNormalDeleteUsesExplicitCanonicalGroupScope() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        let owner = "normal-delete-owner"
+        auth.authState = .authenticated(userId: owner)
+        defer {
+            auth.authState = originalAuth
+            SavePlaceLimitHandoff.testDefaults = originalDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "delete-group.\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let candidate = contextualReviewCandidate(owner: owner, workflow: false)
+        let original = Place.from(candidate)
+        let alias = Place.from(candidate)
+        let displayed = try XCTUnwrap(Place.consolidated([original, alias]).first)
+        var remoteIDs: Set<UUID> = [original.id, alias.id]
+        let rows = [original, alias].enumerated().map { index, place in
+            cappedPlaceRowJSON(id: place.id, index: index, name: place.name, googlePlaceID: place.googlePlaceId)
+        }.joined(separator: ",")
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET", request.url?.path == "/places" { return (200, remoteIDs.isEmpty ? "[]" : "[\(rows)]") }
+            if request.httpMethod == "DELETE", let url = request.url {
+                XCTAssertEqual(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+                    [URLQueryItem(name: "scope", value: "group")])
+                remoteIDs.removeAll()
+                return (204, "")
+            }
+            return (200, "[]")
+        }
+        let map = makeRemoteCappedMap(vaultURL: directory.appendingPathComponent("vault.json"), vault: vault)
+        map.places = [displayed]
+        try await map.deletePlace(displayed)
+        XCTAssertTrue(remoteIDs.isEmpty)
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertFalse(AnalysisRequestURLProtocol.requests.filter { $0.httpMethod == "DELETE" }.isEmpty)
+    }
+
+    @MainActor
+    func testAccountDeletionCannotSendAfterTokenSuspensionChangesAccount() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        defer { auth.authState = originalAuth; AnalysisRequestURLProtocol.reset() }
+        for explicitSession in [false, true] {
+            let owner = "account-delete-a"
+            auth.authState = .authenticated(userId: owner)
+            let generation = auth.sessionGeneration
+            let arrived = expectation(description: "Account-delete token suspended")
+            let release = DispatchSemaphore(value: 0)
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { _ in (204, "") }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+            let service = SupabaseService(apiBaseURL: "https://delete-account.test",
+                session: URLSession(configuration: configuration), accessTokenProvider: {
+                    await Task.detached {
+                        arrived.fulfill()
+                        XCTAssertEqual(release.wait(timeout: .now() + 5), .success)
+                        return "account-b-token"
+                    }.value
+                })
+            let deletion = Task {
+                if explicitSession { try await service.deleteAccount(startedBy: owner, generation: generation) }
+                else { try await service.deleteAccount() }
+            }
+            await fulfillment(of: [arrived], timeout: 2)
+            auth.authState = .authenticated(userId: "account-delete-b")
+            release.signal()
+            do {
+                try await deletion.value
+                XCTFail("A new account token must never delete the initiating or new account")
+            } catch is CancellationError {}
+            XCTAssertTrue(AnalysisRequestURLProtocol.requests.isEmpty)
+            XCTAssertEqual(auth.currentUserId, "account-delete-b")
+        }
+    }
+
+    @MainActor
+    func testAccountDeletionResponseAfterAccountSwitchCleansOnlyInitiatingOwner() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let owner = "account-delete-a"
+        let other = "account-delete-b"
+        auth.authState = .authenticated(userId: owner)
+        let generation = auth.sessionGeneration
+        defer { auth.authState = originalAuth; AnalysisRequestURLProtocol.reset() }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let originalLegacy = SaveMemoryRecord(state: .sourceOnly, title: "Original legacy")
+        let a = SaveMemoryRecord(state: .sourceOnly, title: "A", ownerSubject: owner)
+        let b = SaveMemoryRecord(state: .sourceOnly, title: "B", ownerSubject: other)
+        try vault.append(originalLegacy)
+        try vault.append(a)
+        try vault.append(b)
+        let avatars = ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("avatars"))
+        try avatars.save(Data([1]), for: owner)
+        try avatars.save(Data([2]), for: other)
+        let arrived = expectation(description: "A account deletion sent; response suspended")
+        let release = DispatchSemaphore(value: 0)
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            XCTAssertEqual(request.httpMethod, "DELETE")
+            XCTAssertEqual(request.url?.path, "/v0/account")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer account-a-token")
+            arrived.fulfill()
+            XCTAssertEqual(release.wait(timeout: .now() + 5), .success)
+            return (204, "")
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(apiBaseURL: "https://delete-account.test",
+            session: URLSession(configuration: configuration), accessTokenProvider: { "account-a-token" })
+        let profile = ProfileViewModel(supabaseService: service, accountDeletionService: service,
+            avatarStore: avatars, saveLocalVaultService: vault, reviewerDemoProvider: { false })
+        let deletion = Task {
+            await SAVEPendingImportSessionScope.$current.withValue((generation, owner)) {
+                await profile.deleteAccount()
+            }
+        }
+        await fulfillment(of: [arrived], timeout: 2)
+        auth.authState = .authenticated(userId: other)
+        let laterLegacy = SaveMemoryRecord(state: .sourceOnly, title: "Later legacy")
+        try vault.append(laterLegacy)
+        release.signal()
+        let deleted = await deletion.value
+        XCTAssertTrue(deleted, "A's successful response must reach its local cleanup after switching to B")
+        XCTAssertEqual(Set(try vault.recentRecords().map(\.id)), [b.id, laterLegacy.id])
+        XCTAssertNil(avatars.load(for: owner))
+        XCTAssertEqual(avatars.load(for: other), Data([2]))
+        XCTAssertEqual(auth.currentUserId, other, "A cleanup must not sign out B")
+        XCTAssertNil(profile.errorMessage)
+        XCTAssertEqual(AnalysisRequestURLProtocol.requests.count, 1)
     }
 
     @MainActor

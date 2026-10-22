@@ -164,11 +164,11 @@ final class ProfileAvatarStoreTests: XCTestCase {
         let previousAuth = PrivyAuthService.shared.authState
         defer { PrivyAuthService.shared.authState = previousAuth }
 
-        let vaultURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("delete-account-vault-\(UUID().uuidString).json")
+        let vaultURL = directory.appendingPathComponent("delete-account-vault.json")
         let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
         try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A stays", ownerSubject: "did:privy:a"))
         try vault.append(SaveMemoryRecord(state: .confirmedPlace, title: "B goes", ownerSubject: "did:privy:b"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, sourceText: "Legacy private note", title: "Legacy clue"))
 
         let model = ProfileViewModel(
             supabaseService: SupabaseService(apiBaseURL: nil),
@@ -185,6 +185,193 @@ final class ProfileAvatarStoreTests: XCTestCase {
         XCTAssertEqual(try vault.recentRecords(limit: 10).map(\.title), ["A stays"])
         XCTAssertEqual(try vault.recentRecords(limit: 10, belongingTo: "did:privy:a").map(\.title), ["A stays"])
         XCTAssertTrue(try vault.recentRecords(limit: 10, belongingTo: "did:privy:b").isEmpty)
+    }
+
+    @MainActor
+    func testAccountDeletionCleansCapturedScopeAfterSwitchWithoutSigningOutB() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        defer { auth.authState = previousAuth }
+        auth.authState = .authenticated(userId: "account-a")
+        var currentOwner: String? = "account-a"
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let a = SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a")
+        let b = SaveMemoryRecord(state: .sourceOnly, title: "B clue", ownerSubject: "account-b")
+        let legacy = SaveMemoryRecord(state: .sourceOnly, sourceText: "Old private note", title: "Old clue")
+        let later = SaveMemoryRecord(state: .sourceOnly, title: "New ownerless clue")
+        for record in [a, b, legacy] { try vault.append(record) }
+        let store = ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("avatars"))
+        try store.save(Data([1]), for: "account-a")
+        try store.save(Data([2]), for: "account-b")
+        var requests = 0
+        let model = ProfileViewModel(
+            supabaseService: SupabaseService(apiBaseURL: nil),
+            accountDeletionService: ClosureAccountDeletionService {
+                requests += 1
+                await Task.yield()
+                currentOwner = "account-b"
+                auth.authState = .authenticated(userId: "account-b")
+                try vault.append(later)
+            },
+            avatarStore: store, saveLocalVaultService: vault,
+            currentUserIDProvider: { currentOwner }, reviewerDemoProvider: { false }
+        )
+        let deleted = await model.deleteAccount()
+        XCTAssertTrue(deleted)
+        XCTAssertEqual(requests, 1)
+        XCTAssertEqual(auth.currentUserId, "account-b")
+        XCTAssertEqual(Set(try vault.recentRecords().map(\.id)), [b.id, later.id])
+        XCTAssertEqual(try vault.recentRecords(belongingTo: nil).map(\.id), [later.id])
+        XCTAssertEqual(try vault.recentRecords(belongingTo: "account-b").map(\.id), [b.id])
+        XCTAssertNil(store.load(for: "account-a"))
+        XCTAssertEqual(store.load(for: "account-b"), Data([2]))
+    }
+
+    @MainActor
+    func testAccountDeletionRemoteFailureDoesNotPurgeLocalData() async throws {
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Legacy private clue"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a"))
+        let before = try Data(contentsOf: url)
+        var requests = 0
+        let model = deletionModel(vault: vault, currentOwner: { "account-a" }) {
+            requests += 1
+            throw ProfileUpdateTestError.offline
+        }
+        let deleted = await model.deleteAccount()
+        XCTAssertFalse(deleted)
+        XCTAssertEqual(requests, 1)
+        XCTAssertEqual(try Data(contentsOf: url), before)
+        XCTAssertEqual(model.errorMessage, "Offline")
+        XCTAssertFalse(model.isDeletingAccount)
+    }
+
+    @MainActor
+    func testAccountDeletionWithNoLocalVaultStillCallsRemoteDeletion() async {
+        var owner: String? = "account-a"
+        var requests = 0
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("absent-vault.json"))
+        let model = deletionModel(vault: vault, currentOwner: { owner }) {
+            requests += 1
+            owner = nil
+        }
+        let deleted = await model.deleteAccount()
+        XCTAssertTrue(deleted)
+        XCTAssertEqual(requests, 1)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    @MainActor
+    func testAccountDeletionSnapshotReadFailureDoesNotDeleteRemoteAccount() async throws {
+        let url = directory.appendingPathComponent("vault.json")
+        // An existing directory cannot be read as the JSON vault file.
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        var requests = 0
+        let model = deletionModel(vault: SaveLocalVaultService(overrideVaultURL: url), currentOwner: { "account-a" }) {
+            requests += 1
+        }
+        let deleted = await model.deleteAccount()
+        XCTAssertFalse(deleted)
+        XCTAssertEqual(requests, 0)
+        XCTAssertNotNil(model.errorMessage)
+        XCTAssertFalse(model.isDeletingAccount)
+    }
+
+    @MainActor
+    func testAccountDeletionPurgeReadFailureRetainsScopeForSignedOutRetry() async throws {
+        let url = directory.appendingPathComponent("vault.json")
+        let backup = directory.appendingPathComponent("backup.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Old legacy clue"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a"))
+        var currentOwner: String? = "account-a"
+        var requests = 0
+        let model = deletionModel(vault: vault, currentOwner: { currentOwner }) {
+            requests += 1
+            await Task.yield()
+            try FileManager.default.moveItem(at: url, to: backup)
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        }
+        let deleted = await model.deleteAccount()
+        XCTAssertFalse(deleted)
+        XCTAssertTrue(model.errorMessage?.contains("Account deleted, but local data cleanup failed") == true)
+        XCTAssertEqual(requests, 1)
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.moveItem(at: backup, to: url)
+        let later = SaveMemoryRecord(state: .sourceOnly, title: "Later ownerless clue")
+        try vault.append(later)
+        currentOwner = nil
+        let retried = await model.deleteAccount()
+        XCTAssertTrue(retried)
+        XCTAssertEqual(requests, 1, "Deleted identity must not be needed again to finish cleanup")
+        XCTAssertEqual(try vault.recentRecords().map(\.id), [later.id])
+        XCTAssertNil(model.errorMessage)
+    }
+
+    @MainActor
+    func testAccountDeletionPurgeWriteFailureCannotReportSuccessOrReuseScopeForB() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        defer { PrivyAuthService.shared.authState = previousAuth }
+        let parent = directory.appendingPathComponent("storage")
+        let backup = directory.appendingPathComponent("storage-backup")
+        let vault = SaveLocalVaultService(overrideVaultURL: parent.appendingPathComponent("vault.json"))
+        let b = SaveMemoryRecord(state: .sourceOnly, title: "B clue", ownerSubject: "account-b")
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Old ownerless clue"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a"))
+        try vault.append(b)
+        var currentOwner: String? = "account-a"
+        var requests = 0
+        let model = deletionModel(vault: vault, currentOwner: { currentOwner }) {
+            requests += 1
+            await Task.yield()
+            if requests == 1 {
+                try FileManager.default.moveItem(at: parent, to: backup)
+                // A file at the directory path deterministically prevents the coordinated write.
+                try Data([1]).write(to: parent)
+            }
+        }
+        let deleted = await model.deleteAccount()
+        XCTAssertFalse(deleted)
+        XCTAssertTrue(model.errorMessage?.contains("Account deleted, but local data cleanup failed") == true)
+        XCTAssertFalse(model.isDeletingAccount)
+        currentOwner = "account-b"
+        PrivyAuthService.shared.authState = .authenticated(userId: "account-b")
+        let stillUnavailableRetry = await model.deleteAccount()
+        XCTAssertFalse(stillUnavailableRetry)
+        XCTAssertEqual(requests, 1)
+        XCTAssertTrue(model.errorMessage?.contains("Account deleted, but local data cleanup failed") == true)
+        XCTAssertEqual(PrivyAuthService.shared.currentUserId, "account-b")
+        try FileManager.default.removeItem(at: parent)
+        try FileManager.default.moveItem(at: backup, to: parent)
+        let later = SaveMemoryRecord(state: .sourceOnly, title: "Later ownerless clue")
+        try vault.append(later)
+        let cleanupRetried = await model.deleteAccount()
+        XCTAssertFalse(cleanupRetried, "Finishing A cleanup must not claim that B was deleted")
+        XCTAssertEqual(model.errorMessage, "Previous account’s local cleanup is complete. Retry to delete this account.")
+        XCTAssertEqual(requests, 1)
+        XCTAssertEqual(PrivyAuthService.shared.currentUserId, "account-b")
+        XCTAssertEqual(Set(try vault.recentRecords().map(\.id)), [b.id, later.id])
+        // Only a subsequent explicit B deletion is a new request with a fresh snapshot.
+        let bDeleted = await model.deleteAccount()
+        XCTAssertTrue(bDeleted)
+        XCTAssertEqual(requests, 2)
+        XCTAssertTrue(try vault.recentRecords().isEmpty)
+    }
+
+    @MainActor
+    private func deletionModel(
+        vault: SaveLocalVaultService,
+        currentOwner: @escaping () -> String?,
+        delete: @escaping @MainActor () async throws -> Void
+    ) -> ProfileViewModel {
+        ProfileViewModel(
+            supabaseService: SupabaseService(apiBaseURL: nil),
+            accountDeletionService: ClosureAccountDeletionService(action: delete),
+            avatarStore: ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("avatars")),
+            saveLocalVaultService: vault,
+            currentUserIDProvider: currentOwner, reviewerDemoProvider: { false }
+        )
     }
 
     @MainActor
@@ -251,6 +438,11 @@ private enum ProfileUpdateTestError: LocalizedError {
     case offline
 
     var errorDescription: String? { "Offline" }
+}
+
+private struct ClosureAccountDeletionService: AccountDeletionProviding {
+    let action: @MainActor () async throws -> Void
+    func deleteAccount() async throws { try await action() }
 }
 
 private struct StubAccountDeletionService: AccountDeletionProviding {

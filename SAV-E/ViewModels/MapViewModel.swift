@@ -2026,7 +2026,10 @@ final class MapViewModel: ObservableObject {
                     // Local-only Unplaced items have no place_candidates row.
                     // A 404 must not delete the Map Stamp that just landed.
                     if candidate.captureId != nil || candidate.workflowRunId != nil {
-                        try? await supabaseService.deletePlace(place.id)
+                        try ensureConfirmationSession(userId, confirmationGeneration)
+                        try? await SAVEPendingImportSessionScope.$current.withValue((confirmationGeneration, userId)) {
+                            try await supabaseService.deletePlace(place.id)
+                        }
                         throw error
                     }
                 }
@@ -4167,7 +4170,9 @@ final class MapViewModel: ObservableObject {
                 let remote = try await supabaseService.fetchPlaces(for: userID)
                 try ensureConfirmationSession(userID, generation)
                 for record in remote where place.savedIDs.contains(record.id) {
-                    try await supabaseService.deletePlace(record.id)
+                    try await SAVEPendingImportSessionScope.$current.withValue((generation, userID)) {
+                        try await supabaseService.deletePlaceGroup(record.id)
+                    }
                     try ensureConfirmationSession(userID, generation)
                 }
                 remainingAuthoritativeCount = Place.consolidated(

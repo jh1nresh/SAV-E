@@ -233,7 +233,8 @@ import {
   SavedPlaceLimitError,
   assertNewSavedPlaceAllowed,
   updateSavedPlaceWithinLimit,
-  deleteSavedPlaceGroup,
+  deleteSavedPlace,
+  savedPlaceDeleteScope,
   savedPlaceGrowthSnapshot,
   assertSavedPlaceGrowthAllowed,
 } from "./savedPlaceLimit.js";
@@ -1251,7 +1252,7 @@ createServer(async (request, response) => {
       const result = await new LinkPlaceIntelligence(pool).sources(userId,id);
       return result ? sendJson(response,result) : sendJson(response,{error:"Place not found"},404);
     }
-    if (resource === "places") return await handlePlaces(request, response, id, userId);
+    if (resource === "places") return await handlePlaces(request, response, id, userId, url);
     if (resource === "trips") return await handleTrips(request, response, id, userId);
     if (resource === "profile") return await handleProfile(request, response, userId);
     if (resource === "follows") {
@@ -1569,6 +1570,7 @@ async function handlePlaces(
   response: ServerResponse,
   placeId: string | undefined,
   userId: string,
+  url: URL,
 ): Promise<void> {
   if (request.method === "GET" && !placeId) {
     const rows = await fetchPlacesWithOptionalVisibility(userId);
@@ -1717,8 +1719,9 @@ async function handlePlaces(
   }
 
   if (request.method === "DELETE" && placeId) {
-    await deleteSavedPlaceGroup(pool, userId, placeId);
-    // Idempotent for the remaining savedID requests from existing clients.
+    const scope = savedPlaceDeleteScope(url.searchParams.getAll("scope"));
+    if (!scope) return sendJson(response, { error: "Unsupported place delete scope" }, 400);
+    await deleteSavedPlace(pool, userId, placeId, scope);
     return sendJson(response, null, 204);
   }
 
