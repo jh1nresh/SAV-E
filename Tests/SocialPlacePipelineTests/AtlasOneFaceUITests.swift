@@ -40,6 +40,15 @@ final class AtlasOneFaceUITests: XCTestCase {
     func testOnboardingKeepsMemoMascotMark() throws {
         let firstRun = try source(at: "SAV-E/Views/Onboarding/OnboardingView.swift")
         XCTAssertTrue(firstRun.contains("MemoMascotMark"))
+        XCTAssertTrue(firstRun.contains("Text(step == .candidate ? text(\"Review Candidate\""))
+        XCTAssertFalse(firstRun.contains("Label(step == .candidate"))
+        XCTAssertTrue(
+            firstRun.contains("""
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("onboarding.postcard.\\(step)")
+            """),
+            "postcard identifier without contain hides Review Candidate from staticTexts queries"
+        )
     }
 
     func testHomeTripCardAndTripsTabShowBeta() throws {

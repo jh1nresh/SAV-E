@@ -691,6 +691,17 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(profile.contains("localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces"))
         XCTAssertTrue(profile.contains("cityProgress.visited)/\\(cityProgress.saved)"))
         XCTAssertTrue(profile.contains("profile.stampProgress"))
+        XCTAssertTrue(
+            profile.contains("""
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("profile.stampGrid")
+            """),
+            "stampGrid without contain overwrites child stampProgress (AX: 4/12 becomes profile.stampGrid)"
+        )
+        XCTAssertFalse(
+            profile.contains("accessibilityAddTraits(.isStaticText)"),
+            "combine+traits on the progress HStack still lose to a flattening stampGrid parent"
+        )
         XCTAssertTrue(profile.contains("try await onUpdatePlace(updated)"))
         XCTAssertTrue(profile.contains("SaveDoodleVisitStore().recordVisit"))
         XCTAssertFalse(profile.contains("markIveBeenHere(place)"))
@@ -766,11 +777,12 @@ final class SaveDoodleHomeTests: XCTestCase {
         let cluesBody = home[cluesFn.lowerBound..<locationFn.lowerBound]
         XCTAssertTrue(cluesBody.contains("minHeight: SaveLayout.minTap"))
         XCTAssertTrue(cluesBody.contains(".contentShape(Rectangle())"))
-        XCTAssertTrue(home.contains("home.openSaves"))
+        XCTAssertTrue(home.contains("accessibilityIdentifier(\"home.saves\")"))
+        XCTAssertFalse(home.contains("home.openSaves"))
         XCTAssertFalse(home.contains("showsUITestSavesRoute"))
         XCTAssertFalse(home.contains("hiddenSavesRoute"))
         XCTAssertTrue(home.contains("SaveLayout.minTap"))
-        XCTAssertFalse(home.contains("\"home.saves\""))
+        XCTAssertTrue(home.contains("\"home.saves\""))
         XCTAssertFalse(home.contains("See all saves"))
         XCTAssertFalse(home.contains("看全部收藏"))
         XCTAssertTrue(home.contains("presentation.reviewCount > 0"))
@@ -883,6 +895,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         let parityRunner = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
         XCTAssertTrue(parityRunner.contains("home-mask.png"))
         XCTAssertTrue(parityRunner.contains("--mask"))
+        XCTAssertTrue(parityRunner.contains("compare_args"))
+        XCTAssertFalse(parityRunner.contains("mask_args"))
         let mapPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png"
         ))
@@ -929,7 +943,13 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertFalse(rail.contains("confirmed places"))
         let location = try source(at: "SAV-E/Services/LocationService.swift")
         XCTAssertTrue(location.contains("--uitest-location-allowed"))
+        XCTAssertTrue(location.contains("--uitest-location-tiantan"))
+        XCTAssertTrue(location.contains("uiTestTiantan"))
+        XCTAssertTrue(location.contains("39.882192"))
         XCTAssertTrue(location.contains("simulatesAllowedAuthorization"))
+        XCTAssertTrue(rail.contains("func captureFiveTabHomeParityRaster"))
+        XCTAssertTrue(rail.contains("--uitest-location-tiantan"))
+        XCTAssertTrue(rail.contains("attach(app, name: \"five-tab-home\")"))
         let seed = try source(at: "SAV-E/Services/ReviewDemoService.swift")
         XCTAssertTrue(seed.contains("--uitest-doodle-parity-fixture"))
         XCTAssertTrue(seed.contains("Codex packet / spec §8"))
