@@ -208,6 +208,7 @@ class CoverageTests(unittest.TestCase):
         ios_workflow = (ROOT / ".github/workflows/ios.yml").read_text()
         ci_workflow = (ROOT / ".github/workflows/ci.yml").read_text()
         self.assertRegex(ios_workflow, r"(?m)^  ios:\s*$")
+        self.assertIn("types: [opened, labeled, ready_for_review, synchronize, reopened]", ios_workflow)
         self.assertRegex(ios_workflow, r"(?m)^  ios-gate:\s*$")
         self.assertRegex(ios_workflow, r"(?m)^  ios-build:\s*$")
         self.assertRegex(

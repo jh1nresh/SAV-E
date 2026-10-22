@@ -7,7 +7,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    types: [labeled, ready_for_review, synchronize, reopened]
+    types: [opened, labeled, ready_for_review, synchronize, reopened]
     branches:
       - main
       - cursor/tile-town-product-lock-4894
