@@ -707,34 +707,23 @@ struct GooglePlacesPhotoAttributionBar: View {
     }
 
     /// P1-1 / P1-5: one 44pt row (author left, logo right) opens the viewer.
-    /// Hit target is a SwiftUI `Button` with an empty label. A UIKit
-    /// `UIViewRepresentable` and `.accessibilityElement(children: .contain)`
-    /// both hid the identifier from `app.buttons`. Hidden children and a
-    /// nested logo identifier also swallowed it.
+    /// The visual row is the Button label so XCTest's tap hits real content.
+    /// A clear overlay Button was visible to `app.buttons` but swallowed the
+    /// tap without running `onCompactTap`.
     private var compactRow: some View {
-        ZStack {
+        Button {
+            onCompactTap?()
+        } label: {
             compactVisualRow
-            Button(compactAccessibilityLabel) {
-                onCompactTap?()
-            }
-            .buttonStyle(.plain)
-            .font(.body)
-            .foregroundStyle(.clear)
-            .frame(
-                maxWidth: .infinity,
-                minHeight: GoogleMapsAttributionMetrics.minimumTapTarget,
-                maxHeight: GoogleMapsAttributionMetrics.minimumTapTarget
-            )
-            .contentShape(Rectangle())
-            .accessibilityIdentifier("place.photo.attribution.row")
-            .accessibilityAddTraits(.isButton)
         }
-        .frame(maxWidth: .infinity, minHeight: GoogleMapsAttributionMetrics.minimumTapTarget)
+        .buttonStyle(.plain)
         .contentShape(Rectangle())
+        .accessibilityIdentifier("place.photo.attribution.row")
+        .accessibilityLabel(compactAccessibilityLabel)
     }
 
-    /// Visual-only. No accessibility identifiers or hidden flags — those steal
-    /// the parent Button's identifier in XCTest.
+    /// No accessibility identifiers or hidden flags — those steal the Button
+    /// identifier in XCTest when they sit inside the label.
     private var compactVisualRow: some View {
         HStack(alignment: .center, spacing: 8) {
             if let author = authors.first {
@@ -748,7 +737,7 @@ struct GooglePlacesPhotoAttributionBar: View {
                 .frame(height: GoogleMapsAttributionMetrics.logoHeight)
         }
         .frame(maxWidth: .infinity, minHeight: GoogleMapsAttributionMetrics.minimumTapTarget, alignment: .center)
-        .allowsHitTesting(false)
+        .contentShape(Rectangle())
     }
 
     private var expandedStack: some View {

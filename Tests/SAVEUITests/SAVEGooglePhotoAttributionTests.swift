@@ -47,11 +47,14 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
             "View on Google Maps stays on the full-screen viewer"
         )
         compactRow.tap()
-        XCTAssertTrue(
-            app.descendants(matching: .any)["place.photo.viewer.image"]
-                .waitForExistence(timeout: stepTimeout),
-            "Compact attribution row must open the full-screen viewer"
-        )
+        let viewer = app.descendants(matching: .any)["place.photo.viewer.image"]
+        if !viewer.waitForExistence(timeout: stepTimeout) {
+            let tree = XCTAttachment(string: app.debugDescription)
+            tree.name = "ax-tree-missing-viewer-after-compact-tap"
+            tree.lifetime = .keepAlways
+            add(tree)
+            XCTFail("Compact attribution row must open the full-screen viewer")
+        }
 
         let author = app.buttons["place.photo.attribution.author"]
         XCTAssertTrue(waitUntilHittable(author), "Author tap target missing on viewer")

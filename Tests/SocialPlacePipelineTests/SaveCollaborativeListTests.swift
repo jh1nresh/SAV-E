@@ -354,15 +354,15 @@ final class SaveCollaborativeListTests: XCTestCase {
             return XCTFail("Missing compactRow")
         }
         let compact = String(sheet[compactStart.lowerBound..<compactEnd.lowerBound])
-        XCTAssertTrue(
-            compact.contains("Button(compactAccessibilityLabel)"),
-            "Compact row must be a SwiftUI Button so app.buttons can see it"
-        )
+        XCTAssertTrue(compact.contains("Button {"), "Compact row must be a SwiftUI Button so app.buttons can see it")
+        XCTAssertTrue(compact.contains("compactVisualRow"), "Visual row must be the Button label so the tap hits content")
         XCTAssertTrue(compact.contains("place.photo.attribution.row"))
+        XCTAssertFalse(compact.contains("foregroundStyle(.clear)"), "Clear overlay buttons swallow taps")
         XCTAssertFalse(compact.contains("accessibilityHidden"), "Hidden children swallow the Button identifier")
         XCTAssertFalse(compact.contains("place.photo.attribution.logo"), "Nested logo identifier splits the Button")
         XCTAssertFalse(compact.contains("accessibilityElement(children:"), "AX containers are not hittable in XCTest")
         XCTAssertFalse(compact.contains("UIViewRepresentable"), "UIKit hosts often land in otherElements, not buttons")
+        XCTAssertFalse(compact.contains("allowsHitTesting(false)"), "The Button label must receive the tap")
         XCTAssertTrue(uiTest.contains("app.buttons[\"place.photo.attribution.row\"]"))
         XCTAssertTrue(evidence.contains("sceneIdentifier: \"evidence.googleCarousel\""))
         XCTAssertFalse(
