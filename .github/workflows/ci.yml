@@ -218,7 +218,10 @@ jobs:
       node-version: "22"
       working-directory: backend
       lockfile: backend/package-lock.json
-      # Registry 503s are retried in backend `validate`, not the reusable audit step.
+      # Keep the reusable audit step off. `validate` already runs
+      # audit:self-test, the auto-rerun classifier tests, then
+      # audit:production (npm audit --json with retries). Enabling this
+      # flag would add a second non-retrying `npm audit`.
       check-script: validate
       audit-production: false
       job-key: save-backend
