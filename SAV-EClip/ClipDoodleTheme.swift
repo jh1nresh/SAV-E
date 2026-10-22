@@ -826,11 +826,11 @@ struct ClipListSaveCountTable: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
         .background {
-            ClipJitterRoundedRect(seed: 21, radius: 14)
+            ClipJitterRoundedRect(radius: 14, seed: 21)
                 .fill(ClipJournalPalette.card)
         }
         .overlay {
-            ClipJitterRoundedRect(seed: 21, radius: 14)
+            ClipJitterRoundedRect(radius: 14, seed: 21)
                 .stroke(ClipJournalPalette.ink, lineWidth: ClipJournalPalette.strokeWidth)
         }
         .accessibilityIdentifier("clip.list.counts")
