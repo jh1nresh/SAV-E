@@ -154,7 +154,7 @@ enum ClipListSavePlanner {
 
     static func placeBody(from item: ClipListSaveItem) -> [String: Any] {
         var body: [String: Any] = [
-            "id": stablePlaceID(item),
+            "id": recipientOwnedPlaceID(),
             "name": item.name,
             "address": item.address,
             "latitude": item.latitude,
@@ -170,11 +170,10 @@ enum ClipListSavePlanner {
         return body
     }
 
-    private static func stablePlaceID(_ item: ClipListSaveItem) -> String {
-        if let placeId = item.placeId, UUID(uuidString: placeId) != nil {
-            return placeId.lowercased()
-        }
-        return UUID().uuidString.lowercased()
+    /// Fresh row id. Source UUIDs stay in `provider_place_id` so a copy
+    /// never collides with the owner's `places.id`.
+    private static func recipientOwnedPlaceID() -> String {
+        UUID().uuidString.lowercased()
     }
 
     private static func coordinateToken(_ value: Double) -> String {

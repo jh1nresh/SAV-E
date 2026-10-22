@@ -75,7 +75,6 @@ struct SaveApp: App {
     ) private var pendingFriendShareURL = ""
     @State private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     @State private var autoSaveIncomingShare = false
-    @State private var consumedLaunchShareActivity = false
     @State private var openedTrip: SharedTripData?
     @State private var openedList: SaveCollaborativeList?
     @State private var openedReferral: SaveReferralProfile?
@@ -178,14 +177,6 @@ struct SaveApp: App {
             .onOpenURL(perform: handleIncomingURL)
             .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
                 guard let url = activity.webpageURL else { return }
-                if !consumedLaunchShareActivity,
-                   PendingShareStore.load() == nil,
-                   pendingFriendShareURL.isEmpty,
-                   incomingPlaceReceipt == nil,
-                   isPlaceLink(url) || SaveSharedListPayload.isListLink(url) {
-                    autoSaveIncomingShare = true
-                    consumedLaunchShareActivity = true
-                }
                 handleIncomingURL(url)
             }
             .onChange(of: authService.sessionGeneration) { _, generation in
