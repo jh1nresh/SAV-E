@@ -107,7 +107,18 @@ export function mergeClipListPlace(
     }
   }
   if (extras.length > 0) result.extra_place_ids = extras;
-  return result;
+  return promoteGooglePlaceId(result);
+}
+
+export function promoteGooglePlaceId(place: Record<string, unknown>): Record<string, unknown> {
+  const current = typeof place.google_place_id === "string" ? place.google_place_id.trim() : "";
+  if (isGooglePlaceId(current)) return place;
+  const google = sourcePlaceIds(place).find((id) => isGooglePlaceId(id));
+  if (google) return { ...place, google_place_id: google };
+  if (!current) return place;
+  const next = { ...place };
+  delete next.google_place_id;
+  return next;
 }
 
 /// Collapse transitive duplicates (A↔B↔C) into one retained item.
@@ -122,7 +133,7 @@ export function uniqueClipListItems(items: unknown[]): Record<string, unknown>[]
       .sort((left, right) => left - right);
     if (matched.length === 0) {
       const index = unique.length;
-      unique.push({ ...raw });
+      unique.push(promoteGooglePlaceId({ ...raw }));
       for (const key of keys) indexByKey.set(key, index);
       continue;
     }

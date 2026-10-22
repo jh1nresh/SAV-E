@@ -130,7 +130,7 @@ struct SaveListItem: Identifiable, Codable, Hashable {
             address: subtitle,
             latitude: latitude,
             longitude: longitude,
-            googlePlaceId: nil,
+            googlePlaceId: ([sourceID] + (extraPlaceIds ?? [])).first(where: ClipListHandoff.isGooglePlaceID),
             category: category ?? .food,
             status: .wantToGo,
             rating: nil,

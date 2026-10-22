@@ -307,7 +307,9 @@ enum ClipListSavePlanner {
         let extras = item.extraPlaceIds
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        if let google = extras.first(where: isGooglePlaceID) { body["google_place_id"] = google }
+        if let google = ([item.placeId ?? ""] + extras).first(where: isGooglePlaceID) {
+            body["google_place_id"] = google
+        }
         if !extras.isEmpty { body["extra_place_ids"] = extras }
         return body
     }

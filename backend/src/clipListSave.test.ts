@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import {
   clipListPlaceIdentities,
   isGooglePlaceId,
+  promoteGooglePlaceId,
   clipListSaveResponse,
   clipOnePlaceQuotaDecision,
   clipSavedPlaceLimitBody,
@@ -51,6 +52,23 @@ test("google and provider place ids share one identity", () => {
   });
   assert.equal(plan.alreadySaved, 1);
   assert.equal(plan.newlySaved, 0);
+});
+
+test("primary Google provider id is promoted to google_place_id", () => {
+  const unique = uniqueClipListItems([
+    { provider_place_id: "ChIJ123", name: "Onibus Coffee", latitude: 35.644, longitude: 139.699 },
+  ]);
+  assert.equal(unique[0]?.google_place_id, "ChIJ123");
+  assert.equal(
+    promoteGooglePlaceId({ provider_place_id: "id-a", name: "Onibus Coffee" }).google_place_id,
+    undefined,
+  );
+  const plan = planClipListSave({
+    items: [{ provider_place_id: "id-a", name: "Onibus Coffee", latitude: 35.644, longitude: 139.699 }],
+    existingIdentities: [],
+    savedPlaceCount: 0,
+  });
+  assert.equal(plan.toInsert[0]?.google_place_id, undefined);
 });
 
 test("every merged extra identity is used for account dedupe", () => {

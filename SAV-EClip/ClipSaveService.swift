@@ -218,11 +218,6 @@ enum ClipSaveService {
                 listId: listId,
                 sender: sender,
                 url: url.absoluteString,
-                confirmedPlaceIds: unique.flatMap { item in
-                    ((item.placeId.map { [$0] } ?? []) + item.extraPlaceIds)
-                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                        .filter { !$0.isEmpty }
-                },
                 confirmedPlaces: places
             )
         )
@@ -279,8 +274,8 @@ enum ClipSaveService {
             sender: sender,
             drafts: drafts
         )
-        guard written else { return .failed }
         if ClipFullApp.isInstalled {
+            guard written else { return .failed }
             return await withCheckedContinuation { continuation in
                 openURL(handoff) { opened in
                     let handedOff = ClipListSavePlanner.handoffAfterPersist(written: written, opened: opened)

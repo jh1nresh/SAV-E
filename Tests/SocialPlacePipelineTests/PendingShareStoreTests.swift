@@ -446,9 +446,40 @@ final class PendingShareStoreTests: XCTestCase {
         )
     }
 
+    func testTwoHundredDetailedPlacesFitInTheJournal() throws {
+        let address = String(repeating: "a", count: 200)
+        let url = String(repeating: "u", count: 80)
+        let places = (0..<200).map { index in
+            PendingConfirmedPlace(
+                placeId: "shop-\(index)",
+                name: "Cafe \(index)",
+                address: address,
+                latitude: 35.6,
+                longitude: 139.7,
+                category: "Cafe",
+                sourceURL: url
+            )
+        }
+        let payload = PendingSharePayload(
+            kind: .list,
+            shareCode: "LiSt200z",
+            placeId: nil,
+            listId: "22222222-2222-2222-2222-222222222222",
+            sender: "Mina",
+            url: "https://sav-e-app.vercel.app/list?c=LiSt200z",
+            confirmedPlaces: places
+        )
+        XCTAssertLessThanOrEqual(
+            try JSONEncoder().encode(payload).count,
+            PendingShareStore.journalByteLimit
+        )
+        XCTAssertTrue(PendingShareStore.write(payload, to: store))
+        XCTAssertEqual(PendingShareStore.load(from: store)?.confirmedPlaces?.count, 200)
+    }
+
     func testOversizedListJournalWriteFailsClosed() throws {
         let blob = String(repeating: "x", count: 900)
-        let places = (0..<80).map { index in
+        let places = (0..<200).map { index in
             PendingConfirmedPlace(
                 placeId: "shop-\(index)",
                 name: blob,
@@ -466,7 +497,6 @@ final class PendingShareStoreTests: XCTestCase {
             listId: "22222222-2222-2222-2222-222222222222",
             sender: "Mina",
             url: "https://sav-e-app.vercel.app/list?c=LiSt99_z",
-            confirmedPlaceIds: places.map(\.placeId),
             confirmedPlaces: places
         )
         XCTAssertGreaterThan(
@@ -504,6 +534,19 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertEqual(body["provider_place_id"] as? String, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
         XCTAssertEqual(body["google_place_id"] as? String, "ChIJ123")
         XCTAssertEqual(body["extra_place_ids"] as? [String], ["ChIJ123"])
+        let googleOnly = PendingConfirmedPlace(
+            placeId: "ChIJ123",
+            name: "Onibus Coffee",
+            address: "Tokyo",
+            latitude: 35.644,
+            longitude: 139.699,
+            category: "Cafe",
+            sourceURL: nil
+        )
+        let googleBody = ClipListHandoff.placeBody(from: googleOnly.asListItem())
+        XCTAssertEqual(googleBody["provider_place_id"] as? String, "ChIJ123")
+        XCTAssertEqual(googleBody["google_place_id"] as? String, "ChIJ123")
+        XCTAssertEqual(googleOnly.asListItem().asPlace(includeSenderMemory: false).googlePlaceId, "ChIJ123")
         XCTAssertTrue(ClipListHandoff.isGooglePlaceID("ChIJ123"))
         XCTAssertFalse(ClipListHandoff.isGooglePlaceID("id-c"))
         let aliasOnly = PendingConfirmedPlace(

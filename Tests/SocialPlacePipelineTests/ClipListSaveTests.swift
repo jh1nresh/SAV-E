@@ -347,6 +347,20 @@ final class ClipListSaveTests: XCTestCase {
         XCTAssertEqual(places?.first?["google_place_id"] as? String, "ChIJ123")
     }
 
+    func testPrimaryGooglePlaceIdIsWrittenToGooglePlaceId() {
+        let places = ClipListSavePlanner.requestBody(items: [
+            item("ChIJ123", "Onibus Coffee", lat: 35.644, lng: 139.699),
+        ])["places"] as? [[String: Any]]
+        XCTAssertEqual(places?.first?["provider_place_id"] as? String, "ChIJ123")
+        XCTAssertEqual(places?.first?["google_place_id"] as? String, "ChIJ123")
+        XCTAssertNil(places?.first?["extra_place_ids"])
+        XCTAssertNil(
+            (ClipListSavePlanner.requestBody(items: [
+                item("id-a", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            ])["places"] as? [[String: Any]])?.first?["google_place_id"]
+        )
+    }
+
     private func item(
         _ placeId: String?,
         _ name: String,

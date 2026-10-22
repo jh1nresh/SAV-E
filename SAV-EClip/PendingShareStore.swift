@@ -50,7 +50,7 @@ enum PendingShareStore {
         return true
     }
 
-    static let journalByteLimit = 64 * 1024
+    static let journalByteLimit = 256 * 1024
 
     static func load(from store: UserDefaults? = nil) -> PendingSharePayload? {
         guard let defaults = defaults(store) else { return nil }
