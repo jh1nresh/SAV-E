@@ -33,6 +33,10 @@ enum SAVEProAccessPolicy {
     /// Flip alone after ASC products attach — not with `enforcementEnabled`.
     nonisolated static let purchasingIsAvailable = false
 
+    /// Review / Unplaced parking marker. Share Extension and the host must
+    /// serialize the same token so parked cap saves stay out of recovery.
+    nonisolated static let unplacedInboxMarker = "Unplaced inbox"
+
     /// When `false`, an exhausted allowance may inform the UI but must never
     /// refuse an AI assist. Stay off until a real model-quota refusal surface
     /// ships (Ask or equivalent). Slice 1 contract.
@@ -103,6 +107,21 @@ nonisolated enum SavePlaceLimitError: LocalizedError, Equatable, Sendable {
 }
 
 /// Pure saved-place cap shared by the app, Share Extension, and tests.
+/// Signed-in accounts see only their own vault rows. Ownerless legacy rows
+/// stay hidden while signed in; a nil owner is not evidence that the
+/// current account created them.
+nonisolated enum SaveVaultOwnerScope {
+    static func belongsToActiveAccount(
+        _ ownerSubject: String?,
+        currentUserId: String?
+    ) -> Bool {
+        if let currentUserId {
+            return ownerSubject == currentUserId
+        }
+        return ownerSubject == nil
+    }
+}
+
 nonisolated enum SavePlaceLimitGate {
     static func decide(
         tier: SaveProTier,
@@ -131,6 +150,8 @@ enum SavePlaceLimitHandoff {
     nonisolated static let pendingPaywallKey = "save.pendingSavedPlaceLimitPaywall"
     nonisolated static let cachedTierKey = "save.cachedProTier"
     nonisolated static let cachedCountKey = "save.cachedSavedPlaceCount"
+    /// Active Privy subject for extension vault reads. Missing means signed out.
+    nonisolated static let cachedOwnerKey = "save.cachedActiveOwnerSubject"
 
 #if DEBUG
     nonisolated(unsafe) static var testDefaults: UserDefaults?
@@ -152,6 +173,23 @@ enum SavePlaceLimitHandoff {
     ) {
         defaults.set(tier.rawValue, forKey: cachedTierKey)
         defaults.set(savedPlaceCount, forKey: cachedCountKey)
+    }
+
+    nonisolated static func syncActiveOwner(
+        _ ownerSubject: String?,
+        defaults: UserDefaults = makeDefaults()
+    ) {
+        if let ownerSubject, !ownerSubject.isEmpty {
+            defaults.set(ownerSubject, forKey: cachedOwnerKey)
+        } else {
+            defaults.removeObject(forKey: cachedOwnerKey)
+        }
+    }
+
+    nonisolated static func cachedActiveOwner(
+        defaults: UserDefaults = makeDefaults()
+    ) -> String? {
+        defaults.string(forKey: cachedOwnerKey)
     }
 
     /// Missing cache fails open so a cold extension still writes the item.

@@ -11,7 +11,10 @@ struct AskSaveMemoryIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let records = try SaveLocalVaultService.shared.recentRecords(limit: 5)
+        let records = try SaveLocalVaultService.shared.recentRecords(
+            limit: 5,
+            belongingTo: PrivyAuthService.shared.currentUserId
+        )
         guard !records.isEmpty else {
             return .result(dialog: "Savvy has no Map Stamps or source clues yet. Share or save a place URL first.")
         }

@@ -482,7 +482,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     }
 
     /// Parked at the free 50-place cap. Review keeps the item; it is not a Map Stamp.
-    static let unplacedInboxMarker = "Unplaced inbox"
+    static let unplacedInboxMarker = SAVEProAccessPolicy.unplacedInboxMarker
     var isUnplacedInbox: Bool {
         missingInfo.contains { $0.caseInsensitiveCompare(Self.unplacedInboxMarker) == .orderedSame }
     }

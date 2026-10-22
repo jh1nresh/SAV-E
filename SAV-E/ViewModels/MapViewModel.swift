@@ -694,6 +694,7 @@ final class MapViewModel: ObservableObject {
     private let correctionLearningEnabled: Bool
     private var correctionOriginalCandidates: [UUID: PlaceReviewCandidate] = [:]
     private var correctionAuthObserver: AnyCancellable?
+    private var entitlementRefreshObserver: AnyCancellable?
     private let correctionEventStore: SavePlaceCorrectionEventStore
     private let mapCandidateSearchService: MapCandidateSearchServiceProtocol
     private let saveSearchController: SaveSearchController
@@ -783,6 +784,12 @@ final class MapViewModel: ObservableObject {
             // private memory immediately; do not wait for a network refresh.
             self?.invalidateCorrectionSuggestions(discard: true)
         }
+        entitlementRefreshObserver = NotificationCenter.default
+            .publisher(for: .saveEntitlementDidRefresh)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.syncSavedPlaceLimitCache()
+            }
         reloadCollaborativeLists()
     }
 
@@ -1133,10 +1140,10 @@ final class MapViewModel: ObservableObject {
 
     private func localReviewCandidates() -> [PlaceReviewCandidate] {
         do {
-            let owner = authService.currentUserId
-            return try saveLocalVaultService.reviewCandidates(limit: 500).filter { candidate in
-                Self.localVaultRecordBelongsToActiveAccount(candidate.ownerSubject, currentUserId: owner)
-            }
+            return try saveLocalVaultService.reviewCandidates(
+                limit: 500,
+                belongingTo: authService.currentUserId
+            )
         } catch {
             print("MapViewModel: failed to load local review candidates: \(error)")
             return []
@@ -1150,10 +1157,10 @@ final class MapViewModel: ObservableObject {
         _ ownerSubject: String?,
         currentUserId: String?
     ) -> Bool {
-        if let currentUserId {
-            return ownerSubject == currentUserId
-        }
-        return ownerSubject == nil
+        SaveVaultOwnerScope.belongsToActiveAccount(
+            ownerSubject,
+            currentUserId: currentUserId
+        )
     }
 
     private func mergeRemotePlaces(_ remotePlaces: [Place], withLocalPlaces localPlaces: [Place]) -> [Place] {

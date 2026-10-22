@@ -39,7 +39,11 @@ nonisolated enum MessagesVaultReader {
         let sourceURL: String?
         let sourceImageUrl: String?
         let businessPhotoUrls: [String]?
+        let ownerSubject: String?
     }
+
+    /// Same App Group key as `SavePlaceLimitHandoff.cachedOwnerKey`.
+    static let cachedOwnerKey = "save.cachedActiveOwnerSubject"
 
     static func confirmedPlaces(limit: Int = 250) -> [MessagesPlace] {
         guard let url = vaultURL(),
@@ -55,8 +59,12 @@ nonisolated enum MessagesVaultReader {
             return []
         }
 
-        return records
+        let currentOwner = UserDefaults(suiteName: appGroupSuiteName)?
+            .string(forKey: cachedOwnerKey)
+        return Array(
+            records
             .filter { $0.state == "confirmed_place" }
+            .filter { belongsToActiveAccount($0.ownerSubject, currentUserId: currentOwner) }
             .compactMap { record -> MessagesPlace? in
                 guard let latitude = record.latitude,
                       let longitude = record.longitude,
@@ -83,7 +91,18 @@ nonisolated enum MessagesVaultReader {
                 )
             }
             .prefix(limit)
-            .map { $0 }
+        )
+    }
+
+    /// Must match `SaveVaultOwnerScope.belongsToActiveAccount`.
+    static func belongsToActiveAccount(
+        _ ownerSubject: String?,
+        currentUserId: String?
+    ) -> Bool {
+        if let currentUserId {
+            return ownerSubject == currentUserId
+        }
+        return ownerSubject == nil
     }
 
     private static func vaultURL() -> URL? {

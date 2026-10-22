@@ -37,9 +37,33 @@ final class SaveLocalVaultService: Sendable {
     }
 
     func recentRecords(limit: Int = 25) throws -> [SaveMemoryRecord] {
+        try recentRecords(limit: limit, belongingTo: nil, scopedToActiveAccount: false)
+    }
+
+    func recentRecords(
+        limit: Int = 25,
+        belongingTo currentUserId: String?
+    ) throws -> [SaveMemoryRecord] {
+        try recentRecords(limit: limit, belongingTo: currentUserId, scopedToActiveAccount: true)
+    }
+
+    private func recentRecords(
+        limit: Int,
+        belongingTo currentUserId: String?,
+        scopedToActiveAccount: Bool
+    ) throws -> [SaveMemoryRecord] {
         try withLock {
             try withCoordinatedVaultRead { url in
-                Array(try loadRecords(from: url).prefix(limit))
+                let records = try loadRecords(from: url)
+                let scoped = scopedToActiveAccount
+                    ? records.filter {
+                        MapViewModel.localVaultRecordBelongsToActiveAccount(
+                            $0.ownerSubject,
+                            currentUserId: currentUserId
+                        )
+                    }
+                    : records
+                return Array(scoped.prefix(limit))
             }
         }
     }
@@ -90,14 +114,34 @@ final class SaveLocalVaultService: Sendable {
     }
 
     func reviewCandidates(limit: Int = 250) throws -> [PlaceReviewCandidate] {
+        try reviewCandidates(limit: limit, belongingTo: nil, scopedToActiveAccount: false)
+    }
+
+    func reviewCandidates(
+        limit: Int = 250,
+        belongingTo currentUserId: String?
+    ) throws -> [PlaceReviewCandidate] {
+        try reviewCandidates(limit: limit, belongingTo: currentUserId, scopedToActiveAccount: true)
+    }
+
+    private func reviewCandidates(
+        limit: Int,
+        belongingTo currentUserId: String?,
+        scopedToActiveAccount: Bool
+    ) throws -> [PlaceReviewCandidate] {
         try withLock {
             try withCoordinatedVaultRead { url in
-                Array(
-                    try loadRecords(from: url)
-                        .compactMap(\.reviewCandidate)
-                        .sorted(by: PlaceReviewCandidate.newestFirst)
-                        .prefix(limit)
-                )
+                let candidates = try loadRecords(from: url)
+                    .compactMap(\.reviewCandidate)
+                    .filter { candidate in
+                        !scopedToActiveAccount
+                            || MapViewModel.localVaultRecordBelongsToActiveAccount(
+                                candidate.ownerSubject,
+                                currentUserId: currentUserId
+                            )
+                    }
+                    .sorted(by: PlaceReviewCandidate.newestFirst)
+                return Array(candidates.prefix(limit))
             }
         }
     }

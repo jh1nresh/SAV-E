@@ -32,6 +32,7 @@ BASELINE = [RAIL + name for name in (
     "testPassportListsEntryOpensListsDirectly",
     "testFriendsComingSoon",
     "testSavedPlaceLimitPaywallStatesFreeCap",
+    "testSavedPlaceLimitPaywallRetryIsActionable",
 )] + [ONBOARDING, RAIL + "testPassportTutorialReplaysWithoutAddingPlaces"]
 
 # Exact-file allowlist: adding another view/service requires coverage review.

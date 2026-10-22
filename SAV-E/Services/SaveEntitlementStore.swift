@@ -86,6 +86,7 @@ final class SaveEntitlementStore {
             quota = preview
             confirmedTier = preview.resolvedTier
             isFailingOpen = false
+            NotificationCenter.default.post(name: .saveEntitlementDidRefresh, object: nil)
         } catch {
             guard isCurrent(session, operation: operation) else { return }
             quota = nil
@@ -200,4 +201,8 @@ nonisolated struct SaveEntitlementResponse: Codable, Equatable, Sendable {
     var resolvedTier: SaveProTier {
         SaveProTier(rawValue: tier) ?? .free
     }
+}
+
+extension Notification.Name {
+    static let saveEntitlementDidRefresh = Notification.Name("save.entitlementDidRefresh")
 }

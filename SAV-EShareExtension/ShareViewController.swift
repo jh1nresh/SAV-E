@@ -3297,7 +3297,7 @@ struct ShareExtensionView: View {
                 place.googlePlaceId.map { "Google Place ID: \($0)" }
             ].compactMap { $0 },
             confidence: 0.9,
-            missingInfo: [],
+            missingInfo: [SAVEProAccessPolicy.unplacedInboxMarker],
             savedAt: Date()
         )
     }

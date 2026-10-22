@@ -493,6 +493,36 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.staticTexts["Unlimited saved places and Map Stamps"].exists)
         XCTAssertTrue(app.buttons["paywall.close"].exists)
         attach(app, name: "paywall-free-place-limit")
+        terminate(app)
+    }
+
+    /// B6: StoreKit miss / product-load failure. Production stays on
+    /// `paywall.notForSale` while purchasing is off; this DEBUG launch arg
+    /// is the only way to exercise `paywall.retry` in UI tests.
+    @MainActor
+    func testSavedPlaceLimitPaywallRetryIsActionable() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-show-saved-place-limit-paywall",
+                "--uitest-show-paywall-retry",
+                "-save.appLanguage", "en",
+            ]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.savedNote"].waitForExistence(timeout: stepTimeout))
+        let retry = app.buttons["paywall.retry"]
+        XCTAssertTrue(retry.waitForExistence(timeout: stepTimeout), "B6: paywall.retry must be visible and labeled")
+        XCTAssertEqual(retry.label, "Try again")
+        XCTAssertTrue(app.descendants(matching: .any)["paywall.unavailable"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.notForSale"].exists)
+        attach(app, name: "paywall-retry")
+        terminate(app)
     }
 
     /// HoP E4. Four iPhone stills as `XCTAttachment`s for the macOS `ios-fast`

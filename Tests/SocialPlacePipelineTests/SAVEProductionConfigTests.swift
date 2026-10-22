@@ -49,6 +49,8 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(paywall.contains("paywall.retry"))
         XCTAssertFalse(paywall.contains("paywall.keepGoing"))
         XCTAssertFalse(paywall.contains("paywall.retryProducts"))
+        XCTAssertTrue(paywall.contains("--uitest-show-paywall-retry"))
+        XCTAssertTrue(paywall.contains("func retryOffers(message: String)"))
         XCTAssertFalse(paywall.contains("paywall.productsRetry"))
         XCTAssertFalse(paywall.contains("paywall.proBenefit"))
         XCTAssertFalse(paywall.contains("paywall.freePlaceLimit"))
@@ -178,6 +180,14 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(rail.contains("You've saved 50 places. Keep going."))
         XCTAssertTrue(rail.contains("paywall.savedNote"))
         XCTAssertFalse(rail.contains("paywall.keepGoing"))
+        XCTAssertTrue(rail.contains("func testSavedPlaceLimitPaywallRetryIsActionable()"))
+        XCTAssertTrue(rail.contains("--uitest-show-paywall-retry"))
+        XCTAssertTrue(rail.contains("paywall.retry"))
+        XCTAssertTrue(rail.contains("attach(app, name: \"paywall-retry\")"))
+        XCTAssertTrue(
+            try source(at: "scripts/select-ios-tests.py").contains("testSavedPlaceLimitPaywallRetryIsActionable"),
+            "B6 retry assertion must stay on the required ios/FULL selector list"
+        )
         XCTAssertTrue(rail.contains("Review Candidate"))
         XCTAssertTrue(
             rail.contains("Settings Pro row requires a confirmed Map Stamp on Home first."),
@@ -1369,8 +1379,10 @@ final class SAVEProductionConfigTests: XCTestCase {
             map.contains("ownerSubject: authService.currentUserId"),
             "parked Unplaced must stamp the signed-in account"
         )
+        XCTAssertTrue(map.contains("SaveVaultOwnerScope.belongsToActiveAccount"))
+        let policy = try source(at: "SAV-EShared/SAVEProAccessPolicy.swift")
         XCTAssertTrue(
-            map.contains("return ownerSubject == currentUserId"),
+            policy.contains("return ownerSubject == currentUserId"),
             "signed-in refresh must hide another account's vault rows"
         )
         let vault = try source(at: "SAV-E/Services/SaveLocalVaultService.swift")
@@ -1642,6 +1654,106 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertTrue(MapViewModel.localVaultRecordBelongsToActiveAccount(nil, currentUserId: nil))
         XCTAssertFalse(MapViewModel.localVaultRecordBelongsToActiveAccount("did:privy:a", currentUserId: nil))
+        XCTAssertEqual(
+            SaveVaultOwnerScope.belongsToActiveAccount("did:privy:a", currentUserId: "did:privy:a"),
+            MapViewModel.localVaultRecordBelongsToActiveAccount("did:privy:a", currentUserId: "did:privy:a")
+        )
+        XCTAssertEqual(
+            SaveVaultOwnerScope.belongsToActiveAccount(nil, currentUserId: "did:privy:b"),
+            MapViewModel.localVaultRecordBelongsToActiveAccount(nil, currentUserId: "did:privy:b")
+        )
+    }
+
+    /// D3 / P1 4343590029: shortcuts must use the owner-scoped vault read.
+    func testAskSaveMemoryIntentReadsOnlyTheActiveOwnerRecentRecords() throws {
+        let intent = try source(at: "SAV-E/Intents/AskSaveMemoryIntent.swift")
+        XCTAssertTrue(intent.contains("SaveLocalVaultService.shared.recentRecords"))
+        XCTAssertTrue(
+            intent.contains("belongingTo: PrivyAuthService.shared.currentUserId"),
+            "Ask Savvy Memory must not speak another account's recent titles"
+        )
+        XCTAssertFalse(
+            intent.contains("recentRecords(\n            limit: 5\n        )"),
+            "unscoped recentRecords(limit:) is the leak Codex named"
+        )
+        let vault = try source(at: "SAV-E/Services/SaveLocalVaultService.swift")
+        XCTAssertTrue(vault.contains("func recentRecords(\n        limit: Int = 25,\n        belongingTo currentUserId: String?"))
+        XCTAssertTrue(vault.contains("scopedToActiveAccount: true"))
+        XCTAssertTrue(
+            vault.contains("Array(scoped.prefix(limit))"),
+            "limit applies after the owner filter"
+        )
+    }
+
+    /// D3 / P1 4344606407: iMessage cannot link SAV-EShared; keep the same owner rule.
+    func testIMessageVaultReadFiltersByCachedOwnerBeforeLimit() throws {
+        let reader = try source(at: "SAV-EiMessage/MessagesVaultReader.swift")
+        XCTAssertTrue(reader.contains("let ownerSubject: String?"))
+        XCTAssertTrue(reader.contains("cachedOwnerKey = \"save.cachedActiveOwnerSubject\""))
+        XCTAssertTrue(reader.contains("belongsToActiveAccount($0.ownerSubject, currentUserId: currentOwner)"))
+        XCTAssertTrue(reader.contains("return ownerSubject == currentUserId"))
+        XCTAssertTrue(reader.contains("return ownerSubject == nil"))
+        let filterRange = try XCTUnwrap(reader.range(of: "belongsToActiveAccount($0.ownerSubject, currentUserId: currentOwner)"))
+        let limitRange = try XCTUnwrap(reader.range(of: ".prefix(limit)"))
+        XCTAssertLessThan(
+            filterRange.lowerBound,
+            limitRange.lowerBound,
+            "owner filter must run before prefix so B is not truncated by A's newer stamps"
+        )
+        let policy = try source(at: "SAV-EShared/SAVEProAccessPolicy.swift")
+        XCTAssertTrue(policy.contains("cachedOwnerKey = \"save.cachedActiveOwnerSubject\""))
+        XCTAssertTrue(policy.contains("func syncActiveOwner"))
+        let auth = try source(at: "SAV-E/Services/PrivyAuthService.swift")
+        XCTAssertTrue(auth.contains("SavePlaceLimitHandoff.syncActiveOwner(userId)"))
+        XCTAssertTrue(auth.contains("SavePlaceLimitHandoff.syncActiveOwner(nil)"))
+    }
+
+    func testShareExtensionUnplacedCandidateKeepsInboxMarker() throws {
+        let share = try source(at: "SAV-EShareExtension/ShareViewController.swift")
+        XCTAssertTrue(
+            share.contains("missingInfo: [SAVEProAccessPolicy.unplacedInboxMarker]"),
+            "P2 4344606412: parked Share Extension saves must stay Unplaced, not ordinary Review"
+        )
+        XCTAssertEqual(SAVEProAccessPolicy.unplacedInboxMarker, "Unplaced inbox")
+        XCTAssertEqual(PlaceReviewCandidate.unplacedInboxMarker, SAVEProAccessPolicy.unplacedInboxMarker)
+    }
+
+    func testEntitlementRefreshResyncsAppGroupCacheInSource() throws {
+        let store = try source(at: "SAV-E/Services/SaveEntitlementStore.swift")
+        let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
+        XCTAssertTrue(store.contains("NotificationCenter.default.post(name: .saveEntitlementDidRefresh, object: nil)"))
+        XCTAssertTrue(map.contains("publisher(for: .saveEntitlementDidRefresh)"))
+        XCTAssertTrue(map.contains("self?.syncSavedPlaceLimitCache()"))
+    }
+
+    func testHandoffCachesActiveOwnerForExtensionReads() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "save.owner-handoff.\(UUID().uuidString)"))
+        SavePlaceLimitHandoff.syncActiveOwner("did:privy:a", defaults: defaults)
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedActiveOwner(defaults: defaults), "did:privy:a")
+        SavePlaceLimitHandoff.syncActiveOwner("", defaults: defaults)
+        XCTAssertNil(SavePlaceLimitHandoff.cachedActiveOwner(defaults: defaults))
+        SavePlaceLimitHandoff.syncActiveOwner(nil, defaults: defaults)
+        XCTAssertNil(SavePlaceLimitHandoff.cachedActiveOwner(defaults: defaults))
+    }
+
+    @MainActor
+    func testEntitlementRefreshNotificationResyncsAppGroupCache() async throws {
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(12)
+        SavePlaceLimitHandoff.syncCache(tier: .free, savedPlaceCount: 50)
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .overFreeLimit)
+
+        NotificationCenter.default.post(name: .saveEntitlementDidRefresh, object: nil)
+        let deadline = Date().addingTimeInterval(1)
+        while Date() < deadline, SavePlaceLimitHandoff.cachedDecision() != .allowed {
+            await Task.yield()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        XCTAssertEqual(
+            SavePlaceLimitHandoff.cachedDecision(),
+            .allowed,
+            "P2 4343238313: purchase/restore refresh must rewrite the Share Extension cache"
+        )
     }
 
     @MainActor

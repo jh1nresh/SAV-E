@@ -253,6 +253,8 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertTrue(paywall.contains("paywall.retry"))
         XCTAssertFalse(paywall.contains("paywall.retryProducts"))
         XCTAssertTrue(paywall.contains("if trigger == .savedPlaceLimit"))
+        XCTAssertTrue(paywall.contains("--uitest-show-paywall-retry"))
+        XCTAssertTrue(paywall.contains("func retryOffers(message: String)"))
     }
 
     @MainActor

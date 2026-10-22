@@ -391,6 +391,102 @@ final class SaveLocalVaultServiceTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(stored.first { $0.ownerSubject == "did:privy:owner-a" }).evidence.contains("Account B caption"))
     }
 
+    /// D3 / P1 4343590029: AskSaveMemoryIntent must not speak another account's
+    /// recent titles. Filter by owner before applying the limit.
+    @MainActor
+    func testRecentRecordsBelongingToActiveAccountHideOtherOwnersBeforeLimit() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "B older clue", ownerSubject: "did:privy:b"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A newer clue 2", ownerSubject: "did:privy:a"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A newest clue 1", ownerSubject: "did:privy:a"))
+
+        XCTAssertEqual(try vault.recentRecords(limit: 2).map(\.title), ["A newest clue 1", "A newer clue 2"])
+        XCTAssertEqual(
+            try vault.recentRecords(limit: 2, belongingTo: "did:privy:b").map(\.title),
+            ["B older clue"],
+            "owner filter must run before prefix so B is not truncated by A's newer rows"
+        )
+        XCTAssertTrue(try vault.recentRecords(limit: 5, belongingTo: "did:privy:a").allSatisfy { $0.ownerSubject == "did:privy:a" })
+        XCTAssertTrue(try vault.recentRecords(limit: 5, belongingTo: "did:privy:missing").isEmpty)
+        XCTAssertTrue(try vault.recentRecords(limit: 5, belongingTo: nil).isEmpty, "signed-in scope with nil owner hides stamped rows")
+    }
+
+    /// D3 / P2 4343590036: Review 500-row cap is per account, not the shared file.
+    @MainActor
+    func testReviewCandidatesBelongingToActiveAccountFilterBeforeLimit() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let older = Date(timeIntervalSince1970: 1_700_000_000)
+        let newer = Date(timeIntervalSince1970: 1_800_000_000)
+        try vault.append(SaveMemoryRecord(
+            state: .reviewCandidate,
+            title: "B older review",
+            createdAt: older,
+            ownerSubject: "did:privy:b"
+        ))
+        try vault.append(SaveMemoryRecord(
+            state: .reviewCandidate,
+            title: "A newer review",
+            createdAt: newer,
+            ownerSubject: "did:privy:a"
+        ))
+        try vault.append(SaveMemoryRecord(
+            state: .reviewCandidate,
+            title: "A newest review",
+            createdAt: newer.addingTimeInterval(10),
+            ownerSubject: "did:privy:a"
+        ))
+
+        XCTAssertEqual(
+            try vault.reviewCandidates(limit: 2, belongingTo: "did:privy:b").map(\.name),
+            ["B older review"],
+            "owner filter must run before the Review limit so B survives A's newer rows"
+        )
+        XCTAssertEqual(
+            try vault.reviewCandidates(limit: 2, belongingTo: "did:privy:a").map(\.name),
+            ["A newest review", "A newer review"]
+        )
+    }
+
+    /// D3 / P1 4344606407: iMessage decodes this JSON; ownerSubject must be present
+    /// so `MessagesVaultReader` can apply `SaveVaultOwnerScope`.
+    @MainActor
+    func testPersistedVaultJSONIncludesOwnerSubjectForIMessageReads() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        try vault.append(SaveMemoryRecord(
+            state: .confirmedPlace,
+            title: "A Cafe",
+            placeName: "A Cafe",
+            latitude: 25.03,
+            longitude: 121.56,
+            ownerSubject: "did:privy:a"
+        ))
+        let rows = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [[String: Any]]
+        )
+        XCTAssertEqual(rows.first?["ownerSubject"] as? String, "did:privy:a")
+        XCTAssertEqual(rows.first?["state"] as? String, "confirmed_place")
+        XCTAssertFalse(
+            SaveVaultOwnerScope.belongsToActiveAccount(
+                rows.first?["ownerSubject"] as? String,
+                currentUserId: "did:privy:b"
+            ),
+            "signed-in B must not see A's iMessage vault row"
+        )
+        XCTAssertTrue(
+            SaveVaultOwnerScope.belongsToActiveAccount(
+                rows.first?["ownerSubject"] as? String,
+                currentUserId: "did:privy:a"
+            )
+        )
+    }
+
     @MainActor
     private func makePendingCandidate(localID: UUID?) -> PendingReviewCandidate {
         PendingReviewCandidate(candidateName: "Source clue", address: "", category: "food",

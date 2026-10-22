@@ -355,6 +355,7 @@ final class PrivyAuthService: ObservableObject {
             SaveEntitlementStore.shared.resetForSessionChange()
         }
         authState = .authenticated(userId: userId)
+        SavePlaceLimitHandoff.syncActiveOwner(userId)
         synchronizeShareAnalysisSession(userId: userId)
         Task { await SaveEntitlementStore.shared.refresh() }
     }
@@ -417,6 +418,7 @@ final class PrivyAuthService: ObservableObject {
             SaveEntitlementStore.shared.resetForSessionChange()
         }
         authState = .unauthenticated
+        SavePlaceLimitHandoff.syncActiveOwner(nil)
     }
 
     private func validateConfig() throws {
