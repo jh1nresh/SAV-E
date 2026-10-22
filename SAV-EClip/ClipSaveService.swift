@@ -168,7 +168,8 @@ enum ClipSaveAPI {
 
 @MainActor
 enum ClipSaveService {
-    static func persist(_ draft: ClipPlaceDraft, url: URL, sender: String?) {
+    @discardableResult
+    static func persist(_ draft: ClipPlaceDraft, url: URL, sender: String?) -> Bool {
         PendingShareStore.write(
             PendingSharePayload(
                 kind: .place,
@@ -226,11 +227,13 @@ enum ClipSaveService {
         signIn: @escaping () async throws -> String = { try await ClipAppleAuth.signIn() },
         postPlace: @escaping (ClipPlaceDraft, String) async throws -> (Int, Data) = postPlace
     ) async -> ClipSaveOutcome {
-        persist(draft, url: handoffURL, sender: sender)
+        let written = persist(draft, url: handoffURL, sender: sender)
+        guard written else { return .failed }
         if ClipFullApp.isInstalled {
             return await withCheckedContinuation { continuation in
                 openURL(handoffURL) { opened in
-                    continuation.resume(returning: opened ? .handedOff : .failed)
+                    let handedOff = ClipListSavePlanner.handoffAfterPersist(written: written, opened: opened)
+                    continuation.resume(returning: handedOff ? .handedOff : .failed)
                 }
             }
         }

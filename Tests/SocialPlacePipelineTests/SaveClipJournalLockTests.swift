@@ -183,8 +183,16 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(mapVM.contains("placesFromRemoteRows"))
         XCTAssertTrue(mapVM.contains("includeSenderMemory: false"))
         XCTAssertFalse(mapVM.contains("stampsFromRemoteCounts"))
-        XCTAssertTrue(save.contains("guard written else { return .failed }"))
-        XCTAssertTrue(save.contains("handoffAfterPersist"))
+        XCTAssertEqual(
+            save.components(separatedBy: "guard written else { return .failed }").count - 1,
+            2
+        )
+        XCTAssertEqual(
+            save.components(separatedBy: "handoffAfterPersist").count - 1,
+            2
+        )
+        XCTAssertTrue(save.contains("func persist("))
+        XCTAssertTrue(save.contains("func persistList"))
         XCTAssertTrue(planner.contains("handoffAfterPersist"))
         XCTAssertTrue(planner.contains("compactHandoffURL"))
         XCTAssertTrue(save.contains("compactHandoffURL"))
