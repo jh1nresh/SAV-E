@@ -2741,7 +2741,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["profile.connections.friends"].exists)
         XCTAssertTrue(app.buttons["profile.connections.lists"].exists)
         app.buttons["profile.connections.back"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["profile.collected.root"].waitForExistence(timeout: stepTimeout),
+            "Connections back from Collected returns to Collected, not the sticker grid."
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["passport.root"].waitForExistence(timeout: stepTimeout))
 
         XCTAssertFalse(app.buttons["profile.importGoogleTakeout"].exists)
 

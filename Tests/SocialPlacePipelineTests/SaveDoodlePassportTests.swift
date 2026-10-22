@@ -107,6 +107,18 @@ final class SaveDoodlePassportTests: XCTestCase {
         let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
         XCTAssertTrue(passport.contains("NavigationStack {"))
+        XCTAssertTrue(
+            passport.contains("""
+            if isRootTab {
+                passportRoot
+            } else {
+                NavigationStack {
+                    passportRoot
+                }
+            }
+            """),
+            "Root-tab Passport must reuse ContentView's stack; a nested stack breaks Home → Saves"
+        )
         XCTAssertTrue(passport.contains("SaveDoodlePassportPage("))
         XCTAssertTrue(passport.contains("SaveDoodlePassportFlags.showTodayMissions"))
         XCTAssertTrue(passport.contains("SaveDoodlePassportFlags.showFieldStreak"))
@@ -230,6 +242,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertFalse(design.contains("23cca55"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("attach(app, name: \"five-tab-passport\")"))
+        XCTAssertTrue(rail.contains("Connections back from Collected returns to Collected"))
         XCTAssertTrue(rail.contains("ProductionTargets/passport.png"))
         XCTAssertTrue(rail.contains("at exactly 0.90"))
         XCTAssertTrue(rail.contains("--uitest-doodle-passport-face"))

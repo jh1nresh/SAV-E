@@ -103,6 +103,26 @@ struct ProfileView: View {
         )
     }
 
+    /// Sticker grid or Collected. Collected stays an if-else, never an
+    /// isPresented destination — that modifier attaches to ContentView's
+    /// outer stack and replaces the Atlas tab bar.
+    private var passportRoot: some View {
+        Group {
+            if opensCollected {
+                collectedPage
+            } else {
+                passportContent
+            }
+        }
+        .accessibilityIdentifier("passport.root")
+        .navigationDestination(isPresented: $showSettings) {
+            settingsPage
+        }
+        .navigationDestination(isPresented: $opensConnections) {
+            connectionsDestination
+        }
+    }
+
     private var passportContent: some View {
             SaveDoodlePassportPage(
                 places: cityStampPlaces,
@@ -426,26 +446,17 @@ struct ProfileView: View {
     }
 
     var body: some View {
-        // Root Passport must own this stack. If Collected uses the outer
-        // Home NavigationStack, it replaces the Atlas tab bar and Friends
-        // / Home become unreachable until the page is dismissed.
-        NavigationStack {
-            // An isPresented Collected destination can attach to
-            // ContentView's outer stack and replace the Atlas tab bar.
-            // Keep Collected inside this tab-owned stack.
-            Group {
-                if opensCollected {
-                    collectedPage
-                } else {
-                    passportContent
+        // Root tab already lives in ContentView's NavigationStack. Nesting
+        // another stack here steals later Home → Saves pushes after a
+        // Passport visit (FiveTabLanding). Sheet Passport still owns a
+        // stack so settings and connections do not use Home's path.
+        Group {
+            if isRootTab {
+                passportRoot
+            } else {
+                NavigationStack {
+                    passportRoot
                 }
-            }
-            .accessibilityIdentifier("passport.root")
-            .navigationDestination(isPresented: $showSettings) {
-                settingsPage
-            }
-            .navigationDestination(isPresented: $opensConnections) {
-                connectionsDestination
             }
         }
         .onChange(of: requestsConnections) { _, requested in
