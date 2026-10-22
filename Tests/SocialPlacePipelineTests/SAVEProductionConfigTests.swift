@@ -1593,7 +1593,7 @@ final class SAVEProductionConfigTests: XCTestCase {
             "deleteAllRecords wipes every account on this device"
         )
         XCTAssertTrue(
-            map.contains("let uniqueNewCount = Place.consolidated(importedPlaces + [place]).count"),
+            map.contains("let uniqueNewCount = Place.consolidated(importedPlaces).count"),
             "P2 4348075539: local pending-import cap must count unique new stamps"
         )
         XCTAssertFalse(

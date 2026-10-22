@@ -1091,7 +1091,7 @@ final class MapViewModel: ObservableObject {
                 keepQueued.append(pendingPlace)
                 continue
             }
-            let uniqueNewCount = Place.consolidated(importedPlaces + [place]).count
+            let uniqueNewCount = Place.consolidated(importedPlaces).count
             let projectedCount = savedPlaceCountForLimit + uniqueNewCount
             // Unresolved / loading entitlement must fail open. Default `.free`
             // would park a Pro account that has not refreshed this session.
