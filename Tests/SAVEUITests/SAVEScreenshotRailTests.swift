@@ -809,6 +809,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "five-tab-map")
         attach(app, name: "doodle-map-light")
         assertDoodleMapChrome(app)
+        attachHoP298ChromeEvidence(app)
 
         openTripsFromHome(app: app)
         let existingTrip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")).firstMatch
@@ -944,6 +945,44 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             expectedGreen: 0x1C,
             expectedBlue: 0x19
         )
+        try attachMapWidthEvidence()
+    }
+
+    /// QA item 1: letterbox 375 / 390 / 430 on the same 402pt CI device.
+    /// Names stay off `five-tab-*` so they cannot steal the 0.90 target.
+    @MainActor
+    private func attachMapWidthEvidence() throws {
+        let shots: [(name: String, width: Int, language: String, extra: [String])] = [
+            ("map-375", 375, "en", ["--uitest-force-light", "-AppleInterfaceStyle", "Light"]),
+            ("map-390", 390, "zh-Hant", ["--uitest-force-light", "-AppleInterfaceStyle", "Light"]),
+            ("map-430", 430, "en", ["--uitest-force-dark", "-AppleInterfaceStyle", "Dark"]),
+        ]
+        for shot in shots {
+            let app = makeApp(
+                launchArguments: [
+                    "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                    "--uitest-repair-review-demo-seed",
+                    "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                    "--uitest-map-place-selected",
+                    "--uitest-map-width=\(shot.width)",
+                    "-save.appLanguage", shot.language,
+                ] + shot.extra,
+                launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+            )
+            launch(app)
+            try signInViaReviewDemoRequired(app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+            openRootTab("Map", app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+            let locationNoticeDismiss = app.buttons["map.locationNotice.dismiss"]
+            if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
+                locationNoticeDismiss.tap()
+            }
+            XCTAssertTrue(app.buttons["map.city"].waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(app.descendants(matching: .any)["map.liveSurface"].waitForExistence(timeout: stepTimeout))
+            attach(app, name: shot.name)
+            terminate(app)
+        }
     }
 
     @MainActor
@@ -3326,6 +3365,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout),
             "298-7: tapping the Map tab directly must open Map"
         )
+        attach(app, name: "298-7-map-tab")
         XCTAssertTrue(app.buttons["map.city"].waitForExistence(timeout: stepTimeout))
         let eatPin = "30000000-0000-0000-0000-000000000001"
         let noodlePin = "30000000-0000-0000-0000-000000000002"
@@ -3343,7 +3383,36 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             )
         }
         attach(app, name: "298-3-map")
+        attach(app, name: "298-4-coral-pins")
         terminate(app)
+    }
+
+    /// HoP 298-2 / 298-5 / 298-6 / 298-8: MapKit canvas, 我來過了, city+Eat/Go,
+    /// and provider-backed Directions. Names stay off `five-tab-*`.
+    @MainActor
+    private func attachHoP298ChromeEvidence(_ app: XCUIApplication) {
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.liveSurface"].waitForExistence(timeout: stepTimeout),
+            "298-2: product Map must be a live Apple MapKit surface"
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["tileTown.root"].exists,
+            "298-2: product Map is not tile-town"
+        )
+        attach(app, name: "298-2-mapkit")
+
+        XCTAssertTrue(app.buttons["map.card.beenHere"].exists || app.buttons["map.card.beenHere.undo"].exists,
+                      "298-5: place sheet must offer 我來過了 / I've been here")
+        attach(app, name: "298-5-been-here")
+
+        XCTAssertTrue(app.buttons["map.city"].exists, "298-6: city chrome")
+        XCTAssertTrue(app.buttons["map.eat"].exists, "298-6: Eat chrome")
+        XCTAssertTrue(app.buttons["map.go"].exists, "298-6: Go chrome")
+        attach(app, name: "298-6-city-eat-go")
+
+        XCTAssertTrue(app.buttons["map.directions"].exists,
+                      "298-8: selected place keeps provider-backed Directions")
+        attach(app, name: "298-8-provider")
     }
 
     @MainActor
