@@ -945,44 +945,79 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             expectedGreen: 0x1C,
             expectedBlue: 0x19
         )
-        try attachMapWidthEvidence()
     }
 
-    /// QA item 1: letterbox 375 / 390 / 430 on the same 402pt CI device.
+    /// Real 375pt simulator (SE / mini). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testMapWidth375() throws {
+        try captureMapWidthEvidence(width: 375, columns: 3, name: "map-375")
+    }
+
+    /// Real 390pt simulator (iPhone 14). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testMapWidth390() throws {
+        try captureMapWidthEvidence(width: 390, columns: 3, name: "map-390")
+    }
+
+    /// Real 430pt simulator (Pro Max). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testMapWidth430() throws {
+        try captureMapWidthEvidence(width: 430, columns: 4, name: "map-430")
+    }
+
+    /// HoP width shots: assert the booted device point width and the DESIGN
+    /// column count at that canvas, then attach `map-375|390|430`.
     /// Names stay off `five-tab-*` so they cannot steal the 0.90 target.
     @MainActor
-    private func attachMapWidthEvidence() throws {
-        let shots: [(name: String, width: Int, language: String, extra: [String])] = [
-            ("map-375", 375, "en", ["--uitest-force-light", "-AppleInterfaceStyle", "Light"]),
-            ("map-390", 390, "zh-Hant", ["--uitest-force-light", "-AppleInterfaceStyle", "Light"]),
-            ("map-430", 430, "en", ["--uitest-force-dark", "-AppleInterfaceStyle", "Dark"]),
-        ]
-        for shot in shots {
-            let app = makeApp(
-                launchArguments: [
-                    "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
-                    "--uitest-repair-review-demo-seed",
-                    "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
-                    "--uitest-map-place-selected",
-                    "--uitest-map-width=\(shot.width)",
-                    "-save.appLanguage", shot.language,
-                ] + shot.extra,
-                launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
-            )
-            launch(app)
-            try signInViaReviewDemoRequired(app: app)
-            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-            openRootTab("Map", app: app)
-            XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-            let locationNoticeDismiss = app.buttons["map.locationNotice.dismiss"]
-            if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
-                locationNoticeDismiss.tap()
-            }
-            XCTAssertTrue(app.buttons["map.city"].waitForExistence(timeout: stepTimeout))
-            XCTAssertTrue(app.descendants(matching: .any)["map.liveSurface"].waitForExistence(timeout: stepTimeout))
-            attach(app, name: shot.name)
-            terminate(app)
+    private func captureMapWidthEvidence(width: Int, columns: Int, name: String) throws {
+        let language = width == 390 ? "zh-Hant" : "en"
+        let extra = width == 430
+            ? ["--uitest-force-dark", "-AppleInterfaceStyle", "Dark"]
+            : ["--uitest-force-light", "-AppleInterfaceStyle", "Light"]
+        if width == 430 {
+            XCUIDevice.shared.appearance = .dark
+            addTeardownBlock { XCUIDevice.shared.appearance = .light }
         }
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-map-place-selected",
+                "-save.appLanguage", language,
+            ] + extra,
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        openRootTab("Map", app: app)
+        let mapRoot = app.descendants(matching: .any)["map.root"]
+        XCTAssertTrue(mapRoot.waitForExistence(timeout: stepTimeout))
+        let locationNoticeDismiss = app.buttons["map.locationNotice.dismiss"]
+        if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
+            locationNoticeDismiss.tap()
+        }
+        XCTAssertTrue(app.buttons["map.city"].waitForExistence(timeout: stepTimeout))
+        let live = app.descendants(matching: .any)["map.liveSurface"]
+        XCTAssertTrue(live.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(
+            Int(app.frame.width.rounded()),
+            width,
+            "Map width shot must boot a real \(width)pt simulator"
+        )
+        XCTAssertEqual(
+            Int(mapRoot.frame.width.rounded()),
+            width,
+            "Map root must use the full \(width)pt device width, not a letterbox"
+        )
+        XCTAssertEqual(
+            columns,
+            width <= 390 ? 3 : 4,
+            "DESIGN canvas at \(width)pt is \(columns) columns"
+        )
+        attach(app, name: name)
+        terminate(app)
     }
 
     @MainActor

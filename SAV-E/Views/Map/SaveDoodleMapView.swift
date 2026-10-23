@@ -92,7 +92,6 @@ struct SaveDoodleMapView: View {
             }
             .padding(.bottom, bottomChromeClearance)
         }
-        .frame(maxWidth: uiTestMapWidth ?? .infinity, maxHeight: .infinity)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             _ = onPlanAroundPlace
@@ -148,21 +147,6 @@ struct SaveDoodleMapView: View {
             // user-span. Refit so every saved pin in the city stays visible.
             fitVisiblePlaces()
         }
-    }
-
-    /// CI boots one iPhone 16 Pro (402pt). `--uitest-map-width=375|390|430`
-    /// letterboxes Map to those DESIGN canvases on the same device.
-    private var uiTestMapWidth: CGFloat? {
-#if DEBUG
-        let args = ProcessInfo.processInfo.arguments
-        let prefix = "--uitest-map-width="
-        if let pair = args.first(where: { $0.hasPrefix(prefix) }),
-           let value = Double(pair.dropFirst(prefix.count)),
-           value == 375 || value == 390 || value == 430 {
-            return CGFloat(value)
-        }
-#endif
-        return nil
     }
 
     private func openSystemSettings() {
