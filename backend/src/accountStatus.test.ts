@@ -419,6 +419,8 @@ test("account status route runs before ensureProfile and stays outside the mutat
   assert.ok(ensureIndex >= 0, "ensureProfile call must remain visible to this regression test");
   assert.ok(routeIndex < ensureIndex, "account-status must run before ensureProfile");
   const routeBlock = serverSource.slice(routeIndex, ensureIndex);
+  assert.match(routeBlock, /verifiedPrivyAccessSubject/);
+  assert.doesNotMatch(routeBlock, /verifiedBearerPrivySubject/);
   assert.doesNotMatch(routeBlock, /ensureProfile\s*\(/);
   assert.match(routeBlock, /segments\[1\] !== "confirm"/);
   assert.match(routeBlock, /evaluateAccountConfirmationRequest/);

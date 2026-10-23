@@ -81,15 +81,22 @@ enum ClipDisplayType {
 
     /// Caveat (Latin) / Iansui (zh) for place names, list titles, and state titles.
     /// Ship Iansui-ClipTitles.ttf, not Iansui-SavvySubset.ttf (3.48 MB).
+    /// zh titles cascade to Caveat so Latin shop names do not fall back to system.
     static func title(_ size: CGFloat, relativeTo style: Font.TextStyle) -> Font {
         _ = register
+        let latin = UIFont(name: latinName, size: size)
+            ?? UIFont.systemFont(ofSize: size, weight: .semibold)
         if ClipCopy.usesTraditionalChinese {
             let cjk = UIFont(name: cjkName, size: size)
                 ?? UIFont.systemFont(ofSize: size, weight: .semibold)
-            return Font(UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: cjk))
+            let cascaded = UIFont(
+                descriptor: cjk.fontDescriptor.addingAttributes([
+                    .cascadeList: [latin.fontDescriptor],
+                ]),
+                size: size
+            )
+            return Font(UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: cascaded))
         }
-        let latin = UIFont(name: latinName, size: size)
-            ?? UIFont.systemFont(ofSize: size, weight: .semibold)
         return Font(UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: latin))
     }
 
@@ -159,12 +166,25 @@ struct ClipDisplayTitle: View {
     var pointSize: CGFloat = 28
     var relativeTo: Font.TextStyle = .title
     var color: Color = ClipJournalPalette.forest
+    var alignment: TextAlignment = .center
 
     var body: some View {
         Text(text)
             .font(ClipDisplayType.title(pointSize, relativeTo: relativeTo))
             .foregroundStyle(color)
+            .multilineTextAlignment(alignment)
+            .lineLimit(2)
+            .minimumScaleFactor(0.7)
             .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: frameAlignment)
+    }
+
+    private var frameAlignment: Alignment {
+        switch alignment {
+        case .leading: return .leading
+        case .trailing: return .trailing
+        default: return .center
+        }
     }
 }
 
@@ -303,6 +323,7 @@ enum ClipStickerKind: String {
 struct ClipStickerDrawing: View {
     let kind: ClipStickerKind
     var lineArtPin: Bool = false
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Canvas { context, size in
@@ -311,11 +332,12 @@ struct ClipStickerDrawing: View {
             let cream = ClipJournalPalette.cream
             let kraft = ClipJournalPalette.kraft
             let forest = ClipJournalPalette.forest
+            let plate = colorScheme == .dark ? Color.black : kraft
             switch kind {
             case .noodle:
-                drawNoodleBowl(context: context, size: size, ink: ink, coral: coral, cream: cream, kraft: kraft)
+                drawNoodleBowl(context: context, size: size, ink: ink, coral: coral, cream: cream, plate: plate)
             case .coffee:
-                drawCoffeeCup(context: context, size: size, ink: ink, coral: coral, cream: cream, kraft: kraft)
+                drawCoffeeCup(context: context, size: size, ink: ink, coral: coral, cream: cream, plate: plate)
             case .lantern:
                 drawLantern(context: context, size: size, ink: ink, coral: coral, cream: cream)
             case .seal:
@@ -341,11 +363,11 @@ struct ClipStickerDrawing: View {
         ink: Color,
         coral: Color,
         cream: Color,
-        kraft: Color
+        plate plateColor: Color
     ) {
         var plate = Path()
         plate.addEllipse(in: CGRect(x: size.width * 0.06, y: size.height * 0.58, width: size.width * 0.88, height: size.height * 0.30))
-        context.fill(plate, with: .color(kraft))
+        context.fill(plate, with: .color(plateColor))
         context.stroke(plate, with: .color(ink), lineWidth: 1.4)
 
         var bowl = Path()
@@ -401,11 +423,11 @@ struct ClipStickerDrawing: View {
         ink: Color,
         coral: Color,
         cream: Color,
-        kraft: Color
+        plate plateColor: Color
     ) {
         var saucer = Path()
         saucer.addEllipse(in: CGRect(x: size.width * 0.10, y: size.height * 0.64, width: size.width * 0.80, height: size.height * 0.22))
-        context.fill(saucer, with: .color(kraft))
+        context.fill(saucer, with: .color(plateColor))
         context.stroke(saucer, with: .color(ink), lineWidth: 1.4)
         var well = Path()
         well.addEllipse(in: CGRect(x: size.width * 0.28, y: size.height * 0.70, width: size.width * 0.44, height: size.height * 0.10))

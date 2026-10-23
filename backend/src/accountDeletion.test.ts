@@ -59,7 +59,9 @@ test("account deletion route runs before ensureProfile and remains owner scoped"
   assert.ok(routeIndex < ensureIndex, "account deletion must run before ensureProfile");
   const routeBlock = serverSource.slice(routeIndex, ensureIndex);
   assert.match(routeBlock, /request\.method !== "DELETE"/);
-  assert.match(routeBlock, /verifiedBearerPrivySubject\(token\)/);
+  assert.match(routeBlock, /verifiedPrivyAccessSubject\(token\)/);
+  assert.doesNotMatch(routeBlock, /verifiedBearerPrivySubject\(token\)/);
+  assert.doesNotMatch(routeBlock, /verifiedAppleLinkedPrivySubject/);
   assert.match(routeBlock, /delete from profiles where id = \$1/);
   assert.match(routeBlock, /\[userId\]/);
   assert.match(routeBlock, /privyUserProvisioner\.deleteUser\(privyUserId\)/);

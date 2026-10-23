@@ -90,24 +90,62 @@ test("verifiedAppleIdentitySubject rejects a token signed by another key", async
 test("server resolveUserId verifies Apple identity tokens before Privy", () => {
   const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
   assert.match(server, /verifiedAppleIdentity/);
+  assert.match(server, /findUserForApple/);
   assert.match(server, /ensureUserForApple/);
+  assert.match(server, /lookupAppleLinkedPrivySubject/);
   assert.match(server, /verifiedAppleLinkedPrivySubject/);
   assert.match(server, /verifiedBearerPrivySubject/);
+  assert.match(server, /verifiedPrivyAccessSubject/);
   assert.match(server, /APPLE_IDENTITY_ISSUER/);
   assert.match(server, /decodeJwt\(token\)\.iss === APPLE_IDENTITY_ISSUER/);
   assert.match(server, /Apple identity linking unavailable/);
   assert.match(server, /clip-apple-session/);
   assert.match(server, /Apple identity token required/);
+  assert.match(server, /Privy bearer token required/);
   assert.doesNotMatch(server, /profileIdForPrivySubject\(appleSubject\)/);
   const sessionRoute = server.indexOf('resource === "clip-apple-session"');
+  const sessionEnd = server.indexOf('if (isV0 && resource === "account-status")');
+  const sessionBlock = server.slice(sessionRoute, sessionEnd);
+  assert.match(sessionBlock, /lookupAppleLinkedPrivySubject/);
+  assert.doesNotMatch(sessionBlock, /ensureUserForApple/);
+  assert.doesNotMatch(sessionBlock, /verifiedAppleLinkedPrivySubject/);
   const authGate = server.indexOf("const userId = await resolveUserId(request)");
   assert.ok(sessionRoute >= 0 && sessionRoute < authGate);
+  const statusStart = server.indexOf('if (isV0 && resource === "account-status")');
+  const statusBlock = server.slice(
+    statusStart,
+    server.indexOf('if (isV0 && resource === "share-extension")'),
+  );
+  assert.match(statusBlock, /verifiedPrivyAccessSubject/);
+  assert.doesNotMatch(statusBlock, /verifiedBearerPrivySubject/);
+  const accountStart = server.indexOf('if (isV0 && resource === "account" && !id)');
+  const accountBlock = server.slice(accountStart, server.indexOf("await ensureProfile(userId)"));
+  assert.match(accountBlock, /verifiedPrivyAccessSubject\(token\)/);
+  assert.doesNotMatch(accountBlock, /verifiedBearerPrivySubject/);
+  const shareHandler = server.slice(
+    server.indexOf("async function handleShareExtension"),
+    server.indexOf("function requiredShareExtensionToken"),
+  );
+  assert.match(shareHandler, /verifiedPrivyAccessSubject\(bearer\)/);
+  assert.doesNotMatch(shareHandler, /verifiedBearerPrivySubject/);
   const resolver = server.slice(
     server.indexOf("async function resolveUserId"),
     server.indexOf("async function profileIdForPrivySubject"),
   );
   assert.match(resolver, /verifiedBearerPrivySubject/);
   assert.doesNotMatch(resolver, /profileIdForPrivySubject\(appleSubject\)/);
+  const lookup = server.slice(
+    server.indexOf("async function lookupAppleLinkedPrivySubject"),
+    server.indexOf("async function verifiedAppleLinkedPrivySubject"),
+  );
+  assert.match(lookup, /findUserForApple/);
+  assert.doesNotMatch(lookup, /ensureUserForApple/);
+  const provision = server.slice(
+    server.indexOf("async function verifiedAppleLinkedPrivySubject"),
+    server.indexOf("async function verifiedPrivyAccessSubject"),
+  );
+  assert.match(provision, /ensureUserForApple\(identity\.subject\)/);
+  assert.doesNotMatch(provision, /identity\.email/);
   const audiences = APPLE_IDENTITY_AUDIENCES.join(" ");
   assert.match(audiences, /com\.wanderly\.app\.Clip/);
   const source = readFileSync(
@@ -115,4 +153,8 @@ test("server resolveUserId verifies Apple identity tokens before Privy", () => {
     "utf8",
   );
   assert.match(source, /appleid\.apple\.com\/auth\/keys/);
+  const privyUsers = readFileSync(new URL("../src/privyUsers.ts", import.meta.url), "utf8");
+  assert.match(privyUsers, /\/v1\/users\/apple\/subject/);
+  assert.doesNotMatch(privyUsers, /\/v1\/users\?limit/);
+  assert.doesNotMatch(privyUsers, /searchParams\.set\("limit", "100"\)/);
 });

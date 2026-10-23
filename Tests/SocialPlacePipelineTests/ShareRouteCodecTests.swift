@@ -510,6 +510,37 @@ final class ShareRouteCodecTests: XCTestCase {
     }
 
     @MainActor
+    func testRecipientHandoffStripsSenderNoteAndRating() throws {
+        let payload = SharedPlaceData(
+            id: "place-1",
+            name: "Kato",
+            address: "Los Angeles",
+            lat: 34.035,
+            lng: -118.238,
+            category: "Food",
+            rating: 4.8,
+            reviewCount: 120,
+            priceRange: "$$$",
+            hours: nil,
+            sourceLabel: "Savvy",
+            sourceURL: "https://www.instagram.com/p/example/",
+            photoURLs: [],
+            note: "Order the tasting menu"
+        )
+        let stripped = payload.strippingSenderMemory()
+        XCTAssertNil(stripped.note)
+        XCTAssertNil(stripped.rating)
+        let url = try XCTUnwrap(stripped.toURL())
+        let decoded = try XCTUnwrap(SharedPlaceData.from(url: url))
+        XCTAssertNil(decoded.note)
+        XCTAssertNil(decoded.rating)
+        let recipient = SharedPlaceReceipt.embedded(payload).recipientOwnedPlace()
+        XCTAssertNil(recipient.note)
+        XCTAssertNil(recipient.rating)
+        XCTAssertNil(recipient.googleRating)
+    }
+
+    @MainActor
     func testEmbeddedPayloadCannotForgeVerifiedSender() throws {
         let data = try XCTUnwrap(Self.payloadForgedSenderJSON.data(using: .utf8))
 

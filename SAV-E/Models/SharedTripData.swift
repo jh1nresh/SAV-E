@@ -135,6 +135,29 @@ struct SharedPlaceData: Codable {
         )
     }
 
+    /// Installed-app handoff must not copy sender note/rating into the recipient vault.
+    func strippingSenderMemory() -> SharedPlaceData {
+        SharedPlaceData(
+            id: id,
+            name: name,
+            address: address,
+            lat: lat,
+            lng: lng,
+            category: category,
+            rating: nil,
+            reviewCount: reviewCount,
+            priceRange: priceRange,
+            hours: hours,
+            sourceLabel: sourceLabel,
+            sourceURL: sourceURL,
+            photoURLs: photoURLs,
+            note: nil,
+            coordinateSystem: coordinateSystem,
+            locationProvider: locationProvider,
+            providerMapUrl: providerMapUrl
+        )
+    }
+
     static func from(candidate: SaveMapCandidate) -> SharedPlaceData {
         SharedPlaceData(
             id: "",

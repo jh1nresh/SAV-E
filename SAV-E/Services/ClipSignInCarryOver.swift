@@ -19,10 +19,12 @@ enum ClipSignInCarryOver {
         storedAppleUserID: String?,
         credentialState: ClipAppleCredentialState?
     ) -> ClipSignInCarryOverOutcome {
-        guard let storedAppleUserID,
-              !storedAppleUserID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else { return .showSignIn }
-        return credentialState == .authorized ? .skipSignIn : .showSignIn
+        // HoP 2026-10-24: an empty Apple Privy duplicate is tolerated
+        // pre-launch. Clip journals must land on the phone/email Privy
+        // session, so never skip SignInView with an Apple identity token.
+        _ = storedAppleUserID
+        _ = credentialState
+        return .showSignIn
     }
 
     static func map(_ state: ASAuthorizationAppleIDProvider.CredentialState) -> ClipAppleCredentialState {

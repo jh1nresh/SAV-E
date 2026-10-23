@@ -17,7 +17,7 @@ final class ClipSignInCarryOverTests: XCTestCase {
         super.tearDown()
     }
 
-    func testAuthorizedSkipsSignInAndRestoresSession() async {
+    func testAuthorizedStillShowsSignInSoJournalLandsOnPhoneEmail() async {
         let defaults = store!
         ClipAppleAccountStore.write("001234.clip-apple-user.abcd", to: defaults)
         let restore = RestoreProbe()
@@ -27,14 +27,14 @@ final class ClipSignInCarryOverTests: XCTestCase {
             restoreSession: { restore.mark() }
         ).run()
 
-        XCTAssertEqual(outcome, .skipSignIn)
-        XCTAssertEqual(restore.count, 1)
+        XCTAssertEqual(outcome, .showSignIn)
+        XCTAssertEqual(restore.count, 0)
         XCTAssertEqual(
             ClipSignInCarryOver.decide(
                 storedAppleUserID: "001234.clip-apple-user.abcd",
                 credentialState: .authorized
             ),
-            .skipSignIn
+            .showSignIn
         )
         XCTAssertEqual(ClipSignInCarryOver.map(.authorized), .authorized)
     }

@@ -34,6 +34,11 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(theme.contains("dash: [3.5, 4.5]"))
         XCTAssertTrue(theme.contains("Iansui-Regular"))
         XCTAssertTrue(theme.contains("Iansui-ClipTitles.ttf"))
+        XCTAssertTrue(theme.contains(".cascadeList"))
+        XCTAssertTrue(theme.contains("minimumScaleFactor(0.7)"))
+        XCTAssertTrue(theme.contains("colorScheme == .dark ? Color.black"))
+        XCTAssertFalse(theme.contains("context.fill(plate, with: .color(kraft))"))
+        XCTAssertFalse(theme.contains("context.fill(saucer, with: .color(kraft))"))
         XCTAssertFalse(theme.contains("SavvyLogo"))
         XCTAssertFalse(theme.contains("case elephant"))
         XCTAssertFalse(theme.contains("case temple"))
@@ -242,10 +247,25 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(try source(at: "backend/src/server.ts").contains("items.length > listMaxItems"))
         XCTAssertFalse(try source(at: "backend/src/server.ts").contains("items.length > 100"))
         XCTAssertTrue(try source(at: "backend/src/server.ts").contains("verifiedAppleIdentity"))
+        XCTAssertTrue(try source(at: "backend/src/server.ts").contains("findUserForApple"))
         XCTAssertTrue(try source(at: "backend/src/server.ts").contains("ensureUserForApple"))
+        XCTAssertTrue(try source(at: "backend/src/server.ts").contains("lookupAppleLinkedPrivySubject"))
         XCTAssertTrue(try source(at: "backend/src/server.ts").contains("verifiedAppleLinkedPrivySubject"))
+        XCTAssertTrue(try source(at: "backend/src/server.ts").contains("verifiedPrivyAccessSubject"))
         XCTAssertTrue(try source(at: "backend/src/server.ts").contains("clip-apple-session"))
+        XCTAssertTrue(try source(at: "backend/src/server.ts").contains("Privy bearer token required"))
         XCTAssertFalse(try source(at: "backend/src/server.ts").contains("profileIdForPrivySubject(appleSubject)"))
+        let server = try source(at: "backend/src/server.ts")
+        let sessionBlock = server[
+            server.range(of: "resource === \"clip-apple-session\"")!.lowerBound
+            ..< server.range(of: "resource === \"account-status\"")!.lowerBound
+        ]
+        XCTAssertTrue(sessionBlock.contains("lookupAppleLinkedPrivySubject"))
+        XCTAssertFalse(sessionBlock.contains("ensureUserForApple"))
+        let privyUsers = try source(at: "backend/src/privyUsers.ts")
+        XCTAssertTrue(privyUsers.contains("/v1/users/apple/subject"))
+        XCTAssertFalse(privyUsers.contains("searchParams.set(\"limit\", \"100\")"))
+        XCTAssertFalse(privyUsers.contains("email: email.trim()"))
         let appleIdentity = try source(at: "backend/src/appleIdentityToken.ts")
         XCTAssertTrue(appleIdentity.contains("https://appleid.apple.com"))
         XCTAssertTrue(appleIdentity.contains("com.wanderly.app.Clip"))
@@ -297,6 +317,14 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(app.contains("acceptedListURL"))
         XCTAssertFalse(clip.contains("note: draft.note"))
         XCTAssertFalse(clip.contains("rating: draft.rating"))
+        let handoff = clip[
+            clip.range(of: "private func handoffURL")!.lowerBound
+            ..< clip.range(of: "private func openLeftover")!.lowerBound
+        ]
+        XCTAssertTrue(handoff.contains("strippingSenderMemory()"))
+        XCTAssertFalse(handoff.contains("return lastIncomingURL"))
+        XCTAssertTrue(appPayload.contains("func strippingSenderMemory()"))
+        XCTAssertTrue(clipPayload.contains("func strippingSenderMemory()"))
         XCTAssertTrue(save.contains("func persistList"))
         XCTAssertTrue(save.contains(") -> Bool"))
         let placeModel = try source(at: "SAV-E/Models/Place.swift")
@@ -355,6 +383,8 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(carry.contains("/v0/clip-apple-session"))
         XCTAssertTrue(carry.contains("did:privy:"))
         XCTAssertTrue(carry.contains("case skipSignIn"))
+        XCTAssertTrue(carry.contains("return .showSignIn"))
+        XCTAssertFalse(carry.contains("credentialState == .authorized ? .skipSignIn"))
         XCTAssertTrue(auth.contains("restoreClipSignInIfNeeded"))
         XCTAssertTrue(auth.contains("ClipAppleAccountStore.read"))
         XCTAssertTrue(auth.contains("ClipAppleAccountStore.clear"))

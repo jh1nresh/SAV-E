@@ -13,7 +13,8 @@ export class PrivyUserProvisioningError extends Error {
 
 export type PrivyUserProvisioner = {
   ensureUserForPhone(phoneE164: string): Promise<PrivyUser | null>;
-  ensureUserForApple(appleSubject: string, email?: string): Promise<PrivyUser>;
+  findUserForApple(appleSubject: string): Promise<PrivyUser | null>;
+  ensureUserForApple(appleSubject: string): Promise<PrivyUser>;
   deleteUser(userId: string): Promise<void>;
 };
 
@@ -58,52 +59,16 @@ export function createPrivyUserProvisioner(
     return typeof id === "string" && id.trim() ? { id: id.trim() } : null;
   };
 
-  const appleAccountMatches = (value: unknown, appleSubject: string): boolean => {
-    if (!value || typeof value !== "object") return false;
-    const account = value as Record<string, unknown>;
-    return account.type === "apple_oauth" && account.subject === appleSubject;
-  };
+  const lookupStatus = (status: number): number => (status === 503 ? 502 : status);
 
   const findUserByAppleSubject = async (appleSubject: string): Promise<PrivyUser | null> => {
-    let cursor: string | undefined;
-    const seenCursors = new Set<string>();
-    for (let page = 0; page < 100; page += 1) {
-      const url = new URL(`${endpoint}/v1/users`);
-      url.searchParams.set("limit", "100");
-      if (cursor) url.searchParams.set("cursor", cursor);
-      const listed = await fetchImpl(url, {
-        method: "GET",
-        headers,
-      });
-      if (!listed.ok) {
-        throw new PrivyUserProvisioningError(`Privy Apple user lookup failed: HTTP ${listed.status}`);
-      }
-      const parsed = (await listed.json().catch(() => null)) as unknown;
-      if (!parsed || typeof parsed !== "object") {
-        throw new PrivyUserProvisioningError("Privy Apple user lookup failed: invalid list");
-      }
-      const rows = (parsed as Record<string, unknown>).data;
-      if (!Array.isArray(rows)) {
-        throw new PrivyUserProvisioningError("Privy Apple user lookup failed: invalid list");
-      }
-      for (const row of rows) {
-        if (!row || typeof row !== "object") continue;
-        const record = row as Record<string, unknown>;
-        const id = typeof record.id === "string" ? record.id.trim() : "";
-        const accounts = record.linked_accounts;
-        if (!id || !Array.isArray(accounts)) continue;
-        if (accounts.some((account) => appleAccountMatches(account, appleSubject))) {
-          return { id };
-        }
-      }
-      const nextCursor = (parsed as Record<string, unknown>).next_cursor;
-      if (typeof nextCursor !== "string" || !nextCursor || seenCursors.has(nextCursor)) {
-        return null;
-      }
-      seenCursors.add(nextCursor);
-      cursor = nextCursor;
-    }
-    return null;
+    const existing = await request("/v1/users/apple/subject", { subject: appleSubject });
+    if (existing.ok) return await parseUser(existing);
+    if (existing.status === 404) return null;
+    throw new PrivyUserProvisioningError(
+      `Privy Apple user lookup failed: HTTP ${existing.status}`,
+      lookupStatus(existing.status),
+    );
   };
 
   return {
@@ -130,7 +95,18 @@ export function createPrivyUserProvisioner(
 
       throw new Error(`Privy user import failed: HTTP ${created.status}`);
     },
-    async ensureUserForApple(appleSubject: string, email?: string): Promise<PrivyUser> {
+    async findUserForApple(appleSubject: string): Promise<PrivyUser | null> {
+      const subject = appleSubject.trim();
+      if (!subject) {
+        throw new PrivyUserProvisioningError("Missing Apple subject", 401);
+      }
+      const cached = appleSubjectCache.get(subject);
+      if (cached) return { id: cached };
+      const existing = await findUserByAppleSubject(subject);
+      if (existing) appleSubjectCache.set(subject, existing.id);
+      return existing;
+    },
+    async ensureUserForApple(appleSubject: string): Promise<PrivyUser> {
       const subject = appleSubject.trim();
       if (!subject) {
         throw new PrivyUserProvisioningError("Missing Apple subject", 401);
@@ -144,11 +120,10 @@ export function createPrivyUserProvisioner(
         return existing;
       }
 
-      const createdAccount = email?.trim()
-        ? { type: "apple_oauth", subject, email: email.trim() }
-        : { type: "apple_oauth", subject };
+      // Never attach Apple email on create. An email owned by another Privy
+      // user must not 503, and accounts are never auto-merged by email.
       const created = await request("/v1/users", {
-        linked_accounts: [createdAccount],
+        linked_accounts: [{ type: "apple_oauth", subject }],
         custom_metadata: {
           save_origin: "appclip",
         },
@@ -156,7 +131,7 @@ export function createPrivyUserProvisioner(
       if (created.ok) {
         const user = await parseUser(created);
         if (!user) {
-          throw new PrivyUserProvisioningError("Privy Apple user import failed: missing id");
+          throw new PrivyUserProvisioningError("Privy Apple user import failed: missing id", 502);
         }
         appleSubjectCache.set(subject, user.id);
         return user;
@@ -167,8 +142,15 @@ export function createPrivyUserProvisioner(
           appleSubjectCache.set(subject, retried.id);
           return retried;
         }
+        throw new PrivyUserProvisioningError(
+          `Privy Apple user import failed: HTTP ${created.status}`,
+          created.status === 409 ? 409 : 400,
+        );
       }
-      throw new PrivyUserProvisioningError(`Privy Apple user import failed: HTTP ${created.status}`);
+      throw new PrivyUserProvisioningError(
+        `Privy Apple user import failed: HTTP ${created.status}`,
+        lookupStatus(created.status),
+      );
     },
     async deleteUser(userId: string): Promise<void> {
       const response = await fetchImpl(`${endpoint}/v1/users/${encodeURIComponent(userId)}`, {

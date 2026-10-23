@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createPrivyUserProvisioner } from "./privyUsers.js";
+import { createPrivyUserProvisioner, PrivyUserProvisioningError } from "./privyUsers.js";
 
 test("createPrivyUserProvisioner is disabled without an app secret", () => {
   assert.equal(createPrivyUserProvisioner({ appId: "app_123" }), null);
@@ -103,27 +103,15 @@ test("deleteUser treats an already-missing Privy user as deleted", async () => {
   await assert.doesNotReject(() => provisioner.deleteUser("did:privy:missing"));
 });
 
-test("ensureUserForApple returns the Privy DID for an exact apple_oauth subject", async () => {
-  const calls: string[] = [];
-  const fetchImpl = async (url: string | URL | Request) => {
-    calls.push(url.toString());
-    return Response.json({
-      data: [
-        {
-          id: "did:privy:other",
-          linked_accounts: [
-            { type: "apple_oauth", subject: "001234.other", email: "hidden@privaterelay.appleid.com" },
-          ],
-        },
-        {
-          id: "did:privy:linked",
-          linked_accounts: [
-            { type: "email", address: "hidden@privaterelay.appleid.com" },
-            { type: "apple_oauth", subject: "001234.clip-apple-user" },
-          ],
-        },
-      ],
+test("findUserForApple looks up the official Apple subject path", async () => {
+  const calls: Array<{ url: string; method?: string; body: unknown }> = [];
+  const fetchImpl = async (url: string | URL | Request, init?: RequestInit) => {
+    calls.push({
+      url: url.toString(),
+      method: init?.method,
+      body: init?.body ? JSON.parse(String(init.body)) : null,
     });
+    return Response.json({ id: "did:privy:linked" });
   };
   const provisioner = createPrivyUserProvisioner({
     appId: "app_123",
@@ -132,17 +120,52 @@ test("ensureUserForApple returns the Privy DID for an exact apple_oauth subject"
     fetchImpl,
   });
 
-  const user = await provisioner?.ensureUserForApple(
-    "001234.clip-apple-user",
-    "hidden@privaterelay.appleid.com",
-  );
+  const user = await provisioner?.findUserForApple("001234.clip-apple-user");
 
   assert.equal(user?.id, "did:privy:linked");
   assert.equal(calls.length, 1);
-  assert.equal(calls[0], "https://privy.test/v1/users?limit=100");
+  assert.equal(calls[0]?.url, "https://privy.test/v1/users/apple/subject");
+  assert.equal(calls[0]?.method, "POST");
+  assert.deepEqual(calls[0]?.body, { subject: "001234.clip-apple-user" });
 });
 
-test("ensureUserForApple does not treat a same-email non-Apple account as the owner", async () => {
+test("findUserForApple returns null when the Apple subject is missing", async () => {
+  const provisioner = createPrivyUserProvisioner({
+    appId: "app_123",
+    appSecret: "secret_456",
+    endpoint: "https://privy.test",
+    fetchImpl: async () => new Response(JSON.stringify({ error: "not found" }), { status: 404 }),
+  });
+
+  assert.equal(await provisioner?.findUserForApple("001234.clip-apple-user"), null);
+});
+
+test("ensureUserForApple returns the Privy DID for an exact apple_oauth subject", async () => {
+  const calls: Array<{ url: string; method?: string; body: unknown }> = [];
+  const fetchImpl = async (url: string | URL | Request, init?: RequestInit) => {
+    calls.push({
+      url: url.toString(),
+      method: init?.method,
+      body: init?.body ? JSON.parse(String(init.body)) : null,
+    });
+    return Response.json({ id: "did:privy:linked" });
+  };
+  const provisioner = createPrivyUserProvisioner({
+    appId: "app_123",
+    appSecret: "secret_456",
+    endpoint: "https://privy.test",
+    fetchImpl,
+  });
+
+  const user = await provisioner?.ensureUserForApple("001234.clip-apple-user");
+
+  assert.equal(user?.id, "did:privy:linked");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.url, "https://privy.test/v1/users/apple/subject");
+  assert.deepEqual(calls[0]?.body, { subject: "001234.clip-apple-user" });
+});
+
+test("ensureUserForApple never attaches email or merges a same-email account", async () => {
   const calls: Array<{ url: string; method?: string; body: unknown }> = [];
   const fetchImpl = async (url: string | URL | Request, init?: RequestInit) => {
     const value = url.toString();
@@ -151,16 +174,41 @@ test("ensureUserForApple does not treat a same-email non-Apple account as the ow
       method: init?.method,
       body: init?.body ? JSON.parse(String(init.body)) : null,
     });
-    if (value.includes("/v1/users?") || value.endsWith("/v1/users")) {
-      if (init?.method === "POST" || value.endsWith("/v1/users") && init?.method !== "GET") {
-        return Response.json({ id: "did:privy:imported" });
-      }
-      return Response.json({
-        data: [{
-          id: "did:privy:email-only",
-          linked_accounts: [{ type: "email", address: "same@privaterelay.appleid.com" }],
-        }],
-      });
+    if (value.endsWith("/v1/users/apple/subject")) {
+      return new Response(JSON.stringify({ error: "not found" }), { status: 404 });
+    }
+    return Response.json({ id: "did:privy:imported" });
+  };
+  const provisioner = createPrivyUserProvisioner({
+    appId: "app_123",
+    appSecret: "secret_456",
+    endpoint: "https://privy.test",
+    fetchImpl,
+  });
+
+  const user = await provisioner?.ensureUserForApple("001234.clip-apple-user");
+
+  assert.equal(user?.id, "did:privy:imported");
+  assert.equal(calls[1]?.url, "https://privy.test/v1/users");
+  assert.deepEqual(calls[1]?.body, {
+    linked_accounts: [{
+      type: "apple_oauth",
+      subject: "001234.clip-apple-user",
+    }],
+    custom_metadata: { save_origin: "appclip" },
+  });
+  assert.equal(JSON.stringify(calls[1]?.body).includes("email"), false);
+});
+
+test("ensureUserForApple does not scan the Privy user list", async () => {
+  const urls: string[] = [];
+  const fetchImpl = async (url: string | URL | Request, init?: RequestInit) => {
+    urls.push(url.toString());
+    if (url.toString().endsWith("/v1/users/apple/subject")) {
+      return new Response(JSON.stringify({ error: "not found" }), { status: 404 });
+    }
+    if (url.toString().endsWith("/v1/users") && String(init?.method).toUpperCase() === "POST") {
+      return Response.json({ id: "did:privy:new-apple" });
     }
     return new Response(null, { status: 500 });
   };
@@ -171,61 +219,15 @@ test("ensureUserForApple does not treat a same-email non-Apple account as the ow
     fetchImpl,
   });
 
-  const user = await provisioner?.ensureUserForApple(
-    "001234.clip-apple-user",
-    "same@privaterelay.appleid.com",
-  );
-
-  assert.equal(user?.id, "did:privy:imported");
-  assert.equal(calls[1]?.url, "https://privy.test/v1/users");
-  assert.deepEqual(calls[1]?.body, {
-    linked_accounts: [{
-      type: "apple_oauth",
-      subject: "001234.clip-apple-user",
-      email: "same@privaterelay.appleid.com",
-    }],
-    custom_metadata: { save_origin: "appclip" },
-  });
-});
-
-test("ensureUserForApple pages until the exact Apple subject matches", async () => {
-  let pages = 0;
-  const fetchImpl = async (url: string | URL | Request) => {
-    const parsed = new URL(url.toString());
-    pages += 1;
-    if (!parsed.searchParams.get("cursor")) {
-      return Response.json({
-        data: [{
-          id: "did:privy:page-one",
-          linked_accounts: [{ type: "apple_oauth", subject: "001234.other" }],
-        }],
-        next_cursor: "page-2",
-      });
-    }
-    assert.equal(parsed.searchParams.get("cursor"), "page-2");
-    return Response.json({
-      data: [{
-        id: "did:privy:page-two",
-        linked_accounts: [{ type: "apple_oauth", subject: "001234.clip-apple-user" }],
-      }],
-    });
-  };
-  const provisioner = createPrivyUserProvisioner({
-    appId: "app_123",
-    appSecret: "secret_456",
-    endpoint: "https://privy.test",
-    fetchImpl,
-  });
-
   const user = await provisioner?.ensureUserForApple("001234.clip-apple-user");
-  assert.equal(user?.id, "did:privy:page-two");
-  assert.equal(pages, 2);
+  assert.equal(user?.id, "did:privy:new-apple");
+  assert.equal(urls.some((value) => value.includes("/v1/users?")), false);
 });
 
 test("ensureUserForApple imports a missing Apple subject instead of using the raw sub", async () => {
   const fetchImpl = async (url: string | URL | Request, init?: RequestInit) => {
-    if (String(init?.method ?? "GET").toUpperCase() === "GET") {
-      return Response.json({ data: [] });
+    if (url.toString().endsWith("/v1/users/apple/subject")) {
+      return new Response(JSON.stringify({ error: "not found" }), { status: 404 });
     }
     return Response.json({ id: "did:privy:new-apple" });
   };
@@ -244,18 +246,17 @@ test("ensureUserForApple imports a missing Apple subject instead of using the ra
 test("ensureUserForApple retries the exact subject after a create conflict", async () => {
   let created = false;
   const fetchImpl = async (url: string | URL | Request, init?: RequestInit) => {
-    if (String(init?.method ?? "GET").toUpperCase() === "POST") {
+    if (url.toString().endsWith("/v1/users") && String(init?.method).toUpperCase() === "POST") {
       created = true;
       return new Response(JSON.stringify({ error: "already linked" }), { status: 409 });
     }
-    return Response.json({
-      data: created
-        ? [{
-          id: "did:privy:raced",
-          linked_accounts: [{ type: "apple_oauth", subject: "001234.clip-apple-user" }],
-        }]
-        : [],
-    });
+    if (url.toString().endsWith("/v1/users/apple/subject")) {
+      if (!created) {
+        return new Response(JSON.stringify({ error: "not found" }), { status: 404 });
+      }
+      return Response.json({ id: "did:privy:raced" });
+    }
+    return new Response(null, { status: 500 });
   };
   const provisioner = createPrivyUserProvisioner({
     appId: "app_123",
@@ -268,21 +269,23 @@ test("ensureUserForApple retries the exact subject after a create conflict", asy
   assert.equal(user?.id, "did:privy:raced");
 });
 
-test("ensureUserForApple fails closed when a conflict cannot be resolved to a Privy DID", async () => {
+test("ensureUserForApple returns 409 instead of 503 when a conflict cannot be resolved", async () => {
   const provisioner = createPrivyUserProvisioner({
     appId: "app_123",
     appSecret: "secret_456",
-    fetchImpl: async (_url, init) => {
-      if (String(init?.method ?? "GET").toUpperCase() === "POST") {
+    fetchImpl: async (url, init) => {
+      if (url.toString().endsWith("/v1/users") && String(init?.method).toUpperCase() === "POST") {
         return new Response(JSON.stringify({ error: "already linked" }), { status: 409 });
       }
-      return Response.json({ data: [] });
+      return new Response(JSON.stringify({ error: "not found" }), { status: 404 });
     },
   });
 
   await assert.rejects(
     () => provisioner!.ensureUserForApple("001234.clip-apple-user"),
-    /Privy Apple user import failed: HTTP 409/,
+    (error: unknown) => error instanceof PrivyUserProvisioningError
+      && error.status === 409
+      && /Privy Apple user import failed: HTTP 409/.test(error.message),
   );
 });
 

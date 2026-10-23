@@ -246,6 +246,8 @@ jobs:
               "in `ClipDisplayType.register`\n"
               "- Used for: place name, list title, and state titles when locale is zh-Hant "
               "(`ClipDisplayType.title`)\n"
+              "- Latin shop-name fallback: Iansui cascades to Caveat "
+              "(`UIFontDescriptor.AttributeName.cascadeList`)\n"
               "- Not shipped: `Iansui-SavvySubset.ttf` (3.48 MB)\n"
           )
           (out / "12-screenshot-manifest.md").write_text(

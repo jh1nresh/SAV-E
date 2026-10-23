@@ -435,7 +435,7 @@ struct ClipContentView: View {
 
     private func leftoverContent(title: String, rows: [String]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            ClipDisplayTitle(text: title, pointSize: 28, relativeTo: .title)
+            ClipDisplayTitle(text: title, pointSize: 28, relativeTo: .title, alignment: .leading)
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 Text(row)
                     .font(ClipJournalType.system(17, weight: .regular, relativeTo: .body))
@@ -746,9 +746,8 @@ struct ClipContentView: View {
     }
 
     private func handoffURL(for draft: ClipPlaceDraft, listTitle: String?) -> URL {
-        if let lastIncomingURL, listTitle == nil {
-            return lastIncomingURL
-        }
+        _ = listTitle
+        // Never return lastIncomingURL: /p links can embed the sender's note/rating.
         if let encoded = SharedPlaceData(
             id: draft.placeId ?? "",
             name: draft.name,
@@ -767,10 +766,10 @@ struct ClipContentView: View {
             coordinateSystem: draft.coordinateSystem,
             locationProvider: draft.locationProvider,
             providerMapUrl: draft.providerMapURL
-        ).toURL() {
+        ).strippingSenderMemory().toURL() {
             return encoded
         }
-        return lastIncomingURL ?? URL(string: "https://sav-e-app.vercel.app/p")!
+        return URL(string: "https://sav-e-app.vercel.app/p")!
     }
 
     private func openLeftover() {
