@@ -153,10 +153,11 @@ jobs:
     needs: [ios-build]
     runs-on: macos-26
     # Products come from ios-build (no second compile). Setup + units +
-    # simulator is ~15-20m; UI step 80; Trip 15; slack for parity/teardown
-    # and the main-only Release compile. Run 39736743354: the 60m UI step
-    # cut a passing Passport/Home suite mid-test after ~18 greens.
-    timeout-minutes: 120
+    # simulator is ~15-20m; UI step 80; three real-device width shots 15
+    # each; Trip 15; slack for parity/teardown and the main-only Release
+    # compile. Run 39736743354: the 60m UI step cut a passing Passport/Home
+    # suite mid-test after ~18 greens.
+    timeout-minutes: 180
     env:
       # Re-enabled for the 2026-10-15 pixel-art pass. Disable again after the
       # focused set is green, then run one full suite as the merge gate.
@@ -364,7 +365,7 @@ jobs:
       # and stops before a third run. Retries are named by the next step.
       - name: Run selected UI regression tests
         id: ui_tests
-        # Job budget is 120. The step gets a real 80m of test time so a
+        # Job budget is 180. The step gets a real 80m of test time so a
         # passing selected suite can finish (run 39736743354 hit 60m).
         timeout-minutes: 80
         if: steps.scope.outputs.ui == 'true'
@@ -479,7 +480,7 @@ jobs:
             echo "No readable UI result bundle; keep SAVE_SCREENSHOT_DIR rasters."
           fi
           echo "DESIGN Home/Passport/Map rasters in SAVE-First-Run:"
-          for name in five-tab-home light-home dark-home H1 H2 H3 H4 five-tab-passport doodle-passport-light doodle-passport-dark light-passport dark-passport five-tab-map doodle-map-light light-map dark-map; do
+          for name in five-tab-home light-home dark-home H1 H2 H3 H4 five-tab-passport doodle-passport-light doodle-passport-dark light-passport dark-passport five-tab-map doodle-map-light light-map dark-map passport-375 passport-390 passport-430; do
             path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
             if [[ -f "$path" ]]; then
               wc -c "$path"
@@ -487,6 +488,66 @@ jobs:
               echo "missing $name.png"
             fi
           done
+
+      # Real 375 / 390 / 430 simulators. iPhone-SE-3rd-generation (375),
+      # iPhone-14 (390; not iPhone-16 at 393), iPhone-16-Pro-Max (430).
+      # Letterboxing the 402pt CI device does not count.
+      - name: Capture Passport 375pt width evidence
+        timeout-minutes: 15
+        if: always() && (steps.scope.outputs.ui == 'true')
+        env:
+          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Passport-375-tests.log
+        run: |
+          scripts/run-ios-width-device-test.sh \
+            --width 375 \
+            --test SAVEUITests/SAVEScreenshotRailTests/testPassportWidth375 \
+            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
+            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
+            --result-bundle "$RUNNER_TEMP/SAVE-Passport-375.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Passport-375-tests.log"
+
+      - name: Capture Passport 390pt width evidence
+        timeout-minutes: 15
+        if: always() && (steps.scope.outputs.ui == 'true')
+        env:
+          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Passport-390-tests.log
+        run: |
+          scripts/run-ios-width-device-test.sh \
+            --width 390 \
+            --test SAVEUITests/SAVEScreenshotRailTests/testPassportWidth390 \
+            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
+            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
+            --result-bundle "$RUNNER_TEMP/SAVE-Passport-390.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Passport-390-tests.log"
+
+      - name: Capture Passport 430pt width evidence
+        timeout-minutes: 15
+        if: always() && (steps.scope.outputs.ui == 'true')
+        env:
+          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Passport-430-tests.log
+        run: |
+          scripts/run-ios-width-device-test.sh \
+            --width 430 \
+            --test SAVEUITests/SAVEScreenshotRailTests/testPassportWidth430 \
+            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
+            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
+            --result-bundle "$RUNNER_TEMP/SAVE-Passport-430.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Passport-430-tests.log"
+
+      - name: Require Passport width evidence
+        if: always() && (steps.scope.outputs.ui == 'true')
+        run: |
+          missing=0
+          for name in passport-375 passport-390 passport-430; do
+            path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
+            if [[ -f "$path" ]]; then
+              wc -c "$path"
+            else
+              echo "missing $name.png" >&2
+              missing=1
+            fi
+          done
+          exit "$missing"
 
       - name: Reset focused simulator before Trip sheet UI test
         if: steps.scope.outputs.trip == 'true'

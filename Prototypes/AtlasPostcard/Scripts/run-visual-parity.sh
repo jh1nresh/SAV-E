@@ -29,9 +29,8 @@ map.png, and passport.png. The result-bundle mode prefers the live
 five-tab-home attachment for Home and falls back to atlas-home for
 prototype-only runs. Passport prefers five-tab-passport and falls back to
 atlas-passport. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
-and atlas-map XCTest attachments. Passport still writes a 0.90 comparison
-against the Doodle mock; that score is report-only. DESIGN judges the
-Passport rasters manually.
+and atlas-map XCTest attachments. Home, Map, Saves, Plan, and Passport
+all fail the job below 0.90. Passport has no ignore mask.
 EOF
 }
 
@@ -400,9 +399,9 @@ fi
 
 gate_failed=0
 mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
-# DESIGN v2 map-mask.png: white = live Apple Maps (ignored). Home, Map,
-# and Passport 0.90 scores are recorded for side-by-side review, not
-# a CI gate. Saves and Plan still fail the job below 0.90.
+# DESIGN v2 map-mask.png: white = live Apple Maps (ignored). Home uses
+# home-mask.png. Passport has no mask. Home, Map, Saves, Plan, and
+# Passport all fail the job below 0.90.
 MAP_MASK="$REFERENCE_SOURCE/map-mask.png"
 for screen in home saves plan map passport; do
     actual="$ARTIFACT_DIR/output/$screen.png"
@@ -442,14 +441,8 @@ for screen in home saves plan map passport; do
         comparison_status=$?
         if ((comparison_status == 1)); then
             status="FAIL"
-            # Home / Map / Passport Doodle rasters are judged manually
-            # against DESIGN goldens. The 0.90 score is not a CI gate.
-            if [[ "$screen" == "home" || "$screen" == "map" || "$screen" == "passport" ]]; then
-                status="REVIEW"
-                echo "note: $screen 0.90 is report-only; DESIGN judges rasters manually." >&2
-            else
-                gate_failed=1
-            fi
+            # Home, Map, Saves, Plan, and Passport all fail the job below 0.90.
+            gate_failed=1
         else
             echo "error: parity comparison failed for $screen" >&2
             cat "$ARTIFACT_DIR/results/$screen.json" >&2
