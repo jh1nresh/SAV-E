@@ -189,7 +189,11 @@ struct SaveFriendsView: View {
             .accessibilityIdentifier("friends.author.\(row.authorID)")
 
             Button { selected = row.lastPost } label: {
-                SaveDoodleFriendSticker(name: row.lastPost.name, category: row.lastPost.category)
+                SaveDoodleFriendSticker(
+                    name: row.lastPost.name,
+                    category: row.lastPost.category,
+                    visited: row.lastPost.status == .visited
+                )
                     .frame(width: SaveLayout.stickerArt, height: SaveLayout.stickerArt)
                     .frame(width: SaveLayout.minTap, height: SaveLayout.minTap)
                     .contentShape(Rectangle())
@@ -265,20 +269,21 @@ nonisolated struct SaveDoodleInkRing: Shape {
     }
 }
 
-/// 40pt official outline sticker. Packet §7.4 wants line-art, not a filled box.
+/// 40pt doodle sticker. Outlined if the friend only saved; colored if visited.
 struct SaveDoodleFriendSticker: View {
     let name: String
     let category: String
+    let visited: Bool
 
     var body: some View {
         Group {
             if Self.usesHillMark(name: name) {
-                SaveDoodleFriendHill(size: SaveLayout.stickerArt)
+                SaveDoodleFriendHill(size: SaveLayout.stickerArt, filled: visited)
             } else {
                 SaveDoodleSticker(
                     category: PlaceCategory(rawValue: category) ?? .attraction,
                     placeName: Self.parityPlaceName(name),
-                    visited: false,
+                    visited: visited,
                     pointSize: SaveLayout.stickerArt,
                     boxSize: SaveLayout.minTap
                 )
@@ -324,6 +329,7 @@ struct SaveDoodleFriendSticker: View {
 /// `friends.png` Ana row is a filled hill, not an official temple outline.
 struct SaveDoodleFriendHill: View {
     var size: CGFloat = 40
+    var filled: Bool = true
 
     var body: some View {
         Canvas { context, canvasSize in
@@ -336,7 +342,11 @@ struct SaveDoodleFriendHill: View {
             path.addLine(to: CGPoint(x: width * 0.74, y: height * 0.20))
             path.addLine(to: CGPoint(x: width * 0.96, y: height * 0.84))
             path.closeSubpath()
-            context.fill(path, with: .color(SaveAtlasPalette.forest))
+            if filled {
+                context.fill(path, with: .color(SaveAtlasPalette.forest))
+            } else {
+                context.stroke(path, with: .color(SaveAtlasPalette.forest), lineWidth: 2)
+            }
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)

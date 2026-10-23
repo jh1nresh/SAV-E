@@ -930,6 +930,7 @@ people-first doodle: Caveat / Iansui “Friends” / 「朋友」 title, ink
 outline “Invite”, forest-ring avatars (initial or photo), author name,
 “last at Place · 2d”, and right-side 40pt doodle stickers
 (coffee / noodle / lantern / hill). The shared map stays hidden (HoP; cut in DESIGN v1 and kept).
+Stickers are outlined if the friend only saved the place, colored if they visited.
 The visual reference is Codex packet spec §7.4. Live `five-tab-friends`
 gates at 0.90 against `ProductionTargets/friends.png` with no mask.
 This surface has no animation (F-B11). An

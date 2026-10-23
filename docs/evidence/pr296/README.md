@@ -30,9 +30,10 @@ Attachments: `friends-375` / `friends-390` / `friends-430` plus
 | Title | Large Caveat / Iansui | 48pt locked `SaveDisplayTitle` |
 | Invite | Small outline chip | 12pt / 28pt min height outline |
 | Avatars | Large forest rings | 56pt, 2pt forest stroke |
-| Stickers | coffee / noodle / lantern / hill | 40pt official outlines + hill doodle |
+| Stickers | coffee / noodle / lantern / hill | outlined if saved, colored if visited |
 | Map | Hidden | Hidden |
 | Animation (F-B11) | None | None |
+| Coming-soon | Cannot occur | Deleted; empty feed stays |
 | 375 / 390 / 430 | Real devices | real 375 / 390 / 430 |
 
 ## Out-of-scope files that stay

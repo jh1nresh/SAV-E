@@ -82,6 +82,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    /// Real empty feed (no followed friends). Friends is shipped, so a
+    /// coming-soon state cannot occur and is not shown.
     func testFriendsComingSoon() throws {
         try assertFriendsComingSoonLanguages()
     }

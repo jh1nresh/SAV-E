@@ -190,9 +190,9 @@ final class SharedPostsStore: ObservableObject {
     private static var friendsTownPosts: [SharedPlacePost] {
         [
             ("a1111111-1111-4111-8111-111111111111", "Grey Cafe", "Beijing", "cafe", PlaceStatus.wantToGo, "mia", "Mia", true, "2026-10-18T10:00:00Z"),
-            ("a2222222-2222-4222-8222-222222222222", "Fangzhuanchang Noodles", "Beijing", "food", .visited, "leo", "Leo", true, "2026-10-15T10:00:00Z"),
+            ("a2222222-2222-4222-8222-222222222222", "Fangzhuanchang Noodles", "Beijing", "food", .wantToGo, "leo", "Leo", true, "2026-10-15T10:00:00Z"),
             ("a3333333-3333-4333-8333-333333333333", "Temple of Heaven Park", "Beijing", "attraction", .visited, "kai", "Kai", true, "2026-10-13T10:00:00Z"),
-            ("a4444444-4444-4444-8444-444444444444", "Jingshan Hill", "Beijing", "attraction", .wantToGo, "ana", "Ana", true, "2026-10-06T10:00:00Z"),
+            ("a4444444-4444-4444-8444-444444444444", "Jingshan Hill", "Beijing", "attraction", .visited, "ana", "Ana", true, "2026-10-06T10:00:00Z"),
         ].map { id, name, address, category, status, authorID, authorName, visible, sharedAt in
             post(
                 id: id,
