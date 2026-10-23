@@ -329,7 +329,7 @@ struct SaveCaptureFlowView: View {
     /// Links stay capturable after AI quota exhaustion. Metered analysis
     /// is the only path that turns Save off.
     private var draftLooksLikeLink: Bool {
-        PendingPlaceImportService.looksLikeURL(trimmedText)
+        SaveSourceHandle.looksLikeURL(trimmedText)
     }
 
     private var canSubmitDraft: Bool {

@@ -34,7 +34,7 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(capture.contains("await entitlements.refresh()"))
         XCTAssertTrue(capture.contains("canSubmitDraft"))
         XCTAssertTrue(capture.contains("draftLooksLikeLink"))
-        XCTAssertTrue(capture.contains("PendingPlaceImportService.looksLikeURL"))
+        XCTAssertTrue(capture.contains("SaveSourceHandle.looksLikeURL"))
         XCTAssertFalse(capture.contains("shouldPresentPaywall"))
         XCTAssertFalse(capture.contains("onOpenGoogleTakeout"))
         XCTAssertFalse(capture.contains(".fullScreenCover(isPresented: $isGoogleTakeoutPresented)"))
