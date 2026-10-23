@@ -3424,8 +3424,21 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         let privy = try source(at: "SAV-E/Services/PrivyAuthService.swift")
         XCTAssertTrue(
-            privy.contains("saveConfirmedPlace(place, ownerSubject: ReviewDemo.userId)"),
+            privy.contains("ReviewDemoSeed.seedIsolatedVaultIfNeeded("),
+            "reviewer-demo entry must run the isolated seed/upgrade path"
+        )
+        let demoSeed = try source(at: "SAV-E/Services/ReviewDemoService.swift")
+        XCTAssertTrue(
+            demoSeed.contains("saveConfirmedPlace(place, ownerSubject: ReviewDemo.userId)"),
             "reviewer-demo Map Stamps must stay visible to the demo owner"
+        )
+        XCTAssertTrue(
+            demoSeed.contains("adoptOwnerlessDemoFixtures"),
+            "P2 4365174273: ownerless legacy demo fixtures must be claimed by ReviewDemo.userId"
+        )
+        XCTAssertTrue(
+            demoSeed.contains("belongingTo: ReviewDemo.userId"),
+            "P2 4365174273: seed-presence checks must use the demo-owner scope"
         )
         XCTAssertTrue(map.contains("try persistParkedReviewCandidate(candidate)"))
         XCTAssertTrue(

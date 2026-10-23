@@ -381,4 +381,69 @@ enum ReviewDemoSeed {
     ) -> Bool {
         repairForUITests || !isolatedOfflineUITest
     }
+
+    /// Earlier builds wrote demo fixtures without an owner. Presence checks
+    /// that read the unscoped vault then skip seeding, while the demo
+    /// MapViewModel only shows `ReviewDemo.userId` rows.
+    static func adoptOwnerlessDemoFixtures(in vault: SaveLocalVaultService) {
+        let seedPlaces = places()
+        for record in (try? vault.confirmedPlaceRecords(limit: 500)) ?? [] {
+            guard record.ownerSubject == nil, let place = record.confirmedPlace else { continue }
+            let matchesSeed = seedPlaces.contains { $0.matches(place) }
+                || seedPlaces.contains {
+                    $0.name.localizedCaseInsensitiveCompare(place.name) == .orderedSame
+                }
+            guard matchesSeed else { continue }
+            _ = try? vault.saveConfirmedPlace(place, ownerSubject: ReviewDemo.userId)
+        }
+        let seedNames = reviewCandidates().map(\.candidateName)
+        for candidate in (try? vault.reviewCandidates(limit: 500)) ?? [] {
+            guard candidate.ownerSubject == nil else { continue }
+            let matchesSeed = seedNames.contains {
+                $0.localizedCaseInsensitiveCompare(candidate.name) == .orderedSame
+            }
+            guard matchesSeed else { continue }
+            _ = try? vault.removeReviewCandidate(candidate.id, ownerSubject: nil)
+            var owned = candidate
+            owned.ownerSubject = ReviewDemo.userId
+            _ = try? vault.saveReviewCandidate(owned)
+        }
+    }
+
+    static func seedIsolatedVaultIfNeeded(
+        vault: SaveLocalVaultService,
+        defaults: UserDefaults,
+        repairForUITests: Bool,
+        isolatedOfflineUITest: Bool
+    ) {
+        adoptOwnerlessDemoFixtures(in: vault)
+        let existingPlaces = (try? vault.confirmedPlaces(
+            limit: 500,
+            belongingTo: ReviewDemo.userId
+        )) ?? []
+        let existingReviewCandidates = (try? vault.reviewCandidates(
+            limit: 500,
+            belongingTo: ReviewDemo.userId
+        )) ?? []
+        let wasSeeded = defaults.bool(forKey: ReviewDemo.seededDefaultsKey)
+        if shouldSeedVault(
+            existingPlaces: existingPlaces,
+            wasSeeded: wasSeeded,
+            repairForUITests: repairForUITests
+        ) {
+            for place in missingPlaces(from: existingPlaces) {
+                _ = try? vault.saveConfirmedPlace(place, ownerSubject: ReviewDemo.userId)
+            }
+        }
+        if shouldSeedReviewFace(
+            repairForUITests: repairForUITests,
+            isolatedOfflineUITest: isolatedOfflineUITest
+        ) {
+            for var candidate in missingReviewCandidates(from: existingReviewCandidates) {
+                candidate.ownerSubject = ReviewDemo.userId
+                _ = try? vault.saveReviewCandidate(candidate)
+            }
+        }
+        defaults.set(true, forKey: ReviewDemo.seededDefaultsKey)
+    }
 }

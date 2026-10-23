@@ -238,7 +238,9 @@ final class PrivyAuthService: ObservableObject {
         }
     }
 
-    /// Seeds the isolated review-demo vault once. A DEBUG-only UI-test flag may
+    /// Seeds the isolated review-demo vault once. Ownerless fixtures from an
+    /// earlier build are claimed by `ReviewDemo.userId` so App Review still
+    /// sees Map Stamps and the Harbor Oven clue. A DEBUG-only UI-test flag may
     /// repair missing simulator seeds without changing or clearing existing data.
     /// Best-effort: a seed failure must not block demo entry.
     private func seedReviewerDemoVaultIfNeeded() {
@@ -248,32 +250,12 @@ final class PrivyAuthService: ObservableObject {
 #else
         let shouldRepairForUITests = false
 #endif
-        let vault = ReviewDemoStorage.localVaultService
-        let existingPlaces = (try? vault.confirmedPlaces(limit: 500)) ?? []
-        let existingReviewCandidates = (try? vault.reviewCandidates(limit: 500)) ?? []
-        let wasSeeded = defaults.bool(forKey: ReviewDemo.seededDefaultsKey)
-        if ReviewDemoSeed.shouldSeedVault(
-            existingPlaces: existingPlaces,
-            wasSeeded: wasSeeded,
-            repairForUITests: shouldRepairForUITests
-        ) {
-            for place in ReviewDemoSeed.missingPlaces(from: existingPlaces) {
-                _ = try? vault.saveConfirmedPlace(place, ownerSubject: ReviewDemo.userId)
-            }
-        }
-        // Isolated demo vault only. Harbor Oven is the Review fixture, but
-        // offline capture UI tests need an empty queue unless they ask to
-        // repair the Review face.
-        if ReviewDemoSeed.shouldSeedReviewFace(
+        ReviewDemoSeed.seedIsolatedVaultIfNeeded(
+            vault: ReviewDemoStorage.localVaultService,
+            defaults: defaults,
             repairForUITests: shouldRepairForUITests,
             isolatedOfflineUITest: ReviewDemo.isOfflineUITestMode
-        ) {
-            for var candidate in ReviewDemoSeed.missingReviewCandidates(from: existingReviewCandidates) {
-                candidate.ownerSubject = ReviewDemo.userId
-                _ = try? vault.saveReviewCandidate(candidate)
-            }
-        }
-        defaults.set(true, forKey: ReviewDemo.seededDefaultsKey)
+        )
     }
 
     // MARK: - Sign Out
