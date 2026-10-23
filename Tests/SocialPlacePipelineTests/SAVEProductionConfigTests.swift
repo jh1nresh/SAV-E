@@ -2521,6 +2521,96 @@ final class SAVEProductionConfigTests: XCTestCase {
         try await service.updatePlace(Place.mock)
     }
 
+    /// 2026-10-23 P2 ruling (B): when the server rejects a PATCH that would
+    /// grow the canonical set, the attempted place is Unplaced and the
+    /// saved-50 paywall is the one that appears.
+    @MainActor
+    func testRulingBPatchRejectParksUnplacedAndShowsSaved50Paywall() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        defer {
+            auth.authState = originalAuth
+            SavePlaceLimitHandoff.testDefaults = originalDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        let owner = "ruling-b-patch-owner"
+        auth.authState = .authenticated(userId: owner)
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.ruling-b.\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vaultURL = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        var original = makeCappedPlaces(1)[0]
+        original.googlePlaceId = "ruling-b-existing"
+        var edited = original
+        edited.name = "Ruling B New Venue"
+        edited.googlePlaceId = "ruling-b-new-unique"
+        var patchCount = 0
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "PATCH", request.url?.path.hasPrefix("/places/") == true {
+                patchCount += 1
+                return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#)
+            }
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+        map.places = [original] + makeCappedPlaces(49, indexOffset: 1)
+        map.selectedPlace = original
+        do {
+            try await map.updatePlace(edited)
+            XCTFail("PATCH growth refusal must not keep the attempted identity saved")
+        } catch is SavePlaceLimitError {}
+        XCTAssertEqual(patchCount, 1)
+        XCTAssertEqual(map.places.count, 50)
+        XCTAssertEqual(map.places.first(where: { $0.id == original.id })?.googlePlaceId, "ruling-b-existing")
+        XCTAssertEqual(map.places.first(where: { $0.id == original.id })?.name, original.name)
+        XCTAssertEqual(map.selectedPlace?.id, original.id)
+        XCTAssertEqual(map.selectedPlace?.googlePlaceId, "ruling-b-existing")
+        let parked = try XCTUnwrap(map.reviewCandidates.first)
+        XCTAssertTrue(parked.isUnplacedInbox)
+        XCTAssertEqual(parked.name, "Ruling B New Venue")
+        XCTAssertEqual(parked.googlePlaceId, "ruling-b-new-unique")
+        XCTAssertNotEqual(parked.id, original.id, "Unplaced must not collide with the confirmed stamp")
+        XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        let persisted = try XCTUnwrap(vault.reviewCandidates(belongingTo: owner).first)
+        XCTAssertEqual(persisted.id, parked.id)
+        XCTAssertTrue(persisted.isUnplacedInbox)
+        XCTAssertEqual(persisted.name, "Ruling B New Venue")
+        XCTAssertTrue(try vault.confirmedPlaces(belongingTo: owner).isEmpty)
+
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+        XCTAssertTrue(content.contains(".onChange(of: mapVM.shouldPresentSavedPlaceLimitPaywall)"))
+        XCTAssertTrue(content.contains("presentSavedPlaceLimitPaywall()"))
+        XCTAssertTrue(content.contains("SaveProPaywallView(trigger: .savedPlaceLimit)"))
+        let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
+        XCTAssertTrue(paywall.contains("if trigger == .savedPlaceLimit"))
+        XCTAssertTrue(paywall.contains("You've saved 50 places. Keep going."))
+        XCTAssertTrue(paywall.contains("Free: 50 places"))
+        XCTAssertTrue(paywall.contains("paywall.savedNote"))
+
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "PATCH", request.url?.path.hasPrefix("/places/") == true {
+                return (403, "rejected")
+            }
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+        map.acknowledgeSavedPlaceLimitPaywall()
+        map.reviewCandidates = []
+        var noteOnly = original
+        noteOnly.note = "ordinary edit"
+        do {
+            try await map.updatePlace(noteOnly)
+            XCTFail("ordinary PATCH 403 must not look like a cap")
+        } catch {
+            XCTAssertFalse(error is SavePlaceLimitError)
+        }
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+        XCTAssertEqual(map.places.first(where: { $0.id == original.id })?.note, original.note)
+    }
+
     @MainActor
     func testMatchedReviewMergeCapParksOriginalCandidate() async throws {
         let auth = PrivyAuthService.shared
@@ -2889,6 +2979,24 @@ final class SAVEProductionConfigTests: XCTestCase {
             offline.contains("parkIfLimited"),
             "do not wrap the offline merge in the PATCH-cap parking helper"
         )
+
+        let userEditStart = try XCTUnwrap(map.range(of: "func updatePlace(_ place: Place) async throws"))
+        let userEditEnd = try XCTUnwrap(map[userEditStart.lowerBound...].range(of: "func discoverRelatedSources("))
+        let userEdit = String(map[userEditStart.lowerBound..<userEditEnd.lowerBound])
+        XCTAssertTrue(
+            userEdit.contains("if error is SavePlaceLimitError"),
+            "2026-10-23 P2 ruling (B): user-edit PATCH growth refusals park Unplaced"
+        )
+        XCTAssertTrue(
+            userEdit.contains("try parkPlaceAfterPatchCap(place, startedBy: owner, generation: generation)"),
+            "ruling B parks the attempted identity before rethrowing the cap"
+        )
+        XCTAssertTrue(map.contains("private func parkPlaceAfterPatchCap("))
+        XCTAssertTrue(
+            map.contains("if places.contains(where: { $0.id == candidate.id }) {\n            candidate.id = UUID()"),
+            "ruling B must not turn a confirmed stamp into Unplaced"
+        )
+        XCTAssertTrue(map.contains("requestSavedPlaceLimitPaywall()"))
     }
 
     @MainActor

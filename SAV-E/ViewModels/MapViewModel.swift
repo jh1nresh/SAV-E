@@ -4346,8 +4346,39 @@ final class MapViewModel: ObservableObject {
             if selectedPlace?.id == place.id {
                 selectedPlace = previousPlace
             }
+            // 2026-10-23 P2 ruling (B): a PATCH growth refusal keeps the
+            // confirmed stamp as the server left it and parks the attempted
+            // identity in Unplaced before the saved-50 paywall.
+            if error is SavePlaceLimitError {
+                try parkPlaceAfterPatchCap(place, startedBy: owner, generation: generation)
+            }
             throw error
         }
+    }
+
+    /// Park the attempted PATCH identity without colliding with a stamp that
+    /// is still confirmed. Failed parking stays retryable and must not open
+    /// the paywall.
+    private func parkPlaceAfterPatchCap(
+        _ place: Place, startedBy owner: String?, generation: Int
+    ) throws {
+        guard !Task.isCancelled else { throw CancellationError() }
+        if let owner {
+            try ensureConfirmationSession(owner, generation)
+        } else if authService.currentUserId != nil || authService.sessionGeneration != generation {
+            throw ReviewCandidateError.sessionChangedAfterCommit
+        }
+        var candidate = PlaceReviewCandidate.unplacedInboxItem(
+            from: place,
+            ownerSubject: authService.currentUserId
+        )
+        if places.contains(where: { $0.id == candidate.id }) {
+            candidate.id = UUID()
+        }
+        try persistParkedReviewCandidate(candidate)
+        reviewCandidates = [candidate] + reviewCandidates.filter { $0.id != candidate.id }
+        requestSavedPlaceLimitPaywall()
+        syncSavedPlaceLimitCache()
     }
 
     func discoverRelatedSources(
