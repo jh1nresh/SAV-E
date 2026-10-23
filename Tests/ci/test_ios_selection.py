@@ -246,7 +246,10 @@ class CoverageTests(unittest.TestCase):
             ios_workflow,
         )
         self.assertNotIn("Build without booting a simulator", ios_workflow)
-        self.assertRegex(ios_workflow, r"(?m)^    timeout-minutes: 100\s*$")
+        # Real 375/390/430 boots need a 160m job wall (UI 60 + three
+        # 15m width shots + Trip + slack). 100m cuts the width steps.
+        # Run 40016723698: lock expected 100 vs ios.yml job 160.
+        self.assertRegex(ios_workflow, r"(?m)^    timeout-minutes: 160\s*$")
         self.assertIn("timeout-minutes: 60", ios_workflow)
 
     def test_unknown_focus_fails_loudly(self):
