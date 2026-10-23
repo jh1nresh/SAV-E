@@ -100,11 +100,23 @@ def main() -> None:
         "composite": payload.get("composite"),
         "edgeF1": payload.get("edgeF1"),
         "appearanceSimilarity": payload.get("appearanceSimilarity"),
-        "mask": {"x": x, "y": y, "width": w, "height": h},
+        "mask": (
+            {
+                "kind": "image",
+                "path": str(args.mask_image),
+                "fallbackRectangle": {"x": x, "y": y, "width": w, "height": h},
+            }
+            if args.mask_image and args.mask_image.exists()
+            else {"kind": "rectangle", "x": x, "y": y, "width": w, "height": h}
+        ),
         "maskReason": (
-            "Founder lock: default Apple MapKit surface is excluded. "
-            "Ignore 0,48,402,642 covers live MapKit at y 48..<690 "
-            "(header overlay + gap above the sheet) in both capture and mock."
+            f"Image mask {args.mask_image.name}: white pixels are live Apple Maps "
+            "(ignored). Rectangle bounds are provenance only when no image mask is supplied."
+            if args.mask_image and args.mask_image.exists()
+            else (
+                f"Rectangle mask {x},{y},{w},{h} covers live MapKit in both "
+                "capture and mock."
+            )
         ),
         "sideBySide": str(args.output),
         "passed": payload.get("passed"),

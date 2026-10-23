@@ -17,6 +17,7 @@ struct SaveDoodlePassportPage: View {
     @State private var stampingID: String?
     @State private var visitRevision = 0
     @State private var gridWidth: CGFloat = 0
+    @State private var visitError: String?
     private let visitStore = SavePassportVisitStore.shared
 
     var body: some View {
@@ -127,6 +128,13 @@ struct SaveDoodlePassportPage: View {
             } else {
                 stickerGrid
                 legend
+            }
+            if let visitError {
+                Text(visitError)
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("profile.stamp.visitError")
             }
         }
         .padding(SaveDoodlePassportCatalog.panelPadding)
@@ -422,6 +430,12 @@ struct SaveDoodlePassportPage: View {
                 let didVisit = await onMarkVisited(place)
                 if didVisit {
                     visitStore.recordVisit(for: place.id)
+                    visitError = nil
+                } else {
+                    visitError = languageSettings.localized(
+                        english: "Couldn’t update this place. Please try again.",
+                        traditionalChinese: "暫時無法更新這個地點，請再試一次。"
+                    )
                 }
                 try? await Task.sleep(nanoseconds: 420_000_000)
                 stampingID = nil

@@ -64,6 +64,8 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("consumeMiniMapHandoff()"))
         XCTAssertTrue(map.contains(".id(visitResidue)"))
         XCTAssertTrue(map.contains("showsCityPicker = false"))
+        XCTAssertTrue(map.contains("session.mapFollowsHomeFilter && session.lens == item"))
+        XCTAssertTrue(map.contains("if !denied, let coordinate = locationService.currentLocation?.coordinate"))
     }
 
     func testCheckInIsOneVisitPerPlacePerDayAndCanUndo() {
@@ -244,8 +246,12 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(script.contains("map-doodle-similarity"))
         XCTAssertTrue(script.contains("--ignore-mask"))
         XCTAssertTrue(script.contains("map-mask.png"))
-        XCTAssertTrue(script.contains("status=\"REVIEW\""))
-        XCTAssertTrue(script.contains("The 0.90 score is not a CI gate."))
+        XCTAssertFalse(script.contains("status=\"REVIEW\""))
+        XCTAssertTrue(script.contains("gate_failed=1"))
+        XCTAssertTrue(script.contains("Home grades unmasked"))
+        let compose = try source(at: "Prototypes/AtlasPostcard/Scripts/compose-map-similarity.py")
+        XCTAssertTrue(compose.contains("x, y, w, h = args.mask"))
+        XCTAssertTrue(compose.contains("Image mask"))
         XCTAssertTrue(script.contains("${#extra_args[@]} -gt 0"))
         XCTAssertTrue(script.contains("compare_args"))
         XCTAssertFalse(script.contains("mask_args"))

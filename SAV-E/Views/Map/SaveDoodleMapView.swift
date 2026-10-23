@@ -259,11 +259,13 @@ struct SaveDoodleMapView: View {
     private var eatGoRail: some View {
         HStack(spacing: SaveSpace.xs) {
             ForEach(SaveDoodleLens.allCases) { item in
-                let selected = session.lens == item
+                let selected = session.mapFollowsHomeFilter && session.lens == item
                 Button {
                     SaveHaptics.select()
                     session.lens = item
                     session.mapFollowsHomeFilter = true
+                    onClearSelection()
+                    fitVisiblePlaces()
                 } label: {
                     Text(item.title(language: languageSettings.language))
                         .font(SaveAtlasType.strong(15))
@@ -725,6 +727,9 @@ struct SaveDoodleMapView: View {
         case .city(let id):
             cityID = id
         case .nearYou:
+            if !denied, let coordinate = locationService.currentLocation?.coordinate {
+                return coordinate
+            }
             cityID = mapViewModel.places.compactMap { SaveDoodleHomeCatalog.cityID(for: $0) }.first
         }
         if let cityID {
