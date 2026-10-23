@@ -66,9 +66,9 @@ at 1× 402×874, not a crop. `VisualParity.swift` still accepts only a
 v2's exact 402×874 `map-light.png` from the same commit, with
 `map-dark.png` for DESIGN comparison and `map-mask.png` (white =
 ignore the live Apple Maps area). Saves and Plan stay on their current
-locks until those Doodle PRs. The `0.90` threshold remains the Saves/Plan
-gate. Home and Map Doodle rasters still emit a 0.90 score, but that score
-is not a CI gate; DESIGN goldens are judged manually.
+locks until those Doodle PRs. The `0.90` threshold remains the CI gate
+for Home, Map, Saves, and Plan. Masks stay unchanged and do not waive
+the score.
 
 ## Boundaries
 

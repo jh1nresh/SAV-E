@@ -734,8 +734,9 @@ row. Collected opens
 Passport. Wordmark is Caveat SemiBold 34; the city line is Caveat 20 with
 a 2pt coral underline under the city word only. Body copy stays
 `SaveAtlasType`. The visual reference is the Codex packet and spec §8,
-not DESIGN v2 Home. H1–H4 CI rasters are judged manually by DESIGN;
-the 0.90 visual-parity score is not evidence. Historical DESIGN v2
+not DESIGN v2 Home. H1–H4 CI rasters are judged manually by DESIGN.
+Home and Map still fail CI below 0.90; `home-mask.png` stays unchanged.
+Historical DESIGN v2
 `design/doodle-targets-2026-10-20/home-light.png` at `eade369`
 (exact 402×874; `home-dark.png`; `home-mask.png` white = ignore)
 is archive only. v1 is retired.
@@ -993,14 +994,15 @@ Rules:
 DESIGN v2 `map-light.png` / `map-dark.png` from
 `design/doodle-targets-2026-10-20` at `eade369` are the goldens.
 `map-mask.png` (white = live Apple Maps) is the ignore mask for that
-side-by-side review, not a 0.90 CI gate. City and Eat/Go sit on a cream `paper` header band,
+side-by-side review. Home and Map still fail CI below 0.90; the mask
+does not waive the score. City and Eat/Go sit on a cream `paper` header band,
 not on the live map. Pins are coral outline lollipops. The place sheet
 uses a 64pt official DESIGN sticker (color die-cut when visited, pencil
 outline when not) and a 12pt text gap. Do not replace default Apple
 MapKit `.standard` with a paper or hand-drawn basemap. City strip, place
 sheet, tab bar, and
-status bar are judged manually by DESIGN; the 0.90 visual-parity score is
-not evidence. Light and dark screenshot rails must also pass the
+status bar are judged manually by DESIGN in addition to the 0.90 gate.
+Light and dark screenshot rails must also pass the
 city/filter/place-sheet/action geometry and hit-target assertions; the
 unmasked screenshots remain required for human visual review. Manual
 visit counts use the shared `SaveDoodleVisitStore` read by Map and

@@ -3326,8 +3326,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     /// Live Home is the Doodle Eat/Go list plus mini-map. Capture
     /// `five-tab-home` from the Codex Tiantan fixture at the Tiantan fix;
-    /// a denied-location Taipei Home is a different state. DESIGN judges
-    /// Home and Map 0.90 scores manually; do not retune the gate script here.
+    /// a denied-location Taipei Home is a different state. Home and Map
+    /// still fail CI below 0.90; do not retune masks or the threshold here.
     @MainActor
     private func captureFiveTabHomeParityRaster() throws {
         let app = makeApp(
