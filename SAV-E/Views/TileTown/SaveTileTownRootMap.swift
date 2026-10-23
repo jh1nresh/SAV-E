@@ -2,7 +2,9 @@ import CoreLocation
 import SwiftUI
 
 /// Product Map tab: full-pixel tile-town base with Nearby / Saved / Friends
-/// lenses. Drawer search and Trip MapKit stay elsewhere.
+/// lenses. Drawer search and Trip MapKit stay elsewhere. Home has no
+/// mini-map (founder option B, 2026-10-24). Place-detail "View on map"
+/// may show Home's current Eat/Go + city; two-way sharing stays with #298.
 struct SaveTileTownRootMap: View {
     @ObservedObject var mapViewModel: MapViewModel
     let presentation: AtlasPresentation
@@ -12,17 +14,14 @@ struct SaveTileTownRootMap: View {
     @EnvironmentObject private var session: SaveDoodleSession
     @ObservedObject private var locationService = LocationService.shared
     @State private var lens: SaveTileTownMapLens = .saved
-    @State private var showsCityPicker = false
+    @State private var showsHomeSessionChrome = false
 
     var body: some View {
-        let followsHomeFilter = session.mapFollowsHomeFilter
-        let visitResidue = session.mapVisitResidueID
-        return ZStack(alignment: .top) {
+        ZStack(alignment: .top) {
             SaveAtlasPalette.canvas.ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 10) {
-                header(followsHomeFilter: followsHomeFilter)
-                    .id(visitResidue)
+                header
                     .padding(.horizontal, 16)
                     .padding(.top, AtlasMetrics.statusBarHeight)
 
@@ -85,69 +84,65 @@ struct SaveTileTownRootMap: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear { consumeShowOnMap() }
+        .onChange(of: session.pendingShowOnMapPlaceID) { _, _ in
+            consumeShowOnMap()
+        }
         .onChange(of: lens) { _, newLens in
             if newLens == .friends {
                 mapViewModel.selectSocialLens(.forYou)
             }
         }
-        .onAppear {
-            applyMiniMapHandoff()
-        }
-        .onChange(of: session.mapVisitResidueID) { _, _ in
-            applyMiniMapHandoff()
-        }
-        .onChange(of: session.lens) { _, _ in
-            onClearSelection()
-        }
-        .onChange(of: session.city) { _, _ in
-            onClearSelection()
-        }
-        .sheet(isPresented: $showsCityPicker) {
-            cityPicker
-        }
-    }
-
-    /// Reused Map skips `onAppear`. Residue from `beginMiniMapHandoff` remounts
-    /// Eat/Go and drops leftover lens / city-picker / selected-pin chrome.
-    private func applyMiniMapHandoff() {
-        session.consumeMiniMapHandoff()
-        lens = .saved
-        showsCityPicker = false
     }
 
     @ViewBuilder
-    private func header(followsHomeFilter: Bool) -> some View {
-        if followsHomeFilter {
+    private var header: some View {
+        if showsHomeSessionChrome {
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     SaveDisplayTitle(text: "Savvy", pointSize: 28)
                         .accessibilityIdentifier("map.wordmark")
-                    Button { showsCityPicker = true } label: {
-                        HStack(spacing: 4) {
-                            Text(cityTitle)
-                                .font(SaveAtlasType.body(13))
-                                .foregroundStyle(SaveAtlasPalette.muted)
-                            Text("▾")
-                                .font(SaveAtlasType.body(11))
-                                .foregroundStyle(SaveAtlasPalette.muted)
-                        }
+                    Text(cityTitle)
+                        .font(SaveAtlasType.body(13))
+                        .foregroundStyle(SaveAtlasPalette.muted)
                         .frame(minHeight: 44, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(languageSettings.localized(
-                        english: "Choose city",
-                        traditionalChinese: "選擇城市"
-                    ) + ", " + cityTitle)
-                    .accessibilityIdentifier("map.city")
+                        .accessibilityIdentifier("map.city")
                 }
                 Spacer(minLength: 8)
-                eatGoRail
+                homeSessionRail
             }
         } else {
             SaveDisplayTitle(text: "Savvy", pointSize: 28)
                 .accessibilityIdentifier("map.wordmark")
         }
+    }
+
+    private var homeSessionRail: some View {
+        HStack(spacing: 8) {
+            ForEach(SaveDoodleLens.allCases) { item in
+                let selected = session.lens == item
+                Text(item.title(language: languageSettings.language))
+                    .font(SaveAtlasType.strong(13))
+                    .foregroundStyle(selected ? Color.white : SaveAtlasPalette.ink)
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 44)
+                    .background(
+                        selected ? SaveAtlasPalette.coral : Color.clear,
+                        in: Capsule()
+                    )
+                    .overlay {
+                        Capsule()
+                            .stroke(
+                                selected ? Color.clear : SaveAtlasPalette.ink,
+                                lineWidth: SaveAtlasPalette.strokeWidth
+                            )
+                    }
+                    .accessibilityIdentifier("map.\(item.rawValue)")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("map.eatGo")
     }
 
     private var lensRail: some View {
@@ -189,42 +184,6 @@ struct SaveTileTownRootMap: View {
         .accessibilityIdentifier("map.lensRail")
     }
 
-    private var eatGoRail: some View {
-        HStack(spacing: 8) {
-            ForEach(SaveDoodleLens.allCases) { item in
-                let selected = session.lens == item
-                Button {
-                    SaveHaptics.select()
-                    session.lens = item
-                } label: {
-                    Text(item.title(language: languageSettings.language))
-                        .font(SaveAtlasType.strong(13))
-                        .foregroundStyle(selected ? Color.white : SaveAtlasPalette.ink)
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 44)
-                        .background(
-                            selected ? SaveAtlasPalette.coral : Color.clear,
-                            in: Capsule()
-                        )
-                        .overlay {
-                            Capsule()
-                                .stroke(
-                                    selected ? Color.clear : SaveAtlasPalette.ink,
-                                    lineWidth: SaveAtlasPalette.strokeWidth
-                                )
-                        }
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier(item.mapAccessibilityIdentifier)
-                .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
-            }
-        }
-        // Parent id without contain overwrote each chip as map.eatGo (Q5 CI tree).
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("map.eatGo")
-    }
-
     private var cityTitle: String {
         switch SaveDoodleHomeCatalog.resolvedSelection(
             session.city,
@@ -246,97 +205,26 @@ struct SaveTileTownRootMap: View {
         }
     }
 
+    private var cityGroups: [SaveDoodleCityGroup] {
+        SaveDoodleHomeCatalog.cityGroups(from: mapViewModel.places)
+    }
+
     private var visiblePlaces: [Place] {
         switch lens {
         case .saved:
-            return sessionPlaces(from: mapViewModel.places)
+            return mapViewModel.places
         case .nearby:
-            return sessionPlaces(
-                from: SaveMapIntentFilter.places(
-                    mapViewModel.places,
-                    categories: [],
-                    intents: [.nearby],
-                    nearbyAnchor: locationService.currentLocation?.coordinate
-                        ?? mapViewModel.nearbyFilterAnchor
-                )
+            return SaveMapIntentFilter.places(
+                mapViewModel.places,
+                categories: [],
+                intents: [.nearby],
+                nearbyAnchor: locationService.currentLocation?.coordinate
+                    ?? mapViewModel.nearbyFilterAnchor
             )
         case .friends:
             let social = mapViewModel.visibleSocialPlaces
             return social.isEmpty ? mapViewModel.socialPlaces : social
         }
-    }
-
-    private var cityGroups: [SaveDoodleCityGroup] {
-        SaveDoodleHomeCatalog.cityGroups(from: mapViewModel.places)
-    }
-
-    private var cityPicker: some View {
-        NavigationStack {
-            List {
-                if !locationService.isAuthorizationDenied {
-                    Button {
-                        session.city = .nearYou
-                        showsCityPicker = false
-                    } label: {
-                        HStack {
-                            Text(languageSettings.localized(
-                                english: "Near you (current location)",
-                                traditionalChinese: "附近（目前位置）"
-                            ))
-                            Spacer()
-                            if case .nearYou = session.city {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(SaveAtlasPalette.coral)
-                            }
-                        }
-                    }
-                    .accessibilityIdentifier("map.city.nearYou")
-                }
-                ForEach(cityGroups) { group in
-                    Button {
-                        session.city = .city(group.id)
-                        showsCityPicker = false
-                    } label: {
-                        HStack {
-                            Text("\(group.displayName(language: languageSettings.language)) \(group.count)")
-                            Spacer()
-                            if case .city(let id) = SaveDoodleHomeCatalog.resolvedSelection(
-                                session.city,
-                                places: mapViewModel.places,
-                                locationDenied: locationService.isAuthorizationDenied
-                            ), id == group.id {
-                                Image(systemName: "checkmark")
-                                    .foregroundStyle(SaveAtlasPalette.coral)
-                            }
-                        }
-                    }
-                    .accessibilityIdentifier("map.city.\(group.id)")
-                }
-            }
-            .scrollContentBackground(.hidden)
-            .background(SaveAtlasPalette.paper)
-            .navigationTitle(languageSettings.localized(english: "City", traditionalChinese: "城市"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(languageSettings.localized(english: "Close", traditionalChinese: "關閉")) {
-                        showsCityPicker = false
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-
-    private func sessionPlaces(from places: [Place]) -> [Place] {
-        guard session.mapFollowsHomeFilter else { return places }
-        return SaveDoodleHomeCatalog.visiblePlaces(
-            from: places,
-            lens: session.lens,
-            selection: session.city,
-            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
-            locationDenied: locationService.isAuthorizationDenied
-        )
     }
 
     private var visiblePins: [SaveTileTownPin] {
@@ -351,6 +239,16 @@ struct SaveTileTownRootMap: View {
 
     private func selectPin(_ id: UUID) {
         if let place = visiblePlaces.first(where: { $0.id == id }) {
+            mapViewModel.selectPlace(place)
+        }
+    }
+
+    private func consumeShowOnMap() {
+        guard let id = session.pendingShowOnMapPlaceID else { return }
+        session.pendingShowOnMapPlaceID = nil
+        showsHomeSessionChrome = true
+        lens = .saved
+        if let place = mapViewModel.places.first(where: { $0.id == id }) {
             mapViewModel.selectPlace(place)
         }
     }

@@ -12,7 +12,6 @@ struct SaveHomeView: View {
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
     let onOpenCollectedPassport: () -> Void
-    let onOpenMap: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var locationService = LocationService.shared
@@ -20,7 +19,6 @@ struct SaveHomeView: View {
     var body: some View {
         SaveDoodleHomeView(
             locationService: locationService,
-            onOpenMap: onOpenMap,
             onOpenCollectedPassport: onOpenCollectedPassport,
             headerTopPadding: headerTopPadding
         )
@@ -510,7 +508,6 @@ struct SaveMapRootView: View {
     let onPlanAroundPlace: (Place) -> Void
     let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
-    @EnvironmentObject private var session: SaveDoodleSession
 
     var body: some View {
         Group {
@@ -530,7 +527,6 @@ struct SaveMapRootView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
-            session.consumeMiniMapHandoff()
 #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--uitest-map-place-selected"),
                mapViewModel.selectedPlace == nil,

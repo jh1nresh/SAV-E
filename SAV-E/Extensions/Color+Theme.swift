@@ -15,7 +15,7 @@ enum SaveSpace {
 
 enum SaveLayout {
     static let screenMargin: CGFloat = 24
-    static let rowMinHeight: CGFloat = 64
+    static let rowMinHeight: CGFloat = 68
     static let rowVerticalPadding: CGFloat = 12
     static let stickerBox: CGFloat = 48
     static let stickerArt: CGFloat = 40

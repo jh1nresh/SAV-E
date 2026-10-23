@@ -384,13 +384,14 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(rail.contains("func captureFiveTabHomeParityRaster"))
         XCTAssertTrue(rail.contains("--uitest-location-tiantan"))
         XCTAssertTrue(rail.contains("--uitest-doodle-parity-fixture"))
-        XCTAssertTrue(rail.contains("home.miniMap"))
+        XCTAssertTrue(rail.contains("Home has no map component"))
+        XCTAssertFalse(rail.contains("func testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertTrue(rail.contains("func testHomeShowOnMapFocusesPlace"))
         XCTAssertTrue(rail.contains("home.eat"))
         XCTAssertTrue(rail.contains("home.passport"))
         XCTAssertTrue(rail.contains("testHomeListProgressiveSearch"))
         XCTAssertTrue(selector.contains("testHomeListProgressiveSearch"))
-        XCTAssertTrue(rail.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
-        XCTAssertTrue(selector.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertFalse(selector.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {

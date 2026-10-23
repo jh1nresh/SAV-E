@@ -60,11 +60,10 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(town.contains("map.tilePin.\\(pin.id.uuidString)"))
         XCTAssertTrue(town.contains("showsPins"))
         let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
-        XCTAssertTrue(home.contains("home.miniMap"))
-        XCTAssertTrue(home.contains("Map(initialPosition:"))
-        XCTAssertTrue(home.contains("Annotation("))
-        XCTAssertTrue(home.contains("SaveDoodleNumberPin("))
-        XCTAssertTrue(home.contains("onOpenMap"))
+        XCTAssertFalse(home.contains("home.miniMap"))
+        XCTAssertFalse(home.contains("Map(initialPosition:"))
+        XCTAssertFalse(home.contains("Annotation("))
+        XCTAssertFalse(home.contains("onOpenMap"))
     }
 
     func testDisplayFontIsOFLWithCJKFallbackAndSFBody() throws {
@@ -133,8 +132,8 @@ final class SaveTileTownLockTests: XCTestCase {
 
     func testHomeChromeOmitsMapLensesAndKeepsSearch() throws {
         let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
-        XCTAssertTrue(home.contains("SaveDoodleMiniMap"))
-        XCTAssertTrue(home.contains("home.miniMap"))
+        XCTAssertFalse(home.contains("SaveDoodleMiniMap"))
+        XCTAssertFalse(home.contains("home.miniMap"))
         XCTAssertTrue(home.contains("home.review"))
         XCTAssertTrue(home.contains("accessibilityIdentifier(\"home.saves\")"))
         XCTAssertFalse(home.contains("home.openSaves"))
@@ -189,10 +188,10 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(map.contains("map.lens.nearby") || map.contains("map.lensRail"))
         XCTAssertTrue(map.contains("SaveTileTownMapLens"))
         XCTAssertTrue(map.contains("map.liveSurface"))
-        XCTAssertTrue(map.contains("SaveDoodleSession"))
-        XCTAssertTrue(map.contains("SaveDoodleHomeCatalog.visiblePlaces("))
-        XCTAssertTrue(map.contains("mapAccessibilityIdentifier"))
-        XCTAssertTrue(map.contains("map.city"))
+        XCTAssertFalse(map.contains("SaveDoodleSession"))
+        XCTAssertFalse(map.contains("SaveDoodleHomeCatalog.visiblePlaces("))
+        XCTAssertFalse(map.contains("mapAccessibilityIdentifier"))
+        XCTAssertFalse(map.contains("\"map.city\""))
         let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
         XCTAssertTrue(panel.contains("Spacer(minLength: 0)"))
         XCTAssertTrue(panel.contains("alignment: .bottom"))

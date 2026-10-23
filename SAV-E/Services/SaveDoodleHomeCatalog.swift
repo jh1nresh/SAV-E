@@ -12,8 +12,6 @@ enum SaveDoodleLens: String, CaseIterable, Identifiable {
 
     var accessibilityIdentifier: String { "home.\(rawValue)" }
 
-    var mapAccessibilityIdentifier: String { "map.\(rawValue)" }
-
     func title(language: AppLanguage) -> String {
         switch self {
         case .eat:
@@ -59,8 +57,10 @@ struct SaveDoodleListedPlace: Equatable, Identifiable {
     var id: UUID { place.id }
 }
 
-/// Shared Eat/Go + city selection so Home's mini-map can open Map with the
-/// same filter (IA Q5). Persisted per UI-test storage id so tests stay isolated.
+/// Shared Eat/Go + city selection for Home. Map does not follow this
+/// filter: Home has no mini-map (founder option B, 2026-10-24).
+/// Place-detail "View on map" may focus one stamp; two-way filter
+/// sharing stays with #298.
 @MainActor
 final class SaveDoodleSession: ObservableObject {
     @Published var lens: SaveDoodleLens {
@@ -71,25 +71,8 @@ final class SaveDoodleSession: ObservableObject {
         didSet { defaults.set(city.storageValue, forKey: Self.cityKey) }
     }
 
-    /// Q5: Map applies Home's Eat/Go + city only after a mini-map open.
-    /// Opening the Map tab directly leaves this false so Saved/Nearby stay
-    /// unfiltered. Persisted so a tab switch cannot drop a just-set handoff.
-    @Published var mapFollowsHomeFilter: Bool {
-        didSet { defaults.set(mapFollowsHomeFilter, forKey: Self.followKey) }
-    }
-
-    /// In-memory handoff. A later `selectRootTab(.map)` default-false write
-    /// cannot win while this is set; Map consumes it on appear.
-    @Published private(set) var pendingMiniMapHandoff = false
-
-    /// Bumped on mini-map open and on abandon so a reused Map tab identity
-    /// cannot keep the unfiltered wordmark-only header.
-    @Published private(set) var mapSurfaceID = UUID()
-
-    /// Prior Map-tab residue: selected pin, expanded search drawer, or a
-    /// header that only mounted on the first `onAppear`. Mini-map bumps this
-    /// so Map remounts Eat/Go instead of keeping the wordmark-only chrome.
-    @Published private(set) var mapVisitResidueID = UUID()
+    /// One-shot Home detail → Map focus. Not persisted; not MiniMapHandoff.
+    @Published var pendingShowOnMapPlaceID: UUID?
 
     private let defaults: UserDefaults
 
@@ -106,46 +89,6 @@ final class SaveDoodleSession: ObservableObject {
         } else {
             city = .nearYou
         }
-        mapFollowsHomeFilter = defaults.bool(forKey: Self.followKey)
-    }
-
-    /// Mini-map tap. Sets follow, drops leftover Map-tab chrome, and gives
-    /// Map a new identity so Eat/Go remounts on a reused view.
-    func beginMiniMapHandoff() {
-        pendingMiniMapHandoff = true
-        mapFollowsHomeFilter = true
-        mapSurfaceID = UUID()
-        mapVisitResidueID = UUID()
-    }
-
-    /// Map appear. Re-applies follow if a tab-bar default-false write landed
-    /// after `beginMiniMapHandoff`.
-    func consumeMiniMapHandoff() {
-        guard pendingMiniMapHandoff else { return }
-        mapFollowsHomeFilter = true
-        pendingMiniMapHandoff = false
-    }
-
-    /// Search / show-on-map / list handoffs drop a leftover Home filter.
-    func abandonMiniMapHandoff() {
-        pendingMiniMapHandoff = false
-        if mapFollowsHomeFilter {
-            mapSurfaceID = UUID()
-        }
-        mapFollowsHomeFilter = false
-    }
-
-    /// Tab-bar Map keeps the pending mini-map handoff; any other Map tab
-    /// selection uses the requested follow flag.
-    func applyMapTabSelection(followsHomeFilter: Bool) {
-        if pendingMiniMapHandoff {
-            mapFollowsHomeFilter = true
-            return
-        }
-        if mapFollowsHomeFilter != followsHomeFilter {
-            mapSurfaceID = UUID()
-        }
-        mapFollowsHomeFilter = followsHomeFilter
     }
 
     private static var suiteSuffix: String {
@@ -154,7 +97,6 @@ final class SaveDoodleSession: ObservableObject {
 
     static var lensKey: String { "save.doodle.lens.\(suiteSuffix)" }
     static var cityKey: String { "save.doodle.city.\(suiteSuffix)" }
-    static var followKey: String { "save.doodle.mapFollows.\(suiteSuffix)" }
 }
 
 enum SaveDoodleHomeCatalog {
@@ -422,6 +364,80 @@ enum SaveDoodleHomeCatalog {
         return "\(Int(km.rounded()))km"
     }
 
+    /// Row subtitle: `<distance or neighborhood> · <visit status>`.
+    static func rowMetaText(
+        distance: CLLocationDistance?,
+        place: Place,
+        visitedAt: Date? = nil,
+        now: Date = Date(),
+        language: AppLanguage
+    ) -> String {
+        let location = distance.map(distanceText)
+            ?? neighborhoodText(for: place, language: language)
+        let status = visitStatusText(
+            status: place.status,
+            visitedAt: place.status == .visited ? (visitedAt ?? place.createdAt) : nil,
+            now: now,
+            language: language
+        )
+        if let location, !location.isEmpty {
+            return "\(location) · \(status)"
+        }
+        return status
+    }
+
+    static func visitStatusText(
+        status: PlaceStatus,
+        visitedAt: Date?,
+        now: Date = Date(),
+        language: AppLanguage
+    ) -> String {
+        switch status {
+        case .wantToGo:
+            return language.localized(english: "saved, not yet", traditionalChinese: "已存，還沒去")
+        case .visited:
+            let reference = visitedAt ?? now
+            let days = max(0, Calendar.current.dateComponents([.day], from: reference, to: now).day ?? 0)
+            if days == 0 {
+                return language.localized(english: "visited today", traditionalChinese: "今天去過")
+            }
+            return language.localized(
+                english: "visited \(days)d ago",
+                traditionalChinese: "\(days) 天前去過"
+            )
+        }
+    }
+
+    /// District when the address names one; otherwise the city label.
+    static func neighborhoodText(for place: Place, language: AppLanguage) -> String? {
+        if let district = cjkDistrict(in: place.address) ?? englishDistrict(in: place.address) {
+            return district
+        }
+        return cityDisplayName(for: place, language: language)
+    }
+
+    private static func cjkDistrict(in address: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: "[\\u4e00-\\u9fff]{1,2}[區区]") else {
+            return nil
+        }
+        let range = NSRange(address.startIndex..., in: address)
+        return regex.matches(in: address, range: range).last.flatMap { match in
+            Range(match.range, in: address).map { String(address[$0]) }
+        }
+    }
+
+    private static func englishDistrict(in address: String) -> String? {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"(?i)\b[\w'’.-]+(?:\s+[\w'’.-]+)?\s+District\b"#
+        ) else {
+            return nil
+        }
+        let range = NSRange(address.startIndex..., in: address)
+        return regex.matches(in: address, range: range).last.flatMap { match in
+            Range(match.range, in: address).map { String(address[$0]) }
+        }
+    }
+
     static func moreRecent(_ lhs: Place, _ rhs: Place) -> Bool {
         if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
         return lhs.id.uuidString < rhs.id.uuidString
@@ -432,6 +448,94 @@ enum SaveDoodleHomeCatalog {
         let right = distance(from: location, to: rhs) ?? .infinity
         if left != right { return left < right }
         return moreRecent(lhs, rhs)
+    }
+}
+
+/// Home hint-row greeting and clue copy. Cutoffs and strings live here.
+enum SaveDoodleHomeHint {
+    enum Period: Equatable {
+        case morning, afternoon, evening
+    }
+
+    struct Copy: Equatable {
+        let greeting: String
+        let leadingFull: String
+        let leadingShort: String
+        let review: String?
+        let spoken: String
+    }
+
+    static func period(at date: Date, calendar: Calendar = .current) -> Period {
+        let hour = calendar.component(.hour, from: date)
+        let minute = calendar.component(.minute, from: date)
+        let minutes = hour * 60 + minute
+        switch minutes {
+        case (5 * 60)..<(12 * 60):
+            return .morning
+        case (12 * 60)..<(18 * 60):
+            return .afternoon
+        default:
+            return .evening
+        }
+    }
+
+    static func greeting(_ period: Period, language: AppLanguage) -> String {
+        switch period {
+        case .morning:
+            return language.localized(english: "Good morning", traditionalChinese: "早安")
+        case .afternoon:
+            return language.localized(english: "Good afternoon", traditionalChinese: "午安")
+        case .evening:
+            return language.localized(english: "Good evening", traditionalChinese: "晚安")
+        }
+    }
+
+    static func displayCount(_ count: Int) -> String {
+        count > 99 ? "99+" : "\(count)"
+    }
+
+    static func copy(
+        clueCount: Int,
+        at date: Date,
+        language: AppLanguage,
+        calendar: Calendar = .current
+    ) -> Copy {
+        let greetingText = Self.greeting(period(at: date, calendar: calendar), language: language)
+        guard clueCount > 0 else {
+            return Copy(
+                greeting: greetingText,
+                leadingFull: greetingText,
+                leadingShort: greetingText,
+                review: nil,
+                spoken: greetingText
+            )
+        }
+        let n = displayCount(clueCount)
+        let fullPhrase: String
+        let shortPhrase: String
+        switch language {
+        case .english:
+            if clueCount == 1 {
+                fullPhrase = "1 clue waiting"
+                shortPhrase = "1 clue"
+            } else {
+                fullPhrase = "\(n) clues waiting"
+                shortPhrase = "\(n) clues"
+            }
+        case .traditionalChinese:
+            fullPhrase = "\(n) 條線索待看"
+            shortPhrase = fullPhrase
+        }
+        let review = language.localized(english: "Review ›", traditionalChinese: "去看看 ›")
+        let leadingFull = "\(greetingText) · \(fullPhrase)"
+        let leadingShort = "\(greetingText) · \(shortPhrase)"
+        return Copy(
+            greeting: greetingText,
+            leadingFull: leadingFull,
+            leadingShort: leadingShort,
+            review: review,
+            spoken: "\(leadingFull) · \(review)"
+        )
     }
 }
 

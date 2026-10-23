@@ -1,16 +1,14 @@
 import CoreLocation
-import MapKit
 import SwiftUI
 import UIKit
 
-/// Doodle v1 Home: nearby Eat/Go list, city switcher, and a native MapKit
-/// mini-map. Replaces the tile-town Home peek (spec §7.1, HoP D2/D3).
+/// Doodle v1 Home: nearby Eat/Go list and city switcher. No map component
+/// (founder option B / DESIGN v2, 2026-10-24; HoP 290-5 / H-1 / H-4).
 struct SaveDoodleHomeView: View {
     @Environment(\.atlasPresentation) private var presentation
     @Environment(\.appLanguageSettings) private var languageSettings
     @EnvironmentObject private var session: SaveDoodleSession
     @ObservedObject var locationService: LocationService
-    let onOpenMap: () -> Void
     var onOpenCollectedPassport: () -> Void = {}
     var headerTopPadding: CGFloat = AtlasMetrics.statusBarHeight + SaveSpace.xs
 
@@ -33,6 +31,10 @@ struct SaveDoodleHomeView: View {
             .padding(.horizontal, SaveLayout.screenMargin)
             .padding(.top, SaveSpace.tight)
 
+            cluesLine
+                .padding(.horizontal, SaveLayout.screenMargin)
+                .padding(.top, SaveSpace.xs)
+
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     if showsLocationPrompt {
@@ -45,17 +47,10 @@ struct SaveDoodleHomeView: View {
                             .padding(.top, SaveSpace.md)
                     }
 
-                    if presentation.reviewCount > 0 {
-                        cluesLine
-                            .padding(.top, SaveSpace.xs)
-                    }
-
                     if showsLensEmpty {
                         lensEmpty
                             .padding(.top, SaveSpace.md)
                     } else if !showsEmptyHome {
-                        miniMap
-                            .padding(.top, SaveSpace.md)
                         placeList
                             .padding(.top, SaveSpace.md)
                     }
@@ -116,6 +111,7 @@ struct SaveDoodleHomeView: View {
                         relativeTo: .largeTitle,
                         locksPointSize: true
                     )
+                    MemoMascotMark(size: 28, framed: false)
                 }
                 .contentShape(Rectangle())
             }
@@ -208,29 +204,37 @@ struct SaveDoodleHomeView: View {
     }
 
     private var cluesLine: some View {
-        Button(action: presentation.onReviewAll) {
-            HStack(spacing: SaveSpace.tight) {
-                Text(cluesText)
-                    .font(SaveAtlasType.body(13))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                Text("·")
-                    .font(SaveAtlasType.body(13))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                Text(localized("Review", "確認"))
-                    .font(SaveAtlasType.body(13))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                Text("›")
-                    .font(SaveAtlasType.body(13))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                Spacer(minLength: 0)
+        let copy = SaveDoodleHomeHint.copy(
+            clueCount: presentation.reviewCount,
+            at: Date(),
+            language: languageSettings.language
+        )
+        return HStack(alignment: .center, spacing: SaveSpace.tight) {
+            ViewThatFits(in: .horizontal) {
+                Text(copy.leadingFull)
+                Text(copy.leadingShort)
             }
-            .frame(minHeight: SaveLayout.minTap, alignment: .leading)
-            .contentShape(Rectangle())
+            .font(SaveAtlasType.body(13))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .lineLimit(1)
+
+            if let review = copy.review {
+                Button(action: presentation.onReviewAll) {
+                    Text(review)
+                        .font(SaveAtlasType.body(13))
+                        .foregroundStyle(SaveAtlasPalette.coral)
+                        .frame(minHeight: SaveLayout.minTap)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("home.review.action")
+            }
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(cluesText)
+        .frame(minHeight: SaveLayout.minTap, alignment: .leading)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(copy.spoken)
         .accessibilityIdentifier("home.review")
-        .accessibilityAddTraits(.isButton)
     }
 
     private var locationPrompt: some View {
@@ -277,31 +281,6 @@ struct SaveDoodleHomeView: View {
             .accessibilityIdentifier("home.locationPrompt")
     }
 
-    private var miniMap: some View {
-        SaveDoodleMiniMap(
-            places: listedPlaces,
-            userLocation: locationService.currentLocation
-        )
-        .id(listedPlaces.map(\.place.id))
-        .frame(height: 160)
-        .clipShape(RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
-                .stroke(SaveAtlasPalette.line, lineWidth: SaveAtlasPalette.strokeWidth)
-                .allowsHitTesting(false)
-        }
-        .overlay {
-            Button(action: onOpenMap) {
-                Color.clear
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityLabel(localized("Open map", "打開地圖"))
-            .accessibilityIdentifier("home.miniMap")
-        }
-    }
-
     private var placeList: some View {
         VStack(spacing: 0) {
             ForEach(Array(listedPlaces.enumerated()), id: \.element.id) { index, item in
@@ -319,11 +298,9 @@ struct SaveDoodleHomeView: View {
         Button { presentation.onOpenPlace(item.place.id.uuidString) } label: {
             HStack(alignment: .center, spacing: 0) {
                 Text("\(item.index)")
-                    .font(SaveAtlasType.strong(13))
+                    .font(SaveAtlasType.strong(24))
                     .foregroundStyle(SaveAtlasPalette.coral)
-                    .frame(width: SaveLayout.numberBadge, height: SaveLayout.numberBadge)
-                    .background(SaveAtlasPalette.paper, in: SaveDoodleInkOval())
-                    .overlay { SaveDoodleInkOval().stroke(SaveAtlasPalette.coral, lineWidth: 1.5) }
+                    .frame(width: SaveLayout.numberBadge, alignment: .center)
                     .padding(.trailing, SaveSpace.xs)
                     .accessibilityHidden(true)
 
@@ -344,6 +321,8 @@ struct SaveDoodleHomeView: View {
                     Text(metaText(for: item))
                         .font(SaveAtlasType.body(13))
                         .foregroundStyle(SaveAtlasPalette.muted)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -603,13 +582,6 @@ struct SaveDoodleHomeView: View {
         return cityTitle
     }
 
-    private var cluesText: String {
-        let count = presentation.reviewCount
-        return languageSettings.language == .traditionalChinese
-            ? "\(count) 個線索等待確認"
-            : (count == 1 ? "1 clue waiting" : "\(count) clues waiting")
-    }
-
     private var collectedPlaces: [Place] {
         SaveDoodleHomeCatalog.collectedScopePlaces(
             from: allPlaces,
@@ -644,17 +616,11 @@ struct SaveDoodleHomeView: View {
     }
 
     private func metaText(for item: SaveDoodleListedPlace) -> String {
-        let lens = session.lens.title(language: languageSettings.language)
-        if let meters = item.distance {
-            return "\(lens) · \(SaveDoodleHomeCatalog.distanceText(meters))"
-        }
-        if let area = SaveDoodleHomeCatalog.cityDisplayName(
-            for: item.place,
+        SaveDoodleHomeCatalog.rowMetaText(
+            distance: item.distance,
+            place: item.place,
             language: languageSettings.language
-        ) {
-            return "\(lens) · \(area)"
-        }
-        return lens
+        )
     }
 
     private func latestSaveText(_ latest: (place: Place, distance: CLLocationDistance?)) -> String {
@@ -685,106 +651,12 @@ struct SaveDoodleHomeView: View {
     }
 }
 
-struct SaveDoodleMiniMap: View {
-    let places: [SaveDoodleListedPlace]
-    let userLocation: CLLocation?
-
-    var body: some View {
-        Map(initialPosition: camera, interactionModes: []) {
-            ForEach(places) { item in
-                if item.place.isMapKitMappable {
-                    Annotation(
-                        item.place.name,
-                        coordinate: CLLocationCoordinate2D(
-                            latitude: item.place.latitude,
-                            longitude: item.place.longitude
-                        ),
-                        anchor: .bottom
-                    ) {
-                        SaveDoodleNumberPin(
-                            number: item.index,
-                            visited: item.place.status == .visited
-                        )
-                    }
-                    .annotationTitles(.hidden)
-                }
-            }
-        }
-        .mapStyle(.standard(emphasis: .automatic))
-        .allowsHitTesting(false)
-    }
-
-    private var camera: MapCameraPosition {
-        let coords = places.compactMap { item -> CLLocationCoordinate2D? in
-            guard item.place.isMapKitMappable else { return nil }
-            return CLLocationCoordinate2D(latitude: item.place.latitude, longitude: item.place.longitude)
-        }
-        if coords.count == 1 {
-            return .region(MKCoordinateRegion(
-                center: coords[0],
-                latitudinalMeters: 1_400,
-                longitudinalMeters: 1_400
-            ))
-        }
-        if coords.count > 1 {
-            return .region(Self.region(fitting: coords))
-        }
-        if let userLocation {
-            return .region(MKCoordinateRegion(
-                center: userLocation.coordinate,
-                latitudinalMeters: 2_000,
-                longitudinalMeters: 2_000
-            ))
-        }
-        return .automatic
-    }
-
-    static func region(fitting coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
-        var minLat = coordinates[0].latitude
-        var maxLat = coordinates[0].latitude
-        let originLon = coordinates[0].longitude
-        var minLon = originLon
-        var maxLon = originLon
-        for coordinate in coordinates.dropFirst() {
-            minLat = min(minLat, coordinate.latitude)
-            maxLat = max(maxLat, coordinate.latitude)
-            let lon = unwrappedLongitude(coordinate.longitude, around: originLon)
-            minLon = min(minLon, lon)
-            maxLon = max(maxLon, lon)
-        }
-        let center = CLLocationCoordinate2D(
-            latitude: (minLat + maxLat) / 2,
-            longitude: normalizedLongitude((minLon + maxLon) / 2)
-        )
-        let span = MKCoordinateSpan(
-            latitudeDelta: max((maxLat - minLat) * 1.6, 0.012),
-            longitudeDelta: max((maxLon - minLon) * 1.6, 0.012)
-        )
-        return MKCoordinateRegion(center: center, span: span)
-    }
-
-    /// Pins at 179.99 and -179.99 are neighbors, not a 360° world span.
-    private static func unwrappedLongitude(_ longitude: Double, around origin: Double) -> Double {
-        var value = longitude
-        while value - origin > 180 { value -= 360 }
-        while value - origin < -180 { value += 360 }
-        return value
-    }
-
-    private static func normalizedLongitude(_ longitude: Double) -> Double {
-        var value = longitude
-        while value > 180 { value -= 360 }
-        while value < -180 { value += 360 }
-        return value
-    }
-}
-
 enum SaveDoodleOfficialSticker: String, CaseIterable {
     case duck, noodle, coffee, temple, lantern, elephant
 
     var title: String { rawValue.capitalized }
 
-    /// Place marks only. The archived elephant is no longer shown on Home.
+    /// Place marks only. The brand elephant lives in the header, never here.
     static let placeCases: [SaveDoodleOfficialSticker] = [
         .duck, .noodle, .coffee, .temple, .lantern
     ]
@@ -921,8 +793,7 @@ private struct SaveDoodleHomePreview: View {
 
     var body: some View {
         SaveDoodleHomeView(
-            locationService: LocationService.shared,
-            onOpenMap: {}
+            locationService: LocationService.shared
         )
         .environment(\.atlasPresentation, previewPresentation)
         .environmentObject(SaveDoodleSession(defaults: UserDefaults(suiteName: "save.doodle.preview") ?? .standard))

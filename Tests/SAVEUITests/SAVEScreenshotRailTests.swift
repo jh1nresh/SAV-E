@@ -598,25 +598,21 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(app.buttons["home.hero.changeCover"].exists)
         XCTAssertTrue(app.buttons["home.eat"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["home.citySwitcher"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["home.miniMap"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(
+            app.descendants(matching: .any)["home.root"]
+                .descendants(matching: .any)["home.miniMap"].exists,
+            "Home has no map component"
+        )
         XCTAssertFalse(app.descendants(matching: .any)["home.saves"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.locationPrompt"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["home.locationAllow"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
         tapReachable(app.buttons["home.go"])
-        tapReachable(app.descendants(matching: .any)["home.miniMap"])
-        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-        let mapGo = app.buttons["map.go"]
-        XCTAssertTrue(mapGo.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(mapGo.isSelected, "Mini-map must open Map with the same Eat/Go lens")
-        XCTAssertTrue(app.descendants(matching: .any)["map.city"].exists)
-        openRootTab("Home", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout))
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(
             app.buttons["map.go"].exists,
-            "Opening the Map tab directly must not apply Home's Eat/Go handoff"
+            "Map tab stays unfiltered; Home has no mini-map handoff"
         )
         XCTAssertFalse(app.descendants(matching: .any)["map.city"].exists)
         openRootTab("Home", app: app)
@@ -636,78 +632,43 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
-    func testMiniMapOpensMapWithCarriedFilterAndCityChange() throws {
-        let taipeiCafeID = "10000000-0000-0000-0000-000000000001"
-        let tainanCafeID = "10000000-0000-0000-0000-000000000002"
-        let taipeiParkID = "10000000-0000-0000-0000-000000000005"
+    func testHomeShowOnMapFocusesPlace() throws {
         let app = makeApp(
             launchArguments: [
-                "--uitest-complete-onboarding",
-                "--skip-map-tour",
-                "--uitest-repair-review-demo-seed",
-                "--uitest-review-demo-offline",
-                "--uitest-reset-review-demo-storage",
-                "--uitest-home-memory-fixture",
-                "--uitest-location-denied",
+                "--uitest-complete-onboarding", "--skip-map-tour",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed", "--uitest-home-memory-fixture",
+                "--uitest-location-allowed",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
         )
         launch(app)
         try signInViaReviewDemoRequired(app: app)
-
-        XCTAssertTrue(app.buttons["home.eat"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.buttons["home.go"].exists)
-        XCTAssertTrue(app.buttons["home.place.\(taipeiCafeID)"].waitForExistence(timeout: stepTimeout))
-
-        openRootTab("Map", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        let home = app.descendants(matching: .any)["home.root"]
+        XCTAssertTrue(home.waitForExistence(timeout: launchTimeout))
         XCTAssertFalse(
-            app.buttons["map.go"].exists,
-            "Direct Map tab must keep the unfiltered default"
+            home.descendants(matching: .any)["home.miniMap"].exists,
+            "Home has no map component"
         )
-        XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.\(taipeiCafeID)"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.\(tainanCafeID)"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.\(taipeiParkID)"].exists)
-
-        openRootTab("Home", app: app)
-        tapReachable(app.buttons["home.go"])
-        XCTAssertTrue(app.buttons["home.place.\(taipeiParkID)"].waitForExistence(timeout: stepTimeout))
-        tapReachable(app.descendants(matching: .any)["home.miniMap"])
+        let cafe = app.buttons["home.place.10000000-0000-0000-0000-000000000001"]
+        XCTAssertTrue(cafe.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(
+            cafe.label.range(of: #"[0-9]+(\.[0-9]+)?(m|km)"#, options: .regularExpression) == nil,
+            "Taipei fixture first row must show a non-empty distance string"
+        )
+        cafe.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+        let showOnMap = app.descendants(matching: .any)["home.row.showOnMap"]
+        XCTAssertTrue(showOnMap.waitForExistence(timeout: stepTimeout))
+        XCTAssertGreaterThanOrEqual(showOnMap.frame.height + 0.01, 44)
+        showOnMap.tap()
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-        let mapGo = app.buttons["map.go"]
-        XCTAssertTrue(mapGo.waitForExistence(timeout: stepTimeout), "Mini-map must open Map with Eat/Go")
-        XCTAssertTrue(mapGo.isSelected, "Mini-map must carry the Go lens")
-        XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.\(taipeiParkID)"].waitForExistence(timeout: stepTimeout))
-        XCTAssertFalse(app.descendants(matching: .any)["map.tilePin.\(taipeiCafeID)"].exists)
-
-        openRootTab("Home", app: app)
-        tapReachable(app.buttons["home.eat"])
-        XCTAssertTrue(app.buttons["home.place.\(taipeiCafeID)"].waitForExistence(timeout: stepTimeout))
-        tapReachable(app.descendants(matching: .any)["home.miniMap"])
-        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-        let mapEat = app.buttons["map.eat"]
-        XCTAssertTrue(mapEat.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(mapEat.isSelected)
-        XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.\(taipeiCafeID)"].waitForExistence(timeout: stepTimeout))
-        XCTAssertFalse(app.descendants(matching: .any)["map.tilePin.\(tainanCafeID)"].exists)
-
-        tapReachable(app.descendants(matching: .any)["map.city"])
-        let tainan = app.descendants(matching: .any)["map.city.tainan"]
-        XCTAssertTrue(tainan.waitForExistence(timeout: stepTimeout), "map.city must open a city picker")
-        tapReachable(tainan)
-        XCTAssertTrue(
-            app.descendants(matching: .any)["map.tilePin.\(tainanCafeID)"].waitForExistence(timeout: stepTimeout),
-            "Changing map.city must update Map pins"
-        )
-        XCTAssertFalse(app.descendants(matching: .any)["map.tilePin.\(taipeiCafeID)"].exists)
-
-        openRootTab("Home", app: app)
-        XCTAssertTrue(
-            app.buttons["home.place.\(tainanCafeID)"].waitForExistence(timeout: stepTimeout),
-            "Map city chips write the shared session so Home follows"
-        )
-        XCTAssertFalse(app.buttons["home.place.\(taipeiCafeID)"].exists)
+        let peek = app.descendants(matching: .any)["map.peek.card"]
+        XCTAssertTrue(peek.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(peek.label.contains("Taipei Window Cafe"))
+        XCTAssertTrue(app.descendants(matching: .any)["map.eat"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["map.city"].exists)
     }
 
     @MainActor
@@ -3179,7 +3140,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
-        let review = app.descendants(matching: .any)["home.review"]
+        let review = app.buttons["home.review.action"]
         let fallback = app.buttons["home.saves"]
         XCTAssertTrue(
             review.waitForExistence(timeout: timeout(2))
@@ -3254,7 +3215,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         return elements.first(where: \.exists) ?? elements[0]
     }
 
-    /// Live Home is the Doodle Eat/Go list plus mini-map. The Atlas gate still
+    /// Live Home is the Doodle Eat/Go list with no map component. The Atlas gate still
     /// compares `five-tab-home` to `ProductionTargets/home.png` unmasked at
     /// 0.90. Capture that raster from the Codex Tiantan
     /// fixture at the Tiantan fix; a denied-location Taipei Home is a
@@ -3318,9 +3279,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             launch(app)
             try signInViaReviewDemoRequired(app: app)
             waitForHomeCoverImagery(app)
-            let review = app.buttons["home.review"]
-            XCTAssertTrue(review.isHittable)
-            assertTapTargetHeight(review, name: "home.review")
+            let review = app.descendants(matching: .any)["home.review"]
+            XCTAssertTrue(review.waitForExistence(timeout: stepTimeout))
+            let action = app.buttons["home.review.action"]
+            XCTAssertTrue(action.waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(action.isHittable)
+            assertTapTargetHeight(action, name: "home.review.action")
             let frame = app.frame
             let statusBarFrame = app.statusBars.firstMatch.exists ? String(describing: app.statusBars.firstMatch.frame) : "unavailable"
             let metadata = XCTAttachment(string: "viewport=\(frame); statusBar=\(statusBarFrame); requestedCategory=\(category); language=zh-Hant; reducedMotion=\(UIAccessibility.isReduceMotionEnabled)")
@@ -3408,6 +3372,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertTrue(review.waitForExistence(timeout: stepTimeout), "\(state) must expose home.review")
             XCTAssertEqual(review.identifier, "home.review")
             XCTAssertTrue(review.label.contains("2"), "\(state) must contain two unconfirmed clues")
+            XCTAssertTrue(
+                app.buttons["home.review.action"].waitForExistence(timeout: stepTimeout),
+                "\(state) Review › is the only coral tap on the hint row"
+            )
             XCTAssertFalse(
                 app.buttons["home.saves"].exists,
                 "\(state) hides home.saves while clues wait"
@@ -3428,12 +3396,20 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             // empty-plate container identifier is not an XCUI element because
             // the parent saved-places group uses children: .contain
             // (CI 39925000944, line 3428).
+            XCTAssertFalse(
+                app.descendants(matching: .any)["home.root"]
+                    .descendants(matching: .any)["home.miniMap"].exists,
+                "\(state) has no map component"
+            )
             XCTAssertTrue(
                 app.buttons["home.empty.capture"].waitForExistence(timeout: stepTimeout),
                 "\(state) must show the empty-plate capture entry"
             )
             XCTAssertEqual(app.buttons["home.empty.capture"].identifier, "home.empty.capture")
-            XCTAssertFalse(app.descendants(matching: .any)["home.review"].exists, "\(state) has no Review clues")
+            let hint = app.descendants(matching: .any)["home.review"]
+            XCTAssertTrue(hint.waitForExistence(timeout: stepTimeout), "\(state) always shows the hint row")
+            XCTAssertFalse(hint.label.contains("clue"), "\(state) greeting-only when there are no clues")
+            XCTAssertFalse(app.buttons["home.review.action"].exists)
             XCTAssertFalse(
                 app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'")).firstMatch.exists
             )
@@ -3472,10 +3448,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         waitForHomeCoverImagery(app)
-        XCTAssertFalse(app.descendants(matching: .any)["home.review"].exists, "H3 has no Review clues")
-        XCTAssertFalse(
-            app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'clue waiting'")).firstMatch.exists,
-            "H3 clue count must be 0"
+        let hint = app.descendants(matching: .any)["home.review"]
+        XCTAssertTrue(hint.waitForExistence(timeout: stepTimeout), "H3 always shows the hint row")
+        XCTAssertFalse(hint.label.contains("clue"), "H3 shows the greeting only when there are no clues")
+        XCTAssertFalse(hint.label.contains("線索"))
+        XCTAssertFalse(app.buttons["home.review.action"].exists)
+        let greetings = ["Good morning", "Good afternoon", "Good evening", "早安", "午安", "晚安"]
+        XCTAssertTrue(
+            greetings.contains(where: { hint.label.contains($0) }),
+            "H3 hint row must be a time-of-day greeting"
         )
         for suffix in ["000000000001", "000000000002", "000000000003"] {
             XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-\(suffix)"].exists)
@@ -3510,12 +3491,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
     private func waitForHomeCoverImagery(_ app: XCUIApplication) {
+        let home = app.descendants(matching: .any)["home.root"]
+        XCTAssertTrue(home.waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(
-            app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
+            home.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
             "Live Home should show the saved-place library before the parity raster."
         )
         XCTAssertTrue(app.buttons["home.eat"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["home.miniMap"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(
+            home.descendants(matching: .any)["home.miniMap"].exists,
+            "Home has no map component"
+        )
         let firstPlace = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
         ).firstMatch
