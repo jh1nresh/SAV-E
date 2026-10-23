@@ -2487,9 +2487,11 @@ final class SAVEProductionConfigTests: XCTestCase {
     func testUpdatePlaceMapsStructuredCapAndLeavesOrdinaryFailures() async throws {
         AnalysisRequestURLProtocol.reset()
         defer { AnalysisRequestURLProtocol.reset() }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
         let service = SupabaseService(
             apiBaseURL: "https://analysis.test",
-            session: session(),
+            session: URLSession(configuration: configuration),
             accessTokenProvider: { "test-token" }
         )
         let cap = #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#
