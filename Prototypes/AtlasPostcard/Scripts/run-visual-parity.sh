@@ -217,6 +217,9 @@ for screen in home saves plan map; do
     fi
     cp "$source" "$ARTIFACT_DIR/reference/$screen.png"
 done
+if [[ -f "$REFERENCE_SOURCE/home-mask.png" ]]; then
+    cp "$REFERENCE_SOURCE/home-mask.png" "$ARTIFACT_DIR/reference/home-mask.png"
+fi
 
 if [[ -n "$DESTINATION" ]]; then
     capture_booted_simulators
@@ -389,6 +392,9 @@ for screen in "${compare_screens[@]}"; do
         --diff "$ARTIFACT_DIR/diff/$screen.png"
         --threshold "$THRESHOLD"
     )
+    if [[ "$screen" == home && -f "$ARTIFACT_DIR/reference/home-mask.png" ]]; then
+        compare_args+=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
+    fi
     if xcrun swift "$PARITY_SCRIPT" "${compare_args[@]}" \
         >"$ARTIFACT_DIR/results/$screen.json"
     then

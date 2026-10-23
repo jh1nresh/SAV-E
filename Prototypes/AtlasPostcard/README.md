@@ -63,7 +63,7 @@ extraction, so approving a UI refresh cannot silently alter generated assets.
 The Home production target is DESIGN v2's exact 402×874
 `home-light.png` from `design/doodle-targets-2026-10-20` at `eade369`.
 `home-dark.png` sits next to it for DESIGN comparison.
-Home grades unmasked against `ProductionTargets/home.png`. Grade position,
+`home-mask.png` is the ignore mask (white = ignore). Grade position,
 size, color and font style. v1 is retired. Those rasters are rendered
 at 1× 402×874, not a crop. `VisualParity.swift` still accepts only a
 1× 402 × 874 target. Founder sign-off 2026-10-20:
