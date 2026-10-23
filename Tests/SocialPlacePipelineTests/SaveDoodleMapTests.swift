@@ -346,10 +346,12 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(parity.contains("--ignore-mask"))
         XCTAssertTrue(script.contains("--threshold 0.90") || script.contains("THRESHOLD=\"0.90\""))
         XCTAssertTrue(script.contains("five-tab-map*)"))
+        XCTAssertTrue(script.contains("298-10-saved-unsaved-visited"))
         XCTAssertTrue(script.contains("*-zh*)"))
         XCTAssertTrue(script.contains("map-doodle-similarity"))
-        XCTAssertTrue(script.contains("--ignore-mask"))
-        XCTAssertTrue(script.contains("map-mask.png"))
+        XCTAssertTrue(script.contains("full frame, no map-mask.png"))
+        XCTAssertFalse(script.contains("extra_args=(--ignore-mask \"$MAP_MASK\")"))
+        XCTAssertFalse(script.contains("--mask-image \"$MAP_MASK\""))
         let compose = try source(at: "Prototypes/AtlasPostcard/Scripts/compose-map-similarity.py")
         XCTAssertTrue(compose.contains("used_mask_image"))
         XCTAssertTrue(compose.contains("\"coverage\": \"mask-image\""))
@@ -424,8 +426,10 @@ final class SaveDoodleMapTests: XCTestCase {
         ))
         let design = try source(at: "DESIGN.md")
         XCTAssertTrue(design.contains("judged manually by DESIGN"))
+        XCTAssertTrue(design.contains("DESIGN still signs off"))
         XCTAssertTrue(design.contains("Home and Map still fail CI below 0.90"))
         XCTAssertFalse(design.contains("0.90 visual-parity score is not evidence"))
+        XCTAssertTrue(design.contains("Do not apply `map-mask.png` to the 0.90 score"))
         XCTAssertTrue(design.contains("coral outline lollipops"))
         XCTAssertFalse(design.contains("SaveTileTownRootMap"))
         XCTAssertFalse(FileManager.default.fileExists(
@@ -445,7 +449,7 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertGreaterThan(
             light.pngData()?.count ?? 0,
             50_000,
-            "Map target must be DESIGN v2 map-light.png, not a generated composite"
+            "Map target must be a live Taipei Apple Maps screenshot, not a generated composite"
         )
     }
 

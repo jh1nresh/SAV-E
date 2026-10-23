@@ -806,8 +806,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["map.eat"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["map.go"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["map.placeSheet"].waitForExistence(timeout: stepTimeout))
-        attach(app, name: "five-tab-map")
-        attach(app, name: "doodle-map-light")
+        attach(app, name: "landing-map")
+        attach(app, name: "doodle-map-light-demo")
         assertDoodleMapChrome(app)
         attachHoP298ChromeEvidence(app)
 
@@ -3525,6 +3525,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             attach(app, name: "298-12-zh")
         } else {
             attach(app, name: "298-10-saved-unsaved-visited")
+            attach(app, name: "five-tab-map")
+            attach(app, name: "doodle-map-light")
         }
         if attachM1 {
             attach(app, name: "M1")

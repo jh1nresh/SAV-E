@@ -299,6 +299,11 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                     screen="plan"
                     priority=0
                     ;;
+                298-10-saved-unsaved-visited*|M1*)
+                    # HoP P-4: live Taipei Apple Maps is the Map golden.
+                    screen="map"
+                    priority=2
+                    ;;
                 five-tab-map*)
                     screen="map"
                     priority=1
@@ -324,7 +329,7 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                     ;;
             esac
             case "$human_name" in
-                five-tab-map*|doodle-map-light*|light-map*)
+                298-10-saved-unsaved-visited*|M1*|five-tab-map*|doodle-map-light*|light-map*)
                     if awk -v ts="$timestamp" -v best="$map_light_ts" 'BEGIN { exit !(ts+0 >= best+0) }'
                     then
                         map_light_file="$exported_name"
@@ -393,10 +398,9 @@ fi
 
 gate_failed=0
 mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
-# DESIGN v2 map-mask.png: white = live Apple Maps (ignored) for the
-# side-by-side review raster. Home and Map use the same 0.90 CI gate as
-# Saves and Plan. Masks stay on disk; they do not waive the score.
-MAP_MASK="$REFERENCE_SOURCE/map-mask.png"
+# HoP P-4: Map goldens are live Taipei Apple Maps. Do not apply
+# map-mask.png to the 0.90 score. Home still uses home-mask.png.
+# Home and Map fail the job below 0.90 the same way as Saves and Plan.
 for screen in home saves plan map; do
     actual="$ARTIFACT_DIR/output/$screen.png"
     if [[ ! -f "$actual" ]]; then
@@ -410,12 +414,7 @@ for screen in home saves plan map; do
         mask_args+=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
     fi
     if [[ "$screen" == "map" ]]; then
-        if [[ ! -f "$MAP_MASK" ]]; then
-            echo "error: missing DESIGN map mask: $MAP_MASK" >&2
-            exit 2
-        fi
-        echo "Map pixel coverage: DESIGN map-mask.png (white = Apple Maps)." >&2
-        extra_args=(--ignore-mask "$MAP_MASK")
+        echo "Map pixel coverage: full frame, no map-mask.png." >&2
     fi
     # macOS CI bash + set -u treats "${empty[@]}" as unbound. Only expand
     # when the arrays have values (home mask / map ignore-mask).
@@ -464,8 +463,7 @@ for screen in home saves plan map; do
             --result "$ARTIFACT_DIR/results/map.json"
             --output "$ARTIFACT_DIR/map-doodle-similarity/side-by-side.png"
             --report "$ARTIFACT_DIR/map-doodle-similarity/report.json"
-            --mask "0,160,402,618"
-            --mask-image "$MAP_MASK"
+            --mask "0,0,0,0"
             --status "$status"
             --threshold "$THRESHOLD"
             --modes-output "$ARTIFACT_DIR/map-doodle-similarity/mock-light-dark.png"

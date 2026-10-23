@@ -479,6 +479,7 @@ jobs:
               "doodle-map-dark", "298-3-home", "298-3-map",
               "298-2-mapkit", "298-4-coral-pins", "298-5-been-here",
               "298-6-city-eat-go", "298-7-map-tab", "298-8-provider",
+              "298-10-saved-unsaved-visited", "M1",
               "map-375", "map-390", "map-430",
           ]
           newest = {}

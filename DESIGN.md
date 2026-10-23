@@ -991,11 +991,11 @@ Rules:
 
 ### Doodle Map verification boundary
 
-DESIGN v2 `map-light.png` / `map-dark.png` from
-`design/doodle-targets-2026-10-20` at `eade369` are the goldens.
-`map-mask.png` (white = live Apple Maps) is the ignore mask for that
-side-by-side review. Home and Map still fail CI below 0.90; the mask
-does not waive the score. City and Eat/Go sit on a cream `paper` header band,
+HoP P-4 (founder 2026-10-24): `map.png` / `map-dark.png` are live
+Taipei Apple Maps screenshots from the #298 CI iPhone 16 Pro (402pt).
+Do not apply `map-mask.png` to the 0.90 score. Home and Map still fail
+CI below 0.90. DESIGN still signs off on city / Eat-Go / sheet / tab
+chrome. City and Eat/Go sit on a cream `paper` header band,
 not on the live map. Pins are coral outline lollipops. The place sheet
 uses a 64pt official DESIGN sticker (color die-cut when visited, pencil
 outline when not) and a 12pt text gap. Do not replace default Apple
