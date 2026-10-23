@@ -35,8 +35,22 @@ struct SaveHomeSearch {
     /// "Shibuya City, Tokyo" and "Dusit, Bangkok" resolve to Tokyo / Bangkok.
     /// Shared country recognition for metro matching and fallback city grouping.
     static func countryToken(in address: String) -> String? {
-        addressCountryToken(address)
+        let last = address.split(separator: ",").last.map { normalize(String($0)) } ?? ""
+        guard let token = addressCountryToken(address) ?? countryAliases[last] else { return nil }
+        return countryAliases[token] ?? token
     }
+
+    /// One qualifier per recognized country, including the legacy fallback
+    /// spellings. Otherwise UK and United Kingdom split the same city.
+    private static let countryAliases: [String: String] = [
+        "uk": "united kingdom", "u k": "united kingdom", "england": "united kingdom", "britain": "united kingdom",
+        "usa": "united states", "us": "united states", "united states of america": "united states",
+        "korea": "south korea",
+        "schweiz": "switzerland", "suisse": "switzerland", "svizzera": "switzerland",
+        "österreich": "austria", "osterreich": "austria",
+        "nederland": "netherlands", "holland": "netherlands",
+        "belgie": "belgium", "belgië": "belgium", "belgique": "belgium",
+    ]
 
     static func metroKey(in address: String) -> String? {
         for city in City.ordered where city.matches(address: address) && city.hasLocalityComponent(in: address) {
@@ -342,7 +356,7 @@ private extension SaveHomeSearch {
             if SaveHomeSearch.addressSignalsUnitedStates(address), !isUnitedStatesMetro {
                 return false
             }
-            guard let country = SaveHomeSearch.addressCountryToken(address),
+            guard let country = SaveHomeSearch.countryToken(in: address),
                   let home = homeCountryTokens
             else { return true }
             return home.contains(country)

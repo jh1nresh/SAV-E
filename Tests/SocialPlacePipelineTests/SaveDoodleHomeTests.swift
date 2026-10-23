@@ -317,8 +317,27 @@ final class SaveDoodleHomeTests: XCTestCase {
             place("Cambridge fixture", $0, .cafe)
         }
         XCTAssertEqual(places.map { SaveDoodleHomeCatalog.localityLabel(in: $0.address) }, ["Cambridge", "Cambridge"])
-        XCTAssertEqual(places.map { SaveDoodleHomeCatalog.cityID(for: $0) }, ["cambridge,uk", "cambridge,uk"])
+        XCTAssertEqual(places.map { SaveDoodleHomeCatalog.cityID(for: $0) }, ["cambridge,united kingdom", "cambridge,united kingdom"])
         XCTAssertEqual(SaveDoodleHomeCatalog.cityGroups(from: places).first?.count, 2)
+    }
+
+    func testCountryAliasesShareCityGroupsAndRestoreExistingSelection() {
+        let places = ["UK", "United Kingdom", "England", "Britain", "U.K."].map {
+            place("Country alias", "1 King's Parade, Cambridge CB2 1ST, \($0)", .cafe)
+        }
+        let groups = SaveDoodleHomeCatalog.cityGroups(from: places)
+        XCTAssertEqual(groups.map(\.id), ["cambridge,united kingdom"])
+        XCTAssertEqual(groups.first?.count, 5)
+        XCTAssertEqual(SaveDoodleCitySelection(storageValue: "cambridge,uk"), .city("cambridge,united kingdom"))
+        XCTAssertEqual(SaveDoodleCitySelection(storageValue: "springfield,il"), .city("springfield,il"))
+        for (alias, country) in [("USA", "united states"), ("US", "united states"), ("United States of America", "united states"), ("Schweiz", "switzerland"), ("Holland", "netherlands"), ("Österreich", "austria")] {
+            XCTAssertEqual(SaveHomeSearch.countryToken(in: alias), country, alias)
+        }
+        XCTAssertNil(SaveHomeSearch.metroKey(in: "London, Holland"))
+        XCTAssertEqual(SaveHomeSearch.metroKey(in: "London, U.K."), "london")
+        XCTAssertEqual(SaveHomeSearch.metroKey(in: "Los Angeles, USA"), "losAngeles")
+        let dutchCity = place("Amsterdam fixture", "Damrak, Amsterdam, Holland", .cafe)
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: dutchCity), "amsterdam,netherlands")
     }
 
     func testFallbackCityGroupingRecognizesCountriesOutsideMetroCatalogue() {
@@ -1206,6 +1225,11 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(content.contains("hasActiveExactSearchResolution"))
         XCTAssertTrue(content.contains("if !isExactSearchSessionActive"))
         XCTAssertTrue(content.contains("invalidateExactSearchRequest()"))
+        XCTAssertTrue(content.contains("onClose: closeMapSearch"))
+        XCTAssertTrue(content.contains("onCollapse: closeMapSearch"))
+        let closeSearch = try XCTUnwrap(content.components(separatedBy: "private func closeMapSearch()").last?.components(separatedBy: "@ViewBuilder").first)
+        XCTAssertTrue(closeSearch.contains("invalidateExactSearchRequest()"))
+        XCTAssertTrue(closeSearch.contains("collapseMapPanel()"))
         XCTAssertTrue(content.contains("exactSearchClueID"))
         XCTAssertTrue(content.contains("activateExactSearchSession(for:"))
         XCTAssertTrue(content.contains("restoreExactSearchResolutionIfNeeded()"))

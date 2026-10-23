@@ -3429,7 +3429,12 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
-    private func assertGroupedExactSearchPersistence(failOnce: Bool) async throws {
+    func testClosingPartialCorrectionDoesNotClaimOrdinaryMapActionsAndCanResumeOriginalPlan() async throws {
+        try await assertGroupedExactSearchPersistence(failOnce: true, closesBeforeRetry: true)
+    }
+
+    @MainActor
+    private func assertGroupedExactSearchPersistence(failOnce: Bool, closesBeforeRetry: Bool = false) async throws {
         let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("grouped-exact-\(UUID()).json")
         let eventsURL = FileManager.default.temporaryDirectory.appendingPathComponent("grouped-events-\(UUID()).json")
         defer {
@@ -3476,6 +3481,26 @@ final class SaveSearchControllerTests: XCTestCase {
             XCTAssertEqual(map.reviewCandidates.count, all.count)
             XCTAssertEqual(supabase.updatedPlaces.count, 1, "Never roll back a stamp referenced by an accepted decision")
             let previousDecisions = supabase.recoveryDecisions
+            if closesBeforeRetry {
+                map.clearMapSearchResults()
+                XCTAssertFalse(map.hasActiveExactSearchResolution)
+                let unclaimed = await map.chooseSavedStampFromExactSearch(stamp)
+                XCTAssertNil(unclaimed, "Closing must suspend retained recovery intent")
+                XCTAssertEqual(supabase.recoveryDecisions, previousDecisions)
+                let ordinary = SaveMapCandidate(id: "ordinary-after-close", title: "Ordinary new stamp", subtitle: "Paris", latitude: 48.8566, longitude: 2.3522, category: .cafe)
+                let ordinaryStamp = try await map.saveMapCandidateAsPlace(ordinary)
+                XCTAssertEqual(ordinaryStamp.name, "Ordinary new stamp")
+                XCTAssertEqual(supabase.recoveryDecisions, previousDecisions)
+                XCTAssertEqual(map.reviewCandidates.count, all.count)
+                map.beginExactSearchResolution(for: clue)
+                XCTAssertTrue(map.hasActiveExactSearchResolution)
+                do {
+                    _ = try await map.resolveExactSearchClue(toSavedPlace: ordinaryStamp)
+                    XCTFail("An explicitly resumed partial plan must retain its original stamp lock")
+                } catch ReviewCandidateError.correctionLockedToPreviousStamp {
+                    // The original decision snapshots remain available for retry.
+                }
+            }
             supabase.failingDecisionRuns = []
             try await map.refreshReviewCandidates()
             XCTAssertFalse(map.reviewCandidates.contains { $0.id == otherRun.id })

@@ -761,7 +761,7 @@ struct ContentView: View {
                 onExpand: { focusesSearch in
                     openMapSearch(focusesSearch: focusesSearch)
                 },
-                onCollapse: collapseMapPanel,
+                onCollapse: closeMapSearch,
                 onOpenPassport: openPassport
             ) {
                 if mapDetailDrawerItem != nil {
@@ -778,7 +778,7 @@ struct ContentView: View {
                         focusesSearch: drawerLaunchRequest.focusesSearch,
                         preservesExactSearchClue: isExactSearchSessionActive
                             || exactSearchClueID != nil,
-                        onClose: collapseMapPanel,
+                        onClose: closeMapSearch,
                         onOpenPlace: { openSavedPlaceFromMapSearch($0) },
                         onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
                     )
@@ -808,6 +808,11 @@ struct ContentView: View {
     private func collapseMapPanel() {
         isMapPanelExpanded = false
         handleRootSheetDismiss()
+    }
+
+    private func closeMapSearch() {
+        invalidateExactSearchRequest()
+        collapseMapPanel()
     }
 
     @ViewBuilder
@@ -1518,7 +1523,7 @@ struct ContentView: View {
     }
 
     private func invalidateExactSearchRequest() {
-        guard exactSearchRequestID != nil || isExactSearchSessionActive || exactSearchClueID != nil else { return }
+        guard exactSearchRequestID != nil || isExactSearchSessionActive || exactSearchClueID != nil || mapVM.hasActiveExactSearchResolution else { return }
         exactSearchRequestID = nil
         isExactSearchSessionActive = false
         exactSearchClueID = nil

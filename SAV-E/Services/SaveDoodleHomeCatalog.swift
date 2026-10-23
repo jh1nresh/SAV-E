@@ -36,7 +36,7 @@ enum SaveDoodleCitySelection: Equatable, Hashable {
     }
 
     init(storageValue: String) {
-        self = storageValue == "nearYou" ? .nearYou : .city(storageValue)
+        self = storageValue == "nearYou" ? .nearYou : .city(SaveDoodleHomeCatalog.canonicalCityID(storageValue))
     }
 }
 
@@ -160,6 +160,15 @@ final class SaveDoodleSession: ObservableObject {
 enum SaveDoodleHomeCatalog {
     /// Walking-scale "near you" radius. Empty state uses the same bound.
     static let nearbyRadius: CLLocationDistance = 3_000
+
+    /// Preserve an existing city selection when its country spelling changes
+    /// to the shared canonical qualifier. Administrative-region IDs stay intact.
+    static func canonicalCityID(_ id: String) -> String {
+        guard let separator = id.lastIndex(of: ","),
+              let country = SaveHomeSearch.countryToken(in: String(id[id.index(after: separator)...]))
+        else { return id }
+        return String(id[...separator]) + country
+    }
 
     static func lens(for category: PlaceCategory) -> SaveDoodleLens {
         switch category {

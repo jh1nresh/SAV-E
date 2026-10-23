@@ -681,6 +681,12 @@ final class MapViewModel: ObservableObject {
     /// returned map candidate or choosing a saved Map Stamp retires that
     /// clue. A later unrelated map tap must never retire it.
     private var exactSearchResolution: ExactSearchResolution?
+    /// A retained partial-commit recovery plan is not permission to resolve
+    /// the next ordinary Map tap. Only explicitly entering correction arms it.
+    private var exactSearchIntentActive = false
+    private var liveExactSearchResolution: ExactSearchResolution? {
+        exactSearchIntentActive ? exactSearchResolution : nil
+    }
     /// After a failed rollback the correction stays claimed on this stamp so
     /// the same clue cannot attach to a second place.
     private var exactSearchRollbackLockPlaceID: UUID?
@@ -1743,8 +1749,8 @@ final class MapViewModel: ObservableObject {
 
     @discardableResult
     func saveMapCandidateAsPlace(_ candidate: SaveMapCandidate) async throws -> Place {
-        var resolution = exactSearchResolution.flatMap { $0.includes(candidateID: candidate.id) ? $0 : nil }
-        if resolution == nil, exactSearchRollbackLockPlaceID != nil { resolution = exactSearchResolution }
+        var resolution = liveExactSearchResolution.flatMap { $0.includes(candidateID: candidate.id) ? $0 : nil }
+        if resolution == nil, exactSearchIntentActive, exactSearchRollbackLockPlaceID != nil { resolution = exactSearchResolution }
         return try await withExactSearchTransportSession(resolution) {
             try await saveMapCandidateAsPlace(candidate, exactResolution: resolution)
         }
@@ -1758,7 +1764,7 @@ final class MapViewModel: ObservableObject {
             throw ReviewCandidateError.correctionInFlight
         }
         if let exactResolution { try requireExactSearchSession(exactResolution) }
-        if let locked = exactSearchRollbackLockPlaceID {
+        if exactResolution != nil, let locked = exactSearchRollbackLockPlaceID {
             let lockedStamp = places.first(where: { $0.id == locked })
             let matchesLocked = lockedStamp.map { mapCandidateMatchesStamp(candidate, $0) } ?? false
             if !matchesLocked {
@@ -1820,7 +1826,7 @@ final class MapViewModel: ObservableObject {
                 throw ReviewCandidateError.alreadySavedMapStamp(existing.name)
             }
 
-            if exactSearchRollbackLockPlaceID != nil {
+            if exactResolution != nil, exactSearchRollbackLockPlaceID != nil {
                 correctionDrawerError = ReviewCandidateError.correctionLockedToPreviousStamp.errorDescription
                 throw ReviewCandidateError.correctionLockedToPreviousStamp
             }
@@ -1886,7 +1892,7 @@ final class MapViewModel: ObservableObject {
     }
 
     func mapCandidate(_ candidate: SaveMapCandidate, resolvesReviewCandidateID reviewCandidateID: UUID) -> Bool {
-        guard let resolution = exactSearchResolution else { return false }
+        guard let resolution = liveExactSearchResolution else { return false }
         return resolution.clue.id == reviewCandidateID && resolution.includes(candidateID: candidate.id)
     }
 
@@ -1919,7 +1925,7 @@ final class MapViewModel: ObservableObject {
     /// the correction claimed on the first stamp.
     @discardableResult
     func resolveExactSearchClue(toSavedPlace place: Place) async throws -> Place {
-        try await withExactSearchTransportSession(exactSearchResolution) {
+        try await withExactSearchTransportSession(liveExactSearchResolution) {
             try await resolveExactSearchClueWithinSession(toSavedPlace: place)
         }
     }
@@ -1929,7 +1935,7 @@ final class MapViewModel: ObservableObject {
             correctionDrawerError = ReviewCandidateError.correctionInFlight.errorDescription
             throw ReviewCandidateError.correctionInFlight
         }
-        guard let resolution = exactSearchResolution else {
+        guard let resolution = liveExactSearchResolution else {
             let error: ReviewCandidateError = (usesRemotePersistence && authService.currentUserId == nil)
                 ? .signInRequired
                 : .noActiveCorrectionSession
@@ -3270,7 +3276,7 @@ final class MapViewModel: ObservableObject {
         preservesExactSearchClue: Bool = false
     ) async {
         let generation = beginMapCandidateSearch()
-        let preservedResolution = preservesExactSearchClue ? exactSearchResolution : nil
+        let preservedResolution = preservesExactSearchClue ? liveExactSearchResolution : nil
         if !preservesExactSearchClue {
             dropExactSearchResolutionUnlessLocked()
         }
@@ -3330,7 +3336,7 @@ final class MapViewModel: ObservableObject {
         preservesExactSearchClue: Bool = false
     ) async -> MapCandidateSearchResult {
         let searchGeneration = beginMapCandidateSearch()
-        let preservedResolution = preservesExactSearchClue ? exactSearchResolution : nil
+        let preservedResolution = preservesExactSearchClue ? liveExactSearchResolution : nil
         if !preservesExactSearchClue {
             dropExactSearchResolutionUnlessLocked()
         }
@@ -3479,7 +3485,7 @@ final class MapViewModel: ObservableObject {
     }
 
     func attachExactSearchResults(_ candidates: [SaveMapCandidate]) {
-        guard let resolution = exactSearchResolution else { return }
+        guard let resolution = liveExactSearchResolution else { return }
         exactSearchResolution = resolution.attaching(
             candidateIDs: Set(sanitizedMapCandidates(candidates).map(\.id))
         )
@@ -3742,6 +3748,7 @@ final class MapViewModel: ObservableObject {
             }
             exactSearchResolution = resolution.attaching(candidateIDs: Set(mapCandidates.map(\.id)))
             exactSearchRollbackLockPlaceID = lockPlaceID
+            exactSearchIntentActive = true
             return
         }
         let currentClue = reviewCandidates.first(where: { $0.id == candidate.id }) ?? candidate
@@ -3749,11 +3756,13 @@ final class MapViewModel: ObservableObject {
             clue: currentClue,
             candidateIDs: Set(mapCandidates.map(\.id))
         )
+        exactSearchIntentActive = true
     }
 
-    var hasActiveExactSearchResolution: Bool { exactSearchResolution != nil }
+    var hasActiveExactSearchResolution: Bool { liveExactSearchResolution != nil }
 
     private func dropExactSearchResolutionUnlessLocked() {
+        exactSearchIntentActive = false
         guard exactSearchRollbackLockPlaceID == nil else { return }
         exactSearchResolution = nil
     }
