@@ -403,7 +403,11 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }
         let body = try Self.jsonBody(updates)
 
-        try await request(path: "/places/\(place.id)", method: "PATCH", body: body)
+        do {
+            try await request(path: "/places/\(place.id)", method: "PATCH", body: body)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     func deletePlace(_ placeId: UUID) async throws {

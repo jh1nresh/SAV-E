@@ -1233,6 +1233,25 @@ final class MapViewModel: ObservableObject {
         return merged
     }
 
+    /// PATCH can refuse a merge that would grow the canonical set past the
+    /// free cap. Park the originating item first, then rethrow so confirmation
+    /// never looks saved. Other errors, including committed-session changes
+    /// after a successful write, pass through unchanged.
+    private func mergeSavedSources(
+        _ incoming: Place,
+        into existing: Place,
+        parkIfLimited: () throws -> Void
+    ) async throws -> Place {
+        do {
+            return try await mergeSavedSources(incoming, into: existing)
+        } catch {
+            if error is SavePlaceLimitError {
+                try parkIfLimited()
+            }
+            throw error
+        }
+    }
+
     /// Confirmation can reconcile an older source on the server. Read back its
     /// date without replacing current user edits or retrying a committed save.
     func refreshedConfirmedPlace(_ place: Place) async -> Place {
@@ -1959,7 +1978,11 @@ final class MapViewModel: ObservableObject {
         }
 
         if let match = learnedOwnedPlace ?? existingSavedPlace(matching: place) {
-            var existing = try await mergeSavedSources(place, into: match)
+            var existing = try await mergeSavedSources(place, into: match) {
+                try parkExistingReviewCandidate(
+                    candidate, startedBy: userId, generation: confirmationGeneration
+                )
+            }
             var updatedCandidate = candidate
             updatedCandidate.name = existing.name
             updatedCandidate.address = existing.address
@@ -2133,7 +2156,17 @@ final class MapViewModel: ObservableObject {
                         sessionAlreadyClaimed: claimedExactSearch
                     )
                 }
-                let existing = try await mergeSavedSources(place, into: match)
+                let existing = try await mergeSavedSources(place, into: match) {
+                    if try parkIfServerSavedPlaceLimit(
+                        SavePlaceLimitError.parkedInUnplacedInbox,
+                        place: place,
+                        startedBy: saveUserId,
+                        generation: saveGeneration
+                    ) {
+                        mapCandidates.removeAll { $0.id == candidate.id }
+                        selectedMapCandidate = nil
+                    }
+                }
                 mapCandidates.removeAll { $0.id == candidate.id }
                 selectedMapCandidate = nil
                 focusSavedPlace(existing, showStampMoment: false)
@@ -2328,13 +2361,23 @@ final class MapViewModel: ObservableObject {
             places = Place.consolidated(places.filter { $0.id != associated.id } + [associated])
             return associated
         } catch {
+            var thrown = error
+            if error is SavePlaceLimitError {
+                do {
+                    try parkExistingReviewCandidate(
+                        resolution.clue, startedBy: resolveUserId, generation: resolveGeneration
+                    )
+                } catch {
+                    thrown = error
+                }
+            }
             try await restoreExactSearchAfterFailedMerge(
                 original: place,
                 merged: associated,
                 resolution: resolution,
                 persistedMerge: persistedMerge,
                 decisionCommitted: decisionCommitted,
-                error: error
+                error: thrown
             )
         }
     }
@@ -2370,7 +2413,11 @@ final class MapViewModel: ObservableObject {
         var decisionCommitted = false
         var associated = match
         do {
-            associated = try await mergeSavedSources(incoming, into: match)
+            associated = try await mergeSavedSources(incoming, into: match) {
+                try parkExistingReviewCandidate(
+                    resolution.clue, startedBy: mergeUserId, generation: mergeGeneration
+                )
+            }
             persistedMerge = true
             let resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
                 resolution: resolution,
@@ -2575,7 +2622,16 @@ final class MapViewModel: ObservableObject {
         }
 
         if let match = existingSavedPlace(matching: place) {
-            let existing = try await mergeSavedSources(place, into: match)
+            let owner = authService.currentUserId
+            let generation = authService.sessionGeneration
+            let existing = try await mergeSavedSources(place, into: match) {
+                _ = try parkIfServerSavedPlaceLimit(
+                    SavePlaceLimitError.parkedInUnplacedInbox,
+                    place: place,
+                    startedBy: owner,
+                    generation: generation
+                )
+            }
             focusSavedPlace(existing, showStampMoment: false)
             return .alreadySaved(existing)
         }
@@ -2646,8 +2702,20 @@ final class MapViewModel: ObservableObject {
 
     @discardableResult
     func saveSocialPlaceToMySave(_ socialPlace: Place) async throws -> Place {
+        let userId = authService.currentUserId
+        let saveGeneration = authService.sessionGeneration
         if let match = existingSavedPlace(matching: socialPlace) {
-            let existing = try await mergeSavedSources(socialPlace, into: match)
+            let existing = try await mergeSavedSources(socialPlace, into: match) {
+                if try parkIfServerSavedPlaceLimit(
+                    SavePlaceLimitError.parkedInUnplacedInbox,
+                    place: socialPlace,
+                    startedBy: userId,
+                    generation: saveGeneration
+                ) {
+                    socialPlaces.removeAll { $0.id == socialPlace.id }
+                    selectedSocialPlace = nil
+                }
+            }
             focusSavedPlace(existing, showStampMoment: false)
             await recordOriginSaveOutcomeBestEffort(for: socialPlace)
             return existing
@@ -2686,8 +2754,6 @@ final class MapViewModel: ObservableObject {
             throw SavePlaceLimitError.parkedInUnplacedInbox
         }
 
-        let userId = authService.currentUserId
-        let saveGeneration = authService.sessionGeneration
         var insertedRemotely = false
         if let userId {
             do {
@@ -2953,8 +3019,17 @@ final class MapViewModel: ObservableObject {
     @discardableResult
     func saveListItemAsPlace(_ item: SaveListItem) async throws -> Place {
         let place = item.asPlace()
+        let userId = authService.currentUserId
+        let saveGeneration = authService.sessionGeneration
         if let match = existingSavedPlace(matching: place) {
-            let existing = try await mergeSavedSources(place, into: match)
+            let existing = try await mergeSavedSources(place, into: match) {
+                _ = try parkIfServerSavedPlaceLimit(
+                    SavePlaceLimitError.parkedInUnplacedInbox,
+                    place: place,
+                    startedBy: userId,
+                    generation: saveGeneration
+                )
+            }
             focusSavedPlace(existing, showStampMoment: false)
             return existing
         }
@@ -2964,8 +3039,6 @@ final class MapViewModel: ObservableObject {
             throw SavePlaceLimitError.parkedInUnplacedInbox
         }
 
-        let userId = authService.currentUserId
-        let saveGeneration = authService.sessionGeneration
         var insertedRemotely = false
         if let userId {
             do {

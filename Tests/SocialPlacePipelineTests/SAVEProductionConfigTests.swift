@@ -2484,6 +2484,412 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
+    func testUpdatePlaceMapsStructuredCapAndLeavesOrdinaryFailures() async throws {
+        AnalysisRequestURLProtocol.reset()
+        defer { AnalysisRequestURLProtocol.reset() }
+        let service = SupabaseService(
+            apiBaseURL: "https://analysis.test",
+            session: session(),
+            accessTokenProvider: { "test-token" }
+        )
+        let cap = #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#
+        for status in [403, 409, 422] {
+            AnalysisRequestURLProtocol.handler = { request in
+                XCTAssertEqual(request.httpMethod, "PATCH")
+                return (status, cap)
+            }
+            do {
+                try await service.updatePlace(Place.mock)
+                XCTFail("structured cap \(status) must map to SavePlaceLimitError")
+            } catch is SavePlaceLimitError {}
+        }
+        AnalysisRequestURLProtocol.handler = { _ in (403, "rejected") }
+        do {
+            try await service.updatePlace(Place.mock)
+            XCTFail("ordinary PATCH 403 must stay an auth failure")
+        } catch SupabaseError.notAuthenticated {}
+        AnalysisRequestURLProtocol.handler = { _ in (500, "down") }
+        do {
+            try await service.updatePlace(Place.mock)
+            XCTFail("PATCH 500 must not look like a cap")
+        } catch {
+            XCTAssertFalse(error is SavePlaceLimitError)
+        }
+        AnalysisRequestURLProtocol.handler = { _ in (200, "{}") }
+        try await service.updatePlace(Place.mock)
+    }
+
+    @MainActor
+    func testMatchedReviewMergeCapParksOriginalCandidate() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        defer {
+            auth.authState = originalAuth
+            SavePlaceLimitHandoff.testDefaults = originalDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        let cap = #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#
+        for status in [403, 409, 422] {
+            let owner = "merge-cap-owner-\(status)"
+            auth.authState = .authenticated(userId: owner)
+            SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.merge-cap.\(UUID())")
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+            let candidate = contextualReviewCandidate(owner: owner, workflow: true)
+            try vault.saveReviewCandidate(candidate)
+            var existing = makeCappedPlaces(1)[0]
+            existing.googlePlaceId = candidate.googlePlaceId
+            var patchCount = 0
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { request in
+                if request.httpMethod == "PATCH", request.url?.path.hasPrefix("/places/") == true {
+                    patchCount += 1
+                    return (status, cap)
+                }
+                return (200, request.httpMethod == "GET" ? "[]" : "{}")
+            }
+            let map = makeRemoteCappedMap(
+                vaultURL: directory.appendingPathComponent("vault.json"),
+                vault: vault
+            )
+            map.places = [existing] + makeCappedPlaces(49, indexOffset: 1)
+            map.reviewCandidates = [candidate]
+            map.selectedReviewCandidate = candidate
+            do {
+                _ = try await map.saveReviewCandidateAsPlace(candidate)
+                XCTFail("matched PATCH cap \(status) must keep the original Review item")
+            } catch is SavePlaceLimitError {}
+            XCTAssertEqual(patchCount, 1)
+            XCTAssertEqual(map.places.count, 50)
+            XCTAssertEqual(map.reviewCandidates.first?.id, candidate.id)
+            XCTAssertEqual(map.reviewCandidates.first?.ownerSubject, owner)
+            XCTAssertEqual(map.reviewCandidates.first?.captureId, candidate.captureId)
+            XCTAssertEqual(map.reviewCandidates.first?.workflowRunId, candidate.workflowRunId)
+            XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+            XCTAssertEqual(map.selectedReviewCandidate?.id, candidate.id)
+            XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+            let persisted = try XCTUnwrap(vault.reviewCandidates(belongingTo: owner).first)
+            XCTAssertEqual(persisted.id, candidate.id)
+            XCTAssertEqual(persisted.ownerSubject, owner)
+            XCTAssertEqual(persisted.captureId, candidate.captureId)
+            XCTAssertEqual(persisted.workflowRunId, candidate.workflowRunId)
+            XCTAssertTrue(persisted.isUnplacedInbox)
+            XCTAssertTrue(try vault.confirmedPlaces(belongingTo: owner).isEmpty)
+        }
+    }
+
+    @MainActor
+    func testMatchedReviewMergeFailedParkingStaysRetryable() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        defer {
+            auth.authState = originalAuth
+            SavePlaceLimitHandoff.testDefaults = originalDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        let owner = "merge-cap-retry-owner"
+        auth.authState = .authenticated(userId: owner)
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.merge-cap-retry.\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vaultURL = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let candidate = contextualReviewCandidate(owner: owner, workflow: false)
+        try vault.saveReviewCandidate(candidate)
+        let before = try Data(contentsOf: vaultURL)
+        vault.saveReviewCandidateError = SaveLocalVaultError.storageUnavailable
+        var existing = makeCappedPlaces(1)[0]
+        existing.googlePlaceId = candidate.googlePlaceId
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "PATCH", request.url?.path.hasPrefix("/places/") == true {
+                return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#)
+            }
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+        map.places = [existing]
+        map.reviewCandidates = [candidate]
+        map.selectedReviewCandidate = candidate
+        do {
+            _ = try await map.saveReviewCandidateAsPlace(candidate)
+            XCTFail("storage failure cannot report a parked merge result")
+        } catch SaveLocalVaultError.storageUnavailable {}
+        XCTAssertEqual(map.reviewCandidates, [candidate])
+        XCTAssertEqual(map.selectedReviewCandidate, candidate)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+        XCTAssertFalse(SavePlaceLimitHandoff.consumePaywallPending())
+        XCTAssertEqual(try Data(contentsOf: vaultURL), before)
+        vault.saveReviewCandidateError = nil
+        do {
+            _ = try await map.saveReviewCandidateAsPlace(candidate)
+            XCTFail("retry must still see the PATCH cap")
+        } catch is SavePlaceLimitError {}
+        XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+        XCTAssertEqual(map.reviewCandidates.first?.id, candidate.id)
+        XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        XCTAssertEqual(try vault.reviewCandidates(belongingTo: owner).first?.captureId, candidate.captureId)
+    }
+
+    @MainActor
+    func testMatchedReviewMergeCapAfterAccountSwitchDoesNotParkForNewOwner() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        defer {
+            auth.authState = originalAuth
+            SavePlaceLimitHandoff.testDefaults = originalDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        let owner = "merge-cap-session-A"
+        auth.authState = .authenticated(userId: owner)
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.merge-cap-session.\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let candidate = contextualReviewCandidate(owner: owner, workflow: true)
+        try vault.saveReviewCandidate(candidate)
+        let before = try Data(contentsOf: directory.appendingPathComponent("vault.json"))
+        var existing = makeCappedPlaces(1)[0]
+        existing.googlePlaceId = candidate.googlePlaceId
+        let arrived = expectation(description: "matched PATCH cap response in flight")
+        let release = DispatchSemaphore(value: 0)
+        var hold = true
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "PATCH", request.url?.path.hasPrefix("/places/") == true {
+                if hold { arrived.fulfill(); _ = release.wait(timeout: .now() + 10) }
+                return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#)
+            }
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+        let map = makeRemoteCappedMap(
+            vaultURL: directory.appendingPathComponent("vault.json"),
+            vault: vault
+        )
+        map.places = [existing]
+        map.reviewCandidates = [candidate]
+        let task = Task { try await map.saveReviewCandidateAsPlace(candidate) }
+        await fulfillment(of: [arrived], timeout: 5)
+        auth.authState = .authenticated(userId: "merge-cap-session-B")
+        release.signal()
+        do {
+            _ = try await task.value
+            XCTFail("the old session must stop before parking")
+        } catch is CancellationError {}
+        XCTAssertEqual(map.reviewCandidates, [candidate])
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+        XCTAssertTrue(try vault.reviewCandidates(belongingTo: "merge-cap-session-B").isEmpty)
+        XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent("vault.json")), before)
+        auth.authState = .authenticated(userId: owner)
+        hold = false
+        do {
+            _ = try await map.saveReviewCandidateAsPlace(candidate)
+            XCTFail("still capped for A")
+        } catch is SavePlaceLimitError {}
+        XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+        XCTAssertEqual(try vault.reviewCandidates(belongingTo: owner).first?.workflowRunId, candidate.workflowRunId)
+    }
+
+    @MainActor
+    func testMatchedReviewMergeOrdinaryFailureDoesNotPark() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        defer { auth.authState = originalAuth; AnalysisRequestURLProtocol.reset() }
+        let owner = "merge-ordinary-403-owner"
+        auth.authState = .authenticated(userId: owner)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let candidate = contextualReviewCandidate(owner: owner, workflow: false)
+        try vault.saveReviewCandidate(candidate)
+        var existing = makeCappedPlaces(1)[0]
+        existing.googlePlaceId = candidate.googlePlaceId
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "PATCH", request.url?.path.hasPrefix("/places/") == true {
+                return (403, "rejected")
+            }
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+        let map = makeRemoteCappedMap(
+            vaultURL: directory.appendingPathComponent("vault.json"),
+            vault: vault
+        )
+        map.places = [existing]
+        map.reviewCandidates = [candidate]
+        do {
+            _ = try await map.saveReviewCandidateAsPlace(candidate)
+            XCTFail("ordinary PATCH 403 must surface, not park")
+        } catch {
+            XCTAssertFalse(error is SavePlaceLimitError)
+        }
+        XCTAssertEqual(map.reviewCandidates, [candidate])
+        XCTAssertFalse(map.reviewCandidates.first?.isUnplacedInbox == true)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+        XCTAssertEqual(try vault.reviewCandidates(belongingTo: owner).first?.id, candidate.id)
+    }
+
+    @MainActor
+    func testMatchedMapSocialAndListMergeCapParksIncomingPlace() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        defer {
+            auth.authState = originalAuth
+            SavePlaceLimitHandoff.testDefaults = originalDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        let owner = "merge-adjacent-owner"
+        auth.authState = .authenticated(userId: owner)
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.merge-adjacent.\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        var existing = makeCappedPlaces(1)[0]
+        existing.name = "Harbor Cafe"
+        existing.address = "0 Server Road"
+        existing.latitude = 25.0
+        existing.longitude = 121.0
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "PATCH", request.url?.path.hasPrefix("/places/") == true {
+                return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#)
+            }
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+        let map = makeRemoteCappedMap(
+            vaultURL: directory.appendingPathComponent("vault.json"),
+            vault: vault
+        )
+        map.places = [existing]
+
+        let mapCandidate = SaveMapCandidate(
+            id: "merge-cap-map",
+            title: existing.name,
+            subtitle: existing.address,
+            latitude: existing.latitude,
+            longitude: existing.longitude,
+            category: existing.category
+        )
+        map.mapCandidates = [mapCandidate]
+        do {
+            _ = try await map.saveMapCandidateAsPlace(mapCandidate)
+            XCTFail("matched map-candidate PATCH cap must park")
+        } catch is SavePlaceLimitError {}
+        XCTAssertEqual(map.places.count, 1)
+        XCTAssertTrue(map.mapCandidates.isEmpty)
+        XCTAssertEqual(map.reviewCandidates.first?.name, existing.name)
+        XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+        XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        map.acknowledgeSavedPlaceLimitPaywall()
+        map.reviewCandidates = []
+
+        let social = Place(
+            id: UUID(),
+            name: existing.name,
+            address: existing.address,
+            latitude: existing.latitude,
+            longitude: existing.longitude,
+            googlePlaceId: existing.googlePlaceId,
+            category: existing.category,
+            status: .wantToGo,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: "Alex",
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
+        )
+        map.socialPlaces = [social]
+        do {
+            _ = try await map.saveSocialPlaceToMySave(social)
+            XCTFail("matched social PATCH cap must park")
+        } catch is SavePlaceLimitError {}
+        XCTAssertEqual(map.places.count, 1)
+        XCTAssertTrue(map.socialPlaces.isEmpty)
+        XCTAssertEqual(map.reviewCandidates.first?.name, existing.name)
+        XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+        map.acknowledgeSavedPlaceLimitPaywall()
+        map.reviewCandidates = []
+
+        let listItem = SaveListItem.from(place: existing)
+        do {
+            _ = try await map.saveListItemAsPlace(listItem)
+            XCTFail("matched list PATCH cap must park")
+        } catch is SavePlaceLimitError {}
+        XCTAssertEqual(map.places.count, 1)
+        XCTAssertEqual(map.reviewCandidates.first?.name, existing.name)
+        XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+    }
+
+    func testMatchedStampMergeParksStructuredCapInSource() throws {
+        let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
+        let supabase = try source(at: "SAV-E/Services/SupabaseService.swift")
+        let updateStart = try XCTUnwrap(supabase.range(of: "func updatePlace(_ place: Place, previous: Place? = nil)"))
+        let updateRemainder = supabase[updateStart.lowerBound...]
+        let updateEnd = try XCTUnwrap(updateRemainder.range(of: "func deletePlace(_ placeId: UUID)"))
+        let update = String(updateRemainder[..<updateEnd.lowerBound])
+        XCTAssertTrue(update.contains("method: \"PATCH\""))
+        XCTAssertTrue(
+            update.contains("throw mappedSavedPlaceLimit(error)"),
+            "P2 4353381364: PATCH growth refusals must use the same structured-cap mapper as POST"
+        )
+
+        XCTAssertTrue(map.contains("parkIfLimited: () throws -> Void"))
+        XCTAssertTrue(
+            map.contains("try await mergeSavedSources(place, into: match) {\n                try parkExistingReviewCandidate("),
+            "confirming a matching Review candidate must park the original item on PATCH cap"
+        )
+        XCTAssertTrue(
+            map.contains("try await mergeSavedSources(incoming, into: match) {\n                try parkExistingReviewCandidate("),
+            "exact-search merge onto an existing stamp must park the original clue on PATCH cap"
+        )
+        let chooseStampStart = try XCTUnwrap(map.range(of: "func resolveExactSearchClue(toSavedPlace place: Place)"))
+        let chooseStampEnd = try XCTUnwrap(map.range(of: "func completeExactSearchMergeOntoExistingStamp"))
+        let chooseStamp = String(map[chooseStampStart.lowerBound..<chooseStampEnd.lowerBound])
+        XCTAssertTrue(
+            chooseStamp.contains("try await supabaseService.updatePlace(associated, previous: place)"),
+            "choosing a saved stamp still PATCHes attached clue evidence"
+        )
+        XCTAssertTrue(
+            chooseStamp.contains("if error is SavePlaceLimitError {\n                do {\n                    try parkExistingReviewCandidate("),
+            "choosing a saved stamp must park the original clue when that PATCH hits the cap"
+        )
+        XCTAssertTrue(
+            map.contains("try await mergeSavedSources(place, into: match) {\n                    if try parkIfServerSavedPlaceLimit("),
+            "map-candidate merge must park the incoming place on PATCH cap"
+        )
+        XCTAssertTrue(
+            map.contains("try await mergeSavedSources(socialPlace, into: match) {\n                if try parkIfServerSavedPlaceLimit("),
+            "social merge must park the incoming place on PATCH cap"
+        )
+        XCTAssertTrue(
+            map.contains("try await mergeSavedSources(place, into: match) {\n                _ = try parkIfServerSavedPlaceLimit("),
+            "friend-share and list merges must park the incoming place on PATCH cap"
+        )
+        let offlineStart = try XCTUnwrap(map.range(of: "if !usesRemotePersistence {\n            let place = Place.from(candidate, refinedMatch: nil, nameOverride: nameOverride)"))
+        let offline = String(map[offlineStart.lowerBound...].prefix(700))
+        XCTAssertTrue(
+            offline.contains("let existing = try await mergeSavedSources(place, into: match)"),
+            "local-only Review merge never hits the PATCH guard"
+        )
+        XCTAssertFalse(
+            offline.contains("parkIfLimited"),
+            "do not wrap the offline merge in the PATCH-cap parking helper"
+        )
+    }
+
+    @MainActor
     func testFiftyFirstSaveParksWhenPurchasingIsUnavailable() async throws {
         XCTAssertFalse(SAVEProAccessPolicy.purchasingIsAvailable)
         let map = makeCappedMap(tier: .free)
