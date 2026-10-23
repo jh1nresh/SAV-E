@@ -48,10 +48,15 @@ struct SaveProPaywallView: View {
                         .padding(.top, SaveSpace.md)
                     savedNote
                         .padding(.top, SaveSpace.xs)
-                    saleStateNotice
-                        .padding(.top, SaveSpace.md)
-                        .padding(.bottom, SaveSpace.xs)
                     offers
+                        .padding(.top, SaveSpace.md)
+                    if let statusMessage {
+                        Text(statusMessage)
+                            .font(SaveAtlasType.body(13))
+                            .foregroundStyle(SaveAtlasPalette.coral)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, SaveSpace.xs)
+                    }
                     legalFooter
                         .padding(.top, SaveSpace.sm)
                 }
@@ -144,49 +149,18 @@ struct SaveProPaywallView: View {
         .accessibilityLabel(title)
     }
 
-    private var savedNote: some View {
-        Text(languageSettings.localized(
-            english: SaveProPaywallCopy.savedNote(for: trigger, english: true),
-            traditionalChinese: SaveProPaywallCopy.savedNote(for: trigger, english: false)
-        ))
-        .font(SaveAtlasType.body(15))
-        .foregroundStyle(SaveAtlasPalette.muted)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityIdentifier("paywall.savedNote")
-    }
-
-    /// Sale-state copy sits between the saved note and the Yearly / Monthly
-    /// / Continue stack so the legal footer stays reachable in the scroll.
     @ViewBuilder
-    private var saleStateNotice: some View {
-        if showsNotForSale || hasStatusNotice {
-            VStack(alignment: .leading, spacing: SaveSpace.tight) {
-                if showsNotForSale {
-                    Text(notForSaleText)
-                        .font(SaveAtlasType.body(13))
-                        .foregroundStyle(SaveAtlasPalette.muted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityIdentifier("paywall.notForSale")
-                }
-                if let statusMessage, statusMessage != notForSaleText {
-                    Text(statusMessage)
-                        .font(SaveAtlasType.body(13))
-                        .foregroundStyle(SaveAtlasPalette.coral)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
+    private var savedNote: some View {
+        if trigger == .savedPlacesCap {
+            Text(languageSettings.localized(
+                english: SaveProPaywallCopy.savedNote(for: trigger, english: true),
+                traditionalChinese: SaveProPaywallCopy.savedNote(for: trigger, english: false)
+            ))
+            .font(SaveAtlasType.body(15))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("paywall.savedNote")
         }
-    }
-
-    private var showsNotForSale: Bool {
-        !SAVEProAccessPolicy.purchasingIsAvailable
-    }
-
-    private var hasStatusNotice: Bool {
-        if let statusMessage {
-            return statusMessage != notForSaleText
-        }
-        return false
     }
 
     @ViewBuilder
@@ -244,13 +218,6 @@ struct SaveProPaywallView: View {
         } else if storeKit.products.contains(where: { $0.id == SAVEProAccessPolicy.ProductID.monthly }) {
             selectedProductID = SAVEProAccessPolicy.ProductID.monthly
         }
-    }
-
-    private var notForSaleText: String {
-        languageSettings.localized(
-            english: "Pro isn't on sale yet",
-            traditionalChinese: "Pro 尚未開賣"
-        )
     }
 
     private func planCards(products: [Product]) -> some View {
@@ -464,10 +431,7 @@ struct SaveProPaywallView: View {
     }
 
     private func purchaseSelected() async {
-        guard SAVEProAccessPolicy.purchasingIsAvailable else {
-            statusMessage = notForSaleText
-            return
-        }
+        guard SAVEProAccessPolicy.purchasingIsAvailable else { return }
         guard let product = storeKit.products.first(where: { $0.id == selectedProductID }) else { return }
         isPurchasing = true
         defer { isPurchasing = false }
@@ -517,9 +481,9 @@ struct SaveProPaywallView: View {
     }
 }
 
-/// Illustrated city map for the paywall hero. Outline stickers wait to be
-/// colored; one or two already have a stamp. Tiantan-shaped sample when the
-/// user has no saved city yet.
+/// Illustrated city map for the paywall hero. Colored official stickers
+/// plus a pencil on the park. Tiantan-shaped sample when the user has no
+/// saved city yet.
 struct SaveDoodlePaywallHero: View {
     var body: some View {
         ZStack {
@@ -529,10 +493,10 @@ struct SaveDoodlePaywallHero: View {
             SaveDoodlePaywallPaths()
                 .stroke(SaveAtlasPalette.line, style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
 
-            sticker(.temple, x: 0.18, y: 0.28, visited: false)
-            sticker(.noodle, x: 0.48, y: 0.30, visited: false)
-            sticker(.coffee, x: 0.78, y: 0.26, visited: false)
-            sticker(.duck, x: 0.16, y: 0.72, visited: false)
+            pencilMark(x: 0.18, y: 0.28)
+            sticker(.noodle, x: 0.48, y: 0.30, visited: true)
+            sticker(.coffee, x: 0.78, y: 0.26, visited: true)
+            sticker(.duck, x: 0.16, y: 0.72, visited: true)
             sticker(.lantern, x: 0.74, y: 0.70, visited: true)
 
             ForEach(Array(treeOffsets.enumerated()), id: \.offset) { _, point in
@@ -556,6 +520,17 @@ struct SaveDoodlePaywallHero: View {
             CGPoint(x: 54, y: 168),
             CGPoint(x: 300, y: 166),
         ]
+    }
+
+    private func pencilMark(x: CGFloat, y: CGFloat) -> some View {
+        GeometryReader { geo in
+            Image(systemName: "pencil")
+                .font(.system(size: 22, weight: .regular))
+                .foregroundStyle(SaveAtlasPalette.ink)
+                .rotationEffect(.degrees(-28))
+                .position(x: geo.size.width * x, y: geo.size.height * y)
+                .accessibilityHidden(true)
+        }
     }
 
     private func sticker(
@@ -635,9 +610,7 @@ nonisolated enum SaveProPaywallCopy {
                 ? "You've saved 50 places. Keep going."
                 : "已存 50 個地點，繼續存下去"
         case .settings:
-            return english
-                ? "Upgrade to Savvy Pro"
-                : "升級 Savvy Pro"
+            return ""
         }
     }
 }

@@ -436,6 +436,7 @@ jobs:
             -- \
             -xctestrun '${{ steps.products.outputs.xctestrun }}' \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
+            -storekitConfigurationPath '${{ github.workspace }}/SAV-E/Resources/SAVEPro.storekit' \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test-without-building
 
@@ -551,7 +552,7 @@ jobs:
           done <<< "$retried"
 
       - name: Capture PR 295 large-type paywall evidence
-        if: steps.scope.outputs.ui == 'true'
+        if: always() && (steps.scope.outputs.ui == 'true')
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-PR295-large-type-tests.log
           SAVE_SCREENSHOT_DIR: ${{ runner.temp }}/SAVE-First-Run
@@ -568,6 +569,7 @@ jobs:
             -- \
             -xctestrun '${{ steps.products.outputs.xctestrun }}' \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
+            -storekitConfigurationPath '${{ github.workspace }}/SAV-E/Resources/SAVEPro.storekit' \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test-without-building
           xcrun xcresulttool export attachments \
@@ -575,7 +577,7 @@ jobs:
             --output-path "$RUNNER_TEMP/SAVE-First-Run"
 
       - name: Capture PR 295 iPhone SE evidence
-        if: steps.scope.outputs.ui == 'true'
+        if: always() && (steps.scope.outputs.ui == 'true')
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-PR295-se-tests.log
           SAVE_SCREENSHOT_DIR: ${{ runner.temp }}/SAVE-First-Run
@@ -603,6 +605,7 @@ jobs:
             -- \
             -xctestrun '${{ steps.products.outputs.xctestrun }}' \
             -destination "platform=iOS Simulator,id=$se_udid" \
+            -storekitConfigurationPath '${{ github.workspace }}/SAV-E/Resources/SAVEPro.storekit' \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test-without-building
           status=$?

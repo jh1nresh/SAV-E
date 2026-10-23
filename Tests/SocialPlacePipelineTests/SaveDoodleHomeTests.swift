@@ -865,6 +865,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("Marker("))
         XCTAssertTrue(home.contains("SaveDoodle.stampRed"))
         XCTAssertTrue(home.contains("SaveAtlasPalette.coral"))
+        XCTAssertTrue(home.contains("SaveTheme.brandCoral"))
         XCTAssertTrue(home.contains("interactionModes: []"))
         XCTAssertFalse(home.contains("SaveTileTownCanvas"))
         XCTAssertFalse(home.contains("home.search"))

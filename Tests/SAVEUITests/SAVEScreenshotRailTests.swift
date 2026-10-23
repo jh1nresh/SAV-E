@@ -966,13 +966,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "The one benefit row must stay queryable after official noodle/coffee plan stickers."
         )
         XCTAssertEqual(app.descendants(matching: .any)["paywall.root"].value as? String, "settings")
-        XCTAssertTrue(app.staticTexts["Upgrade to Savvy Pro"].exists)
+        XCTAssertFalse(app.staticTexts["Upgrade to Savvy Pro"].exists)
+        XCTAssertFalse(app.staticTexts["Pro isn't on sale yet"].exists)
         XCTAssertFalse(app.staticTexts["You've saved 50 places. Keep going."].exists)
         XCTAssertFalse(app.staticTexts["Plan trips from your saves"].exists)
         XCTAssertFalse(app.staticTexts["Bonus sticker packs"].exists)
-        attach(app, name: "five-tab-paywall")
-        attach(app, name: "doodle-paywall-light")
-        attach(app, name: "pr295-paywall-light")
 
         let capApp = makeApp(
             launchArguments: [
@@ -999,7 +997,31 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertEqual(savedNote.label, "You've saved 50 places. Keep going.")
         XCTAssertTrue(capApp.staticTexts["You've saved 50 places. Keep going."].exists)
         XCTAssertFalse(capApp.staticTexts["Upgrade to Savvy Pro"].exists)
+        XCTAssertFalse(capApp.staticTexts["Pro isn't on sale yet"].exists)
         XCTAssertFalse(rootTabButton("Home", app: capApp).exists)
+        attach(capApp, name: "five-tab-paywall")
+        attach(capApp, name: "doodle-paywall-light")
+        attach(capApp, name: "pr295-paywall-light")
+        attach(capApp, name: "pr295-paywall-cap-light")
+
+        let zh = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "-save.appLanguage", "zh-Hant",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(zh)
+        try signInViaReviewDemoRequired(app: zh)
+        XCTAssertTrue(zh.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(zh.staticTexts["已存 50 個地點，繼續存下去"].waitForExistence(timeout: stepTimeout))
+        attach(zh, name: "pr295-paywall-zh-hant-light")
     }
 
     @MainActor
@@ -1064,6 +1086,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "doodle-capture-light")
         attach(app, name: "pr295-capture-light")
         XCTAssertFalse(app.descendants(matching: .any)["capture.suggestion"].exists)
+        let draft = app.textViews["capture.input"]
+        XCTAssertTrue(draft.waitForExistence(timeout: stepTimeout))
+        draft.tap()
+        draft.typeText("Fangzhuangchang Noodles")
+        attach(app, name: "pr295-capture-filled-light")
         let nearby = app.buttons["capture.searchNearby"]
         XCTAssertTrue(nearby.isHittable)
         XCTAssertGreaterThanOrEqual(nearby.frame.height, 44)
@@ -1072,6 +1099,28 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.textFields["map.search.input"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
         attach(app, name: "doodle-capture-nearby-search")
+
+        let zh = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
+                "-save.appLanguage", "zh-Hant",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(zh)
+        try signInViaReviewDemoRequired(app: zh)
+        XCTAssertTrue(zh.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let zhSave = rootTabButton("Save", app: zh)
+        XCTAssertTrue(zhSave.waitForExistence(timeout: stepTimeout))
+        zhSave.tap()
+        XCTAssertTrue(zh.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(zh, name: "pr295-capture-zh-hant-light")
     }
 
     /// Warm-dark Capture sheet and Pro paywall for the founder compare rail.
@@ -1114,7 +1163,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
-                "--uitest-show-paywall",
+                "--uitest-show-paywall-cap",
                 "--uitest-force-dark",
                 "-AppleInterfaceStyle", "Dark",
                 "-save.appLanguage", "en",

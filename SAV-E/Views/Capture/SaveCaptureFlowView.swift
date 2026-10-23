@@ -6,7 +6,7 @@ import ImageIO
 
 /// Doodle v1 Capture sheet (spec §7.5). Same import / analyze pipeline as
 /// before; only the paper, handwriting, and spacing change. Sheet detents are
-/// `.medium` / `.large`. Cards stay ungrained.
+/// raised-medium (+40pt) / `.large`. Cards stay ungrained.
 struct SaveCaptureFlowView: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let tripName: String?
@@ -26,8 +26,13 @@ struct SaveCaptureFlowView: View {
     @State private var errorMessage: String?
     @State private var isGoogleTakeoutPresented = false
     @FocusState private var isInputFocused: Bool
-    @State private var detent: PresentationDetent = .medium
+    @State private var detent: PresentationDetent = Self.raisedMediumDetent
     @State private var entitlements = SaveEntitlementStore.shared
+
+    /// Medium + 40pt so the Home peek matches the locked capture mock.
+    private static var raisedMediumDetent: PresentationDetent {
+        .height((UIScreen.main.bounds.height * 0.5) + 40)
+    }
 
     var body: some View {
         Group {
@@ -44,7 +49,7 @@ struct SaveCaptureFlowView: View {
             }
         }
         .interactiveDismissDisabled(isAnalyzing)
-        .presentationDetents([.medium, .large], selection: $detent)
+        .presentationDetents([Self.raisedMediumDetent, .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .presentationBackground(SaveAtlasPalette.paper)
         // Keep capture.flow on the cover root. Without `.contain`, the
@@ -82,6 +87,11 @@ struct SaveCaptureFlowView: View {
 
                         optionRows
                             .padding(.top, SaveSpace.md)
+
+                        if let recentSavedPlace {
+                            recentSaveCard(recentSavedPlace)
+                                .padding(.top, SaveSpace.md)
+                        }
 
                         if isReadingPhoto {
                             ProgressView(localized("Reading photo…", "讀取照片中…"))
@@ -136,7 +146,6 @@ struct SaveCaptureFlowView: View {
                         )
                     }
                     .disabled(!canSubmitDraft)
-                    .opacity(canSubmitDraft ? 1 : 0.48)
                     .accessibilityIdentifier("capture.analyze")
 
                     Text(savedCountText)
@@ -170,8 +179,8 @@ struct SaveCaptureFlowView: View {
         VStack(alignment: .leading, spacing: SaveSpace.tight) {
             SaveDisplayTitle(
                 text: localized("Save a place", "存一個地方"),
-                pointSize: 28,
-                relativeTo: .title2
+                pointSize: 34,
+                relativeTo: .title
             )
             if let tripName {
                 Text(localized("For \(tripName)", "準備加入「\(tripName)」"))
@@ -307,6 +316,61 @@ struct SaveCaptureFlowView: View {
     private var savedCountText: String {
         let count = existingPlaces.count
         return localized("\(count) places saved", "已收藏 \(count) 個地點")
+    }
+
+    /// Newest confirmed save for the mock's "recent saves" sticker card.
+    /// Not a suggestion and not analyzed until the user taps Save.
+    private var recentSavedPlace: Place? {
+        existingPlaces.max(by: { $0.createdAt < $1.createdAt })
+    }
+
+    private func recentSaveCard(_ place: Place) -> some View {
+        let eatGo = eatGoLabel(for: place.category)
+        let city = SaveDoodleHomeCatalog.localityLabel(in: place.address) ?? ""
+        let meta = city.isEmpty ? eatGo : "\(eatGo) · \(city)"
+        return HStack(alignment: .center, spacing: SaveLayout.stickerToText) {
+            SaveDoodleSticker(
+                category: place.category,
+                placeName: place.name,
+                visited: place.status == .visited
+            )
+            .frame(width: SaveLayout.stickerBox, height: SaveLayout.stickerBox)
+
+            VStack(alignment: .leading, spacing: SaveLayout.titleToMeta) {
+                Text(place.name)
+                    .font(SaveAtlasType.strong(17))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                Text(meta)
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, SaveSpace.md)
+        .padding(.vertical, SaveSpace.sm)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            SaveAtlasPalette.paper,
+            in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                .stroke(SaveAtlasPalette.ink, lineWidth: SaveAtlasPalette.strokeWidth)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("capture.recentSave")
+        .accessibilityLabel("\(place.name), \(meta)")
+    }
+
+    private func eatGoLabel(for category: PlaceCategory) -> String {
+        switch category {
+        case .food, .cafe, .bar:
+            return localized("Eat", "吃")
+        case .attraction, .stay, .shopping:
+            return localized("Go", "去")
+        }
     }
 
     private var isBusy: Bool { isAnalyzing || isReadingPhoto }
