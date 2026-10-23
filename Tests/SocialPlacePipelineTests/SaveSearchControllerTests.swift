@@ -6843,11 +6843,29 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual("臺北市信義區", "臺北市信義區")
     }
 
+    func testCloseDrawerContentEndsExactSearchWithoutVisibleResults() throws {
+        let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+        let closer = try XCTUnwrap(
+            drawer.components(separatedBy: "private func closeDrawerContent()").last?
+                .components(separatedBy: "private func closeMapSearchResults()").first
+        )
+        XCTAssertTrue(closer.contains("onClearMapSearchResults(true)"))
+        XCTAssertFalse(
+            closer.contains("hasVisibleMapSearchResults"),
+            "Pending or failed exact search has empty candidates and must still end"
+        )
+    }
+
     func testRetireResolvedReviewClueDoesNotUseNameAndCityAlone() throws {
         let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
         XCTAssertTrue(map.contains("sharesReviewSourceIdentity"))
         XCTAssertFalse(map.contains("leftoverCity == resolvedCity"))
         XCTAssertTrue(map.contains("not name and city alone"))
+        let distance = try XCTUnwrap(
+            map.components(separatedBy: "private func reviewClueDistanceMeters(").last?
+                .components(separatedBy: "private func clearExactSearchResolution").first
+        )
+        XCTAssertTrue(distance.contains("hasReliableCoordinates"))
     }
 
     @MainActor
@@ -6909,6 +6927,70 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(
             map.reviewCandidates.contains { $0.id == leftover.id },
             "A second coordinate-less Starbucks in the same city must stay"
+        )
+    }
+
+    @MainActor
+    func testRetireResolvedReviewClueIgnoresPlaceholderCoordinates() async throws {
+        let search = RecordingMapCandidateSearchService()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("retire-placeholder-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            mapCandidateSearchService: search,
+            usesRemotePersistence: false
+        )
+        let resolved = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Starbucks",
+            address: "Los Angeles",
+            city: "Los Angeles",
+            latitude: 0,
+            longitude: 0,
+            evidence: ["Placeholder coordinates"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        let leftover = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Starbucks",
+            address: "Chicago",
+            city: "Chicago",
+            latitude: 0,
+            longitude: 0,
+            evidence: ["Unrelated branch"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        XCTAssertFalse(resolved.hasReliableCoordinates)
+        XCTAssertFalse(leftover.hasReliableCoordinates)
+        map.reviewCandidates = [resolved, leftover]
+        map.updateVisibleMapRegion(region(around: taipei))
+        map.beginExactSearchResolution(for: resolved)
+        search.nextMatchingResults = [
+            SaveMapCandidate(
+                id: "placeholder-starbucks",
+                title: "Starbucks Sunset",
+                subtitle: "Los Angeles, CA",
+                latitude: 34.0979,
+                longitude: -118.3287,
+                category: .cafe
+            )
+        ]
+        await map.searchMapPlaces("Starbucks Sunset", preservesExactSearchClue: true)
+        let candidate = try XCTUnwrap(map.mapCandidates.first)
+        _ = try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == leftover.id },
+            "(0, 0) is not a 0 m match; an unrelated same-name clue must stay"
         )
     }
 

@@ -2318,7 +2318,8 @@ final class MapViewModel: ObservableObject {
         _ leftover: PlaceReviewCandidate,
         _ resolved: PlaceReviewCandidate
     ) -> CLLocationDistance? {
-        guard let lat1 = leftover.latitude, let lon1 = leftover.longitude,
+        guard leftover.hasReliableCoordinates, resolved.hasReliableCoordinates,
+              let lat1 = leftover.latitude, let lon1 = leftover.longitude,
               let lat2 = resolved.latitude, let lon2 = resolved.longitude
         else { return nil }
         return CLLocation(latitude: lat1, longitude: lon1)

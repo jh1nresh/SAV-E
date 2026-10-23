@@ -1362,11 +1362,10 @@ struct AIDrawerView: View {
     private func closeDrawerContent() {
         cancelMapSearch()
         voiceQuery.stop()
-        let shouldClearMapSearch = hasVisibleMapSearchResults
         viewModel.reset()
-        if shouldClearMapSearch {
-            onClearMapSearchResults(true)
-        }
+        // Loading and error states have empty `mapCandidates`. Closing the
+        // drawer is cancellation and must still end an exact-search session.
+        onClearMapSearchResults(true)
         searchFocused = false
         withAnimation { drawerDetent = collapsedDrawerDetent }
     }
