@@ -570,27 +570,8 @@ final class SAVEProductionConfigTests: XCTestCase {
         defer {
             PrivyAuthService.shared.authState = previousAuth
             SavePlaceLimitHandoff.testDefaults = previousDefaults
-            AnalysisRequestURLProtocol.reset()
         }
 
-        let placeIDs = (0..<50).map { _ in UUID() }
-        var remoteCount = 50
-        AnalysisRequestURLProtocol.reset()
-        AnalysisRequestURLProtocol.handler = { request in
-            if request.httpMethod == "GET", request.url?.path.hasSuffix("/places") == true {
-                let rows = placeIDs.prefix(remoteCount).enumerated().map { index, id in
-                    """
-                    {"id":"\(id.uuidString)","user_id":"stale-count-owner","name":"Cap Place \(index)","address":"\(index) Cap Street","latitude":\(24.0 + Double(index) * 0.01),"longitude":\(120.0 + Double(index) * 0.01),"category":"food","status":"wantToGo","source_platform":"other","google_place_id":"cap-place-\(index)","created_at":"2026-01-01T00:00:00.000Z"}
-                    """
-                }.joined(separator: ",")
-                return (200, "[\(rows)]")
-            }
-            if request.httpMethod == "POST", request.url?.path.hasSuffix("/places") == true {
-                return (201, "{}")
-            }
-            if request.httpMethod == "GET" { return (200, "[]") }
-            return (200, "{}")
-        }
         SavePlaceLimitHandoff.testDefaults = UserDefaults(
             suiteName: "save.place-limit-scene.\(UUID().uuidString)"
         )
@@ -598,15 +579,11 @@ final class SAVEProductionConfigTests: XCTestCase {
             .appendingPathComponent("place-limit-scene-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
-        let service = SupabaseService(
-            apiBaseURL: "https://scene-cap.test",
-            session: URLSession(configuration: configuration),
-            accessTokenProvider: { "fixture-token" }
-        )
+
+        let stub = SceneCapSupabaseStub()
+        stub.remotePlaces = makeCappedPlaces(50)
         let map = MapViewModel(
-            supabaseService: service,
+            supabaseService: stub,
             mapCandidatePlaceSaver: { _, _ in },
             pendingImportService: PendingPlaceImportService(overrideContainerURL: directory),
             mapCandidateDistanceLocationProvider: { nil },
@@ -615,7 +592,7 @@ final class SAVEProductionConfigTests: XCTestCase {
                 overrideVaultURL: directory.appendingPathComponent("vault.json")
             ),
             correctionLearningEnabled: false,
-            relatedPlaceSourcesService: service,
+            relatedPlaceSourcesService: SceneCapRelatedSourcesStub(),
             entitlementTierProvider: { .free },
             entitlementResolvedProvider: { true },
             usesRemotePersistence: true
@@ -625,7 +602,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(map.places.count, 50)
         XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .overFreeLimit)
 
-        remoteCount = 49
+        stub.remotePlaces = Array(stub.remotePlaces.prefix(49))
         await map.handleSceneDidBecomeActive()
         XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed)
 
@@ -3793,6 +3770,124 @@ private struct SceneCapGooglePlacesStub: GooglePlacesServiceProtocol {
         throw URLError(.cancelled)
     }
     func photoURL(reference: String, maxWidth: Int) -> URL? { nil }
+}
+
+private struct SceneCapRelatedSourcesStub: RelatedPlaceSourcesProviding {
+    func discoverRelatedSources(
+        for placeId: UUID,
+        platforms: [RelatedSourcePlatform],
+        maxResultsPerPlatform: Int,
+        forceRefresh: Bool
+    ) async throws -> RelatedPlaceSourcePack {
+        throw SupabaseError.notConfigured
+    }
+}
+
+/// In-memory `/places` only. The URLProtocol 50-row GET path killed XCTest on CI.
+private final class SceneCapSupabaseStub: SupabaseServiceProtocol, @unchecked Sendable {
+    var remotePlaces: [Place] = []
+
+    func fetchPlaces(for userId: String) async throws -> [Place] { remotePlaces }
+    func savePlace(_ place: Place, userId: String) async throws {}
+    func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult {
+        throw SupabaseError.notConfigured
+    }
+    func updatePlace(_ place: Place, previous: Place?) async throws {}
+    func deletePlace(_ placeId: UUID) async throws {}
+    func createMemoryCapture(from candidate: PendingReviewCandidate, userId: String) async throws -> UUID {
+        throw SupabaseError.notConfigured
+    }
+    func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID?) async throws -> UUID {
+        throw SupabaseError.notConfigured
+    }
+    func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?, explicitRetry: Bool) async throws -> SourceSearchRecoveryResult {
+        SourceSearchRecoveryResult(createdCandidates: [], sourceResolution: nil)
+    }
+    func fetchReviewCandidates() async throws -> [PlaceReviewCandidate] { [] }
+    func updatePlaceCandidateStatus(_ candidateId: UUID, status: String, placeId: UUID?) async throws {}
+    func createPlaceRecoveryWorkOrder(sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkOrder {
+        throw SupabaseError.notConfigured
+    }
+    func createPlaceRecoveryRun(workOrderId: UUID?, sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkflowRun {
+        throw SupabaseError.notConfigured
+    }
+    func recordPlaceRecoveryResult(_ result: PlaceRecoveryResultDraft, for runId: UUID) async throws -> PlaceRecoveryWorkflowRun {
+        throw SupabaseError.notConfigured
+    }
+    func recordPlaceRecoveryDecision(_ decision: PlaceRecoveryDecisionDraft, for runId: UUID) async throws -> PlaceRecoveryDecisionReceiptResponse {
+        throw SupabaseError.notConfigured
+    }
+    func fetchTrips(for userId: String) async throws -> [Trip] { [] }
+    func saveTrip(_ trip: Trip, userId: String) async throws {}
+    func updateTrip(_ trip: Trip) async throws {}
+    func deleteTrip(_ tripId: UUID) async throws {}
+    func fetchProfile(for userId: String) async throws -> UserProfile? { nil }
+    func updateProfile(_ profile: UserProfile) async throws {}
+    func fetchFollowedFriends(query: String, cursor: String?, limit: Int) async throws -> SaveFollowedFriendsPage {
+        throw SupabaseError.notConfigured
+    }
+    func followProfile(referralCode: String, lens: SaveSocialLens, source: SaveFollowSource) async throws {}
+    func followProfile(target: SaveReferralTarget, source: SaveFollowSource) async throws {}
+    func unfollowProfile(followId: String) async throws {}
+    func fetchReferralProfile(target: SaveReferralTarget) async throws -> SaveReferralProfile {
+        throw SupabaseError.notConfigured
+    }
+    func fetchSocialSignals(lens: SaveSocialLens) async throws -> [Place] { [] }
+    func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws {}
+    func createSharedPlaceLink(payload: SharedPlaceData, sourcePlaceId: UUID?, noteConsentVersion: Int?) async throws -> URL {
+        throw SupabaseError.notConfigured
+    }
+    func recordFriendShareEvent(code: String, event: FriendShareReceiptEvent, failureReason: FriendShareOpenFailureReason?) async throws {}
+    func fetchVerifiedPlaceClaims(for placeId: UUID, includePrivateEvidence: Bool) async throws -> [VerifiedPlaceClaim] { [] }
+    func createVerifiedPlaceClaim(_ draft: VerifiedPlaceClaimDraft, for placeId: UUID) async throws -> VerifiedPlaceClaim {
+        throw SupabaseError.notConfigured
+    }
+    func fetchPlaceTrustSummary(for placeId: UUID) async throws -> PlaceTrustSummaryResponse {
+        throw SupabaseError.notConfigured
+    }
+    func fetchPlaceMaatAnalysis(for placeId: UUID, includePrivateEvidence: Bool, includePublicWeb: Bool) async throws -> MaatPlaceAnalysisResponse {
+        throw SupabaseError.notConfigured
+    }
+    func recommendPlacesByClaims(_ request: ClaimRecommendationRequest) async throws -> ClaimRecommendationResponse {
+        throw SupabaseError.notConfigured
+    }
+    func recordRecommendationAnalysisReceipt(_ receipt: RecommendationAnalysisReceiptDraft) async throws -> SaveRecommendationAnalysisReceipt {
+        throw SupabaseError.notConfigured
+    }
+    func fetchMemoryPreferences() async throws -> [SaveMemoryPreference] { [] }
+    func fetchRecommendationOutcomes() async throws -> [SaveRecommendationOutcome] { [] }
+    func recordRecommendationOutcome(_ draft: SaveRecommendationOutcomeDraft) async throws {}
+    func createMemoryPreference(_ draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference {
+        throw SupabaseError.notConfigured
+    }
+    func updateMemoryPreference(_ preferenceId: UUID, status: SaveMemoryPreference.Status) async throws -> SaveMemoryPreference {
+        throw SupabaseError.notConfigured
+    }
+    func correctMemoryPreference(_ preferenceId: UUID, draft: SaveMemoryPreferenceDraft) async throws -> SaveMemoryPreference {
+        throw SupabaseError.notConfigured
+    }
+    func fetchPublicPlaceCard(cardId: UUID) async throws -> PublicPlaceCard {
+        throw SupabaseError.notConfigured
+    }
+    func createClaimUsageReceipt(_ receipt: ClaimUsageReceiptDraft, requiresAuth: Bool) async throws -> ClaimUsageReceipt {
+        throw SupabaseError.notConfigured
+    }
+    func fetchCollaborativeListRows() async throws -> [SaveCollaborativeListServerRow] { [] }
+    func createCollaborativeListRow(id: UUID, title: String, note: String?) async throws {}
+    func addCollaborativeListItem(listID: UUID, payload: SaveListItem) async throws {}
+    func createListShareCode(listID: UUID, role: SaveListRole) async throws -> (code: String, url: URL) {
+        throw SupabaseError.notConfigured
+    }
+    func joinCollaborativeList(code: String) async throws -> SaveCollaborativeListServerRow {
+        throw SupabaseError.notConfigured
+    }
+    func fetchListMembers(listID: UUID) async throws -> [SaveListMemberRow] { [] }
+    func removeListMember(listID: UUID, userID: String) async throws {}
+    func fetchListShareCodes(listID: UUID) async throws -> [SaveListShareCodeInfoRow] { [] }
+    func revokeListShareCode(listID: UUID, code: String) async throws {}
+    func fetchMyReferral() async throws -> (code: String, url: URL) {
+        throw SupabaseError.notConfigured
+    }
 }
 
 private final class AnalysisRequestURLProtocol: URLProtocol {
