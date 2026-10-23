@@ -207,6 +207,46 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(groups.first?.englishName, "Victoria")
     }
 
+    /// Australian `STATE 2000` is admin+postcode, not the city. Victoria the
+    /// Canadian city must stay a locality when the country is not Australia.
+    func testFallbackAddressUsesLocalityNotAustralianStatePostcode() {
+        let sydney = place(
+            "Opera House cafe",
+            "1 George St, Sydney, NSW 2000, Australia",
+            .cafe
+        )
+        let otherSydney = place(
+            "Circular Quay",
+            "2 Alfred St, Sydney, NSW 2000, Australia",
+            .attraction
+        )
+        let melbourne = place(
+            "Flinders",
+            "1 Flinders St, Melbourne, VIC 3000, Australia",
+            .food
+        )
+        let namedState = place(
+            "Harbour",
+            "1 George St, Sydney, New South Wales, Australia",
+            .cafe
+        )
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: sydney.address), "Sydney")
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: otherSydney.address), "Sydney")
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: melbourne.address), "Melbourne")
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: namedState.address), "Sydney")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityDisplayName(for: sydney, language: .english), "Sydney")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: sydney), "sydney,nsw")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: otherSydney), "sydney,nsw")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: melbourne), "melbourne,vic")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: namedState), "sydney,nsw")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: sydney), "nsw")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: sydney), "nsw,australia")
+        let groups = SaveDoodleHomeCatalog.cityGroups(from: [sydney, otherSydney, melbourne])
+        XCTAssertEqual(Set(groups.map(\.id)), Set(["sydney,nsw", "melbourne,vic"]))
+        XCTAssertEqual(Set(groups.map(\.englishName)), Set(["Sydney", "Melbourne"]))
+        XCTAssertEqual(groups.first { $0.id == "sydney,nsw" }?.count, 2)
+    }
+
     /// Postcode-first European lines are the city, not the country or ZIP.
     func testFallbackAddressParsesPostcodePrefixedEuropeanLocality() {
         let zurich = place(
@@ -1095,6 +1135,10 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(rail.contains("H2-zh-dark"))
         XCTAssertTrue(rail.contains("accuracy: 0.01"))
         XCTAssertTrue(rail.contains("assertTapTargetHeight"))
+        XCTAssertFalse(rail.contains("[\"home.savedPlaces.empty\"]"))
+        XCTAssertTrue(rail.contains("home.empty.capture"))
+        XCTAssertTrue(catalog.contains("NSW 2000"))
+        XCTAssertTrue(catalog.contains("[A-Za-z]{2,3}"))
         let selector = try source(at: "scripts/select-ios-tests.py")
         XCTAssertTrue(selector.contains("testHomeDesignProductStates"))
         XCTAssertTrue(rail.contains("doodle-home-empty"))

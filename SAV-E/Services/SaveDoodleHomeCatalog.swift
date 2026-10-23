@@ -239,6 +239,12 @@ enum SaveDoodleHomeCatalog {
         let regions: [String: Set<String>] = [
             "chile": ["biobio", "bio bio", "region del biobio"],
             "colombia": ["santander"],
+            "australia": [
+                "nsw", "vic", "qld", "sa", "wa", "tas", "act", "nt",
+                "new south wales", "victoria", "queensland", "south australia",
+                "western australia", "tasmania", "australian capital territory",
+                "northern territory",
+            ],
         ]
         guard let country else { return false }
         return regions[country]?.contains(normalizedCityToken(value)) == true
@@ -304,11 +310,12 @@ enum SaveDoodleHomeCatalog {
         if trimmed.range(of: #"^[A-Za-z]{2}$"#, options: .regularExpression) != nil {
             return trimmed.lowercased()
         }
-        if let match = trimmed.range(of: #"^[A-Za-z]{2}(?=\s)"#, options: .regularExpression) {
+        if let match = trimmed.range(of: #"^[A-Za-z]{2,3}(?=\s)"#, options: .regularExpression) {
             return String(trimmed[match]).lowercased()
         }
         let folded = normalizedCityToken(trimmed)
-        return usStateNames[folded] ?? canadianProvinceNames[folded]
+        if australianStateCodes.contains(folded) { return folded }
+        return usStateNames[folded] ?? canadianProvinceNames[folded] ?? australianStateNames[folded]
     }
 
     /// Full US state / DC names so `Springfield, Illinois` keeps `springfield,il`.
@@ -328,6 +335,22 @@ enum SaveDoodleHomeCatalog {
         "tennessee": "tn", "texas": "tx", "utah": "ut", "vermont": "vt",
         "virginia": "va", "washington": "wa", "west virginia": "wv",
         "wisconsin": "wi", "wyoming": "wy", "district of columbia": "dc",
+    ]
+
+    /// Codes only. Full "Victoria" is a city name (Victoria, BC) and is
+    /// matched as an Australian state only via `isKnownAdminRegion`.
+    private static let australianStateCodes: Set<String> = [
+        "nsw", "vic", "qld", "sa", "wa", "tas", "act", "nt",
+    ]
+
+    private static let australianStateNames: [String: String] = [
+        "new south wales": "nsw",
+        "queensland": "qld",
+        "south australia": "sa",
+        "western australia": "wa",
+        "tasmania": "tas",
+        "australian capital territory": "act",
+        "northern territory": "nt",
     ]
 
     private static let canadianProvinceNames: [String: String] = [
@@ -375,6 +398,13 @@ enum SaveDoodleHomeCatalog {
         }
         // Australia / generic 4-digit postcode.
         if trimmed.range(of: #"^\d{4}$"#, options: .regularExpression) != nil {
+            return true
+        }
+        // Australia: "NSW 2000", "VIC 3000" — state code + 4-digit postcode.
+        if trimmed.range(
+            of: #"^[A-Za-z]{2,3}\s+\d{4}$"#,
+            options: .regularExpression
+        ) != nil {
             return true
         }
         if adminRegionCode(in: trimmed) != nil {

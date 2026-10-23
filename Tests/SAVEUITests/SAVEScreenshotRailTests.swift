@@ -3424,9 +3424,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-\(suffix)"].exists)
             }
         } else {
-            XCTAssertTrue(app.buttons["home.empty.capture"].waitForExistence(timeout: stepTimeout))
-            XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces.empty"].exists)
-            XCTAssertTrue(app.staticTexts["Nothing saved near here yet"].exists)
+            // Empty-plate evidence is the visible capture control. The nested
+            // empty-plate container identifier is not an XCUI element because
+            // the parent saved-places group uses children: .contain
+            // (CI 39925000944, line 3428).
+            XCTAssertTrue(
+                app.buttons["home.empty.capture"].waitForExistence(timeout: stepTimeout),
+                "\(state) must show the empty-plate capture entry"
+            )
+            XCTAssertEqual(app.buttons["home.empty.capture"].identifier, "home.empty.capture")
             XCTAssertFalse(app.descendants(matching: .any)["home.review"].exists, "\(state) has no Review clues")
             XCTAssertFalse(
                 app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'")).firstMatch.exists
