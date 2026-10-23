@@ -75,6 +75,7 @@ struct SaveDoodlePassportSlot: Identifiable, Equatable {
 
     let id: String
     let content: Content
+    var stampNumber: Int? = nil
 
     var place: Place? {
         if case let .place(place, _, _) = content { return place }
@@ -91,8 +92,9 @@ enum SaveDoodlePassportCatalog {
     static let maxColumnCount = 4
     static let minColumnCount = 1
     static let slotSize: CGFloat = SaveLayout.passportSlot
+    static let cardHeight: CGFloat = 88
     static let columnStride: CGFloat = 80
-    static let rowGap: CGFloat = SaveSpace.md
+    static let rowGap: CGFloat = SaveSpace.lg
     static let minColumnGap: CGFloat = SaveSpace.md
     static let panelPadding: CGFloat = SaveSpace.lg
     static let pageSize = 12
@@ -133,6 +135,7 @@ enum SaveDoodlePassportCatalog {
             ("Houhai Bicycle", .attraction, .bicycle, .none),
             ("Chaoyang Park Wheel", .attraction, .ferris, .none),
         ]
+        let stampNumbers: [Int?] = [1, 2, 3, 3, nil, nil, nil, nil, nil, nil, nil, nil]
         return items.enumerated().map { index, item in
             let id = UUID(uuidString: String(format: "20000000-0000-0000-0000-%012d", index + 1))!
             let place = Place(
@@ -148,7 +151,8 @@ enum SaveDoodlePassportCatalog {
             )
             return SaveDoodlePassportSlot(
                 id: id.uuidString,
-                content: .place(place, item.2, item.3)
+                content: .place(place, item.2, item.3),
+                stampNumber: stampNumbers[index]
             )
         }
     }
@@ -188,7 +192,8 @@ enum SaveDoodlePassportCatalog {
             location: location,
             locationDenied: locationDenied
         )
-        let city = scoped.isEmpty ? places : scoped
+        let city = scoped
+        if city.isEmpty { return [] }
         let goal = Self.goal(for: max(city.count, 1))
         let visible = Array(city.prefix(goal))
         var result: [SaveDoodlePassportSlot] = visible.map { place in
@@ -196,7 +201,8 @@ enum SaveDoodlePassportCatalog {
             let rank = visitStore.rank(for: place.id, visited: place.status == .visited)
             return SaveDoodlePassportSlot(
                 id: place.id.uuidString,
-                content: .place(place, kind, rank)
+                content: .place(place, kind, rank),
+                stampNumber: rank == .none ? nil : rank.rawValue
             )
         }
         if result.count < goal {

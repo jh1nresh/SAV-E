@@ -24,11 +24,11 @@ struct SaveDoodlePassportPage: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 header
-                    .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.xs)
-                    .padding(.bottom, SaveLayout.titleToMeta)
+                    .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.lg)
+                    .padding(.bottom, SaveSpace.sm)
 
                 subtitle
-                    .padding(.bottom, SaveLayout.sectionGap)
+                    .padding(.bottom, SaveSpace.xl)
 
                 kraftPanel
                     .padding(.bottom, SaveLayout.sectionGap)
@@ -38,12 +38,28 @@ struct SaveDoodlePassportPage: View {
             .padding(.horizontal, SaveLayout.screenMargin)
             .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
         }
+        .frame(maxWidth: uiTestPassportWidth ?? .infinity, maxHeight: .infinity, alignment: .top)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SaveDottedBackground().ignoresSafeArea())
         .onAppear { visitRevision += 1 }
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
         }
+    }
+
+    /// CI boots one iPhone 16 Pro (402pt). `--uitest-passport-width=375|390|430`
+    /// letterboxes Passport to those DESIGN canvases on the same device.
+    private var uiTestPassportWidth: CGFloat? {
+#if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        let prefix = "--uitest-passport-width="
+        if let pair = args.first(where: { $0.hasPrefix(prefix) }),
+           let value = Double(pair.dropFirst(prefix.count)),
+           value == 375 || value == 390 || value == 430 {
+            return CGFloat(value)
+        }
+#endif
+        return nil
     }
 
     private var header: some View {
@@ -139,10 +155,6 @@ struct SaveDoodlePassportPage: View {
         }
         .padding(SaveDoodlePassportCatalog.panelPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            SaveAtlasPalette.kraft,
-            in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
-        )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.stampGrid")
     }
@@ -203,7 +215,7 @@ struct SaveDoodlePassportPage: View {
                 isStamping: stampingID == slot.id
             )
             .frame(maxWidth: .infinity)
-            .frame(height: SaveDoodlePassportCatalog.slotSize)
+            .frame(height: SaveDoodlePassportCatalog.cardHeight + SaveLayout.numberBadge + SaveSpace.tight)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -344,7 +356,7 @@ struct SaveDoodlePassportPage: View {
             location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
             locationDenied: locationService.isAuthorizationDenied
         )
-        return scoped.isEmpty ? places : scoped
+        return scoped
     }
 
     private var slots: [SaveDoodlePassportSlot] {

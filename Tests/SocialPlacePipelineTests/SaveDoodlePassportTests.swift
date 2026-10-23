@@ -73,6 +73,35 @@ final class SaveDoodlePassportTests: XCTestCase {
             ]
         )
         XCTAssertFalse(SaveDoodlePassportCatalog.usesDoodleFace)
+        let unvisited = slots.compactMap { slot -> SaveDoodleStickerKind? in
+            guard case let .place(_, kind, rank) = slot.content, rank == .none else { return nil }
+            return kind
+        }
+        XCTAssertEqual(
+            unvisited,
+            [.coffee, .hill, .bridge, .baozi, .tea, .bookstore, .bicycle, .ferris]
+        )
+        XCTAssertEqual(Set(unvisited).count, unvisited.count)
+        XCTAssertEqual(unvisited.filter(\.usesOfficialAsset), [.coffee])
+        XCTAssertEqual(slots.compactMap(\.stampNumber), [1, 2, 3, 3])
+    }
+
+    func testEmptyCityScopeDoesNotExpandWorldwide() {
+        let suite = "save.doodle.passport.empty-city.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let tokyo = place(
+            "Ichiran",
+            "1-22-7 Jinnan, Shibuya City, Tokyo, Japan",
+            .food
+        )
+        let slots = SaveDoodlePassportCatalog.slots(
+            from: [tokyo],
+            selection: .city("beijing"),
+            locationDenied: true,
+            visitStore: SavePassportVisitStore(defaults: defaults)
+        )
+        XCTAssertTrue(slots.isEmpty)
     }
 
     func testRecordingAVisitClimbsTheStampRank() {
@@ -163,9 +192,19 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(page.contains("profile.stamp.visitError"))
         XCTAssertTrue(page.contains("Couldn’t update this place. Please try again."))
         XCTAssertTrue(catalog.contains("stableHash(place.id.uuidString)"))
-        XCTAssertTrue(catalog.contains("let city = scoped.isEmpty ? places : scoped"))
+        XCTAssertTrue(catalog.contains("if city.isEmpty { return [] }"))
+        XCTAssertFalse(catalog.contains("let city = scoped.isEmpty ? places : scoped"))
         XCTAssertFalse(catalog.contains("Hasher()"))
         XCTAssertFalse(catalog.contains("place.name, \"\\(index)\""))
+        XCTAssertTrue(catalog.contains("cardHeight"))
+        XCTAssertTrue(catalog.contains("stampNumber"))
+        XCTAssertTrue(page.contains("--uitest-passport-width="))
+        XCTAssertTrue(page.contains("SaveSpace.lg"))
+        XCTAssertFalse(page.contains("SaveAtlasPalette.kraft"))
+        XCTAssertTrue(stickers.contains("SaveDoodlePassportNumberStamp"))
+        XCTAssertTrue(stickers.contains("usesOfficialAsset"))
+        XCTAssertTrue(stickers.contains("SaveDoodlePassportUniqueGlyph"))
+        XCTAssertFalse(stickers.contains("struct SaveDoodlePassportStamp"))
     }
 
     func testUnhintedStickerKindIsStableForTheSamePlace() {
@@ -249,6 +288,10 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(rail.contains("--uitest-doodle-passport-face"))
         XCTAssertTrue(rail.contains("doodle-passport-light"))
         XCTAssertTrue(rail.contains("doodle-passport-dark"))
+        XCTAssertTrue(rail.contains("passport-375"))
+        XCTAssertTrue(rail.contains("passport-390"))
+        XCTAssertTrue(rail.contains("passport-430"))
+        XCTAssertTrue(rail.contains("--uitest-passport-width="))
         let workflow = try source(at: ".github/workflows/ios.yml")
         XCTAssertTrue(workflow.contains("five-tab-passport"))
         XCTAssertTrue(workflow.contains("doodle-passport-light"))

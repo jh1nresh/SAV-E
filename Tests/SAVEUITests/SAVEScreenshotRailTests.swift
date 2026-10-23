@@ -959,6 +959,38 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             expectedGreen: 0x1C,
             expectedBlue: 0x19
         )
+        try attachPassportWidthEvidence()
+    }
+
+    /// 297-1: letterbox 375 / 390 / 430 on the same 402pt CI device.
+    /// Names stay off `five-tab-*` so they cannot steal the 0.90 target.
+    @MainActor
+    private func attachPassportWidthEvidence() throws {
+        let shots: [(name: String, width: Int, language: String, extra: [String])] = [
+            ("passport-375", 375, "en", ["--uitest-force-light", "-AppleInterfaceStyle", "Light"]),
+            ("passport-390", 390, "zh-Hant", ["--uitest-force-light", "-AppleInterfaceStyle", "Light"]),
+            ("passport-430", 430, "en", ["--uitest-force-dark", "-AppleInterfaceStyle", "Dark"]),
+        ]
+        for shot in shots {
+            let app = makeApp(
+                launchArguments: [
+                    "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                    "--uitest-repair-review-demo-seed",
+                    "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                    "--uitest-doodle-passport-face",
+                    "--uitest-passport-width=\(shot.width)",
+                    "-save.appLanguage", shot.language,
+                ] + shot.extra,
+                launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+            )
+            launch(app)
+            try signInViaReviewDemoRequired(app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+            openRootTab("Passport", app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
+            attach(app, name: shot.name)
+            terminate(app)
+        }
     }
 
     @MainActor
