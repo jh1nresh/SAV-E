@@ -169,9 +169,11 @@ final class SaveTileTownLockTests: XCTestCase {
     func testMapOwnsNearbySavedFriendsChipsOnTileTown() throws {
         let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
         let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
-        XCTAssertTrue(map.contains(".mapStyle(.standard)"))
+        XCTAssertTrue(map.contains(".mapStyle(.standard(emphasis: .automatic))"))
         XCTAssertTrue(map.contains("AtlasMetrics.statusBarHeight"))
         XCTAssertFalse(map.contains("emphasis: .muted"))
+        XCTAssertFalse(map.contains(".saturation("))
+        XCTAssertFalse(map.contains(".colorMultiply("))
         XCTAssertFalse(map.contains("SaveTileTownCanvas"))
         XCTAssertTrue(map.contains("map.placeSheet"))
         XCTAssertTrue(map.contains(".frame(minHeight: 44)") || map.contains("SaveLayout.minTap"))

@@ -95,7 +95,6 @@ struct SaveDoodleMapView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             _ = onPlanAroundPlace
-            session.mapFollowsHomeFilter = true
             applyMiniMapHandoff()
             mapViewModel.seedUITestUnsavedCandidateIfNeeded()
             selectParityPlaceIfNeeded()
@@ -737,36 +736,36 @@ struct SaveDoodleMapView: View {
     private func cityOpeningPins() -> [CLLocationCoordinate2D] {
         let denied = locationService.isAuthorizationDenied
         let location = denied ? nil : locationService.currentLocation
-        if !session.mapFollowsHomeFilter {
-            guard let cityID = openingCityID(denied: denied, location: location) else {
-                return addresslessOpeningPins(location: location)
+        if session.mapFollowsHomeFilter {
+            var selection = SaveDoodleHomeCatalog.resolvedSelection(
+                session.city,
+                places: mapViewModel.places,
+                locationDenied: denied
+            )
+            if case .nearYou = selection, location == nil {
+                let newest = mapViewModel.places.sorted(by: SaveDoodleHomeCatalog.moreRecent).first
+                if let newest, let id = SaveDoodleHomeCatalog.cityID(for: newest) {
+                    selection = .city(id)
+                }
             }
-            return mapViewModel.places
-                .filter { SaveDoodleHomeCatalog.cityID(for: $0) == cityID && $0.isMapKitMappable }
-                .map(\.coordinate)
-        }
-        var selection = SaveDoodleHomeCatalog.resolvedSelection(
-            session.city,
-            places: mapViewModel.places,
-            locationDenied: denied
-        )
-        if case .nearYou = selection, location == nil {
-            let newest = mapViewModel.places.sorted(by: SaveDoodleHomeCatalog.moreRecent).first
-            if let newest, let id = SaveDoodleHomeCatalog.cityID(for: newest) {
-                selection = .city(id)
+            var coords: [CLLocationCoordinate2D] = []
+            for place in SaveDoodleHomeCatalog.visiblePlaces(
+                from: mapViewModel.places,
+                lens: session.lens,
+                selection: selection,
+                location: location,
+                locationDenied: denied
+            ) where place.isMapKitMappable {
+                coords.append(place.coordinate)
             }
+            return coords
         }
-        var coords: [CLLocationCoordinate2D] = []
-        for place in SaveDoodleHomeCatalog.visiblePlaces(
-            from: mapViewModel.places,
-            lens: session.lens,
-            selection: selection,
-            location: location,
-            locationDenied: denied
-        ) where place.isMapKitMappable {
-            coords.append(place.coordinate)
+        guard let cityID = openingCityID(denied: denied, location: location) else {
+            return addresslessOpeningPins(location: location)
         }
-        return coords
+        return mapViewModel.places
+            .filter { SaveDoodleHomeCatalog.cityID(for: $0) == cityID && $0.isMapKitMappable }
+            .map(\.coordinate)
     }
 
     /// Coordinate-only imports have no city id. Fit the local cluster, or

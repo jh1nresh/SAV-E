@@ -3521,7 +3521,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         }
         XCTAssertTrue(app.buttons["map.eat"].isSelected || app.buttons["map.go"].isSelected,
                       "298-11: Eat/Go must expose isSelected")
-        attach(app, name: language == "zh-Hant" ? "298-12-zh" : "298-10-saved-unsaved-visited")
+        if language == "zh-Hant" {
+            attach(app, name: "298-12-zh")
+        } else {
+            attach(app, name: "298-10-saved-unsaved-visited")
+        }
         if attachM1 {
             attach(app, name: "M1")
         }

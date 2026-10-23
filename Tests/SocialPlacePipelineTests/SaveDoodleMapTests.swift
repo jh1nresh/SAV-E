@@ -141,6 +141,7 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("onChange(of: session.mapVisitResidueID)"))
         XCTAssertTrue(map.contains("applyMiniMapHandoff()"))
         XCTAssertTrue(map.contains("if session.mapFollowsHomeFilter"))
+        XCTAssertFalse(map.contains("session.mapFollowsHomeFilter = true\n            applyMiniMapHandoff()"))
         XCTAssertTrue(map.contains("SaveDoodleHomeCatalog.listedPlaces("))
         XCTAssertTrue(map.contains("session.lens"))
         XCTAssertTrue(map.contains("session.city"))
