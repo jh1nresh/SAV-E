@@ -262,6 +262,7 @@ enum SaveDoodleHomeCatalog {
         "portugal", "ireland", "sweden", "norway", "denmark", "finland",
         "poland", "hungary", "greece", "romania", "mexico", "brazil",
         "india", "new zealand", "czech republic", "czechia", "south africa",
+        "turkey", "turkiye", "türkiye",
     ]
 
     /// Postal prefixes and trailing numeric/UK/Canadian postcodes are not city names.

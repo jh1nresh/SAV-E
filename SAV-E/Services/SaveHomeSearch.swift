@@ -589,6 +589,7 @@ private extension SaveHomeSearch {
         "taiwan", "japan", "china", "canada", "australia", "france",
         "germany", "italy", "spain", "korea", "south korea", "thailand",
         "singapore", "hong kong",
+        "turkey", "turkiye", "türkiye",
     ]
 
     private static let usStateCodes: Set<String> = [
