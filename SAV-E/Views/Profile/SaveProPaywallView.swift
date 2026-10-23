@@ -263,7 +263,8 @@ struct SaveProPaywallView: View {
                     products: products
                 ),
                 sticker: .noodle,
-                showsBestValue: true
+                showsBestValue: true,
+                products: products
             )
             planCard(
                 id: SAVEProAccessPolicy.ProductID.monthly,
@@ -273,7 +274,8 @@ struct SaveProPaywallView: View {
                     products: products
                 ),
                 sticker: .coffee,
-                showsBestValue: false
+                showsBestValue: false,
+                products: products
             )
         }
     }
@@ -283,7 +285,8 @@ struct SaveProPaywallView: View {
         title: String,
         price: String,
         sticker: SaveDoodleOfficialSticker,
-        showsBestValue: Bool
+        showsBestValue: Bool,
+        products: [Product]
     ) -> some View {
         let isSelected = id == selectedProductID
         return Button {
@@ -306,6 +309,11 @@ struct SaveProPaywallView: View {
                     Text(price)
                         .font(SaveAtlasType.strong(17))
                         .foregroundStyle(SaveAtlasPalette.ink)
+                    Text(renewalDescription(for: id, products: products))
+                        .font(SaveAtlasType.body(13))
+                        .foregroundStyle(SaveAtlasPalette.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("paywall.renewal.\(id)")
                 }
 
                 Spacer(minLength: 0)
@@ -323,8 +331,9 @@ struct SaveProPaywallView: View {
                 }
             }
             .padding(.horizontal, SaveSpace.md)
+            .padding(.vertical, SaveSpace.sm)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: SaveLayout.rowMinHeight)
+            .frame(minHeight: SaveLayout.rowMinHeight)
             .background(
                 SaveAtlasPalette.paper,
                 in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)

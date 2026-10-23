@@ -27,6 +27,7 @@ struct SaveCaptureFlowView: View {
     @State private var isGoogleTakeoutPresented = false
     @FocusState private var isInputFocused: Bool
     @State private var detent: PresentationDetent = .medium
+    @State private var entitlements = SaveEntitlementStore.shared
 
     var body: some View {
         Group {
@@ -55,6 +56,9 @@ struct SaveCaptureFlowView: View {
             if sharedText.isEmpty {
                 sharedText = initialText
             }
+        }
+        .task {
+            await entitlements.refresh()
         }
         .photosPicker(isPresented: $isPhotoPickerPresented, selection: $selectedPhoto, matching: .images)
         .task(id: selectedPhoto) {
@@ -131,8 +135,8 @@ struct SaveCaptureFlowView: View {
                             in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
                         )
                     }
-                    .disabled(trimmedText.isEmpty || isBusy || isAIQuotaExhausted)
-                    .opacity(trimmedText.isEmpty || isBusy || isAIQuotaExhausted ? 0.48 : 1)
+                    .disabled(!canSubmitDraft)
+                    .opacity(canSubmitDraft ? 1 : 0.48)
                     .accessibilityIdentifier("capture.analyze")
 
                     Text(savedCountText)
@@ -319,7 +323,19 @@ struct SaveCaptureFlowView: View {
     /// opens `paywall.root` — Pro is sold for unlimited saved places only.
     private var isAIQuotaExhausted: Bool {
         if forcesQuotaExhausted { return true }
-        return SaveEntitlementStore.shared.decideAIAssist().isRefusal
+        return entitlements.decideAIAssist().isRefusal
+    }
+
+    /// Links stay capturable after AI quota exhaustion. Metered analysis
+    /// is the only path that turns Save off.
+    private var draftLooksLikeLink: Bool {
+        PendingPlaceImportService.looksLikeURL(trimmedText)
+    }
+
+    private var canSubmitDraft: Bool {
+        guard !trimmedText.isEmpty, !isBusy else { return false }
+        if isAIQuotaExhausted { return draftLooksLikeLink }
+        return true
     }
 
     private func readSelectedPhoto() async {
@@ -356,7 +372,7 @@ struct SaveCaptureFlowView: View {
     }
 
     private func analyze() {
-        guard !trimmedText.isEmpty, !isBusy, !isAIQuotaExhausted else { return }
+        guard canSubmitDraft else { return }
         isAnalyzing = true
         errorMessage = nil
         Task {

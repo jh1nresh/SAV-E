@@ -57,6 +57,13 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("consumeMiniMapHandoff()"))
         XCTAssertTrue(map.contains(".id(visitResidue)"))
         XCTAssertTrue(map.contains("showsCityPicker = false"))
+        XCTAssertTrue(map.contains("session.mapFollowsHomeFilter && session.lens == item"))
+        XCTAssertTrue(map.contains("onClearSelection()"))
+        XCTAssertTrue(map.contains("if !denied, let coordinate = locationService.currentLocation?.coordinate"))
+        let compose = try source(at: "Prototypes/AtlasPostcard/Scripts/compose-map-similarity.py")
+        XCTAssertTrue(compose.contains("x, y, w, h = args.mask"))
+        XCTAssertTrue(compose.contains("used_mask_image"))
+        XCTAssertTrue(compose.contains("kind"))
     }
 
     func testCheckInIsOneVisitPerPlacePerDayAndCanUndo() {

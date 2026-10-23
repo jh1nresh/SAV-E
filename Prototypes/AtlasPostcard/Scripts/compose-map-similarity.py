@@ -56,12 +56,13 @@ def main() -> None:
     diff = fit(load(args.diff), (402, 874))
     overlay = Image.new("RGBA", actual.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
-    if args.mask_image and args.mask_image.exists():
+    x, y, w, h = args.mask
+    used_mask_image = bool(args.mask_image and args.mask_image.exists())
+    if used_mask_image:
         mask = fit(load(args.mask_image), (402, 874)).convert("L")
         shade = Image.new("RGBA", actual.size, (20, 20, 24, 90))
         overlay.paste(shade, (0, 0), mask.point(lambda v: 255 if v >= 240 else 0))
     else:
-        x, y, w, h = args.mask
         draw.rectangle((x, y, x + w, y + h), fill=(20, 20, 24, 90))
     actual_masked = Image.alpha_composite(actual.convert("RGBA"), overlay).convert("RGB")
     target_masked = Image.alpha_composite(target.convert("RGBA"), overlay).convert("RGB")
@@ -106,11 +107,23 @@ def main() -> None:
         "composite": payload.get("composite"),
         "edgeF1": payload.get("edgeF1"),
         "appearanceSimilarity": payload.get("appearanceSimilarity"),
-        "mask": {"x": x, "y": y, "width": w, "height": h},
+        "mask": (
+            {
+                "kind": "image",
+                "path": str(args.mask_image),
+                "fallbackRectangle": {"x": x, "y": y, "width": w, "height": h},
+            }
+            if used_mask_image
+            else {"kind": "rectangle", "x": x, "y": y, "width": w, "height": h}
+        ),
         "maskReason": (
-            "Founder lock: default Apple MapKit surface is excluded. "
-            "Ignore 0,48,402,642 covers live MapKit at y 48..<690 "
-            "(header overlay + gap above the sheet) in both capture and mock."
+            f"Image mask {args.mask_image.name}: white pixels are live Apple Maps "
+            "(ignored). Rectangle bounds are provenance only when no image mask is supplied."
+            if used_mask_image
+            else (
+                f"Rectangle mask {x},{y},{w},{h} covers live MapKit in both "
+                "capture and mock."
+            )
         ),
         "sideBySide": str(args.output),
         "passed": payload.get("passed"),

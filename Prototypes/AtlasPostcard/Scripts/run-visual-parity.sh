@@ -225,9 +225,6 @@ for screen in home saves plan map passport capture paywall; do
     fi
     cp "$source" "$ARTIFACT_DIR/reference/$screen.png"
 done
-if [[ -f "$REFERENCE_SOURCE/home-mask.png" ]]; then
-    cp "$REFERENCE_SOURCE/home-mask.png" "$ARTIFACT_DIR/reference/home-mask.png"
-fi
 if [[ -f "$REFERENCE_SOURCE/map-mask.png" ]]; then
     cp "$REFERENCE_SOURCE/map-mask.png" "$ARTIFACT_DIR/reference/map-mask.png"
 fi
@@ -454,9 +451,6 @@ for screen in home saves plan map passport capture paywall; do
         extra_args=(--ignore-rects "24,132,354,176;24,444,354,22;24,698,354,50")
     fi
     mask_args=()
-    if [[ "$screen" == home && -f "$ARTIFACT_DIR/reference/home-mask.png" ]]; then
-        mask_args=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
-    fi
     if [[ "$screen" == "map" ]]; then
         if [[ ! -f "$MAP_MASK" ]]; then
             echo "error: missing DESIGN map mask: $MAP_MASK" >&2
