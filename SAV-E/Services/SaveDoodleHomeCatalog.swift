@@ -220,7 +220,7 @@ enum SaveDoodleHomeCatalog {
         // Otherwise retain the last locality. A country-qualified pair can be
         // street+city (Damrak, Amsterdam), so its length is not region evidence.
         guard let city = local.last, !city.isEmpty else { return nil }
-        return stripLeadingPostalCode(from: city)
+        return strippingPostalCode(from: city)
     }
 
     private static func isKnownAdminRegion(_ value: String, country: String?) -> Bool {
@@ -249,16 +249,15 @@ enum SaveDoodleHomeCatalog {
         "india", "new zealand", "czech republic", "czechia", "south africa",
     ]
 
-    /// `8001 Zürich` / `69001 Lyon` — postcode is a prefix, not the city.
-    private static func stripLeadingPostalCode(from token: String) -> String {
+    /// Postal prefixes and trailing numeric/UK/Canadian postcodes are not city names.
+    static func strippingPostalCode(from token: String) -> String {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let match = trimmed.range(
-            of: #"^\d{4,6}\s+"#,
-            options: .regularExpression
-        ) else { return trimmed }
-        let name = trimmed[match.upperBound...]
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? trimmed : String(name)
+        var name = trimmed.replacingOccurrences(of: #"^\d{4,6}\s+"#, with: "", options: .regularExpression)
+        name = name.replacingOccurrences(
+            of: #"\s+(?:\d{4,6}|[A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d[A-Za-z]{2}|[A-Za-z]\d[A-Za-z]\s*\d[A-Za-z]\d)$"#,
+            with: "", options: .regularExpression
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? trimmed : name
     }
 
     private static func normalizedCityToken(_ value: String) -> String {

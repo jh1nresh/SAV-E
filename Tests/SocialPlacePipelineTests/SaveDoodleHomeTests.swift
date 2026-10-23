@@ -300,6 +300,27 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(SaveHomeSearch.metroKey(in: "台北市, 台灣"), "taipei")
     }
 
+    func testMetroGroupingRejectsCityNamesInStreetComponents() {
+        for address in ["123 London Road, Manchester, United Kingdom", "London Road, Manchester, United Kingdom", "Rue de Paris, Lyon, France", "香港路, 青島", "香港街, 青島", "香港大道, 青島"] {
+            XCTAssertNil(SaveHomeSearch.metroKey(in: address), address)
+        }
+        let manchester = place("Street alias", "123 London Road, Manchester, United Kingdom", .cafe)
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: manchester), "manchester,united kingdom")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityDisplayName(for: manchester, language: .english), "Manchester")
+        for (address, city) in [("10 Downing Street, London SW1A 2AA, UK", "london"), ("東京都渋谷区神南1丁目", "tokyo"), ("106台北市大安區仁愛路", "taipei"), ("北京市东城区天坛东里", "beijing"), ("18 Marina Gardens Dr, Singapore 018953", "singapore"), ("Rue de Rivoli, Paris 75001, France", "paris"), ("香港中環皇后大道中15號", "hongKong"), ("香港九龍尖沙咀", "hongKong")] {
+            XCTAssertEqual(SaveHomeSearch.metroKey(in: address), city, address)
+        }
+    }
+
+    func testTrailingPostcodesDoNotSplitLocalityGroups() {
+        let places = ["1 King's Parade, Cambridge CB2 1ST, UK", "2 Trinity Street, Cambridge CB2 1SU, UK"].map {
+            place("Cambridge fixture", $0, .cafe)
+        }
+        XCTAssertEqual(places.map { SaveDoodleHomeCatalog.localityLabel(in: $0.address) }, ["Cambridge", "Cambridge"])
+        XCTAssertEqual(places.map { SaveDoodleHomeCatalog.cityID(for: $0) }, ["cambridge,uk", "cambridge,uk"])
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityGroups(from: places).first?.count, 2)
+    }
+
     func testFallbackCityGroupingRecognizesCountriesOutsideMetroCatalogue() {
         let addresses = [
             "Santiago, Chile", "Valparaíso, Chile", "Bogotá, Colombia", "Medellín, Colombia",

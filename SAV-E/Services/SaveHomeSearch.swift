@@ -39,7 +39,7 @@ struct SaveHomeSearch {
     }
 
     static func metroKey(in address: String) -> String? {
-        for city in City.ordered where city.matches(address: address) {
+        for city in City.ordered where city.matches(address: address) && city.hasLocalityComponent(in: address) {
             return city.rawValue
         }
         return nil
@@ -301,6 +301,39 @@ private extension SaveHomeSearch {
                 aliasHit = aliases.contains { SaveHomeSearch.contains(alias: $0, in: normalizedAddress) }
             }
             return aliasHit && fitsAdministrativeRegion(address)
+        }
+
+        /// A street named London Road is not evidence that its city is London.
+        /// Keep free-text search matching separate from structured city grouping.
+        func hasLocalityComponent(in address: String) -> Bool {
+            let components = address.split(separator: ",").map {
+                SaveHomeSearch.normalize(SaveDoodleHomeCatalog.strippingPostalCode(from: String($0)))
+            }
+            return components.contains { component in
+                aliases.contains { alias in
+                    let normalizedAlias = SaveHomeSearch.normalize(alias)
+                    if component == normalizedAlias { return true }
+                    // Compact East Asian addresses begin with their municipality:
+                    // 台北市大安區 / 東京都渋谷区 / 大阪府大阪市.
+                    guard normalizedAlias.unicodeScalars.contains(where: { (0x4E00...0x9FFF).contains($0.value) }) else { return false }
+                    var locality = component
+                    for country in ["台灣", "臺灣", "台湾", "日本", "中國", "中国"] where locality.hasPrefix(country) {
+                        locality.removeFirst(country.count)
+                    }
+                    locality = String(locality.drop(while: { $0.isNumber || $0 == "-" || $0.isWhitespace }))
+                    guard locality.hasPrefix(normalizedAlias) else { return false }
+                    let suffix = locality.dropFirst(normalizedAlias.count)
+                    if self == .hongKong {
+                        // Hong Kong has no 市 marker. Accept explicit locality
+                        // prefixes, not streets such as 香港路 in another city.
+                        return ["中環", "中环", "中西區", "中西区", "灣仔", "湾仔", "九龍", "九龙", "新界"].contains {
+                            suffix.hasPrefix($0)
+                        }
+                    }
+                    return normalizedAlias.last.map { "市都府縣县".contains($0) } == true
+                        || suffix.first.map { "市都府縣县".contains($0) } == true
+                }
+            }
         }
 
         /// Allowlisted aliases stay canonical unless the address names a
