@@ -76,7 +76,11 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
 #endif
     }
 
-    func requestCurrentLocation(forceRefresh: Bool = false) async -> CLLocation? {
+    func requestCurrentLocation() async -> CLLocation? {
+        await requestCurrentLocation(forceRefresh: false)
+    }
+
+    func requestCurrentLocation(forceRefresh: Bool) async -> CLLocation? {
         if simulatesDeniedAuthorization {
             return nil
         }
