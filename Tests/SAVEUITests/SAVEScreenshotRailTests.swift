@@ -84,42 +84,63 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     func testFriendsComingSoon() throws {
         try assertFriendsComingSoonLanguages()
-        try attachFriendsSectionDWidths()
     }
 
-    /// DESIGN §D / HoP F-V1..V4, F-B2, F-B3, F-B7: letterbox 375 and 430
-    /// on the same 402pt CI device. Home deferral on #290 does not apply
-    /// to Friends.
+    /// Real 375pt simulator (SE / mini). Not a maxWidth letterbox on 402pt.
     @MainActor
-    private func attachFriendsSectionDWidths() throws {
-        let shots: [(name: String, language: String, width: Int, flags: [String], identifier: String)] = [
-            ("friends-empty-en-375", "en", 375, [], "friends.empty"),
-            ("friends-empty-zh-Hant-430", "zh-Hant", 430, [], "friends.empty"),
-            ("friends-town-375", "en", 375, ["--uitest-friends-town"], "friends.author.mia"),
-            ("friends-town-430", "en", 430, ["--uitest-friends-town"], "friends.author.mia"),
-            ("friends-loading-375", "en", 375, ["--uitest-friends-loading"], "friends.loading"),
-            ("friends-error-430", "en", 430, ["--uitest-friends-error"], "posts.error"),
-        ]
-        for shot in shots {
-            let app = makeApp(
-                launchArguments: [
-                    "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
-                    "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
-                    "--uitest-repair-review-demo-seed",
-                    "--uitest-friends-width=\(shot.width)",
-                    "-save.appLanguage", shot.language,
-                ] + shot.flags,
-                launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
-            )
-            launch(app)
-            try signInViaReviewDemoRequired(app: app)
-            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-            openRootTab("Friends", app: app)
-            XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
-            XCTAssertTrue(app.descendants(matching: .any)[shot.identifier].waitForExistence(timeout: stepTimeout))
-            attach(app, name: shot.name)
-            terminate(app)
-        }
+    func testFriendsWidth375() throws {
+        try captureFriendsWidthEvidence(width: 375, columns: 1, name: "friends-375")
+    }
+
+    /// Real 390pt simulator (iPhone 14). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testFriendsWidth390() throws {
+        try captureFriendsWidthEvidence(width: 390, columns: 1, name: "friends-390")
+    }
+
+    /// Real 430pt simulator (Pro Max). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testFriendsWidth430() throws {
+        try captureFriendsWidthEvidence(width: 430, columns: 1, name: "friends-430")
+    }
+
+    /// HoP width shots: assert the booted device point width and the
+    /// people-first single column, then attach `friends-375|390|430`.
+    @MainActor
+    private func captureFriendsWidthEvidence(width: Int, columns: Int, name: String) throws {
+        let language = width == 390 ? "zh-Hant" : "en"
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-friends-town",
+                "-save.appLanguage", language,
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        openRootTab("Friends", app: app)
+        let root = app.descendants(matching: .any)["friends.root"]
+        XCTAssertTrue(root.waitForExistence(timeout: stepTimeout))
+        let list = app.descendants(matching: .any)["friends.list"]
+        XCTAssertTrue(list.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(
+            Int(app.frame.width.rounded()),
+            width,
+            "Friends width shot must boot a real \(width)pt simulator"
+        )
+        XCTAssertEqual(
+            Int(root.frame.width.rounded()),
+            width,
+            "Friends root must use the full \(width)pt device width, not a letterbox"
+        )
+        XCTAssertEqual(list.value as? String, "\(columns)", "Friends is a 1-column people list")
+        attach(app, name: name)
+        attach(app, name: "friends-town-\(width)")
+        terminate(app)
     }
 
     @MainActor

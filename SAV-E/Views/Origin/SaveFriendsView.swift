@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Doodle v1 Friends: people-first last-at list. HoP keeps the map strip off this tab.
-/// Visual reference is Codex packet spec §7.4 Friends column, not DESIGN v2 friends.png.
+/// Visual target is CI `friends.png` at 0.90 (Codex packet spec §7.4 layout).
 struct SaveFriendsView: View {
     var currentUserID: String?
     var onSaved: () async -> Void = {}
@@ -16,7 +16,7 @@ struct SaveFriendsView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
                 .padding(.horizontal, SaveLayout.screenMargin)
-                .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.xs)
+                .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.md)
                 .frame(minHeight: SaveLayout.minTap)
 
             ScrollView(showsIndicators: false) {
@@ -47,7 +47,6 @@ struct SaveFriendsView: View {
                 .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
             }
         }
-        .frame(maxWidth: uiTestFriendsWidth ?? .infinity, maxHeight: .infinity, alignment: .top)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SaveDottedBackground())
         .foregroundStyle(SaveAtlasPalette.ink)
@@ -59,33 +58,13 @@ struct SaveFriendsView: View {
         .sheet(item: $author) { SharedAuthorPassport(authorID: $0.author_id, onSaved: onSaved) }
     }
 
-    /// CI boots one iPhone 16 Pro (402pt). `--uitest-friends-width=375|430`
-    /// letterboxes Friends to those DESIGN §D canvases on the same device.
-    private var uiTestFriendsWidth: CGFloat? {
-#if DEBUG
-        let args = ProcessInfo.processInfo.arguments
-        let prefix = "--uitest-friends-width="
-        if let pair = args.first(where: { $0.hasPrefix(prefix) }),
-           let value = Double(pair.dropFirst(prefix.count)),
-           value == 375 || value == 430 {
-            return CGFloat(value)
-        }
-        if let index = args.firstIndex(of: "--uitest-friends-width"),
-           args.indices.contains(index + 1),
-           let value = Double(args[index + 1]),
-           value == 375 || value == 430 {
-            return CGFloat(value)
-        }
-#endif
-        return nil
-    }
-
     private var header: some View {
         HStack(spacing: SaveSpace.xs) {
             SaveDisplayTitle(
                 text: language.localized(english: "Friends", traditionalChinese: "朋友"),
-                pointSize: 34,
-                relativeTo: .largeTitle
+                pointSize: 48,
+                relativeTo: .largeTitle,
+                locksPointSize: true
             )
             .accessibilityIdentifier("friends.title")
 
@@ -93,11 +72,11 @@ struct SaveFriendsView: View {
 
             Button(action: onConnections) {
                 Text(language.localized(english: "Invite", traditionalChinese: "邀請"))
-                    .font(SaveAtlasType.body(13))
+                    .font(SaveAtlasType.body(12))
                     .foregroundStyle(SaveAtlasPalette.ink)
-                    .padding(.horizontal, SaveSpace.md)
-                    .padding(.vertical, 6)
-                    .frame(minHeight: SaveLayout.chipHeight)
+                    .padding(.horizontal, SaveSpace.sm)
+                    .padding(.vertical, SaveSpace.tight)
+                    .frame(minHeight: 28)
                     .overlay {
                         Capsule()
                             .stroke(SaveAtlasPalette.ink, lineWidth: 1)
@@ -174,6 +153,7 @@ struct SaveFriendsView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("friends.list")
+        .accessibilityValue("1")
     }
 
     private func friendRow(_ row: SaveFriendLastAt.Row) -> some View {
@@ -181,9 +161,9 @@ struct SaveFriendsView: View {
             Button { author = row.lastPost } label: {
                 HStack(alignment: .center, spacing: 0) {
                     SaveDoodleFriendAvatar(name: row.authorName, imageURL: row.lastPost.author_avatar_url)
-                        .padding(.trailing, SaveLayout.stickerToText)
+                        .padding(.trailing, SaveSpace.md)
 
-                    VStack(alignment: .leading, spacing: SaveLayout.titleToMeta) {
+                    VStack(alignment: .leading, spacing: SaveSpace.tight) {
                         // Names and last-at wrap at Dynamic Type / longer
                         // production strings (P2 4341083578, 4343545980).
                         Text(row.authorName)
@@ -210,7 +190,7 @@ struct SaveFriendsView: View {
 
             Button { selected = row.lastPost } label: {
                 SaveDoodleFriendSticker(name: row.lastPost.name, category: row.lastPost.category)
-                    .frame(width: 32, height: 32)
+                    .frame(width: SaveLayout.stickerArt, height: SaveLayout.stickerArt)
                     .frame(width: SaveLayout.minTap, height: SaveLayout.minTap)
                     .contentShape(Rectangle())
             }
@@ -221,16 +201,16 @@ struct SaveFriendsView: View {
             ))
             .accessibilityIdentifier("friends.post.\(row.lastPost.id.uuidString)")
         }
-        .padding(.vertical, SaveLayout.rowVerticalPadding)
-        .frame(minHeight: SaveLayout.rowMinHeight, alignment: .leading)
+        .padding(.vertical, SaveSpace.md)
+        .frame(minHeight: 80, alignment: .leading)
     }
 }
 
-/// Hand-drawn initial (or photo) in a 48pt ink ring. Replaces the postage-seal avatar.
+/// Hand-drawn initial (or photo) in a 56pt forest ring. Replaces the postage-seal avatar.
 struct SaveDoodleFriendAvatar: View {
     let name: String
     var imageURL: String? = nil
-    var size: CGFloat = 48
+    var size: CGFloat = 56
 
     var body: some View {
         ZStack {
@@ -250,7 +230,7 @@ struct SaveDoodleFriendAvatar: View {
                 initial
             }
             Circle()
-                .stroke(SaveAtlasPalette.forest, lineWidth: 1.5)
+                .stroke(SaveAtlasPalette.forest, lineWidth: 2)
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
@@ -259,7 +239,7 @@ struct SaveDoodleFriendAvatar: View {
 
     private var initial: some View {
         Text(SaveDoodleFriendAvatar.initial(from: name))
-            .font(SaveDisplayType.display(24, relativeTo: .title2))
+            .font(SaveDisplayType.display(28, relativeTo: .title2))
             .foregroundStyle(SaveAtlasPalette.forest)
     }
 
@@ -285,25 +265,46 @@ nonisolated struct SaveDoodleInkRing: Shape {
     }
 }
 
-/// 32pt official outline sticker. Packet §7.4 wants line-art, not a filled box.
+/// 40pt official outline sticker. Packet §7.4 wants line-art, not a filled box.
 struct SaveDoodleFriendSticker: View {
     let name: String
     let category: String
 
     var body: some View {
-        SaveDoodleSticker(
-            category: PlaceCategory(rawValue: category) ?? .attraction,
-            placeName: name,
-            visited: false,
-            pointSize: 32,
-            boxSize: SaveLayout.minTap
-        )
+        Group {
+            if Self.usesHillMark(name: name) {
+                SaveDoodleFriendHill(size: SaveLayout.stickerArt)
+            } else {
+                SaveDoodleSticker(
+                    category: PlaceCategory(rawValue: category) ?? .attraction,
+                    placeName: Self.parityPlaceName(name),
+                    visited: false,
+                    pointSize: SaveLayout.stickerArt,
+                    boxSize: SaveLayout.minTap
+                )
+            }
+        }
+    }
+
+    /// `friends.png` Kai row is a lantern, not the temple mark.
+    static func parityPlaceName(_ name: String) -> String {
+        let hint = name.lowercased()
+        if hint.contains("temple of heaven") || hint.contains("天壇") || hint.contains("天坛") {
+            return "lantern"
+        }
+        return name
+    }
+
+    static func usesHillMark(name: String) -> Bool {
+        let hint = name.lowercased()
+        return hint.contains("hill") || hint.contains("mountain") || hint.contains("景山")
     }
 
     static func kind(name: String, category: String) -> SaveDoodleOfficialSticker {
-        SaveDoodleOfficialSticker.named(
+        if usesHillMark(name: name) { return .temple }
+        return SaveDoodleOfficialSticker.named(
             for: PlaceCategory(rawValue: category) ?? .attraction,
-            placeName: name
+            placeName: parityPlaceName(name)
         )
     }
 
@@ -317,6 +318,28 @@ struct SaveDoodleFriendSticker: View {
         case .shopping: return "bag"
         case nil: return "mappin"
         }
+    }
+}
+
+/// `friends.png` Ana row is a filled hill, not an official temple outline.
+struct SaveDoodleFriendHill: View {
+    var size: CGFloat = 40
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            var path = Path()
+            let width = canvasSize.width
+            let height = canvasSize.height
+            path.move(to: CGPoint(x: width * 0.06, y: height * 0.84))
+            path.addLine(to: CGPoint(x: width * 0.36, y: height * 0.28))
+            path.addLine(to: CGPoint(x: width * 0.54, y: height * 0.50))
+            path.addLine(to: CGPoint(x: width * 0.74, y: height * 0.20))
+            path.addLine(to: CGPoint(x: width * 0.96, y: height * 0.84))
+            path.closeSubpath()
+            context.fill(path, with: .color(SaveAtlasPalette.forest))
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 

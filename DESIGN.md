@@ -928,13 +928,11 @@ source clues or visit timestamps appear in post projections.
 Home / Map / + / Friends / Passport remains the root bar. Friends is
 people-first doodle: Caveat / Iansui “Friends” / 「朋友」 title, ink
 outline “Invite”, forest-ring avatars (initial or photo), author name,
-“last at Place · 2d”, and right-side official 32pt outline stickers
-(coffee / noodle / temple / lantern). The shared map stays hidden (HoP; cut in DESIGN v1 and kept).
-The visual reference is Codex packet spec §7.4 and the Friends column of
-the light/dark main mocks. DESIGN v2 `friends-light.png` / `friends.png`
-is not adopted; only the 402×874 canvas and rough row spacing carry over.
-There is no 0.90 pixel gate against that raster. Stickers are 32pt ink
-line-art. This surface has no animation (F-B11). An
+“last at Place · 2d”, and right-side 40pt doodle stickers
+(coffee / noodle / lantern / hill). The shared map stays hidden (HoP; cut in DESIGN v1 and kept).
+The visual reference is Codex packet spec §7.4. Live `five-tab-friends`
+gates at 0.90 against `ProductionTargets/friends.png` with no mask.
+This surface has no animation (F-B11). An
 author opens a read-only passport under the same live follower audience gate.
 Loading, retry, empty and withdrawn states are explicit; sample activity exists
 only in isolated UI fixtures. A follow or private memory update never publishes.
