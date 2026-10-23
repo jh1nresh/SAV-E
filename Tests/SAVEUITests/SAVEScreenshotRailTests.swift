@@ -1041,6 +1041,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-location-denied",
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-home-memory-fixture",
                 "-save.appLanguage", language,
                 "-AppleInterfaceStyle", appleInterfaceStyle,
                 forceArgument,
@@ -3278,7 +3279,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertLessThanOrEqual(city.frame.maxY, eat.frame.minY)
         XCTAssertLessThanOrEqual(eat.frame.maxY, sheet.frame.minY)
         XCTAssertLessThanOrEqual(directions.frame.maxX, visit.frame.minX)
+        XCTAssertEqual(directions.frame.height, 48, accuracy: 2, "298-4: Directions is 48pt tall")
+        XCTAssertEqual(visit.frame.height, 48, accuracy: 2, "298-4: I've been here is 48pt tall")
+        XCTAssertEqual(visit.frame.minX - directions.frame.maxX, 12, accuracy: 3, "298-4: 12pt button gap")
         XCTAssertLessThanOrEqual(sheet.frame.maxY, rootTabButton("Map", app: app).frame.minY)
+        XCTAssertTrue(
+            eat.isSelected || go.isSelected,
+            "298-11: Eat/Go must expose isSelected on the active lens"
+        )
+        let cityLabel = city.label
+        XCTAssertFalse(cityLabel.contains("…") || cityLabel.contains("..."),
+                       "298-12: city title must not truncate")
     }
 
     @MainActor
@@ -3390,6 +3401,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
         XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-000000000002"].exists)
         XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-000000000003"].exists)
+        let homeEatCount = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
+        ).count
         attach(app, name: "five-tab-home")
         // 298-3: Home and Map from the same Tiantan data, same launch.
         attach(app, name: "298-3-home")
@@ -3411,14 +3425,25 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(
             app.descendants(matching: .any)["map.tilePin.\(eatPin)"].waitForExistence(timeout: stepTimeout)
         )
-        for pin in [noodlePin, cafePin, parkPin, lanternPin, jingshanPin] {
+        for pin in [noodlePin, cafePin] {
             XCTAssertTrue(
                 app.descendants(matching: .any)["map.tilePin.\(pin)"].exists,
-                "298-3: Map must show all Tiantan stamps, not a two-pin slice"
+                "298-3: Map Eat pins must match Home's filtered Eat list"
             )
         }
+        XCTAssertFalse(
+            app.descendants(matching: .any)["map.tilePin.\(parkPin)"].exists
+                || app.descendants(matching: .any)["map.tilePin.\(lanternPin)"].exists
+                || app.descendants(matching: .any)["map.tilePin.\(jingshanPin)"].exists,
+            "298-3: Go stamps stay off the Eat pin set"
+        )
+        let mapPinCount = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.'")
+        ).count
+        XCTAssertEqual(mapPinCount, homeEatCount, "298-3: pin count matches Home's filtered list")
         attach(app, name: "298-3-map")
         attach(app, name: "298-4-coral-pins")
+        XCTAssertEqual(app.buttons["map.eat"].isSelected, true, "298-11: Eat stays selected with Home")
         terminate(app)
     }
 
@@ -3448,6 +3473,59 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["map.directions"].exists,
                       "298-8: selected place keeps provider-backed Directions")
         attach(app, name: "298-8-provider")
+    }
+
+    /// HoP 298-10 / 298-12 / 298-13: Taipei H1/M1 fixture with saved,
+    /// unsaved, and visited pins together. City title in en and zh.
+    @MainActor
+    func testMapSavedUnsavedVisitedTaipeiFixture() throws {
+        try captureTaipeiMapStates(language: "en", attachM1: true)
+        try captureTaipeiMapStates(language: "zh-Hant", attachM1: false)
+    }
+
+    @MainActor
+    private func captureTaipeiMapStates(language: String, attachM1: Bool) throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-home-memory-fixture",
+                "--uitest-map-unsaved-candidate",
+                "--uitest-map-place-selected",
+                "-save.appLanguage", language,
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        let locationNoticeDismiss = app.buttons["map.locationNotice.dismiss"]
+        if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
+            locationNoticeDismiss.tap()
+        }
+        XCTAssertTrue(app.buttons["map.city"].waitForExistence(timeout: stepTimeout))
+        let cityLabel = app.buttons["map.city"].label
+        XCTAssertFalse(
+            cityLabel.contains("…") || cityLabel.contains("..."),
+            "298-12: city title must not truncate"
+        )
+        if language == "zh-Hant" {
+            XCTAssertTrue(cityLabel.contains("台北") || cityLabel.contains("臺北") || cityLabel.contains("附近"),
+                          "298-12/298-13: zh city stays Taipei")
+        } else {
+            XCTAssertTrue(cityLabel.contains("Taipei") || cityLabel.contains("Near you"),
+                          "298-12/298-13: en city stays Taipei")
+        }
+        XCTAssertTrue(app.buttons["map.eat"].isSelected || app.buttons["map.go"].isSelected,
+                      "298-11: Eat/Go must expose isSelected")
+        attach(app, name: language == "zh-Hant" ? "298-12-zh" : "298-10-saved-unsaved-visited")
+        if attachM1 {
+            attach(app, name: "M1")
+        }
+        terminate(app)
     }
 
     @MainActor

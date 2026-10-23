@@ -3,8 +3,8 @@ import MapKit
 import SwiftUI
 import UIKit
 
-/// Founder lock 2026-10-20: coral numbered markers on the product Map.
-/// Outline lollipops match the DESIGN golden (paper fill, coral stroke).
+/// HoP 298-2: coral numbered Savvy pins on saved places only.
+/// Light `#F26B4A` / dark `#D97861`, white number, `stampRed` once visited.
 /// Flip `current` to `.appleDefault` for unstyled Apple pins without
 /// rewriting the Map surface, header, or place sheet.
 enum SaveDoodleMapPinStyle {
@@ -16,9 +16,9 @@ enum SaveDoodleMapPinStyle {
     static var current: Kind = .coralNumbered
 }
 
-/// Product Map tab: default Apple MapKit with Doodle chrome (city, Eat/Go,
-/// paper place sheet, 我來過了). No muted emphasis, paper overlay, custom
-/// tiles, or tile-town.
+/// Product Map tab: default Apple MapKit (`.standard`, emphasis `.automatic`)
+/// with a zero-saturation paper multiply. Saved places use Savvy pins;
+/// unsaved keep the native Marker. No tile-town.
 struct SaveDoodleMapView: View {
     @ObservedObject var mapViewModel: MapViewModel
     let presentation: AtlasPresentation
@@ -95,7 +95,9 @@ struct SaveDoodleMapView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             _ = onPlanAroundPlace
+            session.mapFollowsHomeFilter = true
             applyMiniMapHandoff()
+            mapViewModel.seedUITestUnsavedCandidateIfNeeded()
             selectParityPlaceIfNeeded()
             fitVisiblePlaces()
         }
@@ -196,6 +198,10 @@ struct SaveDoodleMapView: View {
                 }
             }
 
+            ForEach(nativeUnsavedCandidates) { candidate in
+                Marker(candidate.title, coordinate: candidate.coordinate)
+            }
+
             if let polyline = mapViewModel.routePolyline {
                 MapPolyline(polyline)
                     .stroke(
@@ -209,7 +215,17 @@ struct SaveDoodleMapView: View {
                     )
             }
         }
-        .mapStyle(.standard)
+        .mapStyle(.standard(emphasis: .automatic))
+        .overlay {
+            // Paper multiply on the tiles only. Applying `.saturation(0)` to
+            // Map itself would also gray the coral Savvy pins.
+            SaveAtlasPalette.paper
+                .saturation(0)
+                .colorMultiply(SaveAtlasPalette.paper)
+                .opacity(0.22)
+                .blendMode(.multiply)
+                .allowsHitTesting(false)
+        }
         .mapFeatureSelectionDisabled { feature in
             feature.kind != .pointOfInterest
         }
@@ -234,12 +250,15 @@ struct SaveDoodleMapView: View {
                             relativeTo: .title,
                             locksPointSize: true
                         )
+                        .lineLimit(2)
+                        .minimumScaleFactor(1)
+                        .fixedSize(horizontal: false, vertical: true)
                         Capsule()
                             .fill(SaveAtlasPalette.coral)
                             .frame(height: 2)
                             .padding(.top, 1)
                     }
-                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     Text("▾")
                         .font(SaveAtlasType.body(16))
                         .foregroundStyle(SaveAtlasPalette.forest)
@@ -269,7 +288,7 @@ struct SaveDoodleMapView: View {
     private var eatGoRail: some View {
         HStack(spacing: SaveSpace.xs) {
             ForEach(SaveDoodleLens.allCases) { item in
-                let selected = session.mapFollowsHomeFilter && session.lens == item
+                let selected = session.lens == item
                 Button {
                     SaveHaptics.select()
                     session.lens = item
@@ -541,27 +560,30 @@ struct SaveDoodleMapView: View {
     }
 
     private var displayedListedPlaces: [SaveDoodleListedPlace] {
-        if session.mapFollowsHomeFilter {
-            return SaveDoodleHomeCatalog.listedPlaces(
-                from: mapViewModel.places,
-                lens: session.lens,
-                selection: session.city,
-                location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
-                locationDenied: locationService.isAuthorizationDenied
-            )
-        }
-        return mapViewModel.filteredPlaces
-            .filter(\.isMapKitMappable)
-            .enumerated()
-            .map { index, place in
-                SaveDoodleListedPlace(
-                    place: place,
-                    index: index + 1,
-                    distance: locationService.currentLocation.flatMap {
-                        SaveDoodleHomeCatalog.distance(from: $0, to: place)
-                    }
-                )
+        SaveDoodleHomeCatalog.listedPlaces(
+            from: mapViewModel.places,
+            lens: session.lens,
+            selection: session.city,
+            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
+            locationDenied: locationService.isAuthorizationDenied
+        )
+    }
+
+    /// HoP 298-10: unsaved search/POI results stay native Markers.
+    /// Saved places never use this path — they keep the coral Savvy pin.
+    private var nativeUnsavedCandidates: [SaveMapCandidate] {
+        let savedIDs = Set(mapViewModel.places.map(\.id.uuidString))
+        var seen = Set<String>()
+        var result: [SaveMapCandidate] = []
+        for candidate in mapViewModel.visibleMapCandidates + [mapViewModel.selectedMapCandidate].compactMap({ $0 }) {
+            if savedIDs.contains(candidate.id) { continue }
+            if mapViewModel.places.contains(where: { $0.matchesMapFeature(title: candidate.title, coordinate: candidate.coordinate) }) {
+                continue
             }
+            guard seen.insert(candidate.id).inserted else { continue }
+            result.append(candidate)
+        }
+        return result
     }
 
     private var resolvedSelection: SaveDoodleCitySelection {
@@ -926,12 +948,10 @@ struct SaveDoodleCoralPin: View {
             ZStack(alignment: .bottom) {
                 ZStack {
                     SaveDoodleLollipopShape()
-                        .fill(SaveAtlasPalette.paper)
-                    SaveDoodleLollipopShape()
-                        .stroke(pinColor, lineWidth: 2)
+                        .fill(pinColor)
                     Text("\(index)")
                         .font(SaveAtlasType.strong(13))
-                        .foregroundStyle(pinColor)
+                        .foregroundStyle(Color.white)
                         .offset(y: -stemHeight / 2)
                 }
                 .frame(width: headDiameter, height: pinHeight)
@@ -972,7 +992,7 @@ struct SaveDoodleCoralPin: View {
     }
 }
 
-/// DESIGN golden pin: numbered circle on a short stem — outline, not a fill.
+/// HoP 298-2: numbered coral lollipop. Fill stays solid when selected.
 struct SaveDoodleLollipopShape: Shape {
     func path(in rect: CGRect) -> Path {
         let stemWidth = max(2.5, rect.width * 0.14)

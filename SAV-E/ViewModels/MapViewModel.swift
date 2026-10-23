@@ -832,6 +832,27 @@ final class MapViewModel: ObservableObject {
         return result
     }
 
+    /// HoP 298-10 screenshot fixture: one unsaved Taipei candidate next to
+    /// the shared H1/M1 saved+visited set. Production never sets this flag.
+    func seedUITestUnsavedCandidateIfNeeded() {
+#if DEBUG
+        guard ProcessInfo.processInfo.arguments.contains("--uitest-map-unsaved-candidate") else { return }
+        guard !mapCandidates.contains(where: { $0.id == "uitest-unsaved-taipei" }) else { return }
+        mapCandidates.append(
+            SaveMapCandidate(
+                id: "uitest-unsaved-taipei",
+                title: "Unsaved Night Market",
+                subtitle: "Taipei",
+                latitude: 25.0378,
+                longitude: 121.5672,
+                category: .attraction,
+                sourcePlatform: .other,
+                evidence: ["UITest unsaved"]
+            )
+        )
+#endif
+    }
+
     // MARK: - Actions
 
     func loadPlaces(force: Bool = false) async {
