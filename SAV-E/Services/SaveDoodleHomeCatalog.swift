@@ -275,10 +275,13 @@ enum SaveDoodleHomeCatalog {
         return name.isEmpty ? trimmed : name
     }
 
+    /// Stable across device locales. Turkish `.current` turns `Isparta` into `ısparta`.
+    private static let cityIDLocale = Locale(identifier: "en_US_POSIX")
+
     private static func normalizedCityToken(_ value: String) -> String {
         value
-            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-            .lowercased()
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: cityIDLocale)
+            .lowercased(with: cityIDLocale)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
@@ -423,21 +426,53 @@ enum SaveDoodleHomeCatalog {
         return false
     }
 
+    /// Last `市`/`縣`/`县` municipality only — not the prefix through the first marker.
     private static func cjkLocality(in address: String) -> String? {
         guard address.contains(where: {
             $0.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
         }) else { return nil }
-        for marker in ["市", "縣", "县"] {
-            guard let end = address.range(of: marker) else { continue }
-            let head = address[address.startIndex..<end.upperBound]
-            let city = String(head.drop { $0.isNumber })
-                .replacingOccurrences(of: "台灣", with: "")
-                .replacingOccurrences(of: "臺灣", with: "")
-                .replacingOccurrences(of: "中國", with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if city.count >= 2 { return city }
+        let parts = address
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if let city = parts.reversed().compactMap({ cjkMunicipalityToken(in: String($0)) }).first {
+            return city
         }
-        return nil
+        return cjkMunicipalityToken(in: address)
+    }
+
+    private static let cjkCountryPrefixes = ["台灣", "臺灣", "台湾", "中國", "中国"]
+
+    private static func cjkMunicipalityToken(in token: String) -> String? {
+        var text = token
+        for country in cjkCountryPrefixes {
+            text = text.replacingOccurrences(of: country, with: "")
+        }
+        text = String(text.drop { $0.isNumber || $0.isWhitespace || $0 == "," || $0 == "，" })
+        guard let marker = text.rangeOfCharacter(
+            from: CharacterSet(charactersIn: "市縣县"),
+            options: .backwards
+        ) else { return nil }
+        let head = text[..<marker.upperBound]
+        // Stop at province/district/country — not 州/都, which appear in city names.
+        let boundaries = CharacterSet(charactersIn: "省區区鄉乡鎮镇國国,，")
+        var start = marker.lowerBound
+        var taken = 0
+        while start > head.startIndex {
+            let previous = head.index(before: start)
+            let character = head[previous]
+            if character.unicodeScalars.contains(where: { boundaries.contains($0) })
+                || character.isNumber
+                || character.isWhitespace
+                || character.isASCII {
+                break
+            }
+            start = previous
+            taken += 1
+            if taken >= 4 { break }
+        }
+        let city = String(head[start...])
+        return city.count >= 2 ? city : nil
     }
 
     static func cityGroups(from places: [Place]) -> [SaveDoodleCityGroup] {

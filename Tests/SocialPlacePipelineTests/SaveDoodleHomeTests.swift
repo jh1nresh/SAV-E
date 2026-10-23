@@ -336,6 +336,24 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(Set(groups.map(\.id)), Set(["paris", "paris,tx"]))
     }
 
+    /// Province without a country token must not inherit the UK `london` metro.
+    func testMetroAliasesRejectNonUSRegionsWithoutCountry() {
+        XCTAssertNil(SaveHomeSearch.metroKey(in: "London, Ontario"))
+        XCTAssertNil(SaveHomeSearch.metroKey(in: "London, ON"))
+        XCTAssertEqual(SaveHomeSearch.nonUSAdminRegionCountry(in: "London, Ontario"), "canada")
+        let ontario = place("Covent Garden Market", "130 King St, London, Ontario", .food)
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: ontario.address), "London")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityDisplayName(for: ontario, language: .english), "London")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: ontario), "london,on")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: ontario), "london")
+        let uk = place("Borough Market", "8 Southwark St, London, United Kingdom", .food)
+        XCTAssertEqual(SaveHomeSearch.metroKey(in: uk.address), "london")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: uk), "london")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: ontario), SaveDoodleHomeCatalog.cityID(for: uk))
+        let groups = SaveDoodleHomeCatalog.cityGroups(from: [ontario, uk])
+        XCTAssertEqual(Set(groups.map(\.id)), Set(["london,on", "london"]))
+    }
+
     func testMetroAliasesRejectCountriesOutsideTheOriginalAllowlist() {
         for address in ["Los Ángeles, Biobío, Chile", "London, Ontario, Canada", "Paris, Santander, Colombia"] {
             XCTAssertNil(SaveHomeSearch.metroKey(in: address), address)
@@ -385,6 +403,53 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(SaveHomeSearch.metroKey(in: "Los Angeles, USA"), "losAngeles")
         let dutchCity = place("Amsterdam fixture", "Damrak, Amsterdam, Holland", .cafe)
         XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: dutchCity), "amsterdam,netherlands")
+    }
+
+    /// Prefix-through-first-`市` kept province+city (`江蘇省, 蘇州市`) and left
+    /// simplified `中国` in the token. Take the municipality only.
+    func testCJKLocalityExtractsMunicipalityNotProvincePrefix() {
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.localityLabel(in: "中國, 江蘇省, 蘇州市, 姑蘇區"),
+            "蘇州市"
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.localityLabel(in: "中国, 江苏省, 苏州市, 姑苏区"),
+            "苏州市"
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.localityLabel(in: "江蘇省蘇州市姑蘇區"),
+            "蘇州市"
+        )
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: "台北市, 台灣"), "台北市")
+        let traditional = place("Humble Admin", "中國, 江蘇省, 蘇州市, 姑蘇區", .attraction)
+        let compact = place("Garden", "江蘇省蘇州市", .attraction)
+        let simplified = place("Pingjiang", "中国, 江苏省, 苏州市, 姑苏区", .attraction)
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: traditional), "蘇州市")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: compact), "蘇州市")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: simplified), "苏州市")
+        XCTAssertFalse((SaveDoodleHomeCatalog.cityID(for: traditional) ?? "").contains("省"))
+        XCTAssertFalse((SaveDoodleHomeCatalog.cityID(for: simplified) ?? "").contains("中国"))
+        XCTAssertEqual(SaveHomeSearch.metroKey(in: "106台北市大安區仁愛路"), "taipei")
+    }
+
+    /// Device locale must not rewrite persisted fallback city IDs (`Isparta` / `ısparta`).
+    func testFallbackCityIDsUseFixedLocaleForStableNormalization() {
+        let turkish = Locale(identifier: "tr_TR")
+        let posix = Locale(identifier: "en_US_POSIX")
+        XCTAssertEqual("Isparta".lowercased(with: turkish), "ısparta")
+        XCTAssertEqual("Isparta".lowercased(with: posix), "isparta")
+        XCTAssertEqual(
+            "Isparta".folding(options: [.caseInsensitive, .diacriticInsensitive], locale: turkish).lowercased(with: turkish),
+            "ısparta"
+        )
+        XCTAssertEqual(
+            "Isparta".folding(options: [.caseInsensitive, .diacriticInsensitive], locale: posix).lowercased(with: posix),
+            "isparta"
+        )
+        let isparta = place("Rose Garden", "Isparta, Turkey", .attraction)
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: isparta.address), "Isparta")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: isparta), "isparta,turkey")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: isparta), "ısparta,turkey")
     }
 
     func testFallbackCityGroupingRecognizesCountriesOutsideMetroCatalogue() {
@@ -1147,6 +1212,13 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(catalog.contains("NSW 2000"))
         XCTAssertTrue(catalog.contains("australianStatePostcodeCode"))
         XCTAssertFalse(catalog.contains("[A-Za-z]{2,3}"))
+        XCTAssertTrue(catalog.contains("en_US_POSIX"))
+        XCTAssertTrue(catalog.contains("cjkMunicipalityToken"))
+        XCTAssertTrue(catalog.contains("中国"))
+        XCTAssertFalse(catalog.contains("locale: .current"))
+        let search = try source(at: "SAV-E/Services/SaveHomeSearch.swift")
+        XCTAssertTrue(search.contains("nonUSAdminRegionCountry"))
+        XCTAssertTrue(search.contains("London, Ontario"))
         let selector = try source(at: "scripts/select-ios-tests.py")
         XCTAssertTrue(selector.contains("testHomeDesignProductStates"))
         XCTAssertTrue(rail.contains("doodle-home-empty"))

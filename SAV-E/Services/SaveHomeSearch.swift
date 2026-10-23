@@ -351,9 +351,14 @@ private extension SaveHomeSearch {
         }
 
         /// Allowlisted aliases stay canonical unless the address names a
-        /// different country or a US state (Paris, TX vs Paris, France).
+        /// different country, US state, or non-US region (London, Ontario).
         private func fitsAdministrativeRegion(_ address: String) -> Bool {
             if SaveHomeSearch.addressSignalsUnitedStates(address), !isUnitedStatesMetro {
+                return false
+            }
+            if let regionCountry = SaveHomeSearch.nonUSAdminRegionCountry(in: address),
+               let home = homeCountryTokens,
+               !home.contains(regionCountry) {
                 return false
             }
             guard let country = SaveHomeSearch.countryToken(in: address),
@@ -506,6 +511,24 @@ private extension SaveHomeSearch {
         }
     }
 
+    /// Canadian provinces can appear without a country token.
+    /// `London, Ontario` is not the UK `london` metro.
+    static func nonUSAdminRegionCountry(in address: String) -> String? {
+        let parts = address
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        for part in parts {
+            let folded = normalize(SaveDoodleHomeCatalog.strippingPostalCode(from: part))
+            if canadianProvinceNames.contains(folded) { return "canada" }
+            if folded.range(of: #"^[a-z]{2}$"#, options: .regularExpression) != nil,
+               canadianProvinceCodes.contains(folded) {
+                return "canada"
+            }
+        }
+        return nil
+    }
+
     /// `Paris, TX 75460, USA` and `Paris, Texas` are US; `Paris, France` is not.
     static func addressSignalsUnitedStates(_ address: String) -> Bool {
         let parts = address
@@ -574,6 +597,17 @@ private extension SaveHomeSearch {
         "mn", "ms", "mo", "mt", "ne", "nv", "nh", "nj", "nm", "ny", "nc",
         "nd", "oh", "ok", "or", "pa", "ri", "sc", "sd", "tn", "tx", "ut",
         "vt", "va", "wa", "wv", "wi", "wy", "dc",
+    ]
+
+    private static let canadianProvinceCodes: Set<String> = [
+        "ab", "bc", "mb", "nb", "nl", "ns", "nt", "nu", "on", "pe", "qc", "sk", "yt",
+    ]
+
+    private static let canadianProvinceNames: Set<String> = [
+        "alberta", "british columbia", "manitoba", "new brunswick",
+        "newfoundland", "newfoundland and labrador", "nova scotia",
+        "northwest territories", "nunavut", "ontario",
+        "prince edward island", "quebec", "saskatchewan", "yukon",
     ]
 
     private static let usStateNames: Set<String> = [
