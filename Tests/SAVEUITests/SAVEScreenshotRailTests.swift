@@ -806,6 +806,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["friends.list"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["friends.author.mia"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["friends.mapStrip"].exists)
+        // Live Friends raster for the 0.90 gate. Codex packet §7.4.
         attach(app, name: "five-tab-friends")
         attach(app, name: "atlas-friends")
 
@@ -3353,7 +3354,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// different state and scores ~0.66. Do not retune the gate script here.
     /// Friends `five-tab-friends` is a real 0.90 gate against
     /// `ProductionTargets/friends.png`. Home deferral on #290 does not
-    /// apply to Friends. Packet §7.4 remains the people-first layout
+    /// apply to Friends. Codex packet §7.4 remains the people-first layout
     /// reference.
     @MainActor
     private func captureFiveTabHomeParityRaster() throws {
