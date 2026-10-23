@@ -16,7 +16,7 @@ struct SaveFriendsView: View {
         VStack(alignment: .leading, spacing: 0) {
             header
                 .padding(.horizontal, SaveLayout.screenMargin)
-                .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.md)
+                .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.xs)
                 .frame(minHeight: SaveLayout.minTap)
 
             ScrollView(showsIndicators: false) {
@@ -27,7 +27,12 @@ struct SaveFriendsView: View {
                             .padding(.top, SaveSpace.xl)
                             .accessibilityIdentifier("friends.loading")
                     }
-                    if store.error != nil { SocialLoadError().padding(.top, SaveSpace.md) }
+                    if store.error != nil {
+                        SocialLoadError(centered: true, retryIdentifier: "friends.retry") {
+                            Task { await store.refresh(.feed) }
+                        }
+                        .padding(.top, SaveSpace.xl)
+                    }
                     if !store.isLoading && store.error == nil && store.posts.isEmpty {
                         emptyState
                     }
@@ -48,7 +53,10 @@ struct SaveFriendsView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(SaveDottedBackground())
+        .background {
+            SaveDottedBackground()
+                .overlay { SaveFriendsDotGrid() }
+        }
         .foregroundStyle(SaveAtlasPalette.ink)
         .accessibilityIdentifier("friends.root")
         .task(id: currentUserID) { await store.refresh(.feed) }
@@ -62,7 +70,7 @@ struct SaveFriendsView: View {
         HStack(spacing: SaveSpace.xs) {
             SaveDisplayTitle(
                 text: language.localized(english: "Friends", traditionalChinese: "朋友"),
-                pointSize: 48,
+                pointSize: 34,
                 relativeTo: .largeTitle,
                 locksPointSize: true
             )
@@ -147,7 +155,7 @@ struct SaveFriendsView: View {
             ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                 friendRow(row)
                 if index < rows.count - 1 {
-                    SaveDoodleDashedDivider()
+                    SaveDoodleDashedDivider(color: SaveAtlasPalette.ink.opacity(0.45))
                 }
             }
         }
@@ -167,7 +175,7 @@ struct SaveFriendsView: View {
                         // Names and last-at wrap at Dynamic Type / longer
                         // production strings (P2 4341083578, 4343545980).
                         Text(row.authorName)
-                            .font(SaveAtlasType.strong(17))
+                            .font(SaveAtlasType.display(17))
                             .foregroundStyle(SaveAtlasPalette.ink)
                             .fixedSize(horizontal: false, vertical: true)
                         Text(
@@ -192,11 +200,12 @@ struct SaveFriendsView: View {
                 SaveDoodleFriendSticker(
                     name: row.lastPost.name,
                     category: row.lastPost.category,
-                    visited: row.lastPost.status == .visited
+                    visited: SaveDoodleFriendSticker.showsColor(for: row.lastPost.status)
                 )
-                    .frame(width: SaveLayout.stickerArt, height: SaveLayout.stickerArt)
+                    .frame(width: 32, height: 32)
                     .frame(width: SaveLayout.minTap, height: SaveLayout.minTap)
                     .contentShape(Rectangle())
+                    .accessibilityValue(row.lastPost.status == .visited ? "visited" : "saved")
             }
             .buttonStyle(.plain)
             .accessibilityLabel(language.localized(
@@ -205,16 +214,16 @@ struct SaveFriendsView: View {
             ))
             .accessibilityIdentifier("friends.post.\(row.lastPost.id.uuidString)")
         }
-        .padding(.vertical, SaveSpace.md)
-        .frame(minHeight: 80, alignment: .leading)
+        .padding(.vertical, SaveSpace.tight)
+        .frame(minHeight: 57, alignment: .leading)
     }
 }
 
-/// Hand-drawn initial (or photo) in a 56pt forest ring. Replaces the postage-seal avatar.
+/// Hand-drawn initial (or photo) in a 48pt forest ring. Replaces the postage-seal avatar.
 struct SaveDoodleFriendAvatar: View {
     let name: String
     var imageURL: String? = nil
-    var size: CGFloat = 56
+    var size: CGFloat = 48
 
     var body: some View {
         ZStack {
@@ -234,7 +243,7 @@ struct SaveDoodleFriendAvatar: View {
                 initial
             }
             Circle()
-                .stroke(SaveAtlasPalette.forest, lineWidth: 2)
+                .stroke(SaveAtlasPalette.forest, lineWidth: 2.5)
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
@@ -243,7 +252,7 @@ struct SaveDoodleFriendAvatar: View {
 
     private var initial: some View {
         Text(SaveDoodleFriendAvatar.initial(from: name))
-            .font(SaveDisplayType.display(28, relativeTo: .title2))
+            .font(SaveAtlasType.strong(24))
             .foregroundStyle(SaveAtlasPalette.forest)
     }
 
@@ -269,7 +278,7 @@ nonisolated struct SaveDoodleInkRing: Shape {
     }
 }
 
-/// 40pt doodle sticker. Outlined if the friend only saved; colored if visited.
+/// 32pt doodle sticker. Outlined if the friend only saved; colored if visited.
 struct SaveDoodleFriendSticker: View {
     let name: String
     let category: String
@@ -278,17 +287,30 @@ struct SaveDoodleFriendSticker: View {
     var body: some View {
         Group {
             if Self.usesHillMark(name: name) {
-                SaveDoodleFriendHill(size: SaveLayout.stickerArt, filled: visited)
+                SaveDoodleFriendHill(size: 32, filled: visited)
+            } else if visited {
+                SaveDoodleSticker(
+                    category: PlaceCategory(rawValue: category) ?? .attraction,
+                    placeName: Self.parityPlaceName(name),
+                    visited: visited,
+                    pointSize: 32,
+                    boxSize: SaveLayout.minTap
+                )
             } else {
                 SaveDoodleSticker(
                     category: PlaceCategory(rawValue: category) ?? .attraction,
                     placeName: Self.parityPlaceName(name),
                     visited: visited,
-                    pointSize: SaveLayout.stickerArt,
+                    pointSize: 32,
                     boxSize: SaveLayout.minTap
                 )
+                .colorMultiply(SaveAtlasPalette.ink)
             }
         }
+    }
+
+    static func showsColor(for status: PlaceStatus) -> Bool {
+        status == .visited
     }
 
     /// `friends.png` Kai row is a lantern, not the temple mark.
@@ -328,7 +350,7 @@ struct SaveDoodleFriendSticker: View {
 
 /// `friends.png` Ana row is a filled hill, not an official temple outline.
 struct SaveDoodleFriendHill: View {
-    var size: CGFloat = 40
+    var size: CGFloat = 32
     var filled: Bool = true
 
     var body: some View {
@@ -345,11 +367,34 @@ struct SaveDoodleFriendHill: View {
             if filled {
                 context.fill(path, with: .color(SaveAtlasPalette.forest))
             } else {
-                context.stroke(path, with: .color(SaveAtlasPalette.forest), lineWidth: 2)
+                context.stroke(path, with: .color(SaveAtlasPalette.ink), lineWidth: 2.5)
             }
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)
+    }
+}
+
+/// Visible notebook dots on top of `SaveDottedBackground` cream `#FFF9EB`.
+private struct SaveFriendsDotGrid: View {
+    var body: some View {
+        Canvas { context, size in
+            let step: CGFloat = 16
+            let dot = Path(ellipseIn: CGRect(x: 0, y: 0, width: 1.5, height: 1.5))
+            let color = SaveAtlasPalette.ink.opacity(0.18)
+            var x: CGFloat = 8
+            while x < size.width {
+                var y: CGFloat = 8
+                while y < size.height {
+                    var mark = dot
+                    mark = mark.applying(CGAffineTransform(translationX: x, y: y))
+                    context.fill(mark, with: .color(color))
+                    y += step
+                }
+                x += step
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 

@@ -27,10 +27,11 @@ Attachments: `friends-375` / `friends-390` / `friends-430` plus
 
 | Topic | Target | Current head |
 | --- | --- | --- |
-| Title | Large Caveat / Iansui | 48pt locked `SaveDisplayTitle` |
+| Title | 34pt Caveat / Iansui | 34pt locked `SaveDisplayTitle` |
 | Invite | Small outline chip | 12pt / 28pt min height outline |
-| Avatars | Large forest rings | 56pt, 2pt forest stroke |
-| Stickers | coffee / noodle / lantern / hill | outlined if saved, colored if visited |
+| Avatars | 48pt forest rings | 48pt, 2.5pt forest stroke, 24pt initials |
+| Stickers | coffee / noodle / lantern / hill | 32pt; outlined if saved, colored if visited |
+| Rows | ~57pt, four rows near y≈300 | minHeight 57, tight vertical pad |
 | Map | Hidden | Hidden |
 | Animation (F-B11) | None | None |
 | Coming-soon | Cannot occur | Deleted; empty feed stays |

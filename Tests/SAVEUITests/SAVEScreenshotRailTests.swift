@@ -172,7 +172,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertFalse(app.textFields["friends.invite"].exists)
             XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'friends.save.' OR identifier BEGINSWITH 'friends.rate.'")).firstMatch.exists)
             XCTAssertLessThan(title.frame.maxY, rootTabButton("Friends", app: app).frame.minY)
-            attach(app, name: "friends-coming-soon-\(language)")
             attach(app, name: "friends-empty-\(language)")
             let findFriends = app.buttons["friends.findFriends"]
             XCTAssertTrue(findFriends.isHittable)
@@ -239,6 +238,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             }
             if name == "friends-error" {
                 XCTAssertTrue(app.descendants(matching: .any)["posts.error"].waitForExistence(timeout: stepTimeout))
+                XCTAssertTrue(app.buttons["friends.retry"].waitForExistence(timeout: stepTimeout))
             }
             attach(app, name: name)
             terminate(app)
@@ -905,7 +905,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertEqual(app.staticTexts["friends.empty"].label, "Their next place could be yours")
         XCTAssertFalse(app.textFields["friends.invite"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["friends.mapStrip"].exists)
-        attach(app, name: "five-tab-friends-coming-soon")
+        attach(app, name: "five-tab-friends-empty")
 
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))

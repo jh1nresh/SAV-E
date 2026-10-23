@@ -846,6 +846,8 @@ struct SaveDoodleCollectedMark: View {
 }
 
 struct SaveDoodleDashedDivider: View {
+    var color: Color = SaveAtlasPalette.line
+
     var body: some View {
         Rectangle()
             .fill(Color.clear)
@@ -853,7 +855,7 @@ struct SaveDoodleDashedDivider: View {
             .overlay {
                 Rectangle()
                     .stroke(
-                        SaveAtlasPalette.line,
+                        color,
                         style: StrokeStyle(lineWidth: 1, dash: [2, 3])
                     )
             }

@@ -926,9 +926,10 @@ source clues or visit timestamps appear in post projections.
 ### Friends
 
 Home / Map / + / Friends / Passport remains the root bar. Friends is
-people-first doodle: Caveat / Iansui “Friends” / 「朋友」 title, ink
-outline “Invite”, forest-ring avatars (initial or photo), author name,
-“last at Place · 2d”, and right-side 40pt doodle stickers
+people-first doodle: Caveat / Iansui “Friends” / 「朋友」 title at 34pt
+(zh-Hant also Iansui), ink outline “Invite”, 48pt forest-ring avatars
+(initial or photo), author name 17 semibold, “last at Place · 2d” at 13,
+~57pt rows, and right-side 32pt doodle stickers
 (coffee / noodle / lantern / hill). The shared map stays hidden (HoP; cut in DESIGN v1 and kept).
 Stickers are outlined if the friend only saved the place, colored if they visited.
 The visual reference is Codex packet spec §7.4. Live `five-tab-friends`
