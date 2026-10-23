@@ -5,11 +5,12 @@ import Foundation
 /// Rules:
 /// 1. Identifiers always fold with `en_US_POSIX` — never `.current`.
 /// 2. Country-aware admin handling is explicit for US / CA / AU, including
-///    full state and province names. Other trailing admins may be stripped
-///    from the label but do not become the ID qualifier.
+///    full state and province names. Bare two-letter tokens qualify only
+///    when they are known codes for that country.
 /// 3. CJK municipalities stop at prefecture / province suffixes (`県` `府`
-///    `道` `省` …). Region stripping never consumes the locality itself.
-/// 4. Metro aliases apply only when a locality component matches and the
+///    `道` `省` …). The label stays the municipality; the stable ID keeps
+///    the prefecture so 府中市 in Tokyo and Hiroshima stay apart.
+/// 4. Metro aliases apply only when the parsed locality matches and the
 ///    recognized region or country does not contradict the alias.
 struct SaveAddressLocality: Equatable {
     let label: String
@@ -35,9 +36,7 @@ struct SaveAddressLocality: Equatable {
         let cityID: String
         if let metro {
             cityID = metro
-        } else if parsed.isCJK {
-            cityID = parsed.stableLocality
-        } else if let qualifier = parsed.region ?? parsed.country {
+        } else if let qualifier = parsed.region ?? (parsed.isCJK ? nil : parsed.country) {
             cityID = "\(parsed.stableLocality),\(qualifier)"
         } else {
             cityID = parsed.stableLocality
@@ -64,7 +63,7 @@ struct SaveAddressLocality: Equatable {
                 address: trimmed,
                 label: cjk,
                 stableLocality: normalizeIdentifier(cjk),
-                region: nil,
+                region: cjkAdminQualifier(in: trimmed, municipality: cjk),
                 country: country,
                 isCJK: true
             )
@@ -158,15 +157,10 @@ private extension SaveAddressLocality {
     static func qualifyingRegion(in value: String, country: String?) -> String? {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.range(of: #"^[A-Za-z]{2}$"#, options: .regularExpression) != nil {
-            return trimmed.lowercased(with: locale)
+            return knownAdminCode(trimmed.lowercased(with: locale), country: country)
         }
         if let match = trimmed.range(of: #"^[A-Za-z]{2}(?=\s)"#, options: .regularExpression) {
-            let code = String(trimmed[match]).lowercased(with: locale)
-            if usStateCodes.contains(code)
-                || canadianProvinceCodes.contains(code)
-                || australianStateCodes.contains(code) {
-                return code
-            }
+            return knownAdminCode(String(trimmed[match]).lowercased(with: locale), country: country)
         }
         if let code = australianStatePostcodeCode(in: trimmed) {
             return code
@@ -179,6 +173,24 @@ private extension SaveAddressLocality {
             return code
         }
         return nil
+    }
+
+    static func knownAdminCode(_ code: String, country: String?) -> String? {
+        let us = usStateCodes.contains(code)
+        let canadian = canadianProvinceCodes.contains(code)
+        let australian = australianStateCodes.contains(code)
+        switch country {
+        case "united states":
+            return us ? code : nil
+        case "canada":
+            return canadian ? code : nil
+        case "australia":
+            return australian ? code : nil
+        case nil:
+            return (us || canadian || australian) ? code : nil
+        default:
+            return nil
+        }
     }
 
     /// `NSW 2000` / `VIC 3000` only — not `Los Ángeles` or `New South Wales`.
@@ -255,6 +267,54 @@ private extension SaveAddressLocality {
         }
         let city = String(head[start...])
         return city.count >= 2 ? city : nil
+    }
+
+    /// Prefecture / province immediately before the municipality.
+    /// `東京都府中市` and `広島県府中市` stay distinct; the label stays `府中市`.
+    static func cjkAdminQualifier(in address: String, municipality: String) -> String? {
+        let parts = commaParts(address)
+        if let index = parts.lastIndex(where: { $0.contains(municipality) }) {
+            for part in parts[..<index].reversed() {
+                if country(in: part) != nil { continue }
+                if let admin = cjkAdminToken(in: part) { return admin }
+            }
+        }
+        guard let range = address.range(of: municipality) else { return nil }
+        var prefix = String(address[..<range.lowerBound])
+        for name in cjkCountryPrefixes where prefix.hasPrefix(name) {
+            prefix.removeFirst(name.count)
+        }
+        prefix = prefix.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: ",，"))
+        return cjkAdminToken(in: prefix) ?? trailingCJKAdmin(in: prefix)
+    }
+
+    static func cjkAdminToken(in token: String) -> String? {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let last = trimmed.last, "都府道県省".contains(last) else { return nil }
+        if (2...5).contains(trimmed.count) { return trimmed }
+        return trailingCJKAdmin(in: trimmed)
+    }
+
+    static func trailingCJKAdmin(in text: String) -> String? {
+        guard let last = text.last, "都府道県省".contains(last), !text.isEmpty else { return nil }
+        var start = text.index(before: text.endIndex)
+        var taken = 0
+        while start > text.startIndex {
+            let previous = text.index(before: start)
+            let character = text[previous]
+            if "省區区鄉乡鎮镇國国県府道都市縣县,，".contains(character)
+                || character.isNumber
+                || character.isWhitespace
+                || character.isASCII {
+                break
+            }
+            start = previous
+            taken += 1
+            if taken >= 4 { break }
+        }
+        let admin = String(text[start...])
+        return admin.count >= 2 && "都府道県省".contains(admin.last!) ? admin : nil
     }
 
     static let countryAliases: [String: String] = [

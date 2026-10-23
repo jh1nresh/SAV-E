@@ -423,10 +423,10 @@ final class SaveDoodleHomeTests: XCTestCase {
         let traditional = place("Humble Admin", "中國, 江蘇省, 蘇州市, 姑蘇區", .attraction)
         let compact = place("Garden", "江蘇省蘇州市", .attraction)
         let simplified = place("Pingjiang", "中国, 江苏省, 苏州市, 姑苏区", .attraction)
-        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: traditional), "蘇州市")
-        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: compact), "蘇州市")
-        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: simplified), "苏州市")
-        XCTAssertFalse((SaveDoodleHomeCatalog.cityID(for: traditional) ?? "").contains("省"))
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: traditional), "蘇州市,江蘇省")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: compact), "蘇州市,江蘇省")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: simplified), "苏州市,江苏省")
+        XCTAssertFalse((SaveDoodleHomeCatalog.localityLabel(in: traditional.address) ?? "").contains("省"))
         XCTAssertFalse((SaveDoodleHomeCatalog.cityID(for: simplified) ?? "").contains("中国"))
         XCTAssertEqual(SaveHomeSearch.metroKey(in: "106台北市大安區仁愛路"), "taipei")
     }
@@ -499,9 +499,9 @@ final class SaveDoodleHomeTests: XCTestCase {
             // Canonicalize full Australian state qualifiers
             Case(address: "Melbourne, Victoria, Australia", label: "Melbourne", cityID: "melbourne,vic", metro: nil),
             // Extract only the CJK locality component
-            Case(address: "中國, 江蘇省, 蘇州市, 姑蘇區", label: "蘇州市", cityID: "蘇州市", metro: nil),
-            Case(address: "中国, 江苏省, 苏州市, 姑苏区", label: "苏州市", cityID: "苏州市", metro: nil),
-            Case(address: "江蘇省蘇州市姑蘇區", label: "蘇州市", cityID: "蘇州市", metro: nil),
+            Case(address: "中國, 江蘇省, 蘇州市, 姑蘇區", label: "蘇州市", cityID: "蘇州市,江蘇省", metro: nil),
+            Case(address: "中国, 江苏省, 苏州市, 姑苏区", label: "苏州市", cityID: "苏州市,江苏省", metro: nil),
+            Case(address: "江蘇省蘇州市姑蘇區", label: "蘇州市", cityID: "蘇州市,江蘇省", metro: nil),
             Case(address: "台北市, 台灣", label: "台北市", cityID: "taipei", metro: "taipei"),
             // Reject metro aliases contradicted by non-US regions
             Case(address: "London, Ontario", label: "London", cityID: "london,on", metro: nil),
@@ -517,8 +517,11 @@ final class SaveDoodleHomeTests: XCTestCase {
             // Preserve the locality after stripping its region
             Case(address: "1600 Pennsylvania Ave NW, Washington, DC 20500, USA", label: "Washington", cityID: "washington,dc", metro: nil),
             // Treat Japanese prefecture suffixes as locality boundaries
-            Case(address: "日本神奈川県横浜市中区", label: "横浜市", cityID: "横浜市", metro: nil),
-            Case(address: "横浜市中区, 神奈川県, 日本", label: "横浜市", cityID: "横浜市", metro: nil),
+            Case(address: "日本神奈川県横浜市中区", label: "横浜市", cityID: "横浜市,神奈川県", metro: nil),
+            Case(address: "横浜市中区, 神奈川県, 日本", label: "横浜市", cityID: "横浜市,神奈川県", metro: nil),
+            Case(address: "東京都府中市宮町", label: "府中市", cityID: "府中市,東京都", metro: nil),
+            Case(address: "広島県府中市元町", label: "府中市", cityID: "府中市,広島県", metro: nil),
+            Case(address: "Rue Charles Morin, Eu, France", label: "Eu", cityID: "eu,france", metro: nil),
             Case(address: "東京都渋谷区神南1丁目", label: "東京都渋谷区神南1丁目", cityID: "tokyo", metro: "tokyo"),
         ]
 

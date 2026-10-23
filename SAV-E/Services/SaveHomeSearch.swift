@@ -308,7 +308,24 @@ private extension SaveHomeSearch {
         }
 
         func accepts(_ parsed: SaveAddressLocality.Parsed) -> Bool {
-            hasLocalityComponent(in: parsed.address) && fits(parsed)
+            if parsed.isCJK, !matchesCJKLocality(parsed.label) { return false }
+            return hasLocalityComponent(in: parsed.address) && fits(parsed)
+        }
+
+        /// `東京都府中市` contains the Tokyo prefecture alias but its city is 府中市.
+        private func matchesCJKLocality(_ label: String) -> Bool {
+            let locality = SaveAddressLocality.normalizeToken(label)
+            return aliases.contains { alias in
+                let normalizedAlias = SaveAddressLocality.normalizeToken(alias)
+                if locality == normalizedAlias { return true }
+                guard normalizedAlias.unicodeScalars.contains(where: { (0x4E00...0x9FFF).contains($0.value) }) else {
+                    return false
+                }
+                guard locality.hasPrefix(normalizedAlias) else { return false }
+                let suffix = locality.dropFirst(normalizedAlias.count)
+                return normalizedAlias.last.map { "市都府縣县".contains($0) } == true
+                    || suffix.first.map { "市都府縣县".contains($0) } == true
+            }
         }
 
         /// A street named London Road is not evidence that its city is London.
