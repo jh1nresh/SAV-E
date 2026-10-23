@@ -343,7 +343,7 @@ struct SaveTileTownPinMark: View {
     var body: some View {
         Canvas { context, size in
             let unit = max(1, floor(size.width / 5))
-            let coral = Color(red: 0.949, green: 0.420, blue: 0.290)
+            let coral = SaveAtlasPalette.brandCoral
             let paper = Color(red: 1, green: 0.973, blue: 0.925)
             let pin: [(Int, Int)] = isSelected
                 ? [(2, 0), (1, 1), (2, 1), (3, 1), (1, 2), (2, 2), (3, 2), (2, 3), (2, 4)]

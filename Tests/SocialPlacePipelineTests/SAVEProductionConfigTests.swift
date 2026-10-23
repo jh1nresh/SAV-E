@@ -1776,7 +1776,7 @@ final class SAVEProductionConfigTests: XCTestCase {
     func testShareExtensionUsesAtlasStatesWithoutConfirmingUnverifiedCandidates() throws {
         let shareView = try source(at: "SAV-EShareExtension/ShareViewController.swift")
 
-        for token in ["FDF8F3", "FFFDF7", "0E4A33", "2E2117", "F26B4A", "B5E3F5", "D6E8C4", "F0CFA1"] {
+        for token in ["FDF8F3", "FFFDF7", "0E4A33", "2E2117", SaveAtlasPalette.coralLightHex, "B5E3F5", "D6E8C4", "F0CFA1"] {
             XCTAssertTrue(shareView.contains(token), "Share Extension must keep Atlas token \(token)")
         }
         XCTAssertTrue(shareView.contains("share.capture.loading"))
