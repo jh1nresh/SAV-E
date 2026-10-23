@@ -681,7 +681,7 @@ struct SaveDoodleMiniMap: View {
                             longitude: item.place.longitude
                         )
                     )
-                    .tint(SaveTheme.brandCoral)
+                    .tint(SaveAtlasPalette.brandCoral)
                 }
             }
         }
