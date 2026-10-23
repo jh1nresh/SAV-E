@@ -475,7 +475,13 @@ struct SaveDoodleHomeView: View {
     }
 
     private var allPlaces: [Place] {
-        presentation.savedPlaces.compactMap(\.searchPlace)
+        var places: [Place] = []
+        for saved in presentation.savedPlaces {
+            if let place = saved.searchPlace {
+                places.append(place)
+            }
+        }
+        return places
     }
 
     private var resolvedSelection: SaveDoodleCitySelection {
