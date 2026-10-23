@@ -961,15 +961,18 @@ shows Retry (no Saved, no overlay).
 Full screen. Top hero 393×470 pt (~55%) with a jittery torn-paper bottom
 and a 1.6 pt ink line. Show only the sharer’s own public photo. The main
 state is no photo: coral fill, cream jitter circle (236 pt), large
-category sticker (restaurant = noodle bowl, cafe = coffee cup). In dark
-mode the bowl/cup plate is a solid black oval, not kraft. If no
-sticker fits, a cream line-art pin. No Temple of Heaven, roast duck, or
-elephant.
+category sticker (restaurant = noodle bowl, cafe = coffee cup). Bowl/cup
+plate fill is kraft `#EADDC6` in light and dark (`ClipStickerInk.plate`).
+Outline is `ClipStickerInk` `#2F2E23` in both modes — never a black oval
+or `#000000`. Plate, bowl, and cup strokes are 1.6 pt; cup handle 2.4 pt;
+chopsticks 2.0 pt. If no sticker fits, a cream line-art pin. No Temple of
+Heaven, roast duck, or elephant.
 
 Over the hero: left is the sharer chip (short-code + backend sender only)
-— cream capsule, jitter border, avatar, `{name} 分享給你` / system 14
-semibold. Right is the Savvy wordmark on a small cream plate (Caveat,
-no elephant).
+— cream capsule (`#FFF9EB` both modes), `ClipStickerInk` text and jitter
+border (`#2F2E23` both modes) so `{name} shared with you` / `{name} 分享給你`
+stays readable in dark. System 14 semibold. Right is the Savvy wordmark
+on a small cream plate (Caveat, no elephant).
 
 Place name is handwriting: Caveat 38 (en) / Iansui 34 (zh), max 2 lines.
 `Area · Category` is system 15 muted. Friend note is a zigzag washi strip
@@ -1028,6 +1031,8 @@ in light and dark** (`ClipCoral`) — it does not follow the main-app dark
 | Coral (CTA, hero) | `ClipCoral` | `#F26B4A` | `#F26B4A` |
 | Forest / wordmark | `ClipForest` | `#0E4A33` | `#B9E0C9` |
 | Cream / button label | `ClipCream` | `#FFF9EB` | `#FFF9EB` |
+| Sticker / chip ink | `ClipStickerInk` | `#2F2E23` | `#2F2E23` |
+| Sticker plate | `ClipStickerInk.plate` | `#EADDC6` | `#EADDC6` |
 
 No shadows, gradients, or blur. No MapKit on place or list pages. No
 elephant. Unmatched hero categories use the cream line-art pin.

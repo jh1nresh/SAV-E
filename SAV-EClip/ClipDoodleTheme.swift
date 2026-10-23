@@ -19,6 +19,20 @@ enum ClipJournalPalette {
     nonisolated static let strokeWidth: CGFloat = 1.6
 }
 
+/// Sticker and sharer-chip ink that does not flip in dark mode.
+/// `ClipInk` becomes cream in dark; these RGB values stay put.
+enum ClipStickerInk {
+    /// `#2F2E23` in light and dark. Never a black fill or black stroke.
+    static let outline = Color(red: 47.0 / 255.0, green: 46.0 / 255.0, blue: 35.0 / 255.0)
+    /// `#EADDC6` plate fill in light and dark. Not `ClipKraft` (dark `#3A342A`).
+    static let plate = Color(red: 234.0 / 255.0, green: 221.0 / 255.0, blue: 198.0 / 255.0)
+    static let plateStroke: CGFloat = 1.6
+    static let bowlStroke: CGFloat = 1.6
+    static let cupStroke: CGFloat = 1.6
+    static let handleStroke: CGFloat = 2.4
+    static let chopstickStroke: CGFloat = 2.0
+}
+
 enum ClipJournalLayout {
     static let screenMargin: CGFloat = 24
     static let heroWidth: CGFloat = 393
@@ -346,16 +360,15 @@ enum ClipStickerKind: String {
 struct ClipStickerDrawing: View {
     let kind: ClipStickerKind
     var lineArtPin: Bool = false
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Canvas { context, size in
-            let ink = ClipJournalPalette.ink
+            let ink = ClipStickerInk.outline
             let coral = ClipJournalPalette.coral
             let cream = ClipJournalPalette.cream
             let kraft = ClipJournalPalette.kraft
             let forest = ClipJournalPalette.forest
-            let plate = colorScheme == .dark ? Color.black : kraft
+            let plate = ClipStickerInk.plate
             switch kind {
             case .noodle:
                 drawNoodleBowl(context: context, size: size, ink: ink, coral: coral, cream: cream, plate: plate)
@@ -391,7 +404,7 @@ struct ClipStickerDrawing: View {
         var plate = Path()
         plate.addEllipse(in: CGRect(x: size.width * 0.06, y: size.height * 0.58, width: size.width * 0.88, height: size.height * 0.30))
         context.fill(plate, with: .color(plateColor))
-        context.stroke(plate, with: .color(ink), lineWidth: 1.4)
+        context.stroke(plate, with: .color(ink), lineWidth: ClipStickerInk.plateStroke)
 
         var bowl = Path()
         bowl.move(to: CGPoint(x: size.width * 0.18, y: size.height * 0.42))
@@ -412,7 +425,7 @@ struct ClipStickerDrawing: View {
             control: CGPoint(x: size.width * 0.12, y: size.height * 0.62)
         )
         context.fill(bowl, with: .color(coral))
-        context.stroke(bowl, with: .color(ink), lineWidth: 1.6)
+        context.stroke(bowl, with: .color(ink), lineWidth: ClipStickerInk.bowlStroke)
 
         var broth = Path()
         broth.addEllipse(in: CGRect(x: size.width * 0.24, y: size.height * 0.36, width: size.width * 0.52, height: size.height * 0.18))
@@ -435,8 +448,8 @@ struct ClipStickerDrawing: View {
         var chopstickB = Path()
         chopstickB.move(to: CGPoint(x: size.width * 0.66, y: size.height * 0.08))
         chopstickB.addLine(to: CGPoint(x: size.width * 0.84, y: size.height * 0.42))
-        context.stroke(chopstickA, with: .color(ink), lineWidth: 2.0)
-        context.stroke(chopstickB, with: .color(ink), lineWidth: 2.0)
+        context.stroke(chopstickA, with: .color(ink), lineWidth: ClipStickerInk.chopstickStroke)
+        context.stroke(chopstickB, with: .color(ink), lineWidth: ClipStickerInk.chopstickStroke)
     }
 
     /// DESIGN v3.1: cafe = coffee cup + saucer. Not a rounded-rect block.
@@ -451,7 +464,7 @@ struct ClipStickerDrawing: View {
         var saucer = Path()
         saucer.addEllipse(in: CGRect(x: size.width * 0.10, y: size.height * 0.64, width: size.width * 0.80, height: size.height * 0.22))
         context.fill(saucer, with: .color(plateColor))
-        context.stroke(saucer, with: .color(ink), lineWidth: 1.4)
+        context.stroke(saucer, with: .color(ink), lineWidth: ClipStickerInk.plateStroke)
         var well = Path()
         well.addEllipse(in: CGRect(x: size.width * 0.28, y: size.height * 0.70, width: size.width * 0.44, height: size.height * 0.10))
         context.stroke(well, with: .color(ink.opacity(0.45)), lineWidth: 1.0)
@@ -475,7 +488,7 @@ struct ClipStickerDrawing: View {
             control: CGPoint(x: size.width * 0.22, y: size.height * 0.52)
         )
         context.fill(cup, with: .color(coral))
-        context.stroke(cup, with: .color(ink), lineWidth: 1.6)
+        context.stroke(cup, with: .color(ink), lineWidth: ClipStickerInk.cupStroke)
 
         var lip = Path()
         lip.addEllipse(in: CGRect(x: size.width * 0.26, y: size.height * 0.26, width: size.width * 0.44, height: size.height * 0.12))
@@ -490,7 +503,7 @@ struct ClipStickerDrawing: View {
             endAngle: .degrees(85),
             clockwise: false
         )
-        context.stroke(handle, with: .color(ink), lineWidth: 2.4)
+        context.stroke(handle, with: .color(ink), lineWidth: ClipStickerInk.handleStroke)
 
         for (x, controlX) in [(0.36, 0.32), (0.48, 0.50), (0.60, 0.64)] {
             var steam = Path()
@@ -712,15 +725,15 @@ struct ClipSharerChip: View {
     var body: some View {
         HStack(spacing: 8) {
             ZStack {
-                Circle().fill(ClipJournalPalette.kraft)
+                Circle().fill(ClipStickerInk.plate)
                 Text(String(name.prefix(1)))
                     .font(ClipJournalType.system(12, weight: .semibold, relativeTo: .caption))
-                    .foregroundStyle(ClipJournalPalette.ink)
+                    .foregroundStyle(ClipStickerInk.outline)
             }
             .frame(width: ClipJournalLayout.avatar, height: ClipJournalLayout.avatar)
             Text(ClipCopy.format("clip.from", name))
                 .font(ClipJournalType.system(14, weight: .semibold, relativeTo: .subheadline))
-                .foregroundStyle(ClipJournalPalette.ink)
+                .foregroundStyle(ClipStickerInk.outline)
                 .lineLimit(1)
         }
         .padding(.horizontal, 10)
@@ -728,9 +741,10 @@ struct ClipSharerChip: View {
         .background(ClipJournalPalette.cream, in: Capsule())
         .overlay {
             ClipJitterCapsule(seed: 3)
-                .stroke(ClipJournalPalette.ink, lineWidth: ClipJournalPalette.strokeWidth)
+                .stroke(ClipStickerInk.outline, lineWidth: ClipJournalPalette.strokeWidth)
         }
         .accessibilityLabel(ClipCopy.format("clip.from", name))
+        .accessibilityIdentifier("clip.sharer")
     }
 }
 

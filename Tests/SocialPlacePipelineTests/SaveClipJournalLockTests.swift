@@ -38,9 +38,35 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(theme.contains("minimumScaleFactor(0.85)"))
         XCTAssertTrue(theme.contains("titleInkOverflow: CGFloat = 18"))
         XCTAssertTrue(theme.contains("clip.friendNote"))
-        XCTAssertTrue(theme.contains("colorScheme == .dark ? Color.black"))
-        XCTAssertFalse(theme.contains("context.fill(plate, with: .color(kraft))"))
-        XCTAssertFalse(theme.contains("context.fill(saucer, with: .color(kraft))"))
+        XCTAssertTrue(theme.contains("enum ClipStickerInk"))
+        XCTAssertTrue(theme.contains("static let plate"))
+        XCTAssertTrue(theme.contains("#EADDC6"))
+        XCTAssertTrue(theme.contains("#2F2E23"))
+        XCTAssertTrue(theme.contains("Never a black fill or black stroke"))
+        XCTAssertTrue(theme.contains("plateStroke: CGFloat = 1.6"))
+        XCTAssertTrue(theme.contains("bowlStroke: CGFloat = 1.6"))
+        XCTAssertTrue(theme.contains("cupStroke: CGFloat = 1.6"))
+        XCTAssertTrue(theme.contains("handleStroke: CGFloat = 2.4"))
+        XCTAssertTrue(theme.contains("chopstickStroke: CGFloat = 2.0"))
+        XCTAssertTrue(theme.contains("ClipStickerInk.plate"))
+        XCTAssertTrue(theme.contains("ClipStickerInk.outline"))
+        XCTAssertTrue(theme.contains("ClipStickerInk.plateStroke"))
+        XCTAssertTrue(theme.contains("ClipStickerInk.bowlStroke"))
+        XCTAssertTrue(theme.contains("ClipStickerInk.cupStroke"))
+        XCTAssertTrue(theme.contains("ClipStickerInk.handleStroke"))
+        XCTAssertTrue(theme.contains("ClipStickerInk.chopstickStroke"))
+        XCTAssertTrue(theme.contains("accessibilityIdentifier(\"clip.sharer\")"))
+        XCTAssertFalse(theme.contains("Color.black"))
+        XCTAssertFalse(theme.contains("#000000"))
+        XCTAssertFalse(theme.contains("colorScheme == .dark ? Color.black"))
+        XCTAssertGreaterThan(
+            ClipContrastEvidence.ratio(
+                foreground: ClipContrastEvidence.stickerInk,
+                background: ClipContrastEvidence.cream
+            ),
+            4.5,
+            "ClipStickerInk on cream must stay WCAG AA in dark mode"
+        )
         XCTAssertFalse(theme.contains("SavvyLogo"))
         XCTAssertFalse(theme.contains("case elephant"))
         XCTAssertFalse(theme.contains("case temple"))
@@ -228,7 +254,10 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(design.contains("Save this place"))
         XCTAssertTrue(design.contains("group.com.wanderly.app"))
         XCTAssertTrue(design.contains("not `group.com.wanderly.app.shared`"))
-        XCTAssertTrue(design.contains("solid black oval"))
+        XCTAssertTrue(design.contains("ClipStickerInk"))
+        XCTAssertTrue(design.contains("#EADDC6` in light and dark"))
+        XCTAssertTrue(design.contains("never a black oval"))
+        XCTAssertFalse(design.contains("solid black oval, not kraft"))
         XCTAssertTrue(design.contains("cascade to Caveat"))
         XCTAssertTrue(design.contains("11-iansui-proof.md"))
         let backend = try source(at: "backend/src/clipListSave.ts")
@@ -570,6 +599,10 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(shots.contains("Free limit reached"))
         XCTAssertTrue(shots.contains("friend-note-en"))
         XCTAssertTrue(shots.contains("clip.friendNote.by"))
+        XCTAssertTrue(shots.contains("sharer-en-light"))
+        XCTAssertTrue(shots.contains("sharer-en-dark"))
+        XCTAssertTrue(shots.contains("assertSharerChipContrast"))
+        XCTAssertTrue(shots.contains("clip.sharer"))
         let workflow = try source(at: ".github/workflows/ci.yml")
         XCTAssertTrue(workflow.contains("11-iansui-proof.md"))
         XCTAssertTrue(workflow.contains("Iansui-ClipTitles.ttf"))
@@ -591,6 +624,22 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertEqual(coral.components(separatedBy: "0.949").count - 1, 2)
     }
 
+    func testClipStickerInkCatalogDoesNotFlipInDark() throws {
+        let ink = try source(at: "SAV-EClip/Assets.xcassets/ClipStickerInk.colorset/Contents.json")
+        XCTAssertTrue(ink.contains("\"value\": \"dark\""))
+        XCTAssertEqual(ink.components(separatedBy: "\"red\": \"0.184\"").count - 1, 2)
+        XCTAssertEqual(ink.components(separatedBy: "\"green\": \"0.180\"").count - 1, 2)
+        XCTAssertEqual(ink.components(separatedBy: "\"blue\": \"0.137\"").count - 1, 2)
+        XCTAssertGreaterThan(
+            ClipContrastEvidence.ratio(
+                foreground: ClipContrastEvidence.stickerInk,
+                background: ClipContrastEvidence.cream
+            ),
+            7.0,
+            "Mina shared with you on cream must stay well above AA"
+        )
+    }
+
     private var repositoryRoot: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -600,5 +649,29 @@ final class SaveClipJournalLockTests: XCTestCase {
 
     private func source(at relativePath: String) throws -> String {
         try String(contentsOf: repositoryRoot.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+}
+
+enum ClipContrastEvidence {
+    static let stickerInk = (47.0 / 255.0, 46.0 / 255.0, 35.0 / 255.0)
+    static let cream = (1.0, 249.0 / 255.0, 235.0 / 255.0)
+    static let plate = (234.0 / 255.0, 221.0 / 255.0, 198.0 / 255.0)
+
+    static func ratio(
+        foreground: (Double, Double, Double),
+        background: (Double, Double, Double)
+    ) -> Double {
+        let a = luminance(foreground)
+        let b = luminance(background)
+        let lighter = max(a, b)
+        let darker = min(a, b)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    private static func luminance(_ rgb: (Double, Double, Double)) -> Double {
+        func linear(_ channel: Double) -> Double {
+            channel <= 0.04045 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(rgb.0) + 0.7152 * linear(rgb.1) + 0.0722 * linear(rgb.2)
     }
 }

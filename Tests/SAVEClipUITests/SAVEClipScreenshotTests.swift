@@ -19,6 +19,30 @@ final class SAVEClipScreenshotTests: XCTestCase {
         app.terminate()
     }
 
+    func testSharerChipEnglishLightIsReadable() {
+        let app = launchClip(appearance: .light, language: "en", locale: "en_US", screen: "place-sender")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
+        let chip = app.descendants(matching: .any)["clip.sharer"]
+        XCTAssertTrue(chip.waitForExistence(timeout: 5))
+        XCTAssertTrue(chip.label.contains("Mina"), "sharer pill must name who shared")
+        let shot = app.screenshot()
+        attachScreenshot(shot, name: "sharer-en-light")
+        assertSharerChipContrast(shot, chip: chip, app: app, name: "sharer-en-light")
+        app.terminate()
+    }
+
+    func testSharerChipEnglishDarkIsReadable() {
+        let app = launchClip(appearance: .dark, language: "en", locale: "en_US", screen: "place-sender")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
+        let chip = app.descendants(matching: .any)["clip.sharer"]
+        XCTAssertTrue(chip.waitForExistence(timeout: 5))
+        XCTAssertTrue(chip.label.contains("Mina"), "sharer pill must name who shared")
+        let shot = app.screenshot()
+        attachScreenshot(shot, name: "sharer-en-dark", appearance: .dark)
+        assertSharerChipContrast(shot, chip: chip, app: app, name: "sharer-en-dark")
+        app.terminate()
+    }
+
     func testFriendShareNoteEnglish() {
         let app = launchClip(appearance: .light, language: "en", locale: "en_US", screen: "place-sender")
         XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
@@ -379,6 +403,67 @@ final class SAVEClipScreenshotTests: XCTestCase {
         )
     }
 
+    /// Cream pill `#FFF9EB` plus `ClipStickerInk` `#2F2E23` must both be present
+    /// so "Mina shared with you" is not white-on-white in dark mode.
+    private func assertSharerChipContrast(
+        _ screenshot: XCUIScreenshot,
+        chip: XCUIElement,
+        app: XCUIApplication,
+        name: String
+    ) {
+        guard let image = screenshot.image.cgImage else {
+            XCTFail("\(name): missing CGImage")
+            return
+        }
+        let scaleX = CGFloat(image.width) / app.frame.width
+        let scaleY = CGFloat(image.height) / app.frame.height
+        let frame = chip.frame
+        let minX = max(Int((frame.minX * scaleX).rounded()), 0)
+        let maxX = min(Int((frame.maxX * scaleX).rounded()), image.width - 1)
+        let minY = max(Int((frame.minY * scaleY).rounded()), 0)
+        let maxY = min(Int((frame.maxY * scaleY).rounded()), image.height - 1)
+        XCTAssertGreaterThan(maxX, minX, "\(name): empty chip frame")
+        XCTAssertGreaterThan(maxY, minY, "\(name): empty chip frame")
+
+        var light = 0
+        var dark = 0
+        var darkest = (255, 255, 255)
+        var lightest = (0, 0, 0)
+        var darkestY = 1.0
+        var lightestY = 0.0
+        let stepX = max((maxX - minX) / 12, 1)
+        let stepY = max((maxY - minY) / 6, 1)
+        var y = minY
+        while y <= maxY {
+            var x = minX
+            while x <= maxX {
+                if let rgb = samplePixel(image, x: x, y: y) {
+                    let lum = 0.2126 * Double(rgb.0) + 0.7152 * Double(rgb.1) + 0.0722 * Double(rgb.2)
+                    if lum > 200 { light += 1 }
+                    if lum < 80 { dark += 1 }
+                    if lum < darkestY {
+                        darkestY = lum
+                        darkest = rgb
+                    }
+                    if lum > lightestY {
+                        lightestY = lum
+                        lightest = rgb
+                    }
+                }
+                x += stepX
+            }
+            y += stepY
+        }
+        let note = XCTAttachment(string: "\(name) chip light=\(light) dark=\(dark) darkest=\(darkest) lightest=\(lightest)")
+        note.name = "\(name)-chip-contrast"
+        note.lifetime = .keepAlways
+        add(note)
+        XCTAssertGreaterThan(light, 0, "\(name): cream pill background missing")
+        XCTAssertGreaterThan(dark, 0, "\(name): ClipStickerInk text missing — white-on-white")
+        let ratio = ClipScreenshotContrast.ratio(lightest: lightest, darkest: darkest)
+        XCTAssertGreaterThan(ratio, 4.5, "\(name): chip contrast \(ratio) is below AA")
+    }
+
     private func samplePixel(_ image: CGImage, x: Int, y: Int) -> (Int, Int, Int)? {
         guard let crop = image.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)) else { return nil }
         var pixel = [UInt8](repeating: 0, count: 4)
@@ -404,4 +489,19 @@ final class SAVEClipScreenshotTests: XCTestCase {
 
     private static let listInvokeURL =
         "https://sav-e-app.vercel.app/list?d=eyJsaXN0Ijp7ImlkIjoiMjIyMjIyMjItMjIyMi0yMjIyLTIyMjItMjIyMjIyMjIyMjIyIiwidGl0bGUiOiJUb2t5byBjYWZlcyIsIm5vdGUiOiJTYXR1cmRheSB3YWxrIiwib3duZXJEaXNwbGF5TmFtZSI6Ik1pbmEiLCJ2aWV3ZXJSb2xlIjoidmlld2VyIiwiaXRlbXMiOlt7ImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwic291cmNlIjoic2F2ZWRQbGFjZSIsInNvdXJjZUlEIjoicGxhY2UxIiwidGl0bGUiOiJPbmlidXMgQ29mZmVlIiwic3VidGl0bGUiOiJOYWthbWVndXJvIiwibGF0aXR1ZGUiOjM1LjY0NCwibG9uZ2l0dWRlIjoxMzkuNjk5LCJjYXRlZ29yeSI6IkNhZmUiLCJyYXRpbmciOjQuNSwicmV2aWV3Q291bnQiOjEwMCwic291cmNlVVJMIjpudWxsLCJwaG90b1VSTHMiOlsiaHR0cHM6Ly9leGFtcGxlLmNvbS9jb2ZmZWUuanBnIl0sIm5vdGUiOm51bGwsImFkZGVkQnlEaXNwbGF5TmFtZSI6Ik1pbmEiLCJhZGRlZEF0Ijo4MTI1MDU2MDAuMH1dLCJjcmVhdGVkQXQiOjgxMjUwNTYwMC4wLCJ1cGRhdGVkQXQiOjgxMjUwNTYwMC4wfSwicm9sZSI6InZpZXdlciJ9&r=viewer"
+}
+
+private enum ClipScreenshotContrast {
+    static func ratio(lightest: (Int, Int, Int), darkest: (Int, Int, Int)) -> Double {
+        func luminance(_ rgb: (Int, Int, Int)) -> Double {
+            func linear(_ channel: Int) -> Double {
+                let c = Double(channel) / 255.0
+                return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+            }
+            return 0.2126 * linear(rgb.0) + 0.7152 * linear(rgb.1) + 0.0722 * linear(rgb.2)
+        }
+        let a = luminance(lightest)
+        let b = luminance(darkest)
+        return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+    }
 }
