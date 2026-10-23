@@ -753,8 +753,7 @@ StoreKit prices come from the `SAVEPro.storekit` test catalog in DEBUG /
 UI tests and from App Store Connect once products are live; a failed load
 shows retry, never a hardcoded $6.99. An exhausted AI assist never opens
 this wall; the assist surface shows a neutral `ai.quotaExhausted` message
-instead. Product navigation does not mount TileTown Home, RootMap, or
-Canvas.
+instead. Product navigation does not mount TileTown Home, RootMap, or Canvas.
 The 200pt hero is the colored hand-drawn park (official color stickers
 plus a pencil). Do not use SF Symbols inside filled circles as place
 stickers.

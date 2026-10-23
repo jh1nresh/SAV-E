@@ -428,6 +428,9 @@ jobs:
           path.write_bytes(plistlib.dumps(data, fmt=plistlib.FMT_XML))
           print(f"injected SAVE_SCREENSHOT_DIR into {path}")
           PY
+          # StoreKit catalog path flags are invalid with -xctestrun /
+          # test-without-building. SAVE-E.xcscheme already points at
+          # SAVEPro.storekit, so the xctestrun inherits that catalog.
           scripts/run-ios-xcodebuild-retry.sh \
             --max-attempts "$max_attempts" \
             --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
@@ -436,7 +439,6 @@ jobs:
             -- \
             -xctestrun '${{ steps.products.outputs.xctestrun }}' \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
-            -storekitConfigurationPath '${{ github.workspace }}/SAV-E/Resources/SAVEPro.storekit' \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test-without-building
 
@@ -569,7 +571,6 @@ jobs:
             -- \
             -xctestrun '${{ steps.products.outputs.xctestrun }}' \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
-            -storekitConfigurationPath '${{ github.workspace }}/SAV-E/Resources/SAVEPro.storekit' \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test-without-building
           xcrun xcresulttool export attachments \
@@ -605,7 +606,6 @@ jobs:
             -- \
             -xctestrun '${{ steps.products.outputs.xctestrun }}' \
             -destination "platform=iOS Simulator,id=$se_udid" \
-            -storekitConfigurationPath '${{ github.workspace }}/SAV-E/Resources/SAVEPro.storekit' \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test-without-building
           status=$?
