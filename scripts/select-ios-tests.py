@@ -64,6 +64,7 @@ FULL = list(BASELINE) + [
     RAIL + "testMiniMapOpensMapWithCarriedFilterAndCityChange",
     RAIL + "testHomeCollectedOpensPassportWithCityCount",
     RAIL + "testSavesTripsBackReturnsToSaves",
+    RAIL + "testHomeDesignProductStates",
 ]
 
 # Temporary #279 iteration profiles. Empty SAVE_UI_TEST_FOCUS keeps default

@@ -23,6 +23,7 @@ class CoverageTests(unittest.TestCase):
             selection.RAIL + "testMiniMapOpensMapWithCarriedFilterAndCityChange",
             selection.RAIL + "testHomeCollectedOpensPassportWithCityCount",
             selection.RAIL + "testSavesTripsBackReturnsToSaves",
+            selection.RAIL + "testHomeDesignProductStates",
         })
         self.assertTrue(full["trip"])
         self.assertTrue(full["units"])

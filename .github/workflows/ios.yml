@@ -479,7 +479,9 @@ jobs:
             echo "No readable UI result bundle; keep SAVE_SCREENSHOT_DIR rasters."
           fi
           echo "DESIGN Home rasters in SAVE-First-Run:"
-          for name in five-tab-home light-home dark-home H1 H2 H3 H4; do
+          for name in five-tab-home light-home dark-home \
+            H1 H1-allowed-clues H2 H2-denied-clues H3 H3-no-clues-saves H4 H4-empty \
+            H2-en-light H2-en-dark H2-zh-light H2-zh-dark; do
             path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
             if [[ -f "$path" ]]; then
               wc -c "$path"

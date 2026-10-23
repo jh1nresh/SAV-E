@@ -761,7 +761,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     func testCaptureFiveTabLanding() throws {
         try assertFriendsComingSoonLanguages()
         try captureFiveTabHomeParityRaster()
-        try captureHomeSavesWithoutClues()
+        try captureHomeSavesWithoutClues(names: ["H3-no-clues-saves-en"])
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
@@ -888,12 +888,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected, "Capture cancellation returns to Passport")
     }
 
-    /// H1–H4 are legacy appearance aliases (light EN, dark EN, light
-    /// zh-Hant, dark zh-Hant), not the product states in spec §8.1.
-    /// Spec H3 is captured separately as H3-no-clues-saves in the five-tab test.
-    /// DESIGN judges these rasters manually; the
-    /// 0.90 score is not evidence. Warm dark tokens from spec §1 must
-    /// paint Home and Passport once Light is unlocked.
+    /// Warm-dark appearance aliases. These four rasters are all H2
+    /// (location denied + waiting clues) in en/zh × light/dark — not
+    /// spec §8.1 product states. Names stay `H2-*` so DESIGN does not
+    /// treat them as H1/H3/H4. Product states are
+    /// `testHomeDesignProductStates`. DESIGN judges these rasters
+    /// manually; the 0.90 score is not evidence. Warm dark tokens from
+    /// spec §1 must paint Home and Passport once Light is unlocked.
     /// Appearance is forced before launch (`-AppleInterfaceStyle`, `--uitest-force-*`,
     /// and `XCUIDevice.appearance`). Background pixels must be near #1E1C19 / #FFF9EB.
     /// Attachment names stay off the production-parity set (`five-tab-*`, `atlas-*`).
@@ -909,7 +910,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             language: "en",
             homeName: "dark-home",
             passportName: "dark-passport",
-            referenceName: "H2",
+            referenceName: "H2-en-dark",
             expectedRed: 0x1E,
             expectedGreen: 0x1C,
             expectedBlue: 0x19
@@ -921,7 +922,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             language: "en",
             homeName: "light-home",
             passportName: "light-passport",
-            referenceName: "H1",
+            referenceName: "H2-en-light",
             expectedRed: 0xFF,
             expectedGreen: 0xF9,
             expectedBlue: 0xEB
@@ -933,7 +934,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             language: "zh-Hant",
             homeName: "light-home-zh",
             passportName: "light-passport-zh",
-            referenceName: "H3",
+            referenceName: "H2-zh-light",
             expectedRed: 0xFF,
             expectedGreen: 0xF9,
             expectedBlue: 0xEB
@@ -945,7 +946,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             language: "zh-Hant",
             homeName: "dark-home-zh",
             passportName: "dark-passport-zh",
-            referenceName: "H4",
+            referenceName: "H2-zh-dark",
             expectedRed: 0x1E,
             expectedGreen: 0x1C,
             expectedBlue: 0x19
@@ -3190,8 +3191,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(entry.isHittable, "Home Saves must be usable without a hidden test-only route")
         // XCUIElement.frame can report 43.99999999999997 for a 44pt SwiftUI
         // minHeight. Allow 0.01pt of CGRect noise; do not round (43.5 would pass).
-        XCTAssertGreaterThanOrEqual(entry.frame.height, 44 - 0.01)
-        XCTAssertGreaterThanOrEqual(entry.frame.width, 44 - 0.01)
+        assertTapTargetHeight(entry, name: "Home Saves entry")
+        XCTAssertGreaterThanOrEqual(entry.frame.width + 0.01, 44)
         tapReachable(entry)
         let saves = app.descendants(matching: .any)["saves.root"]
         // Cap at stepTimeout, not launchTimeout. A dead navigation used to
@@ -3319,7 +3320,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             waitForHomeCoverImagery(app)
             let review = app.buttons["home.review"]
             XCTAssertTrue(review.isHittable)
-            XCTAssertGreaterThanOrEqual(review.frame.height, 44)
+            assertTapTargetHeight(review, name: "home.review")
             let frame = app.frame
             let statusBarFrame = app.statusBars.firstMatch.exists ? String(describing: app.statusBars.firstMatch.frame) : "unavailable"
             let metadata = XCTAttachment(string: "viewport=\(frame); statusBar=\(statusBarFrame); requestedCategory=\(category); language=zh-Hant; reducedMotion=\(UIAccessibility.isReduceMotionEnabled)")
@@ -3337,63 +3338,121 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         }
     }
 
-    /// Product states from the accepted Home spec, rather than appearance aliases.
-    /// No forced-empty UI flag: H4 must follow the actual saved places and location.
+    /// Spec §8.1 product states. Filenames match the captured state:
+    /// H1 allowed+clues, H2 denied+clues, H3 zero clues with `home.saves`,
+    /// H4 empty plate. Also writes clear CI names (`H1-allowed-clues`, …).
     @MainActor
     func testHomeDesignProductStates() throws {
-        try captureHomeSavesWithoutClues(language: "en")
-        try captureHomeSavesWithoutClues(language: "zh-Hant")
-        for (state, fixture, location, language, dark) in [
-            ("H1", "fixture", "tiantan", "en", false),
-            ("H1-dark", "fixture", "tiantan", "en", true),
-            ("H2", "fixture", "denied", "en", false),
-            ("H1-zh-Hant", "fixture", "tiantan", "zh-Hant", false),
-            ("H4-other-city", "other-city", "tiantan", "en", false),
-            ("H4-empty", "empty", "tiantan", "en", false),
-        ] {
-            let hasClues = fixture == "fixture"
-            let app = makeApp(launchArguments: [
-                "--uitest-complete-onboarding", "--skip-map-tour",
-                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
-                "--uitest-home-design-\(fixture)", "--uitest-location-\(location)",
-                dark ? "--uitest-force-dark" : "--uitest-force-light",
-                "-save.appLanguage", language,
-            ] + (hasClues ? ["--uitest-repair-review-demo-seed"] : []),
-            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
-            launch(app)
-            try signInViaReviewDemoRequired(app: app)
-            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-            if hasClues {
-                waitForHomeCoverImagery(app)
-                let review = app.descendants(matching: .any)["home.review"]
-                XCTAssertTrue(review.exists)
-                XCTAssertTrue(review.label.contains("2"), "H1/H2 must contain two unconfirmed clues")
-                for suffix in ["000000000001", "000000000002", "000000000003"] {
-                    XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-\(suffix)"].exists)
-                }
-                XCTAssertEqual(app.descendants(matching: .any)["home.locationPrompt"].exists, location == "denied")
-            } else {
-                XCTAssertTrue(app.buttons["home.empty.capture"].waitForExistence(timeout: stepTimeout))
-                XCTAssertTrue(app.staticTexts["Nothing saved near here yet"].exists)
-                XCTAssertEqual(app.buttons["home.empty.nearest"].exists, fixture == "other-city")
-                XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'")).firstMatch.exists)
+        try captureHomeProductState(
+            state: "H1",
+            clearName: "H1-allowed-clues",
+            fixture: "fixture",
+            location: "tiantan",
+            language: "en"
+        )
+        try captureHomeProductState(
+            state: "H2",
+            clearName: "H2-denied-clues",
+            fixture: "fixture",
+            location: "denied",
+            language: "en"
+        )
+        try captureHomeSavesWithoutClues(
+            language: "en",
+            names: ["H3", "H3-no-clues-saves"]
+        )
+        try captureHomeSavesWithoutClues(
+            language: "zh-Hant",
+            names: ["H3-no-clues-saves-zh-Hant"]
+        )
+        try captureHomeProductState(
+            state: "H4",
+            clearName: "H4-empty",
+            fixture: "empty",
+            location: "tiantan",
+            language: "en"
+        )
+        try captureHomeProductState(
+            state: "H4-other-city",
+            clearName: nil,
+            fixture: "other-city",
+            location: "tiantan",
+            language: "en"
+        )
+    }
+
+    @MainActor
+    private func captureHomeProductState(
+        state: String,
+        clearName: String?,
+        fixture: String,
+        location: String,
+        language: String
+    ) throws {
+        let hasClues = fixture == "fixture"
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-home-design-\(fixture)", "--uitest-location-\(location)",
+            "--uitest-force-light",
+            "-save.appLanguage", language,
+        ] + (hasClues ? ["--uitest-repair-review-demo-seed"] : []),
+        launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        defer { terminate(app) }
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        if hasClues {
+            waitForHomeCoverImagery(app)
+            let review = app.descendants(matching: .any)["home.review"]
+            XCTAssertTrue(review.waitForExistence(timeout: stepTimeout), "\(state) must expose home.review")
+            XCTAssertEqual(review.identifier, "home.review")
+            XCTAssertTrue(review.label.contains("2"), "\(state) must contain two unconfirmed clues")
+            XCTAssertFalse(
+                app.buttons["home.saves"].exists,
+                "\(state) hides home.saves while clues wait"
+            )
+            XCTAssertEqual(
+                app.descendants(matching: .any)["home.locationPrompt"].exists,
+                location == "denied",
+                "\(state) location prompt must match \(location)"
+            )
+            if location == "denied" {
+                XCTAssertTrue(app.buttons["home.locationAllow"].exists)
             }
-            attach(app, name: "design-\(state)")
-            if fixture == "other-city" {
-                let latest = app.buttons["home.empty.nearest"]
-                XCTAssertTrue(latest.isHittable)
-                // ReferenceViewport scaling can report 44pt as 43.99999999999994.
-                // Match the existing tap-target rail's 0.01pt floating-point tolerance.
-                XCTAssertGreaterThanOrEqual(latest.frame.height, 44 - 0.01)
-                latest.tap()
-                XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
+            for suffix in ["000000000001", "000000000002", "000000000003"] {
+                XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-\(suffix)"].exists)
             }
-            terminate(app)
+        } else {
+            XCTAssertTrue(app.buttons["home.empty.capture"].waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces.empty"].exists)
+            XCTAssertTrue(app.staticTexts["Nothing saved near here yet"].exists)
+            XCTAssertFalse(app.descendants(matching: .any)["home.review"].exists, "\(state) has no Review clues")
+            XCTAssertFalse(
+                app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.'")).firstMatch.exists
+            )
+            XCTAssertEqual(app.buttons["home.empty.nearest"].exists, fixture == "other-city")
+        }
+        attachAccessibilityTree(app, name: "\(state)-accessibility")
+        attach(app, name: state)
+        if let clearName {
+            attach(app, name: clearName)
+        }
+        if fixture == "other-city" {
+            let latest = app.buttons["home.empty.nearest"]
+            XCTAssertEqual(latest.identifier, "home.empty.nearest")
+            XCTAssertTrue(latest.isHittable)
+            assertTapTargetHeight(latest, name: "home.empty.nearest")
+            latest.tap()
+            XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         }
     }
 
     @MainActor
-    private func captureHomeSavesWithoutClues(language: String = "en") throws {
+    private func captureHomeSavesWithoutClues(
+        language: String = "en",
+        names: [String]
+    ) throws {
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-tiantan",
@@ -3408,17 +3467,39 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         waitForHomeCoverImagery(app)
         XCTAssertFalse(app.descendants(matching: .any)["home.review"].exists, "H3 has no Review clues")
+        XCTAssertFalse(
+            app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'clue waiting'")).firstMatch.exists,
+            "H3 clue count must be 0"
+        )
         for suffix in ["000000000001", "000000000002", "000000000003"] {
             XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-\(suffix)"].exists)
         }
         let saves = app.buttons["home.saves"]
-        XCTAssertTrue(saves.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(saves.waitForExistence(timeout: stepTimeout), "H3 must expose home.saves")
+        XCTAssertEqual(saves.identifier, "home.saves")
         XCTAssertTrue(saves.isHittable, "H3 must expose Saves without a Review entry")
-        XCTAssertGreaterThanOrEqual(saves.frame.width, 44 - 0.01)
-        XCTAssertGreaterThanOrEqual(saves.frame.height, 44 - 0.01)
-        attach(app, name: "H3-no-clues-saves-\(language)")
+        XCTAssertGreaterThanOrEqual(saves.frame.width + 0.01, 44)
+        assertTapTargetHeight(saves, name: "home.saves")
+        attachAccessibilityTree(app, name: "H3-accessibility-\(language)")
+        for name in names {
+            attach(app, name: name)
+        }
         saves.tap()
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+    }
+
+    /// XCUIElement.frame can report a 44pt minHeight as 43.99999999999994.
+    @MainActor
+    private func assertTapTargetHeight(_ element: XCUIElement, name: String) {
+        XCTAssertEqual(element.frame.height, 44, accuracy: 0.01, "\(name) must be a 44pt tap target")
+    }
+
+    @MainActor
+    private func attachAccessibilityTree(_ app: XCUIApplication, name: String) {
+        let tree = XCTAttachment(string: app.debugDescription)
+        tree.name = name
+        tree.lifetime = .keepAlways
+        add(tree)
     }
 
     @MainActor
