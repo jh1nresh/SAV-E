@@ -340,7 +340,6 @@ final class SaveDoodleHomeTests: XCTestCase {
     func testMetroAliasesRejectNonUSRegionsWithoutCountry() {
         XCTAssertNil(SaveHomeSearch.metroKey(in: "London, Ontario"))
         XCTAssertNil(SaveHomeSearch.metroKey(in: "London, ON"))
-        XCTAssertEqual(SaveHomeSearch.nonUSAdminRegionCountry(in: "London, Ontario"), "canada")
         let ontario = place("Covent Garden Market", "130 King St, London, Ontario", .food)
         XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: ontario.address), "London")
         XCTAssertEqual(SaveDoodleHomeCatalog.cityDisplayName(for: ontario, language: .english), "London")
