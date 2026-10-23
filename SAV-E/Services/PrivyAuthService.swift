@@ -294,17 +294,16 @@ final class PrivyAuthService: ObservableObject {
             }
         }
         invalidateShareAnalysisSession()
-        // All active-owner writers are on this MainActor. Invalidate before any
-        // SDK suspension so an already-open Share cannot append as this owner.
-        if SavePlaceLimitHandoff.cachedActiveOwner() == owner {
-            SavePlaceLimitHandoff.syncActiveOwner(nil)
-        }
 #if DEBUG
         if signOutSDKUserIDProvider != nil || signOutSuspension != nil {
             let sdkUserID: String?
             if let signOutSDKUserIDProvider { sdkUserID = await signOutSDKUserIDProvider() }
             else { sdkUserID = owner }
             guard canLogOutSDKUser(sdkUserID, startedBy: owner, generation: generation) else { return }
+            // Writers are on this MainActor. Clear only after logout is
+            // confirmed, and before SDK suspension, so Share cannot append as
+            // A during a real logout or see a signed-out snapshot if this aborts.
+            invalidateShareOwnerCacheIfCurrent(owner)
             if let signOutSuspension { await signOutSuspension() }
             guard currentUserId == owner, sessionGeneration == generation else { return }
             sessionOrigin = .restored
@@ -326,6 +325,7 @@ final class PrivyAuthService: ObservableObject {
         }
         let user = await privy.getUser()
         guard canLogOutSDKUser(user?.id, startedBy: owner, generation: generation) else { return }
+        invalidateShareOwnerCacheIfCurrent(owner)
         await user?.logout()
         guard currentUserId == owner, sessionGeneration == generation else { return }
         sessionOrigin = .restored
@@ -335,6 +335,12 @@ final class PrivyAuthService: ObservableObject {
     private func canLogOutSDKUser(_ sdkUserID: String?, startedBy owner: String?, generation: Int) -> Bool {
         currentUserId == owner && sessionGeneration == generation &&
             (sdkUserID == nil || sdkUserID == owner)
+    }
+
+    private func invalidateShareOwnerCacheIfCurrent(_ owner: String?) {
+        if SavePlaceLimitHandoff.cachedActiveOwner() == owner {
+            SavePlaceLimitHandoff.syncActiveOwner(nil)
+        }
     }
 
     func accessToken() async throws -> String {

@@ -4272,14 +4272,23 @@ final class MapViewModel: ObservableObject {
                 // Only delete aliases that actually exist in this account.
                 let remote = try await supabaseService.fetchPlaces(for: userID)
                 try ensureConfirmationSession(userID, generation)
+                var deletedRemoteGroup: [Place] = []
                 for record in remote where place.savedIDs.contains(record.id) {
                     try await SAVEPendingImportSessionScope.$current.withValue((generation, userID)) {
                         try await supabaseService.deletePlaceGroup(record.id)
                     }
                     try ensureConfirmationSession(userID, generation)
+                    deletedRemoteGroup.append(record)
                 }
+                // deletePlaceGroup removes the whole venue, including aliases
+                // another device added after this snapshot's savedIDs went stale.
                 remainingAuthoritativeCount = Place.consolidated(
-                    remote.filter { !place.savedIDs.contains($0.id) }
+                    remote.filter { record in
+                        if deletedRemoteGroup.contains(where: { $0.matches(record) }) {
+                            return false
+                        }
+                        return deletedRemoteGroup.isEmpty || !place.matches(record)
+                    }
                 ).count
             }
             if let userID = startedBy {

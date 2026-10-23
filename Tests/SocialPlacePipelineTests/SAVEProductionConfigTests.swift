@@ -3375,6 +3375,14 @@ final class SAVEProductionConfigTests: XCTestCase {
             "P2 4347594688: post-delete cap uses the owner-scoped remote remainder, not places.count"
         )
         XCTAssertFalse(
+            map.contains("remote.filter { !place.savedIDs.contains($0.id) }"),
+            "P2 4365127948: stale savedIDs miss other-device aliases already removed by deletePlaceGroup"
+        )
+        XCTAssertTrue(
+            map.contains("deletedRemoteGroup"),
+            "P2 4365127948: remaining count must come from the group deletePlaceGroup actually removed"
+        )
+        XCTAssertFalse(
             map.contains("alignAuthoritativeSavedPlaceCountWithPlaces"),
             "P2 4347594688: assigning places.count after delete keeps a stale vault row at 50"
         )
@@ -4131,6 +4139,109 @@ final class SAVEProductionConfigTests: XCTestCase {
             )
         )
         XCTAssertEqual(saved.name, "Freed After Delete Cafe")
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    /// P2 4365127948: a remote alias added on another device is not in
+    /// `place.savedIDs`, but `deletePlaceGroup` still removes it. The cached
+    /// count must drop that venue, not keep the stale alias as a 50th stamp.
+    @MainActor
+    func testDeletePlaceCountDropsRemoteAliasesOutsideSavedIDs() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:alias-count-owner")
+        defer {
+            PrivyAuthService.shared.authState = previousAuth
+            AnalysisRequestURLProtocol.reset()
+        }
+
+        let others = makeCappedPlaces(49)
+        let displayed = makeCappedPlaces(1, indexOffset: 49)[0]
+        XCTAssertEqual(displayed.savedIDs, [displayed.id])
+        let remoteAlias = Place(
+            id: UUID(),
+            name: displayed.name,
+            address: displayed.address,
+            latitude: displayed.latitude,
+            longitude: displayed.longitude,
+            googlePlaceId: displayed.googlePlaceId,
+            category: displayed.category,
+            status: displayed.status,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: displayed.createdAt
+        )
+        XCTAssertTrue(displayed.matches(remoteAlias))
+        XCTAssertFalse(displayed.savedIDs.contains(remoteAlias.id))
+
+        let remotePlaces = others + [displayed, remoteAlias]
+        XCTAssertEqual(Place.consolidated(remotePlaces).count, 50)
+        XCTAssertEqual(
+            Place.consolidated(remotePlaces.filter { !displayed.savedIDs.contains($0.id) }).count,
+            50,
+            "stale savedIDs would keep the other-device alias as a 50th venue"
+        )
+
+        let rows = remotePlaces.enumerated().map { index, place in
+            cappedPlaceRowJSON(
+                id: place.id,
+                index: index,
+                name: place.name,
+                googlePlaceID: place.googlePlaceId
+            )
+        }.joined(separator: ",")
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET", request.url?.path == "/places" {
+                return (200, "[\(rows)]")
+            }
+            if request.httpMethod == "DELETE", request.url?.path.hasPrefix("/places/") == true {
+                return (200, "{}")
+            }
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                return (201, "{}")
+            }
+            if request.url?.path.contains("/memory/candidates") == true { return (200, "[]") }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(
+            suiteName: "save.delete-alias-count.\(UUID().uuidString)"
+        )
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("delete-alias-count-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        _ = try vault.saveConfirmedPlace(displayed, ownerSubject: "did:privy:alias-count-owner")
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+        map.places = [displayed]
+
+        try await map.deletePlace(displayed)
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertEqual(
+            SavePlaceLimitHandoff.cachedDecision(),
+            .allowed,
+            "authoritative count must be 49 after deletePlaceGroup removed the other-device alias"
+        )
+
+        let saved = try await map.saveMapCandidateAsPlace(
+            SaveMapCandidate(
+                id: "cap-after-alias-delete",
+                title: "Freed After Alias Delete Cafe",
+                subtitle: "Taipei",
+                latitude: 25.46,
+                longitude: 121.86,
+                category: .cafe
+            )
+        )
+        XCTAssertEqual(saved.name, "Freed After Alias Delete Cafe")
         XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
     }
 

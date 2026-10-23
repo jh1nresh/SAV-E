@@ -987,6 +987,43 @@ final class ProfileAvatarStoreTests: XCTestCase {
         }
     }
 
+    /// P1 4365127940: aborting logout must not leave Share seeing a signed-out
+    /// owner while the app session is still A.
+    @MainActor
+    func testAbortedSDKLogoutKeepsShareOwnerCache() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        let previousSuspension = auth.signOutSuspension
+        let previousSDKProvider = auth.signOutSDKUserIDProvider
+        let suite = "abort-logout-owner-cache-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        SavePlaceLimitHandoff.testDefaults = defaults
+        defer {
+            auth.authState = previousAuth
+            auth.signOutSuspension = previousSuspension
+            auth.signOutSDKUserIDProvider = previousSDKProvider
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+            defaults.removePersistentDomain(forName: suite)
+        }
+        auth.authState = .authenticated(userId: "account-a")
+        SavePlaceLimitHandoff.syncActiveOwner("account-a")
+        var logoutCalls = 0
+        auth.signOutSDKUserIDProvider = {
+            await Task.yield()
+            return "account-b"
+        }
+        auth.signOutSuspension = { logoutCalls += 1 }
+        await auth.signOut()
+        XCTAssertEqual(logoutCalls, 0, "An SDK owner mismatch must abort before logout")
+        XCTAssertEqual(auth.currentUserId, "account-a")
+        XCTAssertEqual(
+            SavePlaceLimitHandoff.cachedActiveOwner(),
+            "account-a",
+            "Share must still see A when logout aborts and the app stays signed in as A"
+        )
+    }
+
     @MainActor
     func testConsumedBatchesCannotRestoreDeletedOwnerButNewSameOwnerBatchCan() throws {
         let container = directory.appendingPathComponent("consumed-batches")
