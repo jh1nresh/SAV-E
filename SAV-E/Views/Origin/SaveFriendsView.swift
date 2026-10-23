@@ -162,8 +162,8 @@ struct SaveFriendsView: View {
                         .padding(.trailing, SaveLayout.stickerToText)
 
                     VStack(alignment: .leading, spacing: SaveLayout.titleToMeta) {
-                        // Names wrap at Dynamic Type / longer display names
-                        // (P2 4341083578). Last-at stays one line.
+                        // Names and last-at wrap at Dynamic Type / longer
+                        // production strings (P2 4341083578, 4343545980).
                         Text(row.authorName)
                             .font(SaveAtlasType.strong(17))
                             .foregroundStyle(SaveAtlasPalette.ink)
@@ -177,7 +177,7 @@ struct SaveFriendsView: View {
                         )
                             .font(SaveAtlasType.body(13))
                             .foregroundStyle(SaveAtlasPalette.muted)
-                            .lineLimit(1)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }

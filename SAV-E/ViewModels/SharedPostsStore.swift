@@ -54,12 +54,15 @@ final class SharedPostsStore: ObservableObject {
                 return
             }
             if ProcessInfo.processInfo.arguments.contains("--uitest-friends-town") {
-                // Feed-only. `.mine` must stay empty so H1–H4 Passport
-                // captures do not paint Mia / Leo / Kai / Ana as the
-                // signed-in user's own posts (P2 4336028740).
-                if route == .feed {
+                // `.mine` stays empty so H1–H4 Passport captures do not
+                // paint Mia / Leo / Kai / Ana as the signed-in user's
+                // own posts (P2 4336028740). `.feed` and `.author`
+                // keep the fixture so Friends → author passport is
+                // populated (P2 4344156753).
+                switch route {
+                case .feed, .author:
                     applyDemoFixture(items: Self.friendsTownPosts)
-                } else {
+                case .mine:
                     posts = []
                     counts = SocialProfileCounts(postCount: 0, followingCount: 0, followerCount: 0)
                 }

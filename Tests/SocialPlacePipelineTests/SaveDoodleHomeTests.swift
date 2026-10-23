@@ -847,7 +847,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("SaveDoodleEmptyPlate"))
         XCTAssertTrue(design.contains("then the city, clues"))
         XCTAssertTrue(design.contains("eade369"))
-        XCTAssertTrue(design.contains("home-mask.png"))
+        XCTAssertFalse(design.contains("home-mask.png"))
         XCTAssertTrue(design.contains("judged manually by DESIGN"))
         XCTAssertTrue(design.contains("v1 is retired"))
         XCTAssertFalse(design.contains("23cca55"))
@@ -860,8 +860,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         let readme = try source(at: "Prototypes/AtlasPostcard/README.md")
         XCTAssertTrue(readme.contains("home-light.png"))
         XCTAssertTrue(readme.contains("eade369"))
-        XCTAssertTrue(readme.contains("home-mask.png"))
-        XCTAssertTrue(readme.contains("white = ignore"))
+        XCTAssertFalse(readme.contains("home-mask.png"))
+        XCTAssertTrue(readme.contains("unmasked"))
         XCTAssertTrue(readme.contains("position"))
         XCTAssertFalse(readme.contains("23cca55"))
         XCTAssertFalse(readme.contains("layout boxes"))
@@ -881,20 +881,19 @@ final class SaveDoodleHomeTests: XCTestCase {
         ))
         XCTAssertEqual(pngDimension(homeDarkPNG, at: 16), 402)
         XCTAssertEqual(pngDimension(homeDarkPNG, at: 20), 874)
-        let homeMaskPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
-            "Prototypes/AtlasPostcard/Reference/ProductionTargets/home-mask.png"
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent(
+                "Prototypes/AtlasPostcard/Reference/ProductionTargets/home-mask.png"
+            ).path
         ))
-        XCTAssertEqual([UInt8](homeMaskPNG.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
-        XCTAssertEqual(pngDimension(homeMaskPNG, at: 16), 402)
-        XCTAssertEqual(pngDimension(homeMaskPNG, at: 20), 874)
         let parity = try source(at: "Prototypes/AtlasPostcard/Scripts/VisualParity.swift")
         XCTAssertTrue(parity.contains("--mask"))
         XCTAssertTrue(parity.contains("white = ignore"))
         XCTAssertTrue(parity.contains("\"position\""))
         XCTAssertTrue(parity.contains("\"fontStyle\""))
         let parityRunner = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
-        XCTAssertTrue(parityRunner.contains("home-mask.png"))
-        XCTAssertTrue(parityRunner.contains("--mask"))
+        XCTAssertFalse(parityRunner.contains("home-mask.png"))
+        XCTAssertFalse(parityRunner.contains("--mask"))
         XCTAssertTrue(parityRunner.contains("compare_args"))
         XCTAssertFalse(parityRunner.contains("mask_args"))
         let mapPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
