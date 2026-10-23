@@ -241,6 +241,15 @@ private extension SaveAddressLocality {
     }
 
     static func cjkMunicipality(in token: String) -> String? {
+        var text = token
+        for country in cjkCountryPrefixes {
+            text = text.replacingOccurrences(of: country, with: "")
+        }
+        // 京都市 is the only Japanese city whose name is 都+市. A suffix
+        // scan can leave `都市`; the named form must win over that split.
+        if let named = namedCJKMunicipalities.first(where: { text.contains($0) }) {
+            return named
+        }
         if let leading = leadingCJKAdmin(in: token),
            let city = cjkMunicipalityScan(in: leading.rest) {
             return city
@@ -278,6 +287,9 @@ private extension SaveAddressLocality {
             if taken >= 4 { break }
         }
         let city = String(head[start...])
+        if city == "都市", start > head.startIndex, head[head.index(before: start)] == "京" {
+            return "京都市"
+        }
         return city.count >= 2 ? city : nil
     }
 
@@ -328,6 +340,7 @@ private extension SaveAddressLocality {
     }
 
     static let namedJapanesePrefectures = ["東京都", "北海道", "大阪府", "京都府"]
+    static let namedCJKMunicipalities = ["京都市"]
 
     static func cjkAdminToken(in token: String) -> String? {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)

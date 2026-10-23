@@ -691,14 +691,19 @@ final class SaveDoodleHomeTests: XCTestCase {
         let stale = SavePassportCollectionMode.homeCollected.places(
             from: places, selection: .city("nonexistent"), location: nil, locationDenied: true
         )
-        XCTAssertNotEqual(
-            stale.map(\.id),
-            places.map(\.id),
-            "A missing city must not unscope to the full collection"
+        let resolved = SaveDoodleHomeCatalog.resolvedSelection(
+            .city("nonexistent"), places: places, locationDenied: true
         )
+        XCTAssertNotEqual(resolved, .city("nonexistent"))
         XCTAssertFalse(
             stale.isEmpty,
             "A missing city falls back to the newest resolvable city, not an empty stamp set"
+        )
+        XCTAssertEqual(
+            stale.map(\.id),
+            SaveDoodleHomeCatalog.collectedScopePlaces(
+                from: places, selection: resolved, location: nil, locationDenied: true
+            ).map(\.id)
         )
     }
 
