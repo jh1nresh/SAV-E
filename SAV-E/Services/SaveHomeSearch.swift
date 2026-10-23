@@ -33,6 +33,11 @@ struct SaveHomeSearch {
 
     /// Metro-level city for D2 switching. Prefers recognized aliases so
     /// "Shibuya City, Tokyo" and "Dusit, Bangkok" resolve to Tokyo / Bangkok.
+    /// Shared country recognition for metro matching and fallback city grouping.
+    static func countryToken(in address: String) -> String? {
+        addressCountryToken(address)
+    }
+
     static func metroKey(in address: String) -> String? {
         for city in City.ordered where city.matches(address: address) {
             return city.rawValue
@@ -474,7 +479,7 @@ private extension SaveHomeSearch {
             .filter { !$0.isEmpty }
         guard let last = parts.last else { return nil }
         let token = normalize(last)
-        return countryTokens.contains(token) ? token : nil
+        return countryTokens.contains(token) ? token : localizedCountryTokens[token]
     }
 
     private static func isUnitedStatesStatePart(_ value: String) -> Bool {
@@ -489,6 +494,24 @@ private extension SaveHomeSearch {
         }
         return false
     }
+
+    // Use the platform's full region catalogue, not a handful of supported
+    // metros' countries: Los Ángeles in Chile must never become California.
+    private static let localizedCountryTokens: [String: String] = {
+        let english = Locale(identifier: "en_US_POSIX")
+        let locales = [english, Locale(identifier: "zh_Hant"), Locale(identifier: "zh_Hans")]
+        var tokens: [String: String] = [:]
+        for region in Locale.Region.isoRegions {
+            guard let name = english.localizedString(forRegionCode: region.identifier) else { continue }
+            let canonical = region.identifier == "HK" ? "hong kong" : normalize(name)
+            for locale in locales {
+                if let name = locale.localizedString(forRegionCode: region.identifier) {
+                    tokens[normalize(name)] = canonical
+                }
+            }
+        }
+        return tokens
+    }()
 
     private static let countryTokens: Set<String> = [
         "usa", "us", "united states", "united states of america",

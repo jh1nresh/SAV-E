@@ -61,7 +61,9 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(town.contains("showsPins"))
         let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertTrue(home.contains("home.miniMap"))
-        XCTAssertTrue(home.contains("Marker("))
+        XCTAssertTrue(home.contains("Map(initialPosition:"))
+        XCTAssertTrue(home.contains("Annotation("))
+        XCTAssertTrue(home.contains("SaveDoodleNumberPin("))
         XCTAssertTrue(home.contains("onOpenMap"))
     }
 

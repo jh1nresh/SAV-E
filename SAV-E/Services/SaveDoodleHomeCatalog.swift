@@ -208,14 +208,31 @@ enum SaveDoodleHomeCatalog {
         if let cjk = cjkLocality(in: address) { return cjk }
 
         var local = parts
-        if let last = local.last, Self.countryTokens.contains(last.lowercased()) {
+        let hasCountry = local.last.map {
+            SaveHomeSearch.countryToken(in: $0) != nil || countryTokens.contains($0.lowercased())
+        } ?? false
+        if hasCountry { local.removeLast() }
+        let country = parts.last.flatMap { SaveHomeSearch.countryToken(in: $0) }
+        while let last = local.last,
+              isPostalOrAdminRegion(last) || (local.count > 1 && isKnownAdminRegion(last, country: country)) {
             local.removeLast()
         }
-        while let last = local.last, isPostalOrAdminRegion(last) {
-            local.removeLast()
-        }
+        // Otherwise retain the last locality. A country-qualified pair can be
+        // street+city (Damrak, Amsterdam), so its length is not region evidence.
         guard let city = local.last, !city.isEmpty else { return nil }
         return stripLeadingPostalCode(from: city)
+    }
+
+    private static func isKnownAdminRegion(_ value: String, country: String?) -> Bool {
+        // Bounded, country-scoped administrative names supported by our address
+        // fixtures. Unknown free-form regions remain ambiguous; do not guess
+        // them from the absence of a street designator.
+        let regions: [String: Set<String>] = [
+            "chile": ["biobio", "bio bio", "region del biobio"],
+            "colombia": ["santander"],
+        ]
+        guard let country else { return false }
+        return regions[country]?.contains(normalizedCityToken(value)) == true
     }
 
     private static let countryTokens: Set<String> = [
@@ -259,8 +276,9 @@ enum SaveDoodleHomeCatalog {
             .filter { !$0.isEmpty }
         var local = parts
         var country: String?
-        if let last = local.last, countryTokens.contains(last.lowercased()) {
-            country = normalizedCityToken(last)
+        if let last = local.last,
+           let recognized = SaveHomeSearch.countryToken(in: last) ?? (countryTokens.contains(last.lowercased()) ? normalizedCityToken(last) : nil) {
+            country = recognized
             local.removeLast()
         }
         var admin: String?
@@ -668,6 +686,36 @@ final class SaveDoodleVisitStore {
 
     static func countKey(_ id: UUID) -> String {
         "save.doodle.passport.visits.\(suiteSuffix).\(id.uuidString)"
+    }
+}
+
+/// Only Home's Collected entry carries a city scope. Other owner Passport
+/// presentations retain the full collection and saved/goal progress.
+enum SavePassportCollectionMode {
+    case collection
+    case homeCollected
+
+    func places(
+        from places: [Place],
+        selection: SaveDoodleCitySelection,
+        location: CLLocation?,
+        locationDenied: Bool
+    ) -> [Place] {
+        guard self == .homeCollected else { return places }
+        return SaveDoodleHomeProgressCatalog.cityPlaces(
+            from: places, selection: selection, location: location,
+            locationDenied: locationDenied
+        )
+    }
+
+    func progress(in places: [Place]) -> (completed: Int, total: Int) {
+        switch self {
+        case .collection:
+            return (places.count, SaveTileTownProductLock.passportGoal(for: places.count))
+        case .homeCollected:
+            let count = SaveDoodleHomeProgressCatalog.progress(in: places)
+            return (count.visited, count.saved)
+        }
     }
 }
 

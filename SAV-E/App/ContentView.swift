@@ -182,6 +182,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var isRootSheetPresented: Bool
     @State private var isPassportPresented = false
+    @State private var passportCollectionMode: SavePassportCollectionMode = .collection
     @State private var drawerDetent: PresentationDetent
     @State private var mapDetailDrawerItem: MapDetailDrawerItem?
     @State private var pendingReceiptMapDetail: MapDetailDrawerItem?
@@ -303,7 +304,7 @@ struct ContentView: View {
             fullScreenContent(for: route)
         }
         .sheet(isPresented: $isPassportPresented, onDismiss: handleExclusiveChromeDismiss) {
-            passportView(isRootTab: false)
+            passportView(isRootTab: false, collectionMode: passportCollectionMode)
         }
         .onChange(of: drawerVM.mapAction) { _, action in
             if let action { mapVM.apply(action) }
@@ -391,7 +392,7 @@ struct ContentView: View {
     /// Profile root tab, and as the sheet the older surfaces still push. One
     /// definition so the two entry points cannot drift apart.
     @ViewBuilder
-    private func passportView(isRootTab: Bool) -> some View {
+    private func passportView(isRootTab: Bool, collectionMode: SavePassportCollectionMode = .collection) -> some View {
         ProfileView(
             savedPlaces: mapVM.places,
             waitingClues: mapVM.reviewCandidates.count,
@@ -465,6 +466,7 @@ struct ContentView: View {
             },
             onOpenPlace: { openMapDetail(.savedPlace($0)) },
             isRootTab: isRootTab,
+            collectionMode: collectionMode,
             requestsConnections: $requestsSocialConnections
         )
         .environment(\.appLanguageSettings, languageSettings)
@@ -545,97 +547,111 @@ struct ContentView: View {
         // observed before Map remounts with the leftover wordmark header.
         let mapIdentity = doodleSession.mapSurfaceID
         return NavigationStack(path: $rootPath) {
-            ReferenceViewport {
-                ZStack(alignment: .topLeading) {
-                    Group {
-                        switch selectedRootTab {
-                        case .home:
-                            SaveHomeView(
-                                store: tripStore,
-                                mapViewModel: mapVM,
-                                onCapture: { openDrawer(.addLink, tripID: nil) },
-                                onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
-                                onOpenReviewCandidate: { openReviewCandidate($0, tripID: nil) },
-                                // Trips left the root bar; both it and Saves
-                                // are pushed children now, so neither surface
-                                // is lost by the restructure.
-                                onOpenSaves: {
-                                    rootPath = SaveChromeNavigation.pathByOpening(
-                                        .saves,
-                                        currently: rootPath
-                                    )
-                                },
-                                onOpenTrips: {
-                                    rootPath = SaveChromeNavigation.pathByOpening(
-                                        .trips,
-                                        currently: rootPath
-                                    )
-                                },
-                                onOpenTrip: {
-                                    rootPath = SaveChromeNavigation.pathByOpening(
-                                        .trip($0),
-                                        currently: rootPath
-                                    )
-                                },
-                                onOpenPassport: openPassport,
-                                onOpenMap: { openMapFromMiniMap() }
-                            )
-                        case .map:
-                            SaveMapRootView(
-                                mapViewModel: mapVM,
-                                shouldFocusOnUserLocation: true,
-                                // The single drawer panel owns the shelf now;
-                                // the canvas never draws its own copy.
-                                hidesCommandShelf: true,
-                                onOpenSearch: { openMapSearch() },
-                                onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
-                                onPlanAroundPlace: openPlanAround,
-                                onOpenPassport: openPassport
-                            )
-                            .id(mapIdentity)
-                        case .friends:
-                            SaveFriendsView(
-                                currentUserID: PrivyAuthService.shared.currentUserId,
-                                onSaved: { await mapVM.loadPlaces(force: true) },
-                                onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
-                            )
-                        case .profile:
-                            passportView(isRootTab: true)
-                        case .capture:
-                            // Unreachable: `.capture` is a control, and
-                            // `selectRootTab` opens the cover instead of
-                            // committing the selection.
-                            Color.clear
-                        }
-                    }
-
-                    AtlasTabBar(
-                        items: SaveRootTab.allCases,
-                        selection: selectedRootTab,
-                        title: \.atlasTitle,
-                        icon: \.atlasIcon,
-                        accessibilityPrefix: "root.tab",
-                        displayTitle: { $0.title(language: languageSettings.language) },
-                        isRaisedControl: { $0.isCaptureControl },
-                        hidesTitle: { $0.isCaptureControl },
-                        iconView: { item in
-                            AnyView(
-                                SaveDoodleTabIcon(
-                                    kind: .tab(iconName: item.atlasIcon),
-                                    pointSize: 24
+            GeometryReader { safeArea in
+                // ReferenceViewport draws from the full-screen origin and scales its canvas.
+                // Read real insets before that view ignores them; convert Home's physical
+                // safe-area + 8pt header origin into the reference canvas coordinates.
+                let viewportScale = max(0.01, min(
+                    (safeArea.size.width + safeArea.safeAreaInsets.leading + safeArea.safeAreaInsets.trailing) / AtlasMetrics.width,
+                    (safeArea.size.height + safeArea.safeAreaInsets.top + safeArea.safeAreaInsets.bottom) / AtlasMetrics.height
+                ))
+                ReferenceViewport {
+                    ZStack(alignment: .topLeading) {
+                        Group {
+                            switch selectedRootTab {
+                            case .home:
+                                SaveHomeView(
+                                    store: tripStore,
+                                    mapViewModel: mapVM,
+                                    headerTopPadding: (safeArea.safeAreaInsets.top + SaveSpace.xs) / viewportScale,
+                                    onCapture: { openDrawer(.addLink, tripID: nil) },
+                                    onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                    onOpenReviewCandidate: { openReviewCandidate($0, tripID: nil) },
+                                    // Trips left the root bar; both it and Saves
+                                    // are pushed children now, so neither surface
+                                    // is lost by the restructure.
+                                    onOpenSaves: {
+                                        rootPath = SaveChromeNavigation.pathByOpening(
+                                            .saves,
+                                            currently: rootPath
+                                        )
+                                    },
+                                    onOpenTrips: {
+                                        rootPath = SaveChromeNavigation.pathByOpening(
+                                            .trips,
+                                            currently: rootPath
+                                        )
+                                    },
+                                    onOpenTrip: {
+                                        rootPath = SaveChromeNavigation.pathByOpening(
+                                            .trip($0),
+                                            currently: rootPath
+                                        )
+                                    },
+                                    onOpenPassport: openPassport,
+                                    onOpenCollectedPassport: { openPassport(collectionMode: .homeCollected) },
+                                    onOpenMap: { openMapFromMiniMap() }
                                 )
-                            )
-                        },
-                        onSelect: { selectRootTab($0) }
-                    )
-                    .placed(
-                        x: AtlasTabBarMetrics.leadingInset,
-                        y: selectedRootTab == .map
-                            ? AtlasTabBarMetrics.mapY
-                            : AtlasTabBarMetrics.standardY,
-                        width: AtlasTabBarMetrics.width,
-                        height: AtlasTabBarMetrics.height
-                    )
+                            case .map:
+                                SaveMapRootView(
+                                    mapViewModel: mapVM,
+                                    shouldFocusOnUserLocation: true,
+                                    // The single drawer panel owns the shelf now;
+                                    // the canvas never draws its own copy.
+                                    hidesCommandShelf: true,
+                                    onOpenSearch: { openMapSearch() },
+                                    onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                    onPlanAroundPlace: openPlanAround,
+                                    onOpenPassport: openPassport
+                                )
+                                .id(mapIdentity)
+                            case .friends:
+                                SaveFriendsView(
+                                    currentUserID: PrivyAuthService.shared.currentUserId,
+                                    onSaved: { await mapVM.loadPlaces(force: true) },
+                                    onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
+                                )
+                            case .profile:
+                                passportView(isRootTab: true)
+                            case .capture:
+                                // Unreachable: `.capture` is a control, and
+                                // `selectRootTab` opens the cover instead of
+                                // committing the selection.
+                                Color.clear
+                            }
+                        }
+
+                        AtlasTabBar(
+                            items: SaveRootTab.allCases,
+                            selection: selectedRootTab,
+                            title: \.atlasTitle,
+                            icon: \.atlasIcon,
+                            accessibilityPrefix: "root.tab",
+                            displayTitle: { $0.title(language: languageSettings.language) },
+                            isRaisedControl: { $0.isCaptureControl },
+                            hidesTitle: { $0.isCaptureControl },
+                            iconView: { item in
+                                AnyView(
+                                    SaveDoodleTabIcon(
+                                        kind: .tab(iconName: item.atlasIcon),
+                                        pointSize: 24
+                                    )
+                                )
+                            },
+                            raisedBackground: {
+                                AnyView(SaveDoodleInkOval().fill(SaveAtlasPalette.coral))
+                            },
+                            onSelect: { selectRootTab($0) }
+                        )
+                        .placed(
+                            x: AtlasTabBarMetrics.leadingInset,
+                            y: selectedRootTab == .map
+                                ? AtlasTabBarMetrics.mapY
+                                : AtlasTabBarMetrics.standardY,
+                            width: AtlasTabBarMetrics.width,
+                            height: AtlasTabBarMetrics.height
+                        )
+                    }
                 }
             }
             .tint(SaveAtlasPalette.forest)
@@ -1153,7 +1169,12 @@ struct ContentView: View {
     }
 
     private func openPassport() {
+        openPassport(collectionMode: .collection)
+    }
+
+    private func openPassport(collectionMode: SavePassportCollectionMode) {
         guard !isPassportPresented else { return }
+        passportCollectionMode = collectionMode
         SaveHaptics.tap()
 
         if isMapPanelExpanded {

@@ -681,8 +681,10 @@ waiting. Test-only or invisible navigation controls are not valid user
 routes. When clues wait, Review is that route. Visited Home/Map stickers
 use the official DESIGN color die-cut (duck, noodle, coffee, temple,
 lantern); unvisited stickers use the matching pencil outline.
-The elephant is brand-only — wordmark and the empty Home plate — and
-is never a place sticker. Code-drawn geometry is not a place sticker.
+Founder 2026-10-23 removed the original elephant artwork from the Home
+wordmark and empty plate. Keep the Savvy wordmark without a replacement mascot.
+The archived elephant asset is never a place sticker. Code-drawn geometry
+is not a place sticker.
 Art sits in a 48pt box at ≤40pt.
 
 Resting Home is Savvy + Eat/Go in the header, then the city, clues,

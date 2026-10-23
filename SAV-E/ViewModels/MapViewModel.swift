@@ -13,6 +13,7 @@ enum ReviewCandidateError: LocalizedError {
     case correctionLockedToPreviousStamp
     case signInRequired
     case sessionChangedAfterCommit
+    case exactSearchPartiallyCommitted(String)
 
     var errorDescription: String? {
         switch self {
@@ -32,16 +33,19 @@ enum ReviewCandidateError: LocalizedError {
             return "Couldn’t finish recovering the previous stamp. Choose that stamp again."
         case .signInRequired:
             return "Sign in to finish this correction."
+        case .exactSearchPartiallyCommitted(let message):
+            return message
         case .sessionChangedAfterCommit:
             return "Your account changed before this correction finished. The previous account already saved it."
         }
     }
 
     static func preservesCommittedDecision(_ error: Error) -> Bool {
-        if let error = error as? ReviewCandidateError, case .sessionChangedAfterCommit = error {
-            return true
+        guard let error = error as? ReviewCandidateError else { return false }
+        switch error {
+        case .sessionChangedAfterCommit, .exactSearchPartiallyCommitted: return true
+        default: return false
         }
-        return false
     }
 }
 
@@ -450,15 +454,27 @@ enum SharedPlaceSaveOutcome {
 }
 
 struct ExactSearchResolution {
-    let clue: PlaceReviewCandidate
-    let candidateIDs: Set<String>
+    var clue: PlaceReviewCandidate
+    var candidateIDs: Set<String>
+    var decisionPlan: DecisionPlan?
+    let ownerID = PrivyAuthService.shared.currentUserId
+    let sessionGeneration = PrivyAuthService.shared.sessionGeneration
+
+    struct DecisionPlan {
+        let representatives: [PlaceReviewCandidate]
+        let siblings: [PlaceReviewCandidate]
+        let place: Place
+        var hasCommitted = false
+    }
 
     func includes(candidateID: String) -> Bool {
         candidateIDs.contains(candidateID)
     }
 
     func attaching(candidateIDs: Set<String>) -> ExactSearchResolution {
-        ExactSearchResolution(clue: clue, candidateIDs: candidateIDs)
+        var updated = self
+        updated.candidateIDs = candidateIDs
+        return updated
     }
 }
 
@@ -668,7 +684,24 @@ final class MapViewModel: ObservableObject {
     /// After a failed rollback the correction stays claimed on this stamp so
     /// the same clue cannot attach to a second place.
     private var exactSearchRollbackLockPlaceID: UUID?
-    private var isResolvingExactSearchClue = false
+    // A previous account's suspended operation neither blocks a new session
+    // nor releases its in-flight claim when the old continuation finishes.
+    private var exactSearchOperation: (id: UUID, resolution: ExactSearchResolution)?
+    private var isResolvingExactSearchClue: Bool {
+        guard let operation = exactSearchOperation else { return false }
+        return isExactSearchSessionCurrent(operation.resolution)
+    }
+
+    private func claimExactSearchOperation(_ resolution: ExactSearchResolution) -> UUID {
+        let id = UUID()
+        exactSearchOperation = (id, resolution)
+        return id
+    }
+
+    private func releaseExactSearchOperation(_ id: UUID?) {
+        guard let id, exactSearchOperation?.id == id else { return }
+        exactSearchOperation = nil
+    }
     private var importFailureReasons: [UUID: SourceSearchFailureReason] = [:]
     /// Invalidates any in-flight map search before it can publish stale pins.
     private var mapCandidateSearchGeneration = UUID()
@@ -975,9 +1008,12 @@ final class MapViewModel: ObservableObject {
         Place.consolidated(remotePlaces + localPlaces)
     }
 
-    private func mergeSavedSources(_ incoming: Place, into existing: Place) async throws -> Place {
+    private func mergeSavedSources(
+        _ incoming: Place, into existing: Place, exactResolution: ExactSearchResolution? = nil
+    ) async throws -> Place {
         let merged = existing.mergingSources(from: incoming)
         if usesRemotePersistence { try await supabaseService.updatePlace(merged, previous: existing) }
+        if let exactResolution { try requireExactSearchSession(exactResolution) }
         mirrorToLocalVault(merged)
         places = Place.consolidated(places.filter { $0.id != existing.id } + [merged])
         return merged
@@ -1214,11 +1250,13 @@ final class MapViewModel: ObservableObject {
             selectedReviewCandidate = reviewCandidates.first { $0.id == id }
         }
         if let resolution = exactSearchResolution {
+            // A partially committed plan owns immutable decision snapshots even
+            // when refresh no longer returns an already settled representative.
+            if resolution.decisionPlan != nil { return }
             if let refreshedClue = reviewCandidates.first(where: { $0.id == resolution.clue.id }) {
-                exactSearchResolution = ExactSearchResolution(
-                    clue: refreshedClue,
-                    candidateIDs: resolution.candidateIDs
-                )
+                var refreshed = resolution
+                refreshed.clue = refreshedClue
+                exactSearchResolution = refreshed
             } else {
                 exactSearchResolution = nil
                 exactSearchRollbackLockPlaceID = nil
@@ -1705,16 +1743,21 @@ final class MapViewModel: ObservableObject {
 
     @discardableResult
     func saveMapCandidateAsPlace(_ candidate: SaveMapCandidate) async throws -> Place {
+        var resolution = exactSearchResolution.flatMap { $0.includes(candidateID: candidate.id) ? $0 : nil }
+        if resolution == nil, exactSearchRollbackLockPlaceID != nil { resolution = exactSearchResolution }
+        return try await withExactSearchTransportSession(resolution) {
+            try await saveMapCandidateAsPlace(candidate, exactResolution: resolution)
+        }
+    }
+
+    private func saveMapCandidateAsPlace(
+        _ candidate: SaveMapCandidate, exactResolution: ExactSearchResolution?
+    ) async throws -> Place {
         if isResolvingExactSearchClue {
             correctionDrawerError = ReviewCandidateError.correctionInFlight.errorDescription
             throw ReviewCandidateError.correctionInFlight
         }
-        var exactResolution = exactSearchResolution.flatMap { resolution in
-            resolution.includes(candidateID: candidate.id) ? resolution : nil
-        }
-        if exactResolution == nil, exactSearchRollbackLockPlaceID != nil {
-            exactResolution = exactSearchResolution
-        }
+        if let exactResolution { try requireExactSearchSession(exactResolution) }
         if let locked = exactSearchRollbackLockPlaceID {
             let lockedStamp = places.first(where: { $0.id == locked })
             let matchesLocked = lockedStamp.map { mapCandidateMatchesStamp(candidate, $0) } ?? false
@@ -1723,16 +1766,13 @@ final class MapViewModel: ObservableObject {
                 throw ReviewCandidateError.correctionLockedToPreviousStamp
             }
         }
-        var claimedExactSearch = false
-        if exactResolution != nil {
-            isResolvingExactSearchClue = true
-            claimedExactSearch = true
+        let exactOperationID = exactResolution.map { claimExactSearchOperation($0) }
+        let claimedExactSearch = exactOperationID != nil
+        if claimedExactSearch {
             exactSearchResolution = nil
             correctionDrawerError = nil
         }
-        defer {
-            if claimedExactSearch { isResolvingExactSearchClue = false }
-        }
+        defer { releaseExactSearchOperation(exactOperationID) }
 
         do {
             let draft = SavePlaceDraft(
@@ -1751,6 +1791,7 @@ final class MapViewModel: ObservableObject {
             )
             var place = try await saveSearchController.saveMapCandidate(draft)
             if let exactResolution {
+                try requireExactSearchSession(exactResolution)
                 place.createdAt = min(place.createdAt, exactResolution.clue.createdAt)
                 place = place.attachingReviewClue(exactResolution.clue)
             }
@@ -1787,7 +1828,9 @@ final class MapViewModel: ObservableObject {
             if let userId = mapCandidateUserIDProvider() {
                 do {
                     try await mapCandidatePlaceSaver(place, userId)
+                    if let exactResolution { try requireExactSearchSession(exactResolution) }
                 } catch {
+                    if let exactResolution { try requireExactSearchSession(exactResolution) }
                     print("MapViewModel: failed to sync saved map candidate \(place.name): \(error)")
                     if exactResolution != nil {
                         // Resolving a Review clue is a two-record operation. Do
@@ -1808,6 +1851,7 @@ final class MapViewModel: ObservableObject {
                 if ReviewCandidateError.preservesCommittedDecision(error) {
                     throw error
                 }
+                if let exactResolution { try requireExactSearchSession(exactResolution) }
                 // The place insert already succeeded. Retain its ID so retrying
                 // the pending decision reuses this stamp instead of inserting
                 // another, and keep the correction claimed on this new row.
@@ -1821,6 +1865,7 @@ final class MapViewModel: ObservableObject {
                 throw error
             }
             if resolvedExactSearch { place = await refreshedConfirmedPlace(place) }
+            if let exactResolution { try requireExactSearchSession(exactResolution) }
             mirrorToLocalVault(place)
             if !places.contains(where: { $0.matches(place) }) {
                 places = [place] + places
@@ -1830,6 +1875,7 @@ final class MapViewModel: ObservableObject {
             revealImportedPlaces([place])
             return place
         } catch {
+            if let exactResolution { try requireExactSearchSession(exactResolution) }
             if claimedExactSearch,
                exactSearchResolution == nil,
                !ReviewCandidateError.preservesCommittedDecision(error) {
@@ -1847,9 +1893,12 @@ final class MapViewModel: ObservableObject {
     /// Map-search saved-row tap during Review correction. On failure the
     /// drawer stays open and `correctionDrawerError` is ready for the alert.
     func chooseSavedStampFromExactSearch(_ place: Place) async -> Place? {
+        let owner = authService.currentUserId
+        let generation = authService.sessionGeneration
         do {
             return try await resolveExactSearchClue(toSavedPlace: place)
         } catch {
+            guard !usesRemotePersistence || (authService.currentUserId == owner && authService.sessionGeneration == generation) else { return nil }
             if correctionDrawerError == nil, let message = (error as? LocalizedError)?.errorDescription,
                !message.isEmpty {
                 correctionDrawerError = message
@@ -1870,6 +1919,12 @@ final class MapViewModel: ObservableObject {
     /// the correction claimed on the first stamp.
     @discardableResult
     func resolveExactSearchClue(toSavedPlace place: Place) async throws -> Place {
+        try await withExactSearchTransportSession(exactSearchResolution) {
+            try await resolveExactSearchClueWithinSession(toSavedPlace: place)
+        }
+    }
+
+    private func resolveExactSearchClueWithinSession(toSavedPlace place: Place) async throws -> Place {
         if isResolvingExactSearchClue {
             correctionDrawerError = ReviewCandidateError.correctionInFlight.errorDescription
             throw ReviewCandidateError.correctionInFlight
@@ -1881,12 +1936,13 @@ final class MapViewModel: ObservableObject {
             correctionDrawerError = error.errorDescription
             throw error
         }
+        try requireExactSearchSession(resolution)
         if let locked = exactSearchRollbackLockPlaceID, locked != place.id {
             correctionDrawerError = ReviewCandidateError.correctionLockedToPreviousStamp.errorDescription
             throw ReviewCandidateError.correctionLockedToPreviousStamp
         }
-        isResolvingExactSearchClue = true
-        defer { isResolvingExactSearchClue = false }
+        let operationID = claimExactSearchOperation(resolution)
+        defer { releaseExactSearchOperation(operationID) }
         exactSearchResolution = nil
         correctionDrawerError = nil
         var persistedMerge = false
@@ -1896,6 +1952,7 @@ final class MapViewModel: ObservableObject {
             associated = place.attachingReviewClue(resolution.clue)
             if associated != place {
                 if usesRemotePersistence { try await supabaseService.updatePlace(associated, previous: place) }
+                try requireExactSearchSession(resolution)
                 persistedMerge = true
                 mirrorToLocalVault(associated)
                 places = Place.consolidated(places.filter { $0.id != associated.id } + [associated])
@@ -1907,10 +1964,12 @@ final class MapViewModel: ObservableObject {
                 to: associated
             )
             decisionCommitted = resolvedExactSearch.committed
+            try requireExactSearchSession(resolution)
             exactSearchRollbackLockPlaceID = nil
             correctionDrawerError = nil
             guard resolvedExactSearch.resolved else { return associated }
             associated = await refreshedConfirmedPlace(associated)
+            try requireExactSearchSession(resolution)
             mirrorToLocalVault(associated)
             places = Place.consolidated(places.filter { $0.id != associated.id } + [associated])
             return associated
@@ -1935,18 +1994,18 @@ final class MapViewModel: ObservableObject {
         candidateID: String,
         sessionAlreadyClaimed: Bool
     ) async throws -> Place {
+        try requireExactSearchSession(resolution)
+        var operationID: UUID?
         if !sessionAlreadyClaimed {
             if isResolvingExactSearchClue {
                 correctionDrawerError = ReviewCandidateError.correctionInFlight.errorDescription
                 throw ReviewCandidateError.correctionInFlight
             }
-            isResolvingExactSearchClue = true
+            operationID = claimExactSearchOperation(resolution)
             exactSearchResolution = nil
             correctionDrawerError = nil
         }
-        defer {
-            if !sessionAlreadyClaimed { isResolvingExactSearchClue = false }
-        }
+        defer { releaseExactSearchOperation(operationID) }
         if let locked = exactSearchRollbackLockPlaceID, locked != match.id {
             correctionDrawerError = ReviewCandidateError.correctionLockedToPreviousStamp.errorDescription
             throw ReviewCandidateError.correctionLockedToPreviousStamp
@@ -1955,7 +2014,7 @@ final class MapViewModel: ObservableObject {
         var decisionCommitted = false
         var associated = match
         do {
-            associated = try await mergeSavedSources(incoming, into: match)
+            associated = try await mergeSavedSources(incoming, into: match, exactResolution: resolution)
             persistedMerge = true
             let resolvedExactSearch = try await resolveExactSearchClueIfNeeded(
                 resolution: resolution,
@@ -1963,6 +2022,7 @@ final class MapViewModel: ObservableObject {
                 to: associated
             )
             decisionCommitted = resolvedExactSearch.committed
+            try requireExactSearchSession(resolution)
             exactSearchRollbackLockPlaceID = nil
             correctionDrawerError = nil
             mapCandidates.removeAll { $0.id == candidateID }
@@ -1970,6 +2030,7 @@ final class MapViewModel: ObservableObject {
             if resolvedExactSearch.resolved {
                 associated = await refreshedConfirmedPlace(associated)
             }
+            try requireExactSearchSession(resolution)
             mirrorToLocalVault(associated)
             places = Place.consolidated(places.filter { $0.id != associated.id } + [associated])
             focusSavedPlace(associated, showStampMoment: false)
@@ -1994,6 +2055,15 @@ final class MapViewModel: ObservableObject {
         decisionCommitted: Bool,
         error: Error
     ) async throws -> Never {
+        try requireExactSearchSession(resolution)
+        if let reviewError = error as? ReviewCandidateError {
+            switch reviewError {
+            case .exactSearchPartiallyCommitted, .sessionChangedAfterCommit:
+                // Preserve a retry plan, or leave a new account's state untouched.
+                throw error
+            default: break
+            }
+        }
         if decisionCommitted || ReviewCandidateError.preservesCommittedDecision(error) {
             exactSearchRollbackLockPlaceID = nil
             correctionDrawerError = error.localizedDescription
@@ -2003,11 +2073,12 @@ final class MapViewModel: ObservableObject {
             var rollbackError: Error?
             if usesRemotePersistence {
                 do {
-                    try await rollBackRemoteStampMerge(original: original, merged: merged)
+                    try await rollBackRemoteStampMerge(original: original, merged: merged, resolution: resolution)
                 } catch {
                     rollbackError = error
                 }
             }
+            try requireExactSearchSession(resolution)
             try? saveLocalVaultService.removeConfirmedPlace(original)
             mirrorToLocalVault(original)
             places = Place.consolidated(places.filter { $0.id != original.id } + [original])
@@ -2026,17 +2097,46 @@ final class MapViewModel: ObservableObject {
         throw error
     }
 
-    private func rollBackRemoteStampMerge(original: Place, merged: Place) async throws {
+    private func rollBackRemoteStampMerge(original: Place, merged: Place, resolution: ExactSearchResolution) async throws {
         var lastError: Error?
         for _ in 1...2 {
+            try requireExactSearchSession(resolution)
             do {
                 try await supabaseService.updatePlace(original, previous: merged)
+                try requireExactSearchSession(resolution)
                 return
             } catch {
+                try requireExactSearchSession(resolution)
                 lastError = error
             }
         }
         throw lastError ?? ReviewCandidateError.sourceStillUnresolved
+    }
+
+    /// Reuse the transport's pre-send token guard for every nested exact-search
+    /// request (insert, merge, decision, readback and compensating rollback).
+    /// Local continuations still validate the initiating resolution separately.
+    private func withExactSearchTransportSession(
+        _ resolution: ExactSearchResolution?, operation: () async throws -> Place
+    ) async throws -> Place {
+        guard usesRemotePersistence, let resolution, let owner = resolution.ownerID else {
+            return try await operation()
+        }
+        try requireExactSearchSession(resolution)
+        return try await SAVEPendingImportSessionScope.$current.withValue((resolution.sessionGeneration, owner)) {
+            try await operation()
+        }
+    }
+
+    private func isExactSearchSessionCurrent(_ resolution: ExactSearchResolution) -> Bool {
+        !usesRemotePersistence || (
+            authService.currentUserId == resolution.ownerID &&
+            authService.sessionGeneration == resolution.sessionGeneration
+        )
+    }
+
+    private func requireExactSearchSession(_ resolution: ExactSearchResolution) throws {
+        guard isExactSearchSessionCurrent(resolution) else { throw ReviewCandidateError.sessionChangedAfterCommit }
     }
 
     /// After an exact-place search confirms a place, the originating Review
@@ -2055,26 +2155,73 @@ final class MapViewModel: ObservableObject {
         if let candidateID, !resolution.includes(candidateID: candidateID) { return (false, false) }
 
         let clue = resolution.clue
-        var committed = false
-        if usesRemotePersistence {
-            // Persist leftovers first so a leftover failure cannot leave the
-            // originating decision committed while extras remain remote-review
-            // and the next refresh restores them.
-            let leftovers = reviewCandidates.filter {
-                $0.id != clue.id && isDuplicateReviewClue($0, of: clue)
-            }
-            for leftover in leftovers {
-                try await persistExactSearchResolution(for: leftover, to: place)
-            }
-            try await persistExactSearchResolution(for: clue, to: place)
-            committed = true
+        var retryResolution = resolution
+        var committed = resolution.decisionPlan?.hasCommitted ?? false
+        func requireInitiatingSession() throws {
+            try requireExactSearchSession(resolution)
         }
+        try requireInitiatingSession()
+        if usesRemotePersistence {
+            if retryResolution.decisionPlan == nil {
+                let leftovers = reviewCandidates.filter {
+                    $0.id != clue.id && isDuplicateReviewClue($0, of: clue)
+                }.sorted { $0.id.uuidString < $1.id.uuidString }
+                var seenRuns = Set<UUID>()
+                if let run = clue.workflowRunId { seenRuns.insert(run) }
+                var representatives: [PlaceReviewCandidate] = []
+                var siblings: [PlaceReviewCandidate] = []
+                for leftover in leftovers {
+                    if let run = leftover.workflowRunId, !seenRuns.insert(run).inserted {
+                        siblings.append(leftover)
+                    } else {
+                        representatives.append(leftover)
+                    }
+                }
+                retryResolution.decisionPlan = .init(representatives: representatives + [clue], siblings: siblings, place: place)
+            }
+            guard let plan = retryResolution.decisionPlan else { return (false, false) }
+            do {
+                // Freeze representative IDs and payloads across refresh, not
+                // just ordering: a settled run rejects a sibling's fingerprint.
+                for representative in plan.representatives {
+                    try requireInitiatingSession()
+                    try await persistExactSearchResolution(for: representative, to: plan.place)
+                    try requireInitiatingSession()
+                    committed = true
+                    retryResolution.decisionPlan?.hasCommitted = true
+                }
+                // A terminal decision settles one workflow, but venue
+                // reconciliation can leave source-duplicate siblings pending.
+                for leftover in plan.siblings {
+                    try requireInitiatingSession()
+                    try await supabaseService.updatePlaceCandidateStatus(
+                        leftover.id, status: "saved", placeId: place.id
+                    )
+                    try requireInitiatingSession()
+                }
+            } catch {
+                // Even an error response can arrive after an account switch.
+                // Never mirror or restore the old account's correction then.
+                try requireInitiatingSession()
+                if committed && !ReviewCandidateError.preservesCommittedDecision(error) {
+                    mirrorToLocalVault(place)
+                    places = Place.consolidated(places.filter { $0.id != place.id } + [place])
+                    exactSearchResolution = retryResolution
+                    exactSearchRollbackLockPlaceID = place.id
+                    correctionDrawerError = error.localizedDescription
+                    throw ReviewCandidateError.exactSearchPartiallyCommitted(error.localizedDescription)
+                }
+                throw error
+            }
+        }
+        try requireInitiatingSession()
 
         // Remote persistence must succeed before the local clue disappears.
         // After the decision commits, local cleanup is best-effort so a vault
         // write cannot roll back a stamp the server already accepted.
         try retireResolvedReviewClue(clue, committed: committed)
         if usesRemotePersistence { await refreshReviewCandidatesLoggingFailures() }
+        try requireInitiatingSession()
         return (true, committed)
     }
 
@@ -2095,6 +2242,7 @@ final class MapViewModel: ObservableObject {
             eventType: .confirmCandidate,
             afterCandidate: updated,
             userFinalPlaceId: place.id,
+            eventID: candidate.workflowRunId ?? candidate.id,
             reason: "User resolved review candidate to an exact map place."
         )
     }
@@ -2638,11 +2786,13 @@ final class MapViewModel: ObservableObject {
         afterCandidate: PlaceReviewCandidate? = nil,
         userFinalPlaceId: UUID? = nil,
         finalPlace: Place? = nil,
+        eventID: UUID = UUID(),
         reason: String
     ) async throws {
         let userId = authService.currentUserId
         let generation = authService.sessionGeneration
         var event = SavePlaceCorrectionEvent(
+            id: eventID,
             userId: userId,
             candidate: candidate,
             eventType: eventType,
@@ -3585,11 +3735,12 @@ final class MapViewModel: ObservableObject {
     func beginExactSearchResolution(for candidate: PlaceReviewCandidate) {
         if let lockPlaceID = exactSearchRollbackLockPlaceID {
             guard exactSearchResolution?.clue.id == candidate.id else { return }
-            guard let currentClue = reviewCandidates.first(where: { $0.id == candidate.id }) else { return }
-            exactSearchResolution = ExactSearchResolution(
-                clue: currentClue,
-                candidateIDs: Set(mapCandidates.map(\.id))
-            )
+            guard var resolution = exactSearchResolution else { return }
+            if resolution.decisionPlan == nil,
+               let currentClue = reviewCandidates.first(where: { $0.id == candidate.id }) {
+                resolution.clue = currentClue
+            }
+            exactSearchResolution = resolution.attaching(candidateIDs: Set(mapCandidates.map(\.id)))
             exactSearchRollbackLockPlaceID = lockPlaceID
             return
         }

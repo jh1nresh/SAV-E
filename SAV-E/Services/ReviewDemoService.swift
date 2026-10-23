@@ -188,6 +188,20 @@ enum ReviewDemoSeed {
     /// render fully.
     static func places(now: Date = Date()) -> [Place] {
 #if DEBUG
+        // Isolated visual acceptance data; the production parity fixture is unchanged.
+        if ReviewDemo.isOfflineUITestMode, ReviewDemo.uiTestStorageIdentifier != nil {
+            let arguments = ProcessInfo.processInfo.arguments
+            if arguments.contains("--uitest-home-design-empty") { return [] }
+            if arguments.contains("--uitest-home-design-other-city") {
+                return [Place(id: UUID(uuidString: "40000000-0000-0000-0000-000000000001")!,
+                              name: "Sydney Harbour Cafe", address: "Sydney, Australia",
+                              latitude: -33.859, longitude: 151.213, category: .cafe,
+                              status: .wantToGo, sourcePlatform: .other, createdAt: now)]
+            }
+            if arguments.contains("--uitest-home-design-fixture") {
+                return Array(doodleParityPlaces(now: now).prefix(3))
+            }
+        }
         if ReviewDemo.isOfflineUITestMode,
            ReviewDemo.uiTestStorageIdentifier != nil,
            ProcessInfo.processInfo.arguments.contains("--uitest-doodle-parity-fixture") {
@@ -320,7 +334,19 @@ enum ReviewDemoSeed {
     static let harborOvenPizzaName = "Harbor Oven Pizza"
 
     static func reviewCandidates(now: Date = Date()) -> [PendingReviewCandidate] {
-        [
+#if DEBUG
+        if ReviewDemo.isOfflineUITestMode, ReviewDemo.uiTestStorageIdentifier != nil,
+           ProcessInfo.processInfo.arguments.contains("--uitest-home-design-fixture") {
+            return ["Temple Courtyard Tea", "Beijing Dumpling Kitchen"].enumerated().map { index, name in
+                PendingReviewCandidate(candidateName: name, address: "Tiantan, Beijing, China",
+                    category: "food", latitude: 39.89, longitude: 116.40,
+                    sourceURL: nil, sourceText: name, evidence: ["Unconfirmed saved clue"],
+                    confidence: 0.8, missingInfo: ["User confirmation required"],
+                    savedAt: now.addingTimeInterval(Double(-index)))
+            }
+        }
+#endif
+        return [
             PendingReviewCandidate(
                 candidateName: harborOvenPizzaName,
                 address: "Berth 73, San Pedro, Los Angeles, CA 90731",

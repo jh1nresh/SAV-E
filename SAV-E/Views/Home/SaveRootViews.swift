@@ -3,6 +3,7 @@ import SwiftUI
 struct SaveHomeView: View {
     @ObservedObject var store: TripPackStore
     @ObservedObject var mapViewModel: MapViewModel
+    let headerTopPadding: CGFloat
     let onCapture: () -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
@@ -10,6 +11,7 @@ struct SaveHomeView: View {
     let onOpenTrips: () -> Void
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
+    let onOpenCollectedPassport: () -> Void
     let onOpenMap: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject private var locationService = LocationService.shared
@@ -17,7 +19,9 @@ struct SaveHomeView: View {
     var body: some View {
         SaveDoodleHomeView(
             locationService: locationService,
-            onOpenMap: onOpenMap
+            onOpenMap: onOpenMap,
+            onOpenCollectedPassport: onOpenCollectedPassport,
+            headerTopPadding: headerTopPadding
         )
         .environment(\.atlasPresentation, atlasPresentation)
         .task(id: locationService.authorizationStatus) {

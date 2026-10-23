@@ -11,6 +11,8 @@ struct SaveDoodleHomeView: View {
     @EnvironmentObject private var session: SaveDoodleSession
     @ObservedObject var locationService: LocationService
     let onOpenMap: () -> Void
+    var onOpenCollectedPassport: () -> Void = {}
+    var headerTopPadding: CGFloat = AtlasMetrics.statusBarHeight + SaveSpace.xs
 
     @State private var showsCityPicker = false
 
@@ -19,7 +21,7 @@ struct SaveDoodleHomeView: View {
             header
                 .frame(height: SaveLayout.minTap)
                 .padding(.horizontal, SaveLayout.screenMargin)
-                .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.xs)
+                .padding(.top, headerTopPadding)
                 .zIndex(2)
 
             ZStack(alignment: .trailing) {
@@ -103,7 +105,6 @@ struct SaveDoodleHomeView: View {
                         relativeTo: .largeTitle,
                         locksPointSize: true
                     )
-                    SaveDoodleElephant(size: 28)
                 }
                 .contentShape(Rectangle())
             }
@@ -141,13 +142,14 @@ struct SaveDoodleHomeView: View {
                 .frame(height: SaveLayout.chipHeight)
                 .background(
                     selected ? SaveAtlasPalette.coral : Color.clear,
-                    in: Capsule()
+                    in: SaveDoodleInkCapsule()
                 )
                 .overlay {
-                    Capsule()
+                    SaveDoodleInkCapsule()
                         .stroke(selected ? Color.clear : SaveAtlasPalette.ink, lineWidth: SaveAtlasPalette.strokeWidth)
                 }
-                .contentShape(Capsule())
+                .frame(minHeight: SaveLayout.minTap)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(lens.title(language: languageSettings.language))
@@ -241,10 +243,11 @@ struct SaveDoodleHomeView: View {
                     .padding(.horizontal, SaveSpace.md)
                     .frame(minHeight: SaveLayout.chipHeight)
                     .overlay {
-                        Capsule()
+                        SaveDoodleInkCapsule()
                             .stroke(SaveAtlasPalette.ink, lineWidth: SaveAtlasPalette.strokeWidth)
                     }
-                    .contentShape(Capsule())
+                    .frame(minHeight: SaveLayout.minTap)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .frame(minHeight: SaveLayout.minTap)
@@ -306,9 +309,10 @@ struct SaveDoodleHomeView: View {
             HStack(alignment: .center, spacing: 0) {
                 Text("\(item.index)")
                     .font(SaveAtlasType.strong(13))
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(SaveAtlasPalette.coral)
                     .frame(width: SaveLayout.numberBadge, height: SaveLayout.numberBadge)
-                    .background(SaveAtlasPalette.coral, in: Circle())
+                    .background(SaveAtlasPalette.paper, in: SaveDoodleInkOval())
+                    .overlay { SaveDoodleInkOval().stroke(SaveAtlasPalette.coral, lineWidth: 1.5) }
                     .padding(.trailing, SaveSpace.xs)
                     .accessibilityHidden(true)
 
@@ -342,7 +346,7 @@ struct SaveDoodleHomeView: View {
     }
 
     private var collectedStrip: some View {
-        Button(action: presentation.onOpenPassport) {
+        Button(action: onOpenCollectedPassport) {
             HStack(spacing: SaveSpace.xs) {
                 Text(collectedText)
                     .font(SaveAtlasType.strong(15))
@@ -360,7 +364,12 @@ struct SaveDoodleHomeView: View {
             .padding(.horizontal, SaveSpace.md)
             .frame(height: 44)
             .frame(maxWidth: .infinity)
-            .background(SaveAtlasPalette.kraft, in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous))
+            .background(SaveAtlasPalette.kraft, in: SaveDoodlePaperStrip())
+            .overlay {
+                SaveDoodlePaperStrip()
+                    .stroke(SaveDoodle.pencil, lineWidth: 0.75)
+                    .allowsHitTesting(false)
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -402,8 +411,10 @@ struct SaveDoodleHomeView: View {
                         .font(SaveAtlasType.body(13))
                         .foregroundStyle(SaveAtlasPalette.muted)
                         .frame(maxWidth: .infinity, minHeight: SaveLayout.minTap)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(latestSaveText(latest))
                 .accessibilityIdentifier("home.empty.nearest")
             }
         }
@@ -671,15 +682,20 @@ struct SaveDoodleMiniMap: View {
         Map(initialPosition: camera, interactionModes: []) {
             ForEach(places) { item in
                 if item.place.isMapKitMappable {
-                    Marker(
+                    Annotation(
                         item.place.name,
-                        monogram: Text("\(item.index)"),
                         coordinate: CLLocationCoordinate2D(
                             latitude: item.place.latitude,
                             longitude: item.place.longitude
+                        ),
+                        anchor: .bottom
+                    ) {
+                        SaveDoodleNumberPin(
+                            number: item.index,
+                            visited: item.place.status == .visited
                         )
-                    )
-                    .tint(item.place.status == .visited ? SaveDoodle.stampRed : SaveAtlasPalette.coral)
+                    }
+                    .annotationTitles(.hidden)
                 }
             }
         }
@@ -757,7 +773,7 @@ enum SaveDoodleOfficialSticker: String, CaseIterable {
 
     var title: String { rawValue.capitalized }
 
-    /// Place marks only. `.elephant` is brand-only (wordmark / empty Home).
+    /// Place marks only. The archived elephant is no longer shown on Home.
     static let placeCases: [SaveDoodleOfficialSticker] = [
         .duck, .noodle, .coffee, .temple, .lantern
     ]
@@ -829,17 +845,14 @@ struct SaveDoodleCollectedMark: View {
     var placeName: String = ""
 
     var body: some View {
-        SaveDoodleSticker(
-            category: category,
-            placeName: placeName,
-            visited: true,
-            pointSize: 20,
-            boxSize: 24
-        )
-        .overlay {
-            Circle()
-                .stroke(SaveDoodle.stampRed, lineWidth: 1.2)
+        ZStack {
+            SaveDoodleInkOval()
+                .stroke(SaveDoodle.stampRed, lineWidth: 1.1)
+            SaveDoodleCategorySeal(category: category)
+                .stroke(SaveDoodle.stampRed, style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round))
+                .padding(5)
         }
+        .frame(width: 24, height: 24)
         .rotationEffect(.degrees(-4))
         .accessibilityHidden(true)
     }
@@ -861,21 +874,6 @@ struct SaveDoodleDashedDivider: View {
     }
 }
 
-/// Brand elephant. Not a place sticker — wordmark and empty Home only.
-struct SaveDoodleElephant: View {
-    var size: CGFloat = 28
-
-    var body: some View {
-        Image(SaveDoodleOfficialSticker.elephant.imageName(visited: true, pointSize: size))
-            .resizable()
-            .interpolation(.high)
-            .renderingMode(.original)
-            .scaledToFit()
-            .frame(width: size, height: size)
-            .accessibilityHidden(true)
-    }
-}
-
 struct SaveDoodleEmptyPlate: View {
     var body: some View {
         ZStack {
@@ -887,8 +885,6 @@ struct SaveDoodleEmptyPlate: View {
                 .stroke(SaveAtlasPalette.line, lineWidth: 1)
                 .frame(width: 128, height: 36)
                 .offset(y: 18)
-            SaveDoodleElephant(size: 44)
-                .offset(x: 52, y: -8)
         }
         .frame(maxWidth: .infinity)
     }

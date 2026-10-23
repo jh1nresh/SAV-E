@@ -289,6 +289,71 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(Set(groups.map(\.id)), Set(["paris", "paris,tx"]))
     }
 
+    func testMetroAliasesRejectCountriesOutsideTheOriginalAllowlist() {
+        for address in ["Los Ángeles, Biobío, Chile", "London, Ontario, Canada", "Paris, Santander, Colombia"] {
+            XCTAssertNil(SaveHomeSearch.metroKey(in: address), address)
+        }
+        XCTAssertEqual(SaveHomeSearch.metroKey(in: "Los Angeles, California, United States"), "losAngeles")
+        XCTAssertEqual(SaveHomeSearch.metroKey(in: "Los Angeles, California"), "losAngeles")
+        XCTAssertEqual(SaveHomeSearch.metroKey(in: "Tokyo, Shibuya"), "tokyo")
+        XCTAssertEqual(SaveHomeSearch.metroKey(in: "Paris, France"), "paris")
+        XCTAssertEqual(SaveHomeSearch.metroKey(in: "台北市, 台灣"), "taipei")
+    }
+
+    func testFallbackCityGroupingRecognizesCountriesOutsideMetroCatalogue() {
+        let addresses = [
+            "Santiago, Chile", "Valparaíso, Chile", "Bogotá, Colombia", "Medellín, Colombia",
+            "Los Ángeles, Biobío, Chile", "Concepción, Biobío, Chile",
+            "Calle 5, Los Ángeles, Biobío, Chile", "Paris, Santander, Colombia",
+            "Rue de la République, Lyon, France", "Bahnhofstrasse 1, Zürich, Switzerland",
+            "Damrak, Amsterdam, Netherlands", "La Rambla, Barcelona, Spain",
+            "12 Damrak, Amsterdam, Netherlands", "Calle Mayor, Santander, Spain",
+        ]
+        let expectedIDs = [
+            "santiago,chile", "valparaiso,chile", "bogota,colombia", "medellin,colombia",
+            "los angeles,chile", "concepcion,chile", "los angeles,chile", "paris,colombia",
+            "lyon,france", "zurich,switzerland",
+            "amsterdam,netherlands", "barcelona,spain", "amsterdam,netherlands", "santander,spain",
+        ]
+        let expectedNames = [
+            "Santiago", "Valparaíso", "Bogotá", "Medellín", "Los Ángeles", "Concepción",
+            "Los Ángeles", "Paris", "Lyon", "Zürich", "Amsterdam", "Barcelona", "Amsterdam", "Santander",
+        ]
+        let places = addresses.map { address in
+            place("City fixture", address, .cafe)
+        }
+        for (index, place) in places.enumerated() {
+            XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: place), expectedIDs[index])
+            XCTAssertEqual(SaveDoodleHomeCatalog.cityDisplayName(for: place, language: .english), expectedNames[index])
+        }
+        XCTAssertEqual(Set(SaveDoodleHomeCatalog.cityGroups(from: places).map(\.id)), Set(expectedIDs))
+    }
+
+    func testPassportCollectionModePreservesRootProgressAndOnlyScopesCollected() {
+        let places = ReviewDemoSeed.doodleParityPlaces(now: Date(timeIntervalSince1970: 1_760_000_000))
+        let full = SavePassportCollectionMode.collection.places(
+            from: places, selection: .city("nonexistent"), location: nil, locationDenied: true
+        )
+        XCTAssertEqual(full.map(\.id), places.map(\.id), "Root and ordinary sheets ignore Home's city")
+        let fourUnvisited = Array(places.prefix(4)).map { original in
+            var place = original
+            place.status = .wantToGo
+            return place
+        }
+        let rootProgress = SavePassportCollectionMode.collection.progress(in: fourUnvisited)
+        XCTAssertEqual(rootProgress.completed, 4)
+        XCTAssertEqual(rootProgress.total, 12)
+        let collected = SavePassportCollectionMode.homeCollected.places(
+            from: places, selection: .nearYou, location: tiantanFix, locationDenied: false
+        )
+        let cityProgress = SavePassportCollectionMode.homeCollected.progress(in: collected)
+        XCTAssertEqual(cityProgress.completed, 4)
+        XCTAssertEqual(cityProgress.total, 12)
+        XCTAssertTrue(SavePassportCollectionMode.homeCollected.places(
+            from: places, selection: .city("nonexistent"), location: nil, locationDenied: true
+        ).isEmpty, "An empty city must never fall back to unrelated stamps")
+    }
+
     /// Closest pin without an address must not empty Near you / Collected.
     func testNearYouCitySkipsAddresslessClosestSave() {
         let here = CLLocation(latitude: 37.8796, longitude: -122.2697)
@@ -713,7 +778,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
         let strip = try XCTUnwrap(home.range(of: "private var collectedStrip"))
         let empty = try XCTUnwrap(home.range(of: "private var emptyHome"))
-        XCTAssertTrue(home[strip.lowerBound..<empty.lowerBound].contains("presentation.onOpenPassport"))
+        XCTAssertTrue(home[strip.lowerBound..<empty.lowerBound].contains("onOpenCollectedPassport"))
         XCTAssertTrue(home.contains("Collected \\(progress.visited)/\\(progress.saved)"))
         let catalog = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")
         XCTAssertTrue(catalog.contains("enum SaveDoodleHomeProgressCatalog"))
@@ -721,13 +786,14 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(catalog.contains("collectedScopePlaces"))
         XCTAssertTrue(catalog.contains("PR #295 already owns"))
         let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
-        XCTAssertTrue(profile.contains("SaveDoodleHomeProgressCatalog.cityPlaces"))
-        XCTAssertTrue(profile.contains("guard !isRootTab else { return source }"))
-        XCTAssertTrue(profile.contains("return scoped.isEmpty ? source : scoped"))
+        XCTAssertTrue(profile.contains("collectionMode.places("))
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+        XCTAssertTrue(content.contains("onOpenCollectedPassport: { openPassport(collectionMode: .homeCollected) }"))
+        XCTAssertTrue(content.contains("openPassport(collectionMode: .collection)"))
         XCTAssertTrue(profile.contains("PassportTileTownCollection(places: cityStampPlaces"))
         XCTAssertTrue(profile.contains("accessibilityIdentifier(\"profile.stampProgress\")"))
         XCTAssertTrue(profile.contains("localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces"))
-        XCTAssertTrue(profile.contains("cityProgress.visited)/\\(cityProgress.saved)"))
+        XCTAssertTrue(profile.contains("collectionProgress.completed)/\\(collectionProgress.total)"))
         XCTAssertTrue(profile.contains("profile.stampProgress"))
         XCTAssertTrue(
             profile.contains("""
@@ -861,7 +927,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("AtlasTabBarMetrics.height"))
         XCTAssertFalse(home.contains("rootTabScrollClearance"))
         XCTAssertTrue(home.contains(".mapStyle(.standard(emphasis: .automatic))"))
-        XCTAssertTrue(home.contains("Marker("))
+        XCTAssertTrue(home.contains("Annotation("))
+        XCTAssertTrue(home.contains("SaveDoodleNumberPin("))
         XCTAssertTrue(home.contains("SaveDoodle.stampRed"))
         XCTAssertTrue(home.contains("SaveAtlasPalette.coral"))
         XCTAssertTrue(home.contains("interactionModes: []"))
@@ -877,11 +944,11 @@ final class SaveDoodleHomeTests: XCTestCase {
         let design = try source(at: "DESIGN.md")
         XCTAssertTrue(design.contains("Savvy + Eat/Go in the header"))
         XCTAssertTrue(design.contains("official DESIGN color die-cut"))
-        XCTAssertTrue(design.contains("brand-only"))
+        XCTAssertTrue(design.contains("removed the original elephant artwork"))
         XCTAssertTrue(design.contains("Codex packet and spec §8"))
         XCTAssertTrue(design.contains("0.90 visual-parity score is not evidence"))
         XCTAssertTrue(home.contains("placeCases"))
-        XCTAssertTrue(home.contains("SaveDoodleElephant"))
+        XCTAssertFalse(home.contains("SaveDoodleElephant"), "Home no longer displays the retired elephant artwork")
         XCTAssertTrue(home.contains("SaveDoodleEmptyPlate"))
         XCTAssertTrue(design.contains("then the city, clues"))
         XCTAssertTrue(design.contains("eade369"))
@@ -996,9 +1063,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(seed.contains("SaveMemoryRecord.confirmedPlace"))
         XCTAssertFalse(seed.contains("latitude: 0"))
         let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
-        XCTAssertTrue(profile.contains("SaveDoodleHomeProgressCatalog.cityPlaces"))
-        XCTAssertTrue(profile.contains("guard !isRootTab else { return source }"))
-        XCTAssertTrue(profile.contains("return scoped.isEmpty ? source : scoped"))
+        XCTAssertTrue(profile.contains("collectionMode.places("))
+        XCTAssertTrue(profile.contains("var collectionMode: SavePassportCollectionMode = .collection"))
         XCTAssertTrue(profile.contains("SaveDoodleVisitStore().recordVisit"))
         XCTAssertTrue(profile.contains("try await onUpdatePlace(updated)"))
         let map = try source(at: "SAV-E/Views/TileTown/SaveTileTownRootMap.swift")
