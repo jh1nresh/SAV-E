@@ -2673,7 +2673,7 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testResolvingOneClueRetiresSameCityNameDuplicate() async throws {
+    func testResolvingOneClueKeepsSameCityNameDuplicate() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("same-city-duplicate-\(UUID().uuidString).json")
         defer { try? FileManager.default.removeItem(at: vaultURL) }
@@ -2700,12 +2700,12 @@ final class SaveSearchControllerTests: XCTestCase {
         _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
 
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
-        XCTAssertFalse(
+        XCTAssertTrue(
             map.reviewCandidates.contains { $0.id == leftover.id },
-            "A same-city Harbor Oven leftover must retire with the corrected clue"
+            "A same-city Harbor Oven leftover stays until it is resolved by id"
         )
         let remaining = try vault.reviewCandidates()
-        XCTAssertFalse(remaining.contains { $0.id == leftover.id })
+        XCTAssertTrue(remaining.contains { $0.id == leftover.id })
     }
 
     @MainActor
@@ -6442,9 +6442,9 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(mapModel.contains("func clearMapSearchResults(preservesExactSearchClue: Bool = false)"))
         XCTAssertTrue(mapModel.contains("retireResolvedReviewClue"))
         XCTAssertTrue(mapModel.contains("reviewCandidates.first(where: { $0.id == candidate.id }) ?? candidate"))
+        XCTAssertTrue(mapModel.contains("$0.id == clue.id"))
         XCTAssertFalse(mapModel.contains("retireSameNameReviewClues"))
-        XCTAssertTrue(mapModel.contains("reviewClueDistanceMeters"))
-        XCTAssertTrue(mapModel.contains("sharesReviewSourceIdentity"))
+        XCTAssertFalse(mapModel.contains("isDuplicateReviewClue"))
         XCTAssertFalse(mapModel.contains("leftoverCity == resolvedCity"))
         XCTAssertEqual(
             mapModel.components(separatedBy: "var hasActiveExactSearchResolution: Bool { exactSearchResolution != nil }").count - 1,
@@ -6495,11 +6495,12 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual("臺北市信義區", "臺北市信義區")
     }
 
-    func testRetireResolvedReviewClueDoesNotUseNameAndCityAlone() throws {
+    func testRetireResolvedReviewClueIsIdOnly() throws {
         let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
-        XCTAssertTrue(map.contains("sharesReviewSourceIdentity"))
+        XCTAssertTrue(map.contains("reviewCandidates.removeAll { $0.id == clue.id }"))
+        XCTAssertFalse(map.contains("isDuplicateReviewClue"))
         XCTAssertFalse(map.contains("leftoverCity == resolvedCity"))
-        XCTAssertTrue(map.contains("not name and city alone"))
+        XCTAssertFalse(map.contains("retireSameNameReviewClues"))
     }
 
     @MainActor
@@ -6621,9 +6622,9 @@ final class MapReviewLocationRepairTests: XCTestCase {
         let candidate = try XCTUnwrap(map.mapCandidates.first)
         _ = try await map.saveMapCandidateAsPlace(candidate)
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
-        XCTAssertFalse(
+        XCTAssertTrue(
             map.reviewCandidates.contains { $0.id == leftover.id },
-            "A recapture that shares captureId is the same source identity"
+            "A recapture that shares captureId still stays until it is resolved by id"
         )
     }
 

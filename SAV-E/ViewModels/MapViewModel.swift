@@ -2085,76 +2085,24 @@ final class MapViewModel: ObservableObject {
         return (true, committed)
     }
 
-    /// Retire the originating clue and proven same-place leftovers (seed +
-    /// recapture). Same-name clues in the same city without coordinates are
-    /// distinct branches until a shared source identity or a <250 m pair
-    /// proves otherwise.
+    /// Retire the originating clue by stable id only. Same-name leftovers
+    /// stay until the user resolves that leftover by id.
     private func retireResolvedReviewClue(
         _ clue: PlaceReviewCandidate,
         committed: Bool = true
     ) throws {
-        let retiring = reviewCandidates.filter { isDuplicateReviewClue($0, of: clue) }
-        let ids = Set(retiring.map(\.id) + [clue.id])
         if committed {
-            for id in ids {
-                try? saveLocalVaultService.removeReviewCandidate(id)
-            }
+            try? saveLocalVaultService.removeReviewCandidate(clue.id)
         } else {
             try saveLocalVaultService.removeReviewCandidate(clue.id)
-            for id in ids where id != clue.id {
-                try? saveLocalVaultService.removeReviewCandidate(id)
-            }
         }
-        reviewCandidates.removeAll { ids.contains($0.id) }
-        if selectedReviewCandidate.map({ ids.contains($0.id) }) == true {
+        reviewCandidates.removeAll { $0.id == clue.id }
+        if selectedReviewCandidate?.id == clue.id {
             selectedReviewCandidate = nil
         }
-        if exactSearchResolution.map({ ids.contains($0.clue.id) }) == true {
+        if exactSearchResolution?.clue.id == clue.id {
             exactSearchResolution = nil
         }
-    }
-
-    private func isDuplicateReviewClue(
-        _ leftover: PlaceReviewCandidate,
-        of resolved: PlaceReviewCandidate
-    ) -> Bool {
-        if leftover.id == resolved.id { return true }
-        guard leftover.name.localizedCaseInsensitiveCompare(resolved.name) == .orderedSame else {
-            return false
-        }
-        if let meters = reviewClueDistanceMeters(leftover, resolved) {
-            return meters < 250
-        }
-        return sharesReviewSourceIdentity(leftover, resolved)
-    }
-
-    /// Capture / workflow / semantic source — not name and city alone.
-    private func sharesReviewSourceIdentity(
-        _ leftover: PlaceReviewCandidate,
-        _ resolved: PlaceReviewCandidate
-    ) -> Bool {
-        if let capture = leftover.captureId, capture == resolved.captureId {
-            return true
-        }
-        if let workflow = leftover.workflowRunId, workflow == resolved.workflowRunId {
-            return true
-        }
-        if leftover.semanticSource != nil,
-           leftover.semanticSource == resolved.semanticSource {
-            return true
-        }
-        return false
-    }
-
-    private func reviewClueDistanceMeters(
-        _ leftover: PlaceReviewCandidate,
-        _ resolved: PlaceReviewCandidate
-    ) -> CLLocationDistance? {
-        guard let lat1 = leftover.latitude, let lon1 = leftover.longitude,
-              let lat2 = resolved.latitude, let lon2 = resolved.longitude
-        else { return nil }
-        return CLLocation(latitude: lat1, longitude: lon1)
-            .distance(from: CLLocation(latitude: lat2, longitude: lon2))
     }
 
     /// Terminal actions for this clue (reject / archive / source-only / confirm)
