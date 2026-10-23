@@ -2076,14 +2076,14 @@ final class MapViewModel: ObservableObject {
             }
 
             if isOverFreeSavedPlaceLimit {
-                if exactResolution == nil {
-                    try parkPlaceInUnplacedInbox(place)
-                } else {
+                if let exactResolution {
                     try parkExistingReviewCandidate(
                         exactResolution.clue,
                         startedBy: saveUserId,
                         generation: saveGeneration
                     )
+                } else {
+                    try parkPlaceInUnplacedInbox(place)
                 }
                 mapCandidates.removeAll { $0.id == candidate.id }
                 selectedMapCandidate = nil
@@ -2099,7 +2099,7 @@ final class MapViewModel: ObservableObject {
                 do {
                     try await mapCandidatePlaceSaver(place, userId)
                 } catch {
-                    if error is SavePlaceLimitError, exactResolution != nil {
+                    if error is SavePlaceLimitError, let exactResolution {
                         guard saveUserId == authService.currentUserId,
                               saveGeneration == authService.sessionGeneration else {
                             throw CancellationError()
