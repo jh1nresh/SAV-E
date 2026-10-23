@@ -270,7 +270,7 @@ private extension SaveHomeSearch {
             case .tokyo: return ["tokyo", "東京都", "东京都", "東京", "东京"]
             case .losAngeles: return ["los angeles", "losangeles", "洛杉磯", "洛杉矶"]
             case .bangkok: return ["bangkok", "曼谷"]
-            case .kyoto: return ["kyoto", "京都"]
+            case .kyoto: return ["kyoto", "京都市", "京都"]
             case .osaka: return ["osaka", "大阪"]
             case .newYork: return ["new york city", "new york", "newyork", "紐約市", "纽约市", "紐約", "纽约"]
             case .sanFrancisco: return ["san francisco", "sanfrancisco", "舊金山", "旧金山"]
