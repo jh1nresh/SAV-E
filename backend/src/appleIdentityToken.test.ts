@@ -8,6 +8,7 @@ import {
   APPLE_IDENTITY_AUDIENCES,
   APPLE_IDENTITY_ISSUER,
   AppleIdentityTokenError,
+  verifiedAppleIdentity,
   verifiedAppleIdentitySubject,
 } from "./appleIdentityToken.js";
 
@@ -22,9 +23,9 @@ async function appleFixture() {
 
 async function signApple(
   privateKey: KeyLike,
-  claims: { iss?: string; aud?: string; sub?: string; exp?: string } = {},
+  claims: { iss?: string; aud?: string; sub?: string; exp?: string; email?: string } = {},
 ) {
-  return new SignJWT({})
+  return new SignJWT(claims.email ? { email: claims.email } : {})
     .setProtectedHeader({ alg: "ES256", kid: "test-apple-kid" })
     .setIssuer(claims.iss ?? APPLE_IDENTITY_ISSUER)
     .setAudience(claims.aud ?? "com.wanderly.app.Clip")
@@ -41,6 +42,15 @@ test("verifiedAppleIdentitySubject accepts a signed Apple identity token", async
     await verifiedAppleIdentitySubject(token, { jwks }),
     "001234.apple-user",
   );
+});
+
+test("verifiedAppleIdentity keeps an optional email off the identity subject", async () => {
+  const { privateKey, jwks } = await appleFixture();
+  const token = await signApple(privateKey, { email: "hidden@privaterelay.appleid.com" });
+  assert.deepEqual(await verifiedAppleIdentity(token, { jwks }), {
+    subject: "001234.apple-user",
+    email: "hidden@privaterelay.appleid.com",
+  });
 });
 
 test("verifiedAppleIdentitySubject accepts the full-app audience", async () => {
@@ -79,9 +89,25 @@ test("verifiedAppleIdentitySubject rejects a token signed by another key", async
 
 test("server resolveUserId verifies Apple identity tokens before Privy", () => {
   const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
-  assert.match(server, /verifiedAppleIdentitySubject/);
+  assert.match(server, /verifiedAppleIdentity/);
+  assert.match(server, /ensureUserForApple/);
+  assert.match(server, /verifiedAppleLinkedPrivySubject/);
+  assert.match(server, /verifiedBearerPrivySubject/);
   assert.match(server, /APPLE_IDENTITY_ISSUER/);
   assert.match(server, /decodeJwt\(token\)\.iss === APPLE_IDENTITY_ISSUER/);
+  assert.match(server, /Apple identity linking unavailable/);
+  assert.match(server, /clip-apple-session/);
+  assert.match(server, /Apple identity token required/);
+  assert.doesNotMatch(server, /profileIdForPrivySubject\(appleSubject\)/);
+  const sessionRoute = server.indexOf('resource === "clip-apple-session"');
+  const authGate = server.indexOf("const userId = await resolveUserId(request)");
+  assert.ok(sessionRoute >= 0 && sessionRoute < authGate);
+  const resolver = server.slice(
+    server.indexOf("async function resolveUserId"),
+    server.indexOf("async function profileIdForPrivySubject"),
+  );
+  assert.match(resolver, /verifiedBearerPrivySubject/);
+  assert.doesNotMatch(resolver, /profileIdForPrivySubject\(appleSubject\)/);
   const audiences = APPLE_IDENTITY_AUDIENCES.join(" ");
   assert.match(audiences, /com\.wanderly\.app\.Clip/);
   const source = readFileSync(

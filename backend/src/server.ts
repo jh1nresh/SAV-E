@@ -9,7 +9,7 @@ import { decodeJwt, importSPKI, jwtVerify, type JWTPayload, type KeyLike } from 
 import {
   APPLE_IDENTITY_ISSUER,
   AppleIdentityTokenError,
-  verifiedAppleIdentitySubject,
+  verifiedAppleIdentity,
 } from "./appleIdentityToken.js";
 import pg, { type PoolClient } from "pg";
 import {
@@ -186,7 +186,7 @@ import {
 } from "./receiptEnvelope.js";
 import { readSourceRecoveryConfigStatus } from "./sourceRecoveryConfig.js";
 import { readAnalysisReadiness } from "./analysisReadiness.js";
-import { createPrivyUserProvisioner } from "./privyUsers.js";
+import { createPrivyUserProvisioner, PrivyUserProvisioningError } from "./privyUsers.js";
 import {
   MemoryContractError,
   normalizePreferenceCreate,
@@ -1022,6 +1022,33 @@ createServer(async (request, response) => {
       return await handleMySaves(response, id);
     }
 
+    if (isV0 && request.method === "GET" && resource === "clip-apple-session" && !id) {
+      response.setHeader("Cache-Control", "private, no-store");
+      const token = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (!token) return sendJson(response, { error: "Missing bearer token" }, 401);
+      let appleIssuer = false;
+      try {
+        appleIssuer = decodeJwt(token).iss === APPLE_IDENTITY_ISSUER;
+      } catch {
+        appleIssuer = false;
+      }
+      if (!appleIssuer) {
+        return sendJson(response, { error: "Apple identity token required" }, 401);
+      }
+      try {
+        const privyUserId = await verifiedAppleLinkedPrivySubject(token);
+        return sendJson(response, { version: "v0", privy_user_id: privyUserId });
+      } catch (error) {
+        if (error instanceof AppleIdentityTokenError) {
+          return sendJson(response, { error: error.message }, 401);
+        }
+        if (error instanceof ApiError) {
+          return sendJson(response, { error: error.message }, error.status);
+        }
+        throw error;
+      }
+    }
+
     if (isV0 && resource === "account-status") {
       if (segments.length > 2 || (segments.length === 2 && segments[1] !== "confirm")) {
         return sendJson(response, { error: "Not found" }, 404);
@@ -1041,7 +1068,7 @@ createServer(async (request, response) => {
             authorizationHeader: request.headers.authorization,
             accountRefSecret: stableAccountRefSecret(process.env),
             expectedAccountRef: body.account_ref,
-            verifySubject: verifiedPrivySubject,
+            verifySubject: verifiedBearerPrivySubject,
             beginTransaction: async () => { await client.query("begin"); },
             lockSubject: (subject) => lockProfileSubject(client, subject),
             query: (sql, values) => client.query(sql, [...values] as QueryValue[]),
@@ -1070,7 +1097,7 @@ createServer(async (request, response) => {
         accountRefSecret: stableAccountRefSecret(process.env),
         previousAccountRefSecrets: previousAccountRefSecrets(process.env),
         presentedAccountRef: request.headers["x-save-account-ref"],
-        verifySubject: verifiedPrivySubject,
+        verifySubject: verifiedBearerPrivySubject,
         query: (sql, values) => pool.query(sql, [...values] as QueryValue[]),
       });
       return sendJson(response, result.body, result.statusCode);
@@ -1094,7 +1121,7 @@ createServer(async (request, response) => {
       }
       const token = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
       if (!token) return sendJson(response, { error: "Missing bearer token" }, 401);
-      const privyUserId = await verifiedPrivySubject(token);
+      const privyUserId = await verifiedBearerPrivySubject(token);
       await deleteAccount({
         deleteProfile: async () => {
           await pool.query(
@@ -2593,7 +2620,7 @@ async function handleShareExtension(
       const bearer = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
       if (!bearer) throw new ShareExtensionSessionError(401, "A Privy bearer token is required");
       let ownerSubject: string;
-      try { ownerSubject = await verifiedPrivySubject(bearer); }
+      try { ownerSubject = await verifiedBearerPrivySubject(bearer); }
       catch { throw new ShareExtensionSessionError(401, "Invalid Privy bearer token"); }
       const body = await readJson(request, 2_048);
       if (Object.keys(body).some(key => key !== "installation_id")) {
@@ -6698,28 +6725,53 @@ async function ensurePrivyPhoneProfile(
   }
 }
 
+async function verifiedAppleLinkedPrivySubject(token: string): Promise<string> {
+  const identity = await verifiedAppleIdentity(token);
+  if (!privyUserProvisioner) {
+    throw new ApiError(503, "Apple identity linking unavailable");
+  }
+  try {
+    const privyUser = await privyUserProvisioner.ensureUserForApple(
+      identity.subject,
+      identity.email,
+    );
+    if (!privyUser.id) {
+      throw new ApiError(503, "Apple identity linking unavailable");
+    }
+    return privyUser.id;
+  } catch (error) {
+    if (error instanceof PrivyUserProvisioningError) {
+      throw new ApiError(error.status, error.message);
+    }
+    throw error;
+  }
+}
+
+async function verifiedBearerPrivySubject(token: string): Promise<string> {
+  let appleIssuer = false;
+  try {
+    appleIssuer = decodeJwt(token).iss === APPLE_IDENTITY_ISSUER;
+  } catch {
+    appleIssuer = false;
+  }
+  if (appleIssuer) {
+    try {
+      return await verifiedAppleLinkedPrivySubject(token);
+    } catch (error) {
+      if (error instanceof AppleIdentityTokenError) {
+        throw new ApiError(401, error.message);
+      }
+      throw error;
+    }
+  }
+  return await verifiedPrivySubject(token);
+}
+
 async function resolveUserId(request: IncomingMessage): Promise<string> {
   const header = request.headers.authorization ?? "";
   const token = header.match(/^Bearer\s+(.+)$/i)?.[1];
   if (token) {
-    let appleIssuer = false;
-    try {
-      appleIssuer = decodeJwt(token).iss === APPLE_IDENTITY_ISSUER;
-    } catch {
-      appleIssuer = false;
-    }
-    if (appleIssuer) {
-      try {
-        const appleSubject = await verifiedAppleIdentitySubject(token);
-        return await profileIdForPrivySubject(appleSubject);
-      } catch (error) {
-        if (error instanceof AppleIdentityTokenError) {
-          throw new ApiError(401, error.message);
-        }
-        throw error;
-      }
-    }
-    const privySubject = await verifiedPrivySubject(token);
+    const privySubject = await verifiedBearerPrivySubject(token);
     return await profileIdForPrivySubject(privySubject);
   }
 

@@ -17,14 +17,19 @@ export class AppleIdentityTokenError extends Error {
   }
 }
 
-export async function verifiedAppleIdentitySubject(
+export type VerifiedAppleIdentity = {
+  subject: string;
+  email?: string;
+};
+
+export async function verifiedAppleIdentity(
   token: string,
   options?: {
     jwks?: JWTVerifyGetKey;
     audiences?: readonly string[];
     now?: Date;
   },
-): Promise<string> {
+): Promise<VerifiedAppleIdentity> {
   const trimmed = token.trim();
   if (!trimmed) {
     throw new AppleIdentityTokenError("Missing Apple identity token");
@@ -39,9 +44,23 @@ export async function verifiedAppleIdentitySubject(
     if (typeof payload.sub !== "string" || payload.sub.length === 0) {
       throw new AppleIdentityTokenError("Invalid Apple subject");
     }
-    return payload.sub;
+    const email = typeof payload.email === "string" ? payload.email.trim() : "";
+    return email
+      ? { subject: payload.sub, email }
+      : { subject: payload.sub };
   } catch (error) {
     if (error instanceof AppleIdentityTokenError) throw error;
     throw new AppleIdentityTokenError();
   }
+}
+
+export async function verifiedAppleIdentitySubject(
+  token: string,
+  options?: {
+    jwks?: JWTVerifyGetKey;
+    audiences?: readonly string[];
+    now?: Date;
+  },
+): Promise<string> {
+  return (await verifiedAppleIdentity(token, options)).subject;
 }

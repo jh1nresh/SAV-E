@@ -55,6 +55,8 @@ final class PrivyAuthService: ObservableObject {
     private var shareSessionAttempt: UUID?
     private var interactiveAuthAttempts: Set<UUID> = []
     private var clipCarryOverInFlight = false
+    private var clipAppleSessionActive = false
+    private var clipAppleIdentityToken: String?
     private var isPerformingInitialRestore = true
 
     // MARK: App Review Demo
@@ -141,16 +143,15 @@ final class PrivyAuthService: ObservableObject {
     }
 
     private func restorePrivySessionFromClip() async throws {
-        if let userId = await ClipAppleSessionExchange.exchange(
+        guard let session = await ClipAppleSessionExchange.exchange(
             appleUserID: ClipAppleAccountStore.read() ?? ""
-        ) {
-            sessionOrigin = .interactive
-            transitionToAuthenticated(userId: userId)
-            return
+        ) else {
+            throw AuthError.signInFailed("Clip Apple session exchange failed")
         }
-        // No backend Apple-id exchange. Follow-up ASAuthorizationAppleIDRequest
-        // via Privy (no name/email on a repeat Apple login).
-        try await signInWithApple()
+        clipAppleIdentityToken = session.identityToken
+        clipAppleSessionActive = true
+        sessionOrigin = .interactive
+        transitionToAuthenticated(userId: session.privyUserId)
     }
 
     private func observeAuthState() {
@@ -309,6 +310,7 @@ final class PrivyAuthService: ObservableObject {
 
     func signOut() async {
         ClipAppleAccountStore.clear()
+        clearClipAppleSession()
         invalidateShareAnalysisSession()
         if isReviewerDemo {
             clearReviewerDemoState()
@@ -332,6 +334,14 @@ final class PrivyAuthService: ObservableObject {
         // handled error so callers degrade to local/cached behavior. The demo
         // path that needs the backend (drawer search) uses `demoGuestToken`.
         if isReviewerDemo { throw AuthError.reviewerDemoNoToken }
+        if clipAppleSessionActive {
+            if let cached = clipAppleIdentityToken, !ClipAppleIdentityToken.isExpired(cached) {
+                return cached
+            }
+            let refreshed = try await ClipAppleSilentAuth.requestIdentityToken()
+            clipAppleIdentityToken = refreshed
+            return refreshed
+        }
         let privy = try validatedPrivy()
         guard let user = await privy.getUser() else { throw AuthError.signInFailed("No authenticated user") }
         return try await user.getAccessToken()
@@ -345,6 +355,7 @@ final class PrivyAuthService: ObservableObject {
         clearReviewerDemoState()
         switch state {
         case .authenticated(let user):
+            clearClipAppleSession()
             if hasInteractiveAuthenticationInFlight {
                 sessionOrigin = .interactive
             } else if currentUserId != user.id {
@@ -352,7 +363,7 @@ final class PrivyAuthService: ObservableObject {
             }
             transitionToAuthenticated(userId: user.id)
         case .unauthenticated:
-            if clipCarryOverInFlight || isPerformingInitialRestore { return }
+            if clipCarryOverInFlight || isPerformingInitialRestore || clipAppleSessionActive { return }
             if !hasInteractiveAuthenticationInFlight {
                 sessionOrigin = .restored
             }
@@ -383,6 +394,11 @@ final class PrivyAuthService: ObservableObject {
         isReviewerDemo = false
         demoGuestToken = nil
         ReviewDemoGuestTokenHolder.shared.set(nil)
+    }
+
+    private func clearClipAppleSession() {
+        clipAppleSessionActive = false
+        clipAppleIdentityToken = nil
     }
 
     private func transitionToAuthenticated(userId: String) {

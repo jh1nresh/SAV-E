@@ -81,6 +81,23 @@ test("account status returns generic 401 for missing, malformed, or rejected bea
   assert.equal(queried, false);
 });
 
+test("account status surfaces Apple linking unavailability instead of creating a split profile", async () => {
+  let queried = false;
+  const result = await evaluateAccountStatusRequest({
+    method: "GET",
+    authorizationHeader: "Bearer apple-token",
+    accountRefSecret: secret,
+    verifySubject: async () => {
+      const error = new Error("Apple identity linking unavailable") as Error & { status: number };
+      error.status = 503;
+      throw error;
+    },
+    query: async () => { queried = true; return { rows: [] }; },
+  });
+  assert.deepEqual(result, { statusCode: 503, body: { error: "Account verification unavailable" } });
+  assert.equal(queried, false);
+});
+
 test("account status fails closed without a stable ref secret and never queries", async () => {
   let queried = false;
   const result = await evaluateAccountStatusRequest({

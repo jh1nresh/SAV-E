@@ -80,10 +80,75 @@ final class ClipSignInCarryOverTests: XCTestCase {
         XCTAssertNil(ClipAppleAccountStore.read(from: store))
     }
 
-    func testBackendHasNoAppleIdSessionExchange() async {
-        let userID = await ClipAppleSessionExchange.exchange(appleUserID: "001234.clip-apple-user.abcd")
-        XCTAssertNil(userID)
+    func testSilentAppleRequestHasNoNameOrEmailScopes() {
         XCTAssertTrue(ClipAppleSilentAuth.makeRequest().requestedScopes?.isEmpty ?? true)
+    }
+
+    func testExchangeResolvesLinkedPrivyDIDFromSilentAppleToken() async {
+        let session = await ClipAppleSessionExchange.exchange(
+            appleUserID: "001234.clip-apple-user.abcd",
+            dependencies: .init(
+                requestIdentityToken: { "silent-apple-identity-token" },
+                resolvePrivyUserId: { token in
+                    XCTAssertEqual(token, "silent-apple-identity-token")
+                    return "did:privy:linked-clip-user"
+                }
+            )
+        )
+        XCTAssertEqual(session?.privyUserId, "did:privy:linked-clip-user")
+        XCTAssertEqual(session?.identityToken, "silent-apple-identity-token")
+    }
+
+    func testExchangeRejectsRawAppleSubjectAndEmptyUser() async {
+        let empty = await ClipAppleSessionExchange.exchange(
+            appleUserID: "   ",
+            dependencies: .init(
+                requestIdentityToken: { "nope" },
+                resolvePrivyUserId: { _ in "nope" }
+            )
+        )
+        XCTAssertNil(empty)
+
+        let rawSubject = await ClipAppleSessionExchange.exchange(
+            appleUserID: "001234.clip-apple-user.abcd",
+            dependencies: .init(
+                requestIdentityToken: { "silent-apple-identity-token" },
+                resolvePrivyUserId: { _ in "001234.clip-apple-user.abcd" }
+            )
+        )
+        XCTAssertNil(rawSubject)
+    }
+
+    func testExchangeFailureFallsBackToSignIn() async {
+        let restore = RestoreProbe()
+        let outcome = await ClipSignInCarryOverController(
+            loadAppleUserID: { "001234.clip-apple-user.abcd" },
+            credentialState: { _ in .authorized },
+            restoreSession: {
+                guard await ClipAppleSessionExchange.exchange(
+                    appleUserID: "001234.clip-apple-user.abcd",
+                    dependencies: .init(
+                        requestIdentityToken: { throw ClipAppleSessionError.failed },
+                        resolvePrivyUserId: { _ in "did:privy:unused" }
+                    )
+                ) != nil else {
+                    throw ClipAppleSessionError.failed
+                }
+                restore.mark()
+            }
+        ).run()
+        XCTAssertEqual(outcome, .showSignIn)
+        XCTAssertEqual(restore.count, 0)
+    }
+
+    func testIdentityTokenExpiryUsesExpClaimWithoutStoringJWT() {
+        let header = Data("{\"alg\":\"none\"}".utf8).base64EncodedString()
+            .replacingOccurrences(of: "=", with: "")
+        let payload = Data("{\"exp\":1}".utf8).base64EncodedString()
+            .replacingOccurrences(of: "=", with: "")
+        let expired = "\(header).\(payload).sig"
+        XCTAssertTrue(ClipAppleIdentityToken.isExpired(expired, now: Date(timeIntervalSince1970: 100)))
+        XCTAssertNil(store.string(forKey: "identityToken"))
     }
 }
 
