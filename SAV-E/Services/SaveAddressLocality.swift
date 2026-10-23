@@ -55,7 +55,7 @@ struct SaveAddressLocality: Equatable {
         guard !trimmed.isEmpty else { return nil }
 
         var parts = commaParts(trimmed)
-        let country = parts.last.flatMap { country(in: $0) }
+        let country = parts.last.flatMap { Self.country(in: $0) }
         if country != nil { parts.removeLast() }
 
         if let cjk = cjkMunicipalityToken(in: trimmed) {
@@ -99,7 +99,7 @@ struct SaveAddressLocality: Equatable {
 
     static func canonicalCityID(_ id: String) -> String {
         guard let separator = id.lastIndex(of: ","),
-              let country = country(in: String(id[id.index(after: separator)...]))
+              let country = Self.country(in: String(id[id.index(after: separator)...]))
         else { return id }
         return String(id[...separator]) + country
     }
