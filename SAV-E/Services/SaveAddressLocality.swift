@@ -7,9 +7,10 @@ import Foundation
 /// 2. Country-aware admin handling is explicit for US / CA / AU, including
 ///    full state and province names. Bare two-letter tokens qualify only
 ///    when they are known codes for that country.
-/// 3. CJK municipalities stop at prefecture / province suffixes (`県` `府`
-///    `道` `省` …). The label stays the municipality; the stable ID keeps
-///    the prefecture so 府中市 in Tokyo and Hiroshima stay apart.
+/// 3. CJK municipalities stop at prefecture / province suffixes (`県` `道`
+///    `都` `省`, and `府` only in 大阪府 / 京都府). The label stays the
+///    municipality; the stable ID keeps the prefecture so 府中市 in Tokyo
+///    and Hiroshima stay apart.
 /// 4. Metro aliases apply only when the parsed locality matches and the
 ///    recognized region or country does not contradict the alias.
 struct SaveAddressLocality: Equatable {
@@ -225,8 +226,9 @@ private extension SaveAddressLocality {
 
     static let cjkCountryPrefixes = ["台灣", "臺灣", "台湾", "日本", "中國", "中国"]
 
-    /// Last `市`/`縣`/`县` municipality only. Japanese prefecture suffixes
-    /// (`県` `府` `道`) are locality boundaries so `神奈川県横浜市` stays `横浜市`.
+    /// Last `市`/`縣`/`县` municipality only. A leading prefecture/province
+    /// is stripped first so `神奈川県横浜市` stays `横浜市` and `東京都府中市`
+    /// stays `府中市` instead of colliding with `京都府`.
     static func cjkMunicipalityToken(in token: String) -> String? {
         guard token.contains(where: {
             $0.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
@@ -239,6 +241,14 @@ private extension SaveAddressLocality {
     }
 
     static func cjkMunicipality(in token: String) -> String? {
+        if let leading = leadingCJKAdmin(in: token),
+           let city = cjkMunicipalityScan(in: leading.rest) {
+            return city
+        }
+        return cjkMunicipalityScan(in: token)
+    }
+
+    static func cjkMunicipalityScan(in token: String) -> String? {
         var text = token
         for country in cjkCountryPrefixes {
             text = text.replacingOccurrences(of: country, with: "")
@@ -249,7 +259,9 @@ private extension SaveAddressLocality {
             options: .backwards
         ) else { return nil }
         let head = text[..<marker.upperBound]
-        let boundaries = CharacterSet(charactersIn: "省區区鄉乡鎮镇國国県府道,，")
+        // `府` and `都` belong to city names (府中市, 京都市). Prefectures
+        // are removed by `leadingCJKAdmin` before this scan.
+        let boundaries = CharacterSet(charactersIn: "省區区鄉乡鎮镇國国県道,，")
         var start = marker.lowerBound
         var taken = 0
         while start > head.startIndex {
@@ -274,10 +286,14 @@ private extension SaveAddressLocality {
     static func cjkAdminQualifier(in address: String, municipality: String) -> String? {
         let parts = commaParts(address)
         if let index = parts.lastIndex(where: { $0.contains(municipality) }) {
-            for part in parts[..<index].reversed() {
-                if country(in: part) != nil { continue }
+            let neighbors = Array(parts[..<index].reversed()) + Array(parts.dropFirst(index + 1))
+            for part in neighbors {
+                if Self.country(in: part) != nil { continue }
                 if let admin = cjkAdminToken(in: part) { return admin }
             }
+        }
+        if let leading = leadingCJKAdmin(in: address) {
+            return leading.admin
         }
         guard let range = address.range(of: municipality) else { return nil }
         var prefix = String(address[..<range.lowerBound])
@@ -288,6 +304,30 @@ private extension SaveAddressLocality {
             .trimmingCharacters(in: CharacterSet(charactersIn: ",，"))
         return cjkAdminToken(in: prefix) ?? trailingCJKAdmin(in: prefix)
     }
+
+    /// Compact Japanese/Chinese addresses put the prefecture or province
+    /// first. Named 都/道/府 units must be exact prefixes so `東京都府中市`
+    /// does not match `京都府`.
+    static func leadingCJKAdmin(in token: String) -> (admin: String, rest: String)? {
+        var text = token
+        for country in cjkCountryPrefixes where text.hasPrefix(country) {
+            text.removeFirst(country.count)
+        }
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: ",，"))
+        for name in namedJapanesePrefectures where text.hasPrefix(name) {
+            return (name, String(text.dropFirst(name.count)))
+        }
+        if let index = text.firstIndex(where: { $0 == "県" || $0 == "省" }) {
+            let admin = String(text[...index])
+            if (2...5).contains(admin.count) {
+                return (admin, String(text[text.index(after: index)...]))
+            }
+        }
+        return nil
+    }
+
+    static let namedJapanesePrefectures = ["東京都", "北海道", "大阪府", "京都府"]
 
     static func cjkAdminToken(in token: String) -> String? {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)

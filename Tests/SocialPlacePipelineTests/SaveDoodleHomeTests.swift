@@ -521,6 +521,10 @@ final class SaveDoodleHomeTests: XCTestCase {
             Case(address: "横浜市中区, 神奈川県, 日本", label: "横浜市", cityID: "横浜市,神奈川県", metro: nil),
             Case(address: "東京都府中市宮町", label: "府中市", cityID: "府中市,東京都", metro: nil),
             Case(address: "広島県府中市元町", label: "府中市", cityID: "府中市,広島県", metro: nil),
+            Case(address: "京都市中京区", label: "京都市", cityID: "kyoto", metro: "kyoto"),
+            Case(address: "大阪府大阪市北区", label: "大阪市", cityID: "osaka", metro: "osaka"),
+            Case(address: "京都府京都市下京区", label: "京都市", cityID: "kyoto", metro: "kyoto"),
+            Case(address: "北海道札幌市中央区", label: "札幌市", cityID: "札幌市,北海道", metro: nil),
             Case(address: "Rue Charles Morin, Eu, France", label: "Eu", cityID: "eu,france", metro: nil),
             Case(address: "東京都渋谷区神南1丁目", label: "東京都渋谷区神南1丁目", cityID: "tokyo", metro: "tokyo"),
         ]
@@ -684,9 +688,18 @@ final class SaveDoodleHomeTests: XCTestCase {
         let cityProgress = SavePassportCollectionMode.homeCollected.progress(in: collected)
         XCTAssertEqual(cityProgress.completed, 4)
         XCTAssertEqual(cityProgress.total, 12)
-        XCTAssertTrue(SavePassportCollectionMode.homeCollected.places(
+        let stale = SavePassportCollectionMode.homeCollected.places(
             from: places, selection: .city("nonexistent"), location: nil, locationDenied: true
-        ).isEmpty, "An empty city must never fall back to unrelated stamps")
+        )
+        XCTAssertNotEqual(
+            stale.map(\.id),
+            places.map(\.id),
+            "A missing city must not unscope to the full collection"
+        )
+        XCTAssertFalse(
+            stale.isEmpty,
+            "A missing city falls back to the newest resolvable city, not an empty stamp set"
+        )
     }
 
     /// Closest pin without an address must not empty Near you / Collected.
@@ -1067,19 +1080,26 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(design.contains("locality (Berkeley)"))
     }
 
-    /// T5: a city with no saves hides the strip (or would be 0/0) and
-    /// does not crash.
+    /// T5: a city with no saves hides the strip. A stale persisted city ID
+    /// is replaced, so Collected only disappears when nothing resolves.
     func testT5HomeCollectedHiddenWhenCityHasNoSaves() throws {
         let now = Date(timeIntervalSince1970: 1_760_000_000)
         let places = ReviewDemoSeed.doodleParityPlaces(now: now)
-        let scope = SaveDoodleHomeCatalog.collectedScopePlaces(
+        let stale = SaveDoodleHomeCatalog.collectedScopePlaces(
             from: places,
             selection: .city("osaka"),
             location: nil,
             locationDenied: true
         )
-        XCTAssertTrue(scope.isEmpty)
-        let count = SaveDoodleHomeCatalog.cityCollectedCount(in: scope)
+        XCTAssertFalse(stale.isEmpty, "Stale Osaka falls back to the newest resolvable city")
+        let empty = SaveDoodleHomeCatalog.collectedScopePlaces(
+            from: [],
+            selection: .city("osaka"),
+            location: nil,
+            locationDenied: true
+        )
+        XCTAssertTrue(empty.isEmpty)
+        let count = SaveDoodleHomeCatalog.cityCollectedCount(in: empty)
         XCTAssertEqual(count.visited, 0)
         XCTAssertEqual(count.saved, 0)
         let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
