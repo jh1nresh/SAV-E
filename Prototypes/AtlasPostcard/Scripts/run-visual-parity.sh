@@ -206,9 +206,6 @@ for screen in home saves plan map; do
     fi
     cp "$source" "$ARTIFACT_DIR/reference/$screen.png"
 done
-if [[ -f "$REFERENCE_SOURCE/home-mask.png" ]]; then
-    cp "$REFERENCE_SOURCE/home-mask.png" "$ARTIFACT_DIR/reference/home-mask.png"
-fi
 if [[ -f "$REFERENCE_SOURCE/map-mask.png" ]]; then
     cp "$REFERENCE_SOURCE/map-mask.png" "$ARTIFACT_DIR/reference/map-mask.png"
 fi
@@ -394,8 +391,8 @@ fi
 gate_failed=0
 mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
 # DESIGN v2 map-mask.png: white = live Apple Maps (ignored) for the
-# side-by-side review raster. Home and Map 0.90 scores are recorded, not
-# a CI gate; DESIGN goldens are judged manually. Saves and Plan still gate.
+# side-by-side review raster. Home grades unmasked. Every compared
+# screen still fails the job below 0.90.
 MAP_MASK="$REFERENCE_SOURCE/map-mask.png"
 for screen in home saves plan map; do
     actual="$ARTIFACT_DIR/output/$screen.png"
@@ -406,9 +403,6 @@ for screen in home saves plan map; do
 
     extra_args=()
     mask_args=()
-    if [[ "$screen" == home && -f "$ARTIFACT_DIR/reference/home-mask.png" ]]; then
-        mask_args+=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
-    fi
     if [[ "$screen" == "map" ]]; then
         if [[ ! -f "$MAP_MASK" ]]; then
             echo "error: missing DESIGN map mask: $MAP_MASK" >&2
@@ -440,13 +434,7 @@ for screen in home saves plan map; do
         comparison_status=$?
         if ((comparison_status == 1)); then
             status="FAIL"
-            # Home / Map Doodle rasters are judged manually against DESIGN
-            # goldens. The 0.90 score is not a CI gate.
-            if [[ "$screen" != "home" && "$screen" != "map" ]]; then
-                gate_failed=1
-            else
-                status="REVIEW"
-            fi
+            gate_failed=1
         else
             echo "error: parity comparison failed for $screen" >&2
             cat "$ARTIFACT_DIR/results/$screen.json" >&2

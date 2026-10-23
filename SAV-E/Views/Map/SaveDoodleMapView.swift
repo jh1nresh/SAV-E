@@ -33,6 +33,7 @@ struct SaveDoodleMapView: View {
     @StateObject private var checkIns = SaveDoodleCheckInStore()
     @State private var showsCityPicker = false
     @State private var stampPulse = false
+    @State private var visitError: String?
 
     var body: some View {
         let followsHomeFilter = session.mapFollowsHomeFilter
@@ -130,6 +131,11 @@ struct SaveDoodleMapView: View {
         }
         .onChange(of: mapViewModel.selectedMapFeature) { _, feature in
             mapViewModel.selectMapFeature(feature)
+        }
+        .onChange(of: locationService.currentLocation?.coordinate.latitude) { _, _ in
+            guard mapViewModel.selectedPlace == nil else { return }
+            guard cityOpeningPins().isEmpty else { return }
+            fitVisiblePlaces()
         }
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
@@ -263,16 +269,13 @@ struct SaveDoodleMapView: View {
     private var eatGoRail: some View {
         HStack(spacing: SaveSpace.xs) {
             ForEach(SaveDoodleLens.allCases) { item in
-                let selected = session.lens == item
+                let selected = session.mapFollowsHomeFilter && session.lens == item
                 Button {
                     SaveHaptics.select()
-                    let reselecting = session.lens == item
                     session.lens = item
                     session.mapFollowsHomeFilter = true
-                    if reselecting {
-                        onClearSelection()
-                        fitVisiblePlaces()
-                    }
+                    onClearSelection()
+                    fitVisiblePlaces()
                 } label: {
                     Text(item.title(language: languageSettings.language))
                         .font(SaveAtlasType.strong(15))
@@ -435,6 +438,13 @@ struct SaveDoodleMapView: View {
                     .disabled(checkIns.isPersisting(placeID: place.id))
                     .accessibilityIdentifier("map.card.beenHere")
                 }
+                if let visitError {
+                    Text(visitError)
+                        .font(SaveAtlasType.body(13))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("map.card.visitError")
+                }
             }
             .padding(.top, SaveSpace.md)
         }
@@ -540,7 +550,7 @@ struct SaveDoodleMapView: View {
                 locationDenied: locationService.isAuthorizationDenied
             )
         }
-        return mapViewModel.places
+        return mapViewModel.filteredPlaces
             .filter(\.isMapKitMappable)
             .enumerated()
             .map { index, place in
@@ -635,7 +645,14 @@ struct SaveDoodleMapView: View {
             ) {
                 try await mapViewModel.updatePlace(updated)
             }
-            guard accepted else { return }
+            guard accepted else {
+                visitError = languageSettings.localized(
+                    english: "Couldn’t update this place. Please try again.",
+                    traditionalChinese: "暫時無法更新這個地點，請再試一次。"
+                )
+                return
+            }
+            visitError = nil
             SaveHaptics.stamp()
             stampPulse = false
             withAnimation(SaveTheme.Motion.stampSpring) {
@@ -652,7 +669,14 @@ struct SaveDoodleMapView: View {
                 updated.status = restoreStatus
                 try await mapViewModel.updatePlace(updated)
             }
-            guard accepted else { return }
+            guard accepted else {
+                visitError = languageSettings.localized(
+                    english: "Couldn’t undo this visit. Please try again.",
+                    traditionalChinese: "暫時無法撤銷這次打卡，請再試一次。"
+                )
+                return
+            }
+            visitError = nil
             stampPulse = false
         }
     }
@@ -850,6 +874,9 @@ struct SaveDoodleMapView: View {
         case .city(let id):
             cityID = id
         case .nearYou:
+            if !denied, let coordinate = locationService.currentLocation?.coordinate {
+                return coordinate
+            }
             cityID = mapViewModel.places.compactMap { SaveDoodleHomeCatalog.cityID(for: $0) }.first
         }
         if let cityID {
