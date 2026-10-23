@@ -1,15 +1,32 @@
 # PR 296 Friends evidence
 
 HoP visual reference is Codex packet spec §7.4 and the Friends column of
-the light/dark main mocks. DESIGN v2 `friends.png` is not adopted. Only
-the 402×874 canvas and rough row spacing carry over. There is no 0.90
-pixel gate against that raster.
+the light/dark main mocks. Friends is a **real 0.90 gate** against
+`ProductionTargets/friends.png`. Home deferral on #290 does not apply
+to Friends. Only user-confirmed Map Stamps are saved place memory.
+
+The PNGs below are still the 9fad61a gallery. Do not treat them as
+current-head rasters. Fresh attachments from the next `ios` run land
+under artifact `save-atlas-parity-<sha>` → `SAVE-First-Run`. This
+directory is not refreshed in this push.
 
 ## Section D gallery (simulator XCTAttachments)
 
-Light and dark list, empty (en + zh-Hant). CI device is iPhone 16 Pro
-(402×874), the packet canvas. 375pt / 430pt were not booted (would
-need extra simulators and an `ios.yml` change HoP asked us to drop).
+Light and dark list, empty (en + zh-Hant), accessibility XXXL, plus
+375pt / 430pt letterboxes on the same iPhone 16 Pro (402pt) via
+`--uitest-friends-width=375|430`. CI does not boot extra simulators.
+
+F-V1..V4 / F-B2 / F-B3 / F-B7 width attachments on the next `ios` run:
+
+| ID | Attachment |
+| --- | --- |
+| F-B2 empty en 375 | `friends-empty-en-375` |
+| F-B2 empty zh-Hant 430 | `friends-empty-zh-Hant-430` |
+| F-V populated 375 / F-B7 last-at | `friends-town-375` |
+| F-V populated 430 / F-B7 last-at | `friends-town-430` |
+| F-B3 loading 375 | `friends-loading-375` |
+| F-B3 error 430 | `friends-error-430` |
+| a11y large text | `friends-dynamic-type-xxxl` (already on the 402pt rail) |
 
 | Light list | Dark list |
 | --- | --- |
@@ -43,18 +60,19 @@ workflow, iPhone 16 Pro (402pt logical width), exported from
 
 Friends has no ignore-mask. `home-mask.png` is the only production mask
 (white = ignore) and is attached so the packet review can see the Home
-gate is unchanged.
+gate is unchanged (founder 2026-10-22). The Friends 0.90 compare uses
+`five-tab-friends` against `ProductionTargets/friends.png` with no
+REVIEW conversion.
 
 The Friends chrome in those rasters is the pre-P0 filled-sticker build.
 The current head redraws stickers as 32pt ink outlines, thins the avatar
-ring and Invite stroke, and drops the v2 0.90 gate. Fresh
+ring and Invite stroke, and **gates Friends at 0.90**. Fresh
 `light-friends` / `dark-friends` / `friends-empty-*` /
-`friends-dynamic-type-xxxl` / `friends-loading` / `friends-error`
-attachments land on the next `ios` run under artifact
-`save-atlas-parity-<sha>` → `SAVE-First-Run`.
-
-CI does not boot 375pt or 430pt devices (one iPhone 16 Pro, 402pt). The
-rail records `friends-window-width` on the Dynamic Type launch.
+`friends-dynamic-type-xxxl` / `friends-loading` / `friends-error` /
+`friends-empty-en-375` / `friends-empty-zh-Hant-430` /
+`friends-town-375` / `friends-town-430` / `friends-loading-375` /
+`friends-error-430` attachments land on the next `ios` run under
+artifact `save-atlas-parity-<sha>` → `SAVE-First-Run`.
 
 ## Side-by-side vs packet §7.4 Friends column
 
@@ -71,10 +89,10 @@ rows, 32pt line-art stickers, no shared map, no animation (F-B11).
 | P1 tab bar | Shared Atlas root bar | Home / Map / + / Friends / Passport | Unchanged shared chrome (not a Friends-only file) |
 | P2 background | Dotted paper | `SaveDottedBackground` (dots read faint at 1×) | Same |
 | P2 fixture text | last at Place · 2d | Mia / Leo / Kai / Ana last-at copy | Same isolated `--uitest-friends-town` fixture |
-| Empty (F-B2) | Empty + Find friends | `friends-empty*.png` | Same + zh-Hant |
-| Loading / error (F-B3) | Must be shown | Not in 9fad61a set | New `friends-loading` / `friends-error` attachments |
+| Empty (F-B2) | Empty + Find friends | `friends-empty*.png` | Same + zh-Hant + 375/430 letterbox |
+| Loading / error (F-B3) | Must be shown | Not in 9fad61a set | `friends-loading` / `friends-error` + 375/430 |
 | Animation (F-B11) | None | None | None (`SaveFriendsView` has no `withAnimation`) |
-| 375 / 430 | Requested | Not captured | Not captured; CI is 402pt |
+| 375 / 430 | Requested | Not captured | Letterboxed on the 402pt device via `--uitest-friends-width` |
 
 Invite / 邀請 opens Passport connections, Friends section:
 `SaveFriendsView.onConnections` → `ContentView` sets

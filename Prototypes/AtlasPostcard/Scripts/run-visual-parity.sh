@@ -28,11 +28,12 @@ The screenshots directory must contain home.png, saves.png, plan.png,
 and map.png. The result-bundle mode prefers the live five-tab-home
 attachment for Home and falls back to atlas-home for prototype-only
 runs. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
-and atlas-map XCTest attachments. Friends is not in the 0.90 gate;
-HoP grades it by side-by-side against Codex packet spec §7.4.
+and atlas-map XCTest attachments. Friends is a real 0.90 gate against
+`friends.png` (Home deferral on #290 does not apply to Friends).
 
 --destination runs the prototype XCTest testCaptureFourLockedScreens
-(Home, Saves, Plan, Map only). Friends is not in that prototype shell.
+(Home, Saves, Plan, Map only). Friends is not in that prototype shell;
+CI result-bundle mode still gates live `five-tab-friends` at 0.90.
 EOF
 }
 
@@ -203,13 +204,13 @@ mkdir -p \
     "$ARTIFACT_DIR/diff" \
     "$ARTIFACT_DIR/results"
 
-# Prototype --destination and production result-bundle both compare four
-# screens. Friends is packet §7.4 side-by-side, not a 0.90 v2 raster gate.
+# Prototype --destination still compares four screens (no Friends tab).
+# Production result-bundle also gates Friends at 0.90 against friends.png.
 destination_screens=(home saves plan map)
-parity_screens=(home saves plan map)
+parity_screens=(home saves plan map friends)
 captured_from_prototype=0
 
-for screen in home saves plan map; do
+for screen in home saves plan map friends; do
     source="$REFERENCE_SOURCE/$screen.png"
     if [[ ! -f "$source" ]]; then
         echo "error: missing reference image: $source" >&2

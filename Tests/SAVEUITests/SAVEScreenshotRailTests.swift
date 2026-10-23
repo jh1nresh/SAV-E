@@ -84,6 +84,42 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     func testFriendsComingSoon() throws {
         try assertFriendsComingSoonLanguages()
+        try attachFriendsSectionDWidths()
+    }
+
+    /// DESIGN §D / HoP F-V1..V4, F-B2, F-B3, F-B7: letterbox 375 and 430
+    /// on the same 402pt CI device. Home deferral on #290 does not apply
+    /// to Friends.
+    @MainActor
+    private func attachFriendsSectionDWidths() throws {
+        let shots: [(name: String, language: String, width: Int, flags: [String], identifier: String)] = [
+            ("friends-empty-en-375", "en", 375, [], "friends.empty"),
+            ("friends-empty-zh-Hant-430", "zh-Hant", 430, [], "friends.empty"),
+            ("friends-town-375", "en", 375, ["--uitest-friends-town"], "friends.author.mia"),
+            ("friends-town-430", "en", 430, ["--uitest-friends-town"], "friends.author.mia"),
+            ("friends-loading-375", "en", 375, ["--uitest-friends-loading"], "friends.loading"),
+            ("friends-error-430", "en", 430, ["--uitest-friends-error"], "posts.error"),
+        ]
+        for shot in shots {
+            let app = makeApp(
+                launchArguments: [
+                    "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                    "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                    "--uitest-repair-review-demo-seed",
+                    "--uitest-friends-width=\(shot.width)",
+                    "-save.appLanguage", shot.language,
+                ] + shot.flags,
+                launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+            )
+            launch(app)
+            try signInViaReviewDemoRequired(app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+            openRootTab("Friends", app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(app.descendants(matching: .any)[shot.identifier].waitForExistence(timeout: stepTimeout))
+            attach(app, name: shot.name)
+            terminate(app)
+        }
     }
 
     @MainActor
@@ -3315,8 +3351,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// 0.90 with `home-mask.png`. Capture that raster from the Codex Tiantan
     /// fixture at the Tiantan fix; a denied-location Taipei Home is a
     /// different state and scores ~0.66. Do not retune the gate script here.
-    /// Friends `five-tab-friends` is packet §7.4 evidence, not a 0.90 gate
-    /// against `ProductionTargets/friends.png`.
+    /// Friends `five-tab-friends` is a real 0.90 gate against
+    /// `ProductionTargets/friends.png`. Home deferral on #290 does not
+    /// apply to Friends. Packet §7.4 remains the people-first layout
+    /// reference.
     @MainActor
     private func captureFiveTabHomeParityRaster() throws {
         let app = makeApp(

@@ -47,6 +47,7 @@ struct SaveFriendsView: View {
                 .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
             }
         }
+        .frame(maxWidth: uiTestFriendsWidth ?? .infinity, maxHeight: .infinity, alignment: .top)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(SaveDottedBackground())
         .foregroundStyle(SaveAtlasPalette.ink)
@@ -56,6 +57,27 @@ struct SaveFriendsView: View {
         .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await store.refresh(.feed) } } }
         .sheet(item: $selected) { SharedPostDetail(initialPost: $0, store: store, onSaved: onSaved) }
         .sheet(item: $author) { SharedAuthorPassport(authorID: $0.author_id, onSaved: onSaved) }
+    }
+
+    /// CI boots one iPhone 16 Pro (402pt). `--uitest-friends-width=375|430`
+    /// letterboxes Friends to those DESIGN §D canvases on the same device.
+    private var uiTestFriendsWidth: CGFloat? {
+#if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        let prefix = "--uitest-friends-width="
+        if let pair = args.first(where: { $0.hasPrefix(prefix) }),
+           let value = Double(pair.dropFirst(prefix.count)),
+           value == 375 || value == 430 {
+            return CGFloat(value)
+        }
+        if let index = args.firstIndex(of: "--uitest-friends-width"),
+           args.indices.contains(index + 1),
+           let value = Double(args[index + 1]),
+           value == 375 || value == 430 {
+            return CGFloat(value)
+        }
+#endif
+        return nil
     }
 
     private var header: some View {
