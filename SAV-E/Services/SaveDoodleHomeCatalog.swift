@@ -310,12 +310,25 @@ enum SaveDoodleHomeCatalog {
         if trimmed.range(of: #"^[A-Za-z]{2}$"#, options: .regularExpression) != nil {
             return trimmed.lowercased()
         }
-        if let match = trimmed.range(of: #"^[A-Za-z]{2,3}(?=\s)"#, options: .regularExpression) {
+        if let match = trimmed.range(of: #"^[A-Za-z]{2}(?=\s)"#, options: .regularExpression) {
             return String(trimmed[match]).lowercased()
+        }
+        if let code = australianStatePostcodeCode(in: trimmed) {
+            return code
         }
         let folded = normalizedCityToken(trimmed)
         if australianStateCodes.contains(folded) { return folded }
         return usStateNames[folded] ?? canadianProvinceNames[folded] ?? australianStateNames[folded]
+    }
+
+    /// `NSW 2000` / `VIC 3000` only — not `Los Ángeles` or `New South Wales`.
+    private static func australianStatePostcodeCode(in value: String) -> String? {
+        let folded = normalizedCityToken(value)
+        guard let match = folded.range(
+            of: #"^(nsw|vic|qld|tas|act|sa|wa|nt)\s+\d{4}$"#,
+            options: .regularExpression
+        ) else { return nil }
+        return String(folded[match]).split(separator: " ").first.map(String.init)
     }
 
     /// Full US state / DC names so `Springfield, Illinois` keeps `springfield,il`.
@@ -400,11 +413,8 @@ enum SaveDoodleHomeCatalog {
         if trimmed.range(of: #"^\d{4}$"#, options: .regularExpression) != nil {
             return true
         }
-        // Australia: "NSW 2000", "VIC 3000" — state code + 4-digit postcode.
-        if trimmed.range(
-            of: #"^[A-Za-z]{2,3}\s+\d{4}$"#,
-            options: .regularExpression
-        ) != nil {
+        // Australia: "NSW 2000", "VIC 3000" — known state code + 4-digit postcode.
+        if australianStatePostcodeCode(in: trimmed) != nil {
             return true
         }
         if adminRegionCode(in: trimmed) != nil {

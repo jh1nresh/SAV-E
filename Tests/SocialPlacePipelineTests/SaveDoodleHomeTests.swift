@@ -245,6 +245,13 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(Set(groups.map(\.id)), Set(["sydney,nsw", "melbourne,vic"]))
         XCTAssertEqual(Set(groups.map(\.englishName)), Set(["Sydney", "Melbourne"]))
         XCTAssertEqual(groups.first { $0.id == "sydney,nsw" }?.count, 2)
+        let losAngelesChile = place(
+            "Biobío cafe",
+            "Los Ángeles, Biobío, Chile",
+            .cafe
+        )
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: losAngelesChile.address), "Los Ángeles")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: losAngelesChile), "los angeles,chile")
     }
 
     /// Postcode-first European lines are the city, not the country or ZIP.
@@ -1138,7 +1145,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertFalse(rail.contains("[\"home.savedPlaces.empty\"]"))
         XCTAssertTrue(rail.contains("home.empty.capture"))
         XCTAssertTrue(catalog.contains("NSW 2000"))
-        XCTAssertTrue(catalog.contains("[A-Za-z]{2,3}"))
+        XCTAssertTrue(catalog.contains("australianStatePostcodeCode"))
+        XCTAssertFalse(catalog.contains("[A-Za-z]{2,3}"))
         let selector = try source(at: "scripts/select-ios-tests.py")
         XCTAssertTrue(selector.contains("testHomeDesignProductStates"))
         XCTAssertTrue(rail.contains("doodle-home-empty"))
