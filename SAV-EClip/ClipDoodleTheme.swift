@@ -175,6 +175,8 @@ struct ClipWordmarkPlate: View {
                 ClipJitterCapsule(seed: 19)
                     .stroke(ClipJournalPalette.ink, lineWidth: ClipJournalPalette.strokeWidth)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityIdentifier("clip.wordmark")
     }
 }
 
@@ -743,6 +745,7 @@ struct ClipSharerChip: View {
             ClipJitterCapsule(seed: 3)
                 .stroke(ClipStickerInk.outline, lineWidth: ClipJournalPalette.strokeWidth)
         }
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(ClipCopy.format("clip.from", name))
         .accessibilityIdentifier("clip.sharer")
     }

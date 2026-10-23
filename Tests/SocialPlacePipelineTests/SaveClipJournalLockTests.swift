@@ -56,6 +56,11 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(theme.contains("ClipStickerInk.handleStroke"))
         XCTAssertTrue(theme.contains("ClipStickerInk.chopstickStroke"))
         XCTAssertTrue(theme.contains("accessibilityIdentifier(\"clip.sharer\")"))
+        XCTAssertGreaterThanOrEqual(
+            theme.components(separatedBy: "accessibilityElement(children: .ignore)").count - 1,
+            2,
+            "wordmark plate and sharer chip must be XCUI elements, not hidden children"
+        )
         XCTAssertFalse(theme.contains("Color.black"))
         XCTAssertFalse(theme.contains("#000000"))
         XCTAssertFalse(theme.contains("colorScheme == .dark ? Color.black"))
@@ -465,8 +470,8 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(strings.contains("%@'s note"))
         XCTAssertTrue(clip.contains("clip.cap50.saved"))
         XCTAssertTrue(clip.contains("clip.cap50.title"))
-        XCTAssertTrue(clip.contains("clip.friendNote"))
-        XCTAssertTrue(clip.contains("clip.wordmark"))
+        XCTAssertTrue(theme.contains("clip.friendNote"))
+        XCTAssertTrue(clip.contains("clip.wordmark") || theme.contains("clip.wordmark"))
         XCTAssertGreaterThanOrEqual(clip.components(separatedBy: "ClipWordmarkPlate()").count - 1, 3)
         XCTAssertTrue(design.contains("已存 50 個"))
         XCTAssertFalse(strings.contains("clip.footnote.howSave"))
