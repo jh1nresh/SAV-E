@@ -2611,6 +2611,108 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(map.places.first(where: { $0.id == original.id })?.note, original.note)
     }
 
+    /// P1 4365096518: a pending Share merge onto a cached stamp must not park
+    /// under that stamp's ID when PATCH hits the cap.
+    @MainActor
+    func testPendingShareMergeCapParksNewUnplacedIDAndKeepsConfirmedStamp() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        defer {
+            auth.authState = originalAuth
+            SavePlaceLimitHandoff.testDefaults = originalDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        let owner = "pending-merge-cap-owner"
+        auth.authState = .authenticated(userId: owner)
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.pending-merge-cap.\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vaultURL = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamps = makeCappedPlaces(50)
+        let stamp = stamps[0]
+        _ = try vault.saveConfirmedPlace(stamp, ownerSubject: owner)
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([
+            PendingSharedPlace(
+                ownerSubject: owner,
+                googlePlaceId: stamp.googlePlaceId,
+                name: stamp.name,
+                address: stamp.address,
+                category: stamp.category.rawValue,
+                latitude: stamp.latitude,
+                longitude: stamp.longitude,
+                dishes: ["New share dish"],
+                sourceURL: "https://example.com/share/pending-merge-cap",
+                sourceText: "Fresh share capture for the cached stamp",
+                savedAt: Date()
+            )
+        ])
+        var patchCount = 0
+        let rows = stamps.enumerated().map { index, place in
+            cappedPlaceRowJSON(
+                id: place.id,
+                index: index,
+                name: place.name,
+                googlePlaceID: place.googlePlaceId
+            )
+        }.joined(separator: ",")
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET", request.url?.path == "/places" {
+                return (200, "[\(rows)]")
+            }
+            if request.httpMethod == "PATCH", request.url?.path.hasPrefix("/places/") == true {
+                patchCount += 1
+                return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#)
+            }
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(
+            apiBaseURL: "https://pending-merge-cap.test",
+            session: URLSession(configuration: configuration),
+            accessTokenProvider: { "test-token" }
+        )
+        let map = MapViewModel(
+            supabaseService: service,
+            pendingImportService: queue,
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        await map.loadPlaces()
+        XCTAssertEqual(patchCount, 1)
+        XCTAssertEqual(map.places.count, 50)
+        XCTAssertEqual(map.places.first(where: { $0.id == stamp.id })?.googlePlaceId, stamp.googlePlaceId)
+        XCTAssertEqual(map.places.first(where: { $0.id == stamp.id })?.name, stamp.name)
+        let parked = try XCTUnwrap(map.reviewCandidates.first)
+        XCTAssertEqual(map.reviewCandidates.count, 1)
+        XCTAssertTrue(parked.isUnplacedInbox)
+        XCTAssertEqual(parked.name, stamp.name)
+        XCTAssertNotEqual(parked.id, stamp.id)
+        XCTAssertEqual(parked.correctionLearningPlaceID, stamp.id)
+        XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        XCTAssertTrue(queue.consumePendingPlaces(ownerSubject: owner).isEmpty)
+
+        try await map.refreshReviewCandidates()
+        XCTAssertEqual(map.reviewCandidates.count, 1)
+        XCTAssertEqual(map.reviewCandidates.first?.id, parked.id)
+        XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+        let persisted = try XCTUnwrap(vault.reviewCandidates(belongingTo: owner).first)
+        XCTAssertEqual(persisted.id, parked.id)
+        XCTAssertTrue(persisted.isUnplacedInbox)
+        XCTAssertFalse(try vault.reviewCandidates(belongingTo: owner).contains { $0.id == stamp.id })
+        let confirmed = try XCTUnwrap(vault.confirmedPlaces(belongingTo: owner).first { $0.id == stamp.id })
+        XCTAssertEqual(confirmed.id, stamp.id)
+        XCTAssertEqual(confirmed.googlePlaceId, stamp.googlePlaceId)
+        XCTAssertEqual(confirmed.name, stamp.name)
+    }
+
     @MainActor
     func testMatchedReviewMergeCapParksOriginalCandidate() async throws {
         let auth = PrivyAuthService.shared
@@ -2993,8 +3095,19 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertTrue(map.contains("private func parkPlaceAfterPatchCap("))
         XCTAssertTrue(
-            map.contains("if places.contains(where: { $0.id == candidate.id }) {\n            candidate.id = UUID()"),
-            "ruling B must not turn a confirmed stamp into Unplaced"
+            userEdit.contains("try parkPlaceInUnplacedInbox(place)"),
+            "ruling B reuses the shared Unplaced park so stamp IDs are remapped"
+        )
+        let inboxStart = try XCTUnwrap(map.range(of: "func parkPlaceInUnplacedInbox(_ place: Place, requestPaywall: Bool = true)"))
+        let inboxEnd = try XCTUnwrap(map[inboxStart.lowerBound...].range(of: "private func parkIfServerSavedPlaceLimit("))
+        let inbox = String(map[inboxStart.lowerBound..<inboxEnd.lowerBound])
+        XCTAssertTrue(
+            inbox.contains("candidate.id = UUID()"),
+            "P1 4365096518: pending merges must not park under the confirmed stamp ID"
+        )
+        XCTAssertTrue(
+            inbox.contains("candidate.correctionLearningPlaceID = confirmedID"),
+            "keep a reference to the confirmed stamp after minting a new Unplaced ID"
         )
         XCTAssertTrue(map.contains("requestSavedPlaceLimitPaywall()"))
     }

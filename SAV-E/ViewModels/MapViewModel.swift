@@ -944,10 +944,17 @@ final class MapViewModel: ObservableObject {
 
     @discardableResult
     func parkPlaceInUnplacedInbox(_ place: Place, requestPaywall: Bool = true) throws -> PlaceReviewCandidate {
-        let candidate = PlaceReviewCandidate.unplacedInboxItem(
+        var candidate = PlaceReviewCandidate.unplacedInboxItem(
             from: place,
             ownerSubject: authService.currentUserId
         )
+        // A pending merge keeps the confirmed stamp's ID. Parking under that
+        // ID makes upsertReviewRecord return the stamp and drop the capture.
+        if places.contains(where: { $0.id == candidate.id }) {
+            let confirmedID = candidate.id
+            candidate.id = UUID()
+            candidate.correctionLearningPlaceID = confirmedID
+        }
         try persistParkedReviewCandidate(candidate)
         reviewCandidates = [candidate] + reviewCandidates.filter { $0.id != candidate.id }
         if requestPaywall {
@@ -980,7 +987,10 @@ final class MapViewModel: ObservableObject {
         if stamped.ownerSubject == nil {
             stamped.ownerSubject = authService.currentUserId
         }
-        _ = try saveLocalVaultService.saveReviewCandidate(stamped)
+        _ = try saveLocalVaultService.saveReviewCandidate(
+            stamped,
+            preservingParkedContext: stamped.isUnplacedInbox
+        )
     }
 
     /// Park the original review item, retaining its workflow and source context.
@@ -4368,17 +4378,7 @@ final class MapViewModel: ObservableObject {
         } else if authService.currentUserId != nil || authService.sessionGeneration != generation {
             throw ReviewCandidateError.sessionChangedAfterCommit
         }
-        var candidate = PlaceReviewCandidate.unplacedInboxItem(
-            from: place,
-            ownerSubject: authService.currentUserId
-        )
-        if places.contains(where: { $0.id == candidate.id }) {
-            candidate.id = UUID()
-        }
-        try persistParkedReviewCandidate(candidate)
-        reviewCandidates = [candidate] + reviewCandidates.filter { $0.id != candidate.id }
-        requestSavedPlaceLimitPaywall()
-        syncSavedPlaceLimitCache()
+        try parkPlaceInUnplacedInbox(place)
     }
 
     func discoverRelatedSources(
