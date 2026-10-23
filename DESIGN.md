@@ -737,7 +737,7 @@ a 2pt coral underline under the city word only. Body copy stays
 not DESIGN v2 Home. H1–H4 CI rasters are judged manually by DESIGN;
 the 0.90 visual-parity score is not evidence. Historical DESIGN v2
 `design/doodle-targets-2026-10-20/home-light.png` at `eade369`
-(exact 402×874; `home-dark.png`)
+(exact 402×874; `home-dark.png`; `home-mask.png` white = ignore)
 is archive only. v1 is retired.
 
 ### Sign-In
