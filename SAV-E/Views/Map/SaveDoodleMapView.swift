@@ -17,8 +17,8 @@ enum SaveDoodleMapPinStyle {
 }
 
 /// Product Map tab: default Apple MapKit (`.standard`, emphasis `.automatic`)
-/// with a zero-saturation paper multiply. Saved places use Savvy pins;
-/// unsaved keep the native Marker. No tile-town.
+/// with native Apple tile colors. Saved places use Savvy pins;
+/// unsaved keep the native Marker. No tile-town, no paper wash.
 struct SaveDoodleMapView: View {
     @ObservedObject var mapViewModel: MapViewModel
     let presentation: AtlasPresentation
@@ -216,16 +216,6 @@ struct SaveDoodleMapView: View {
             }
         }
         .mapStyle(.standard(emphasis: .automatic))
-        .overlay {
-            // Paper multiply on the tiles only. Applying `.saturation(0)` to
-            // Map itself would also gray the coral Savvy pins.
-            SaveAtlasPalette.paper
-                .saturation(0)
-                .colorMultiply(SaveAtlasPalette.paper)
-                .opacity(0.22)
-                .blendMode(.multiply)
-                .allowsHitTesting(false)
-        }
         .mapFeatureSelectionDisabled { feature in
             feature.kind != .pointOfInterest
         }
