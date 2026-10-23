@@ -35,28 +35,18 @@ struct SaveHomeSearch {
     /// "Shibuya City, Tokyo" and "Dusit, Bangkok" resolve to Tokyo / Bangkok.
     /// Shared country recognition for metro matching and fallback city grouping.
     static func countryToken(in address: String) -> String? {
-        let last = address.split(separator: ",").last.map { normalize(String($0)) } ?? ""
-        guard let token = addressCountryToken(address) ?? countryAliases[last] else { return nil }
-        return countryAliases[token] ?? token
+        SaveAddressLocality.country(in: address)
     }
 
-    /// One qualifier per recognized country, including the legacy fallback
-    /// spellings. Otherwise UK and United Kingdom split the same city.
-    private static let countryAliases: [String: String] = [
-        "uk": "united kingdom", "u k": "united kingdom", "england": "united kingdom", "britain": "united kingdom",
-        "usa": "united states", "us": "united states", "united states of america": "united states",
-        "korea": "south korea",
-        "schweiz": "switzerland", "suisse": "switzerland", "svizzera": "switzerland",
-        "österreich": "austria", "osterreich": "austria",
-        "nederland": "netherlands", "holland": "netherlands",
-        "belgie": "belgium", "belgië": "belgium", "belgique": "belgium",
-    ]
-
     static func metroKey(in address: String) -> String? {
-        for city in City.ordered where city.matches(address: address) && city.hasLocalityComponent(in: address) {
-            return city.rawValue
-        }
-        return nil
+        SaveAddressLocality.resolve(address)?.metroKey
+    }
+
+    /// Allowlisted metro only when a locality component matches and the
+    /// parsed region does not contradict the alias (Paris TX, London ON,
+    /// Los Angeles TX).
+    static func metroAlias(for parsed: SaveAddressLocality.Parsed) -> String? {
+        City.ordered.first { $0.accepts(parsed) }?.rawValue
     }
 
     static func metroName(in address: String, traditionalChinese: Bool) -> String? {
@@ -317,15 +307,19 @@ private extension SaveHomeSearch {
             return aliasHit && fitsAdministrativeRegion(address)
         }
 
+        func accepts(_ parsed: SaveAddressLocality.Parsed) -> Bool {
+            hasLocalityComponent(in: parsed.address) && fits(parsed)
+        }
+
         /// A street named London Road is not evidence that its city is London.
         /// Keep free-text search matching separate from structured city grouping.
         func hasLocalityComponent(in address: String) -> Bool {
             let components = address.split(separator: ",").map {
-                SaveHomeSearch.normalize(SaveDoodleHomeCatalog.strippingPostalCode(from: String($0)))
+                SaveAddressLocality.normalizeToken(SaveAddressLocality.strippingPostalCode(from: String($0)))
             }
             return components.contains { component in
                 aliases.contains { alias in
-                    let normalizedAlias = SaveHomeSearch.normalize(alias)
+                    let normalizedAlias = SaveAddressLocality.normalizeToken(alias)
                     if component == normalizedAlias { return true }
                     // Compact East Asian addresses begin with their municipality:
                     // 台北市大安區 / 東京都渋谷区 / 大阪府大阪市.
@@ -353,18 +347,24 @@ private extension SaveHomeSearch {
         /// Allowlisted aliases stay canonical unless the address names a
         /// different country, US state, or non-US region (London, Ontario).
         private func fitsAdministrativeRegion(_ address: String) -> Bool {
-            if SaveHomeSearch.addressSignalsUnitedStates(address), !isUnitedStatesMetro {
+            guard let parsed = SaveAddressLocality.parse(address) else { return true }
+            return fits(parsed)
+        }
+
+        private func fits(_ parsed: SaveAddressLocality.Parsed) -> Bool {
+            if SaveAddressLocality.signalsUnitedStates(parsed), !isUnitedStatesMetro {
                 return false
             }
-            if let regionCountry = SaveHomeSearch.nonUSAdminRegionCountry(in: address),
-               let home = homeCountryTokens,
-               !home.contains(regionCountry) {
+            if let region = parsed.region,
+               let regionCountry = SaveAddressLocality.countryForAdminRegion(region),
+               !homeCountries.contains(regionCountry) {
                 return false
             }
-            guard let country = SaveHomeSearch.countryToken(in: address),
-                  let home = homeCountryTokens
-            else { return true }
-            return home.contains(country)
+            if isUnitedStatesMetro, let region = parsed.region {
+                return homeUSStates.contains(region)
+            }
+            guard let country = parsed.country else { return true }
+            return homeCountries.contains(country)
         }
 
         private var isUnitedStatesMetro: Bool {
@@ -374,10 +374,18 @@ private extension SaveHomeSearch {
             }
         }
 
-        private var homeCountryTokens: Set<String>? {
+        private var homeUSStates: Set<String> {
+            switch self {
+            case .losAngeles, .sanFrancisco: return ["ca"]
+            case .newYork: return ["ny"]
+            default: return []
+            }
+        }
+
+        private var homeCountries: Set<String> {
             switch self {
             case .losAngeles, .newYork, .sanFrancisco:
-                return ["usa", "us", "united states", "united states of america"]
+                return ["united states"]
             case .taipei, .newTaipei, .taoyuan, .taichung, .tainan, .kaohsiung,
                  .keelung, .hsinchu, .chiayi:
                 return ["taiwan"]
@@ -386,7 +394,7 @@ private extension SaveHomeSearch {
             case .bangkok:
                 return ["thailand"]
             case .seoul:
-                return ["korea", "south korea"]
+                return ["south korea"]
             case .singapore:
                 return ["singapore"]
             case .hongKong:
@@ -394,7 +402,7 @@ private extension SaveHomeSearch {
             case .paris:
                 return ["france"]
             case .london:
-                return ["uk", "u.k.", "united kingdom", "england", "britain"]
+                return ["united kingdom"]
             case .shanghai, .beijing, .guangzhou, .shenzhen, .chengdu:
                 return ["china"]
             }
@@ -514,113 +522,11 @@ private extension SaveHomeSearch {
     /// Canadian provinces can appear without a country token.
     /// `London, Ontario` is not the UK `london` metro.
     static func nonUSAdminRegionCountry(in address: String) -> String? {
-        let parts = address
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        for part in parts {
-            let folded = normalize(SaveDoodleHomeCatalog.strippingPostalCode(from: part))
-            if canadianProvinceNames.contains(folded) { return "canada" }
-            if folded.range(of: #"^[a-z]{2}$"#, options: .regularExpression) != nil,
-               canadianProvinceCodes.contains(folded) {
-                return "canada"
-            }
-        }
-        return nil
+        guard let parsed = SaveAddressLocality.parse(address),
+              let region = parsed.region,
+              let country = SaveAddressLocality.countryForAdminRegion(region),
+              country != "united states"
+        else { return nil }
+        return country
     }
-
-    /// `Paris, TX 75460, USA` and `Paris, Texas` are US; `Paris, France` is not.
-    static func addressSignalsUnitedStates(_ address: String) -> Bool {
-        let parts = address
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        if let last = parts.last, countryTokens.contains(normalize(last)),
-           ["usa", "us", "united states", "united states of america"].contains(normalize(last)) {
-            return true
-        }
-        return parts.contains { isUnitedStatesStatePart($0) }
-    }
-
-    static func addressCountryToken(_ address: String) -> String? {
-        let parts = address
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        guard let last = parts.last else { return nil }
-        let token = normalize(last)
-        return countryTokens.contains(token) ? token : localizedCountryTokens[token]
-    }
-
-    private static func isUnitedStatesStatePart(_ value: String) -> Bool {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        let folded = normalize(trimmed)
-        if usStateNames.contains(folded) { return true }
-        if folded.range(of: #"^[a-z]{2}$"#, options: .regularExpression) != nil {
-            return usStateCodes.contains(folded)
-        }
-        if let match = folded.range(of: #"^[a-z]{2}(?=\s)"#, options: .regularExpression) {
-            return usStateCodes.contains(String(folded[match]))
-        }
-        return false
-    }
-
-    // Use the platform's full region catalogue, not a handful of supported
-    // metros' countries: Los Ángeles in Chile must never become California.
-    private static let localizedCountryTokens: [String: String] = {
-        let english = Locale(identifier: "en_US_POSIX")
-        let locales = [english, Locale(identifier: "zh_Hant"), Locale(identifier: "zh_Hans")]
-        var tokens: [String: String] = [:]
-        for region in Locale.Region.isoRegions {
-            guard let name = english.localizedString(forRegionCode: region.identifier) else { continue }
-            let canonical = region.identifier == "HK" ? "hong kong" : normalize(name)
-            for locale in locales {
-                if let name = locale.localizedString(forRegionCode: region.identifier) {
-                    tokens[normalize(name)] = canonical
-                }
-            }
-        }
-        return tokens
-    }()
-
-    private static let countryTokens: Set<String> = [
-        "usa", "us", "united states", "united states of america",
-        "uk", "u.k.", "united kingdom", "england", "britain",
-        "taiwan", "japan", "china", "canada", "australia", "france",
-        "germany", "italy", "spain", "korea", "south korea", "thailand",
-        "singapore", "hong kong",
-        "turkey", "turkiye", "türkiye",
-    ]
-
-    private static let usStateCodes: Set<String> = [
-        "al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga", "hi",
-        "id", "il", "in", "ia", "ks", "ky", "la", "me", "md", "ma", "mi",
-        "mn", "ms", "mo", "mt", "ne", "nv", "nh", "nj", "nm", "ny", "nc",
-        "nd", "oh", "ok", "or", "pa", "ri", "sc", "sd", "tn", "tx", "ut",
-        "vt", "va", "wa", "wv", "wi", "wy", "dc",
-    ]
-
-    private static let canadianProvinceCodes: Set<String> = [
-        "ab", "bc", "mb", "nb", "nl", "ns", "nt", "nu", "on", "pe", "qc", "sk", "yt",
-    ]
-
-    private static let canadianProvinceNames: Set<String> = [
-        "alberta", "british columbia", "manitoba", "new brunswick",
-        "newfoundland", "newfoundland and labrador", "nova scotia",
-        "northwest territories", "nunavut", "ontario",
-        "prince edward island", "quebec", "saskatchewan", "yukon",
-    ]
-
-    private static let usStateNames: Set<String> = [
-        "alabama", "alaska", "arizona", "arkansas", "california", "colorado",
-        "connecticut", "delaware", "florida", "georgia", "hawaii", "idaho",
-        "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana",
-        "maine", "maryland", "massachusetts", "michigan", "minnesota",
-        "mississippi", "missouri", "montana", "nebraska", "nevada",
-        "new hampshire", "new jersey", "new mexico", "new york",
-        "north carolina", "north dakota", "ohio", "oklahoma", "oregon",
-        "pennsylvania", "rhode island", "south carolina", "south dakota",
-        "tennessee", "texas", "utah", "vermont", "virginia", "washington",
-        "west virginia", "wisconsin", "wyoming", "district of columbia",
-    ]
 }

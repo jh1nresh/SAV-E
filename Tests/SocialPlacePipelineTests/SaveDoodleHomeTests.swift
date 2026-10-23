@@ -451,6 +451,187 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: isparta), "ısparta,turkey")
     }
 
+    /// Every Home city-parsing P2 on this PR, resolved and unresolved.
+    func testAddressLocalityTableCoversHomeCityP2Cases() {
+        let turkish = Locale(identifier: "tr_TR")
+        XCTAssertEqual("India".lowercased(with: turkish), "ındia")
+        XCTAssertEqual(SaveAddressLocality.normalizeIdentifier("India"), "india")
+        XCTAssertEqual(SaveAddressLocality.country(in: "India"), "india")
+
+        struct Case {
+            let address: String
+            let label: String?
+            let cityID: String?
+            let metro: String?
+        }
+        let cases: [Case] = [
+            // Parse fallback addresses into actual cities
+            Case(address: "1517 Shattuck Ave, Berkeley, CA 94704, USA", label: "Berkeley", cityID: "berkeley,ca", metro: nil),
+            Case(address: "1504 Shattuck Ave, Berkeley, CA 94709, USA", label: "Berkeley", cityID: "berkeley,ca", metro: nil),
+            // Strip non-US postcodes
+            Case(address: "123 Main St, Victoria, BC V8W 1P6, Canada", label: "Victoria", cityID: "victoria,bc", metro: nil),
+            // Parse postcode-prefixed European localities
+            Case(address: "Bahnhofstrasse 1, 8001 Zürich, Switzerland", label: "Zürich", cityID: "zurich,switzerland", metro: nil),
+            Case(address: "Rue de la République, 69001 Lyon, France", label: "Lyon", cityID: "lyon,france", metro: nil),
+            // Disambiguate fallback city IDs by region
+            Case(address: "2935 S 6th St, Springfield, IL 62703, USA", label: "Springfield", cityID: "springfield,il", metro: nil),
+            Case(address: "8 Fort St, Springfield, MA 01103, USA", label: "Springfield", cityID: "springfield,ma", metro: nil),
+            // Recognize full administrative-region names
+            Case(address: "123 Main St, Springfield, Illinois, United States", label: "Springfield", cityID: "springfield,il", metro: nil),
+            // Qualify allowlisted city IDs by region
+            Case(address: "172 Boulevard Saint-Germain, Paris, France", label: "Paris", cityID: "paris", metro: "paris"),
+            Case(address: "Paris, TX 75460, USA", label: "Paris", cityID: "paris,tx", metro: nil),
+            // Reject metro aliases with unrecognized countries
+            Case(address: "Los Ángeles, Biobío, Chile", label: "Los Ángeles", cityID: "los angeles,chile", metro: nil),
+            // Restrict metro aliases to locality components
+            Case(address: "123 London Road, Manchester, United Kingdom", label: "Manchester", cityID: "manchester,united kingdom", metro: nil),
+            Case(address: "10 Downing Street, London SW1A 2AA, UK", label: "London", cityID: "london", metro: "london"),
+            // Strip trailing postcodes from locality labels
+            Case(address: "1 King's Parade, Cambridge CB2 1ST, UK", label: "Cambridge", cityID: "cambridge,united kingdom", metro: nil),
+            Case(address: "2 Trinity Street, Cambridge CB2 1SU, UK", label: "Cambridge", cityID: "cambridge,united kingdom", metro: nil),
+            // Canonicalize country aliases in city IDs
+            Case(address: "1 King's Parade, Cambridge CB2 1ST, United Kingdom", label: "Cambridge", cityID: "cambridge,united kingdom", metro: nil),
+            Case(address: "Damrak, Amsterdam, Holland", label: "Amsterdam", cityID: "amsterdam,netherlands", metro: nil),
+            // Handle Australian state and postcode components
+            Case(address: "1 George St, Sydney, NSW 2000, Australia", label: "Sydney", cityID: "sydney,nsw", metro: nil),
+            Case(address: "1 Flinders St, Melbourne, VIC 3000, Australia", label: "Melbourne", cityID: "melbourne,vic", metro: nil),
+            Case(address: "1 George St, Sydney, New South Wales, Australia", label: "Sydney", cityID: "sydney,nsw", metro: nil),
+            // Canonicalize full Australian state qualifiers
+            Case(address: "Melbourne, Victoria, Australia", label: "Melbourne", cityID: "melbourne,vic", metro: nil),
+            // Extract only the CJK locality component
+            Case(address: "中國, 江蘇省, 蘇州市, 姑蘇區", label: "蘇州市", cityID: "蘇州市", metro: nil),
+            Case(address: "中国, 江苏省, 苏州市, 姑苏区", label: "苏州市", cityID: "苏州市", metro: nil),
+            Case(address: "江蘇省蘇州市姑蘇區", label: "蘇州市", cityID: "蘇州市", metro: nil),
+            Case(address: "台北市, 台灣", label: "台北市", cityID: "taipei", metro: "taipei"),
+            // Reject metro aliases contradicted by non-US regions
+            Case(address: "London, Ontario", label: "London", cityID: "london,on", metro: nil),
+            Case(address: "130 King St, London, Ontario", label: "London", cityID: "london,on", metro: nil),
+            Case(address: "8 Southwark St, London, United Kingdom", label: "London", cityID: "london", metro: "london"),
+            // Normalize stable city IDs / country qualifiers with a fixed locale
+            Case(address: "Isparta, Turkey", label: "Isparta", cityID: "isparta,turkey", metro: nil),
+            Case(address: "Connaught Place, Delhi, India", label: "Delhi", cityID: "delhi,india", metro: nil),
+            // Reject contradictory states for US metro aliases
+            Case(address: "Los Angeles, TX 78014, USA", label: "Los Angeles", cityID: "los angeles,tx", metro: nil),
+            Case(address: "Los Angeles, California, United States", label: "Los Angeles", cityID: "losAngeles", metro: "losAngeles"),
+            Case(address: "Los Angeles, CA 90012, USA", label: "Los Angeles", cityID: "losAngeles", metro: "losAngeles"),
+            // Preserve the locality after stripping its region
+            Case(address: "1600 Pennsylvania Ave NW, Washington, DC 20500, USA", label: "Washington", cityID: "washington,dc", metro: nil),
+            // Treat Japanese prefecture suffixes as locality boundaries
+            Case(address: "日本神奈川県横浜市中区", label: "横浜市", cityID: "横浜市", metro: nil),
+            Case(address: "横浜市中区, 神奈川県, 日本", label: "横浜市", cityID: "横浜市", metro: nil),
+            Case(address: "東京都渋谷区神南1丁目", label: "東京都渋谷区神南1丁目", cityID: "tokyo", metro: "tokyo"),
+        ]
+
+        for item in cases {
+            let resolved = SaveAddressLocality.resolve(item.address)
+            XCTAssertEqual(resolved?.label, item.label, item.address)
+            XCTAssertEqual(resolved?.cityID, item.cityID, item.address)
+            XCTAssertEqual(resolved?.metroKey, item.metro, item.address)
+            XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: item.address), item.label, item.address)
+            let fixture = place("P2 fixture", item.address, .cafe)
+            XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: fixture), item.cityID, item.address)
+            XCTAssertEqual(SaveHomeSearch.metroKey(in: item.address), item.metro, item.address)
+        }
+
+        XCTAssertEqual(
+            SaveDoodleCitySelection(storageValue: "cambridge,uk"),
+            .city("cambridge,united kingdom")
+        )
+        XCTAssertEqual(SaveHomeSearch.countryToken(in: "India"), "india")
+        XCTAssertNotEqual(SaveHomeSearch.countryToken(in: "India"), "ındia")
+    }
+
+    /// Selected `.city` must not stick after its last save is gone.
+    func testResolvedSelectionReplacesCityWhoseLastSaveDisappeared() {
+        let berkeley = place(
+            "Chez Panisse",
+            "1517 Shattuck Ave, Berkeley, CA 94704, USA",
+            .food,
+            createdAt: Date().addingTimeInterval(-10)
+        )
+        let tokyo = place(
+            "Ichiran",
+            "1-22-7 Jinnan, Shibuya City, Tokyo, Japan",
+            .food,
+            createdAt: Date()
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.resolvedSelection(
+                .city("berkeley,ca"),
+                places: [berkeley],
+                locationDenied: false
+            ),
+            .city("berkeley,ca")
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.resolvedSelection(
+                .city("berkeley,ca"),
+                places: [tokyo],
+                locationDenied: false
+            ),
+            .nearYou
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.resolvedSelection(
+                .city("berkeley,ca"),
+                places: [tokyo],
+                locationDenied: true
+            ),
+            .city("tokyo")
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.resolvedSelection(
+                .city("berkeley,ca"),
+                places: [],
+                locationDenied: false
+            ),
+            .nearYou
+        )
+        let edited = place(
+            "Chez Panisse",
+            "1-22-7 Jinnan, Shibuya City, Tokyo, Japan",
+            .food
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.resolvedSelection(
+                .city("berkeley,ca"),
+                places: [edited],
+                locationDenied: false
+            ),
+            .nearYou
+        )
+        XCTAssertTrue(
+            SaveDoodleHomeCatalog.visiblePlaces(
+                from: [tokyo],
+                lens: .eat,
+                selection: .city("berkeley,ca"),
+                location: nil,
+                locationDenied: true
+            ).map(\.name) == ["Ichiran"]
+        )
+    }
+
+    func testCachedLocationFreshnessExpiresBeforeNearYouFilter() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let fresh = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 39.88, longitude: 116.40),
+            altitude: 0,
+            horizontalAccuracy: 10,
+            verticalAccuracy: 10,
+            timestamp: now.addingTimeInterval(-60)
+        )
+        let stale = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 34.05, longitude: -118.24),
+            altitude: 0,
+            horizontalAccuracy: 10,
+            verticalAccuracy: 10,
+            timestamp: now.addingTimeInterval(-SaveLocationFreshness.maxAge - 1)
+        )
+        XCTAssertFalse(SaveLocationFreshness.shouldRefresh(cached: fresh, at: now))
+        XCTAssertTrue(SaveLocationFreshness.shouldRefresh(cached: stale, at: now))
+        XCTAssertTrue(SaveLocationFreshness.shouldRefresh(cached: nil, at: now))
+    }
+
     func testFallbackCityGroupingRecognizesCountriesOutsideMetroCatalogue() {
         let addresses = [
             "Santiago, Chile", "Valparaíso, Chile", "Bogotá, Colombia", "Medellín, Colombia",
@@ -1208,16 +1389,27 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(rail.contains("assertTapTargetHeight"))
         XCTAssertFalse(rail.contains("[\"home.savedPlaces.empty\"]"))
         XCTAssertTrue(rail.contains("home.empty.capture"))
-        XCTAssertTrue(catalog.contains("NSW 2000"))
-        XCTAssertTrue(catalog.contains("australianStatePostcodeCode"))
-        XCTAssertFalse(catalog.contains("[A-Za-z]{2,3}"))
-        XCTAssertTrue(catalog.contains("en_US_POSIX"))
-        XCTAssertTrue(catalog.contains("cjkMunicipalityToken"))
-        XCTAssertTrue(catalog.contains("中国"))
+        let locality = try source(at: "SAV-E/Services/SaveAddressLocality.swift")
+        XCTAssertTrue(locality.contains("NSW 2000"))
+        XCTAssertTrue(locality.contains("australianStatePostcodeCode"))
+        XCTAssertFalse(locality.contains("[A-Za-z]{2,3}"))
+        XCTAssertTrue(locality.contains("en_US_POSIX"))
+        XCTAssertTrue(locality.contains("cjkMunicipalityToken"))
+        XCTAssertTrue(locality.contains("中国"))
+        XCTAssertTrue(locality.contains("県"))
+        XCTAssertFalse(locality.contains("locale: .current"))
         XCTAssertFalse(catalog.contains("locale: .current"))
         let search = try source(at: "SAV-E/Services/SaveHomeSearch.swift")
         XCTAssertTrue(search.contains("nonUSAdminRegionCountry"))
         XCTAssertTrue(search.contains("London, Ontario"))
+        XCTAssertTrue(search.contains("homeUSStates"))
+        XCTAssertTrue(root.contains("scenePhase"))
+        XCTAssertTrue(root.contains("forceRefresh: true"))
+        XCTAssertTrue(home.contains("replaceMissingCitySelection"))
+        let locationService = try source(at: "SAV-E/Services/LocationService.swift")
+        XCTAssertTrue(locationService.contains("SaveLocationFreshness"))
+        XCTAssertTrue(locationService.contains("forceRefresh"))
+        XCTAssertFalse(locationService.contains("if let currentLocation {\n            return currentLocation"))
         let selector = try source(at: "scripts/select-ios-tests.py")
         XCTAssertTrue(selector.contains("testHomeDesignProductStates"))
         XCTAssertTrue(rail.contains("doodle-home-empty"))

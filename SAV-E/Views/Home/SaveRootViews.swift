@@ -14,6 +14,7 @@ struct SaveHomeView: View {
     let onOpenCollectedPassport: () -> Void
     let onOpenMap: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var locationService = LocationService.shared
 
     var body: some View {
@@ -25,12 +26,21 @@ struct SaveHomeView: View {
         )
         .environment(\.atlasPresentation, atlasPresentation)
         .task(id: locationService.authorizationStatus) {
-            guard !ReviewDemo.isOfflineUITestMode,
-                  [.authorizedAlways, .authorizedWhenInUse].contains(locationService.authorizationStatus) else { return }
-            _ = await locationService.requestCurrentLocation()
+            await refreshHomeLocation(forceRefresh: false)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await refreshHomeLocation(forceRefresh: true) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.root")
+    }
+
+    private func refreshHomeLocation(forceRefresh: Bool) async {
+        guard !ReviewDemo.isOfflineUITestMode,
+              [.authorizedAlways, .authorizedWhenInUse].contains(locationService.authorizationStatus)
+        else { return }
+        _ = await locationService.requestCurrentLocation(forceRefresh: forceRefresh)
     }
 
     private var atlasPresentation: AtlasPresentation {

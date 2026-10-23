@@ -1,6 +1,22 @@
 import CoreLocation
 import Foundation
 
+/// Home's 3 km Near-you filter must not keep a first-fix forever after travel
+/// or a resume. Callers still show the last known location while a refresh
+/// is in flight.
+enum SaveLocationFreshness {
+    static let maxAge: TimeInterval = 5 * 60
+
+    static func shouldRefresh(
+        cached: CLLocation?,
+        at now: Date = Date(),
+        maxAge: TimeInterval = maxAge
+    ) -> Bool {
+        guard let cached else { return true }
+        return now.timeIntervalSince(cached.timestamp) >= maxAge
+    }
+}
+
 @MainActor
 final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocationManagerDelegate {
     static let shared = LocationService()
@@ -9,7 +25,7 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     @Published private(set) var currentLocation: CLLocation?
 
     private let manager = CLLocationManager()
-    private var pendingContinuation: CheckedContinuation<CLLocation?, Never>?
+    private var pendingContinuations: [CheckedContinuation<CLLocation?, Never>] = []
 
 #if DEBUG
     /// Deterministic denied-state for UI tests — springboard permission
@@ -60,34 +76,23 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
 #endif
     }
 
-    func requestCurrentLocation() async -> CLLocation? {
+    func requestCurrentLocation(forceRefresh: Bool = false) async -> CLLocation? {
         if simulatesDeniedAuthorization {
             return nil
         }
         if simulatesAllowedAuthorization {
             return currentLocation
         }
-        if let currentLocation {
-            return currentLocation
-        }
-
-        guard pendingContinuation == nil else {
+        if !forceRefresh,
+           let currentLocation,
+           !SaveLocationFreshness.shouldRefresh(cached: currentLocation) {
             return currentLocation
         }
 
         return await withCheckedContinuation { continuation in
-            pendingContinuation = continuation
-
-            switch manager.authorizationStatus {
-            case .notDetermined:
-                manager.requestWhenInUseAuthorization()
-            case .authorizedAlways, .authorizedWhenInUse:
-                manager.requestLocation()
-            case .denied, .restricted:
-                finish(with: nil)
-            @unknown default:
-                finish(with: nil)
-            }
+            pendingContinuations.append(continuation)
+            guard pendingContinuations.count == 1 else { return }
+            startRequest()
         }
     }
 
@@ -95,7 +100,7 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         if simulatesDeniedAuthorization || simulatesAllowedAuthorization { return }
         authorizationStatus = manager.authorizationStatus
 
-        guard pendingContinuation != nil else { return }
+        guard !pendingContinuations.isEmpty else { return }
 
         switch manager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:
@@ -118,11 +123,26 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         finish(with: nil)
     }
 
+    private func startRequest() {
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+        case .authorizedAlways, .authorizedWhenInUse:
+            manager.requestLocation()
+        case .denied, .restricted:
+            finish(with: nil)
+        @unknown default:
+            finish(with: nil)
+        }
+    }
+
     private func finish(with location: CLLocation?) {
         if let location {
             currentLocation = location
         }
-        pendingContinuation?.resume(returning: location)
-        pendingContinuation = nil
+        let waiters = pendingContinuations
+        pendingContinuations = []
+        let result = location ?? currentLocation
+        waiters.forEach { $0.resume(returning: result) }
     }
 }

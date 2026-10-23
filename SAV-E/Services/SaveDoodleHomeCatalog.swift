@@ -164,10 +164,7 @@ enum SaveDoodleHomeCatalog {
     /// Preserve an existing city selection when its country spelling changes
     /// to the shared canonical qualifier. Administrative-region IDs stay intact.
     static func canonicalCityID(_ id: String) -> String {
-        guard let separator = id.lastIndex(of: ","),
-              let country = SaveHomeSearch.countryToken(in: String(id[id.index(after: separator)...]))
-        else { return id }
-        return String(id[...separator]) + country
+        SaveAddressLocality.canonicalCityID(id)
     }
 
     static func lens(for category: PlaceCategory) -> SaveDoodleLens {
@@ -180,18 +177,7 @@ enum SaveDoodleHomeCatalog {
     }
 
     static func cityID(for place: Place) -> String? {
-        if let key = SaveHomeSearch.metroKey(in: place.address) {
-            return key
-        }
-        guard let area = localityLabel(in: place.address) else { return nil }
-        let locality = normalizedCityToken(area)
-        guard !locality.isEmpty else { return nil }
-        // Locality alone merges Springfield IL with Springfield MA.
-        // Keep the displayed name as the city; qualify the stable ID.
-        if let qualifier = regionQualifier(in: place.address) {
-            return "\(locality),\(qualifier)"
-        }
-        return locality
+        SaveAddressLocality.resolve(place.address)?.cityID
     }
 
     static func cityDisplayName(for place: Place, language: AppLanguage) -> String? {
@@ -209,271 +195,18 @@ enum SaveDoodleHomeCatalog {
     /// takes the second-to-last comma part and turns
     /// `Berkeley, CA 94704, USA` into `CA 94704`, splitting one city by ZIP.
     static func localityLabel(in address: String) -> String? {
-        let parts = address
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        guard !parts.isEmpty else { return nil }
-        if let cjk = cjkLocality(in: address) { return cjk }
-
-        var local = parts
-        let hasCountry = local.last.map {
-            SaveHomeSearch.countryToken(in: $0) != nil || countryTokens.contains($0.lowercased())
-        } ?? false
-        if hasCountry { local.removeLast() }
-        let country = parts.last.flatMap { SaveHomeSearch.countryToken(in: $0) }
-        while let last = local.last,
-              isPostalOrAdminRegion(last) || (local.count > 1 && isKnownAdminRegion(last, country: country)) {
-            local.removeLast()
-        }
-        // Otherwise retain the last locality. A country-qualified pair can be
-        // street+city (Damrak, Amsterdam), so its length is not region evidence.
-        guard let city = local.last, !city.isEmpty else { return nil }
-        return strippingPostalCode(from: city)
+        SaveAddressLocality.resolve(address)?.label
     }
-
-    private static func isKnownAdminRegion(_ value: String, country: String?) -> Bool {
-        // Bounded, country-scoped administrative names supported by our address
-        // fixtures. Unknown free-form regions remain ambiguous; do not guess
-        // them from the absence of a street designator.
-        let regions: [String: Set<String>] = [
-            "chile": ["biobio", "bio bio", "region del biobio"],
-            "colombia": ["santander"],
-            "australia": [
-                "nsw", "vic", "qld", "sa", "wa", "tas", "act", "nt",
-                "new south wales", "victoria", "queensland", "south australia",
-                "western australia", "tasmania", "australian capital territory",
-                "northern territory",
-            ],
-        ]
-        guard let country else { return false }
-        return regions[country]?.contains(normalizedCityToken(value)) == true
-    }
-
-    private static let countryTokens: Set<String> = [
-        "usa", "us", "united states", "united states of america",
-        "uk", "u.k.", "united kingdom", "taiwan", "japan", "china",
-        "canada", "australia", "france", "germany", "italy", "spain",
-        "korea", "south korea", "thailand", "singapore",
-        "switzerland", "schweiz", "suisse", "svizzera",
-        "austria", "österreich", "osterreich",
-        "netherlands", "nederland", "holland",
-        "belgium", "belgie", "belgië", "belgique",
-        "portugal", "ireland", "sweden", "norway", "denmark", "finland",
-        "poland", "hungary", "greece", "romania", "mexico", "brazil",
-        "india", "new zealand", "czech republic", "czechia", "south africa",
-        "turkey", "turkiye", "türkiye",
-    ]
 
     /// Postal prefixes and trailing numeric/UK/Canadian postcodes are not city names.
     static func strippingPostalCode(from token: String) -> String {
-        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        var name = trimmed.replacingOccurrences(of: #"^\d{4,6}\s+"#, with: "", options: .regularExpression)
-        name = name.replacingOccurrences(
-            of: #"\s+(?:\d{4,6}|[A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d[A-Za-z]{2}|[A-Za-z]\d[A-Za-z]\s*\d[A-Za-z]\d)$"#,
-            with: "", options: .regularExpression
-        ).trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? trimmed : name
-    }
-
-    /// Stable across device locales. Turkish `.current` turns `Isparta` into `ısparta`.
-    private static let cityIDLocale = Locale(identifier: "en_US_POSIX")
-
-    private static func normalizedCityToken(_ value: String) -> String {
-        value
-            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: cityIDLocale)
-            .lowercased(with: cityIDLocale)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        SaveAddressLocality.strippingPostalCode(from: token)
     }
 
     /// Admin region or country after the locality. Display stays the city.
     static func regionQualifier(in address: String) -> String? {
-        let parts = address
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        var local = parts
-        var country: String?
-        if let last = local.last,
-           let recognized = SaveHomeSearch.countryToken(in: last) ?? (countryTokens.contains(last.lowercased()) ? normalizedCityToken(last) : nil) {
-            country = recognized
-            local.removeLast()
-        }
-        var admin: String?
-        while let last = local.last, isPostalOrAdminRegion(last) {
-            if admin == nil, let code = adminRegionCode(in: last) {
-                admin = code
-            }
-            local.removeLast()
-        }
-        return admin ?? country
-    }
-
-    private static func adminRegionCode(in value: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.range(of: #"^[A-Za-z]{2}$"#, options: .regularExpression) != nil {
-            return trimmed.lowercased()
-        }
-        if let match = trimmed.range(of: #"^[A-Za-z]{2}(?=\s)"#, options: .regularExpression) {
-            return String(trimmed[match]).lowercased()
-        }
-        if let code = australianStatePostcodeCode(in: trimmed) {
-            return code
-        }
-        let folded = normalizedCityToken(trimmed)
-        if australianStateCodes.contains(folded) { return folded }
-        return usStateNames[folded] ?? canadianProvinceNames[folded] ?? australianStateNames[folded]
-    }
-
-    /// `NSW 2000` / `VIC 3000` only — not `Los Ángeles` or `New South Wales`.
-    private static func australianStatePostcodeCode(in value: String) -> String? {
-        let folded = normalizedCityToken(value)
-        guard let match = folded.range(
-            of: #"^(nsw|vic|qld|tas|act|sa|wa|nt)\s+\d{4}$"#,
-            options: .regularExpression
-        ) else { return nil }
-        return String(folded[match]).split(separator: " ").first.map(String.init)
-    }
-
-    /// Full US state / DC names so `Springfield, Illinois` keeps `springfield,il`.
-    private static let usStateNames: [String: String] = [
-        "alabama": "al", "alaska": "ak", "arizona": "az", "arkansas": "ar",
-        "california": "ca", "colorado": "co", "connecticut": "ct",
-        "delaware": "de", "florida": "fl", "georgia": "ga", "hawaii": "hi",
-        "idaho": "id", "illinois": "il", "indiana": "in", "iowa": "ia",
-        "kansas": "ks", "kentucky": "ky", "louisiana": "la", "maine": "me",
-        "maryland": "md", "massachusetts": "ma", "michigan": "mi",
-        "minnesota": "mn", "mississippi": "ms", "missouri": "mo",
-        "montana": "mt", "nebraska": "ne", "nevada": "nv",
-        "new hampshire": "nh", "new jersey": "nj", "new mexico": "nm",
-        "new york": "ny", "north carolina": "nc", "north dakota": "nd",
-        "ohio": "oh", "oklahoma": "ok", "oregon": "or", "pennsylvania": "pa",
-        "rhode island": "ri", "south carolina": "sc", "south dakota": "sd",
-        "tennessee": "tn", "texas": "tx", "utah": "ut", "vermont": "vt",
-        "virginia": "va", "washington": "wa", "west virginia": "wv",
-        "wisconsin": "wi", "wyoming": "wy", "district of columbia": "dc",
-    ]
-
-    /// Codes only. Full "Victoria" is a city name (Victoria, BC) and is
-    /// matched as an Australian state only via `isKnownAdminRegion`.
-    private static let australianStateCodes: Set<String> = [
-        "nsw", "vic", "qld", "sa", "wa", "tas", "act", "nt",
-    ]
-
-    private static let australianStateNames: [String: String] = [
-        "new south wales": "nsw",
-        "queensland": "qld",
-        "south australia": "sa",
-        "western australia": "wa",
-        "tasmania": "tas",
-        "australian capital territory": "act",
-        "northern territory": "nt",
-    ]
-
-    private static let canadianProvinceNames: [String: String] = [
-        "alberta": "ab", "british columbia": "bc", "manitoba": "mb",
-        "new brunswick": "nb", "newfoundland": "nl",
-        "newfoundland and labrador": "nl", "nova scotia": "ns",
-        "northwest territories": "nt", "nunavut": "nu", "ontario": "on",
-        "prince edward island": "pe", "quebec": "qc", "saskatchewan": "sk",
-        "yukon": "yt",
-    ]
-
-    private static func isPostalOrAdminRegion(_ value: String) -> Bool {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.range(of: #"^[A-Za-z]{2}$"#, options: .regularExpression) != nil {
-            return true
-        }
-        if trimmed.range(
-            of: #"^[A-Za-z]{2}\s+\d{5}(?:-\d{4})?$"#,
-            options: .regularExpression
-        ) != nil {
-            return true
-        }
-        if trimmed.range(of: #"^\d{5}(?:-\d{4})?$"#, options: .regularExpression) != nil {
-            return true
-        }
-        // Canada: "BC V8W 1P6" or "V8W 1P6" — not the city.
-        if trimmed.range(
-            of: #"^[A-Za-z]{2}\s+[A-Za-z]\d[A-Za-z]\s*\d[A-Za-z]\d$"#,
-            options: .regularExpression
-        ) != nil {
-            return true
-        }
-        if trimmed.range(
-            of: #"^[A-Za-z]\d[A-Za-z]\s*\d[A-Za-z]\d$"#,
-            options: .regularExpression
-        ) != nil {
-            return true
-        }
-        // UK outward+inward: "SW1A 1AA", "M1 1AE".
-        if trimmed.range(
-            of: #"^[A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d[A-Za-z]{2}$"#,
-            options: .regularExpression
-        ) != nil {
-            return true
-        }
-        // Australia / generic 4-digit postcode.
-        if trimmed.range(of: #"^\d{4}$"#, options: .regularExpression) != nil {
-            return true
-        }
-        // Australia: "NSW 2000", "VIC 3000" — known state code + 4-digit postcode.
-        if australianStatePostcodeCode(in: trimmed) != nil {
-            return true
-        }
-        if adminRegionCode(in: trimmed) != nil {
-            return true
-        }
-        return false
-    }
-
-    /// Last `市`/`縣`/`县` municipality only — not the prefix through the first marker.
-    private static func cjkLocality(in address: String) -> String? {
-        guard address.contains(where: {
-            $0.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
-        }) else { return nil }
-        let parts = address
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        if let city = parts.reversed().compactMap({ cjkMunicipalityToken(in: String($0)) }).first {
-            return city
-        }
-        return cjkMunicipalityToken(in: address)
-    }
-
-    private static let cjkCountryPrefixes = ["台灣", "臺灣", "台湾", "中國", "中国"]
-
-    private static func cjkMunicipalityToken(in token: String) -> String? {
-        var text = token
-        for country in cjkCountryPrefixes {
-            text = text.replacingOccurrences(of: country, with: "")
-        }
-        text = String(text.drop { $0.isNumber || $0.isWhitespace || $0 == "," || $0 == "，" })
-        guard let marker = text.rangeOfCharacter(
-            from: CharacterSet(charactersIn: "市縣县"),
-            options: .backwards
-        ) else { return nil }
-        let head = text[..<marker.upperBound]
-        // Stop at province/district/country — not 州/都, which appear in city names.
-        let boundaries = CharacterSet(charactersIn: "省區区鄉乡鎮镇國国,，")
-        var start = marker.lowerBound
-        var taken = 0
-        while start > head.startIndex {
-            let previous = head.index(before: start)
-            let character = head[previous]
-            if character.unicodeScalars.contains(where: { boundaries.contains($0) })
-                || character.isNumber
-                || character.isWhitespace
-                || character.isASCII {
-                break
-            }
-            start = previous
-            taken += 1
-            if taken >= 4 { break }
-        }
-        let city = String(head[start...])
-        return city.count >= 2 ? city : nil
+        guard let resolved = SaveAddressLocality.resolve(address) else { return nil }
+        return resolved.region ?? resolved.country
     }
 
     static func cityGroups(from places: [Place]) -> [SaveDoodleCityGroup] {
@@ -498,20 +231,33 @@ enum SaveDoodleHomeCatalog {
     }
 
     /// Location denied hides "Near you" and falls back to the last city,
-    /// or the city of the most recent save.
+    /// or the city of the most recent save. A `.city` whose last save
+    /// disappeared (delete or address edit) falls back the same way.
     static func resolvedSelection(
         _ selection: SaveDoodleCitySelection,
         places: [Place],
         locationDenied: Bool
     ) -> SaveDoodleCitySelection {
+        if case .city(let id) = selection {
+            if places.contains(where: { cityID(for: $0) == id }) {
+                return selection
+            }
+            if !locationDenied {
+                return .nearYou
+            }
+            return newestResolvableCity(in: places) ?? .nearYou
+        }
         guard locationDenied, case .nearYou = selection else { return selection }
         // Coordinate-only imports have no locality. Walk recency until a
         // save actually resolves, so denied Near you does not stay empty.
-        if let match = places.sorted(by: moreRecent).first(where: { cityID(for: $0) != nil }),
-           let id = cityID(for: match) {
-            return .city(id)
-        }
-        return selection
+        return newestResolvableCity(in: places) ?? selection
+    }
+
+    private static func newestResolvableCity(in places: [Place]) -> SaveDoodleCitySelection? {
+        guard let match = places.sorted(by: moreRecent).first(where: { cityID(for: $0) != nil }),
+              let id = cityID(for: match)
+        else { return nil }
+        return .city(id)
     }
 
     static func visiblePlaces(

@@ -78,6 +78,17 @@ struct SaveDoodleHomeView: View {
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
         }
+        .onAppear { replaceMissingCitySelection(with: resolvedSelection) }
+        .onChange(of: resolvedSelection) { _, resolved in
+            replaceMissingCitySelection(with: resolved)
+        }
+    }
+
+    /// Persist a replacement when the selected city's last save disappeared
+    /// so the picker check and header do not keep a stale ID.
+    private func replaceMissingCitySelection(with resolved: SaveDoodleCitySelection) {
+        guard session.city != resolved, case .city = session.city else { return }
+        session.city = resolved
     }
 
     /// A visible production route, also available when there are no waiting clues.

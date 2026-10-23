@@ -1,0 +1,353 @@
+import Foundation
+
+/// One structural parse for Home locality labels and stable city IDs.
+///
+/// Rules:
+/// 1. Identifiers always fold with `en_US_POSIX` — never `.current`.
+/// 2. Country-aware admin handling is explicit for US / CA / AU, including
+///    full state and province names. Other trailing admins may be stripped
+///    from the label but do not become the ID qualifier.
+/// 3. CJK municipalities stop at prefecture / province suffixes (`県` `府`
+///    `道` `省` …). Region stripping never consumes the locality itself.
+/// 4. Metro aliases apply only when a locality component matches and the
+///    recognized region or country does not contradict the alias.
+struct SaveAddressLocality: Equatable {
+    let label: String
+    let cityID: String
+    let metroKey: String?
+    let region: String?
+    let country: String?
+
+    static let locale = Locale(identifier: "en_US_POSIX")
+
+    struct Parsed: Equatable {
+        let address: String
+        let label: String
+        let stableLocality: String
+        let region: String?
+        let country: String?
+        let isCJK: Bool
+    }
+
+    static func resolve(_ address: String) -> SaveAddressLocality? {
+        guard let parsed = parse(address) else { return nil }
+        let metro = SaveHomeSearch.metroAlias(for: parsed)
+        let cityID: String
+        if let metro {
+            cityID = metro
+        } else if parsed.isCJK {
+            cityID = parsed.stableLocality
+        } else if let qualifier = parsed.region ?? parsed.country {
+            cityID = "\(parsed.stableLocality),\(qualifier)"
+        } else {
+            cityID = parsed.stableLocality
+        }
+        return SaveAddressLocality(
+            label: parsed.label,
+            cityID: cityID,
+            metroKey: metro,
+            region: parsed.region,
+            country: parsed.country
+        )
+    }
+
+    static func parse(_ address: String) -> Parsed? {
+        let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        var parts = commaParts(trimmed)
+        let country = parts.last.flatMap { country(in: $0) }
+        if country != nil { parts.removeLast() }
+
+        if let cjk = cjkMunicipalityToken(in: trimmed) {
+            return Parsed(
+                address: trimmed,
+                label: cjk,
+                stableLocality: normalizeIdentifier(cjk),
+                region: nil,
+                country: country,
+                isCJK: true
+            )
+        }
+
+        var region: String?
+        if let last = parts.last, isTrailingAdmin(last, country: country) {
+            region = qualifyingRegion(in: last, country: country)
+            parts.removeLast()
+        }
+
+        guard let rawCity = parts.last, !rawCity.isEmpty else { return nil }
+        let label = strippingPostalCode(from: rawCity)
+        guard !label.isEmpty else { return nil }
+        return Parsed(
+            address: trimmed,
+            label: label,
+            stableLocality: normalizeIdentifier(label),
+            region: region,
+            country: country,
+            isCJK: false
+        )
+    }
+
+    static func country(in value: String) -> String? {
+        let last = commaParts(value).last ?? value
+        let token = normalizeToken(last)
+        guard !token.isEmpty else { return nil }
+        if let aliased = countryAliases[token] { return aliased }
+        if explicitCountries.contains(token) { return countryAliases[token] ?? token }
+        return localizedCountries[token]
+    }
+
+    static func canonicalCityID(_ id: String) -> String {
+        guard let separator = id.lastIndex(of: ","),
+              let country = country(in: String(id[id.index(after: separator)...]))
+        else { return id }
+        return String(id[...separator]) + country
+    }
+
+    static func normalizeIdentifier(_ value: String) -> String {
+        value
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: locale)
+            .lowercased(with: locale)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func normalizeToken(_ value: String) -> String {
+        normalizeIdentifier(value)
+            .replacingOccurrences(of: #"[^\p{L}\p{N}]+"#, with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func strippingPostalCode(from token: String) -> String {
+        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        var name = trimmed.replacingOccurrences(of: #"^\d{4,6}\s+"#, with: "", options: .regularExpression)
+        name = name.replacingOccurrences(
+            of: #"\s+(?:\d{4,6}|[A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d[A-Za-z]{2}|[A-Za-z]\d[A-Za-z]\s*\d[A-Za-z]\d)$"#,
+            with: "",
+            options: .regularExpression
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? trimmed : name
+    }
+
+    static func countryForAdminRegion(_ code: String) -> String? {
+        if usStateCodes.contains(code) { return "united states" }
+        if canadianProvinceCodes.contains(code) { return "canada" }
+        if australianStateCodes.contains(code) { return "australia" }
+        return nil
+    }
+
+    static func signalsUnitedStates(_ parsed: Parsed) -> Bool {
+        parsed.country == "united states" || (parsed.region != nil && usStateCodes.contains(parsed.region ?? ""))
+    }
+}
+
+private extension SaveAddressLocality {
+    static func commaParts(_ value: String) -> [String] {
+        value
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    static func isTrailingAdmin(_ value: String, country: String?) -> Bool {
+        qualifyingRegion(in: value, country: country) != nil
+            || isStandalonePostcode(value)
+            || isKnownNonQualifyingAdmin(value, country: country)
+    }
+
+    static func qualifyingRegion(in value: String, country: String?) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.range(of: #"^[A-Za-z]{2}$"#, options: .regularExpression) != nil {
+            return trimmed.lowercased(with: locale)
+        }
+        if let match = trimmed.range(of: #"^[A-Za-z]{2}(?=\s)"#, options: .regularExpression) {
+            let code = String(trimmed[match]).lowercased(with: locale)
+            if usStateCodes.contains(code)
+                || canadianProvinceCodes.contains(code)
+                || australianStateCodes.contains(code) {
+                return code
+            }
+        }
+        if let code = australianStatePostcodeCode(in: trimmed) {
+            return code
+        }
+        let folded = normalizeIdentifier(trimmed)
+        if australianStateCodes.contains(folded) { return folded }
+        if let code = usStateNames[folded] { return code }
+        if let code = canadianProvinceNames[folded] { return code }
+        if country == "australia", let code = australianStateNames[folded] {
+            return code
+        }
+        return nil
+    }
+
+    /// `NSW 2000` / `VIC 3000` only — not `Los Ángeles` or `New South Wales`.
+    static func australianStatePostcodeCode(in value: String) -> String? {
+        let folded = normalizeIdentifier(value)
+        guard let match = folded.range(
+            of: #"^(nsw|vic|qld|tas|act|sa|wa|nt)\s+\d{4}$"#,
+            options: .regularExpression
+        ) else { return nil }
+        return String(folded[match]).split(separator: " ").first.map(String.init)
+    }
+
+    static func isStandalonePostcode(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let patterns = [
+            #"^\d{5}(?:-\d{4})?$"#,
+            #"^[A-Za-z]\d[A-Za-z]\s*\d[A-Za-z]\d$"#,
+            #"^[A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d[A-Za-z]{2}$"#,
+            #"^\d{4}$"#,
+        ]
+        return patterns.contains { trimmed.range(of: $0, options: .regularExpression) != nil }
+    }
+
+    static func isKnownNonQualifyingAdmin(_ value: String, country: String?) -> Bool {
+        let regions: [String: Set<String>] = [
+            "chile": ["biobio", "bio bio", "region del biobio"],
+            "colombia": ["santander"],
+        ]
+        guard let country else { return false }
+        return regions[country]?.contains(normalizeIdentifier(value)) == true
+    }
+
+    static let cjkCountryPrefixes = ["台灣", "臺灣", "台湾", "日本", "中國", "中国"]
+
+    /// Last `市`/`縣`/`县` municipality only. Japanese prefecture suffixes
+    /// (`県` `府` `道`) are locality boundaries so `神奈川県横浜市` stays `横浜市`.
+    static func cjkMunicipalityToken(in token: String) -> String? {
+        guard token.contains(where: {
+            $0.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
+        }) else { return nil }
+        let parts = commaParts(token)
+        if let city = parts.reversed().compactMap({ cjkMunicipality(in: $0) }).first {
+            return city
+        }
+        return cjkMunicipality(in: token)
+    }
+
+    static func cjkMunicipality(in token: String) -> String? {
+        var text = token
+        for country in cjkCountryPrefixes {
+            text = text.replacingOccurrences(of: country, with: "")
+        }
+        text = String(text.drop { $0.isNumber || $0.isWhitespace || $0 == "," || $0 == "，" })
+        guard let marker = text.rangeOfCharacter(
+            from: CharacterSet(charactersIn: "市縣县"),
+            options: .backwards
+        ) else { return nil }
+        let head = text[..<marker.upperBound]
+        let boundaries = CharacterSet(charactersIn: "省區区鄉乡鎮镇國国県府道,，")
+        var start = marker.lowerBound
+        var taken = 0
+        while start > head.startIndex {
+            let previous = head.index(before: start)
+            let character = head[previous]
+            if character.unicodeScalars.contains(where: { boundaries.contains($0) })
+                || character.isNumber
+                || character.isWhitespace
+                || character.isASCII {
+                break
+            }
+            start = previous
+            taken += 1
+            if taken >= 4 { break }
+        }
+        let city = String(head[start...])
+        return city.count >= 2 ? city : nil
+    }
+
+    static let countryAliases: [String: String] = [
+        "uk": "united kingdom", "u k": "united kingdom", "u.k.": "united kingdom",
+        "england": "united kingdom", "britain": "united kingdom",
+        "usa": "united states", "us": "united states",
+        "united states of america": "united states",
+        "korea": "south korea",
+        "schweiz": "switzerland", "suisse": "switzerland", "svizzera": "switzerland",
+        "österreich": "austria", "osterreich": "austria",
+        "nederland": "netherlands", "holland": "netherlands",
+        "belgie": "belgium", "belgië": "belgium", "belgique": "belgium",
+        "turkiye": "turkey", "türkiye": "turkey",
+    ]
+
+    static let explicitCountries: Set<String> = [
+        "usa", "us", "united states", "united states of america",
+        "uk", "u.k.", "united kingdom", "england", "britain",
+        "taiwan", "japan", "china", "canada", "australia", "france",
+        "germany", "italy", "spain", "korea", "south korea", "thailand",
+        "singapore", "hong kong",
+        "turkey", "turkiye", "türkiye",
+        "switzerland", "austria", "netherlands", "belgium",
+        "india", "chile", "colombia", "mexico", "brazil",
+    ]
+
+    static let localizedCountries: [String: String] = {
+        let english = locale
+        let locales = [english, Locale(identifier: "zh_Hant"), Locale(identifier: "zh_Hans")]
+        var tokens: [String: String] = [:]
+        for region in Locale.Region.isoRegions {
+            guard let name = english.localizedString(forRegionCode: region.identifier) else { continue }
+            let canonical = region.identifier == "HK" ? "hong kong" : normalizeToken(name)
+            for named in locales {
+                if let localized = named.localizedString(forRegionCode: region.identifier) {
+                    tokens[normalizeToken(localized)] = canonical
+                }
+            }
+        }
+        return tokens
+    }()
+
+    static let usStateCodes: Set<String> = [
+        "al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga", "hi",
+        "id", "il", "in", "ia", "ks", "ky", "la", "me", "md", "ma", "mi",
+        "mn", "ms", "mo", "mt", "ne", "nv", "nh", "nj", "nm", "ny", "nc",
+        "nd", "oh", "ok", "or", "pa", "ri", "sc", "sd", "tn", "tx", "ut",
+        "vt", "va", "wa", "wv", "wi", "wy", "dc",
+    ]
+
+    static let usStateNames: [String: String] = [
+        "alabama": "al", "alaska": "ak", "arizona": "az", "arkansas": "ar",
+        "california": "ca", "colorado": "co", "connecticut": "ct",
+        "delaware": "de", "florida": "fl", "georgia": "ga", "hawaii": "hi",
+        "idaho": "id", "illinois": "il", "indiana": "in", "iowa": "ia",
+        "kansas": "ks", "kentucky": "ky", "louisiana": "la", "maine": "me",
+        "maryland": "md", "massachusetts": "ma", "michigan": "mi",
+        "minnesota": "mn", "mississippi": "ms", "missouri": "mo",
+        "montana": "mt", "nebraska": "ne", "nevada": "nv",
+        "new hampshire": "nh", "new jersey": "nj", "new mexico": "nm",
+        "new york": "ny", "north carolina": "nc", "north dakota": "nd",
+        "ohio": "oh", "oklahoma": "ok", "oregon": "or", "pennsylvania": "pa",
+        "rhode island": "ri", "south carolina": "sc", "south dakota": "sd",
+        "tennessee": "tn", "texas": "tx", "utah": "ut", "vermont": "vt",
+        "virginia": "va", "washington": "wa", "west virginia": "wv",
+        "wisconsin": "wi", "wyoming": "wy", "district of columbia": "dc",
+    ]
+
+    static let canadianProvinceCodes: Set<String> = [
+        "ab", "bc", "mb", "nb", "nl", "ns", "nt", "nu", "on", "pe", "qc", "sk", "yt",
+    ]
+
+    static let canadianProvinceNames: [String: String] = [
+        "alberta": "ab", "british columbia": "bc", "manitoba": "mb",
+        "new brunswick": "nb", "newfoundland": "nl",
+        "newfoundland and labrador": "nl", "nova scotia": "ns",
+        "northwest territories": "nt", "nunavut": "nu", "ontario": "on",
+        "prince edward island": "pe", "quebec": "qc", "saskatchewan": "sk",
+        "yukon": "yt",
+    ]
+
+    static let australianStateCodes: Set<String> = [
+        "nsw", "vic", "qld", "sa", "wa", "tas", "act", "nt",
+    ]
+
+    static let australianStateNames: [String: String] = [
+        "new south wales": "nsw",
+        "victoria": "vic",
+        "queensland": "qld",
+        "south australia": "sa",
+        "western australia": "wa",
+        "tasmania": "tas",
+        "australian capital territory": "act",
+        "northern territory": "nt",
+    ]
+}
