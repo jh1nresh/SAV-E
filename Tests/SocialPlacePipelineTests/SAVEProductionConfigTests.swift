@@ -565,44 +565,57 @@ final class SAVEProductionConfigTests: XCTestCase {
     @MainActor
     func testSceneActivationRefetchesAuthoritativeCountBeforeCap() async throws {
         let previousAuth = PrivyAuthService.shared.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
         PrivyAuthService.shared.authState = .authenticated(userId: "stale-count-owner")
         defer {
             PrivyAuthService.shared.authState = previousAuth
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
             AnalysisRequestURLProtocol.reset()
         }
 
+        let placeIDs = (0..<50).map { _ in UUID() }
         var remoteCount = 50
         AnalysisRequestURLProtocol.reset()
         AnalysisRequestURLProtocol.handler = { request in
-            if request.httpMethod == "GET", request.url?.path == "/places" {
-                let rows = (0..<remoteCount).map { index in
+            if request.httpMethod == "GET", request.url?.path.hasSuffix("/places") == true {
+                let rows = placeIDs.prefix(remoteCount).enumerated().map { index, id in
                     """
-                    {"id":"00000000-0000-4000-8000-0000000000\(String(format: "%02d", index))","user_id":"stale-count-owner","name":"Cap Place \(index)","address":"\(index) Cap Street","latitude":\(24.0 + Double(index) * 0.01),"longitude":\(120.0 + Double(index) * 0.01),"category":"food","status":"wantToGo","source_platform":"other","google_place_id":"cap-place-\(index)","created_at":"2026-01-01T00:00:00.000Z"}
+                    {"id":"\(id.uuidString)","user_id":"stale-count-owner","name":"Cap Place \(index)","address":"\(index) Cap Street","latitude":\(24.0 + Double(index) * 0.01),"longitude":\(120.0 + Double(index) * 0.01),"category":"food","status":"wantToGo","source_platform":"other","google_place_id":"cap-place-\(index)","created_at":"2026-01-01T00:00:00.000Z"}
                     """
                 }.joined(separator: ",")
                 return (200, "[\(rows)]")
             }
-            if request.httpMethod == "POST", request.url?.path == "/places" {
+            if request.httpMethod == "POST", request.url?.path.hasSuffix("/places") == true {
                 return (201, "{}")
             }
-            if request.url?.path.contains("/memory/candidates") == true { return (200, "[]") }
             if request.httpMethod == "GET" { return (200, "[]") }
             return (200, "{}")
         }
         SavePlaceLimitHandoff.testDefaults = UserDefaults(
             suiteName: "save.place-limit-scene.\(UUID().uuidString)"
         )
-        let vaultURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("place-limit-scene-\(UUID().uuidString).json")
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-scene-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(
+            apiBaseURL: "https://scene-cap.test",
+            session: URLSession(configuration: configuration),
+            accessTokenProvider: { "fixture-token" }
+        )
         let map = MapViewModel(
-            supabaseService: SupabaseService(
-                apiBaseURL: "https://scene-cap.test",
-                session: URLSession(configuration: configuration),
-                accessTokenProvider: { "fixture-token" }
+            supabaseService: service,
+            mapCandidatePlaceSaver: { _, _ in },
+            pendingImportService: PendingPlaceImportService(overrideContainerURL: directory),
+            mapCandidateDistanceLocationProvider: { nil },
+            googlePlacesService: SceneCapGooglePlacesStub(),
+            saveLocalVaultService: SaveLocalVaultService(
+                overrideVaultURL: directory.appendingPathComponent("vault.json")
             ),
-            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            correctionLearningEnabled: false,
+            relatedPlaceSourcesService: service,
             entitlementTierProvider: { .free },
             entitlementResolvedProvider: { true },
             usesRemotePersistence: true
@@ -3772,6 +3785,14 @@ private final class AnalysisAppleSpy: AppleMapsPlaceSearchServiceProtocol {
         searchCount += 1
         return []
     }
+}
+
+private struct SceneCapGooglePlacesStub: GooglePlacesServiceProtocol {
+    func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] { [] }
+    func getPlaceDetails(placeId: String) async throws -> GooglePlaceDetails {
+        throw URLError(.cancelled)
+    }
+    func photoURL(reference: String, maxWidth: Int) -> URL? { nil }
 }
 
 private final class AnalysisRequestURLProtocol: URLProtocol {

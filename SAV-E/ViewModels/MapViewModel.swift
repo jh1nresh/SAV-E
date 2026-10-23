@@ -3385,8 +3385,9 @@ final class MapViewModel: ObservableObject {
 
         do {
             let signals = try await supabaseService.fetchSocialSignals(lens: socialLens)
-            async let preferences = fetchOriginPreferences()
-            async let outcomes = fetchOriginOutcomes()
+            // Do not `async let` these MainActor helpers from this MainActor method.
+            let preferences = await fetchOriginPreferences()
+            let outcomes = await fetchOriginOutcomes()
             let unsavedSignals = signals.filter { seed in
                 !places.contains { saved in
                     saved.matchesMapFeature(title: seed.name, coordinate: seed.coordinate) ||
@@ -3396,8 +3397,8 @@ final class MapViewModel: ObservableObject {
             socialPlaces = SaveOriginPersonalization.rank(
                 candidates: unsavedSignals,
                 savedPlaces: places,
-                preferences: await preferences,
-                outcomes: await outcomes
+                preferences: preferences,
+                outcomes: outcomes
             )
         } catch {
             print("MapViewModel: failed to refresh social signals: \(error)")
