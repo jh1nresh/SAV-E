@@ -155,7 +155,7 @@ final class SharedPostsStore: ObservableObject {
                 throw CancellationError()
             }
             if error is SavePlaceLimitError {
-                _ = try parkOverLimitPlace(post.asUnplacedPlace())
+                _ = try parkOverLimitPlace(post.asUnplacedPlace(ownerSubject: account))
                 return .parkedAtFreeLimit
             }
             throw error

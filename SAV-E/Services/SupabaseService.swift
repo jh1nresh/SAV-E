@@ -947,8 +947,12 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     }
 
     func saveFriendRestaurant(placeID: UUID) async throws -> Place {
-        let data = try await request(path: "/v0/friend-ratings/\(placeID)/save", method: "POST", body: Data("{}".utf8))
-        return try JSONDecoder.supabase.decode(PlaceRow.self, from: data).toPlace()
+        do {
+            let data = try await request(path: "/v0/friend-ratings/\(placeID)/save", method: "POST", body: Data("{}".utf8))
+            return try JSONDecoder.supabase.decode(PlaceRow.self, from: data).toPlace()
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     // Explicit follower posts, independent of the owner's private place memory.

@@ -58,6 +58,20 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertEqual(store.quota?.usedUnits, 12)
     }
 
+    @MainActor
+    func testUnrecognizedQuotaTierCannotEnableLocalSavedPlaceRefusal() async {
+        for value: String? in [nil, "", "platinum", "FREE"] {
+            let store = Self.makeStore(loadQuota: { Self.quota(tier: value, used: 0) })
+            await store.refresh()
+            XCTAssertFalse(store.hasAuthoritativeSavedPlaceTier)
+        }
+        for value in ["free", "pro"] {
+            let store = Self.makeStore(loadQuota: { Self.quota(tier: value, used: 0) })
+            await store.refresh()
+            XCTAssertTrue(store.hasAuthoritativeSavedPlaceTier)
+        }
+    }
+
     /// The server saying "free" must win even if a stale local receipt exists.
     /// Otherwise a refunded or expired subscription would keep working.
     @MainActor
@@ -218,7 +232,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
             groundedAnswerClient: nil,
             assistDecision: { .refusedAllowanceExhausted }
         )
-        drawer.query = "best noodles nearby"
+        drawer.query = "explain this month's model allowance"
         await drawer.submit(outputLanguage: .english)
 
         guard case .error(let message) = drawer.drawerState else {
@@ -235,6 +249,58 @@ final class SaveEntitlementWiringTests: XCTestCase {
                 hasConfirmedMapStamp: true
             )
         )
+    }
+
+    @MainActor
+    func testDrawerDeterministicSearchRunsBeforeAllowanceRefusal() async {
+        let drawer = AIDrawerViewModel(
+            groundedAnswerClient: nil,
+            assistDecision: { .refusedAllowanceExhausted }
+        )
+        let saved = Place(
+            id: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
+            name: "Rise Bagels",
+            address: "Irvine, CA",
+            latitude: 33.6846,
+            longitude: -117.8265,
+            googlePlaceId: nil,
+            category: .cafe,
+            status: .visited,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
+        )
+        drawer.places = [saved]
+        drawer.query = "Rise Bagels"
+        await drawer.submit(outputLanguage: .english)
+
+        guard case .saveSearchResults(let response) = drawer.drawerState else {
+            return XCTFail("a saved-place search must run before model-allowance refusal")
+        }
+        XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Rise Bagels"])
+    }
+
+    func testSaveFriendRestaurantMapsSavedPlaceLimitLikePlaces() throws {
+        let supabase = try source(at: "SAV-E/Services/SupabaseService.swift")
+        let friendSaveRange = try XCTUnwrap(supabase.range(of: "func saveFriendRestaurant(placeID: UUID) async throws -> Place"))
+        let mappedAfterFriendSave = supabase[friendSaveRange.lowerBound...].range(of: "throw mappedSavedPlaceLimit(error)")
+        XCTAssertNotNil(mappedAfterFriendSave, "saveFriendRestaurant must remap over_free_limit like shared-post save")
+        let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
+        XCTAssertTrue(map.contains("SaveRecipientPlaceIdentity.id("))
+        XCTAssertTrue(map.contains("source: \"social:\\(socialPlace.id)\""))
+        let drawer = try source(at: "SAV-E/ViewModels/AIDrawerViewModel.swift")
+        let searchIndex = try XCTUnwrap(drawer.range(of: "if saveSearchResponse.hasVisibleResults"))
+        let refusalIndex = try XCTUnwrap(drawer.range(of: "if decision.isRefusal"))
+        XCTAssertLessThan(searchIndex.lowerBound, refusalIndex.lowerBound)
     }
 
     // MARK: - Source-level guarantees
@@ -301,7 +367,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private static func quota(tier: String, used: Int, limit: Int = 20) -> SaveUsageQuotaPreview {
+    private static func quota(tier: String?, used: Int, limit: Int = 20) -> SaveUsageQuotaPreview {
         SaveUsageQuotaPreview(
             policyVersion: "ai-assists-beta-v0",
             periodStart: "2026-08-01T00:00:00.000Z",

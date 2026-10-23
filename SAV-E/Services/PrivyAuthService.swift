@@ -273,7 +273,11 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Sign Out
 
     func signOut() async {
+        let owner = currentUserId
         invalidateShareAnalysisSession()
+        if SavePlaceLimitHandoff.cachedActiveOwner() == owner {
+            SavePlaceLimitHandoff.syncActiveOwner(nil)
+        }
         if isReviewerDemo {
             clearReviewerDemoState()
             sessionOrigin = .restored
@@ -355,6 +359,7 @@ final class PrivyAuthService: ObservableObject {
             SaveEntitlementStore.shared.resetForSessionChange()
         }
         authState = .authenticated(userId: userId)
+        SavePlaceLimitHandoff.syncActiveOwner(userId)
         synchronizeShareAnalysisSession(userId: userId)
         Task { await SaveEntitlementStore.shared.refresh() }
     }
@@ -417,6 +422,7 @@ final class PrivyAuthService: ObservableObject {
             SaveEntitlementStore.shared.resetForSessionChange()
         }
         authState = .unauthenticated
+        SavePlaceLimitHandoff.syncActiveOwner(nil)
     }
 
     private func validateConfig() throws {

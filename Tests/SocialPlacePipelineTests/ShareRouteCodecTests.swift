@@ -328,6 +328,14 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertEqual(savedPlace.status, .wantToGo)
         XCTAssertEqual(savedPlace.visibility, .privateMemory)
         XCTAssertEqual(savedPlace.note, "Order the tasting menu")
+        XCTAssertEqual(
+            receipt.privatePlace(ownerSubject: "a").id,
+            receipt.privatePlace(ownerSubject: "a").id
+        )
+        XCTAssertNotEqual(
+            receipt.privatePlace(ownerSubject: "a").id,
+            receipt.privatePlace(ownerSubject: "b").id
+        )
 
         var placeWithCredentialedSource = savedPlace
         placeWithCredentialedSource.sourceUrl = "https://user:secret@example.com/private"

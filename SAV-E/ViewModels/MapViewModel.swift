@@ -707,6 +707,12 @@ final class MapViewModel: ObservableObject {
     private var didRequestInitialLocation = false
     private var isLoadingPlaces = false
     private var hasLoadedPlaces = false
+    /// Last successful `/places` count for the active account. `mergeRemotePlaces`
+    /// can keep a confirmed vault row another device already deleted, so the
+    /// local cap must not use that inflated `places.count`.
+    private var authoritativeSavedPlaceOwner: String?
+    private var authoritativeSavedPlaceCount: Int?
+    private var entitlementRefreshObserver: AnyCancellable?
     private var hasLoadedFollowedFriends = false
     /// Home may revisit the same missing-photo places while switching tabs.
     /// Keep provider lookups to one attempt per place for this app session.
@@ -778,6 +784,12 @@ final class MapViewModel: ObservableObject {
             // private memory immediately; do not wait for a network refresh.
             self?.invalidateCorrectionSuggestions(discard: true)
         }
+        entitlementRefreshObserver = NotificationCenter.default
+            .publisher(for: .saveEntitlementDidRefresh)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.syncSavedPlaceLimitCache()
+            }
         reloadCollaborativeLists()
     }
 
@@ -845,14 +857,42 @@ final class MapViewModel: ObservableObject {
 
     private var currentSavedPlaceTier: SaveProTier { entitlementTierProvider() }
 
+    private var savedPlaceCountForLimit: Int {
+        if let count = authoritativeSavedPlaceCount,
+           authoritativeSavedPlaceOwner == authService.currentUserId {
+            return count
+        }
+        return places.count
+    }
+
     private var isOverFreeSavedPlaceLimit: Bool {
         // Unresolved / fail-open must not refuse. Default `.free` would park a
         // Pro account that has not refreshed this session.
         guard entitlementResolvedProvider() else { return false }
+        // Only the server can decide a remote save against current canonical
+        // venue identity. Even a previously authoritative count can become stale
+        // while this app stays active (deletion/save from another device).
+        guard !usesRemotePersistence else { return false }
         return SavePlaceLimitGate.decide(
             tier: currentSavedPlaceTier,
-            savedPlaceCount: places.count
+            savedPlaceCount: savedPlaceCountForLimit
         ) == .overFreeLimit
+    }
+
+    private func rememberAuthoritativeSavedPlaceCount(_ count: Int, owner: String) {
+        authoritativeSavedPlaceOwner = owner
+        authoritativeSavedPlaceCount = count
+    }
+
+    private func clearAuthoritativeSavedPlaceCount() {
+        authoritativeSavedPlaceOwner = nil
+        authoritativeSavedPlaceCount = nil
+    }
+
+    private func incrementAuthoritativeSavedPlaceCountIfNeeded() {
+        guard let count = authoritativeSavedPlaceCount,
+              authoritativeSavedPlaceOwner == authService.currentUserId else { return }
+        authoritativeSavedPlaceCount = count + 1
     }
 
     func requestSavedPlaceLimitPaywall() {
@@ -875,7 +915,7 @@ final class MapViewModel: ObservableObject {
         guard entitlementResolvedProvider() else { return }
         SavePlaceLimitHandoff.syncCache(
             tier: currentSavedPlaceTier,
-            savedPlaceCount: places.count
+            savedPlaceCount: savedPlaceCountForLimit
         )
     }
 
@@ -922,6 +962,26 @@ final class MapViewModel: ObservableObject {
         _ = try saveLocalVaultService.saveReviewCandidate(stamped)
     }
 
+    /// Park the original review item, retaining its workflow and source context.
+    private func parkExistingReviewCandidate(
+        _ candidate: PlaceReviewCandidate, startedBy owner: String?, generation: Int
+    ) throws {
+        guard !Task.isCancelled,
+              authService.currentUserId == owner, authService.sessionGeneration == generation else {
+            throw CancellationError()
+        }
+        guard candidate.ownerSubject == nil || candidate.ownerSubject == owner else {
+            throw SupabaseError.notAuthenticated
+        }
+        var parked = candidate
+        parked.ownerSubject = candidate.ownerSubject ?? owner
+        if !parked.isUnplacedInbox { parked.missingInfo.append(PlaceReviewCandidate.unplacedInboxMarker) }
+        _ = try saveLocalVaultService.saveReviewCandidate(parked, preservingParkedContext: true)
+        reviewCandidates = [parked] + reviewCandidates.filter { $0.id != parked.id }
+        if selectedReviewCandidate?.id == parked.id { selectedReviewCandidate = parked }
+        requestSavedPlaceLimitPaywall()
+    }
+
     // MARK: - Actions
 
     func loadPlaces(force: Bool = false) async {
@@ -938,6 +998,7 @@ final class MapViewModel: ObservableObject {
         }
 
         if !usesRemotePersistence {
+            clearAuthoritativeSavedPlaceCount()
             places = localConfirmedPlaces()
             reviewCandidates = localReviewCandidates()
             socialPlaces = []
@@ -945,6 +1006,7 @@ final class MapViewModel: ObservableObject {
         }
 
         guard let userId = authService.currentUserId else {
+            clearAuthoritativeSavedPlaceCount()
             places = mergeRemotePlaces([], withLocalPlaces: localConfirmedPlaces())
             importPendingPlacesForLocalUse()
             reviewCandidates = []
@@ -954,6 +1016,10 @@ final class MapViewModel: ObservableObject {
 
         do {
             let remotePlaces = try await supabaseService.fetchPlaces(for: userId)
+            rememberAuthoritativeSavedPlaceCount(
+                Place.consolidated(remotePlaces).count,
+                owner: userId
+            )
             places = mergeRemotePlaces(remotePlaces, withLocalPlaces: localConfirmedPlaces())
             await completeReferralHandoffIfNeeded()
             // Each sync step is isolated: a failed pending import must not
@@ -1019,6 +1085,19 @@ final class MapViewModel: ObservableObject {
         isLoadingPlaces = true
         defer { isLoadingPlaces = false }
 
+        // Another device may have freed a slot while this app was inactive.
+        // Refresh before queued imports can make a local cap decision.
+        let generation = authService.sessionGeneration
+        do {
+            let remotePlaces = try await supabaseService.fetchPlaces(for: userId)
+            try ensureConfirmationSession(userId, generation)
+            rememberAuthoritativeSavedPlaceCount(Place.consolidated(remotePlaces).count, owner: userId)
+            syncSavedPlaceLimitCache()
+        } catch {
+            guard authService.currentUserId == userId,
+                  authService.sessionGeneration == generation else { return }
+            clearAuthoritativeSavedPlaceCount()
+        }
         await completeReferralHandoffIfNeeded()
         await importPendingReviewCandidatesLoggingFailures(for: userId)
         do {
@@ -1041,10 +1120,9 @@ final class MapViewModel: ObservableObject {
         var importedPlaces: [Place] = []
         for pendingPlace in pending {
             let place = Place.from(pendingPlace)
-            let isNewKey = importedPendingKeys.insert(pendingPlace.deduplicationKey).inserted
+            let isNewKey = !importedPendingKeys.contains(pendingPlace.deduplicationKey)
             if existingSavedPlace(matching: place) != nil
                 || importedPlaces.contains(where: { $0.matches(place) }) {
-                if isNewKey { importedPlaces.append(place) }
                 keepQueued.append(pendingPlace)
                 continue
             }
@@ -1052,18 +1130,21 @@ final class MapViewModel: ObservableObject {
                 keepQueued.append(pendingPlace)
                 continue
             }
-            let projectedCount = places.count + importedPlaces.count
-            if SavePlaceLimitGate.decide(
-                tier: currentSavedPlaceTier,
-                savedPlaceCount: projectedCount
-            ) == .overFreeLimit {
+            let projectedCount = Place.consolidated(places + importedPlaces).count
+            if entitlementResolvedProvider(),
+               SavePlaceLimitGate.decide(
+                    tier: currentSavedPlaceTier,
+                    savedPlaceCount: projectedCount
+               ) == .overFreeLimit {
                 do {
                     try parkPlaceInUnplacedInbox(place)
+                    importedPendingKeys.insert(pendingPlace.deduplicationKey)
                 } catch {
                     keepQueued.append(pendingPlace)
                 }
                 continue
             }
+            importedPendingKeys.insert(pendingPlace.deduplicationKey)
             importedPlaces.append(place)
             keepQueued.append(pendingPlace)
         }
@@ -1072,6 +1153,7 @@ final class MapViewModel: ObservableObject {
         if !newPlaces.isEmpty { revealImportedPlaces(newPlaces) }
 
         pendingImportService.restorePendingPlaces(keepQueued)
+        syncSavedPlaceLimitCache()
     }
 
     private func localConfirmedPlaces() -> [Place] {
@@ -1757,7 +1839,7 @@ final class MapViewModel: ObservableObject {
             }
             if let match = existingSavedPlace(matching: place) {
                 let existing = try await mergeSavedSources(place, into: match)
-                try saveLocalVaultService.removeReviewCandidate(candidate.id)
+                try saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
                 reviewCandidates.removeAll { $0.id == candidate.id }
                 if selectedReviewCandidate?.id == candidate.id {
                     selectedReviewCandidate = nil
@@ -1767,12 +1849,17 @@ final class MapViewModel: ObservableObject {
                 return existing
             }
             if isOverFreeSavedPlaceLimit {
-                requestSavedPlaceLimitPaywall()
+                try parkExistingReviewCandidate(
+                    candidate,
+                    startedBy: authService.currentUserId,
+                    generation: authService.sessionGeneration
+                )
                 throw SavePlaceLimitError.parkedInUnplacedInbox
             }
             _ = try saveLocalVaultService.saveConfirmedPlace(place, ownerSubject: authService.currentUserId)
-            try saveLocalVaultService.removeReviewCandidate(candidate.id)
+            try saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
             places = [place] + places
+            incrementAuthoritativeSavedPlaceCountIfNeeded()
             reviewCandidates.removeAll { $0.id == candidate.id }
             if selectedReviewCandidate?.id == candidate.id {
                 selectedReviewCandidate = nil
@@ -1827,7 +1914,7 @@ final class MapViewModel: ObservableObject {
             try ensureConfirmationSession(userId, confirmationGeneration)
             existing = await refreshedConfirmedPlace(existing)
             try ensureConfirmationSession(userId, confirmationGeneration)
-            try? saveLocalVaultService.removeReviewCandidate(candidate.id)
+            try? saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
             try mirrorToLocalVault(existing, startedBy: userId, generation: confirmationGeneration)
             places = Place.consolidated(places.filter { $0.id != existing.id } + [existing])
             reviewCandidates.removeAll { $0.id == candidate.id }
@@ -1895,9 +1982,10 @@ final class MapViewModel: ObservableObject {
         try ensureConfirmationSession(userId, confirmationGeneration)
         let confirmedPlace = await refreshedConfirmedPlace(place)
         try ensureConfirmationSession(userId, confirmationGeneration)
-        try? saveLocalVaultService.removeReviewCandidate(candidate.id)
+        try? saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
         try mirrorToLocalVault(confirmedPlace, startedBy: userId, generation: confirmationGeneration)
         places = [confirmedPlace] + places
+        incrementAuthoritativeSavedPlaceCountIfNeeded()
         reviewCandidates.removeAll { $0.id == candidate.id }
         if selectedReviewCandidate?.id == candidate.id {
             selectedReviewCandidate = nil
@@ -1991,7 +2079,11 @@ final class MapViewModel: ObservableObject {
                 if exactResolution == nil {
                     try parkPlaceInUnplacedInbox(place)
                 } else {
-                    requestSavedPlaceLimitPaywall()
+                    try parkExistingReviewCandidate(
+                        exactResolution.clue,
+                        startedBy: saveUserId,
+                        generation: saveGeneration
+                    )
                 }
                 mapCandidates.removeAll { $0.id == candidate.id }
                 selectedMapCandidate = nil
@@ -2007,6 +2099,20 @@ final class MapViewModel: ObservableObject {
                 do {
                     try await mapCandidatePlaceSaver(place, userId)
                 } catch {
+                    if error is SavePlaceLimitError, exactResolution != nil {
+                        guard saveUserId == authService.currentUserId,
+                              saveGeneration == authService.sessionGeneration else {
+                            throw CancellationError()
+                        }
+                        try parkExistingReviewCandidate(
+                            exactResolution.clue,
+                            startedBy: saveUserId,
+                            generation: saveGeneration
+                        )
+                        mapCandidates.removeAll { $0.id == candidate.id }
+                        selectedMapCandidate = nil
+                        throw error
+                    }
                     if try parkIfServerSavedPlaceLimit(
                         error,
                         place: place,
@@ -2053,6 +2159,7 @@ final class MapViewModel: ObservableObject {
             try mirrorToLocalVault(place, startedBy: saveUserId, generation: saveGeneration)
             if !places.contains(where: { $0.matches(place) }) {
                 places = [place] + places
+                incrementAuthoritativeSavedPlaceCountIfNeeded()
             }
             mapCandidates.removeAll { $0.id == candidate.id }
             selectedMapCandidate = nil
@@ -2354,7 +2461,7 @@ final class MapViewModel: ObservableObject {
             await loadPlaces()
         }
 
-        let place = receipt.privatePlace()
+        let place = receipt.privatePlace(ownerSubject: authService.currentUserId)
 
         // A verified short-code receipt is server-owned. The server must accept
         // the save before we mirror it locally, otherwise an expired, forged,
@@ -2458,7 +2565,10 @@ final class MapViewModel: ObservableObject {
         }
 
         let place = Place(
-            id: UUID(),
+            id: SaveRecipientPlaceIdentity.id(
+                source: "social:\(socialPlace.id)",
+                ownerSubject: authService.currentUserId
+            ),
             name: socialPlace.name,
             address: socialPlace.address,
             latitude: socialPlace.latitude,
@@ -2874,6 +2984,13 @@ final class MapViewModel: ObservableObject {
     ) async throws {
         let userId = authService.currentUserId
         let generation = authService.sessionGeneration
+        let localDecision = candidate.captureId == nil && candidate.workflowRunId == nil
+            && afterCandidate.map { ["source_only", "needs_more_evidence"].contains($0.status) } == true
+        if localDecision {
+            guard Self.localVaultRecordBelongsToActiveAccount(candidate.ownerSubject, currentUserId: userId) else {
+                throw ReviewCandidateError.sessionChangedAfterCommit
+            }
+        }
         var event = SavePlaceCorrectionEvent(
             userId: userId,
             candidate: candidate,
@@ -2883,6 +3000,9 @@ final class MapViewModel: ObservableObject {
             userReasonText: reason
         )
         try correctionEventStore.append(event)
+        if localDecision, let afterCandidate {
+            try saveLocalVaultService.saveLocalReviewDecision(afterCandidate)
+        }
         if ![.confirmCandidate, .editPlaceIdentity, .mergeExisting].contains(eventType),
            let scopeKey = candidate.correctionScopeKey {
             invalidateCorrectionSuggestions(scopeKey: scopeKey)
@@ -3936,7 +4056,10 @@ final class MapViewModel: ObservableObject {
     }
 
     func deletePlace(_ place: Place) async throws {
+        let startedBy = authService.currentUserId
         let previousPlaces = places
+        let previousAuthoritativeCount = authoritativeSavedPlaceCount
+        let previousAuthoritativeOwner = authoritativeSavedPlaceOwner
         invalidateCorrectionSuggestions(placeIDs: place.savedIDs)
         places.removeAll { $0.id == place.id }
         if selectedPlace?.id == place.id {
@@ -3944,11 +4067,15 @@ final class MapViewModel: ObservableObject {
         }
         activeFilter?.remove(place.id)
         clearRoute()
+        if authoritativeSavedPlaceOwner == startedBy,
+           let count = authoritativeSavedPlaceCount {
+            authoritativeSavedPlaceCount = max(0, count - 1)
+        }
         syncSavedPlaceLimitCache()
 
         do {
             if usesRemotePersistence {
-                guard let userID = authService.currentUserId else { throw SupabaseError.notAuthenticated }
+                guard let userID = startedBy else { throw SupabaseError.notAuthenticated }
                 // The user's Delete action applies to the whole displayed venue.
                 // Only delete aliases that actually exist in this account.
                 let remote = try await supabaseService.fetchPlaces(for: userID)
@@ -3956,11 +4083,13 @@ final class MapViewModel: ObservableObject {
                     try await supabaseService.deletePlace(record.id)
                 }
             }
-            try saveLocalVaultService.removeConfirmedPlace(place)
+            try saveLocalVaultService.removeConfirmedPlace(place, belongingTo: startedBy)
         } catch {
-            _ = try? saveLocalVaultService.saveConfirmedPlace(place)
+            _ = try? saveLocalVaultService.saveConfirmedPlace(place, ownerSubject: startedBy)
             places = previousPlaces
             selectedPlace = place
+            authoritativeSavedPlaceCount = previousAuthoritativeCount
+            authoritativeSavedPlaceOwner = previousAuthoritativeOwner
             syncSavedPlaceLimitCache()
             throw error
         }
@@ -4192,7 +4321,7 @@ final class MapViewModel: ObservableObject {
         let existingKeys = Set(places.map(\.importDeduplicationKey))
         let isCapped = SavePlaceLimitGate.remainingNewSaves(
             tier: currentSavedPlaceTier,
-            savedPlaceCount: places.count
+            savedPlaceCount: savedPlaceCountForLimit
         ) != nil
         var parked = 0
         let summary = try await GoogleTakeoutBatchSaver.save(
@@ -4231,8 +4360,10 @@ final class MapViewModel: ObservableObject {
                 if places.contains(where: { $0.id == place.id }) { return }
                 if reviewCandidates.contains(where: { $0.id == place.id }) { return }
                 places.insert(place, at: 0)
+                incrementAuthoritativeSavedPlaceCountIfNeeded()
             }
         )
+        syncSavedPlaceLimitCache()
         return GoogleTakeoutSaveSummary(
             saved: max(0, summary.saved - parked),
             skippedDuplicates: summary.skippedDuplicates,

@@ -133,6 +133,8 @@ enum SavePlaceLimitHandoff {
     nonisolated static let pendingPaywallKey = "save.pendingSavedPlaceLimitPaywall"
     nonisolated static let cachedTierKey = "save.cachedProTier"
     nonisolated static let cachedCountKey = "save.cachedSavedPlaceCount"
+    /// Active Privy subject for extension vault and cap-cache reads. Missing means signed out.
+    nonisolated static let cachedOwnerKey = "save.cachedActiveOwnerSubject"
 
 #if DEBUG
     nonisolated(unsafe) static var testDefaults: UserDefaults?
@@ -156,11 +158,39 @@ enum SavePlaceLimitHandoff {
         defaults.set(savedPlaceCount, forKey: cachedCountKey)
     }
 
-    /// Missing cache fails open so a cold extension still writes the item.
-    /// The main app re-checks on pending-place import.
-    nonisolated static func cachedDecision(
+    nonisolated static func syncActiveOwner(
+        _ ownerSubject: String?,
         defaults: UserDefaults = makeDefaults()
+    ) {
+        let owner = ownerSubject.flatMap { $0.isEmpty ? nil : $0 }
+        if cachedActiveOwner(defaults: defaults) != owner {
+            defaults.removeObject(forKey: cachedTierKey)
+            defaults.removeObject(forKey: cachedCountKey)
+            defaults.removeObject(forKey: pendingPaywallKey)
+        }
+        if let ownerSubject, !ownerSubject.isEmpty {
+            defaults.set(ownerSubject, forKey: cachedOwnerKey)
+        } else {
+            defaults.removeObject(forKey: cachedOwnerKey)
+        }
+    }
+
+    nonisolated static func cachedActiveOwner(
+        defaults: UserDefaults = makeDefaults()
+    ) -> String? {
+        defaults.string(forKey: cachedOwnerKey)
+    }
+
+    /// Missing cache fails open so a cold extension still writes the item.
+    /// The main app re-checks on pending-place import. A reader that already
+    /// knows its owner ignores another account's leftover count.
+    nonisolated static func cachedDecision(
+        defaults: UserDefaults = makeDefaults(),
+        belongingTo ownerSubject: String? = nil
     ) -> SavePlaceLimitDecision {
+        if let ownerSubject, cachedActiveOwner(defaults: defaults) != ownerSubject {
+            return .allowed
+        }
         guard defaults.object(forKey: cachedCountKey) != nil else { return .allowed }
         let tier = SaveProTier(rawValue: defaults.string(forKey: cachedTierKey) ?? "") ?? .free
         return SavePlaceLimitGate.decide(

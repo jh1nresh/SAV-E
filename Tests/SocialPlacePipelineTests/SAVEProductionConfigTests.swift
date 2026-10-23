@@ -118,9 +118,19 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertTrue(share.contains("SaveShareExtensionPlaceDestination.resolve"))
         XCTAssertTrue(
-            map.contains("savedPlaceCount: places.count"),
-            "A1: the local cap counts confirmed Map Stamps only"
+            map.contains("savedPlaceCount: savedPlaceCountForLimit"),
+            "A1: the local cap counts confirmed Map Stamps, preferring the last server count"
         )
+        XCTAssertTrue(
+            map.contains("authoritativeSavedPlaceCount"),
+            "A5 inverse: a stale vault row must not keep the local cap at 50"
+        )
+        XCTAssertTrue(map.contains("publisher(for: .saveEntitlementDidRefresh)"))
+        XCTAssertTrue(map.contains("self?.syncSavedPlaceLimitCache()"))
+        XCTAssertTrue(map.contains("parkExistingReviewCandidate("))
+        XCTAssertTrue(map.contains("saveLocalReviewDecision"))
+        XCTAssertTrue(map.contains("Place.consolidated(places + importedPlaces).count"))
+        XCTAssertTrue(map.contains("entitlementResolvedProvider()"))
         XCTAssertTrue(map.contains("let remotePlaces = try await supabaseService.fetchPlaces(for: userId)"))
         XCTAssertTrue(map.contains("places = mergeRemotePlaces(remotePlaces, withLocalPlaces: localConfirmedPlaces())"))
 
@@ -220,6 +230,47 @@ final class SAVEProductionConfigTests: XCTestCase {
         SavePlaceLimitHandoff.markPaywallPending(defaults: defaults)
         XCTAssertTrue(SavePlaceLimitHandoff.consumePaywallPending(defaults: defaults))
         XCTAssertFalse(SavePlaceLimitHandoff.consumePaywallPending(defaults: defaults))
+    }
+
+    func testAccountSwitchClearsOnlyThePreviousOwnersCapHandoff() throws {
+        let suite = "save.owner-cap.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        SavePlaceLimitHandoff.syncActiveOwner("owner-a", defaults: defaults)
+        SavePlaceLimitHandoff.syncCache(tier: .free, savedPlaceCount: 50, defaults: defaults)
+        SavePlaceLimitHandoff.markPaywallPending(defaults: defaults, notify: false)
+        SavePlaceLimitHandoff.syncActiveOwner("owner-a", defaults: defaults)
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(defaults: defaults), .overFreeLimit)
+        XCTAssertTrue(SavePlaceLimitHandoff.consumePaywallPending(defaults: defaults))
+        SavePlaceLimitHandoff.markPaywallPending(defaults: defaults, notify: false)
+        SavePlaceLimitHandoff.syncActiveOwner("owner-b", defaults: defaults)
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(defaults: defaults), .allowed)
+        XCTAssertFalse(SavePlaceLimitHandoff.consumePaywallPending(defaults: defaults))
+        SavePlaceLimitHandoff.syncCache(tier: .free, savedPlaceCount: 50, defaults: defaults)
+        SavePlaceLimitHandoff.markPaywallPending(defaults: defaults, notify: false)
+        SavePlaceLimitHandoff.syncActiveOwner(nil, defaults: defaults)
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(defaults: defaults), .allowed)
+        XCTAssertFalse(SavePlaceLimitHandoff.consumePaywallPending(defaults: defaults))
+    }
+
+    func testHandoffCachesActiveOwnerForExtensionReads() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "save.owner-handoff.\(UUID().uuidString)"))
+        SavePlaceLimitHandoff.syncActiveOwner("did:privy:a", defaults: defaults)
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedActiveOwner(defaults: defaults), "did:privy:a")
+        SavePlaceLimitHandoff.syncCache(tier: .free, savedPlaceCount: 50, defaults: defaults)
+        XCTAssertEqual(
+            SavePlaceLimitHandoff.cachedDecision(defaults: defaults, belongingTo: "did:privy:a"),
+            .overFreeLimit
+        )
+        XCTAssertEqual(
+            SavePlaceLimitHandoff.cachedDecision(defaults: defaults, belongingTo: "did:privy:b"),
+            .allowed,
+            "Share and other readers must ignore another owner's leftover cap"
+        )
+        SavePlaceLimitHandoff.syncActiveOwner("", defaults: defaults)
+        XCTAssertNil(SavePlaceLimitHandoff.cachedActiveOwner(defaults: defaults))
+        SavePlaceLimitHandoff.syncActiveOwner(nil, defaults: defaults)
+        XCTAssertNil(SavePlaceLimitHandoff.cachedActiveOwner(defaults: defaults))
     }
 
     @MainActor
@@ -369,6 +420,375 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(map.places.count, 51)
         XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
         XCTAssertFalse(map.reviewCandidates.contains { $0.name == "Unresolved Cafe" })
+    }
+
+    /// P2 4334384154: unknown/loading membership must not park a local pending import.
+    @MainActor
+    func testLocalPendingImportAllowsWhileEntitlementUnresolved() throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        let owner = "did:privy:unresolved-tier"
+        PrivyAuthService.shared.authState = .authenticated(userId: owner)
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pending-unresolved-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.unresolved-tier.\(UUID().uuidString)")
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([
+            PendingSharedPlace(
+                ownerSubject: owner,
+                googlePlaceId: "cap-place-unresolved",
+                name: "Offline Import Cafe",
+                address: "1 Loading Street",
+                category: "food",
+                latitude: 25.6,
+                longitude: 121.8,
+                dishes: [],
+                savedAt: Date()
+            )
+        ])
+        let map = MapViewModel(
+            pendingImportService: queue,
+            saveLocalVaultService: SaveLocalVaultService(
+                overrideVaultURL: directory.appendingPathComponent("vault.json")
+            ),
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { false },
+            usesRemotePersistence: false
+        )
+        map.places = makeCappedPlaces(50)
+
+        map.importPendingPlacesForLocalUse()
+
+        XCTAssertEqual(map.places.count, 51)
+        XCTAssertTrue(map.places.contains { $0.name == "Offline Import Cafe" })
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    /// P2 4336003494: a matching duplicate must not consume the 50th unique slot.
+    @MainActor
+    func testPendingImportDoesNotCountDuplicateTowardProjectedCap() throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        let owner = "did:privy:duplicate-pending"
+        PrivyAuthService.shared.authState = .authenticated(userId: owner)
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pending-duplicate-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let saved = makeCappedPlaces(49)
+        let duplicateOfFirst = saved[0]
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.duplicate-pending.\(UUID().uuidString)")
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([
+            PendingSharedPlace(
+                ownerSubject: owner,
+                googlePlaceId: duplicateOfFirst.googlePlaceId,
+                name: duplicateOfFirst.name,
+                address: duplicateOfFirst.address,
+                category: "food",
+                latitude: duplicateOfFirst.latitude,
+                longitude: duplicateOfFirst.longitude,
+                dishes: [],
+                savedAt: Date()
+            ),
+            PendingSharedPlace(
+                ownerSubject: owner,
+                googlePlaceId: "cap-place-new-50",
+                name: "Fiftieth Unique Cafe",
+                address: "50 New Street",
+                category: "food",
+                latitude: 25.5,
+                longitude: 121.9,
+                dishes: [],
+                savedAt: Date()
+            )
+        ])
+        let map = MapViewModel(
+            pendingImportService: queue,
+            saveLocalVaultService: SaveLocalVaultService(
+                overrideVaultURL: directory.appendingPathComponent("vault.json")
+            ),
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: false
+        )
+        map.places = saved
+
+        map.importPendingPlacesForLocalUse()
+
+        XCTAssertEqual(map.places.count, 50)
+        XCTAssertTrue(map.places.contains { $0.name == "Fiftieth Unique Cafe" })
+        XCTAssertTrue(
+            map.reviewCandidates.isEmpty,
+            "a matching duplicate must not park the legitimate 50th place"
+        )
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    /// P2 4334565259: Takeout 49 → 50 must refresh the extension handoff cache.
+    @MainActor
+    func testTakeoutLandingOnFiftyRefreshesHandoffCache() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .unauthenticated
+        defer { PrivyAuthService.shared.authState = previousAuth }
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(49)
+        map.syncSavedPlaceLimitCache()
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed)
+
+        let drafts = [
+            ImportedPlaceDraft(
+                name: "Fiftieth Takeout Cafe",
+                address: "50 Cap Road",
+                latitude: 25.19,
+                longitude: 121.60,
+                sourceFile: "Saved Places.json",
+                sourceFormat: "json",
+                reviewState: .readyToSave
+            )
+        ]
+        let summary = try await map.saveImportedPlaces(drafts)
+        XCTAssertEqual(summary.saved, 1)
+        XCTAssertEqual(map.places.count, 50)
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .overFreeLimit)
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+    }
+
+    /// P2 4334633586: scene activation refetches the last server count before the cap can refuse.
+    @MainActor
+    func testSceneActivationRefetchesAuthoritativeCountBeforeCap() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "stale-count-owner")
+        defer {
+            PrivyAuthService.shared.authState = previousAuth
+            AnalysisRequestURLProtocol.reset()
+        }
+
+        var remoteCount = 50
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET", request.url?.path == "/places" {
+                let rows = (0..<remoteCount).map { index in
+                    """
+                    {"id":"00000000-0000-4000-8000-0000000000\(String(format: "%02d", index))","user_id":"stale-count-owner","name":"Cap Place \(index)","address":"\(index) Cap Street","latitude":\(24.0 + Double(index) * 0.01),"longitude":\(120.0 + Double(index) * 0.01),"category":"food","status":"wantToGo","source_platform":"other","google_place_id":"cap-place-\(index)","created_at":"2026-01-01T00:00:00.000Z"}
+                    """
+                }.joined(separator: ",")
+                return (200, "[\(rows)]")
+            }
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                return (201, "{}")
+            }
+            if request.url?.path.contains("/memory/candidates") == true { return (200, "[]") }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(
+            suiteName: "save.place-limit-scene.\(UUID().uuidString)"
+        )
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("place-limit-scene-\(UUID().uuidString).json")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let map = MapViewModel(
+            supabaseService: SupabaseService(
+                apiBaseURL: "https://scene-cap.test",
+                session: URLSession(configuration: configuration),
+                accessTokenProvider: { "fixture-token" }
+            ),
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+
+        await map.loadPlaces()
+        XCTAssertEqual(map.places.count, 50)
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .overFreeLimit)
+
+        remoteCount = 49
+        await map.handleSceneDidBecomeActive()
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed)
+
+        let saved = try await map.saveMapCandidateAsPlace(
+            SaveMapCandidate(
+                id: "freed-slot-after-scene",
+                title: "Freed Remote Slot Cafe",
+                subtitle: "Taipei",
+                latitude: 25.44,
+                longitude: 121.84,
+                category: .cafe
+            )
+        )
+        XCTAssertEqual(saved.name, "Freed Remote Slot Cafe")
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    /// P2 4334728030: an exact-search cap must keep the original clue, not park the refined POI.
+    @MainActor
+    func testExactSearchCapDoesNotParkASecondCandidate() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .unauthenticated
+        defer { PrivyAuthService.shared.authState = previousAuth }
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(50)
+        let clue = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Original Clue Cafe",
+            address: "1 Clue Road",
+            city: nil,
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Source URL: https://example.com/original-clue"],
+            confidence: 0.8,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        let refined = SaveMapCandidate(
+            id: "refined-search-cafe",
+            title: "Refined Search Cafe",
+            subtitle: "1 Refined Road",
+            latitude: 25.0,
+            longitude: 121.0,
+            category: .cafe
+        )
+        map.reviewCandidates = [clue]
+        map.selectedReviewCandidate = clue
+        map.mapCandidates = [refined]
+        map.beginExactSearchResolution(for: clue)
+
+        do {
+            _ = try await map.saveMapCandidateAsPlace(refined)
+            XCTFail("the exact-search cap must keep the original clue")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+            XCTAssertEqual(map.reviewCandidates.map(\.id), [clue.id])
+            XCTAssertEqual(map.reviewCandidates.first?.name, clue.name)
+            XCTAssertFalse(map.reviewCandidates.contains { $0.name == refined.title })
+            XCTAssertEqual(map.places.count, 50)
+            XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        }
+    }
+
+    /// P2 4339598680: Keep source only / Investigate must survive vault reload and refresh.
+    @MainActor
+    func testLocalReviewDecisionsSurviveReloadAndRelaunch() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        defer { PrivyAuthService.shared.authState = previousAuth }
+        PrivyAuthService.shared.authState = .unauthenticated
+
+        for status in ["source_only", "needs_more_evidence"] {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let url = directory.appendingPathComponent("vault.json")
+            let vault = SaveLocalVaultService(overrideVaultURL: url)
+            let candidate = PlaceReviewCandidate(
+                id: UUID(),
+                captureId: nil,
+                name: "Local Decision Cafe",
+                address: "9 Review Road",
+                city: "Taipei",
+                latitude: 25.03,
+                longitude: 121.56,
+                evidence: ["Source URL: https://example.com/local-decision"],
+                confidence: 0.7,
+                missingInfo: [],
+                status: "review",
+                createdAt: Date()
+            )
+            _ = try vault.saveReviewCandidate(candidate, preservingParkedContext: true)
+            let events = SavePlaceCorrectionEventStore(
+                overrideURL: directory.appendingPathComponent("events.json")
+            )
+            let map = MapViewModel(
+                supabaseService: SupabaseService(apiBaseURL: nil),
+                saveLocalVaultService: vault,
+                correctionEventStore: events,
+                usesRemotePersistence: false
+            )
+            map.reviewCandidates = [candidate]
+            map.selectedReviewCandidate = candidate
+            if status == "source_only" {
+                try await map.saveReviewCandidateAsSourceOnly(candidate)
+            } else {
+                try await map.investigateReviewCandidateMore(candidate)
+            }
+            XCTAssertEqual(map.reviewCandidates.first?.status, status)
+            XCTAssertEqual(map.selectedReviewCandidate?.status, status)
+
+            let reloaded = SaveLocalVaultService(overrideVaultURL: url)
+            XCTAssertEqual(try reloaded.reviewCandidates().first?.status, status)
+            XCTAssertEqual(try reloaded.reviewCandidates().first?.id, candidate.id)
+
+            let fresh = MapViewModel(
+                supabaseService: SupabaseService(apiBaseURL: nil),
+                saveLocalVaultService: reloaded,
+                correctionEventStore: events,
+                usesRemotePersistence: false
+            )
+            await fresh.loadPlaces(force: true)
+            XCTAssertEqual(fresh.reviewCandidates.first?.status, status)
+            try await fresh.refreshReviewCandidates()
+            XCTAssertEqual(fresh.reviewCandidates.first?.status, status)
+        }
+    }
+
+    @MainActor
+    func testLocalReviewDecisionWriteFailureRetainsOriginalCandidate() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        defer { PrivyAuthService.shared.authState = previousAuth }
+        PrivyAuthService.shared.authState = .unauthenticated
+
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        let candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Keep Original Cafe",
+            address: "2 Review Road",
+            city: nil,
+            latitude: 25.04,
+            longitude: 121.57,
+            evidence: ["Source URL: https://example.com/keep-original"],
+            confidence: 0.6,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        _ = try vault.saveReviewCandidate(candidate, preservingParkedContext: true)
+        let before = try Data(contentsOf: url)
+        let events = SavePlaceCorrectionEventStore(
+            overrideURL: directory.appendingPathComponent("events.json")
+        )
+        let map = MapViewModel(
+            supabaseService: SupabaseService(apiBaseURL: nil),
+            saveLocalVaultService: vault,
+            correctionEventStore: events,
+            usesRemotePersistence: false
+        )
+        map.reviewCandidates = [candidate]
+        map.selectedReviewCandidate = candidate
+        vault.saveReviewCandidateError = SaveLocalVaultError.storageUnavailable
+
+        do {
+            try await map.saveReviewCandidateAsSourceOnly(candidate)
+            XCTFail("a failed vault write must not report a successful decision")
+        } catch SaveLocalVaultError.storageUnavailable {}
+
+        XCTAssertEqual(map.reviewCandidates, [candidate])
+        XCTAssertEqual(map.selectedReviewCandidate, candidate)
+        XCTAssertEqual(try Data(contentsOf: url), before)
+        XCTAssertEqual(try events.recentEvents().first?.learningCommitted, false)
     }
 
     @MainActor
@@ -1006,6 +1426,8 @@ final class SAVEProductionConfigTests: XCTestCase {
         let intent = try source(at: "SAV-E/Intents/SavePlaceFromURLIntent.swift")
         let share = try source(at: "SAV-EShareExtension/ShareViewController.swift")
         XCTAssertTrue(vault.contains("existing.ownerSubject == incoming.ownerSubject"))
+        XCTAssertTrue(vault.contains("$0.id == recordID && $0.ownerSubject == record.ownerSubject"))
+        XCTAssertTrue(vault.contains("func removeConfirmedPlace(_ place: Place, belongingTo currentUserId: String?)"))
         XCTAssertTrue(vault.contains("ownerSubject: candidate.ownerSubject"))
         XCTAssertTrue(vault.contains("func saveSourceOnly(url: URL, note: String? = nil, ownerSubject: String? = nil)"))
         XCTAssertTrue(vault.contains("func saveConfirmedPlace(_ incoming: Place, ownerSubject: String? = nil)"))
@@ -1052,7 +1474,22 @@ final class SAVEProductionConfigTests: XCTestCase {
             "screenshot and Maps-list Review candidates must stamp the owner at persist"
         )
         XCTAssertTrue(share.contains("appendPendingItems(stamped"))
+        XCTAssertTrue(
+            share.contains("saveReviewCandidates([candidate], markSavedPlaceLimitPaywall: true)"),
+            "over-cap share parks first, then may mark the paywall"
+        )
+        XCTAssertTrue(
+            share.contains("guard appendPendingItems(stamped, to: fileURL, as: PendingReviewCandidate.self) else { return }\n        if markSavedPlaceLimitPaywall {\n            SavePlaceLimitHandoff.markPaywallPending()"),
+            "paywall handoff only after the Review append succeeds"
+        )
+        XCTAssertFalse(
+            share.contains("SavePlaceLimitHandoff.markPaywallPending()\n            saveReviewCandidates([candidate])"),
+            "do not persist a paywall for a failed Share Extension save"
+        )
+        XCTAssertTrue(share.contains("cachedDecision(belongingTo: shareOwnerSubject)"))
         XCTAssertTrue(map.contains("belongingTo: authService.currentUserId"))
+        XCTAssertTrue(map.contains("removeConfirmedPlace(place, belongingTo: startedBy)"))
+        XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: startedBy)"))
         XCTAssertTrue(map.contains("saveConfirmedPlace(place, ownerSubject: userId)"))
         XCTAssertTrue(
             map.contains("saveConfirmedPlace(place, ownerSubject: authService.currentUserId)"),
@@ -1063,6 +1500,8 @@ final class SAVEProductionConfigTests: XCTestCase {
             privy.contains("saveConfirmedPlace(place, ownerSubject: ReviewDemo.userId)"),
             "reviewer-demo Map Stamps must stay visible to the demo owner"
         )
+        XCTAssertTrue(privy.contains("SavePlaceLimitHandoff.syncActiveOwner(userId)"))
+        XCTAssertTrue(privy.contains("SavePlaceLimitHandoff.syncActiveOwner(nil)"))
         XCTAssertTrue(map.contains("try persistParkedReviewCandidate(candidate)"))
         XCTAssertTrue(map.contains("try ensureConfirmationSession(userId, importGeneration)"))
         XCTAssertTrue(map.contains("startedBy userId: String?"))
@@ -1135,12 +1574,18 @@ final class SAVEProductionConfigTests: XCTestCase {
         }
         """
         let post = try JSONDecoder().decode(SharedPlacePost.self, from: Data(json.utf8))
-        let parked = post.asUnplacedPlace()
+        let parked = post.asUnplacedPlace(ownerSubject: "recipient-a")
         XCTAssertNotEqual(
             parked.id,
             post.id,
             "author places.id must not become the recipient Map Stamp id"
         )
+        XCTAssertEqual(
+            parked.id,
+            post.asUnplacedPlace(ownerSubject: "recipient-a").id,
+            "repeated park of the same shared post must upsert"
+        )
+        XCTAssertNotEqual(parked.id, post.asUnplacedPlace(ownerSubject: "recipient-b").id)
         XCTAssertEqual(parked.latitude, 25.033)
         XCTAssertEqual(parked.longitude, 121.565)
         XCTAssertEqual(parked.googlePlaceId, "ChIJcap-harbor")
@@ -1170,7 +1615,7 @@ final class SAVEProductionConfigTests: XCTestCase {
             author_avatar_url: nil,
             visible_to_followers: true
         )
-        let parked = post.asUnplacedPlace()
+        let parked = post.asUnplacedPlace(ownerSubject: "recipient-a")
         let evidence = parked.sourceEvidence.joined(separator: " ")
         XCTAssertNotEqual(
             parked.id,

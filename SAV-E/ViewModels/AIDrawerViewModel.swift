@@ -93,12 +93,6 @@ final class AIDrawerViewModel: ObservableObject {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
-        let decision = assistDecision()
-        if decision.isRefusal {
-            drawerState = .error(SaveEntitlementStore.exhaustedAllowanceMessage(language: outputLanguage))
-            return
-        }
-
         if isFollowUpToLastSearch(trimmed),
            let lastSaveSearchResponse,
            let groundedAnswerClient {
@@ -166,6 +160,12 @@ final class AIDrawerViewModel: ObservableObject {
                 intent: resolvedIntent,
                 outputLanguage: outputLanguage
             )
+            return
+        }
+
+        let decision = assistDecision()
+        if decision.isRefusal {
+            drawerState = .error(SaveEntitlementStore.exhaustedAllowanceMessage(language: outputLanguage))
             return
         }
 

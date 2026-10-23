@@ -160,6 +160,38 @@ final class SaveLocalVaultServiceTests: XCTestCase {
         XCTAssertTrue(try service.confirmedPlaces().isEmpty)
     }
 
+    /// Deleting A's stamp must not erase B's matching venue on the same device.
+    @MainActor
+    func testRemoveConfirmedPlaceKeepsAnotherAccountMatchingVenue() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let ownerA = makePlace(
+            id: UUID(),
+            name: "Harbor Cafe",
+            address: "1 Harbor Way",
+            googlePlaceId: "ChIJ-shared-harbor"
+        )
+        let ownerB = makePlace(
+            id: UUID(),
+            name: "Harbor Cafe",
+            address: "1 Harbor Way",
+            googlePlaceId: "ChIJ-shared-harbor"
+        )
+        _ = try vault.saveConfirmedPlace(ownerA, ownerSubject: "did:privy:a")
+        _ = try vault.saveConfirmedPlace(ownerB, ownerSubject: "did:privy:b")
+        XCTAssertEqual(try vault.confirmedPlaces(belongingTo: "did:privy:a").count, 1)
+        XCTAssertEqual(try vault.confirmedPlaces(belongingTo: "did:privy:b").count, 1)
+
+        try vault.removeConfirmedPlace(ownerA, belongingTo: "did:privy:a")
+
+        XCTAssertTrue(try vault.confirmedPlaces(belongingTo: "did:privy:a").isEmpty)
+        let remaining = try vault.confirmedPlaces(belongingTo: "did:privy:b")
+        XCTAssertEqual(remaining.count, 1, "account B must keep the shared-venue stamp after A deletes")
+        XCTAssertEqual(remaining.first?.id, ownerB.id)
+        XCTAssertEqual(remaining.first?.googlePlaceId, "ChIJ-shared-harbor")
+    }
+
     @MainActor
     func testDeleteAllRecordsClearsEveryLocalMemoryState() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -392,6 +424,63 @@ final class SaveLocalVaultServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testExactIDUpsertsStayWithinTheOwningAccount() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let sharedID = UUID()
+        var a = makePendingCandidate(localID: sharedID)
+        a.ownerSubject = "owner-a"
+        a.isSourceOnly = false
+        a.candidateName = "Cafe A"
+        a.latitude = 25
+        a.longitude = 121
+        let savedA = try vault.saveReviewCandidate(a, recordID: sharedID)
+        var b = a
+        b.ownerSubject = "owner-b"
+        b.candidateName = "Cafe B"
+        b.evidence = ["B private clue"]
+        let savedB = try vault.saveReviewCandidate(b, recordID: sharedID, preservingExisting: true)
+        XCTAssertEqual(savedA.ownerSubject, "owner-a")
+        XCTAssertEqual(savedB.ownerSubject, "owner-b")
+        XCTAssertEqual(savedB.title, "Cafe B")
+        var bReview = try XCTUnwrap(try vault.reviewCandidates().first { $0.ownerSubject == "owner-b" })
+        XCTAssertEqual(bReview.id, savedB.id)
+        bReview.name = "B refined"
+        _ = try vault.saveReviewCandidate(bReview)
+        let stored = try vault.reviewCandidates()
+        XCTAssertEqual(stored.count, 2)
+        XCTAssertEqual(stored.first { $0.ownerSubject == "owner-a" }?.name, "Cafe A")
+        XCTAssertEqual(stored.first { $0.ownerSubject == "owner-b" }?.name, "B refined")
+    }
+
+    @MainActor
+    func testOwnerlessLegacyRowDoesNotMatchOwnedIDUpsert() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let sharedID = UUID()
+        var legacy = makePendingCandidate(localID: sharedID)
+        legacy.isSourceOnly = false
+        legacy.candidateName = "Legacy Cafe"
+        legacy.latitude = 25
+        legacy.longitude = 121
+        let savedLegacy = try vault.saveReviewCandidate(legacy, recordID: sharedID)
+        var owned = legacy
+        owned.ownerSubject = "owner-b"
+        owned.candidateName = "Owned Cafe"
+        owned.evidence = ["Owned clue"]
+        let savedOwned = try vault.saveReviewCandidate(owned, recordID: sharedID, preservingExisting: true)
+        XCTAssertNil(savedLegacy.ownerSubject)
+        XCTAssertEqual(savedOwned.ownerSubject, "owner-b")
+        XCTAssertEqual(savedOwned.title, "Owned Cafe")
+        let stored = try vault.reviewCandidates()
+        XCTAssertEqual(stored.count, 2)
+        XCTAssertEqual(stored.first { $0.ownerSubject == nil }?.name, "Legacy Cafe")
+        XCTAssertEqual(stored.first { $0.ownerSubject == "owner-b" }?.name, "Owned Cafe")
+    }
+
+    @MainActor
     private func makePendingCandidate(localID: UUID?) -> PendingReviewCandidate {
         PendingReviewCandidate(candidateName: "Source clue", address: "", category: "food",
             sourceURL: "https://example.com/shared-post", sourceText: "Original caption",
@@ -429,5 +518,63 @@ final class SaveLocalVaultServiceTests: XCTestCase {
             openingHours: nil,
             createdAt: Date()
         )
+    }
+
+    @MainActor
+    func testSaveLocalReviewDecisionPersistsSourceOnlyAndInvestigate() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        var candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Vault Decision Cafe",
+            address: "1 Vault Road",
+            city: nil,
+            latitude: 25.01,
+            longitude: 121.51,
+            evidence: ["Source URL: https://example.com/vault-decision"],
+            confidence: 0.5,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        _ = try vault.saveReviewCandidate(candidate, preservingParkedContext: true)
+
+        candidate.status = "source_only"
+        try vault.saveLocalReviewDecision(candidate)
+        XCTAssertEqual(try vault.reviewCandidates().first?.status, "source_only")
+
+        candidate.status = "needs_more_evidence"
+        try vault.saveLocalReviewDecision(candidate)
+        XCTAssertEqual(try vault.reviewCandidates().first?.status, "needs_more_evidence")
+        XCTAssertEqual(try vault.reviewCandidates().first?.id, candidate.id)
+    }
+
+    @MainActor
+    func testSaveLocalReviewDecisionRejectsRemoteOrUnknownCandidates() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        var candidate = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: UUID(),
+            name: "Remote Cafe",
+            address: "2 Vault Road",
+            city: nil,
+            latitude: nil,
+            longitude: nil,
+            evidence: [],
+            confidence: nil,
+            missingInfo: [],
+            status: "source_only",
+            createdAt: Date()
+        )
+        XCTAssertThrowsError(try vault.saveLocalReviewDecision(candidate))
+        candidate.captureId = nil
+        candidate.workflowRunId = UUID()
+        XCTAssertThrowsError(try vault.saveLocalReviewDecision(candidate))
+        candidate.workflowRunId = nil
+        XCTAssertThrowsError(try vault.saveLocalReviewDecision(candidate))
     }
 }

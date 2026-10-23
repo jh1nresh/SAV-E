@@ -232,6 +232,11 @@ import { deleteAccount } from "./accountDeletion.js";
 import {
   SavedPlaceLimitError,
   assertNewSavedPlaceAllowed,
+  updateSavedPlaceWithinLimit,
+  deleteSavedPlace,
+  savedPlaceDeleteScope,
+  savedPlaceGrowthSnapshot,
+  assertSavedPlaceGrowthAllowed,
 } from "./savedPlaceLimit.js";
 import {
   FriendRatingError, listFriendRatings, getFriendRating, ownFriendRatings,
@@ -1247,7 +1252,7 @@ createServer(async (request, response) => {
       const result = await new LinkPlaceIntelligence(pool).sources(userId,id);
       return result ? sendJson(response,result) : sendJson(response,{error:"Place not found"},404);
     }
-    if (resource === "places") return await handlePlaces(request, response, id, userId);
+    if (resource === "places") return await handlePlaces(request, response, id, userId, url);
     if (resource === "trips") return await handleTrips(request, response, id, userId);
     if (resource === "profile") return await handleProfile(request, response, userId);
     if (resource === "follows") {
@@ -1565,6 +1570,7 @@ async function handlePlaces(
   response: ServerResponse,
   placeId: string | undefined,
   userId: string,
+  url: URL,
 ): Promise<void> {
   if (request.method === "GET" && !placeId) {
     const rows = await fetchPlacesWithOptionalVisibility(userId);
@@ -1609,11 +1615,7 @@ async function handlePlaces(
       try {
         await client.query("begin");
         await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
-        const existingReceipt = await client.query(
-          "select id from places where user_id = $1 and origin_shared_place_link_id = $2",
-          [userId, link.id],
-        );
-        if (!existingReceipt.rows[0]) await assertNewSavedPlaceAllowed(client, userId);
+        const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
         const { rows } = await client.query(
           `${insert.sql}
            ${friendSharePlaceOriginConflictClause}
@@ -1638,6 +1640,7 @@ async function handlePlaces(
            on conflict do nothing`,
           [link.id, link.user_id, userId, canonicalPlace.id, terminalEvent],
         );
+        await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
         await client.query("commit");
         return sendJson(response, {
           place: formatPlace(canonicalPlace),
@@ -1656,15 +1659,7 @@ async function handlePlaces(
     try {
       await client.query("begin");
       await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
-      let isNewPlace = true;
-      if (typeof body.id === "string" && body.id) {
-        const existing = await client.query(
-          "select id from places where id = $1 and user_id = $2",
-          [body.id, userId],
-        );
-        isNewPlace = existing.rows.length === 0;
-      }
-      if (isNewPlace) await assertNewSavedPlaceAllowed(client, userId);
+      const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
       const { rows } = await client.query(
         `${insert.sql}
          on conflict (id) do update
@@ -1677,6 +1672,9 @@ async function handlePlaces(
         await client.query("rollback");
         return sendJson(response, { error: "Place id conflict" }, 409);
       }
+      // PostgreSQL may coerce accepted JSON fields (for example string float8
+      // coordinates). Gate actual stored rows, not a raw-request approximation.
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
       await client.query("commit");
       return sendJson(response, formatPlace(rows[0]), 201);
     } catch (error) {
@@ -1707,21 +1705,15 @@ async function handlePlaces(
     }
     if (!update) return sendJson(response, { error: "No writable fields" }, 400);
 
-    const values = [...update.values, placeId, userId];
-    const { rows } = await pool.query(
-      `${update.sql} where id = $${values.length - 1} and user_id = $${values.length} returning *`,
-      values,
-    );
-    if (!rows[0]) return sendJson(response, { error: "Place not found" }, 404);
-    return sendJson(response, formatPlace(rows[0]));
+    const updated = await updateSavedPlaceWithinLimit(pool, userId, placeId, update);
+    if (!updated) return sendJson(response, { error: "Place not found" }, 404);
+    return sendJson(response, formatPlace(updated));
   }
 
   if (request.method === "DELETE" && placeId) {
-    const { rows } = await pool.query(
-      "delete from places where id = $1 and user_id = $2 returning id",
-      [placeId, userId],
-    );
-    if (!rows[0]) return sendJson(response, { error: "Place not found" }, 404);
+    const scope = savedPlaceDeleteScope(url.searchParams.getAll("scope"));
+    if (!scope) return sendJson(response, { error: "Unsupported place delete scope" }, 400);
+    await deleteSavedPlace(pool, userId, placeId, scope);
     return sendJson(response, null, 204);
   }
 
@@ -6003,7 +5995,7 @@ async function insertFinalPlaceForDecision(
   if (existing.rows[0]) {
     throw new WorkflowConflictError("final_place.id already exists; use an existing-place decision without final_place");
   }
-  await assertNewSavedPlaceAllowed(client, userId);
+  await assertNewSavedPlaceAllowed(client, userId, decision.finalPlace);
 
   const body = withOwner(pickFields(decision.finalPlace, placeFields), userId);
   const insert = buildInsert("places", body, [...placeFields, "user_id"]);

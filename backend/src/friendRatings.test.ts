@@ -9,6 +9,12 @@ import {
   saveFriendRating, savedFriendAttributions, withdrawFriendRating,
 } from "./friendRatings.js";
 
+test("friend-rating save passes incoming identity into the canonical cap", async () => {
+  const source = await readFile(new URL("../src/friendRatings.ts", import.meta.url), "utf8");
+  assert.match(source, /assertNewSavedPlaceAllowed\(client, userId, source\)/);
+  assert.match(source, /if \(!place\) \{/);
+});
+
 const placeID = "11111111-1111-4111-8111-111111111111";
 const secondID = "22222222-2222-4222-8222-222222222222";
 

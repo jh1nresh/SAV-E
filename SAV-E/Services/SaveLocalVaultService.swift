@@ -2,11 +2,14 @@ import Foundation
 
 enum SaveLocalVaultError: LocalizedError {
     case storageUnavailable
+    case invalidLocalReviewDecision
 
     var errorDescription: String? {
         switch self {
         case .storageUnavailable:
             return "Savvy local memory storage is unavailable."
+        case .invalidLocalReviewDecision:
+            return "This review decision can only be saved for a local clue."
         }
     }
 }
@@ -161,7 +164,7 @@ final class SaveLocalVaultService: Sendable {
         return try withLock {
             try withCoordinatedVaultWrite { url in
                 var records = try loadRecords(from: url)
-                if let index = records.firstIndex(where: { $0.id == recordID }) {
+                if let index = records.firstIndex(where: { $0.id == recordID && $0.ownerSubject == record.ownerSubject }) {
                     // A retry must retain already-refined evidence or a user-confirmed place.
                     let existing = records[index]
                     if preservingExisting || existing.state == .confirmedPlace { return existing }
@@ -176,16 +179,16 @@ final class SaveLocalVaultService: Sendable {
                     records.insert(record, at: 0)
                 }
                 try save(records, to: url)
-                return records.first { $0.id == recordID } ?? record
+                return records.first { $0.id == recordID && $0.ownerSubject == record.ownerSubject } ?? record
             }
         }
     }
 
-    func saveReviewCandidate(_ candidate: PlaceReviewCandidate) throws -> SaveMemoryRecord {
+    func saveReviewCandidate(_ candidate: PlaceReviewCandidate, preservingParkedContext: Bool = false) throws -> SaveMemoryRecord {
 #if DEBUG
         if let saveReviewCandidateError { throw saveReviewCandidateError }
 #endif
-        let record = SaveMemoryRecord(
+        var record = SaveMemoryRecord(
             id: candidate.id,
             state: candidate.status == "source_only" ? .sourceOnly : .reviewCandidate,
             title: candidate.name,
@@ -206,7 +209,38 @@ final class SaveLocalVaultService: Sendable {
             semanticSource: candidate.semanticSource,
             ownerSubject: candidate.ownerSubject
         )
+        if preservingParkedContext {
+            record.parkedReviewCandidate = candidate
+        }
         return try upsertReviewRecord(record, matchSourceIdentity: false)
+    }
+
+    func saveLocalReviewDecision(_ candidate: PlaceReviewCandidate) throws {
+        guard candidate.captureId == nil, candidate.workflowRunId == nil,
+              ["source_only", "needs_more_evidence"].contains(candidate.status) else {
+            throw SaveLocalVaultError.invalidLocalReviewDecision
+        }
+#if DEBUG
+        if let saveReviewCandidateError { throw saveReviewCandidateError }
+#endif
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                var records = try loadRecords(from: url)
+                guard let index = records.firstIndex(where: {
+                    $0.id == candidate.id && $0.ownerSubject == candidate.ownerSubject
+                        && ($0.state == .reviewCandidate || $0.state == .sourceOnly)
+                }) else { throw SaveLocalVaultError.invalidLocalReviewDecision }
+                records[index].state = candidate.status == "source_only" ? .sourceOnly : .reviewCandidate
+                records[index].parkedReviewCandidate = candidate
+                for evidence in candidate.evidence where !records[index].evidence.contains(evidence) {
+                    records[index].evidence.append(evidence)
+                }
+                records[index].evidenceDiagnostic = preservingMissingInfo(
+                    candidate.missingInfo, diagnostic: records[index].evidenceDiagnostic
+                )
+                try save(records, to: url)
+            }
+        }
     }
 
     private func preservingMissingInfo(_ fields: [String], diagnostic: SocialPlaceEvidenceDiagnostic?) -> SocialPlaceEvidenceDiagnostic? {
@@ -221,6 +255,7 @@ final class SaveLocalVaultService: Sendable {
             try withCoordinatedVaultWrite { url in
                 var records = try loadRecords(from: url)
                 let index = records.firstIndex { existing in
+                    guard existing.ownerSubject == incoming.ownerSubject else { return false }
                     if existing.id == incoming.id { return true }
                     guard matchSourceIdentity,
                           existing.ownerSubject == incoming.ownerSubject,
@@ -270,6 +305,7 @@ final class SaveLocalVaultService: Sendable {
             ?? SaveSourceHandle.stored(incoming.sourceHandle)
             ?? SaveSourceHandle.stored(existing.sourceHandle)
         merged.ownerSubject = existing.ownerSubject ?? incoming.ownerSubject
+        merged.parkedReviewCandidate = incoming.parkedReviewCandidate ?? existing.parkedReviewCandidate
         return merged
     }
 
@@ -311,7 +347,9 @@ final class SaveLocalVaultService: Sendable {
                     ownerSubject: ownerSubject
                 )
                 records.removeAll { record in
-                    record.state == .confirmedPlace && place.savedIDs.contains(record.id)
+                    record.state == .confirmedPlace
+                        && record.ownerSubject == ownerSubject
+                        && place.savedIDs.contains(record.id)
                 }
                 records.insert(record, at: 0)
                 try save(records, to: url)
@@ -321,11 +359,30 @@ final class SaveLocalVaultService: Sendable {
     }
 
     func removeConfirmedPlace(_ place: Place) throws {
+        try removeConfirmedPlace(place, belongingTo: nil, scopedToActiveAccount: false)
+    }
+
+    func removeConfirmedPlace(_ place: Place, belongingTo currentUserId: String?) throws {
+        try removeConfirmedPlace(place, belongingTo: currentUserId, scopedToActiveAccount: true)
+    }
+
+    private func removeConfirmedPlace(
+        _ place: Place,
+        belongingTo currentUserId: String?,
+        scopedToActiveAccount: Bool
+    ) throws {
         try withLock {
             try withCoordinatedVaultWrite { url in
                 var records = try loadRecords(from: url)
                 records.removeAll { record in
                     guard let confirmed = record.confirmedPlace else { return false }
+                    if scopedToActiveAccount,
+                       !MapViewModel.localVaultRecordBelongsToActiveAccount(
+                            record.ownerSubject,
+                            currentUserId: currentUserId
+                       ) {
+                        return false
+                    }
                     return place.savedIDs.contains(confirmed.id) || confirmed.matches(place)
                 }
                 try save(records, to: url)
@@ -333,14 +390,18 @@ final class SaveLocalVaultService: Sendable {
         }
     }
 
-    func removeReviewCandidate(_ candidateID: UUID) throws {
+    func removeReviewCandidate(_ candidateID: UUID, ownerSubject: String? = nil) throws {
 #if DEBUG
         if let removeReviewCandidateError { throw removeReviewCandidateError }
 #endif
         try withLock {
             try withCoordinatedVaultWrite { url in
                 var records = try loadRecords(from: url)
-                records.removeAll { ($0.state == .reviewCandidate || $0.state == .sourceOnly) && $0.id == candidateID }
+                records.removeAll { record in
+                    guard record.state == .reviewCandidate || record.state == .sourceOnly,
+                          record.id == candidateID else { return false }
+                    return ownerSubject == nil || record.ownerSubject == ownerSubject
+                }
                 try save(records, to: url)
             }
         }
@@ -560,7 +621,7 @@ private extension SaveMemoryRecord {
         let name = displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return nil }
 
-        return PlaceReviewCandidate(
+        var candidate = PlaceReviewCandidate(
             id: id,
             captureId: nil,
             name: name,
@@ -586,6 +647,23 @@ private extension SaveMemoryRecord {
             semanticSource: semanticSource,
             ownerSubject: ownerSubject
         )
+        if let parked = parkedReviewCandidate,
+           parked.id == id, parked.ownerSubject == ownerSubject,
+           parked.isUnplacedInbox || (parked.captureId == nil && parked.workflowRunId == nil
+                && ["source_only", "needs_more_evidence"].contains(parked.status)) {
+            candidate.captureId = parked.captureId
+            candidate.workflowRunId = parked.workflowRunId
+            candidate.city = parked.city
+            candidate.confidence = parked.confidence
+            candidate.correctionScopeKey = parked.correctionScopeKey
+            candidate.supersededByCandidateID = parked.supersededByCandidateID
+            candidate.supersededByCandidateIDs = parked.supersededByCandidateIDs
+            candidate.status = state == .sourceOnly ? "source_only" : parked.status
+            for field in parked.missingInfo where !candidate.missingInfo.contains(field) {
+                candidate.missingInfo.append(field)
+            }
+        }
+        return candidate
     }
 
     var confirmedPlace: Place? {

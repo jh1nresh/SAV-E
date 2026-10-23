@@ -481,6 +481,11 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         status == "source_only" && missingInfo.contains { $0.caseInsensitiveCompare("Analysis pending") == .orderedSame }
     }
 
+    nonisolated static let unplacedInboxMarker = "unplaced_inbox"
+    var isUnplacedInbox: Bool {
+        missingInfo.contains { $0.caseInsensitiveCompare(Self.unplacedInboxMarker) == .orderedSame }
+    }
+
     // Transient display state; excluded from Codable/evidence/share payloads.
     var sourceFailureReason: SourceSearchFailureReason? = nil
     var supersededByCandidateID: UUID? = nil
