@@ -92,7 +92,7 @@ enum SaveDoodlePassportCatalog {
     static let maxColumnCount = 4
     static let minColumnCount = 1
     static let slotSize: CGFloat = SaveLayout.passportSlot
-    static let cardHeight: CGFloat = 88
+    static let cardHeight: CGFloat = SaveLayout.passportSlot
     static let columnStride: CGFloat = 80
     static let rowGap: CGFloat = SaveSpace.lg
     static let minColumnGap: CGFloat = SaveSpace.md

@@ -50,14 +50,14 @@ struct SaveDoodlePassportSlotView: View {
         VStack(spacing: SaveSpace.tight) {
             ZStack {
                 if showsCard {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    Circle()
                         .stroke(
                             SaveDoodle.pencil,
                             style: StrokeStyle(lineWidth: 1, dash: [4, 4])
                         )
                         .background(
                             SaveAtlasPalette.paper
-                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .clipShape(Circle())
                         )
                 }
                 switch slot.content {
