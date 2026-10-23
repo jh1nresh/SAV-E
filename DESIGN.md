@@ -961,7 +961,8 @@ shows Retry (no Saved, no overlay).
 Full screen. Top hero 393×470 pt (~55%) with a jittery torn-paper bottom
 and a 1.6 pt ink line. Show only the sharer’s own public photo. The main
 state is no photo: coral fill, cream jitter circle (236 pt), large
-category sticker (restaurant = noodle bowl, cafe = coffee cup). If no
+category sticker (restaurant = noodle bowl, cafe = coffee cup). In dark
+mode the bowl/cup plate is a solid black oval, not kraft. If no
 sticker fits, a cream line-art pin. No Temple of Heaven, roast duck, or
 elephant.
 
@@ -1037,7 +1038,8 @@ Handwriting (Caveat Latin / Iansui zh-Hant) only for the place name, list
 title, and state titles. Everything else is the system font. Wordmark is
 Caveat “Savvy” at a fixed 34 pt in `ClipForest` on a cream plate. Ship
 `Iansui-ClipTitles.ttf`. Do not copy `Iansui-SavvySubset.ttf` (3.48 MB).
-Missing glyphs fall back to the system font.
+Missing Iansui glyphs cascade to Caveat for Latin shop names, then the
+system font. Proof: `SAV-E/Resources/DisplayFont/11-iansui-proof.md`.
 
 ### Size
 

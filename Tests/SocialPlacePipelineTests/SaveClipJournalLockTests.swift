@@ -226,6 +226,9 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(design.contains("Save this place"))
         XCTAssertTrue(design.contains("group.com.wanderly.app"))
         XCTAssertTrue(design.contains("not `group.com.wanderly.app.shared`"))
+        XCTAssertTrue(design.contains("solid black oval"))
+        XCTAssertTrue(design.contains("cascade to Caveat"))
+        XCTAssertTrue(design.contains("11-iansui-proof.md"))
         let backend = try source(at: "backend/src/clipListSave.ts")
         XCTAssertTrue(backend.contains("planClipListSave"))
         XCTAssertTrue(backend.contains("clipListSaveResponse"))
@@ -322,7 +325,12 @@ final class SaveClipJournalLockTests: XCTestCase {
             ..< clip.range(of: "private func openLeftover")!.lowerBound
         ]
         XCTAssertTrue(handoff.contains("strippingSenderMemory()"))
-        XCTAssertFalse(handoff.contains("return lastIncomingURL"))
+        XCTAssertFalse(
+            handoff.split(whereSeparator: \.isNewline).contains { line in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                return !trimmed.hasPrefix("//") && trimmed.hasPrefix("return lastIncomingURL")
+            }
+        )
         XCTAssertTrue(appPayload.contains("func strippingSenderMemory()"))
         XCTAssertTrue(clipPayload.contains("func strippingSenderMemory()"))
         XCTAssertTrue(save.contains("func persistList"))
@@ -551,6 +559,10 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(workflow.contains("Iansui-Regular"))
         XCTAssertTrue(workflow.contains("12-screenshot-manifest.md"))
         XCTAssertTrue(workflow.contains("appclip-doodle-screenshots-"))
+        let proof = try source(at: "SAV-E/Resources/DisplayFont/11-iansui-proof.md")
+        XCTAssertTrue(proof.contains("Iansui-ClipTitles.ttf"))
+        XCTAssertTrue(proof.contains("cascadeList"))
+        XCTAssertTrue(proof.contains("Caveat"))
     }
 
     func testClipCoralStaysF26B4AInDark() throws {

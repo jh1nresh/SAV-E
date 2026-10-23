@@ -33,9 +33,9 @@ hope at 4808 coverage. The shipped subset is the smallest TTF that still
 keeps those characters; leftover glyphs fall back to PingFang TC.
 
 The App Clip ships `Iansui-ClipTitles.ttf` (state-title glyphs only; rebuild
-with `scripts/subset-iansui-clip.py`). User list names are not covered and
-fall back to the system font. Do not copy `Iansui-SavvySubset.ttf` into the
-Clip.
+with `scripts/subset-iansui-clip.py`). Missing Clip title glyphs cascade to
+Caveat (`UIFontDescriptor.AttributeName.cascadeList`), then the system font.
+Do not copy `Iansui-SavvySubset.ttf` into the Clip. See `11-iansui-proof.md`.
 
 Runtime registration is in `SaveDisplayType`. `UIAppFonts` also lists these
 files. Titles scale with Dynamic Type (`UIFontMetrics`).

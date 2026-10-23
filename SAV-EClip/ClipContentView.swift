@@ -747,7 +747,7 @@ struct ClipContentView: View {
 
     private func handoffURL(for draft: ClipPlaceDraft, listTitle: String?) -> URL {
         _ = listTitle
-        // Never return lastIncomingURL: /p links can embed the sender's note/rating.
+        // Incoming /p URLs can embed sender note/rating. Always synthesize a stripped payload.
         if let encoded = SharedPlaceData(
             id: draft.placeId ?? "",
             name: draft.name,
