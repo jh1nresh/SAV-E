@@ -11,7 +11,24 @@ final class SAVEClipScreenshotTests: XCTestCase {
     }
 
     func test01PlaceZhHantShortCodeWithSender() {
-        capture(screen: "place-sender", appearance: .light, language: "zh-Hant", locale: "zh_TW", name: "01-place-zh-Hant-sender", identifier: "clip.place.preview")
+        let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "place-sender")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.friendNote"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.friendNote.by"].exists)
+        attachScreenshot(app.screenshot(), name: "01-place-zh-Hant-sender")
+        app.terminate()
+    }
+
+    func testFriendShareNoteEnglish() {
+        let app = launchClip(appearance: .light, language: "en", locale: "en_US", screen: "place-sender")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.friendNote"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Save this for a slow dinner night"].exists)
+        let by = app.descendants(matching: .any)["clip.friendNote.by"]
+        XCTAssertTrue(by.exists)
+        XCTAssertTrue(by.label.contains("Mina"), "publicNote must be labelled with who wrote it")
+        attachScreenshot(app.screenshot(), name: "friend-note-en")
+        app.terminate()
     }
 
     func test02PlaceEnglishInline() {
@@ -156,6 +173,30 @@ final class SAVEClipScreenshotTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["clip.cap50"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.descendants(matching: .any)["clip.cap50.saved"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
+        let title = app.descendants(matching: .any)["clip.cap50.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        let normalized = title.label
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "  ", with: " ")
+        XCTAssertTrue(
+            normalized.contains("Free limit") && normalized.contains("reached"),
+            "cap50 title must keep Free limit reached, not a clipped 'reachea': \(title.label)"
+        )
+        XCTAssertFalse(
+            normalized.contains("reachea") && !normalized.contains("reached"),
+            "cap50 title must not truncate the last d of reached"
+        )
+        XCTAssertGreaterThan(
+            title.frame.height,
+            40,
+            "cap50 title must wrap onto a second line so Caveat ink is not clipped"
+        )
+        XCTAssertGreaterThanOrEqual(title.frame.minX, app.frame.minX + 8)
+        XCTAssertLessThanOrEqual(
+            title.frame.maxX,
+            app.frame.maxX - 8,
+            "cap50 title must stay inside the screen so the last glyph is not clipped"
+        )
         attachScreenshot(app.screenshot(), name: "cap50-en-dark")
         app.terminate()
     }

@@ -612,6 +612,17 @@ struct SharedTripData: Codable {
     }
 }
 
+/// Preview copy for another person's publicNote. Saving still strips it.
+enum FriendShareNoteCopy {
+    static func title(sender: String?) -> (english: String, traditionalChinese: String) {
+        let name = sender?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !name.isEmpty else {
+            return ("Shared note", "分享備註")
+        }
+        return ("\(name)'s note", "\(name)的手寫便條")
+    }
+}
+
 enum ShareRoutePayloadLimits {
     static let placePayloadMaxBytes = 12 * 1024
     // Base64 expands by roughly one third. Keep raw Trip JSON at or below

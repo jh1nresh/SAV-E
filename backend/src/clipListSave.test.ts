@@ -376,3 +376,54 @@ test("SL4 POST /places list writes are one transactional call", () => {
     /for \(const .+ of rawBody\.places\)[\s\S]{0,80}await fetch/,
   );
 });
+
+test("HoP R2 A1: phone Clip import increments that account by one and does not copy to another Privy user", () => {
+  const item = {
+    id: "quarter-sheets-pizza-club",
+    name: "Quarter Sheets Pizza Club",
+    latitude: 34.0779,
+    longitude: -118.2543,
+    google_place_id: "ChIJClipPhoneHandoff",
+  };
+  const phone = planClipListSave({
+    items: [item],
+    existingIdentities: [],
+    savedPlaceCount: 0,
+  });
+  assert.equal(phone.newlySaved, 1);
+  assert.equal(phone.alreadySaved, 0);
+  assert.equal(phone.toInsert.length, 1);
+  assert.equal(
+    clipListSaveResponse(phone, [{ ...item, id: "11111111-1111-1111-1111-111111111111" }]).newly_saved,
+    1,
+    "server count for the phone account goes +1",
+  );
+
+  const email = planClipListSave({
+    items: [],
+    existingIdentities: [],
+    savedPlaceCount: 0,
+  });
+  assert.equal(email.newlySaved, 0, "a different Privy account does not inherit the phone import");
+  assert.equal(clipListSaveResponse(email).newly_saved, 0);
+
+  const phoneAgain = planClipListSave({
+    items: [item],
+    existingIdentities: clipListPlaceIdentities(item),
+    savedPlaceCount: 1,
+  });
+  assert.equal(phoneAgain.newlySaved, 0);
+  assert.equal(phoneAgain.alreadySaved, 1);
+
+  const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+  assert.match(
+    server,
+    /from places where user_id = \$1/,
+    "Clip/list inserts count only the signed-in Privy profile",
+  );
+  assert.doesNotMatch(
+    server,
+    /update places[\s\S]{0,80}set user_id/,
+    "saves are not moved onto a different Privy account",
+  );
+});

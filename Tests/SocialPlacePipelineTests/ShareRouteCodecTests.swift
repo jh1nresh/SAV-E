@@ -538,6 +538,16 @@ final class ShareRouteCodecTests: XCTestCase {
         XCTAssertNil(recipient.note)
         XCTAssertNil(recipient.rating)
         XCTAssertNil(recipient.googleRating)
+        XCTAssertEqual(payload.note, "Order the tasting menu")
+        XCTAssertEqual(
+            SharedPlaceReceipt.embedded(payload).payload.note,
+            "Order the tasting menu",
+            "Preview keeps the sender publicNote; only the saved stamp strips it"
+        )
+        let labeled = FriendShareNoteCopy.title(sender: "Mina")
+        XCTAssertEqual(labeled.english, "Mina's note")
+        XCTAssertEqual(labeled.traditionalChinese, "Mina的手寫便條")
+        XCTAssertEqual(FriendShareNoteCopy.title(sender: "  ").english, "Shared note")
     }
 
     @MainActor

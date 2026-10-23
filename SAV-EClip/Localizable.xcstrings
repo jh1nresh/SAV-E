@@ -123,7 +123,7 @@
     },
     "clip.cap50.title" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Free limit reached" } },
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Free limit\nreached" } },
         "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "免費額度已滿" } }
       }
     },

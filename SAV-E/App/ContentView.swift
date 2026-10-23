@@ -2066,12 +2066,11 @@ private struct FriendShareReceiptView: View {
 
                 if let note = receipt.payload.note, !note.isEmpty {
                     receiptSection(
-                        title: receipt.verifiedSenderLabel == nil
-                            ? localized("Shared note", "分享備註")
-                            : localized("Why they shared it", "為什麼推薦這裡"),
+                        title: friendShareNoteTitle(receipt),
                         value: note,
                         icon: "quote.bubble"
                     )
+                    .accessibilityIdentifier("friendShareReceipt.note")
                 }
 
                 receiptSection(
@@ -2266,6 +2265,11 @@ private struct FriendShareReceiptView: View {
                 "無法儲存這張已驗證的分享。連結可能已過期；請重新載入收據後再試。"
             )
         }
+    }
+
+    private func friendShareNoteTitle(_ receipt: SharedPlaceReceipt) -> String {
+        let copy = FriendShareNoteCopy.title(sender: receipt.verifiedSenderLabel)
+        return localized(copy.english, copy.traditionalChinese)
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {

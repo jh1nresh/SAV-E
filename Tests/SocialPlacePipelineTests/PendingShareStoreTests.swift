@@ -124,6 +124,97 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertNil(PendingShareStore.loadURL(from: store))
     }
 
+    func testPhoneOnlyClipSaveThenSamePhoneSignInIncrementsServerCount() throws {
+        let snapshot = PendingConfirmedPlace(
+            placeId: "quarter-sheets-pizza-club",
+            name: "Quarter Sheets Pizza Club",
+            address: "1305 Portia St, Los Angeles, CA 90026",
+            latitude: 34.0779,
+            longitude: -118.2543,
+            category: "Food",
+            sourceURL: nil,
+            extraPlaceIds: nil,
+            coordinateSystem: nil,
+            locationProvider: nil,
+            providerMapUrl: nil,
+            googlePlaceId: "ChIJClipPhoneHandoff"
+        )
+        let written = PendingShareStore.write(
+            PendingSharePayload(
+                kind: .place,
+                shareCode: "AbC123_x",
+                placeId: snapshot.placeId,
+                listId: nil,
+                sender: "Mina",
+                url: "https://sav-e-app.vercel.app/p/AbC123_x",
+                confirmedPlaces: [snapshot]
+            ),
+            to: store
+        )
+        XCTAssertTrue(written, "Clip persist writes the session-agnostic journal first")
+
+        let phoneUserId = "did:privy:phone-only"
+        XCTAssertFalse(
+            ClipPlaceHandoff.shouldResetHandoffOnAccountChange(
+                previousUserId: nil,
+                currentUserId: phoneUserId
+            ),
+            "first phone sign-in must keep the Clip journal"
+        )
+        XCTAssertEqual(
+            ClipSignInCarryOver.decide(
+                storedAppleUserID: "001234.clip-apple-user",
+                credentialState: .authorized
+            ),
+            .showSignIn,
+            "Apple carry-over must not consume the journal before phone sign-in"
+        )
+
+        let journal = try XCTUnwrap(PendingShareStore.load(from: store))
+        XCTAssertTrue(
+            ClipPlaceHandoff.shouldAutoSavePlace(
+                pending: journal,
+                incomingURL: URL(string: journal.url)!
+            )
+        )
+        let item = try XCTUnwrap(journal.confirmedPlaces?.first).asListItem()
+        let planned = ClipListHandoff.planStamps(
+            confirmed: [item],
+            alreadySaved: { _ in false },
+            savedPlaceCount: 0
+        )
+        XCTAssertEqual(planned.counts.newlySaved, 1, "phone account count must go +1")
+        XCTAssertEqual(ClipListHandoff.onePlaceImport(counts: planned.counts), .saved)
+        XCTAssertNil(item.note, "recipient stamp must not inherit the sender publicNote")
+
+        let serverBody = Data(#"""
+        {"newly_saved":1,"already_saved":0,"over_cap":0,"remaining":49,"limit":50,"saved":[{"id":"11111111-1111-1111-1111-111111111111","name":"Quarter Sheets Pizza Club","latitude":34.0779,"longitude":-118.2543}]}
+        """#.utf8)
+        let remote = try XCTUnwrap(ClipListHandoff.parseRemote(status: 201, data: serverBody))
+        XCTAssertEqual(remote.counts.newlySaved, 1, "server count must go +1 for the same phone account")
+        XCTAssertEqual(remote.saved.count, 1)
+        XCTAssertEqual(remote.saved.first?.name, "Quarter Sheets Pizza Club")
+
+        let emailUserId = "did:privy:email-only"
+        XCTAssertTrue(
+            ClipPlaceHandoff.shouldResetHandoffOnAccountChange(
+                previousUserId: phoneUserId,
+                currentUserId: emailUserId
+            ),
+            "a later different Privy account must not inherit an already-owned journal"
+        )
+        PendingShareStore.clear(store)
+        XCTAssertNil(PendingShareStore.load(from: store))
+        let emailPlan = ClipListHandoff.planStamps(
+            confirmed: [],
+            alreadySaved: { _ in false },
+            savedPlaceCount: 0
+        )
+        XCTAssertEqual(emailPlan.counts.newlySaved, 0, "cleared journal does not copy stamps to another Privy account")
+        let emptyRemote = Data(#"{"newly_saved":0,"already_saved":0,"over_cap":0,"remaining":50,"limit":50}"#.utf8)
+        XCTAssertEqual(ClipListHandoff.parseCounts(status: 201, data: emptyRemote)?.newlySaved, 0)
+    }
+
     func testLegacyURLFallbackWhenPendingShareMissing() throws {
         store.set("https://sav-e-app.vercel.app/p/AbC123_x", forKey: PendingShareStore.legacyURLKey)
         XCTAssertNil(PendingShareStore.load(from: store))

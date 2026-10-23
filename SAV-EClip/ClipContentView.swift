@@ -435,7 +435,13 @@ struct ClipContentView: View {
 
     private func leftoverContent(title: String, rows: [String]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            ClipDisplayTitle(text: title, pointSize: 28, relativeTo: .title, alignment: .leading)
+            ClipDisplayTitle(
+                text: title,
+                pointSize: 28,
+                relativeTo: .title,
+                alignment: .leading,
+                maxWidth: .infinity
+            )
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 Text(row)
                     .font(ClipJournalType.system(17, weight: .regular, relativeTo: .body))
@@ -459,45 +465,54 @@ struct ClipContentView: View {
         identifier: String,
         savedLine: String? = nil
     ) -> some View {
-        VStack(spacing: ClipJournalLayout.stateTitleGap) {
-            ClipWordmarkPlate()
-                .accessibilityIdentifier("clip.wordmark")
-            ClipStateIllustration(sticker: sticker, badge: badge)
-            VStack(spacing: ClipJournalLayout.stateBodyGap) {
-                ClipDisplayTitle(text: title, pointSize: 24, relativeTo: .title2)
-                    .multilineTextAlignment(.center)
-                if let savedLine {
-                    Text(savedLine)
-                        .font(ClipJournalType.system(17, weight: .semibold, relativeTo: .headline))
-                        .foregroundStyle(ClipJournalPalette.ink)
+        ScrollView {
+            VStack(spacing: ClipJournalLayout.stateTitleGap) {
+                ClipWordmarkPlate()
+                    .accessibilityIdentifier("clip.wordmark")
+                ClipStateIllustration(sticker: sticker, badge: badge)
+                VStack(spacing: ClipJournalLayout.stateBodyGap) {
+                    ClipDisplayTitle(
+                        text: title,
+                        pointSize: 24,
+                        relativeTo: .title2,
+                        accessibilityID: identifier == "clip.cap50" ? "clip.cap50.title" : nil
+                    )
+                    if let savedLine {
+                        Text(savedLine)
+                            .font(ClipJournalType.system(17, weight: .semibold, relativeTo: .headline))
+                            .foregroundStyle(ClipJournalPalette.ink)
+                            .multilineTextAlignment(.center)
+                            .accessibilityIdentifier("clip.cap50.saved")
+                    }
+                    Text(bodyText)
+                        .font(ClipJournalType.system(15, weight: .regular, relativeTo: .body))
+                        .foregroundStyle(ClipJournalPalette.muted)
                         .multilineTextAlignment(.center)
-                        .accessibilityIdentifier("clip.cap50.saved")
+                        .frame(maxWidth: ClipJournalLayout.stateBodyMaxWidth)
                 }
-                Text(bodyText)
-                    .font(ClipJournalType.system(15, weight: .regular, relativeTo: .body))
-                    .foregroundStyle(ClipJournalPalette.muted)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: ClipJournalLayout.stateBodyMaxWidth)
-            }
-            .accessibilityElement(children: .combine)
-            if let retry {
-                ClipJournalPrimaryButton(title: ClipCopy.string("clip.retry"), action: retry)
-                    .accessibilityIdentifier("clip.error.retry")
-                    .padding(.horizontal, ClipJournalLayout.screenMargin)
-            }
-            if let back {
-                Button(back) {
-                    surface = .preview
-                    presentsAppClipOverlay = false
+                if let retry {
+                    ClipJournalPrimaryButton(title: ClipCopy.string("clip.retry"), action: retry)
+                        .accessibilityIdentifier("clip.error.retry")
+                        .padding(.horizontal, ClipJournalLayout.screenMargin)
                 }
-                .font(ClipJournalType.system(15, weight: .semibold, relativeTo: .subheadline))
-                .foregroundStyle(ClipJournalPalette.coral)
-                .underline()
-                .accessibilityIdentifier("clip.cap50.back")
+                if let back {
+                    Button(back) {
+                        surface = .preview
+                        presentsAppClipOverlay = false
+                    }
+                    .font(ClipJournalType.system(15, weight: .semibold, relativeTo: .subheadline))
+                    .foregroundStyle(ClipJournalPalette.coral)
+                    .underline()
+                    .accessibilityIdentifier("clip.cap50.back")
+                }
             }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, ClipJournalLayout.screenMargin)
+            .padding(.vertical, 16)
         }
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, ClipJournalLayout.screenMargin)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(identifier)
     }

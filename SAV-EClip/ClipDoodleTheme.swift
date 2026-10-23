@@ -43,6 +43,9 @@ enum ClipJournalLayout {
     static let stateTitleGap: CGFloat = 24
     static let stateBodyGap: CGFloat = 12
     static let stateBodyMaxWidth: CGFloat = 300
+    static let stateTitleMaxWidth: CGFloat = 280
+    /// Caveat's last glyph extends past the typographic advance (`reachea`).
+    static let titleInkOverflow: CGFloat = 18
     static let namePointLatin: CGFloat = 38
     static let namePointCJK: CGFloat = 34
     static let listTitlePoint: CGFloat = 22
@@ -167,16 +170,20 @@ struct ClipDisplayTitle: View {
     var relativeTo: Font.TextStyle = .title
     var color: Color = ClipJournalPalette.forest
     var alignment: TextAlignment = .center
+    var maxWidth: CGFloat = ClipJournalLayout.stateTitleMaxWidth
+    var accessibilityID: String? = nil
 
     var body: some View {
         Text(text)
             .font(ClipDisplayType.title(pointSize, relativeTo: relativeTo))
             .foregroundStyle(color)
             .multilineTextAlignment(alignment)
-            .lineLimit(2)
-            .minimumScaleFactor(0.7)
+            .lineLimit(3)
+            .minimumScaleFactor(0.85)
+            .padding(.horizontal, ClipJournalLayout.titleInkOverflow)
+            .frame(maxWidth: maxWidth, alignment: frameAlignment)
             .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: frameAlignment)
+            .modifier(ClipOptionalAccessibilityID(accessibilityID))
     }
 
     private var frameAlignment: Alignment {
@@ -184,6 +191,22 @@ struct ClipDisplayTitle: View {
         case .leading: return .leading
         case .trailing: return .trailing
         default: return .center
+        }
+    }
+}
+
+private struct ClipOptionalAccessibilityID: ViewModifier {
+    let identifier: String?
+
+    init(_ identifier: String?) {
+        self.identifier = identifier
+    }
+
+    func body(content: Content) -> some View {
+        if let identifier, !identifier.isEmpty {
+            content.accessibilityIdentifier(identifier)
+        } else {
+            content
         }
     }
 }
@@ -725,6 +748,7 @@ struct ClipWashiNote: View {
                 Text(ClipCopy.format("clip.noteBy", attribution))
                     .font(ClipJournalType.system(12, weight: .regular, relativeTo: .caption))
                     .foregroundStyle(ClipJournalPalette.muted)
+                    .accessibilityIdentifier("clip.friendNote.by")
             }
         }
         .padding(.horizontal, 14)
@@ -735,6 +759,8 @@ struct ClipWashiNote: View {
                 .fill(ClipJournalPalette.kraft)
         }
         .rotationEffect(.degrees(ClipJournalLayout.noteRotation))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("clip.friendNote")
     }
 }
 
