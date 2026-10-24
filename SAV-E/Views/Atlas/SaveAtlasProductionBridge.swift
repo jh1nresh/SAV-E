@@ -183,8 +183,24 @@ enum SaveAtlasPresentationFactory {
             onOpenReview(candidate)
         }
         presentation.onOpenPassport = onOpenPassport
+#if DEBUG
+        if let override = uiTestHintCountOverride() {
+            presentation.reviewCount = override
+        }
+#endif
         return presentation
     }
+
+#if DEBUG
+    /// Evidence-only override so N=0 / N=1 / N=99+ hint copy can be captured
+    /// without seeding 100 review candidates. Production never reads this.
+    static func uiTestHintCountOverride() -> Int? {
+        let prefix = "--uitest-home-hint-count="
+        guard let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) })
+        else { return nil }
+        return Int(argument.dropFirst(prefix.count))
+    }
+#endif
 
     static func orderedHomePlaces(_ places: [Place], location: CLLocation?) -> [Place] {
         places.sorted { lhs, rhs in

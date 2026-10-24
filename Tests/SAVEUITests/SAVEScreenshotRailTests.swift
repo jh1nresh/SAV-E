@@ -3345,6 +3345,128 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
     }
 
+    /// H-3b evidence: greeting + clue count + separator + Review, for N=0 / 1 /
+    /// 99+ in en and zh. CI boots iPhone 16 Pro (~402pt); #295's 375pt shots
+    /// come from a dedicated SE workflow step this PR is not allowed to add.
+    /// Attachments record the actual viewport width. Do not fake 375pt images.
+    @MainActor
+    func testHomeHintCountEvidence() throws {
+        for language in ["en", "zh-Hant"] {
+            for count in [0, 1, 100] {
+                try captureHomeHintCount(
+                    count: count,
+                    language: language
+                )
+            }
+        }
+    }
+
+    @MainActor
+    private func captureHomeHintCount(count: Int, language: String) throws {
+        let label = count > 99 ? "n99" : "n\(count)"
+        let languageTag = language == "en" ? "en" : "zh"
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour",
+                "--uitest-location-allowed",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed", "--uitest-home-taipei-granted",
+                "--uitest-home-hint-count=\(count)",
+                "--uitest-force-light",
+                "-save.appLanguage", language,
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        defer { terminate(app) }
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        let hint = app.descendants(matching: .any)["home.review"]
+        XCTAssertTrue(hint.waitForExistence(timeout: stepTimeout))
+        let action = app.buttons["home.review.action"]
+        if count == 0 {
+            XCTAssertFalse(action.exists)
+            XCTAssertFalse(hint.label.contains("clue"))
+            XCTAssertFalse(hint.label.contains("線索"))
+        } else {
+            XCTAssertTrue(action.waitForExistence(timeout: stepTimeout))
+            assertTapTargetHeight(action, name: "home.review.action")
+            XCTAssertFalse(action.label.contains("·"))
+            if language == "en" {
+                XCTAssertEqual(action.label, "Review ›")
+                if count == 1 {
+                    XCTAssertTrue(hint.label.contains("1 clue waiting · Review ›"), hint.label)
+                } else {
+                    XCTAssertTrue(hint.label.contains("99+ clues waiting · Review ›"), hint.label)
+                }
+            } else {
+                XCTAssertEqual(action.label, "去看看 ›")
+                if count == 1 {
+                    XCTAssertTrue(hint.label.contains("1 條線索待看 · 去看看 ›"), hint.label)
+                } else {
+                    XCTAssertTrue(hint.label.contains("99+ 條線索待看 · 去看看 ›"), hint.label)
+                }
+            }
+        }
+        let width = Int(app.frame.width.rounded())
+        let metadata = XCTAttachment(string: "viewport=\(app.frame); hint=\(hint.label); language=\(language); count=\(count)")
+        metadata.name = "H3b-\(label)-\(languageTag)-viewport-\(width)"
+        metadata.lifetime = .keepAlways
+        add(metadata)
+        attach(app, name: "H3b-\(label)-\(languageTag)")
+    }
+
+    /// B-2 Taipei distances with location granted. Light and dark English.
+    /// Leaves the Tiantan parity fixture and home.png baseline unchanged.
+    @MainActor
+    func testHomeTaipeiGrantedDistances() throws {
+        try captureTaipeiGrantedHome(dark: false, name: "taipei-granted-light-en")
+        try captureTaipeiGrantedHome(dark: true, name: "taipei-granted-dark-en")
+    }
+
+    @MainActor
+    private func captureTaipeiGrantedHome(dark: Bool, name: String) throws {
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        if dark {
+            XCUIDevice.shared.appearance = .dark
+        }
+        var arguments = [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-location-allowed",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed", "--uitest-home-taipei-granted",
+            "--uitest-home-hint-count=0",
+            "-save.appLanguage", "en",
+        ]
+        if dark {
+            arguments.append(contentsOf: ["--uitest-force-dark", "-AppleInterfaceStyle", "Dark"])
+        } else {
+            arguments.append("--uitest-force-light")
+        }
+        let app = makeApp(
+            launchArguments: arguments,
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        defer { terminate(app) }
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        XCTAssertFalse(app.descendants(matching: .any)["home.locationPrompt"].exists)
+        let first = app.buttons["home.place.50000000-0000-0000-0000-000000000002"]
+        XCTAssertTrue(first.waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(
+            first.label.range(of: #"[0-9]+(\.[0-9]+)?(m|km)"#, options: .regularExpression) == nil,
+            "Taipei granted first Eat row must show a non-empty distance: \(first.label)"
+        )
+        XCTAssertTrue(app.buttons["home.place.50000000-0000-0000-0000-000000000001"].exists)
+        XCTAssertTrue(app.buttons["home.place.50000000-0000-0000-0000-000000000003"].exists)
+        attach(app, name: name)
+    }
+
     @MainActor
     private func captureHomeProductState(
         state: String,
@@ -3375,6 +3497,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertTrue(
                 app.buttons["home.review.action"].waitForExistence(timeout: stepTimeout),
                 "\(state) Review › is the only coral tap on the hint row"
+            )
+            XCTAssertTrue(
+                review.label.contains("waiting · Review ›")
+                    || review.label.contains("待看 · 去看看 ›"),
+                "\(state) must keep the separator before Review / 去看看"
+            )
+            XCTAssertFalse(
+                app.buttons["home.review.action"].label.contains("·"),
+                "\(state) coral Review control must not include the separator"
             )
             XCTAssertFalse(
                 app.buttons["home.saves"].exists,

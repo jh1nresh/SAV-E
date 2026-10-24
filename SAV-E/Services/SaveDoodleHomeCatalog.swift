@@ -527,14 +527,16 @@ enum SaveDoodleHomeHint {
             shortPhrase = fullPhrase
         }
         let review = language.localized(english: "Review ›", traditionalChinese: "去看看 ›")
-        let leadingFull = "\(greetingText) · \(fullPhrase)"
-        let leadingShort = "\(greetingText) · \(shortPhrase)"
+        // Trailing ` ·` stays in the muted leading text so ViewThatFits and
+        // the coral Review / 去看看 control both keep the DESIGN separator.
+        let leadingFull = "\(greetingText) · \(fullPhrase) ·"
+        let leadingShort = "\(greetingText) · \(shortPhrase) ·"
         return Copy(
             greeting: greetingText,
             leadingFull: leadingFull,
             leadingShort: leadingShort,
             review: review,
-            spoken: "\(leadingFull) · \(review)"
+            spoken: "\(leadingFull) \(review)"
         )
     }
 }

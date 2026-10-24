@@ -201,6 +201,9 @@ enum ReviewDemoSeed {
             if arguments.contains("--uitest-home-design-fixture") {
                 return Array(doodleParityPlaces(now: now).prefix(3))
             }
+            if arguments.contains("--uitest-home-taipei-granted") {
+                return taipeiGrantedPlaces(now: now)
+            }
         }
         if ReviewDemo.isOfflineUITestMode,
            ReviewDemo.uiTestStorageIdentifier != nil,
@@ -402,6 +405,33 @@ enum ReviewDemoSeed {
         }
 #endif
         return repairForUITests || (!wasSeeded && existingPlaces.isEmpty)
+    }
+
+    /// Taipei B-2 evidence: location-granted, 6 own saves in 台北 (mix of
+    /// saved + visited) so Home rows show distances. Isolated from the
+    /// Tiantan parity fixture and the multi-city memory fixture.
+    static func taipeiGrantedPlaces(now: Date = Date()) -> [Place] {
+        let seeds: [(Int, String, String, PlaceCategory, PlaceStatus, Double, Double)] = [
+            (0, "Taipei Window Cafe", "台北市大安區", .cafe, .visited, 25.0370, 121.5600),
+            (1, "Taipei Lunch", "台北市信義區", .food, .wantToGo, 25.0336, 121.5654),
+            (2, "Raohe Night Market", "台北市松山區", .food, .wantToGo, 25.0380, 121.5720),
+            (3, "Yongkang Beef Noodles", "台北市大安區", .food, .visited, 25.0325, 121.5550),
+            (4, "Fujin Tree 353 Cafe", "台北市松山區", .cafe, .wantToGo, 25.0360, 121.5500),
+            (5, "Taipei Riverside Park", "台北市中山區", .attraction, .visited, 25.0400, 121.5600),
+        ]
+        return seeds.map { index, name, address, category, status, latitude, longitude in
+            Place(
+                id: UUID(uuidString: String(format: "50000000-0000-0000-0000-%012d", index + 1))!,
+                name: name,
+                address: address,
+                latitude: latitude,
+                longitude: longitude,
+                category: category,
+                status: status,
+                sourcePlatform: .other,
+                createdAt: now.addingTimeInterval(Double(-index))
+            )
+        }
     }
 
     /// Temple of Heaven (天壇) Eat rows plus the Map sheet park. Distances

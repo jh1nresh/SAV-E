@@ -873,21 +873,43 @@ final class SaveDoodleHomeTests: XCTestCase {
         let three = SaveDoodleHomeHint.copy(
             clueCount: 3, at: morning, language: .english, calendar: calendar
         )
-        XCTAssertEqual(three.leadingFull, "Good morning · 3 clues waiting")
-        XCTAssertEqual(three.leadingShort, "Good morning · 3 clues")
+        XCTAssertEqual(three.leadingFull, "Good morning · 3 clues waiting ·")
+        XCTAssertEqual(three.leadingShort, "Good morning · 3 clues ·")
         XCTAssertEqual(three.review, "Review ›")
         XCTAssertEqual(three.spoken, "Good morning · 3 clues waiting · Review ›")
 
         let one = SaveDoodleHomeHint.copy(
             clueCount: 1, at: morning, language: .english, calendar: calendar
         )
-        XCTAssertEqual(one.leadingFull, "Good morning · 1 clue waiting")
-        XCTAssertEqual(one.leadingShort, "Good morning · 1 clue")
+        XCTAssertEqual(one.leadingFull, "Good morning · 1 clue waiting ·")
+        XCTAssertEqual(one.leadingShort, "Good morning · 1 clue ·")
+        XCTAssertEqual(one.spoken, "Good morning · 1 clue waiting · Review ›")
+
+        let evening = at(20, 0)
+        let oneEvening = SaveDoodleHomeHint.copy(
+            clueCount: 1, at: evening, language: .english, calendar: calendar
+        )
+        XCTAssertEqual(oneEvening.leadingFull, "Good evening · 1 clue waiting ·")
+        XCTAssertEqual(oneEvening.leadingShort, "Good evening · 1 clue ·")
+        XCTAssertEqual(oneEvening.review, "Review ›")
+        XCTAssertEqual(oneEvening.spoken, "Good evening · 1 clue waiting · Review ›")
+        XCTAssertFalse(oneEvening.review?.contains("·") == true)
+
+        let oneEveningZh = SaveDoodleHomeHint.copy(
+            clueCount: 1, at: evening, language: .traditionalChinese, calendar: calendar
+        )
+        XCTAssertEqual(oneEveningZh.leadingFull, "晚安 · 1 條線索待看 ·")
+        XCTAssertEqual(oneEveningZh.leadingShort, "晚安 · 1 條線索待看 ·")
+        XCTAssertEqual(oneEveningZh.review, "去看看 ›")
+        XCTAssertEqual(oneEveningZh.spoken, "晚安 · 1 條線索待看 · 去看看 ›")
+        XCTAssertFalse(oneEveningZh.review?.contains("·") == true)
 
         let overflow = SaveDoodleHomeHint.copy(
             clueCount: 100, at: morning, language: .english, calendar: calendar
         )
-        XCTAssertEqual(overflow.leadingFull, "Good morning · 99+ clues waiting")
+        XCTAssertEqual(overflow.leadingFull, "Good morning · 99+ clues waiting ·")
+        XCTAssertEqual(overflow.leadingShort, "Good morning · 99+ clues ·")
+        XCTAssertEqual(overflow.spoken, "Good morning · 99+ clues waiting · Review ›")
         XCTAssertEqual(SaveDoodleHomeHint.displayCount(99), "99")
         XCTAssertEqual(SaveDoodleHomeHint.displayCount(100), "99+")
 
@@ -902,8 +924,10 @@ final class SaveDoodleHomeTests: XCTestCase {
         let zh = SaveDoodleHomeHint.copy(
             clueCount: 3, at: morning, language: .traditionalChinese, calendar: calendar
         )
-        XCTAssertEqual(zh.leadingFull, "早安 · 3 條線索待看")
+        XCTAssertEqual(zh.leadingFull, "早安 · 3 條線索待看 ·")
+        XCTAssertEqual(zh.leadingShort, "早安 · 3 條線索待看 ·")
         XCTAssertEqual(zh.review, "去看看 ›")
+        XCTAssertEqual(zh.spoken, "早安 · 3 條線索待看 · 去看看 ›")
         let eveningZh = SaveDoodleHomeHint.copy(
             clueCount: 0, at: at(18, 0), language: .traditionalChinese, calendar: calendar
         )
@@ -1340,6 +1364,11 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("home.review"))
         XCTAssertTrue(home.contains("SaveDoodleHomeHint"))
         XCTAssertTrue(home.contains("home.review.action"))
+        XCTAssertTrue(home.contains(".padding(.trailing, 4)"))
+        let catalogHint = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")
+        XCTAssertTrue(catalogHint.contains("\\(fullPhrase) ·\""))
+        XCTAssertTrue(catalogHint.contains("\\(shortPhrase) ·\""))
+        XCTAssertTrue(catalogHint.contains("spoken: \"\\(leadingFull) \\(review)\""))
         XCTAssertTrue(home.contains("MemoMascotMark"))
         XCTAssertFalse(home.contains("import MapKit"))
         XCTAssertFalse(home.contains("MKMapView"))
@@ -1361,6 +1390,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("clueCount: presentation.reviewCount"))
         let factory = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
         XCTAssertFalse(factory.contains("presentation.reviewCount = mapViewModel.reviewCandidates.count"))
+        XCTAssertTrue(factory.contains("uiTestHintCountOverride"))
+        XCTAssertTrue(factory.contains("--uitest-home-hint-count="))
         XCTAssertFalse(home.contains("accessibilityIdentifier(\"home.trips\")"))
         XCTAssertTrue(home.contains("SaveDisplayTitle("))
         XCTAssertTrue(home.contains("text: \"Savvy\""))
@@ -1556,6 +1587,17 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertFalse(locationService.contains("if let currentLocation {\n            return currentLocation"))
         let selector = try source(at: "scripts/select-ios-tests.py")
         XCTAssertTrue(selector.contains("testHomeDesignProductStates"))
+        XCTAssertTrue(selector.contains("testHomeHintCountEvidence"))
+        XCTAssertTrue(selector.contains("testHomeTaipeiGrantedDistances"))
+        XCTAssertTrue(rail.contains("func testHomeHintCountEvidence"))
+        XCTAssertTrue(rail.contains("func testHomeTaipeiGrantedDistances"))
+        XCTAssertTrue(rail.contains("waiting · Review ›"))
+        XCTAssertTrue(rail.contains("待看 · 去看看 ›"))
+        XCTAssertTrue(rail.contains("H3b-n0-en"))
+        XCTAssertTrue(rail.contains("H3b-n1-zh"))
+        XCTAssertTrue(rail.contains("H3b-n99-en"))
+        XCTAssertTrue(rail.contains("taipei-granted-light-en"))
+        XCTAssertTrue(rail.contains("taipei-granted-dark-en"))
         XCTAssertTrue(rail.contains("doodle-home-empty"))
         XCTAssertTrue(rail.contains("doodle-home-allowed"))
         XCTAssertTrue(rail.contains("doodle-home-multirow"))
@@ -1573,6 +1615,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(rail.contains("attach(app, name: \"five-tab-home\")"))
         let seed = try source(at: "SAV-E/Services/ReviewDemoService.swift")
         XCTAssertTrue(seed.contains("--uitest-doodle-parity-fixture"))
+        XCTAssertTrue(seed.contains("--uitest-home-taipei-granted"))
+        XCTAssertTrue(seed.contains("func taipeiGrantedPlaces"))
         XCTAssertTrue(seed.contains("Codex packet / spec §8"))
         XCTAssertTrue(seed.contains("SaveMemoryRecord.confirmedPlace"))
         XCTAssertFalse(seed.contains("latitude: 0"))
