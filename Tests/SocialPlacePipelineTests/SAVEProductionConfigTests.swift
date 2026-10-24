@@ -30,7 +30,13 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(paywall.contains("Save every place you love"))
         XCTAssertTrue(paywall.contains("想去的地方，全部存下"))
         XCTAssertFalse(paywall.contains("收藏每一個你愛的地方"))
-        XCTAssertTrue(paywall.contains("SaveDisplayTitle(text: headline, pointSize: 34)"))
+        XCTAssertNotNil(
+            paywall.range(
+                of: #"SaveDisplayTitle\(\s*text:\s*(?:headline|languageSettings\.localized\([\s\S]*?Save every place you love[\s\S]*?\))\s*,[\s\S]*?pointSize:\s*34"#,
+                options: .regularExpression
+            ),
+            "Headline must call SaveDisplayTitle at pointSize 34; text is headline or the localized source"
+        )
         XCTAssertFalse(paywall.contains("SaveAtlasType.display(28)"))
         XCTAssertTrue(paywall.contains("Free: 50 places"))
         XCTAssertTrue(paywall.contains("免費：50 個地點"))
