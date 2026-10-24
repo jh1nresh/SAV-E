@@ -232,6 +232,13 @@ final class SaveCollaborativeListTests: XCTestCase {
         let trip = try source(at: "SAV-E/Views/Trips/TripPackViews.swift")
         XCTAssertTrue(trip.contains("GooglePlacesPhotoSourceMark(style: .homeStacked)"))
         XCTAssertTrue(trip.contains("availableWidth: 70"))
+        XCTAssertTrue(trip.contains("struct TripStopRow: View"))
+        let supabasePersist = try source(at: "SAV-E/Services/SupabaseService.swift")
+        XCTAssertTrue(supabasePersist.contains("private struct TripStopPersistRow: Codable"))
+        XCTAssertFalse(
+            supabasePersist.contains("private struct TripStopRow:"),
+            "Persist DTO must not reuse the TripStopRow view name"
+        )
 
         let origin = try source(at: "SAV-E/Views/Origin/SaveOriginView.swift")
         XCTAssertTrue(origin.contains("GooglePlacesPhotoSourceMark(style: .homeStacked)"))
