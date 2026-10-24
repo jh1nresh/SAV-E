@@ -693,6 +693,7 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertTrue(evidence.contains("evidence.cityPage"))
         XCTAssertTrue(evidence.contains("evidence.reportEntry"))
         XCTAssertTrue(evidence.contains("case homeThumbs"))
+        XCTAssertTrue(evidence.contains("homeThumbsScene()"))
         XCTAssertTrue(evidence.contains("SaveTileTownPeekCard("))
         XCTAssertTrue(evidence.contains("size: .recent"))
         XCTAssertTrue(evidence.contains("evidence.homeThumbs"))

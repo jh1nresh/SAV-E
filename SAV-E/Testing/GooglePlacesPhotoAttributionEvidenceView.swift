@@ -273,7 +273,7 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
         case .homeThumbs:
-            homeThumbsScene
+            homeThumbsScene()
                 .environment(\.appLanguageSettings, Self.languageSettings(.english))
         case .homeThumbsZh:
             homeThumbsScene(identifier: "evidence.homeThumbsZh", languageNote: "zh-Hant VoiceOver")
@@ -481,7 +481,7 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.saveInk)
                     .accessibilityIdentifier(identifier)
-                homeThumbsScene
+                homeThumbsScene()
                 drawerThumbsContent
                 tripStopContent
                 originFoodContent
