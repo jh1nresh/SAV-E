@@ -15,15 +15,24 @@ final class ProfileViewModel: ObservableObject {
     private let authService: PrivyAuthService
     private let accountDeletionService: AccountDeletionProviding
     private let avatarStore: ProfileAvatarStore
+    private let saveLocalVaultService: SaveLocalVaultService
+    private let pendingPlaceImportService: PendingPlaceImportService
+    private let accountReferenceStore: AccountReferenceStoring
     private let updateProfileRemotely: (UserProfile) async throws -> Void
     private let currentUserIDProvider: () -> String?
     private let reviewerDemoProvider: () -> Bool
     private var loadedUserID: String?
+    // A live request owns its intent across Profile instances in this process.
+    // A process restart naturally has no lease and can recover the durable scope.
+    private static var inFlightAccountDeletionIDs = Set<UUID>()
 
     init(
         supabaseService: SupabaseServiceProtocol = SupabaseService.shared,
         accountDeletionService: AccountDeletionProviding = SupabaseService.shared,
         avatarStore: ProfileAvatarStore = .shared,
+        saveLocalVaultService: SaveLocalVaultService = .shared,
+        pendingPlaceImportService: PendingPlaceImportService = .shared,
+        accountReferenceStore: AccountReferenceStoring = KeychainAccountReferenceStore.shared,
         updateProfileRemotely: ((UserProfile) async throws -> Void)? = nil,
         currentUserIDProvider: @escaping () -> String? = { PrivyAuthService.shared.currentUserId },
         reviewerDemoProvider: @escaping () -> Bool = { PrivyAuthService.shared.isReviewerDemo }
@@ -31,6 +40,9 @@ final class ProfileViewModel: ObservableObject {
         self.supabaseService = supabaseService
         self.accountDeletionService = accountDeletionService
         self.avatarStore = avatarStore
+        self.saveLocalVaultService = saveLocalVaultService
+        self.pendingPlaceImportService = pendingPlaceImportService
+        self.accountReferenceStore = accountReferenceStore
         self.updateProfileRemotely = updateProfileRemotely ?? { profile in
             try await supabaseService.updateProfile(profile)
         }
@@ -51,7 +63,26 @@ final class ProfileViewModel: ObservableObject {
     }
 
     func loadProfile() async {
+        guard !isDeletingAccount else { return }
         resetForCurrentSession()
+        // Recovery is local-only and works even when the deleted identity can no
+        // longer sign in. Unknown remote outcomes never trigger an automatic DELETE.
+        do {
+            if let pending = try saveLocalVaultService.pendingAccountDeletionIntent() {
+                guard !Self.inFlightAccountDeletionIDs.contains(pending.id) else { return }
+                let generation = authService.sessionGeneration
+                Self.inFlightAccountDeletionIDs.insert(pending.id)
+                defer { Self.inFlightAccountDeletionIDs.remove(pending.id) }
+                try await finishLocalAccountDeletion(pending, sessionGeneration: generation)
+                errorMessage = pending.remoteOutcome == .succeeded
+                    ? "Previous account’s local cleanup is complete."
+                    : "Local cleanup is complete. The remote account deletion result could not be confirmed."
+                return
+            }
+        } catch {
+            errorMessage = "Local account cleanup could not finish. Retry to remove the hidden data from this device. \(error.localizedDescription)"
+            return
+        }
         if reviewerDemoProvider() {
             errorMessage = nil
             return
@@ -168,23 +199,144 @@ final class ProfileViewModel: ObservableObject {
     }
 
     func deleteAccount() async -> Bool {
-        guard !reviewerDemoProvider(), let deletingUserID = currentUserIDProvider() else { return false }
+        guard !isDeletingAccount, !reviewerDemoProvider() else { return false }
         isDeletingAccount = true
         errorMessage = nil
-        defer { isDeletingAccount = false }
+        var activeIntentID: UUID?
+        defer {
+            if let activeIntentID { Self.inFlightAccountDeletionIDs.remove(activeIntentID) }
+            isDeletingAccount = false
+        }
+        var remoteSuccessObserved = false
 
         do {
-            try await accountDeletionService.deleteAccount()
-            try? avatarStore.remove(for: deletingUserID)
-            guard currentUserIDProvider() == deletingUserID, !reviewerDemoProvider() else { return true }
-            try? SaveLocalVaultService.shared.deleteAllRecords()
-            try? KeychainAccountReferenceStore.shared.clear()
-            await authService.signOut()
-            resetForCurrentSession()
+            let cleanup: SaveAccountDeletionIntent
+            let sessionGeneration = authService.sessionGeneration
+            let currentOwner = currentUserIDProvider()
+            let isRecovery: Bool
+            if let pending = try saveLocalVaultService.pendingAccountDeletionIntent() {
+                guard !Self.inFlightAccountDeletionIDs.contains(pending.id) else {
+                    errorMessage = "Account deletion is already in progress. Retry after it finishes."
+                    return false
+                }
+                cleanup = pending
+                isRecovery = true
+            } else {
+                guard let deletingUserID = currentOwner else { return false }
+                let queueSnapshot = try pendingPlaceImportService.ownerlessQueueSnapshotForAccountDeletion()
+                let prepared = try saveLocalVaultService.prepareAccountDeletion(
+                    belongingTo: deletingUserID,
+                    initialOwnerlessQueueItemKeys: queueSnapshot.ownerlessItemKeys,
+                    unreadableQueueFileNames: queueSnapshot.unreadableFileNames
+                )
+                activeIntentID = prepared.id
+                Self.inFlightAccountDeletionIDs.insert(prepared.id)
+                isRecovery = false
+                do {
+                    try await accountDeletionService.deleteAccount(
+                        startedBy: deletingUserID, generation: sessionGeneration
+                    )
+                    remoteSuccessObserved = true
+                    cleanup = try saveLocalVaultService.recordRemoteAccountDeletionSuccess(intentID: prepared.id)
+                } catch {
+                    // Unknown remote outcome stays on the durable intent
+                    // (`.awaitingRemoteResult`). Finish the same local
+                    // quarantine cleanup as recovery so neither Share
+                    // queue remains consumable while A stays signed in.
+                    cleanup = prepared
+                }
+            }
+            if activeIntentID == nil {
+                activeIntentID = cleanup.id
+                Self.inFlightAccountDeletionIDs.insert(cleanup.id)
+            }
+            try await finishLocalAccountDeletion(cleanup, sessionGeneration: sessionGeneration)
+            if cleanup.remoteOutcome != .succeeded {
+                errorMessage = "Local cleanup is complete. The remote account deletion result could not be confirmed. Retry only to request account deletion again."
+                return false
+            }
+            if isRecovery, let currentOwner, currentOwner != cleanup.owner {
+                errorMessage = "Previous account’s local cleanup is complete. Retry to delete this account."
+                return false
+            }
             return true
         } catch {
-            errorMessage = error.localizedDescription
+            if remoteSuccessObserved {
+                errorMessage = "Account deleted, but local data cleanup failed. Retry to finish removing data from this device. \(error.localizedDescription)"
+            } else {
+                errorMessage = "Account deletion or local cleanup could not be completed. Any pending local data remains hidden; retry to finish cleanup. \(error.localizedDescription)"
+            }
             return false
+        }
+    }
+
+    private func finishLocalAccountDeletion(
+        _ intent: SaveAccountDeletionIntent, sessionGeneration: Int
+    ) async throws {
+        var bindingClearError: Error?
+        if intent.remoteOutcome == .succeeded {
+            // Invalidate the deleted owner before any fallible vault-record
+            // purge so a storage failure cannot leave A able to consume Share
+            // queues. Sign out before the queue purge so admitted late writers
+            // finish under the same per-file lock, then cannot recreate A.
+            if !reviewerDemoProvider() {
+                let activeOwner = authService.currentUserId
+                if activeOwner == intent.owner,
+                   currentUserIDProvider() == intent.owner,
+                   authService.sessionGeneration == sessionGeneration {
+                    do {
+                        try accountReferenceStore.clear()
+                    } catch {
+                        bindingClearError = error
+                    }
+                    await authService.signOut()
+                    resetForCurrentSession()
+                } else if activeOwner == nil {
+                    // Recovery after Privy already reports signed out.
+                    // Propagate Keychain failure so the receipt stays
+                    // retryable; only a different active account keeps
+                    // its binding.
+                    try accountReferenceStore.clear()
+                }
+            }
+            // The owner may already be signed out or replaced by B. Only remove
+            // the deleted owner's stale cache; this synchronous check never clears B.
+            if authService.currentUserId != intent.owner,
+               SavePlaceLimitHandoff.cachedActiveOwner() == intent.owner {
+                SavePlaceLimitHandoff.syncActiveOwner(nil)
+            }
+        }
+        // Quarantine both Share queues before the fallible vault-record purge
+        // and before fallible avatar removal. Unknown remote outcomes still
+        // finish this local cleanup while A stays signed in. A captured
+        // Keychain clear failure must not skip this quarantine: queue
+        // reads do not consult the deletion receipt.
+        try pendingPlaceImportService.purgeAccountDeletionItems(
+            belongingTo: intent.owner,
+            initialOwnerlessItemKeys: intent.initialOwnerlessQueueItemKeys,
+            unreadableFileNames: intent.unreadableQueueFileNames
+        )
+        if intent.remoteOutcome == .succeeded {
+            // SDK identity mismatch or a changed generation may make signOut
+            // return without ending A's local session. Queues are already
+            // quarantined; keep the durable vault scope for retry.
+            guard authService.currentUserId != intent.owner else {
+                throw AccountDeletionCleanupError.deletedSessionStillActive
+            }
+            if let bindingClearError {
+                throw bindingClearError
+            }
+        }
+        try saveLocalVaultService.purgeAccountDeletionRecords(intentID: intent.id)
+        try avatarStore.remove(for: intent.owner)
+        try saveLocalVaultService.completeAccountDeletionCleanup(intentID: intent.id)
+    }
+
+    private enum AccountDeletionCleanupError: LocalizedError {
+        case deletedSessionStillActive
+
+        var errorDescription: String? {
+            "The deleted account’s session is still active. Retry to finish signing out and local cleanup."
         }
     }
 

@@ -377,7 +377,7 @@ private final class StubAccountStatusProvider: AccountStatusProviding {
     }
 }
 
-private final class InMemoryAccountReferenceStore: AccountReferenceStoring {
+final class InMemoryAccountReferenceStore: AccountReferenceStoring {
     var value: String?
     var clearError: Error?
     private(set) var saveCount = 0

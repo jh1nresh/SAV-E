@@ -58,6 +58,20 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertEqual(store.quota?.usedUnits, 12)
     }
 
+    @MainActor
+    func testUnrecognizedQuotaTierCannotEnableLocalSavedPlaceRefusal() async {
+        for value: String? in [nil, "", "platinum", "FREE"] {
+            let store = Self.makeStore(loadQuota: { Self.quota(tier: value, used: 0) })
+            await store.refresh()
+            XCTAssertFalse(store.hasAuthoritativeSavedPlaceTier)
+        }
+        for value in ["free", "pro"] {
+            let store = Self.makeStore(loadQuota: { Self.quota(tier: value, used: 0) })
+            await store.refresh()
+            XCTAssertTrue(store.hasAuthoritativeSavedPlaceTier)
+        }
+    }
+
     /// The server saying "free" must win even if a stale local receipt exists.
     /// Otherwise a refunded or expired subscription would keep working.
     @MainActor
@@ -78,6 +92,16 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertEqual(store.tier, .free, "an offline client must not grant itself Pro")
         XCTAssertTrue(store.isFailingOpen)
         XCTAssertNil(store.quota)
+        XCTAssertFalse(store.hasAuthoritativeSavedPlaceTier, "fail-open must not refuse saves locally")
+    }
+
+    @MainActor
+    func testAuthoritativeSavedPlaceTierRequiresASuccessfulRefresh() async {
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "pro", used: 1) })
+        XCTAssertFalse(store.hasAuthoritativeSavedPlaceTier)
+        await store.refresh()
+        XCTAssertTrue(store.hasAuthoritativeSavedPlaceTier)
+        XCTAssertEqual(store.tier, .pro)
     }
 
     // MARK: - Paywall trigger policy
@@ -185,12 +209,66 @@ final class SaveEntitlementWiringTests: XCTestCase {
     func testPassportProEntryUsesSharedStampGate() throws {
         let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         let policy = try source(at: "SAV-EShared/SAVEProAccessPolicy.swift")
-        XCTAssertTrue(profile.contains("shouldOfferProFromPassport"))
-        XCTAssertTrue(profile.contains("hasConfirmedMapStamp: !passportPlaces.isEmpty"))
-        XCTAssertTrue(profile.contains("--uitest-show-paywall"))
+        XCTAssertTrue(profile.contains("if !passportPlaces.isEmpty"))
+        XCTAssertTrue(profile.contains("showProPaywall = true"))
+        XCTAssertTrue(profile.contains("SaveProPaywallView(trigger: .passport)"))
         XCTAssertFalse(profile.contains("SaveEntitlementStore"))
         XCTAssertTrue(policy.contains("shouldOfferProFromPassport"))
         XCTAssertTrue(policy.contains("purchasingIsAvailable && hasConfirmedMapStamp"))
+    }
+
+    /// B7: Settings opens the informational paywall after a Map Stamp exists.
+    /// The row is not gated on StoreKit, and exhausted AI quota is not this sheet.
+    func testSettingsProRowOpensPassportPaywallWithoutPurchaseGate() throws {
+        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+        XCTAssertTrue(profile.contains("if !passportPlaces.isEmpty"))
+        XCTAssertTrue(profile.contains("accessibilityIdentifier: \"profile.pro\""))
+        XCTAssertTrue(
+            profile.contains(".accessibilityElement(children: .contain)"),
+            "CI 39703881022: parent identifier flattened Savvy Pro off profile.pro"
+        )
+        XCTAssertTrue(profile.contains("SaveProPaywallView(trigger: .passport)"))
+        XCTAssertFalse(profile.contains("shouldOfferProFromPassport"))
+        XCTAssertFalse(profile.contains("if SAVEProAccessPolicy.purchasingIsAvailable"))
+        XCTAssertFalse(profile.contains("SaveProPaywallView(trigger: .savedPlaceLimit)"))
+        XCTAssertFalse(profile.contains("SaveProPaywallView(trigger: .aiAssistExhausted)"))
+        XCTAssertFalse(content.contains("aiAssistExhausted"))
+        XCTAssertTrue(content.contains("SaveProPaywallView(trigger: .savedPlaceLimit)"))
+    }
+
+    /// B7: exhausted AI quota stays a neutral analysis notice, never the Pro wall.
+    @MainActor
+    func testExhaustedAIQuotaIsANeutralMessageNotThePaywall() async throws {
+        XCTAssertFalse(SAVEProAccessPolicy.enforcementEnabled)
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "free", used: 20, limit: 20) })
+        await store.refresh()
+
+        let decision = store.decideAIAssist()
+        XCTAssertEqual(decision, .allowedEnforcementDisabled)
+        XCTAssertFalse(decision.isRefusal)
+        XCTAssertFalse(store.shouldPresentPaywall(for: decision, hasConfirmedMapStamp: true))
+        XCTAssertFalse(store.shouldPresentPaywall(for: .refusedAllowanceExhausted, hasConfirmedMapStamp: false))
+
+        let notice = try XCTUnwrap(ShareAnalysisError.usageLimit.errorDescription)
+        XCTAssertTrue(notice.contains("usage limit") || notice.contains("用量上限"))
+        XCTAssertFalse(notice.localizedCaseInsensitiveContains("paywall"))
+        XCTAssertFalse(notice.localizedCaseInsensitiveContains("Savvy Pro"))
+        XCTAssertFalse(notice.localizedCaseInsensitiveContains("unlimited saved places"))
+    }
+
+    func testSessionStartupRefreshesEntitlementBeforeLocalCap() throws {
+        let auth = try source(at: "SAV-E/Services/PrivyAuthService.swift")
+        let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
+        XCTAssertTrue(auth.contains("SaveEntitlementStore.shared.refresh()"))
+        XCTAssertTrue(map.contains("hasAuthoritativeSavedPlaceTier"))
+        XCTAssertTrue(map.contains("entitlementResolvedProvider"))
+        let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
+        XCTAssertTrue(paywall.contains("paywall.retry"))
+        XCTAssertFalse(paywall.contains("paywall.retryProducts"))
+        XCTAssertTrue(paywall.contains("if trigger == .savedPlaceLimit"))
+        XCTAssertTrue(paywall.contains("--uitest-show-paywall-retry"))
+        XCTAssertTrue(paywall.contains("func retryOffers(message: String)"))
     }
 
     @MainActor
@@ -208,7 +286,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private static func quota(tier: String, used: Int, limit: Int = 20) -> SaveUsageQuotaPreview {
+    private static func quota(tier: String?, used: Int, limit: Int = 20) -> SaveUsageQuotaPreview {
         SaveUsageQuotaPreview(
             policyVersion: "ai-assists-beta-v0",
             periodStart: "2026-08-01T00:00:00.000Z",

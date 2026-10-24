@@ -16,6 +16,7 @@ protocol SupabaseServiceProtocol {
     func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult
     func updatePlace(_ place: Place, previous: Place?) async throws
     func deletePlace(_ placeId: UUID) async throws
+    func deletePlaceGroup(_ placeId: UUID) async throws
     func createMemoryCapture(from candidate: PendingReviewCandidate, userId: String) async throws -> UUID
     func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID?) async throws -> UUID
     func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?, explicitRetry: Bool) async throws -> SourceSearchRecoveryResult
@@ -87,6 +88,13 @@ protocol RelatedPlaceSourcesProviding {
 
 protocol AccountDeletionProviding {
     func deleteAccount() async throws
+    func deleteAccount(startedBy userId: String, generation: Int) async throws
+}
+
+extension AccountDeletionProviding {
+    func deleteAccount(startedBy userId: String, generation: Int) async throws {
+        try await deleteAccount()
+    }
 }
 
 // MARK: - Errors
@@ -113,6 +121,10 @@ enum SupabaseError: LocalizedError {
 
 // Existing service fakes opt out; production always creates a server session.
 extension SupabaseServiceProtocol {
+    func deletePlaceGroup(_ placeId: UUID) async throws {
+        try await deletePlace(placeId)
+    }
+
     func updatePlace(_ place: Place) async throws {
         try await updatePlace(place, previous: nil)
     }
@@ -232,8 +244,17 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     }
 
     func deleteAccount() async throws {
+        let session = await MainActor.run {
+            (PrivyAuthService.shared.currentUserId, PrivyAuthService.shared.sessionGeneration)
+        }
+        guard let owner = session.0 else { throw SupabaseError.notAuthenticated }
+        try await deleteAccount(startedBy: owner, generation: session.1)
+    }
+
+    func deleteAccount(startedBy userId: String, generation: Int) async throws {
         guard isConfigured else { throw SupabaseError.notConfigured }
-        try await request(path: "/v0/account", method: "DELETE")
+        try await request(path: "/v0/account", method: "DELETE",
+            accountDeletionSession: (generation, userId))
     }
 
     // MARK: - Places
@@ -257,7 +278,11 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         let row = PlaceRow.from(place: place, userId: userId)
         let body = try JSONEncoder.supabase.encode(row)
 
-        try await request(path: "/places", method: "POST", body: body)
+        do {
+            try await request(path: "/places", method: "POST", body: body)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     func saveFriendSharedPlace(
@@ -269,7 +294,12 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
 
         let row = PlaceRow.from(place: place, userId: userId, friendShareCode: code)
         let body = try JSONEncoder.supabase.encode(row)
-        let data = try await request(path: "/places", method: "POST", body: body)
+        let data: Data
+        do {
+            data = try await request(path: "/places", method: "POST", body: body)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
         let response = try JSONDecoder.supabase.decode(FriendSharedPlaceSaveResponse.self, from: data)
         guard let outcome = FriendSharedPlaceSaveResult.Outcome(rawValue: response.outcome) else {
             throw SupabaseError.invalidResponse("Savvy returned an invalid friend share save outcome")
@@ -373,12 +403,21 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }
         let body = try Self.jsonBody(updates)
 
-        try await request(path: "/places/\(place.id)", method: "PATCH", body: body)
+        do {
+            try await request(path: "/places/\(place.id)", method: "PATCH", body: body)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     func deletePlace(_ placeId: UUID) async throws {
         guard isConfigured else { return }
         try await request(path: "/places/\(placeId)", method: "DELETE")
+    }
+
+    func deletePlaceGroup(_ placeId: UUID) async throws {
+        guard isConfigured else { return }
+        try await request(path: "/places/\(placeId)?scope=group", method: "DELETE")
     }
 
     func updatePlaceVisibility(_ visibility: PlaceVisibility, for placeId: UUID) async throws {
@@ -466,6 +505,9 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     }
 
     static func httpError(statusCode: Int, body: String) -> SupabaseError {
+        if SavePlaceLimitError.matchesServerResponse(status: statusCode, body: body) {
+            return .apiError(statusCode, body)
+        }
         if statusCode == 401 || statusCode == 403 {
             return .notAuthenticated
         }
@@ -704,9 +746,13 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             "status": candidate.isSourceOnly ? "source_only" : "review",
             "created_at": ISO8601DateFormatter().string(from: candidate.savedAt),
         ])
-        let data = try await request(path: "/memory/candidates", method: "POST", body: body)
-        let row = try JSONDecoder.supabase.decode(PlaceCandidateRow.self, from: data)
-        return row.id
+        do {
+            let data = try await request(path: "/memory/candidates", method: "POST", body: body)
+            let row = try JSONDecoder.supabase.decode(PlaceCandidateRow.self, from: data)
+            return row.id
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID? = nil, explicitRetry: Bool = false) async throws -> SourceSearchRecoveryResult {
@@ -775,7 +821,11 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             values["place_id"] = placeId.uuidString
         }
         let body = try Self.jsonBody(values)
-        try await request(path: "/memory/candidates/\(candidateId)", method: "PATCH", body: body)
+        do {
+            try await request(path: "/memory/candidates/\(candidateId)", method: "PATCH", body: body)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     // MARK: - Place Recovery Workflow
@@ -821,8 +871,12 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         guard isConfigured else { throw SupabaseError.notConfigured }
 
         let body = try Self.jsonBody(decision.body)
-        let data = try await request(path: "/v0/workflows/place-recovery/runs/\(runId.uuidString)/decision", method: "POST", body: body)
-        return try JSONDecoder.supabase.decode(PlaceRecoveryDecisionReceiptResponse.self, from: data)
+        do {
+            let data = try await request(path: "/v0/workflows/place-recovery/runs/\(runId.uuidString)/decision", method: "POST", body: body)
+            return try JSONDecoder.supabase.decode(PlaceRecoveryDecisionReceiptResponse.self, from: data)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     // MARK: - Trips
@@ -931,8 +985,12 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     }
 
     func saveFriendRestaurant(placeID: UUID) async throws -> Place {
-        let data = try await request(path: "/v0/friend-ratings/\(placeID)/save", method: "POST", body: Data("{}".utf8))
-        return try JSONDecoder.supabase.decode(PlaceRow.self, from: data).toPlace()
+        do {
+            let data = try await request(path: "/v0/friend-ratings/\(placeID)/save", method: "POST", body: Data("{}".utf8))
+            return try JSONDecoder.supabase.decode(PlaceRow.self, from: data).toPlace()
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     // Explicit follower posts, independent of the owner's private place memory.
@@ -970,8 +1028,21 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
     }
 
     func saveSharedPost(id: UUID) async throws -> Place {
-        let data = try await request(path: "/v0/shared-posts/\(id)/save", method: "POST", body: Data("{}".utf8))
-        return try JSONDecoder.supabase.decode(PlaceRow.self, from: data).toPlace()
+        do {
+            let data = try await request(path: "/v0/shared-posts/\(id)/save", method: "POST", body: Data("{}".utf8))
+            return try JSONDecoder.supabase.decode(PlaceRow.self, from: data).toPlace()
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
+    }
+
+    private func mappedSavedPlaceLimit(_ error: Error) -> Error {
+        if error is SavePlaceLimitError { return error }
+        if case .apiError(let status, let body) = error as? SupabaseError,
+           let limit = SavePlaceLimitError.fromServerResponse(status: status, body: body) {
+            return limit
+        }
+        return error
     }
 
     func fetchFollowers(cursor: String?) async throws -> SaveFollowedFriendsPage {
@@ -1209,14 +1280,16 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         method: String = "GET",
         body: Data? = nil,
         requiresAuth: Bool = true,
-        additionalHeaders: [String: String] = [:]
+        additionalHeaders: [String: String] = [:],
+        accountDeletionSession: (generation: Int, owner: String)? = nil
     ) async throws -> Data {
         let (data, _) = try await requestWithResponse(
             path: path,
             method: method,
             body: body,
             requiresAuth: requiresAuth,
-            additionalHeaders: additionalHeaders
+            additionalHeaders: additionalHeaders,
+            accountDeletionSession: accountDeletionSession
         )
         return data
     }
@@ -1227,13 +1300,18 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         body: Data? = nil,
         requiresAuth: Bool = true,
         additionalHeaders: [String: String] = [:],
-        baseURLOverride: String? = nil
+        baseURLOverride: String? = nil,
+        accountDeletionSession: (generation: Int, owner: String)? = nil
     ) async throws -> (Data, HTTPURLResponse) {
         let isSocialRequest = ["/v0/friend-ratings", "/v0/shared-posts", "/v0/passports", "/v0/social-profile", "/v0/follows", "/v0/followers"].contains { path.hasPrefix($0) }
         let sessionBound = isSocialRequest || path.hasPrefix("/v0/analysis")
             || path.hasPrefix("/v0/entitlements/") || path == "/v0/usage/quota"
         let friendSession: (Int, String?)?
-        if let importing = SAVEPendingImportSessionScope.current {
+        if accountDeletionSession != nil {
+            // A successful deletion must still reach owner-scoped local cleanup
+            // after the account changes while the response is in flight.
+            friendSession = nil
+        } else if let importing = SAVEPendingImportSessionScope.current {
             friendSession = (importing.generation, importing.owner)
         } else {
             friendSession = sessionBound
@@ -1266,6 +1344,15 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             } catch {
                 throw SupabaseError.notAuthenticated
             }
+        }
+
+        if let accountDeletionSession {
+            let stillCurrent = await MainActor.run {
+                PrivyAuthService.shared.sessionGeneration == accountDeletionSession.generation
+                    && PrivyAuthService.shared.currentUserId == accountDeletionSession.owner
+            }
+            guard stillCurrent else { throw CancellationError() }
+            try Task.checkCancellation()
         }
 
         if let friendSession {
@@ -2004,7 +2091,7 @@ struct PlaceRecoveryDecisionDraft: Equatable {
         if let value = finalPlace.coordinateSystem { payload["coordinate_system"] = value.rawValue }
         if let value = finalPlace.locationProvider { payload["location_provider"] = value.rawValue }
         if let value = finalPlace.providerPlaceId { payload["provider_place_id"] = value }
-        if let value = finalPlace.providerMapUrl { payload["provider_map_url"] = value }
+        if let value = finalPlace.confirmableProviderMapUrl { payload["provider_map_url"] = value }
         if let value = GooglePlacesPhotoURL.persistableString(finalPlace.sourceImageUrl) {
             payload["source_image_url"] = value
         }
@@ -2211,7 +2298,7 @@ private struct PlaceRow: Codable {
             coordinate_system: place.coordinateSystem?.rawValue,
             location_provider: place.locationProvider?.rawValue,
             provider_place_id: place.providerPlaceId,
-            provider_map_url: place.providerMapUrl,
+            provider_map_url: place.confirmableProviderMapUrl,
             source_image_url: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
             business_photo_urls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
             extracted_dishes: place.extractedDishes,

@@ -3,6 +3,24 @@ import SwiftUI
 struct SaveFriendsView: View {
     var currentUserID: String?
     var onSaved: () async -> Void = {}
+    var onParkedAtFreeLimit: (Place) throws -> PlaceReviewCandidate = { place in
+        let candidate = PlaceReviewCandidate.unplacedInboxItem(
+            from: place,
+            ownerSubject: PrivyAuthService.shared.currentUserId
+        )
+        _ = try SaveLocalVaultService.shared.saveReviewCandidate(
+            candidate,
+            preservingParkedContext: candidate.isUnplacedInbox
+        )
+        SavePlaceLimitHandoff.markPaywallPending(notify: false)
+        return candidate
+    }
+    var onRemoveParkedAtFreeLimit: (Place) throws -> Void = { place in
+        try SaveLocalVaultService.shared.removeReviewCandidate(
+            place.id,
+            ownerSubject: PrivyAuthService.shared.currentUserId
+        )
+    }
     var onConnections: () -> Void = {}
     @StateObject private var store = SharedPostsStore()
     @State private var selected: SharedPlacePost?
@@ -55,11 +73,15 @@ struct SaveFriendsView: View {
         }
         .background(SaveAtlasPalette.canvas).foregroundStyle(SaveAtlasPalette.forest)
         .accessibilityIdentifier("friends.root")
-        .task(id: currentUserID) { await store.refresh(.feed) }
         .refreshable { await store.refresh(.feed) }
         .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await store.refresh(.feed) } } }
+        .task(id: currentUserID) {
+            store.parkOverLimitPlace = onParkedAtFreeLimit
+            store.removeParkedOverLimitPlace = onRemoveParkedAtFreeLimit
+            await store.refresh(.feed)
+        }
         .sheet(item: $selected) { SharedPostDetail(initialPost: $0, store: store, onSaved: onSaved) }
-        .sheet(item: $author) { SharedAuthorPassport(authorID: $0.author_id, onSaved: onSaved) }
+        .sheet(item: $author) { SharedAuthorPassport(authorID: $0.author_id, onSaved: onSaved, parkOverLimitPlace: onParkedAtFreeLimit) }
     }
 
     private var emptyState: some View {

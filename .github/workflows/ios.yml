@@ -145,18 +145,18 @@ jobs:
           retention-days: 1
           overwrite: true
 
-  # Required check name `ios` (ruleset 19331432). Never skipped. This job
-  # is the full UI + snapshot + 0.90 parity suite and can succeed only when
-  # that suite actually ran.
+  # Required check name `ios` (ruleset 19331432). Never skipped: still runs
+  # when ios-build fails. !cancelled() (not always()) lets the existing
+  # concurrency group cancel a superseded run.
   ios:
-    if: always()
+    if: ${{ !cancelled() }}
     needs: [ios-build]
     runs-on: macos-26
     # Products come from ios-build (no second compile). Setup + units +
-    # simulator is ~15-20m; UI step 60; Trip 15; T3 screens 15; slack for
-    # parity/teardown and the main-only Release compile. Run 39497842970:
-    # 75m job wall cut the 55m UI step at 52m50s after ~20m of rebuild.
-    timeout-minutes: 120
+    # simulator is ~15-20m; UI step 100; Trip 15; T3 screens 15; slack for
+    # parity/teardown and the main-only Release compile. Founder 2026-10-24:
+    # #290/#293 match A (UI 60→100, job 100→160). Other timeouts stay.
+    timeout-minutes: 160
     env:
       # Re-enabled for the 2026-10-15 pixel-art pass. Disable again after the
       # focused set is green, then run one full suite as the merge gate.
@@ -364,9 +364,9 @@ jobs:
       # and stops before a third run. Retries are named by the next step.
       - name: Run selected UI regression tests
         id: ui_tests
-        # Job budget is 100. The step gets a real 60m of test time instead of
-        # whatever is left after a second compile (run 39497842970).
-        timeout-minutes: 60
+        # Job budget is 160. The step gets 100m of test time so the full
+        # UI + retry wall is not cut at 60 (run 40077344726).
+        timeout-minutes: 100
         if: steps.scope.outputs.ui == 'true'
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-UI-tests.log
@@ -592,10 +592,21 @@ jobs:
     if: github.event_name == 'push'
     needs: [ios]
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Require backend, contracts, and evidence-rubric
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/require-save-release-ci.py \
+            --commit "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY"
 
       - name: Write release-readiness receipt
         run: |

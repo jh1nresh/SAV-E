@@ -15,17 +15,27 @@ enum SAVEProAccessPolicy {
     /// No paywall may present automatically at launch, ever.
     nonisolated static let showsAutomaticLaunchPaywall = false
 
-    /// The saved-place memory loop is free forever. Locking it would stop the
-    /// place-memory asset from compounding.
+    /// Free: 50 places. Stated from day one and never lowered. Pro
+    /// (`SaveProTier.pro` from the existing entitlement check) is unlimited.
+    /// Existing accounts already over 50 keep every confirmed Map Stamp; only
+    /// new saves are gated.
+    nonisolated static let freeSavedPlaceLimit = 50
+
+    /// The first Map Stamp does not require purchase. Free: 50 places.
     nonisolated static let firstMapStampRequiresPurchase = false
 
-    /// Capture, Review, Map Stamps, the private map, notebooks, search over
-    /// saved places, deterministic parsing, and cache hits are never metered.
+    /// Capture, Review, the private map, notebooks, search, deterministic
+    /// parsing, and cache hits stay free. Confirmed Map Stamps on the free
+    /// tier are capped at `freeSavedPlaceLimit`.
     nonisolated static let coreMemoryLoopIsFree = true
 
     /// Purchases are wired but products are not yet live in App Store Connect.
     /// Flip alone after ASC products attach — not with `enforcementEnabled`.
     nonisolated static let purchasingIsAvailable = false
+
+    /// Review / Unplaced parking marker. Share Extension and the host must
+    /// serialize the same token so parked cap saves stay out of recovery.
+    nonisolated static let unplacedInboxMarker = "Unplaced inbox"
 
     /// When `false`, an exhausted allowance may inform the UI but must never
     /// refuse an AI assist. Stay off until a real model-quota refusal surface
@@ -66,6 +76,191 @@ nonisolated enum SaveProTier: String, Codable, Equatable, Sendable {
     case pro
 
     var allowsUnlimitedAIAssists: Bool { self == .pro }
+    var allowsUnlimitedSavedPlaces: Bool { self == .pro }
+}
+
+/// Why a new confirmed Map Stamp was allowed or parked in Review (Unplaced).
+nonisolated enum SavePlaceLimitDecision: Equatable, Sendable {
+    case allowed
+    case overFreeLimit
+}
+
+/// The 51st free save is not dropped. Callers park it in the Review inbox
+/// (the existing Unplaced queue) and present `SaveProPaywallView`.
+nonisolated enum SavePlaceLimitError: LocalizedError, Equatable, Sendable {
+    case parkedInUnplacedInbox
+
+    var errorDescription: String? {
+        "Free: 50 places"
+    }
+
+    /// Server `/places` and `/v0/shared-posts/:id/save` return this after the
+    /// transactional count. 403 is otherwise remapped to not-authenticated.
+    static func matchesServerResponse(status: Int, body: String) -> Bool {
+        (status == 403 || status == 409 || status == 422)
+            && (body.contains("over_free_limit") || body.contains("saved_place_limit"))
+    }
+
+    static func fromServerResponse(status: Int, body: String) -> SavePlaceLimitError? {
+        matchesServerResponse(status: status, body: body) ? .parkedInUnplacedInbox : nil
+    }
+}
+
+/// Pure saved-place cap shared by the app, Share Extension, and tests.
+/// Signed-in accounts see only their own vault rows. Ownerless legacy rows
+/// stay hidden while signed in; a nil owner is not evidence that the
+/// current account created them.
+nonisolated enum SaveVaultOwnerScope {
+    static func belongsToActiveAccount(
+        _ ownerSubject: String?,
+        currentUserId: String?
+    ) -> Bool {
+        if let currentUserId {
+            return ownerSubject == currentUserId
+        }
+        return ownerSubject == nil
+    }
+}
+
+nonisolated enum SavePlaceLimitGate {
+    static func decide(
+        tier: SaveProTier,
+        savedPlaceCount: Int,
+        limit: Int = SAVEProAccessPolicy.freeSavedPlaceLimit
+    ) -> SavePlaceLimitDecision {
+        guard !tier.allowsUnlimitedSavedPlaces else { return .allowed }
+        return savedPlaceCount < limit ? .allowed : .overFreeLimit
+    }
+
+    /// `nil` means Pro / unlimited. Otherwise the number of new Map Stamps
+    /// still allowed on the free tier.
+    static func remainingNewSaves(
+        tier: SaveProTier,
+        savedPlaceCount: Int,
+        limit: Int = SAVEProAccessPolicy.freeSavedPlaceLimit
+    ) -> Int? {
+        guard !tier.allowsUnlimitedSavedPlaces else { return nil }
+        return max(0, limit - savedPlaceCount)
+    }
+}
+
+/// App Group handoff so the Share Extension can honor the cap without UI
+/// and so the next app launch can open the paywall.
+enum SavePlaceLimitHandoff {
+    nonisolated static let pendingPaywallKey = "save.pendingSavedPlaceLimitPaywall"
+    nonisolated static let cachedTierKey = "save.cachedProTier"
+    nonisolated static let cachedCountKey = "save.cachedSavedPlaceCount"
+    /// Active Privy subject for extension vault reads. Missing means signed out.
+    nonisolated static let cachedOwnerKey = "save.cachedActiveOwnerSubject"
+
+#if DEBUG
+    nonisolated(unsafe) static var testDefaults: UserDefaults?
+#endif
+
+    nonisolated static func makeDefaults() -> UserDefaults {
+#if DEBUG
+        if let testDefaults { return testDefaults }
+#endif
+        // Same App Group as `SAVEProductionConfig.appGroupSuiteName`. Kept as a
+        // literal so the host entitlement checker can compile this file alone.
+        return UserDefaults(suiteName: "group.com.wanderly.app") ?? .standard
+    }
+
+    nonisolated static func syncCache(
+        tier: SaveProTier,
+        savedPlaceCount: Int,
+        defaults: UserDefaults = makeDefaults()
+    ) {
+        defaults.set(tier.rawValue, forKey: cachedTierKey)
+        defaults.set(savedPlaceCount, forKey: cachedCountKey)
+    }
+
+    /// Drop a stale remainder so Share fail-opens instead of parking on a
+    /// pre-delete snapshot when the post-delete refetch cannot run.
+    nonisolated static func clearSavedPlaceCount(
+        defaults: UserDefaults = makeDefaults()
+    ) {
+        defaults.removeObject(forKey: cachedCountKey)
+    }
+
+    nonisolated static func syncActiveOwner(
+        _ ownerSubject: String?,
+        defaults: UserDefaults = makeDefaults()
+    ) {
+        let owner = ownerSubject.flatMap { $0.isEmpty ? nil : $0 }
+        if cachedActiveOwner(defaults: defaults) != owner {
+            // Quota and pending UI belong to the account that produced them.
+            // A new owner starts unresolved until its own entitlement/count sync.
+            defaults.removeObject(forKey: cachedTierKey)
+            defaults.removeObject(forKey: cachedCountKey)
+            defaults.removeObject(forKey: pendingPaywallKey)
+        }
+        if let ownerSubject, !ownerSubject.isEmpty {
+            defaults.set(ownerSubject, forKey: cachedOwnerKey)
+        } else {
+            defaults.removeObject(forKey: cachedOwnerKey)
+        }
+    }
+
+    nonisolated static func cachedActiveOwner(
+        defaults: UserDefaults = makeDefaults()
+    ) -> String? {
+        defaults.string(forKey: cachedOwnerKey)
+    }
+
+    /// Missing cache fails open so a cold extension still writes the item.
+    /// The main app re-checks on pending-place import.
+    nonisolated static func cachedDecision(
+        defaults: UserDefaults = makeDefaults()
+    ) -> SavePlaceLimitDecision {
+        guard defaults.object(forKey: cachedCountKey) != nil else { return .allowed }
+        let tier = SaveProTier(rawValue: defaults.string(forKey: cachedTierKey) ?? "") ?? .free
+        return SavePlaceLimitGate.decide(
+            tier: tier,
+            savedPlaceCount: defaults.integer(forKey: cachedCountKey)
+        )
+    }
+
+    nonisolated static let paywallRequestedNotification = Notification.Name("save.placeLimitPaywallRequested")
+
+    nonisolated static func markPaywallPending(
+        defaults: UserDefaults = makeDefaults(),
+        notify: Bool = true
+    ) {
+        defaults.set(true, forKey: pendingPaywallKey)
+        // Nested social sheets present the paywall themselves. Skip the
+        // notification so ContentView does not try to present underneath.
+        guard notify else { return }
+        NotificationCenter.default.post(name: paywallRequestedNotification, object: nil)
+    }
+
+    @discardableResult
+    nonisolated static func consumePaywallPending(defaults: UserDefaults = makeDefaults()) -> Bool {
+        let pending = defaults.bool(forKey: pendingPaywallKey)
+        if pending { defaults.set(false, forKey: pendingPaywallKey) }
+        return pending
+    }
+}
+
+/// Where a Share Extension ready-to-save place goes when the free cap is full.
+nonisolated enum SaveShareExtensionPlaceDestination: Equatable, Sendable {
+    case pendingMapStamp
+    case unplacedInbox
+
+    static func resolve(
+        cached: SavePlaceLimitDecision
+    ) -> SaveShareExtensionPlaceDestination {
+        // The extension has no canonical venue list. A full cached count cannot
+        // distinguish a duplicate from a new venue; the app deduplicates this
+        // durable handoff before enforcing the limit and parking a new place.
+        .pendingMapStamp
+    }
+}
+
+/// Distinct result for a social-post save that hit the free cap.
+nonisolated enum SharedPostSaveOutcome: Equatable, Sendable {
+    case saved
+    case parkedAtFreeLimit
 }
 
 /// The reason an AI assist was allowed or would be refused.
@@ -110,5 +305,52 @@ nonisolated enum SaveAIAssistGate {
         }
 
         return enforcementEnabled ? .refusedAllowanceExhausted : .allowedEnforcementDisabled
+    }
+}
+
+/// One owner snapshot for App Intents, Share, iMessage, and host writes.
+/// `nil` means signed-out / ownerless only after auth has left `.unknown`.
+nonisolated enum SaveActiveOwnerError: Error, Equatable {
+    case unresolved
+    case ownerChanged
+}
+
+nonisolated struct SaveActiveOwnerSnapshot: Equatable, Sendable {
+    let ownerSubject: String?
+    let generation: Int?
+
+    init(ownerSubject: String?, generation: Int? = nil) {
+        self.ownerSubject = ownerSubject.flatMap { $0.isEmpty ? nil : $0 }
+        self.generation = generation
+    }
+
+    func revalidate(currentOwner: String?, currentGeneration: Int? = nil) throws {
+        let current = currentOwner.flatMap { $0.isEmpty ? nil : $0 }
+        guard current == ownerSubject else { throw SaveActiveOwnerError.ownerChanged }
+        if let generation, let currentGeneration, generation != currentGeneration {
+            throw SaveActiveOwnerError.ownerChanged
+        }
+    }
+}
+
+nonisolated enum SaveActiveOwnerResolver {
+    /// Live owner wins once auth is resolved. While auth is still restoring,
+    /// use the durable cached owner and do not bind `sessionGeneration`:
+    /// restore of the same owner increments generation because `currentUserId`
+    /// is still nil. Fail closed if both owners are missing so a cold launch
+    /// cannot read or stamp ownerless rows.
+    static func resolve(
+        liveOwner: String?,
+        cachedOwner: String?,
+        generation: Int? = nil,
+        authIsUnresolved: Bool
+    ) throws -> SaveActiveOwnerSnapshot {
+        if authIsUnresolved {
+            guard let cached = cachedOwner.flatMap({ $0.isEmpty ? nil : $0 }) else {
+                throw SaveActiveOwnerError.unresolved
+            }
+            return SaveActiveOwnerSnapshot(ownerSubject: cached, generation: nil)
+        }
+        return SaveActiveOwnerSnapshot(ownerSubject: liveOwner, generation: generation)
     }
 }

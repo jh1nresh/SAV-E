@@ -148,6 +148,10 @@ final class SaveTileTownLockTests: XCTestCase {
         let resting = memberBody("restingHome", in: home)
         let empty = memberBody("emptyHome", in: home)
         XCTAssertTrue(moreSheet.contains("reviewQueuePreview"))
+        XCTAssertTrue(
+            moreSheet.contains(".accessibilityElement(children: .contain)"),
+            "More must expose home.more.saves as its own control, not a merged Manage label"
+        )
         XCTAssertFalse(resting.contains("reviewQueuePreview"))
         XCTAssertFalse(empty.contains("reviewQueuePreview"))
         XCTAssertTrue(home.contains("Waiting for review"))
