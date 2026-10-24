@@ -693,7 +693,12 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertTrue(evidence.contains("evidence.cityPage"))
         XCTAssertTrue(evidence.contains("evidence.reportEntry"))
         XCTAssertTrue(evidence.contains("case homeThumbs"))
-        XCTAssertTrue(evidence.contains("homeThumbsScene()"))
+        XCTAssertTrue(evidence.contains("private var homeThumbsScene: some View"))
+        XCTAssertTrue(evidence.contains("makeHomeThumbsScene("))
+        XCTAssertFalse(
+            evidence.contains("case .homeThumbs:\n            homeThumbsScene("),
+            "A default-argument function used as a View is a function value"
+        )
         XCTAssertTrue(evidence.contains("SaveTileTownPeekCard("))
         XCTAssertTrue(evidence.contains("size: .recent"))
         XCTAssertTrue(evidence.contains("evidence.homeThumbs"))

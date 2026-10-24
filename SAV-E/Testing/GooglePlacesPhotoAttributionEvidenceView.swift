@@ -1,5 +1,6 @@
 #if DEBUG
 import SwiftUI
+import UIKit
 
 enum GooglePlacesPhotoAttributionEvidence {
     static let launchArgument = "--uitest-google-photo-attribution"
@@ -273,10 +274,10 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
         case .homeThumbs:
-            homeThumbsScene()
+            homeThumbsScene
                 .environment(\.appLanguageSettings, Self.languageSettings(.english))
         case .homeThumbsZh:
-            homeThumbsScene(identifier: "evidence.homeThumbsZh", languageNote: "zh-Hant VoiceOver")
+            makeHomeThumbsScene(identifier: "evidence.homeThumbsZh", languageNote: "zh-Hant VoiceOver")
                 .environment(\.appLanguageSettings, Self.languageSettings(.traditionalChinese))
         case .drawerThumbs:
             ScrollView { drawerThumbsContent }
@@ -299,7 +300,11 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
         }
     }
 
-    private func homeThumbsScene(
+    private var homeThumbsScene: some View {
+        makeHomeThumbsScene()
+    }
+
+    private func makeHomeThumbsScene(
         identifier: String = "evidence.homeThumbs",
         languageNote: String = "en VoiceOver"
     ) -> some View {
@@ -481,7 +486,7 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.saveInk)
                     .accessibilityIdentifier(identifier)
-                homeThumbsScene()
+                homeThumbsScene
                 drawerThumbsContent
                 tripStopContent
                 originFoodContent
