@@ -2521,7 +2521,7 @@ private struct TripRow: Codable {
     let end_date: String?
     let is_optimized: Bool
     let created_at: String
-    let trip_stops: [TripStopRow]?
+    let trip_stops: [TripStopPersistRow]?
 
     func toTrip() -> Trip {
         let df = DateFormatter()
@@ -2554,12 +2554,12 @@ private struct TripRow: Codable {
             end_date: trip.endDate.map { df.string(from: $0) },
             is_optimized: trip.isOptimized,
             created_at: ISO8601DateFormatter().string(from: trip.createdAt),
-            trip_stops: includeStops ? trip.places.map { TripStopRow.from(stop: $0, tripId: trip.id) } : nil
+            trip_stops: includeStops ? trip.places.map { TripStopPersistRow.from(stop: $0, tripId: trip.id) } : nil
         )
     }
 }
 
-private struct TripStopRow: Codable {
+private struct TripStopPersistRow: Codable {
     let id: UUID
     let trip_id: UUID
     let place_id: UUID?
@@ -2584,8 +2584,8 @@ private struct TripStopRow: Codable {
         )
     }
 
-    static func from(stop: TripStop, tripId: UUID) -> TripStopRow {
-        TripStopRow(
+    static func from(stop: TripStop, tripId: UUID) -> TripStopPersistRow {
+        TripStopPersistRow(
             id: stop.id,
             trip_id: tripId,
             place_id: stop.placeId,
