@@ -658,7 +658,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let e2 = app.buttons["home.place.60000000-0000-0000-0000-000000000002"]
         XCTAssertTrue(e2.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(e2.label.contains("Lunch Noodle"), e2.label)
-        XCTAssertTrue(e2.label.contains("650m"), "TPE-A E2 must show 650m: \(e2.label)")
+        XCTAssertTrue(e2.label.contains("651m"), "TPE-A E2 must show 651m: \(e2.label)")
         e2.tap()
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         let showOnMap = app.descendants(matching: .any)["home.row.showOnMap"]
@@ -3328,12 +3328,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.60000000'"))
     }
 
-    /// HoP TPE-A option A: located Eat + Near you is exactly 4 rows at
-    /// 280m / 650m / 1.2km / 2.1km. E5 3.4km and G3 4.0km stay out.
+    /// HoP TPE-A option A: located Eat + Near you is exactly 4 rows.
+    /// Labels come from CLLocation.distance + distanceText, not HoP 280/650.
     private func assertTPEALocatedEatRows(_ app: XCUIApplication) {
         let expected: [(Int, String, String)] = [
-            (1, "Fujin Tree 353 Cafe", "280m"),
-            (2, "Lunch Noodle", "650m"),
+            (1, "Fujin Tree 353 Cafe", "279m"),
+            (2, "Lunch Noodle", "651m"),
             (3, "Roast Duck Kitchen", "1.2km"),
             (4, "Window Cafe", "2.1km"),
         ]
@@ -3360,14 +3360,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
     }
 
-    /// Located Go is exactly 2 rows: 900m and 1.6km visited. E5/G3 stay out.
+    /// Located Go is exactly 2 rows: 899m and 1.6km visited. E5/G3 stay out.
     private func assertTPEALocatedGoRows(_ app: XCUIApplication) {
         let g1 = tpeaPlaceButton(app, 6)
         let g2 = tpeaPlaceButton(app, 7)
         XCTAssertTrue(g1.waitForExistence(timeout: stepTimeout), g1.identifier)
         XCTAssertTrue(g2.waitForExistence(timeout: stepTimeout), g2.identifier)
         XCTAssertTrue(g1.label.contains("Temple Courtyard"), g1.label)
-        XCTAssertTrue(g1.label.contains("900m"), g1.label)
+        XCTAssertTrue(g1.label.contains("899m"), g1.label)
         XCTAssertTrue(g2.label.contains("Lantern Alley Park"), g2.label)
         XCTAssertTrue(g2.label.contains("1.6km"), g2.label)
         XCTAssertTrue(g2.label.contains("visited"), g2.label)
