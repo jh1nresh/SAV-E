@@ -272,7 +272,12 @@ struct SaveLibraryView: View {
                 LazyVStack(spacing: 0) {
                     if !unplaced.isEmpty {
                         VStack(alignment: .leading, spacing: 0) {
-                            Text(localized("Unplaced", "暫未放入"))
+                            let unplacedTitle = localized("Unplaced", "暫未放入")
+                            let unplacedReason = localized(
+                                "Held after 50 places saved. Not on the map yet.",
+                                "已存 50 個地點，所以暫放，還沒放上地圖。"
+                            )
+                            Text(unplacedTitle)
                                 .font(SaveAtlasType.strong(12))
                                 .foregroundStyle(SaveAtlasPalette.forest)
                                 .padding(.horizontal, 14)
@@ -280,16 +285,17 @@ struct SaveLibraryView: View {
                                 .padding(.bottom, 2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .accessibilityAddTraits(.isHeader)
-                            Text(localized(
-                                "Held after 50 places saved. Not on the map yet.",
-                                "已存 50 個地點，所以暫放，還沒放上地圖。"
-                            ))
+                                .accessibilityLabel(unplacedTitle)
+                                .accessibilityIdentifier("saves.unplaced.title")
+                            Text(unplacedReason)
                             .font(SaveAtlasType.body(12))
                             .foregroundStyle(SaveAtlasPalette.muted)
                             .fixedSize(horizontal: false, vertical: true)
                             .padding(.horizontal, 14)
                             .padding(.bottom, 8)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityLabel(unplacedReason)
+                            .accessibilityIdentifier("saves.unplaced.reason")
                             ForEach(unplaced) { candidate in
                                 reviewTicket(candidate)
                                 if candidate.id != unplaced.last?.id || !others.isEmpty {

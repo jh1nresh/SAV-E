@@ -5129,11 +5129,18 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertFalse(other.coversUnplacedInbox(parked))
         let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
-        XCTAssertTrue(
+        XCTAssertFalse(
             map.contains("local.isUnplacedInbox && places.contains { $0.coversUnplacedInbox(local) }"),
-            "refresh must hide a parked post once the same venue is a Map Stamp"
+            "refresh must not hide reminted Unplaced that matches a confirmed stamp by venue identity"
         )
-        XCTAssertTrue(map.contains("func removeParkedUnplacedInboxItem"))
+        XCTAssertTrue(
+            map.contains("!confirmedIDs.contains(local.id)"),
+            "refresh still hides Unplaced whose ID is a confirmed alias"
+        )
+        XCTAssertTrue(
+            map.contains("func removeParkedUnplacedInboxItem"),
+            "successful shared-post retry deletes the parked row instead of inferring cover"
+        )
         XCTAssertTrue(map.contains("removeLocalOnlyUnplacedBeforeDecision"))
     }
 
@@ -5182,11 +5189,20 @@ final class SAVEProductionConfigTests: XCTestCase {
             saves.contains("已存 50 個地點，所以暫放，還沒放上地圖。"),
             "B8-2: zh-Hant Unplaced reason must stay visible"
         )
+        XCTAssertTrue(
+            saves.contains("saves.unplaced.title"),
+            "B8-4: Unplaced title must expose a stable accessibility identifier"
+        )
+        XCTAssertTrue(
+            saves.contains("saves.unplaced.reason"),
+            "B8-4: Unplaced reason must expose a stable accessibility identifier"
+        )
     }
 
-    /// B8-4 / supplementary B8-5: parked Unplaced copy must be a visible
-    /// UILabel at the 375pt and 430pt canvases. These view-render stills
-    /// cannot satisfy B8-5 alone; the required gate is the XCUITest
+    /// B8-4 / supplementary B8-5: parked Unplaced copy must be readable at
+    /// the 375pt and 430pt canvases via the accessibility tree (SwiftUI Text
+    /// is not a UILabel). These view-render stills cannot satisfy B8-5
+    /// alone; the required gate is the XCUITest
     /// `testUnplacedLabelFullScreenAtDeviceWidth`.
     @MainActor
     func testUnplacedVisibleLabelAt375And430() throws {
@@ -6752,11 +6768,20 @@ final class SAVEProductionConfigTests: XCTestCase {
             .environment(\.appLanguageSettings, settings)
             .frame(width: width, height: height)
         )
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: height))
+        let window: UIWindow
+        if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
+            window = UIWindow(windowScene: scene)
+            window.frame = CGRect(x: 0, y: 0, width: width, height: height)
+        } else {
+            window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: height))
+        }
         window.rootViewController = host
         window.isHidden = false
         window.makeKeyAndVisible()
         host.view.frame = window.bounds
+        host.beginAppearanceTransition(true, animated: false)
+        host.endAppearanceTransition()
+        host.view.setNeedsLayout()
         host.view.layoutIfNeeded()
         let deadline = Date().addingTimeInterval(1)
         var labels: [String] = []
@@ -6767,6 +6792,7 @@ final class SAVEProductionConfigTests: XCTestCase {
                 break
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            host.view.setNeedsLayout()
             host.view.layoutIfNeeded()
         }
         XCTAssertTrue(
@@ -6818,30 +6844,71 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     private func visibleTexts(in view: UIView) -> [String] {
+        collectAccessibilityStrings(from: view, seen: NSHashTable<AnyObject>.weakObjects())
+    }
+
+    /// SwiftUI `Text` on current iOS is not a `UILabel`. Walk the materialized
+    /// accessibility tree (count/at) plus identifiers so B8-4 can still assert
+    /// the visible en/zh-Hant Unplaced title and reason.
+    private func collectAccessibilityStrings(from element: Any?, seen: NSHashTable<AnyObject>) -> [String] {
+        guard let object = element as? AnyObject else { return [] }
+        if seen.contains(object) { return [] }
+        seen.add(object)
+
         var texts: [String] = []
-        if let label = view as? UILabel {
+        if let label = object as? UILabel {
             if let text = label.text, !text.isEmpty { texts.append(text) }
             if let attributed = label.attributedText?.string, !attributed.isEmpty {
                 texts.append(attributed)
             }
         }
-        if let text = view.accessibilityLabel, !text.isEmpty {
-            texts.append(text)
-        }
-        if let value = view.accessibilityValue, !value.isEmpty {
-            texts.append(value)
-        }
-        for subview in view.subviews {
-            texts.append(contentsOf: visibleTexts(in: subview))
-        }
-        if let elements = view.accessibilityElements as? [NSObject] {
-            for element in elements {
-                if let text = element.accessibilityLabel, !text.isEmpty {
-                    texts.append(text)
+        if let view = object as? UIView {
+            if let text = view.accessibilityLabel, !text.isEmpty { texts.append(text) }
+            if let value = view.accessibilityValue, !value.isEmpty { texts.append(value) }
+            if let identifier = view.accessibilityIdentifier, !identifier.isEmpty {
+                texts.append(identifier)
+            }
+            let count = view.accessibilityElementCount()
+            if count != NSNotFound {
+                for index in 0..<count {
+                    texts.append(contentsOf: collectAccessibilityStrings(
+                        from: view.accessibilityElement(at: index),
+                        seen: seen
+                    ))
                 }
-                if let value = element.accessibilityValue, !value.isEmpty {
-                    texts.append(value)
+            }
+            if let elements = view.accessibilityElements {
+                for child in elements {
+                    texts.append(contentsOf: collectAccessibilityStrings(from: child, seen: seen))
                 }
+            }
+            for subview in view.subviews {
+                texts.append(contentsOf: collectAccessibilityStrings(from: subview, seen: seen))
+            }
+            return texts
+        }
+
+        let node = object as NSObject
+        if let text = node.accessibilityLabel, !text.isEmpty { texts.append(text) }
+        if let value = node.accessibilityValue as? String, !value.isEmpty { texts.append(value) }
+        if let identified = node as? UIAccessibilityIdentification,
+           let identifier = identified.accessibilityIdentifier, !identifier.isEmpty {
+            texts.append(identifier)
+        }
+        if node.responds(to: #selector(NSObject.accessibilityElementCount)) {
+            let count = node.accessibilityElementCount()
+            if count != NSNotFound {
+                for index in 0..<count {
+                    texts.append(contentsOf: collectAccessibilityStrings(
+                        from: node.accessibilityElement(at: index),
+                        seen: seen
+                    ))
+                }
+            }
+        }
+        if let elements = node.accessibilityElements {
+            for child in elements {
+                texts.append(contentsOf: collectAccessibilityStrings(from: child, seen: seen))
             }
         }
         return texts

@@ -1373,8 +1373,9 @@ extension Place {
         return !leftAddress.isEmpty && leftAddress == other.address.normalizedVenueIdentity
     }
 
-    /// A successful shared-post retry mints a new stamp ID. Hide the parked
-    /// Unplaced row when the confirmed venue is the same place.
+    /// Same-ID collision, or the same venue after a successful retry minted a
+    /// new stamp. Refresh must not use the identity branch: a capped merge
+    /// onto an existing stamp remints Unplaced and must stay visible.
     func coversUnplacedInbox(_ candidate: PlaceReviewCandidate) -> Bool {
         guard candidate.isUnplacedInbox else { return false }
         if savedIDs.contains(candidate.id) { return true }

@@ -1548,10 +1548,17 @@ final class MapViewModel: ObservableObject {
             !$0.replacementCandidateIDs.isEmpty || !["review", "confirmed", "needs_more_evidence", "source_only"].contains($0.status)
         }.map(\.id))
         let confirmedIDs = Set(places.flatMap(\.savedIDs))
+        // Hide Unplaced only when its ID is a confirmed alias, or the remote
+        // row is terminal. Do not hide by venue identity: a pending-share
+        // merge that rolls back at the 50-group boundary remints a new
+        // Unplaced ID for the same stamp, and that row must survive refresh.
+        // Successful shared-post retries delete the parked row via
+        // `removeParkedUnplacedInboxItem` instead of inferring success from
+        // matching name/coordinates. `correctionLearningPlaceID` is transient
+        // and stripped on vault reload, so it cannot be the keep-signal.
         let localOnly = local.filter { local in
             !remoteIDs.contains(local.id) && !confirmedIDs.contains(local.id)
                 && !(local.isUnplacedInbox && terminalIDs.contains(local.id))
-                && !(local.isUnplacedInbox && places.contains { $0.coversUnplacedInbox(local) })
         }
         reviewCandidates = (localOnly + remoteWithParking).sorted(by: PlaceReviewCandidate.newestFirst)
         if let id = selectedReviewCandidate?.id {
