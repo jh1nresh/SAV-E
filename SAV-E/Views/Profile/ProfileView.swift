@@ -69,6 +69,17 @@ struct ProfileView: View {
         localSavedPlaces
     }
 
+    /// DEBUG rail launch-arg. Production Settings Pro row follows B7
+    /// (`!passportPlaces.isEmpty`); this flag does not widen that gate.
+    private var offersProForUITest: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall")
+            && !passportPlaces.isEmpty
+#else
+        false
+#endif
+    }
+
     private var todayMissions: [SavePassportTodayMission] {
         guard isRootTab else { return [] }
         return SavePassportTodayCatalog.missions(
