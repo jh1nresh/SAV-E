@@ -13,6 +13,7 @@ private enum MessagesTheme {
 
 struct PlacePickerView: View {
     let places: [MessagesPlace]
+    let owner: String?
     let onSelect: (MessagesPlace) -> Void
 
     var body: some View {
@@ -25,6 +26,8 @@ struct PlacePickerView: View {
                 placeList
             }
         }
+        .accessibilityIdentifier("messages.picker")
+        .accessibilityValue(owner ?? "signed-out")
     }
 
     private var emptyState: some View {

@@ -31,7 +31,9 @@ enum AtlasPalette {
     static let forest = SaveAtlasPalette.forest
     static let ink = SaveAtlasPalette.ink
     static let muted = SaveAtlasPalette.muted
+    static let cream = SaveAtlasPalette.cream
     static let coral = SaveAtlasPalette.coral
+    static let brandCoral = SaveAtlasPalette.brandCoral
     static let mint = SaveAtlasPalette.mint
     static let sky = SaveAtlasPalette.sky
     static let lavender = SaveAtlasPalette.lavender

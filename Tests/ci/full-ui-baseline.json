@@ -21,5 +21,8 @@
   "SAVEUITests/SAVEScreenshotRailTests/testSocialPassportGridAndComposer",
   "SAVEUITests/SAVEScreenshotRailTests/testPassportListsEntryOpensListsDirectly",
   "SAVEUITests/SAVEScreenshotRailTests/testFriendsComingSoon",
+  "SAVEUITests/SAVEScreenshotRailTests/testSavedPlaceLimitPaywallStatesFreeCap",
+  "SAVEUITests/SAVEScreenshotRailTests/testSavedPlaceLimitPaywallRetryIsActionable",
+  "SAVEUITests/SAVEScreenshotRailTests/testUnplacedLabelFullScreenAtDeviceWidth",
   "SAVEUITests/SAVEGooglePhotoAttributionTests/testCaptureLightAndDarkEvidence"
 ]

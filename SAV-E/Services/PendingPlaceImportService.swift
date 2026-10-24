@@ -481,6 +481,18 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         status == "source_only" && missingInfo.contains { $0.caseInsensitiveCompare("Analysis pending") == .orderedSame }
     }
 
+    /// Parked at the free 50-place cap. Review keeps the item; it is not a Map Stamp.
+    nonisolated static let unplacedInboxMarker = SAVEProAccessPolicy.unplacedInboxMarker
+    var isUnplacedInbox: Bool {
+        missingInfo.contains { $0.caseInsensitiveCompare(Self.unplacedInboxMarker) == .orderedSame }
+    }
+
+    mutating func stripUnplacedInboxMarker() {
+        missingInfo.removeAll {
+            $0.caseInsensitiveCompare(Self.unplacedInboxMarker) == .orderedSame
+        }
+    }
+
     // Transient display state; excluded from Codable/evidence/share payloads.
     var sourceFailureReason: SourceSearchFailureReason? = nil
     var supersededByCandidateID: UUID? = nil
@@ -509,6 +521,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     var semanticSource: SemanticSourceIdentity? = nil
     var googlePlaceId: String? = nil
     var category: PlaceCategory? = nil
+    var ownerSubject: String? = nil
 
     init(
         id: UUID,
@@ -531,11 +544,13 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         sourceHandle: String? = nil,
         googlePlaceId: String? = nil,
         category: PlaceCategory? = nil,
-        semanticSource: SemanticSourceIdentity? = nil
+        semanticSource: SemanticSourceIdentity? = nil,
+        ownerSubject: String? = nil
     ) {
         self.semanticSource = semanticSource
         self.googlePlaceId = googlePlaceId
         self.category = category
+        self.ownerSubject = ownerSubject
         self.id = id
         self.captureId = captureId
         self.workflowRunId = workflowRunId
@@ -582,6 +597,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         case semanticSource
         case googlePlaceId
         case category
+        case ownerSubject
     }
 
     init(from decoder: Decoder) throws {
@@ -592,6 +608,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         semanticSource = try container.decodeIfPresent(SemanticSourceIdentity.self, forKey: .semanticSource)
         googlePlaceId = try container.decodeIfPresent(String.self, forKey: .googlePlaceId)
         category = try container.decodeIfPresent(PlaceCategory.self, forKey: .category)
+        ownerSubject = try container.decodeIfPresent(String.self, forKey: .ownerSubject)
         id = try container.decode(UUID.self, forKey: .id)
         captureId = try container.decodeIfPresent(UUID.self, forKey: .captureId)
         workflowRunId = try container.decodeIfPresent(UUID.self, forKey: .workflowRunId)
@@ -629,6 +646,112 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     static func newestFirst(_ lhs: Self, _ rhs: Self) -> Bool {
         if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
         return lhs.id.uuidString < rhs.id.uuidString
+    }
+
+    /// Keep a capped save in the Review / Unplaced inbox instead of dropping it.
+    static func unplacedInboxItem(from place: Place, ownerSubject: String? = nil) -> PlaceReviewCandidate {
+        var venueEvidence = place.sourceEvidence
+        venueEvidence += Self.providerVenueEvidence(from: place)
+        let canReconstructProvider = Self.providerLocation(from: venueEvidence) != nil
+        // Never drop lat/lon unless provider evidence can rebuild the venue.
+        // GCJ-02 / BD-09 must not be promoted as MapKit WGS84.
+        let keepCoordinates = place.isMapKitMappable || !canReconstructProvider
+        return PlaceReviewCandidate(
+            id: place.id,
+            captureId: nil,
+            name: place.name,
+            address: place.address,
+            city: nil,
+            latitude: keepCoordinates ? place.latitude : nil,
+            longitude: keepCoordinates ? place.longitude : nil,
+            evidence: venueEvidence,
+            confidence: 1,
+            missingInfo: [unplacedInboxMarker],
+            status: "review",
+            createdAt: place.createdAt,
+            placeHighlights: place.savedPlaceHighlights,
+            recommendedItems: place.savedRecommendedItems,
+            vibeTags: place.savedVibeTags,
+            accessNotes: place.savedAccessNotes,
+            sourceHandle: place.savedSourceHandle,
+            googlePlaceId: place.googlePlaceId,
+            category: place.category,
+            ownerSubject: ownerSubject
+        )
+    }
+
+    /// Evidence prefixes that encode a live provider venue. Re-parking and
+    /// remote refresh must drop these so a corrected venue does not keep
+    /// stale coordinates as the first active location.
+    static let providerVenueEvidencePrefixes = [
+        "Amap POI id:",
+        "Amap reference coordinates (GCJ-02):",
+        "Baidu Maps POI id:",
+        "Baidu Maps reference coordinates",
+        "Provider:",
+        "Provider place id:",
+        "Provider reference coordinates",
+        "Provider map URL:",
+    ]
+
+    /// Persist enough for every non-WGS park to rebuild after vault reload:
+    /// provider identity, original coordinates + system, and the map URL
+    /// when one exists. Amap-specific lines stay for existing receipts.
+    static func providerVenueEvidence(from place: Place) -> [String] {
+        guard !place.isMapKitMappable else { return [] }
+        var lines: [String] = []
+        if let provider = place.locationProvider {
+            lines.append("Provider: \(provider.rawValue)")
+            if let providerID = Self.nonEmptyTrimmed(place.providerPlaceId) {
+                lines.append("Provider place id: \(providerID)")
+                switch provider {
+                case .amap:
+                    lines.append("Amap POI id: \(providerID)")
+                case .baidu:
+                    lines.append("Baidu Maps POI id: \(providerID)")
+                case .googlePlaces, .appleMaps:
+                    break
+                }
+            }
+            if place.hasValidCoordinate {
+                let system = place.resolvedCoordinateSystem
+                lines.append(
+                    "\(provider.displayName) reference coordinates (\(system.rawValue)): \(place.latitude), \(place.longitude)"
+                )
+                if provider == .amap, system == .gcj02 {
+                    lines.append(
+                        "Amap reference coordinates (GCJ-02): \(place.latitude), \(place.longitude)"
+                    )
+                }
+            }
+        } else if place.hasValidCoordinate, place.resolvedCoordinateSystem != .wgs84 {
+            let system = place.resolvedCoordinateSystem
+            lines.append(
+                "Provider reference coordinates (\(system.rawValue)): \(place.latitude), \(place.longitude)"
+            )
+        }
+        if let mapURL = place.confirmableProviderMapUrl {
+            lines.append("Provider map URL: \(mapURL)")
+        }
+        return lines
+    }
+
+    /// Persist a confirmable Amap marker URL on remote-backed parks that
+    /// already have GCJ-02 + POI id but no optional map URL.
+    mutating func ensureConfirmableAmapMapURL() {
+        guard Self.storedProviderMapURL(from: evidence) == nil,
+              let location = Self.providerLocation(from: evidence),
+              location.provider == .amap,
+              location.coordinateSystem == .gcj02,
+              location.providerPlaceID != nil,
+              let url = Place.synthesizedAmapMarkerURL(
+                  name: name,
+                  latitude: location.latitude,
+                  longitude: location.longitude
+              ) else {
+            return
+        }
+        evidence.append("Provider map URL: \(url.absoluteString)")
     }
 
     /// A shared post can contain several venues. Reuse only an exact identity
@@ -694,11 +817,11 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
               let range = trimmed.range(of: prefix, options: .caseInsensitive) else {
             return nil
         }
-        return nonEmptyTrimmed(String(trimmed[range.upperBound...]))
+        return Self.nonEmptyTrimmed(String(trimmed[range.upperBound...]))
     }
 
     private static func recoveryHintValue(in line: String) -> String? {
-        guard let raw = value(after: "Recovery hint:", in: line),
+        guard let raw = Self.value(after: "Recovery hint:", in: line),
               let separator = raw.firstIndex(of: "=") else {
             return nil
         }
@@ -706,7 +829,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         guard label == "region" || label == "address" || label == "location" || label == "area" else {
             return nil
         }
-        return nonEmptyTrimmed(String(raw[raw.index(after: separator)...]))
+        return Self.nonEmptyTrimmed(String(raw[raw.index(after: separator)...]))
     }
 
     private static func compactSearchQuery(_ values: [String]) -> String {
@@ -800,49 +923,121 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     }
 
     var providerLocation: ProviderPlaceLocation? {
-        guard let mapURL = providerMapURL,
-              let providerID = evidence.compactMap({ Self.value(after: "Amap POI id:", in: $0) }).first,
-              let rawCoordinate = evidence.compactMap({
-                  Self.value(after: "Amap reference coordinates (GCJ-02):", in: $0)
-              }).first else {
-            return nil
-        }
-        let components = rawCoordinate.split(separator: ",", maxSplits: 1).map {
-            $0.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        guard components.count == 2,
-              let latitude = Double(components[0]),
-              let longitude = Double(components[1]),
-              latitude.isFinite,
-              longitude.isFinite,
-              (-90...90).contains(latitude),
-              (-180...180).contains(longitude),
-              latitude != 0 || longitude != 0 else {
-            return nil
-        }
+        Self.providerLocation(from: evidence)
+    }
+
+    static func providerLocation(from evidence: [String]) -> ProviderPlaceLocation? {
+        guard let coordinate = Self.providerCoordinate(from: evidence) else { return nil }
+        let provider = Self.providerIdentity(from: evidence)
+            ?? (coordinate.system == .bd09 ? .baidu : nil)
+            ?? (coordinate.system == .gcj02 ? .amap : nil)
+        guard let provider else { return nil }
+        let providerID = evidence.compactMap({ Self.value(after: "Provider place id:", in: $0) }).first
+            ?? evidence.compactMap({ Self.value(after: "Amap POI id:", in: $0) }).first
+            ?? evidence.compactMap({ Self.value(after: "Baidu Maps POI id:", in: $0) }).first
         return ProviderPlaceLocation(
-            provider: .amap,
+            provider: provider,
             providerPlaceID: providerID,
-            coordinateSystem: .gcj02,
-            latitude: latitude,
-            longitude: longitude,
-            mapURL: mapURL
+            coordinateSystem: coordinate.system,
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            mapURL: Self.storedProviderMapURL(from: evidence)
         )
+    }
+
+    private static func providerIdentity(from evidence: [String]) -> PlaceMatchProvider? {
+        if let raw = evidence.compactMap({ Self.value(after: "Provider:", in: $0) }).first,
+           let provider = PlaceMatchProvider(rawValue: raw) {
+            return provider
+        }
+        if evidence.contains(where: {
+            $0.localizedCaseInsensitiveContains("Amap POI id:")
+                || $0.localizedCaseInsensitiveContains("Amap reference coordinates")
+        }) {
+            return .amap
+        }
+        if evidence.contains(where: {
+            $0.localizedCaseInsensitiveContains("Baidu Maps POI id:")
+                || $0.localizedCaseInsensitiveContains("Baidu Maps reference coordinates")
+        }) {
+            return .baidu
+        }
+        return nil
+    }
+
+    private static func providerCoordinate(
+        from evidence: [String]
+    ) -> (system: PlaceCoordinateSystem, latitude: Double, longitude: Double)? {
+        for line in evidence {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let marker = trimmed.range(of: "reference coordinates (", options: .caseInsensitive)
+            else { continue }
+            let afterMarker = trimmed[marker.upperBound...]
+            guard let close = afterMarker.firstIndex(of: ")") else { continue }
+            let systemRaw = String(afterMarker[..<close]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let system = PlaceCoordinateSystem(rawValue: systemRaw) else { continue }
+            var rest = afterMarker[afterMarker.index(after: close)...]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if rest.hasPrefix(":") {
+                rest = rest.dropFirst().trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let components = rest.split(separator: ",", maxSplits: 1).map {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            guard components.count == 2,
+                  let latitude = Double(components[0]),
+                  let longitude = Double(components[1]),
+                  latitude.isFinite,
+                  longitude.isFinite,
+                  (-90...90).contains(latitude),
+                  (-180...180).contains(longitude),
+                  latitude != 0 || longitude != 0 else {
+                continue
+            }
+            return (system, latitude, longitude)
+        }
+        return nil
+    }
+
+    private static func storedProviderMapURL(from evidence: [String]) -> URL? {
+        for line in evidence {
+            guard let rawValue = Self.value(after: "Provider map URL:", in: line),
+                  let url = Place.validAmapMapURL(from: rawValue) else {
+                continue
+            }
+            return url
+        }
+        return nil
     }
 
 }
 
 struct ProviderPlaceLocation: Hashable {
     var provider: PlaceMatchProvider
-    var providerPlaceID: String
+    var providerPlaceID: String?
     var coordinateSystem: PlaceCoordinateSystem
     var latitude: Double
     var longitude: Double
-    var mapURL: URL
+    var mapURL: URL?
+}
+
+struct PendingQueueAccountDeletionSnapshot: Equatable {
+    var ownerlessItemKeys: Set<String>
+    var unreadableFileNames: Set<String>
+}
+
+struct PendingImportRestorationToken {
+    fileprivate let containerURL: URL
+    fileprivate let ownerGenerations: [String: Int]
+    fileprivate let consumingOwner: String?
 }
 
 final class PendingPlaceImportService {
     static let shared = PendingPlaceImportService()
+    // Only in-memory consumed batches need invalidation; they cannot survive a
+    // process restart. A new batch captures the new generation, even for the
+    // same owner recreated after deletion.
+    private static var restorationGenerations: [URL: [String: Int]] = [:]
 
     private let fileManager: FileManager
     private let overrideContainerURL: URL?
@@ -852,14 +1047,29 @@ final class PendingPlaceImportService {
         self.overrideContainerURL = overrideContainerURL
     }
 
+    func restorationToken(consumingOwner: String? = nil) -> PendingImportRestorationToken? {
+        guard let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return nil }
+        let container = Self.canonicalContainer(for: url)
+        return PendingImportRestorationToken(
+            containerURL: container,
+            ownerGenerations: Self.restorationGenerations[container] ?? [:],
+            consumingOwner: consumingOwner
+        )
+    }
+
+    private static func canonicalContainer(for queueURL: URL) -> URL {
+        queueURL.deletingLastPathComponent().standardizedFileURL.resolvingSymlinksInPath()
+    }
+
     func consumePendingPlaces(ownerSubject: String? = nil) -> [PendingSharedPlace] {
         consumePendingArray(named: SAVEProductionConfig.pendingPlacesFileName, as: PendingSharedPlace.self) {
             $0.ownerSubject == nil || $0.ownerSubject == ownerSubject
         }
     }
 
-    func restorePendingPlaces(_ places: [PendingSharedPlace]) {
-        appendPendingArray(places, named: SAVEProductionConfig.pendingPlacesFileName)
+    func restorePendingPlaces(_ places: [PendingSharedPlace], restorationToken: PendingImportRestorationToken? = nil) {
+        appendPendingArray(places, named: SAVEProductionConfig.pendingPlacesFileName,
+            restorationToken: restorationToken, ownerSubject: { $0.ownerSubject })
     }
 
     func consumePendingReviewCandidates(ownerSubject: String? = nil) -> [PendingReviewCandidate] {
@@ -868,8 +1078,113 @@ final class PendingPlaceImportService {
         }
     }
 
-    func restorePendingReviewCandidates(_ candidates: [PendingReviewCandidate]) {
-        appendPendingArray(candidates, named: SAVEProductionConfig.pendingReviewCandidatesFileName)
+    func restorePendingReviewCandidates(_ candidates: [PendingReviewCandidate], restorationToken: PendingImportRestorationToken? = nil) {
+        appendPendingArray(candidates, named: SAVEProductionConfig.pendingReviewCandidatesFileName,
+            restorationToken: restorationToken, ownerSubject: { $0.ownerSubject })
+    }
+
+    /// Fingerprints ownerless Share-queue rows so deletion can purge the
+    /// pre-deletion legacy set without claiming later ownerless rows or
+    /// another owner's items.
+    ///
+    /// Best-effort uncoordinated read: taking the Share write lock here
+    /// deadlocks admitted late writers that already hold it. Existing files
+    /// that cannot be read are named on the intent so purge can drop every
+    /// ownerless row in them once they are readable. Prepare never throws
+    /// for unreadable JSON; purge stays fail-closed.
+    func ownerlessQueueSnapshotForAccountDeletion() throws -> PendingQueueAccountDeletionSnapshot {
+        var keys = Set<String>()
+        var unreadable = Set<String>()
+        for name in [SAVEProductionConfig.pendingPlacesFileName, SAVEProductionConfig.pendingReviewCandidatesFileName] {
+            guard let url = pendingFileURL(named: name) else { throw SaveLocalVaultError.storageUnavailable }
+            guard fileManager.fileExists(atPath: url.path) else { continue }
+            guard let data = try? Data(contentsOf: url),
+                  let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                unreadable.insert(name)
+                continue
+            }
+            keys.formUnion(rows.compactMap(Self.ownerlessQueueItemKey))
+        }
+        return PendingQueueAccountDeletionSnapshot(
+            ownerlessItemKeys: keys,
+            unreadableFileNames: unreadable
+        )
+    }
+
+    func ownerlessItemKeysForAccountDeletion() throws -> Set<String> {
+        try ownerlessQueueSnapshotForAccountDeletion().ownerlessItemKeys
+    }
+
+    /// Runs after the deleted owner's Share cache is invalidated. The same
+    /// per-file lock as Share append orders already-admitted writers before this
+    /// purge. Remove the deleted owner and snapshotted pre-deletion ownerless
+    /// rows. Keep later ownerless rows, other owners and unrecognized fields.
+    func purgeAccountDeletionItems(
+        belongingTo owner: String,
+        initialOwnerlessItemKeys: Set<String> = [],
+        unreadableFileNames: Set<String> = []
+    ) throws {
+        guard let firstURL = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else {
+            throw SaveLocalVaultError.storageUnavailable
+        }
+        let container = Self.canonicalContainer(for: firstURL)
+        Self.restorationGenerations[container, default: [:]][owner, default: 0] += 1
+        try withAccountDeletionQueueFiles(writeChanges: true) { fileName, rows in
+            rows.filter { row in
+                if let subject = row["ownerSubject"] as? String, !subject.isEmpty {
+                    return subject != owner
+                }
+                if unreadableFileNames.contains(fileName) { return false }
+                guard let key = Self.ownerlessQueueItemKey(row) else { return true }
+                return !initialOwnerlessItemKeys.contains(key)
+            }
+        }
+    }
+
+    /// Stable identity for an ownerless pending place or Review row. Uses the
+    /// on-disk JSON fields so snapshot and purge agree after a rewrite.
+    static func ownerlessQueueItemKey(_ row: [String: Any]) -> String? {
+        if let subject = row["ownerSubject"] as? String, !subject.isEmpty { return nil }
+        let name = (row["name"] as? String) ?? (row["candidateName"] as? String) ?? ""
+        let address = row["address"] as? String ?? ""
+        let sourceURL = row["sourceURL"] as? String ?? ""
+        let sourceText = row["sourceText"] as? String ?? ""
+        let savedAt: String
+        if let number = row["savedAt"] as? NSNumber {
+            savedAt = String(format: "%.5f", number.doubleValue)
+        } else if let raw = row["savedAt"] as? String {
+            savedAt = raw
+        } else {
+            savedAt = ""
+        }
+        let localID = row["localVaultRecordID"] as? String ?? ""
+        return [name, address, sourceURL, sourceText, savedAt, localID].joined(separator: "\u{1e}")
+    }
+
+    private func withAccountDeletionQueueFiles(
+        writeChanges: Bool,
+        _ body: (String, [[String: Any]]) throws -> [[String: Any]]
+    ) throws {
+        for name in [SAVEProductionConfig.pendingPlacesFileName, SAVEProductionConfig.pendingReviewCandidatesFileName] {
+            guard let url = pendingFileURL(named: name) else { throw SaveLocalVaultError.storageUnavailable }
+            var coordinationError: NSError?
+            var writeError: Error?
+            NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
+                do {
+                    guard fileManager.fileExists(atPath: coordinatedURL.path) else { return }
+                    let data = try Data(contentsOf: coordinatedURL)
+                    guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                        throw CocoaError(.fileReadCorruptFile)
+                    }
+                    let next = try body(name, rows)
+                    guard writeChanges, next.count != rows.count else { return }
+                    try JSONSerialization.data(withJSONObject: next, options: [.sortedKeys])
+                        .write(to: coordinatedURL, options: .atomic)
+                } catch { writeError = error }
+            }
+            if let coordinationError { throw coordinationError }
+            if let writeError { throw writeError }
+        }
     }
 
     private func consumePendingArray<Element: Codable>(named fileName: String, as elementType: Element.Type, accepts: (Element) -> Bool) -> [Element] {
@@ -894,13 +1209,32 @@ final class PendingPlaceImportService {
         return result
     }
 
-    private func appendPendingArray<Element: Codable>(_ items: [Element], named fileName: String) {
+    private func appendPendingArray<Element: Codable>(
+        _ items: [Element], named fileName: String,
+        restorationToken: PendingImportRestorationToken?, ownerSubject: (Element) -> String?
+    ) {
         guard !items.isEmpty, let url = pendingFileURL(named: fileName) else { return }
         coordinate(url: url, purpose: "append \(fileName)") {
             do {
+                let container = Self.canonicalContainer(for: url)
+                let retained = items.filter { item in
+                    guard let token = restorationToken else { return true }
+                    let subject = ownerSubject(item)
+                    let owner: String?
+                    if let subject, !subject.isEmpty {
+                        owner = subject
+                    } else {
+                        owner = token.consumingOwner
+                    }
+                    guard let owner, !owner.isEmpty else { return true }
+                    return token.containerURL == container &&
+                        token.ownerGenerations[owner, default: 0] ==
+                        Self.restorationGenerations[container, default: [:]][owner, default: 0]
+                }
+                guard !retained.isEmpty else { return }
                 try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
                 let existing = try loadArray([Element].self, from: url)
-                let data = try JSONEncoder().encode(existing + items)
+                let data = try JSONEncoder().encode(existing + retained)
                 try data.write(to: url, options: [.atomic])
             } catch {
                 print("PendingPlaceImportService: failed to append \(fileName): \(error)")
@@ -987,7 +1321,7 @@ extension Place {
         let coordinateSystem: PlaceCoordinateSystem = refinedMatch != nil || candidate.hasReliableCoordinates
             ? .wgs84
             : (providerLocation?.coordinateSystem ?? .wgs84)
-        return Place(
+        var place = Place(
             id: UUID(),
             name: displayName,
             address: refinedMatch?.address ?? candidate.address,
@@ -1004,7 +1338,7 @@ extension Place {
             coordinateSystem: coordinateSystem,
             locationProvider: providerLocation?.provider,
             providerPlaceId: providerLocation?.providerPlaceID,
-            providerMapUrl: providerLocation?.mapURL.absoluteString,
+            providerMapUrl: providerLocation?.mapURL?.absoluteString,
             sourceImageUrl: nil,
             extractedDishes: candidate.recommendedItems.map(\.name).nilIfEmpty,
             priceRange: nil,
@@ -1022,6 +1356,8 @@ extension Place {
             sourceHandle: candidate.sourceHandle,
             additionalSourceEvidence: additional.nilIfEmpty
         )
+        place.providerMapUrl = place.confirmableProviderMapUrl
+        return place
     }
 
     var pendingDeduplicationKey: String {
@@ -1059,6 +1395,15 @@ extension Place {
         }
         let leftAddress = address.normalizedVenueIdentity
         return !leftAddress.isEmpty && leftAddress == other.address.normalizedVenueIdentity
+    }
+
+    /// Same-ID collision, or the same venue after a successful retry minted a
+    /// new stamp. Refresh must not use the identity branch: a capped merge
+    /// onto an existing stamp remints Unplaced and must stay visible.
+    func coversUnplacedInbox(_ candidate: PlaceReviewCandidate) -> Bool {
+        guard candidate.isUnplacedInbox else { return false }
+        if savedIDs.contains(candidate.id) { return true }
+        return matches(Place.from(candidate))
     }
 
 }
@@ -1312,8 +1657,25 @@ private extension String {
 
 private extension String {
     var normalizedVenueIdentity: String {
-        folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
-            .unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.map(String.init).joined()
+        // Keep word boundaries: "AB-C" and "A-BC" stay distinct. Mirrors
+        // backend savedPlaceLimit.normalized (separators → one space;
+        // Latin/Greek/Cyrillic combining marks fold away, other marks stay).
+        let folded = folding(
+            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+            locale: Locale(identifier: "en_US_POSIX")
+        )
+        var scalars: [Unicode.Scalar] = []
+        var pendingSpace = false
+        for scalar in folded.unicodeScalars {
+            if CharacterSet.alphanumerics.contains(scalar) {
+                if pendingSpace, !scalars.isEmpty { scalars.append(" ") }
+                scalars.append(scalar)
+                pendingSpace = false
+            } else {
+                pendingSpace = true
+            }
+        }
+        return String(String.UnicodeScalarView(scalars))
     }
 }
 

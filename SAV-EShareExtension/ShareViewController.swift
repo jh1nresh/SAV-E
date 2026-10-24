@@ -45,8 +45,8 @@ private enum SaveTheme {
     // import the main app target, so these values must stay aligned with
     // SaveAtlasPalette in Color+Theme.swift.
     static let cream = Color(hex: "FDF8F3")
-    static let yellow = Color(hex: "F26B4A")
     static let coral = Color(hex: "F26B4A")
+    static let yellow = coral
     static let sky = Color(hex: "B5E3F5")
     static let mint = Color(hex: "D6E8C4")
     static let pink = Color(hex: "F0CFA1")
@@ -444,6 +444,8 @@ private struct PendingReviewCandidate: Codable {
     var confidence: Double
     var missingInfo: [String]
     var savedAt: Date
+    // Shared queue key also decoded by the app PendingReviewCandidate model.
+    var googlePlaceId: String? = nil
     var evidenceDiagnostic: SocialPlaceEvidenceDiagnostic? = nil
     var isSourceOnly: Bool = false
     var reviewState: String? = nil
@@ -468,6 +470,7 @@ private struct ShareMemoryRecord: Codable {
     var evidence: [String]
     var evidenceDiagnostic: SocialPlaceEvidenceDiagnostic? = nil
     var createdAt: Date
+    var ownerSubject: String? = nil
 }
 
 // MARK: - Share Extension SwiftUI View
@@ -493,6 +496,7 @@ struct ShareExtensionView: View {
     @State private var analysisInputKey: String?
     @State private var rotateAnalysisIDOnRetry = false
     @State private var isSocialAnalysis = false
+    @State private var shareOwnerSnapshot: ShareOwnerSnapshot?
 
     private let categories = ["food", "cafe", "bar", "attraction", "stay", "shopping"]
 
@@ -1223,6 +1227,7 @@ struct ShareExtensionView: View {
     // MARK: - Extract & Parse
 
     private func extractAndParse() async {
+        bindShareSessionOwnerIfNeeded()
         guard let items = extensionContext?.inputItems as? [NSExtensionItem] else {
             parseError = "No content to parse"
             isParsing = false
@@ -1412,9 +1417,13 @@ struct ShareExtensionView: View {
 
     private func analyzeSharedSocialURL(_ sourceURL: String) async {
         do {
-            guard let credential = ShareAnalysisKeychain.read(), credential.isUsable() else {
-                throw ShareAnalysisError.sessionUnavailable
+            guard shareSessionStillMatches(requireAnalysisCredential: false) else {
+                throw ShareAnalysisError.sessionChanged
             }
+            guard let snapshot = shareOwnerSnapshot else { throw ShareAnalysisError.sessionChanged }
+            let credential = try snapshot.validatedAnalysisCredential(
+                cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner(),
+                credential: ShareAnalysisKeychain.read())
             let inputKey = sourceURL + "\n" + socialCaption
             if analysisInputKey != inputKey || analysisCredential != credential {
                 analysisID = UUID()
@@ -1434,14 +1443,14 @@ struct ShareExtensionView: View {
                 // Lost responses reuse the ID and replay without another charge.
                 try Task.checkCancellation()
                 guard !isSaved else { return }
-                guard ShareAnalysisKeychain.read() == credential else { throw ShareAnalysisError.sessionChanged }
+                guard shareSessionStillMatches(), ShareAnalysisKeychain.read() == credential else { throw ShareAnalysisError.sessionChanged }
                 analysisID = UUID()
                 result = try await ShareAnalysisClient().analyze(sourceURL: sourceURL, caption: socialCaption,
                     credential: credential, analysisID: analysisID)
             }
             try Task.checkCancellation()
             guard !isSaved else { return }
-            guard ShareAnalysisKeychain.read() == credential else { throw ShareAnalysisError.sessionChanged }
+            guard shareSessionStillMatches(), ShareAnalysisKeychain.read() == credential else { throw ShareAnalysisError.sessionChanged }
             guard result.semanticStatus != "analysis_pending" else {
                 // Completed pending results are stored against this ID; reuse
                 // would replay forever. Rotate so Retry starts a new claim.
@@ -1509,8 +1518,33 @@ struct ShareExtensionView: View {
         }
     }
 
-    private func shareAccountStillMatches() -> Bool {
-        guard isSocialAnalysis, let credential = analysisCredential else { return !isSocialAnalysis }
+    /// The app's active owner is authoritative even before an analysis-only
+    /// credential has been provisioned, or after that credential expires.
+    private var shareOwnerSubject: String? { shareOwnerSnapshot?.ownerSubject }
+
+    private func bindShareSessionOwnerIfNeeded() {
+        if shareOwnerSnapshot == nil {
+            shareOwnerSnapshot = ShareOwnerSnapshot(
+                cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner())
+        }
+    }
+
+    private func shareSessionStillMatches(requireAnalysisCredential: Bool = true) -> Bool {
+        bindShareSessionOwnerIfNeeded()
+        guard let snapshot = shareOwnerSnapshot else {
+            parseError = ShareAnalysisError.sessionChanged.errorDescription
+            return false
+        }
+        do {
+            try snapshot.validate(
+                cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner(),
+                credential: ShareAnalysisKeychain.read())
+        } catch {
+            parseError = ShareAnalysisError.sessionChanged.errorDescription
+            return false
+        }
+        guard requireAnalysisCredential, isSocialAnalysis,
+              let credential = analysisCredential else { return true }
         guard ShareAnalysisKeychain.read() == credential, credential.isUsable() else {
             parseError = ShareAnalysisError.sessionChanged.errorDescription
             return false
@@ -1522,12 +1556,8 @@ struct ShareExtensionView: View {
         guard !isSaved else { return }
         // Failed analysis never creates a map pin; this button is an explicit
         // local source save. Preserve the originating account when available.
-        let current = ShareAnalysisKeychain.read()
-        if let analysisCredential, current != analysisCredential {
-            parseError = ShareAnalysisError.sessionChanged.errorDescription
-            return
-        }
-        let candidate = PendingReviewCandidate(ownerSubject: current?.ownerSubject,
+        guard shareSessionStillMatches(requireAnalysisCredential: false) else { return }
+        let candidate = PendingReviewCandidate(ownerSubject: shareOwnerSubject,
             candidateName: "Source clue", address: "", category: "other", sourceURL: sharedURL,
             sourceText: socialCaption, evidence: ["Source preserved; semantic analysis pending"],
             confidence: 0, missingInfo: ["Analysis pending", "User confirmation"], savedAt: Date(),
@@ -3251,6 +3281,35 @@ struct ShareExtensionView: View {
         return isValidCoordinate(latitude: latitude, longitude: longitude)
     }
 
+    private func unplacedReviewCandidate(
+        from place: ParsedPlace,
+        sourceURLString: String,
+        sourceText: String,
+        latitude: Double,
+        longitude: Double
+    ) -> PendingReviewCandidate {
+        PendingReviewCandidate(
+            ownerSubject: shareOwnerSubject,
+            candidateName: cleanPlaceName(place.name),
+            address: place.address,
+            category: selectedCategory,
+            latitude: latitude,
+            longitude: longitude,
+            sourceURL: sourceURLString.isEmpty ? nil : sourceURLString,
+            sourceText: sourceText.isEmpty ? nil : sourceText,
+            evidence: [
+                "Held in Review: Free: 50 places",
+                sourceURLString.isEmpty ? nil : "Source URL: \(sourceURLString)",
+                sourceText.isEmpty ? nil : String(sourceText.prefix(300)),
+                place.googlePlaceId.map { "Google Place ID: \($0)" }
+            ].compactMap { $0 },
+            confidence: 0.9,
+            missingInfo: [SAVEProAccessPolicy.unplacedInboxMarker],
+            savedAt: Date(),
+            googlePlaceId: place.googlePlaceId
+        )
+    }
+
     private func reviewCandidate(from place: ParsedPlace, sourceURLString: String, sourceText: String) -> PendingReviewCandidate? {
         let name = cleanPlaceName(place.name)
         guard isUsablePlaceName(name), name != "Unknown Place" else { return nil }
@@ -3600,7 +3659,7 @@ struct ShareExtensionView: View {
 
     private func savePlace() {
         guard !isSaved else { return }
-        if isSocialAnalysis && !shareAccountStillMatches() { return }
+        if !shareSessionStillMatches() { return }
         guard let place = parsedPlace else { return }
         guard let latitude = place.latitude,
               let longitude = place.longitude,
@@ -3618,8 +3677,22 @@ struct ShareExtensionView: View {
             return
         }
 
+        if SaveShareExtensionPlaceDestination.resolve(
+            cached: SavePlaceLimitHandoff.cachedDecision()
+        ) == .unplacedInbox {
+            let candidate = unplacedReviewCandidate(
+                from: place,
+                sourceURLString: sharedURL.isEmpty ? sharedText : sharedURL,
+                sourceText: sharedText,
+                latitude: latitude,
+                longitude: longitude
+            )
+            saveReviewCandidates([candidate], markSavedPlaceLimitPaywall: true)
+            return
+        }
+
         let pendingPlace = PendingSharedPlace(
-            ownerSubject: analysisCredential?.ownerSubject,
+            ownerSubject: shareOwnerSubject,
             googlePlaceId: place.googlePlaceId,
             name: place.name,
             address: place.address,
@@ -3651,16 +3724,36 @@ struct ShareExtensionView: View {
         saveReviewCandidates(candidates)
     }
 
-    private func saveReviewCandidates(_ candidates: [PendingReviewCandidate], sourceFallback: Bool = false) {
+    private func saveReviewCandidates(
+        _ candidates: [PendingReviewCandidate],
+        sourceFallback: Bool = false,
+        markSavedPlaceLimitPaywall: Bool = false
+    ) {
         guard !isSaved else { return }
-        if isSocialAnalysis && !sourceFallback && !shareAccountStillMatches() { return }
+        bindShareSessionOwnerIfNeeded()
+        guard shareSessionStillMatches(requireAnalysisCredential: !sourceFallback) else { return }
         guard !candidates.isEmpty else { return }
         guard let fileURL = appGroupFileURL(named: SAVEProductionConfig.pendingReviewCandidatesFileName) else {
             parseError = "Shared app storage is unavailable"
             return
         }
 
-        guard appendPendingItems(candidates, to: fileURL, as: PendingReviewCandidate.self) else { return }
+        guard let snapshot = shareOwnerSnapshot else { return }
+        let stamped: [PendingReviewCandidate]
+        do {
+            stamped = try candidates.map { candidate in
+                var next = candidate
+                next.ownerSubject = try snapshot.ownerForNewItem(existingOwner: candidate.ownerSubject)
+                return next
+            }
+        } catch {
+            parseError = ShareAnalysisError.sessionChanged.errorDescription
+            return
+        }
+        guard appendPendingItems(stamped, to: fileURL, as: PendingReviewCandidate.self) else { return }
+        if markSavedPlaceLimitPaywall {
+            SavePlaceLimitHandoff.markPaywallPending()
+        }
 
         savedReviewCandidateCount = candidates.count
         isSaved = true
@@ -3671,6 +3764,7 @@ struct ShareExtensionView: View {
 
     @discardableResult
     private func saveSourceOnlyMemory(_ source: String, reason: String) -> Bool {
+        guard shareSessionStillMatches(requireAnalysisCredential: false) else { return false }
         guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: SAVEProductionConfig.appGroupSuiteName) else {
             parseError = "Shared app storage is unavailable"
             return false
@@ -3695,10 +3789,12 @@ struct ShareExtensionView: View {
             address: nil,
             evidence: diagnostic.found + diagnostic.attempts + diagnosticSearchEvidence(diagnostic),
             evidenceDiagnostic: diagnostic,
-            createdAt: Date()
+            createdAt: Date(),
+            ownerSubject: shareOwnerSubject
         )
         var saved = false
         let coordinated = coordinate(fileURL, purpose: "append source-only memory") { coordinatedURL in
+            guard shareSessionStillMatches(requireAnalysisCredential: false) else { return }
             do {
                 let existingData = FileManager.default.fileExists(atPath: coordinatedURL.path)
                     ? try Data(contentsOf: coordinatedURL)
@@ -3726,6 +3822,7 @@ struct ShareExtensionView: View {
 
         var success = false
         let coordinated = coordinate(fileURL, purpose: "append pending queue") { coordinatedURL in
+            guard shareSessionStillMatches(requireAnalysisCredential: false) else { return }
             do {
                 let existing = try loadArray([Element].self, from: coordinatedURL)
                 let data = try JSONEncoder().encode(existing + items)
@@ -3764,6 +3861,7 @@ struct ShareExtensionView: View {
     }
 
     private func write(_ data: Data, to fileURL: URL) -> Bool {
+        guard shareSessionStillMatches(requireAnalysisCredential: false) else { return false }
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try data.write(to: fileURL, options: [.atomic])
