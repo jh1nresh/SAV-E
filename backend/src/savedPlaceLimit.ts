@@ -179,11 +179,17 @@ function nonEmpty(value: unknown): string | undefined {
 }
 
 function normalized(value: unknown): string {
-  return typeof value === "string"
-    ? value.normalize("NFKD").toLowerCase().replace(/ß/g, "ss").replace(/ς/g, "σ")
-      .replace(/[^\p{L}\p{N}]+/gu, " ")
-      .trim()
-    : "";
+  if (typeof value !== "string") return "";
+  // Mirrors Swift Place.normalizedVenueIdentity: CFStringFold case /
+  // diacritic / width (en_US_POSIX) then keep CharacterSet.alphanumerics
+  // (Unicode L*, M*, N*). Diacritic folding drops non-base marks only
+  // when the mark is in the Roman/Greek/Cyrillic range (code point
+  // <= 0x050F); Thai/Devanagari vowel signs stay. See CFString.c
+  // __CFStringFoldCharacterClusterAtIndex.
+  return value.normalize("NFKD").toLowerCase().replace(/ß/g, "ss").replace(/ς/g, "σ")
+    .replace(/\p{M}/gu, mark => (mark.codePointAt(0) ?? 0) <= 0x050F ? "" : mark)
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, " ")
+    .trim();
 }
 
 function coordinate(place: SavedPlaceIdentity): [number, number] | undefined {

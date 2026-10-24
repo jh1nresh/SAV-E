@@ -146,6 +146,24 @@ final class PlaceDeduplicationTests: XCTestCase {
         XCTAssertTrue(folded.matches(ascii))
     }
 
+    /// Mid-word and word-final Latin diacritics fold away. Must stay in
+    /// lockstep with backend savedPlaceLimit.normalized so a 51st venue
+    /// that only differs by an accent is not counted as new.
+    @MainActor
+    func testLatinDiacriticsFoldForVenueIdentityIncludingMidWord() {
+        let sao = makePlace(name: "São Cafe", address: "1 Example Road", googlePlaceId: nil, sourceUrl: nil)
+        let saoAscii = makePlace(name: "Sao Cafe", address: "1 Example Road", googlePlaceId: nil, sourceUrl: nil)
+        XCTAssertTrue(sao.matches(saoAscii))
+        let zurich = makePlace(name: "Zürich Bar", address: "1 Example Road", googlePlaceId: nil, sourceUrl: nil)
+        let zurichAscii = makePlace(name: "Zurich Bar", address: "1 Example Road", googlePlaceId: nil, sourceUrl: nil)
+        XCTAssertTrue(zurich.matches(zurichAscii))
+        let cafe = makePlace(name: "Café", address: "1 Example Road", googlePlaceId: nil, sourceUrl: nil)
+        let cafeAscii = makePlace(name: "Cafe", address: "1 Example Road", googlePlaceId: nil, sourceUrl: nil)
+        let cafeDecomposed = makePlace(name: "Cafe\u{0301}", address: "1 Example Road", googlePlaceId: nil, sourceUrl: nil)
+        XCTAssertTrue(cafe.matches(cafeAscii))
+        XCTAssertTrue(cafeDecomposed.matches(cafeAscii))
+    }
+
     @MainActor
     func testOnePostCanRecommendDifferentVenuesAtTheSameCoordinate() {
         let first = makePlace(name: "Cafe", address: "Mall floor 1", googlePlaceId: nil, sourceUrl: "https://instagram.com/p/list")

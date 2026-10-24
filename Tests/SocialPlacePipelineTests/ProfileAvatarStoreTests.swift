@@ -1034,18 +1034,33 @@ final class ProfileAvatarStoreTests: XCTestCase {
         let deletedRef = "save_account_" + String(repeating: "A", count: 43)
         let store = InMemoryAccountReferenceStore(value: deletedRef)
         store.clearError = ProfileUpdateTestError.offline
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let vault = SaveLocalVaultService(
             overrideVaultURL: directory.appendingPathComponent("signed-in-clear-fail.json")
         )
         try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a"))
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([
+            pendingDeletionPlace(owner: "account-a", name: "A pending"),
+            pendingDeletionPlace(owner: "account-b", name: "B pending")
+        ])
+        queue.restorePendingReviewCandidates([
+            pendingDeletionReview(owner: "account-a", name: "A review"),
+            pendingDeletionReview(owner: "account-b", name: "B review")
+        ])
         auth.authState = .authenticated(userId: "account-a")
         SavePlaceLimitHandoff.syncActiveOwner("account-a")
 
-        let model = deletionModel(
-            vault: vault,
-            currentOwner: { auth.currentUserId },
-            accountReferenceStore: store
-        ) {}
+        let model = ProfileViewModel(
+            supabaseService: SupabaseService(apiBaseURL: nil),
+            accountDeletionService: ClosureAccountDeletionService {},
+            avatarStore: ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("avatars")),
+            saveLocalVaultService: vault,
+            pendingPlaceImportService: queue,
+            accountReferenceStore: store,
+            currentUserIDProvider: { auth.currentUserId },
+            reviewerDemoProvider: { false }
+        )
 
         let first = await model.deleteAccount()
         XCTAssertFalse(first)
@@ -1059,6 +1074,14 @@ final class ProfileAvatarStoreTests: XCTestCase {
         XCTAssertEqual(kept.remoteOutcome, .succeeded)
         XCTAssertEqual(store.value, deletedRef)
         XCTAssertEqual(store.clearCount, 0)
+        let remainingPlaces = queue.consumePendingPlaces(ownerSubject: "account-a")
+            + queue.consumePendingPlaces(ownerSubject: "account-b")
+        XCTAssertEqual(Set(remainingPlaces.map(\.name)), ["B pending"])
+        XCTAssertFalse(remainingPlaces.contains { $0.ownerSubject == "account-a" })
+        let remainingReviews = queue.consumePendingReviewCandidates(ownerSubject: "account-a")
+            + queue.consumePendingReviewCandidates(ownerSubject: "account-b")
+        XCTAssertEqual(Set(remainingReviews.map(\.candidateName)), ["B review"])
+        XCTAssertFalse(remainingReviews.contains { $0.ownerSubject == "account-a" })
 
         store.clearError = nil
         let retry = await model.deleteAccount()

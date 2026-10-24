@@ -273,12 +273,12 @@ final class ProfileViewModel: ObservableObject {
     private func finishLocalAccountDeletion(
         _ intent: SaveAccountDeletionIntent, sessionGeneration: Int
     ) async throws {
+        var bindingClearError: Error?
         if intent.remoteOutcome == .succeeded {
             // Invalidate the deleted owner before any fallible vault-record
             // purge so a storage failure cannot leave A able to consume Share
             // queues. Sign out before the queue purge so admitted late writers
             // finish under the same per-file lock, then cannot recreate A.
-            var bindingClearError: Error?
             if !reviewerDemoProvider() {
                 let activeOwner = authService.currentUserId
                 if activeOwner == intent.owner,
@@ -305,13 +305,12 @@ final class ProfileViewModel: ObservableObject {
                SavePlaceLimitHandoff.cachedActiveOwner() == intent.owner {
                 SavePlaceLimitHandoff.syncActiveOwner(nil)
             }
-            if let bindingClearError {
-                throw bindingClearError
-            }
         }
         // Quarantine both Share queues before the fallible vault-record purge
         // and before fallible avatar removal. Unknown remote outcomes still
-        // finish this local cleanup while A stays signed in.
+        // finish this local cleanup while A stays signed in. A captured
+        // Keychain clear failure must not skip this quarantine: queue
+        // reads do not consult the deletion receipt.
         try pendingPlaceImportService.purgeAccountDeletionItems(
             belongingTo: intent.owner,
             initialOwnerlessItemKeys: intent.initialOwnerlessQueueItemKeys,
@@ -323,6 +322,9 @@ final class ProfileViewModel: ObservableObject {
             // quarantined; keep the durable vault scope for retry.
             guard authService.currentUserId != intent.owner else {
                 throw AccountDeletionCleanupError.deletedSessionStillActive
+            }
+            if let bindingClearError {
+                throw bindingClearError
             }
         }
         try saveLocalVaultService.purgeAccountDeletionRecords(intentID: intent.id)

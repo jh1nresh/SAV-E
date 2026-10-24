@@ -1658,7 +1658,8 @@ private extension String {
 private extension String {
     var normalizedVenueIdentity: String {
         // Keep word boundaries: "AB-C" and "A-BC" stay distinct. Mirrors
-        // backend savedPlaceLimit.normalized (separators → one space).
+        // backend savedPlaceLimit.normalized (separators → one space;
+        // Latin/Greek/Cyrillic combining marks fold away, other marks stay).
         let folded = folding(
             options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
             locale: Locale(identifier: "en_US_POSIX")

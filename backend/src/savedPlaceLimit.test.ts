@@ -343,6 +343,30 @@ test("canonical identity honors provider conflicts, coordinates, addresses and U
   assert.equal(savedPlacesMatch({ ...base, latitude: 80 }, { ...base, id: "b", latitude: 80.00108 }), false);
 });
 
+function nearby(name: string, id = name): SavedPlaceIdentity {
+  return { id, name, address: "1 Example Road", latitude: 25, longitude: 121 };
+}
+
+test("venue identity strips Latin combining marks and keeps non-Latin marks and separators", () => {
+  assert.equal(savedPlacesMatch(nearby("São Cafe"), nearby("Sao Cafe")), true);
+  assert.equal(savedPlacesMatch(nearby("Zürich Bar"), nearby("Zurich Bar")), true);
+  assert.equal(savedPlacesMatch(nearby("Café"), nearby("Cafe")), true);
+  assert.equal(savedPlacesMatch(nearby("Cafe\u0301"), nearby("Cafe")), true);
+  assert.equal(savedPlacesMatch(nearby("ＡＢＣ １２３"), nearby("ABC 123")), true);
+  assert.equal(savedPlacesMatch(nearby("ﬁsh"), nearby("fish")), true);
+  assert.equal(savedPlacesMatch(nearby("Straße Cafe"), nearby("Strasse Cafe")), true);
+  assert.equal(savedPlacesMatch(nearby("ςigma"), nearby("σigma")), true);
+  assert.equal(savedPlacesMatch(nearby("隐月咖啡"), nearby("隐月咖啡")), true);
+  assert.equal(savedPlacesMatch(nearby("กิ"), nearby("ก")), false);
+  assert.equal(savedPlacesMatch(nearby("का"), nearby("क")), false);
+  assert.equal(savedPlacesMatch(nearby("København"), nearby("Kobenhavn")), false);
+  assert.equal(savedPlacesMatch(nearby("Łódź"), nearby("Lodz")), false);
+  assert.equal(savedPlacesMatch(nearby("Đorđe"), nearby("Dorđe")), false);
+  assert.equal(savedPlacesMatch(nearby("CafeRoma"), nearby("Cafe Roma")), false);
+  assert.equal(savedPlacesMatch(nearby("7Eleven"), nearby("7-Eleven")), false);
+  assert.equal(savedPlacesMatch(nearby("AB-C"), nearby("A-BC")), false);
+});
+
 test("canonical consolidation uses stable earliest identity and inherits missing Google identity", () => {
   const base = { name: "Cafe", address: "Road", latitude: 25, longitude: 121 };
   const rows: SavedPlaceIdentity[] = [

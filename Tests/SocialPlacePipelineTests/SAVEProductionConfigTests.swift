@@ -4143,18 +4143,31 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertTrue(
             profile.contains("if let bindingClearError"),
-            "P2 PRRT_kwDOTYZUp86v3W8L: rethrow after sign-out and cache sync"
+            "P2 PRRT_kwDOTYZUp86v3W8L: rethrow after sign-out, cache sync, and queue quarantine"
         )
         let clearErrorStart = try XCTUnwrap(profile.range(of: "if let bindingClearError"))
+        let stillActiveStart = try XCTUnwrap(
+            profile.range(of: "throw AccountDeletionCleanupError.deletedSessionStillActive")
+        )
         XCTAssertLessThan(
             try XCTUnwrap(profile.range(of: "SavePlaceLimitHandoff.syncActiveOwner(nil)")).lowerBound,
             clearErrorStart.lowerBound,
             "P2 PRRT_kwDOTYZUp86v3W8L: cache sync must run before rethrowing clear"
         )
         XCTAssertLessThan(
-            clearErrorStart.lowerBound,
             purgeStart.lowerBound,
-            "P2 PRRT_kwDOTYZUp86v3W8L: rethrow before queue purge so the receipt stays"
+            clearErrorStart.lowerBound,
+            "QA 851ddfb: queue purge must still run when Keychain clear fails"
+        )
+        XCTAssertLessThan(
+            stillActiveStart.lowerBound,
+            clearErrorStart.lowerBound,
+            "QA 851ddfb: post-signOut session guard still runs before the captured clear error"
+        )
+        XCTAssertLessThan(
+            clearErrorStart.lowerBound,
+            vaultPurgeStart.lowerBound,
+            "QA 851ddfb: rethrow before vault/avatar/receipt completion so the receipt stays"
         )
         let nilOwnerStart = try XCTUnwrap(profile.range(of: "else if activeOwner == nil"))
         let nilOwnerSlice = String(profile[nilOwnerStart.lowerBound...].prefix(500))
