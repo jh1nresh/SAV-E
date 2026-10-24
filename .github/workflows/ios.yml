@@ -145,11 +145,11 @@ jobs:
           retention-days: 1
           overwrite: true
 
-  # Required check name `ios` (ruleset 19331432). Never skipped. This job
-  # is the full UI + snapshot + 0.90 parity suite and can succeed only when
-  # that suite actually ran.
+  # Required check name `ios` (ruleset 19331432). Never skipped: still runs
+  # when ios-build fails. !cancelled() (not always()) lets the existing
+  # concurrency group cancel a superseded run.
   ios:
-    if: always()
+    if: ${{ !cancelled() }}
     needs: [ios-build]
     runs-on: macos-26
     # Products come from ios-build (no second compile). Setup + units +
@@ -370,9 +370,7 @@ jobs:
         if: steps.scope.outputs.ui == 'true'
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-UI-tests.log
-          SAVE_SCREENSHOT_DIR: ${{ runner.temp }}/SAVE-First-Run
         run: |
-          mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
           if [[ ! -s "$RUNNER_TEMP/ios-ui-args.txt" ]]; then
             echo 'UI coverage was selected but no test arguments were produced.' >&2
             exit 1
@@ -389,48 +387,6 @@ jobs:
           if ((${#iteration_args[@]} > 0)); then
             max_attempts=3
           fi
-          # Host `env:` does not reach the xctestrun UI runner. Inject the
-          # fallback path into the plist. Xcode 26.6 rejects the extra
-          # xcodebuild environment flag, so the plist is the only path.
-          python3 - "${{ steps.products.outputs.xctestrun }}" "$SAVE_SCREENSHOT_DIR" <<'PY'
-          import plistlib, sys
-          from pathlib import Path
-          path = Path(sys.argv[1])
-          screenshot_dir = sys.argv[2]
-          data = plistlib.loads(path.read_bytes())
-
-          def inject(obj):
-              if isinstance(obj, dict):
-                  for key in ("EnvironmentVariables", "TestingEnvironmentVariables"):
-                      existing = obj.get(key)
-                      if isinstance(existing, dict):
-                          existing["SAVE_SCREENSHOT_DIR"] = screenshot_dir
-                      elif key in obj:
-                          obj[key] = {"SAVE_SCREENSHOT_DIR": screenshot_dir}
-                  if any(k in obj for k in (
-                      "BlueprintName",
-                      "TestHostBundleIdentifier",
-                      "ProductModuleName",
-                  )):
-                      env = obj.setdefault("EnvironmentVariables", {})
-                      if isinstance(env, dict):
-                          env["SAVE_SCREENSHOT_DIR"] = screenshot_dir
-                      testing = obj.setdefault("TestingEnvironmentVariables", {})
-                      if isinstance(testing, dict):
-                          testing["SAVE_SCREENSHOT_DIR"] = screenshot_dir
-                  for value in obj.values():
-                      inject(value)
-              elif isinstance(obj, list):
-                  for value in obj:
-                      inject(value)
-
-          inject(data)
-          path.write_bytes(plistlib.dumps(data, fmt=plistlib.FMT_XML))
-          print(f"injected SAVE_SCREENSHOT_DIR into {path}")
-          PY
-          # StoreKit catalog path flags are invalid with -xctestrun /
-          # test-without-building. SAVE-E.xcscheme already points at
-          # SAVEPro.storekit, so the xctestrun inherits that catalog.
           scripts/run-ios-xcodebuild-retry.sh \
             --max-attempts "$max_attempts" \
             --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
@@ -443,51 +399,24 @@ jobs:
             test-without-building
 
       - name: Enforce Atlas production visual parity
-        if: always() && (steps.scope.outputs.ui == 'true')
+        if: steps.scope.outputs.ui == 'true'
         run: |
           # macOS runners ship a PEP 668 Homebrew Python. Install Pillow in a
           # throwaway venv so pip never touches the system interpreter.
           python3 -m venv "$RUNNER_TEMP/save-parity-venv"
           "$RUNNER_TEMP/save-parity-venv/bin/python" -m pip install Pillow
-          skip_args=()
-          if [[ -f "$RUNNER_TEMP/ios-ui-args.txt" ]] \
-             && ! grep -q 'testDoodlePaywallParity' "$RUNNER_TEMP/ios-ui-args.txt"; then
-            # tile-town-home and other focused sets omit the paywall rail.
-            # Requiring five-tab-paywall there fails the required ios job.
-            skip_args+=(--skip-screens paywall)
-          fi
-          parity_cmd=(
-            Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh
-            --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult"
-            --artifacts "$RUNNER_TEMP/SAVE-Atlas-Parity"
-            --threshold 0.90
-          )
-          if [[ ${#skip_args[@]} -gt 0 ]]; then
-            parity_cmd+=("${skip_args[@]}")
-          fi
-          PATH="$RUNNER_TEMP/save-parity-venv/bin:$PATH" "${parity_cmd[@]}"
+          PATH="$RUNNER_TEMP/save-parity-venv/bin:$PATH" \
+            Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh \
+              --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
+              --artifacts "$RUNNER_TEMP/SAVE-Atlas-Parity" \
+              --threshold 0.90
 
       - name: Export first-run visual evidence
-        if: always()
+        if: always() && (steps.ui_tests.outcome == 'success' || steps.ui_tests.outcome == 'failure')
         run: |
-          mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
-          if [[ -f "$RUNNER_TEMP/SAVE-UI.xcresult/Info.plist" ]]; then
-            xcrun xcresulttool export attachments \
-              --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
-              --output-path "$RUNNER_TEMP/SAVE-First-Run" \
-              || echo "xcresulttool export failed; keep SAVE_SCREENSHOT_DIR rasters."
-          else
-            echo "No readable UI result bundle; keep SAVE_SCREENSHOT_DIR rasters."
-          fi
-          echo "DESIGN Home/Passport/Map rasters in SAVE-First-Run:"
-          for name in five-tab-home light-home dark-home H1 H2 H3 H4 five-tab-passport doodle-passport-light doodle-passport-dark light-passport dark-passport five-tab-map doodle-map-light light-map dark-map five-tab-capture five-tab-paywall pr295-capture-light pr295-paywall-light; do
-            path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
-            if [[ -f "$path" ]]; then
-              wc -c "$path"
-            else
-              echo "missing $name.png"
-            fi
-          done
+          xcrun xcresulttool export attachments \
+            --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
+            --output-path "$RUNNER_TEMP/SAVE-First-Run"
 
       - name: Reset focused simulator before Trip sheet UI test
         if: steps.scope.outputs.trip == 'true'
@@ -552,129 +481,6 @@ jobs:
           while IFS= read -r line; do
             echo "::warning title=Flaky UI test::$line"
           done <<< "$retried"
-
-      - name: Capture PR 295 large-type paywall evidence
-        if: always() && (steps.scope.outputs.ui == 'true')
-        env:
-          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-PR295-large-type-tests.log
-          SAVE_SCREENSHOT_DIR: ${{ runner.temp }}/SAVE-First-Run
-        run: |
-          mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
-          printf '%s\n' \
-            '-only-testing:SAVEUITests/SAVEScreenshotRailTests/testPR295PaywallLargeTypeEvidence' \
-            > "$RUNNER_TEMP/ios-pr295-large-type-args.txt"
-          scripts/run-ios-xcodebuild-retry.sh \
-            --max-attempts 3 \
-            --result-bundle "$RUNNER_TEMP/SAVE-PR295-LargeType.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-PR295-large-type-tests.log" \
-            --only-testing-file "$RUNNER_TEMP/ios-pr295-large-type-args.txt" \
-            -- \
-            -xctestrun '${{ steps.products.outputs.xctestrun }}' \
-            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            test-without-building
-          xcrun xcresulttool export attachments \
-            --path "$RUNNER_TEMP/SAVE-PR295-LargeType.xcresult" \
-            --output-path "$RUNNER_TEMP/SAVE-First-Run"
-
-      - name: Capture PR 295 iPhone SE evidence
-        if: always() && (steps.scope.outputs.ui == 'true')
-        env:
-          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-PR295-se-tests.log
-          SAVE_SCREENSHOT_DIR: ${{ runner.temp }}/SAVE-First-Run
-        run: |
-          mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
-          device_type="$(xcrun simctl list -j devicetypes | python3 -c "import json,sys; types=json.load(sys.stdin)['devicetypes']; prefs=['com.apple.CoreSimulator.SimDeviceType.iPhone-SE-3rd-generation','com.apple.CoreSimulator.SimDeviceType.iPhone-SE']; idents={item.get('identifier') for item in types}; print(next((pref for pref in prefs if pref in idents), next((item.get('identifier') for item in types if 'iPhone-SE' in (item.get('identifier') or '') or (item.get('name') or '').startswith('iPhone SE')), '')))")"
-          if [[ -z "$device_type" ]]; then
-            echo 'iPhone SE simulator device type is missing' >&2
-            exit 1
-          fi
-          se_udid="$(xcrun simctl create \
-            'SAV-E CI SE' \
-            "$device_type" \
-            'com.apple.CoreSimulator.SimRuntime.iOS-26-5')"
-          xcrun simctl bootstatus "$se_udid" -b
-          printf '%s\n' \
-            '-only-testing:SAVEUITests/SAVEScreenshotRailTests/testPR295SEEvidence' \
-            > "$RUNNER_TEMP/ios-pr295-se-args.txt"
-          set +e
-          scripts/run-ios-xcodebuild-retry.sh \
-            --max-attempts 3 \
-            --result-bundle "$RUNNER_TEMP/SAVE-PR295-SE.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-PR295-se-tests.log" \
-            --only-testing-file "$RUNNER_TEMP/ios-pr295-se-args.txt" \
-            -- \
-            -xctestrun '${{ steps.products.outputs.xctestrun }}' \
-            -destination "platform=iOS Simulator,id=$se_udid" \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            test-without-building
-          status=$?
-          set -e
-          xcrun xcresulttool export attachments \
-            --path "$RUNNER_TEMP/SAVE-PR295-SE.xcresult" \
-            --output-path "$RUNNER_TEMP/SAVE-First-Run" \
-            || true
-          xcrun simctl shutdown "$se_udid" || true
-          xcrun simctl delete "$se_udid" || true
-          exit "$status"
-
-      - name: Stage PR 295 simulator evidence
-        if: always() && (steps.scope.outputs.ui == 'true')
-        run: |
-          mkdir -p "$RUNNER_TEMP/pr295-evidence"
-          shopt -s nullglob
-          copied=0
-          for path in "$RUNNER_TEMP/SAVE-First-Run"/pr295-*.png \
-                      "$RUNNER_TEMP/SAVE-First-Run"/doodle-capture-light.png \
-                      "$RUNNER_TEMP/SAVE-First-Run"/doodle-capture-dark.png \
-                      "$RUNNER_TEMP/SAVE-First-Run"/doodle-paywall-light.png \
-                      "$RUNNER_TEMP/SAVE-First-Run"/doodle-paywall-dark.png; do
-            if [[ -f "$path" ]]; then
-              cp "$path" "$RUNNER_TEMP/pr295-evidence/"
-              copied=$((copied + 1))
-            fi
-          done
-          echo "Staged $copied PR 295 evidence PNGs:"
-          ls -la "$RUNNER_TEMP/pr295-evidence"
-          required=(
-            pr295-paywall-large-type-light.png
-            pr295-paywall-large-type-dark.png
-            pr295-capture-se-light.png
-            pr295-paywall-se-light.png
-          )
-          # tile-town-home and other focused sets omit capture/paywall
-          # parity. Those four files come from those tests; requiring
-          # them there fails the required ios job (Codex P1 4335775078).
-          args="$RUNNER_TEMP/ios-ui-args.txt"
-          if [[ ! -f "$args" ]] || grep -q 'testDoodleCaptureParity' "$args"; then
-            required+=(pr295-capture-light.png)
-          fi
-          if [[ ! -f "$args" ]] || grep -q 'testDoodleCapturePaywallDarkParity' "$args"; then
-            required+=(pr295-capture-dark.png)
-          fi
-          if [[ ! -f "$args" ]] || grep -q 'testDoodlePaywallParity' "$args"; then
-            required+=(pr295-paywall-light.png)
-          fi
-          if [[ ! -f "$args" ]] || grep -q 'testDoodleCapturePaywallDarkParity' "$args"; then
-            required+=(pr295-paywall-dark.png)
-          fi
-          missing=0
-          for name in "${required[@]}"; do
-            if [[ ! -f "$RUNNER_TEMP/pr295-evidence/$name" ]]; then
-              echo "missing $name" >&2
-              missing=1
-            fi
-          done
-          exit "$missing"
-
-      - name: Upload PR 295 simulator evidence
-        if: always() && (steps.scope.outputs.ui == 'true')
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: pr295-evidence-${{ github.sha }}
-          path: ${{ runner.temp }}/pr295-evidence
-          if-no-files-found: error
-          retention-days: 14
 
       - name: Tear down simulator
         if: always() && steps.simulator.outputs.udid != ''

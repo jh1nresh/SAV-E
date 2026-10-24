@@ -19,6 +19,10 @@ PENDING = "pending"
 FAILED = "failed"
 MISSING = "missing"
 RANK = {MISSING: 0, SUCCESS: 1, PENDING: 2, FAILED: 3}
+CI_WORKFLOW_FILE = "ci.yml"
+CI_WORKFLOW_PATH = ".github/workflows/ci.yml"
+CI_NOT_FOUND = "CI not found"
+MAX_RUN_PAGES = 50
 
 
 def job_key(name: str) -> str | None:
@@ -91,20 +95,73 @@ def api_get(url: str, token: str) -> dict:
         raise SystemExit(f"GitHub API {error.code} for {url}: {detail}") from error
 
 
-def latest_ci_run(repository: str, commit: str, token: str) -> dict | None:
-    query = urllib.parse.urlencode({"head_sha": commit, "per_page": 20})
-    payload = api_get(
-        f"https://api.github.com/repos/{repository}/actions/runs?{query}",
-        token,
+def ci_workflow_runs_url(
+    repository: str, commit: str, *, page: int = 1, per_page: int = 100
+) -> str:
+    query = urllib.parse.urlencode(
+        {"head_sha": commit, "per_page": per_page, "page": page}
     )
-    runs = [
-        run
-        for run in payload.get("workflow_runs") or []
-        if run.get("path") == ".github/workflows/ci.yml"
-    ]
-    if not runs:
-        return None
-    return max(runs, key=lambda run: int(run.get("id") or 0))
+    return (
+        f"https://api.github.com/repos/{repository}/actions/workflows/"
+        f"{CI_WORKFLOW_FILE}/runs?{query}"
+    )
+
+
+def run_recency_key(run: dict) -> tuple:
+    return (str(run.get("created_at") or ""), int(run.get("id") or 0))
+
+
+def is_ci_run_for_commit(run: dict, commit: str) -> bool:
+    if str(run.get("head_sha") or "") != commit:
+        return False
+    path = run.get("path")
+    if path not in (None, "", CI_WORKFLOW_PATH):
+        return False
+    return True
+
+
+def describe_ci_run(run: dict | None) -> str:
+    if run is None:
+        return CI_NOT_FOUND
+    conclusion = run.get("conclusion") or "none"
+    return (
+        f"CI run {run.get('id')} status={run.get('status') or 'unknown'} "
+        f"conclusion={conclusion}"
+    )
+
+
+def latest_ci_run(
+    repository: str, commit: str, token: str, *, per_page: int = 100
+) -> dict | None:
+    """Return the newest CI workflow run for commit, or None if none exist.
+
+    Queries the CI workflow runs API directly so other workflows (for
+    example Auto-rerun flaky) cannot crowd the first page of the generic
+    /actions/runs list. Paginates until a short page. Does not filter by
+    status or conclusion: in-progress and failed runs are returned so the
+    caller can wait or block.
+    """
+    selected: dict | None = None
+    page = 1
+    while True:
+        payload = api_get(
+            ci_workflow_runs_url(
+                repository, commit, page=page, per_page=per_page
+            ),
+            token,
+        )
+        page_runs = list(payload.get("workflow_runs") or [])
+        for run in page_runs:
+            if not is_ci_run_for_commit(run, commit):
+                continue
+            if selected is None or run_recency_key(run) > run_recency_key(selected):
+                selected = run
+        if len(page_runs) < per_page:
+            break
+        page += 1
+        if page > MAX_RUN_PAGES:
+            break
+    return selected
 
 
 def list_jobs(repository: str, run_id: int, token: str) -> list[dict]:
@@ -144,8 +201,8 @@ def main() -> None:
                 f"evidence-rubric: {format_results(results)}"
             )
         print(
-            f"waiting for CI jobs ({format_results(results)}); "
-            f"{int(remaining)}s left",
+            f"waiting for CI jobs ({describe_ci_run(run)}; "
+            f"{format_results(results)}); {int(remaining)}s left",
             file=sys.stderr,
         )
         time.sleep(min(args.poll_seconds, remaining))
