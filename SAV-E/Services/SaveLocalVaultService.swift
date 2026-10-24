@@ -570,7 +570,7 @@ final class SaveLocalVaultService: Sendable {
         let replacesVenue = incoming.id == existing.id
             && incoming.reviewCandidate?.isUnplacedInbox == true
             && incoming.reviewCandidate?.hasSavableLocation == true
-        let activeProviderPrefixes = ["Amap POI id:", "Amap reference coordinates (GCJ-02):", "Provider map URL:"]
+        let activeProviderPrefixes = PlaceReviewCandidate.providerVenueEvidencePrefixes
         let previousEvidence = replacesVenue ? existing.evidence.filter { line in
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             return !activeProviderPrefixes.contains { trimmed.lowercased().hasPrefix($0.lowercased()) }

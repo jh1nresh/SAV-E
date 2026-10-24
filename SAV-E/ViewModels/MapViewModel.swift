@@ -1534,7 +1534,7 @@ final class MapViewModel: ObservableObject {
             candidate.correctionScopeKey = candidate.correctionScopeKey ?? parked.correctionScopeKey
             // Fresh server venue fields remain authoritative. Retain original
             // source context without reactivating obsolete provider coordinates.
-            let providerPrefixes = ["Amap POI id:", "Amap reference coordinates (GCJ-02):", "Provider map URL:"]
+            let providerPrefixes = PlaceReviewCandidate.providerVenueEvidencePrefixes
             for evidence in parked.evidence where !candidate.evidence.contains(evidence) {
                 if candidate.hasSavableLocation && providerPrefixes.contains(where: {
                     evidence.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().hasPrefix($0.lowercased())

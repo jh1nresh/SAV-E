@@ -8,7 +8,10 @@ struct SaveFriendsView: View {
             from: place,
             ownerSubject: PrivyAuthService.shared.currentUserId
         )
-        _ = try SaveLocalVaultService.shared.saveReviewCandidate(candidate)
+        _ = try SaveLocalVaultService.shared.saveReviewCandidate(
+            candidate,
+            preservingParkedContext: candidate.isUnplacedInbox
+        )
         SavePlaceLimitHandoff.markPaywallPending(notify: false)
         return candidate
     }

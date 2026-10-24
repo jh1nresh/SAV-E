@@ -3310,6 +3310,44 @@ final class SAVEProductionConfigTests: XCTestCase {
             map.contains(#"let confirmedIDs = Set(places.flatMap(\.savedIDs))"#),
             "P2 4366041520: Unplaced refresh must hide alias IDs that belong to a stamp"
         )
+        let pending = try source(at: "SAV-E/Services/PendingPlaceImportService.swift")
+        XCTAssertTrue(
+            pending.contains("venueEvidence += providerVenueEvidence(from: place)"),
+            "P2 4366358729: Unplaced parking must persist every non-WGS provider venue"
+        )
+        XCTAssertTrue(
+            pending.contains("let keepCoordinates = place.isMapKitMappable || !canReconstructProvider"),
+            "P2 4366358729: never nil lat/lon unless provider evidence can rebuild the venue"
+        )
+        XCTAssertFalse(
+            pending.contains("let mapURL = place.providerMapDestinationURL"),
+            "P2 4366358729: Amap without optional provider_map_url must still park a reconstructable venue"
+        )
+        XCTAssertTrue(pending.contains("Baidu Maps POI id:"))
+        XCTAssertTrue(
+            map.contains("PlaceReviewCandidate.providerVenueEvidencePrefixes"),
+            "P2 4366358729: refresh must retire every provider-venue evidence prefix"
+        )
+        XCTAssertTrue(
+            try source(at: "SAV-E/Services/SaveLocalVaultService.swift")
+                .contains("PlaceReviewCandidate.providerVenueEvidencePrefixes"),
+            "P2 4366358729: vault re-park must retire stale provider coordinates"
+        )
+        for sibling in [
+            "SAV-E/ViewModels/SharedPostsStore.swift",
+            "SAV-E/Views/Origin/SaveFriendsView.swift",
+            "SAV-E/Views/Origin/SharedPostViews.swift",
+        ] {
+            let text = try source(at: sibling)
+            XCTAssertTrue(
+                text.contains("PlaceReviewCandidate.unplacedInboxItem("),
+                "P2 4366358729: \(sibling) must reuse the shared Unplaced park writer"
+            )
+            XCTAssertTrue(
+                text.contains("preservingParkedContext: candidate.isUnplacedInbox"),
+                "P2 4366358729: \(sibling) must persist the parked Unplaced snapshot"
+            )
+        }
         XCTAssertTrue(map.contains("requestSavedPlaceLimitPaywall()"))
     }
 
@@ -4471,6 +4509,140 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(saved.name, "Parked Harbor Cafe")
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == parked.id })
         XCTAssertFalse(try vault.reviewCandidates(belongingTo: "did:privy:owner-a").contains { $0.id == parked.id })
+    }
+
+    /// P2 4366358729: every non-WGS Unplaced park must reload with a
+    /// reconstructable venue. WGS rows keep their coordinates unchanged.
+    @MainActor
+    func testUnplacedParkingPreservesEveryProviderLocationThroughVaultReload() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vaultURL = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let owner = "did:privy:owner-a"
+
+        var amap = Place(
+            id: UUID(),
+            name: "Amap Harbor Cafe",
+            address: "1 Harbor",
+            latitude: 31.230,
+            longitude: 121.470,
+            category: .cafe,
+            status: .wantToGo,
+            sourcePlatform: .other,
+            createdAt: Date()
+        )
+        amap.coordinateSystem = .gcj02
+        amap.locationProvider = .amap
+        amap.providerPlaceId = "amap-no-url"
+        amap.providerMapUrl = nil
+        XCTAssertNil(amap.providerMapDestinationURL)
+        _ = try vault.saveReviewCandidate(
+            PlaceReviewCandidate.unplacedInboxItem(from: amap, ownerSubject: owner),
+            preservingParkedContext: true
+        )
+
+        let baiduPost = SharedPlacePost(
+            id: UUID(uuidString: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")!,
+            name: "Baidu West Lake",
+            address: "Hangzhou",
+            latitude: 30.250,
+            longitude: 120.150,
+            coordinate_system: .bd09,
+            location_provider: .baidu,
+            provider_place_id: "baidu-west-lake",
+            category: "attraction",
+            status: .wantToGo,
+            stars: nil,
+            caption: nil,
+            shared_at: "2026-10-24T00:00:00Z",
+            author_id: "author",
+            author_name: "Author",
+            author_handle: nil,
+            author_avatar_url: nil,
+            visible_to_followers: true
+        )
+        let baiduPlace = baiduPost.asUnplacedPlace(ownerSubject: owner)
+        XCTAssertEqual(baiduPlace.resolvedCoordinateSystem, .bd09)
+        XCTAssertEqual(baiduPlace.locationProvider, .baidu)
+        _ = try vault.saveReviewCandidate(
+            PlaceReviewCandidate.unplacedInboxItem(from: baiduPlace, ownerSubject: owner),
+            preservingParkedContext: true
+        )
+
+        var wgs = Place(
+            id: UUID(),
+            name: "WGS Harbor Cafe",
+            address: "2 Harbor",
+            latitude: 25.033,
+            longitude: 121.565,
+            googlePlaceId: "ChIJwgs-harbor",
+            category: .cafe,
+            status: .wantToGo,
+            sourcePlatform: .other,
+            createdAt: Date()
+        )
+        wgs.coordinateSystem = .wgs84
+        _ = try vault.saveReviewCandidate(
+            PlaceReviewCandidate.unplacedInboxItem(from: wgs, ownerSubject: owner),
+            preservingParkedContext: true
+        )
+
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: owner)
+        defer { PrivyAuthService.shared.authState = previousAuth }
+        let parkedVaultURL = directory.appendingPathComponent("parked.json")
+        let parkedVault = SaveLocalVaultService(overrideVaultURL: parkedVaultURL)
+        let map = MapViewModel(
+            saveLocalVaultService: parkedVault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: false
+        )
+        _ = try map.parkPlaceInUnplacedInbox(amap, requestPaywall: false)
+
+        let reloaded = try SaveLocalVaultService(overrideVaultURL: vaultURL).reviewCandidates(belongingTo: owner)
+        let amapReloaded = try XCTUnwrap(reloaded.first { $0.name == "Amap Harbor Cafe" })
+        XCTAssertNil(amapReloaded.latitude, "GCJ-02 must not be promoted as WGS84")
+        XCTAssertTrue(amapReloaded.hasSavableLocation)
+        XCTAssertEqual(amapReloaded.providerLocation?.provider, .amap)
+        XCTAssertEqual(amapReloaded.providerLocation?.providerPlaceID, "amap-no-url")
+        XCTAssertEqual(amapReloaded.providerLocation?.coordinateSystem, .gcj02)
+        XCTAssertEqual(amapReloaded.providerLocation?.latitude, 31.230)
+        XCTAssertEqual(amapReloaded.providerLocation?.longitude, 121.470)
+        XCTAssertNil(amapReloaded.providerLocation?.mapURL)
+        let amapConfirmed = Place.from(amapReloaded)
+        XCTAssertEqual(amapConfirmed.resolvedCoordinateSystem, .gcj02)
+        XCTAssertEqual(amapConfirmed.providerPlaceId, "amap-no-url")
+        XCTAssertEqual(amapConfirmed.latitude, 31.230)
+
+        let baiduReloaded = try XCTUnwrap(reloaded.first { $0.name == "Baidu West Lake" })
+        XCTAssertNil(baiduReloaded.latitude, "BD-09 must not be promoted as WGS84")
+        XCTAssertTrue(baiduReloaded.hasSavableLocation)
+        XCTAssertEqual(baiduReloaded.providerLocation?.provider, .baidu)
+        XCTAssertEqual(baiduReloaded.providerLocation?.providerPlaceID, "baidu-west-lake")
+        XCTAssertEqual(baiduReloaded.providerLocation?.coordinateSystem, .bd09)
+        XCTAssertEqual(baiduReloaded.providerLocation?.latitude, 30.250)
+        XCTAssertEqual(baiduReloaded.providerLocation?.longitude, 120.150)
+        let baiduConfirmed = Place.from(baiduReloaded)
+        XCTAssertEqual(baiduConfirmed.resolvedCoordinateSystem, .bd09)
+        XCTAssertEqual(baiduConfirmed.locationProvider, .baidu)
+        XCTAssertEqual(baiduConfirmed.latitude, 30.250)
+
+        let wgsReloaded = try XCTUnwrap(reloaded.first { $0.name == "WGS Harbor Cafe" })
+        XCTAssertEqual(wgsReloaded.latitude, 25.033)
+        XCTAssertEqual(wgsReloaded.longitude, 121.565)
+        XCTAssertNil(wgsReloaded.providerLocation)
+        XCTAssertTrue(wgsReloaded.hasSavableLocation)
+        XCTAssertTrue(wgsReloaded.hasReliableCoordinates)
+        XCTAssertEqual(Place.from(wgsReloaded).resolvedCoordinateSystem, .wgs84)
+
+        let parkedReload = try SaveLocalVaultService(overrideVaultURL: parkedVaultURL)
+            .reviewCandidates(belongingTo: owner)
+        let parkedAmap = try XCTUnwrap(parkedReload.first { $0.name == "Amap Harbor Cafe" })
+        XCTAssertTrue(parkedAmap.hasSavableLocation)
+        XCTAssertEqual(parkedAmap.providerLocation?.providerPlaceID, "amap-no-url")
+        XCTAssertTrue(parkedAmap.isUnplacedInbox)
     }
 
     @MainActor

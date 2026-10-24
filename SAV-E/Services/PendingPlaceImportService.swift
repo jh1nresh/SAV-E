@@ -645,20 +645,19 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     /// Keep a capped save in the Review / Unplaced inbox instead of dropping it.
     static func unplacedInboxItem(from place: Place, ownerSubject: String? = nil) -> PlaceReviewCandidate {
         var venueEvidence = place.sourceEvidence
-        if place.resolvedCoordinateSystem == .gcj02, place.locationProvider == .amap,
-           let providerID = place.providerPlaceId, let mapURL = place.providerMapDestinationURL {
-            venueEvidence += ["Amap POI id: \(providerID)",
-                              "Amap reference coordinates (GCJ-02): \(place.latitude), \(place.longitude)",
-                              "Provider map URL: \(mapURL.absoluteString)"]
-        }
+        venueEvidence += providerVenueEvidence(from: place)
+        let canReconstructProvider = providerLocation(from: venueEvidence) != nil
+        // Never drop lat/lon unless provider evidence can rebuild the venue.
+        // GCJ-02 / BD-09 must not be promoted as MapKit WGS84.
+        let keepCoordinates = place.isMapKitMappable || !canReconstructProvider
         return PlaceReviewCandidate(
             id: place.id,
             captureId: nil,
             name: place.name,
             address: place.address,
             city: nil,
-            latitude: place.isMapKitMappable ? place.latitude : nil,
-            longitude: place.isMapKitMappable ? place.longitude : nil,
+            latitude: keepCoordinates ? place.latitude : nil,
+            longitude: keepCoordinates ? place.longitude : nil,
             evidence: venueEvidence,
             confidence: 1,
             missingInfo: [unplacedInboxMarker],
@@ -673,6 +672,62 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
             category: place.category,
             ownerSubject: ownerSubject
         )
+    }
+
+    /// Evidence prefixes that encode a live provider venue. Re-parking and
+    /// remote refresh must drop these so a corrected venue does not keep
+    /// stale coordinates as the first active location.
+    static let providerVenueEvidencePrefixes = [
+        "Amap POI id:",
+        "Amap reference coordinates (GCJ-02):",
+        "Baidu Maps POI id:",
+        "Baidu Maps reference coordinates",
+        "Provider:",
+        "Provider place id:",
+        "Provider reference coordinates",
+        "Provider map URL:",
+    ]
+
+    /// Persist enough for every non-WGS park to rebuild after vault reload:
+    /// provider identity, original coordinates + system, and the map URL
+    /// when one exists. Amap-specific lines stay for existing receipts.
+    static func providerVenueEvidence(from place: Place) -> [String] {
+        guard !place.isMapKitMappable else { return [] }
+        var lines: [String] = []
+        if let provider = place.locationProvider {
+            lines.append("Provider: \(provider.rawValue)")
+            if let providerID = nonEmptyTrimmed(place.providerPlaceId) {
+                lines.append("Provider place id: \(providerID)")
+                switch provider {
+                case .amap:
+                    lines.append("Amap POI id: \(providerID)")
+                case .baidu:
+                    lines.append("Baidu Maps POI id: \(providerID)")
+                case .googlePlaces, .appleMaps:
+                    break
+                }
+            }
+            if place.hasValidCoordinate {
+                let system = place.resolvedCoordinateSystem
+                lines.append(
+                    "\(provider.displayName) reference coordinates (\(system.rawValue)): \(place.latitude), \(place.longitude)"
+                )
+                if provider == .amap, system == .gcj02 {
+                    lines.append(
+                        "Amap reference coordinates (GCJ-02): \(place.latitude), \(place.longitude)"
+                    )
+                }
+            }
+        } else if place.hasValidCoordinate, place.resolvedCoordinateSystem != .wgs84 {
+            let system = place.resolvedCoordinateSystem
+            lines.append(
+                "Provider reference coordinates (\(system.rawValue)): \(place.latitude), \(place.longitude)"
+            )
+        }
+        if let mapURL = nonEmptyTrimmed(place.providerMapUrl) {
+            lines.append("Provider map URL: \(mapURL)")
+        }
+        return lines
     }
 
     /// A shared post can contain several venues. Reuse only an exact identity
@@ -844,45 +899,104 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     }
 
     var providerLocation: ProviderPlaceLocation? {
-        guard let mapURL = providerMapURL,
-              let providerID = evidence.compactMap({ Self.value(after: "Amap POI id:", in: $0) }).first,
-              let rawCoordinate = evidence.compactMap({
-                  Self.value(after: "Amap reference coordinates (GCJ-02):", in: $0)
-              }).first else {
-            return nil
-        }
-        let components = rawCoordinate.split(separator: ",", maxSplits: 1).map {
-            $0.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        guard components.count == 2,
-              let latitude = Double(components[0]),
-              let longitude = Double(components[1]),
-              latitude.isFinite,
-              longitude.isFinite,
-              (-90...90).contains(latitude),
-              (-180...180).contains(longitude),
-              latitude != 0 || longitude != 0 else {
-            return nil
-        }
+        Self.providerLocation(from: evidence)
+    }
+
+    static func providerLocation(from evidence: [String]) -> ProviderPlaceLocation? {
+        guard let coordinate = providerCoordinate(from: evidence) else { return nil }
+        let provider = providerIdentity(from: evidence)
+            ?? (coordinate.system == .bd09 ? .baidu : nil)
+            ?? (coordinate.system == .gcj02 ? .amap : nil)
+        guard let provider else { return nil }
+        let providerID = evidence.compactMap({ value(after: "Provider place id:", in: $0) }).first
+            ?? evidence.compactMap({ value(after: "Amap POI id:", in: $0) }).first
+            ?? evidence.compactMap({ value(after: "Baidu Maps POI id:", in: $0) }).first
         return ProviderPlaceLocation(
-            provider: .amap,
+            provider: provider,
             providerPlaceID: providerID,
-            coordinateSystem: .gcj02,
-            latitude: latitude,
-            longitude: longitude,
-            mapURL: mapURL
+            coordinateSystem: coordinate.system,
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude,
+            mapURL: storedProviderMapURL(from: evidence)
         )
+    }
+
+    private static func providerIdentity(from evidence: [String]) -> PlaceMatchProvider? {
+        if let raw = evidence.compactMap({ value(after: "Provider:", in: $0) }).first,
+           let provider = PlaceMatchProvider(rawValue: raw) {
+            return provider
+        }
+        if evidence.contains(where: {
+            $0.localizedCaseInsensitiveContains("Amap POI id:")
+                || $0.localizedCaseInsensitiveContains("Amap reference coordinates")
+        }) {
+            return .amap
+        }
+        if evidence.contains(where: {
+            $0.localizedCaseInsensitiveContains("Baidu Maps POI id:")
+                || $0.localizedCaseInsensitiveContains("Baidu Maps reference coordinates")
+        }) {
+            return .baidu
+        }
+        return nil
+    }
+
+    private static func providerCoordinate(
+        from evidence: [String]
+    ) -> (system: PlaceCoordinateSystem, latitude: Double, longitude: Double)? {
+        for line in evidence {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let marker = trimmed.range(of: "reference coordinates (", options: .caseInsensitive)
+            else { continue }
+            let afterMarker = trimmed[marker.upperBound...]
+            guard let close = afterMarker.firstIndex(of: ")") else { continue }
+            let systemRaw = String(afterMarker[..<close]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let system = PlaceCoordinateSystem(rawValue: systemRaw) else { continue }
+            var rest = afterMarker[afterMarker.index(after: close)...]
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if rest.hasPrefix(":") {
+                rest = rest.dropFirst().trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            let components = rest.split(separator: ",", maxSplits: 1).map {
+                $0.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            guard components.count == 2,
+                  let latitude = Double(components[0]),
+                  let longitude = Double(components[1]),
+                  latitude.isFinite,
+                  longitude.isFinite,
+                  (-90...90).contains(latitude),
+                  (-180...180).contains(longitude),
+                  latitude != 0 || longitude != 0 else {
+                continue
+            }
+            return (system, latitude, longitude)
+        }
+        return nil
+    }
+
+    private static func storedProviderMapURL(from evidence: [String]) -> URL? {
+        for line in evidence {
+            guard let rawValue = value(after: "Provider map URL:", in: line),
+                  let url = URL(string: rawValue),
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "https" || scheme == "http" else {
+                continue
+            }
+            return url
+        }
+        return nil
     }
 
 }
 
 struct ProviderPlaceLocation: Hashable {
     var provider: PlaceMatchProvider
-    var providerPlaceID: String
+    var providerPlaceID: String?
     var coordinateSystem: PlaceCoordinateSystem
     var latitude: Double
     var longitude: Double
-    var mapURL: URL
+    var mapURL: URL?
 }
 
 struct PendingQueueAccountDeletionSnapshot: Equatable {
@@ -1202,7 +1316,7 @@ extension Place {
             coordinateSystem: coordinateSystem,
             locationProvider: providerLocation?.provider,
             providerPlaceId: providerLocation?.providerPlaceID,
-            providerMapUrl: providerLocation?.mapURL.absoluteString,
+            providerMapUrl: providerLocation?.mapURL?.absoluteString,
             sourceImageUrl: nil,
             extractedDishes: candidate.recommendedItems.map(\.name).nilIfEmpty,
             priceRange: nil,
