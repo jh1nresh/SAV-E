@@ -1807,7 +1807,6 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(profile.contains("SaveDoodleVisitStore().recordVisit"))
         XCTAssertTrue(profile.contains("try await onUpdatePlace(updated)"))
         let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
-        let catalog = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")
         XCTAssertTrue(map.contains("map.eatGo"))
         XCTAssertTrue(map.contains("\"map.city\""))
         XCTAssertTrue(catalog.contains("pendingShowOnMapPlaceID"))
