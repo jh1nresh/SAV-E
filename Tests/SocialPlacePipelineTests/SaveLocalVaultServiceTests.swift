@@ -192,6 +192,42 @@ final class SaveLocalVaultServiceTests: XCTestCase {
         XCTAssertEqual(remaining.first?.googlePlaceId, "ChIJ-shared-harbor")
     }
 
+    /// P1 4366239481: replacing a signed-in confirmed row must not delete an
+    /// ownerless pre-upgrade mirror that shares the same ID.
+    @MainActor
+    func testSaveConfirmedPlaceDoesNotReplaceOwnerlessConfirmedMirror() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let sharedID = UUID()
+        var ownerless = makePlace(
+            id: sharedID,
+            name: "Harbor Cafe",
+            address: "1 Harbor Way",
+            googlePlaceId: "ChIJ-ownerless-harbor"
+        )
+        ownerless.note = "Legacy private note"
+        _ = try vault.saveConfirmedPlace(ownerless)
+        var signedIn = makePlace(
+            id: sharedID,
+            name: "Harbor Cafe",
+            address: "1 Harbor Way",
+            googlePlaceId: "ChIJ-ownerless-harbor"
+        )
+        signedIn.note = "Signed-in edit"
+        _ = try vault.saveConfirmedPlace(signedIn, ownerSubject: "did:privy:a")
+
+        let records = try vault.confirmedPlaceRecords()
+        let legacy = try XCTUnwrap(records.first { $0.ownerSubject == nil })
+        XCTAssertEqual(legacy.id, sharedID)
+        XCTAssertEqual(legacy.sourceText, "Legacy private note")
+        XCTAssertTrue(legacy.evidence.contains("Legacy private note"))
+        let owned = try XCTUnwrap(records.first { $0.ownerSubject == "did:privy:a" })
+        XCTAssertEqual(owned.id, sharedID)
+        XCTAssertEqual(owned.sourceText, "Signed-in edit")
+        XCTAssertEqual(records.count, 2, "ownerless and signed-in confirmed rows must both remain")
+    }
+
     @MainActor
     func testDeleteAllRecordsClearsEveryLocalMemoryState() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

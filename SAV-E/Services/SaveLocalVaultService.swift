@@ -98,6 +98,7 @@ final class SaveLocalVaultService: Sendable {
 #if DEBUG
     nonisolated(unsafe) var removeReviewCandidateError: Error?
     nonisolated(unsafe) var saveReviewCandidateError: Error?
+    nonisolated(unsafe) var purgeAccountDeletionRecordsError: Error?
 #endif
 
     init(overrideVaultURL: URL? = nil) {
@@ -316,6 +317,9 @@ final class SaveLocalVaultService: Sendable {
     }
 
     func purgeAccountDeletionRecords(intentID: UUID) throws {
+#if DEBUG
+        if let purgeAccountDeletionRecordsError { throw purgeAccountDeletionRecordsError }
+#endif
         try withLock {
             try withCoordinatedVaultWrite { url in
                 let intent = try matchingAccountDeletionIntent(intentID, vaultURL: url)
@@ -627,7 +631,9 @@ final class SaveLocalVaultService: Sendable {
                     ownerSubject: ownerSubject
                 )
                 records.removeAll { record in
-                    record.state == .confirmedPlace && place.savedIDs.contains(record.id)
+                    record.state == .confirmedPlace
+                        && record.ownerSubject == ownerSubject
+                        && place.savedIDs.contains(record.id)
                 }
                 records.insert(record, at: 0)
                 try save(records, to: url)

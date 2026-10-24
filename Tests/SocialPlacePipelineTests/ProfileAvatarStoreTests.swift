@@ -605,6 +605,56 @@ final class ProfileAvatarStoreTests: XCTestCase {
         XCTAssertFalse(remainingReviews.contains { $0.candidateName == "Legacy" || $0.ownerSubject == "account-a" })
     }
 
+    /// P1 4366239479: a failed vault-record purge after remote delete must
+    /// not leave the deleted session able to consume either Share queue.
+    @MainActor
+    func testVaultRecordPurgeFailureStillQuarantinesPendingQueues() async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        defer { auth.authState = previousAuth }
+        auth.authState = .authenticated(userId: "account-a")
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        vault.purgeAccountDeletionRecordsError = SaveLocalVaultError.storageUnavailable
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A private clue", ownerSubject: "account-a"))
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([
+            pendingDeletionPlace(owner: "account-a", name: "A pending"),
+            pendingDeletionPlace(owner: "account-b", name: "B pending"),
+            pendingDeletionPlace(owner: nil, name: "Legacy")
+        ])
+        queue.restorePendingReviewCandidates([
+            pendingDeletionReview(owner: "account-a", name: "A review"),
+            pendingDeletionReview(owner: "account-b", name: "B review"),
+            pendingDeletionReview(owner: nil, name: "Legacy")
+        ])
+        var requests = 0
+        let model = ProfileViewModel(
+            supabaseService: SupabaseService(apiBaseURL: nil),
+            accountDeletionService: ClosureAccountDeletionService { requests += 1 },
+            avatarStore: ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("avatars")),
+            saveLocalVaultService: vault,
+            pendingPlaceImportService: queue,
+            currentUserIDProvider: { "account-a" },
+            reviewerDemoProvider: { false }
+        )
+        let result = await model.deleteAccount()
+        XCTAssertFalse(result)
+        XCTAssertEqual(requests, 1)
+        XCTAssertNil(auth.currentUserId, "deleted owner must be signed out before the vault purge fails")
+        XCTAssertEqual(try vault.pendingAccountDeletionIntent()?.remoteOutcome, .succeeded)
+        let remainingPlaces = queue.consumePendingPlaces(ownerSubject: "account-a")
+            + queue.consumePendingPlaces(ownerSubject: "account-b")
+        XCTAssertEqual(Set(remainingPlaces.map(\.name)), ["B pending"])
+        XCTAssertFalse(remainingPlaces.contains { $0.name == "Legacy" || $0.ownerSubject == "account-a" })
+        let remainingReviews = queue.consumePendingReviewCandidates(ownerSubject: "account-a")
+            + queue.consumePendingReviewCandidates(ownerSubject: "account-b")
+        XCTAssertEqual(Set(remainingReviews.map(\.candidateName)), ["B review"])
+        XCTAssertFalse(remainingReviews.contains { $0.candidateName == "Legacy" || $0.ownerSubject == "account-a" })
+        XCTAssertTrue(model.errorMessage?.contains("Account deleted, but local data cleanup failed") == true)
+    }
+
     @MainActor
     func testDeletionAndKnownSuccessRecoveryKeepQuarantineThroughLogout() async throws {
         let auth = PrivyAuthService.shared

@@ -3679,6 +3679,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         let succeededStart = try XCTUnwrap(profile.range(of: "if intent.remoteOutcome == .succeeded"))
         let purgeStart = try XCTUnwrap(profile.range(of: "try pendingPlaceImportService.purgeAccountDeletionItems"))
+        let vaultPurgeStart = try XCTUnwrap(profile.range(of: "try saveLocalVaultService.purgeAccountDeletionRecords"))
         let avatarRemoveStart = try XCTUnwrap(profile.range(of: "try avatarStore.remove(for: intent.owner)"))
         XCTAssertLessThan(
             succeededStart.lowerBound, purgeStart.lowerBound,
@@ -3691,6 +3692,23 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertLessThan(
             purgeStart.lowerBound, avatarRemoveStart.lowerBound,
             "P1 4365736452: purge pending queues before fallible avatar removal"
+        )
+        XCTAssertTrue(
+            profile.contains("await authService.signOut()"),
+            "P1 4366239479: remote-success cleanup must invalidate the deleted owner"
+        )
+        XCTAssertLessThan(
+            try XCTUnwrap(profile.range(of: "await authService.signOut()")).lowerBound,
+            vaultPurgeStart.lowerBound,
+            "P1 4366239479: sign out before the fallible vault-record purge"
+        )
+        XCTAssertLessThan(
+            purgeStart.lowerBound, vaultPurgeStart.lowerBound,
+            "P1 4366239479: quarantine Share queues before purgeAccountDeletionRecords"
+        )
+        XCTAssertTrue(
+            vault.contains("record.ownerSubject == ownerSubject\n                        && place.savedIDs.contains(record.id)"),
+            "P1 4366239481: confirmed replacement must stay on the same owner"
         )
         XCTAssertTrue(
             map.contains("restorationToken(consumingOwner:"),
@@ -4435,7 +4453,7 @@ final class SAVEProductionConfigTests: XCTestCase {
 
         let remotePlaces = makeCappedPlaces(50)
         let stalePlace = makeCappedPlaces(1, indexOffset: 50)[0]
-        var liveRemote = remotePlaces
+        var liveRemote = liveRemotePlaces(remotePlaces)
         AnalysisRequestURLProtocol.reset()
         AnalysisRequestURLProtocol.handler = { request in
             if request.httpMethod == "GET", request.url?.path == "/places" {
@@ -4540,7 +4558,7 @@ final class SAVEProductionConfigTests: XCTestCase {
             "stale savedIDs would keep the other-device alias as a 50th venue"
         )
 
-        var liveRemote = remotePlaces
+        var liveRemote = liveRemotePlaces(remotePlaces)
         AnalysisRequestURLProtocol.reset()
         AnalysisRequestURLProtocol.handler = { request in
             if request.httpMethod == "GET", request.url?.path == "/places" {
@@ -4753,30 +4771,27 @@ final class SAVEProductionConfigTests: XCTestCase {
             {"id":"\(place.id.uuidString)","user_id":"owner","name":"\(place.name)","address":"\(place.address)","latitude":\(place.latitude),"longitude":\(place.longitude),"category":"cafe","status":"wantToGo","source_platform":"other"\(placeID),"created_at":"\(createdAt)"}
             """
         }
-        var liveRemote = others + [placeA, placeB, placeC]
-        func encodeLive(_ places: [Place]) -> String {
-            places.enumerated().map { index, place in
-                if place.id == placeA.id {
-                    return rowJSON(place, createdAt: "2020-01-01T00:00:00Z", googlePlaceID: placeA.googlePlaceId)
-                }
-                if place.id == placeB.id {
-                    return rowJSON(place, createdAt: "2020-01-02T00:00:00Z", googlePlaceID: placeB.googlePlaceId)
-                }
-                if place.id == placeC.id {
-                    return rowJSON(place, createdAt: "2020-01-03T00:00:00Z", googlePlaceID: nil)
-                }
-                return self.cappedPlaceRowJSON(
-                    id: place.id,
-                    index: index,
-                    name: "Cap Place",
-                    googlePlaceID: place.googlePlaceId
-                )
-            }.joined(separator: ",")
+        var liveRemote = liveRemotePlaces(others + [placeA, placeB, placeC]) { index, place in
+            if place.id == placeA.id {
+                return rowJSON(place, createdAt: "2020-01-01T00:00:00Z", googlePlaceID: placeA.googlePlaceId)
+            }
+            if place.id == placeB.id {
+                return rowJSON(place, createdAt: "2020-01-02T00:00:00Z", googlePlaceID: placeB.googlePlaceId)
+            }
+            if place.id == placeC.id {
+                return rowJSON(place, createdAt: "2020-01-03T00:00:00Z", googlePlaceID: nil)
+            }
+            return self.cappedPlaceRowJSON(
+                id: place.id,
+                index: index,
+                name: "Cap Place",
+                googlePlaceID: place.googlePlaceId
+            )
         }
         AnalysisRequestURLProtocol.reset()
         AnalysisRequestURLProtocol.handler = { request in
             if request.httpMethod == "GET", request.url?.path == "/places" {
-                return (200, "[\(encodeLive(liveRemote))]")
+                return (200, "[\(self.livePlacesJSON(liveRemote))]")
             }
             if request.httpMethod == "DELETE", request.url?.path.hasPrefix("/places/") == true {
                 if let id = UUID(uuidString: request.url?.lastPathComponent ?? "") {
@@ -4827,7 +4842,7 @@ final class SAVEProductionConfigTests: XCTestCase {
 
         let initial = makeCappedPlaces(50)
         let displayed = initial[0]
-        var liveRemote = initial
+        var liveRemote = liveRemotePlaces(initial)
         var didDelete = false
         AnalysisRequestURLProtocol.reset()
         AnalysisRequestURLProtocol.handler = { request in
@@ -4885,8 +4900,9 @@ final class SAVEProductionConfigTests: XCTestCase {
         }
 
         let displayed = makeCappedPlaces(1)[0]
-        var liveRemote = makeCappedPlaces(50)
-        liveRemote[0] = displayed
+        var seeded = makeCappedPlaces(50)
+        seeded[0] = displayed
+        var liveRemote = liveRemotePlaces(seeded)
         var placeGets = 0
         AnalysisRequestURLProtocol.reset()
         AnalysisRequestURLProtocol.handler = { request in
@@ -5442,6 +5458,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func makeCappedPlaces(
         _ count: Int,
         status: PlaceStatus = .wantToGo,
@@ -5486,23 +5503,45 @@ final class SAVEProductionConfigTests: XCTestCase {
         """
     }
 
-    private func livePlacesJSON(_ places: [Place]) -> String {
-        places.enumerated().map { index, place in
-            cappedPlaceRowJSON(
-                id: place.id,
-                index: index,
-                name: "Cap Place",
-                googlePlaceID: place.googlePlaceId
-            )
-        }.joined(separator: ",")
+    /// Sendable wire rows so URLProtocol handlers (nonisolated) never read
+    /// MainActor-isolated `Place` members.
+    private struct LiveRemotePlace: Sendable {
+        let id: UUID
+        let savedIDs: Set<UUID>
+        let json: String
     }
 
-    private func removeDeletedGroup(from places: inout [Place], id: UUID) {
-        let group = Place.consolidated(places).first { $0.savedIDs.contains(id) }
-        let drop = group?.savedIDs ?? [id]
+    @MainActor
+    private func liveRemotePlaces(
+        _ places: [Place],
+        row: ((Int, Place) -> String)? = nil
+    ) -> [LiveRemotePlace] {
+        let groups = Place.consolidated(places)
+        return places.enumerated().map { index, place in
+            let group = groups.first { $0.savedIDs.contains(place.id) }
+            LiveRemotePlace(
+                id: place.id,
+                savedIDs: group?.savedIDs ?? place.savedIDs,
+                json: row?(index, place) ?? cappedPlaceRowJSON(
+                    id: place.id,
+                    index: index,
+                    name: "Cap Place",
+                    googlePlaceID: place.googlePlaceId
+                )
+            )
+        }
+    }
+
+    nonisolated private func livePlacesJSON(_ places: [LiveRemotePlace]) -> String {
+        places.map(\.json).joined(separator: ",")
+    }
+
+    nonisolated private func removeDeletedGroup(from places: inout [LiveRemotePlace], id: UUID) {
+        let drop = places.first { $0.savedIDs.contains(id) }?.savedIDs ?? [id]
         places.removeAll { drop.contains($0.id) }
     }
 
+    @MainActor
     private func makeSocialPlace(name: String) -> Place {
         Place(
             id: UUID(),

@@ -262,12 +262,11 @@ final class ProfileViewModel: ObservableObject {
     private func finishLocalAccountDeletion(
         _ intent: SaveAccountDeletionIntent, sessionGeneration: Int
     ) async throws {
-        try saveLocalVaultService.purgeAccountDeletionRecords(intentID: intent.id)
         if intent.remoteOutcome == .succeeded {
-            // Keep the durable quarantine and its in-process lease through logout.
-            // A crash or final write failure leaves the same scope recoverable.
-            // Sign out before the queue purge so admitted late writers finish
-            // under the same per-file lock, then cannot recreate A.
+            // Invalidate the deleted owner before any fallible vault-record
+            // purge so a storage failure cannot leave A able to consume Share
+            // queues. Sign out before the queue purge so admitted late writers
+            // finish under the same per-file lock, then cannot recreate A.
             if currentUserIDProvider() == intent.owner,
                authService.currentUserId == intent.owner,
                authService.sessionGeneration == sessionGeneration,
@@ -276,27 +275,30 @@ final class ProfileViewModel: ObservableObject {
                 await authService.signOut()
                 resetForCurrentSession()
             }
-            // SDK identity mismatch or a changed generation may make signOut
-            // return without ending A's local session. Keep its durable scope.
-            guard authService.currentUserId != intent.owner else {
-                throw AccountDeletionCleanupError.deletedSessionStillActive
-            }
             // The owner may already be signed out or replaced by B. Only remove
             // the deleted owner's stale cache; this synchronous check never clears B.
-            if SavePlaceLimitHandoff.cachedActiveOwner() == intent.owner {
+            if authService.currentUserId != intent.owner,
+               SavePlaceLimitHandoff.cachedActiveOwner() == intent.owner {
                 SavePlaceLimitHandoff.syncActiveOwner(nil)
             }
         }
-        // Unknown remote outcomes still finish local cleanup while A stays
-        // signed in. A-owned and snapshotted ownerless Share rows must not
-        // become consumable again after the quarantine receipt is removed.
-        // Purge queues before fallible avatar removal so a protected-storage
-        // failure cannot leave those rows consumable while the receipt stays.
+        // Quarantine both Share queues before the fallible vault-record purge
+        // and before fallible avatar removal. Unknown remote outcomes still
+        // finish this local cleanup while A stays signed in.
         try pendingPlaceImportService.purgeAccountDeletionItems(
             belongingTo: intent.owner,
             initialOwnerlessItemKeys: intent.initialOwnerlessQueueItemKeys,
             unreadableFileNames: intent.unreadableQueueFileNames
         )
+        if intent.remoteOutcome == .succeeded {
+            // SDK identity mismatch or a changed generation may make signOut
+            // return without ending A's local session. Queues are already
+            // quarantined; keep the durable vault scope for retry.
+            guard authService.currentUserId != intent.owner else {
+                throw AccountDeletionCleanupError.deletedSessionStillActive
+            }
+        }
+        try saveLocalVaultService.purgeAccountDeletionRecords(intentID: intent.id)
         try avatarStore.remove(for: intent.owner)
         try saveLocalVaultService.completeAccountDeletionCleanup(intentID: intent.id)
     }
