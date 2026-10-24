@@ -326,12 +326,15 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertFalse(origin.contains("homeStacked"))
 
         let atlas = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
-        // Was stacked mark on 56pt. HoP G6: map.place.card must not show Google photos.
-        XCTAssertFalse(atlas.contains("GooglePlacesPhotoSourceMark"))
+        // Was GooglePlacesPhotoSourceMark(style: .homeStacked) on 56pt.
+        // HoP G6: no mark View on the map callout. Metrics.mapSafePhotoURL stays.
+        XCTAssertFalse(atlas.contains("GooglePlacesPhotoSourceMark("))
+        XCTAssertFalse(atlas.contains("style: .footer"))
+        XCTAssertFalse(atlas.contains("style: .homeStacked"))
         XCTAssertFalse(atlas.contains("displaysGooglePhoto("))
         XCTAssertFalse(atlas.contains("displaysStackedGooglePhoto"))
         XCTAssertFalse(atlas.contains("homeStacked"))
-        XCTAssertTrue(atlas.contains("mapSafePhotoURL"))
+        XCTAssertTrue(atlas.contains("GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL"))
         XCTAssertTrue(atlas.contains("AtlasPalette.coral"))
         XCTAssertTrue(atlas.contains("map.place.card"))
         XCTAssertTrue(atlas.contains("callout"))
