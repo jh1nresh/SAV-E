@@ -658,10 +658,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let e2 = app.buttons["home.place.60000000-0000-0000-0000-000000000002"]
         XCTAssertTrue(e2.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(e2.label.contains("Lunch Noodle"), e2.label)
-        XCTAssertFalse(
-            e2.label.range(of: #"[0-9]+(\.[0-9]+)?(m|km)"#, options: .regularExpression) == nil,
-            "TPE-A E2 must show a computed distance: \(e2.label)"
-        )
+        XCTAssertTrue(e2.label.contains("650m"), "TPE-A E2 must show 650m: \(e2.label)")
         e2.tap()
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         let showOnMap = app.descendants(matching: .any)["home.row.showOnMap"]
@@ -3293,13 +3290,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(hint.label.contains("Good evening · 1 clue waiting · Review ›"), hint.label)
         XCTAssertTrue(app.buttons["home.eat"].isSelected)
         XCTAssertFalse(app.buttons["home.go"].isSelected)
-        for suffix in 1...4 {
-            let id = String(format: "home.place.60000000-0000-0000-0000-%012d", suffix)
-            XCTAssertTrue(app.buttons[id].waitForExistence(timeout: stepTimeout), id)
-        }
-        XCTAssertTrue(app.buttons["home.place.60000000-0000-0000-0000-000000000001"].label.contains("Fujin Tree 353 Cafe"))
-        XCTAssertFalse(app.buttons["home.place.60000000-0000-0000-0000-000000000005"].exists)
-        XCTAssertFalse(app.buttons["home.place.60000000-0000-0000-0000-000000000006"].exists)
+        assertTPEALocatedEatRows(app)
         attach(app, name: "atlas-home")
     }
 
@@ -3327,6 +3318,93 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             arguments.append("--uitest-force-light")
         }
         return arguments
+    }
+
+    private func tpeaPlaceButton(_ app: XCUIApplication, _ index: Int) -> XCUIElement {
+        app.buttons[String(format: "home.place.60000000-0000-0000-0000-%012d", index)]
+    }
+
+    private func tpeaPlaceRows(_ app: XCUIApplication) -> XCUIElementQuery {
+        app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'home.place.60000000'"))
+    }
+
+    /// HoP TPE-A option A: located Eat + Near you is exactly 4 rows at
+    /// 280m / 650m / 1.2km / 2.1km. E5 3.4km and G3 4.0km stay out.
+    private func assertTPEALocatedEatRows(_ app: XCUIApplication) {
+        let expected: [(Int, String, String)] = [
+            (1, "Fujin Tree 353 Cafe", "280m"),
+            (2, "Lunch Noodle", "650m"),
+            (3, "Roast Duck Kitchen", "1.2km"),
+            (4, "Window Cafe", "2.1km"),
+        ]
+        for (index, name, distance) in expected {
+            let row = tpeaPlaceButton(app, index)
+            XCTAssertTrue(row.waitForExistence(timeout: stepTimeout), row.identifier)
+            XCTAssertTrue(row.label.contains(name), row.label)
+            XCTAssertTrue(row.label.contains(distance), row.label)
+        }
+        XCTAssertEqual(tpeaPlaceRows(app).count, 4, "Located Eat + Near you must show exactly 4 rows")
+        XCTAssertFalse(tpeaPlaceButton(app, 5).exists, "E5 3.4km must not appear on located Near you")
+        XCTAssertFalse(tpeaPlaceButton(app, 8).exists, "G3 4.0km must not appear on located Eat")
+        XCTAssertFalse(
+            app.buttons.matching(
+                NSPredicate(format: "identifier BEGINSWITH 'home.place.' AND label CONTAINS 'Night Market Bar'")
+            ).firstMatch.exists,
+            "E5 Night Market Bar must not appear on located Eat"
+        )
+        XCTAssertFalse(
+            app.buttons.matching(
+                NSPredicate(format: "identifier BEGINSWITH 'home.place.' AND label CONTAINS 'Forest Walk'")
+            ).firstMatch.exists,
+            "G3 Forest Walk must not appear on located Eat"
+        )
+    }
+
+    /// Located Go is exactly 2 rows: 900m and 1.6km visited. E5/G3 stay out.
+    private func assertTPEALocatedGoRows(_ app: XCUIApplication) {
+        let g1 = tpeaPlaceButton(app, 6)
+        let g2 = tpeaPlaceButton(app, 7)
+        XCTAssertTrue(g1.waitForExistence(timeout: stepTimeout), g1.identifier)
+        XCTAssertTrue(g2.waitForExistence(timeout: stepTimeout), g2.identifier)
+        XCTAssertTrue(g1.label.contains("Temple Courtyard"), g1.label)
+        XCTAssertTrue(g1.label.contains("900m"), g1.label)
+        XCTAssertTrue(g2.label.contains("Lantern Alley Park"), g2.label)
+        XCTAssertTrue(g2.label.contains("1.6km"), g2.label)
+        XCTAssertTrue(g2.label.contains("visited"), g2.label)
+        XCTAssertEqual(tpeaPlaceRows(app).count, 2, "Located Go + Near you must show exactly 2 rows")
+        XCTAssertFalse(tpeaPlaceButton(app, 5).exists, "E5 3.4km must not appear on located Go")
+        XCTAssertFalse(tpeaPlaceButton(app, 8).exists, "G3 4.0km must not appear on located Go")
+        XCTAssertFalse(
+            app.buttons.matching(
+                NSPredicate(format: "identifier BEGINSWITH 'home.place.' AND label CONTAINS 'Night Market Bar'")
+            ).firstMatch.exists
+        )
+        XCTAssertFalse(
+            app.buttons.matching(
+                NSPredicate(format: "identifier BEGINSWITH 'home.place.' AND label CONTAINS 'Forest Walk'")
+            ).firstMatch.exists
+        )
+    }
+
+    /// TPE-B denied/city Eat: 5 rows including E5, ≥2 districts, not 3 km limited.
+    private func assertTPEBDeniedEatRows(_ app: XCUIApplication) {
+        XCTAssertTrue(app.buttons["home.eat"].isSelected)
+        var labels: [String] = []
+        for index in 1...5 {
+            let row = tpeaPlaceButton(app, index)
+            XCTAssertTrue(row.waitForExistence(timeout: stepTimeout), row.identifier)
+            labels.append(row.label)
+        }
+        XCTAssertEqual(tpeaPlaceRows(app).count, 5, "Denied/city Eat must show exactly 5 rows including E5")
+        XCTAssertTrue(labels[4].contains("Night Market Bar"), labels[4])
+        let districts = ["大安區", "信義區", "中山區", "松山區"].filter { token in
+            labels.contains { $0.contains(token) }
+        }
+        XCTAssertGreaterThanOrEqual(districts.count, 2, "TPE-B must show ≥2 districts: \(labels)")
+        XCTAssertFalse(
+            tpeaPlaceButton(app, 8).exists,
+            "G3 is Go and must not appear on denied Eat"
+        )
     }
 
     /// Live Home is the Doodle Eat/Go list with no map component. The Atlas gate still
@@ -3701,10 +3779,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         waitForHomeCoverImagery(app)
         XCTAssertFalse(app.descendants(matching: .any)["home.locationPrompt"].exists)
         XCTAssertTrue(app.buttons["home.eat"].isSelected)
-        for suffix in 1...4 {
-            let id = String(format: "home.place.60000000-0000-0000-0000-%012d", suffix)
-            XCTAssertTrue(app.buttons[id].waitForExistence(timeout: stepTimeout), id)
-        }
+        assertTPEALocatedEatRows(app)
         if let expectedGreeting {
             XCTAssertTrue(
                 app.descendants(matching: .any)["home.review"].label.contains(expectedGreeting),
@@ -3738,12 +3813,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         waitForHomeCoverImagery(app)
         tapReachable(app.buttons["home.go"])
         XCTAssertTrue(app.buttons["home.go"].isSelected)
-        for suffix in 6...7 {
-            let id = String(format: "home.place.60000000-0000-0000-0000-%012d", suffix)
-            XCTAssertTrue(app.buttons[id].waitForExistence(timeout: stepTimeout), id)
-        }
-        XCTAssertFalse(app.buttons["home.place.60000000-0000-0000-0000-000000000008"].exists)
-        XCTAssertFalse(app.buttons["home.place.60000000-0000-0000-0000-000000000001"].exists)
+        assertTPEALocatedGoRows(app)
         attach(app, name: "TPE-A-go-light-en")
     }
 
@@ -3765,16 +3835,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         waitForHomeCoverImagery(app)
         XCTAssertTrue(app.descendants(matching: .any)["home.locationPrompt"].waitForExistence(timeout: stepTimeout))
-        let labels = (1...5).compactMap { suffix -> String? in
-            let id = String(format: "home.place.60000000-0000-0000-0000-%012d", suffix)
-            let row = app.buttons[id]
-            XCTAssertTrue(row.waitForExistence(timeout: stepTimeout), id)
-            return row.label
-        }
-        let districts = ["大安區", "信義區", "中山區", "松山區"].filter { token in
-            labels.contains { $0.contains(token) }
-        }
-        XCTAssertGreaterThanOrEqual(districts.count, 2, "TPE-B must show ≥2 districts: \(labels)")
+        assertTPEBDeniedEatRows(app)
         attach(app, name: name)
     }
 
