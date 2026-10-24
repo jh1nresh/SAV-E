@@ -729,35 +729,34 @@ struct SaveDoodleMapView: View {
         }
     }
 
-    /// Pins in the current city (or nearby, when a mini-map handoff still
-    /// follows Home's Eat/Go + Near you). Tab-direct Map fits every saved
-    /// stamp in that city — never the 3 km slice that left only two pins.
-    /// Never fits the worldwide set — that opens over Europe/Africa.
+    /// HoP 298-3 / 298-7: fit the same saved Eat/Go + city set Home lists.
+    /// Unsaved candidates stay native Markers and are not in this fit.
+    /// Never fit the worldwide set — that opens over Europe/Africa.
     private func cityOpeningPins() -> [CLLocationCoordinate2D] {
         let denied = locationService.isAuthorizationDenied
         let location = denied ? nil : locationService.currentLocation
-        if session.mapFollowsHomeFilter {
-            var selection = SaveDoodleHomeCatalog.resolvedSelection(
-                session.city,
-                places: mapViewModel.places,
-                locationDenied: denied
-            )
-            if case .nearYou = selection, location == nil {
-                let newest = mapViewModel.places.sorted(by: SaveDoodleHomeCatalog.moreRecent).first
-                if let newest, let id = SaveDoodleHomeCatalog.cityID(for: newest) {
-                    selection = .city(id)
-                }
+        var selection = SaveDoodleHomeCatalog.resolvedSelection(
+            session.city,
+            places: mapViewModel.places,
+            locationDenied: denied
+        )
+        if case .nearYou = selection, location == nil {
+            let newest = mapViewModel.places.sorted(by: SaveDoodleHomeCatalog.moreRecent).first
+            if let newest, let id = SaveDoodleHomeCatalog.cityID(for: newest) {
+                selection = .city(id)
             }
-            var coords: [CLLocationCoordinate2D] = []
-            for place in SaveDoodleHomeCatalog.visiblePlaces(
-                from: mapViewModel.places,
-                lens: session.lens,
-                selection: selection,
-                location: location,
-                locationDenied: denied
-            ) where place.isMapKitMappable {
-                coords.append(place.coordinate)
-            }
+        }
+        var coords: [CLLocationCoordinate2D] = []
+        for place in SaveDoodleHomeCatalog.visiblePlaces(
+            from: mapViewModel.places,
+            lens: session.lens,
+            selection: selection,
+            location: location,
+            locationDenied: denied
+        ) where place.isMapKitMappable {
+            coords.append(place.coordinate)
+        }
+        if !coords.isEmpty {
             return coords
         }
         guard let cityID = openingCityID(denied: denied, location: location) else {

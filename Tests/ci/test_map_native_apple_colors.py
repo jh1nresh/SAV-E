@@ -1,4 +1,4 @@
-"""HoP 298-1: Map and mini-map keep native Apple MapKit colors."""
+"""HoP 298-1: product Map keeps native Apple MapKit colors."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ MAP = ROOT / "SAV-E/Views/Map/SaveDoodleMapView.swift"
 HOME = ROOT / "SAV-E/Views/Home/SaveDoodleHomeView.swift"
 
 # Acceptance: ZERO `.saturation(`, `.colorMultiply(`, `.muted`, and
-# paper-texture overlay in Map / mini-map sources.
+# paper-texture overlay on the product Map surface.
 FORBIDDEN = (
     r"\.saturation\(",
     r"\.colorMultiply\(",

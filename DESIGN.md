@@ -787,11 +787,12 @@ Rules:
   48pt status band. The search drawer never covers them: large stop ends
   below `SaveTileTownProductLock.mapChromeHeight`, and only the visible
   paper hits so pins stay tappable through medium. Home's shared Eat/Go +
-  city (`SaveDoodleSession`) apply to Saved/Nearby pins only when Map opens
-  from the Home mini-map. Opening the Map tab directly keeps the unfiltered
-  Saved/Nearby/Friends default. After a mini-map handoff, Map Eat/Go chips
-  (`map.eat` / `map.go`) and the city control (`map.city`) can change that
-  shared state.
+  city (`SaveDoodleSession`) are one source of truth, synced both ways.
+  Map draws only saved places that match the current Eat/Go + city.
+  Unsaved places keep native Apple Markers. Pin count equals Home list
+  rows under the same filters; pin numbers do not have to match the Home
+  list. Map Eat/Go (`map.eat` / `map.go`) and city (`map.city`) write the
+  same session Home reads.
 - The town canvas pans with a drag. Pin tap selects the kraft peek card.
 - Drawer search (collapsed capsule) still opens the parked search panel.
   Category, Want to try, Visited, and Nearby-distance chips may remain in
@@ -991,6 +992,10 @@ Rules:
 
 ### Doodle Map verification boundary
 
+HoP 298-7 / B-4: Home and Map share one Eat/Go + city state, synced both
+ways. HoP 298-3: Map draws only saved places matching those filters;
+pin count equals Home list rows; pin numbers need not match the Home
+list. Unsaved places keep native Apple Markers.
 HoP P-4 (founder 2026-10-24): `map.png` / `map-dark.png` are live
 Taipei Apple Maps screenshots from #298 CI iPhone 16 Pro (402pt / 3×
 1206×2622) head `ae37a7d1` (Taipei fixture `298-10` / `M1`, English

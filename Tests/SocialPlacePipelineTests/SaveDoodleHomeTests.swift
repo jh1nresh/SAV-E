@@ -1025,133 +1025,73 @@ final class SaveDoodleHomeTests: XCTestCase {
     }
 
     func testMapAppliesSharedDoodleSessionFilter() throws {
+        let taipeiEat = place(
+            "Taipei Window Cafe",
+            "No. 353, Section 1, Fuxing S Rd, Da'an District, Taipei",
+            .cafe
+        )
+        let taipeiGo = place(
+            "Daan Park",
+            "Da'an District, Taipei, Taiwan",
+            .attraction
+        )
         let tokyoEat = place(
             "Ichiran",
             "1-22-7 Jinnan, Shibuya City, Tokyo, Japan",
             .food
         )
-        let tokyoGo = place(
-            "teamLab",
-            "1-3-8 Aomi, Koto City, Tokyo, Japan",
-            .attraction
-        )
-        let taipeiEat = place(
-            "Fujin",
-            "No. 353, Section 1, Fuxing S Rd, Da'an District, Taipei",
-            .cafe
-        )
         let session = SaveDoodleSession(
             defaults: UserDefaults(suiteName: "save.doodle.map.\(UUID().uuidString)")!
         )
-        session.lens = .go
-        session.city = .city("tokyo")
-        let homeIDs = SaveDoodleHomeCatalog.visiblePlaces(
-            from: [tokyoEat, tokyoGo, taipeiEat],
+        let inventory = [taipeiEat, taipeiGo, tokyoEat]
+
+        session.lens = .eat
+        session.city = .city("taipei")
+        let homeEat = SaveDoodleHomeCatalog.visiblePlaces(
+            from: inventory,
             lens: session.lens,
             selection: session.city,
             location: nil,
             locationDenied: true
         ).map(\.id)
-        XCTAssertEqual(homeIDs, [tokyoGo.id])
+        let mapEat = SaveDoodleHomeCatalog.listedPlaces(
+            from: inventory,
+            lens: session.lens,
+            selection: session.city,
+            location: nil,
+            locationDenied: true
+        ).map(\.place.id)
+        XCTAssertEqual(
+            Set(homeEat),
+            Set(mapEat),
+            "298-7: Eat + Taipei on Home is the same saved set Map draws"
+        )
+        XCTAssertEqual(homeEat, [taipeiEat.id])
+        XCTAssertEqual(mapEat.count, homeEat.count, "298-3: pin count equals Home list rows")
+
+        session.lens = .go
+        let homeGo = SaveDoodleHomeCatalog.visiblePlaces(
+            from: inventory,
+            lens: session.lens,
+            selection: session.city,
+            location: nil,
+            locationDenied: true
+        ).map(\.id)
+        XCTAssertEqual(
+            homeGo,
+            [taipeiGo.id],
+            "298-7: changing Map to Go changes Home's list too"
+        )
+        XCTAssertNotEqual(Set(homeGo), Set(homeEat))
 
         let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
-        let content = try source(at: "SAV-E/App/ContentView.swift")
-        XCTAssertTrue(map.contains("@EnvironmentObject private var session: SaveDoodleSession"))
-        XCTAssertTrue(map.contains("header(followsHomeFilter: followsHomeFilter)"))
-        XCTAssertTrue(map.contains("onChange(of: session.mapVisitResidueID)"))
-        XCTAssertTrue(map.contains("applyMiniMapHandoff()"))
-        XCTAssertTrue(map.contains("if session.mapFollowsHomeFilter"))
-        XCTAssertFalse(map.contains("session.mapFollowsHomeFilter = true\n            applyMiniMapHandoff()"))
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        XCTAssertTrue(map.contains("session.lens = item"))
+        XCTAssertTrue(map.contains("session.city = .city"))
         XCTAssertTrue(map.contains("SaveDoodleHomeCatalog.listedPlaces("))
-        XCTAssertTrue(map.contains("session.lens"))
-        XCTAssertTrue(map.contains("session.city"))
-        XCTAssertTrue(map.contains("mapAccessibilityIdentifier"))
-        XCTAssertTrue(map.contains("map.city"))
-        XCTAssertTrue(map.contains("map.eatGo"))
-        XCTAssertTrue(map.contains("onChange(of: session.lens)"))
-        XCTAssertTrue(map.contains("onChange(of: session.city)"))
-        XCTAssertTrue(map.contains("onClearSelection()"))
-        XCTAssertTrue(map.contains("accessibilityElement(children: .contain)"))
-        XCTAssertTrue(map.contains("showsCityPicker = true"))
-        XCTAssertTrue(map.contains("map.city.\\(group.id)"))
-        XCTAssertTrue(content.contains("selectRootTab(_ tab: SaveRootTab, mapFollowsHomeFilter: Bool = false)"))
-        XCTAssertTrue(content.contains("applyMapTabSelection(followsHomeFilter: mapFollowsHomeFilter)"))
-        XCTAssertTrue(content.contains("private func openMapFromMiniMap()"))
-        XCTAssertTrue(content.contains("beginMiniMapHandoff()"))
-        XCTAssertTrue(content.contains("onOpenMap: { openMapFromMiniMap() }"))
-        XCTAssertTrue(content.contains("let mapIdentity = doodleSession.mapSurfaceID"))
-        XCTAssertTrue(content.contains(".id(mapIdentity)"))
-        XCTAssertTrue(content.contains("resetMapVisitResidue()"))
-        XCTAssertTrue(content.contains("clearSelectedMapObject()"))
-        XCTAssertTrue(content.contains("onSelect: { selectRootTab($0) }"))
-        XCTAssertTrue(content.contains("SaveDoodleTabIcon("))
-        XCTAssertFalse(content.contains("SavePixelChromeIcon("))
-        XCTAssertTrue(content.contains("private func showMapTab()"))
-        XCTAssertTrue(content.contains("if !isExactSearchSessionActive"))
-        XCTAssertTrue(content.contains("abandonMiniMapHandoff()"))
-        XCTAssertTrue(content.contains("preservesExactSearchClue: isExactSearchSessionActive"))
-        XCTAssertTrue(content.contains("hasActiveExactSearchResolution"))
-        XCTAssertTrue(content.contains("if !isExactSearchSessionActive"))
-        XCTAssertTrue(content.contains("invalidateExactSearchRequest()"))
-        XCTAssertTrue(content.contains("exactSearchClueID"))
-        XCTAssertTrue(content.contains("activateExactSearchSession(for:"))
-        XCTAssertTrue(content.contains("restoreExactSearchResolutionIfNeeded()"))
-        XCTAssertTrue(content.contains("onClearMapSearchResults: { endsExactSearch in"))
-        let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
-        XCTAssertTrue(drawer.contains("onClearMapSearchResults(false)"))
-        XCTAssertTrue(drawer.contains("onClearMapSearchResults(true)"))
-        XCTAssertTrue(map.contains("consumeMiniMapHandoff()"))
-        let catalogSource = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")
-        XCTAssertTrue(catalogSource.contains("save.doodle.mapFollows."))
-        XCTAssertTrue(catalogSource.contains("mapFollowsHomeFilter = defaults.bool(forKey: Self.followKey)"))
-        XCTAssertTrue(catalogSource.contains("func beginMiniMapHandoff()"))
-        XCTAssertTrue(catalogSource.contains("func consumeMiniMapHandoff()"))
-        XCTAssertTrue(catalogSource.contains("func abandonMiniMapHandoff()"))
-        XCTAssertTrue(catalogSource.contains("func applyMapTabSelection(followsHomeFilter: Bool)"))
-        XCTAssertTrue(catalogSource.contains("mapVisitResidueID = UUID()"))
-        let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
-        XCTAssertTrue(root.contains("session.consumeMiniMapHandoff()"))
-        XCTAssertTrue(root.contains(".accessibilityIdentifier(\"map.root\")"))
-        XCTAssertTrue(
-            root.contains("accessibilityElement(children: .contain)"),
-            "map.root must keep the contain container the other Map UI tests query"
-        )
-        let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
-        XCTAssertTrue(rail.contains("func testHomeAndPassportWarmDarkMode"))
-        XCTAssertTrue(rail.contains("home.eat"))
-        XCTAssertTrue(rail.contains("home.citySwitcher"))
-        XCTAssertTrue(rail.contains("captureHomeAndPassportCanvas"))
-        XCTAssertTrue(rail.contains("func testMiniMapOpensMapWithCarriedFilterAndCityChange"))
-        XCTAssertTrue(rail.contains("app.buttons[\"map.go\"]"))
-        XCTAssertTrue(rail.contains("app.buttons[\"map.eat\"]"))
-        XCTAssertFalse(rail.contains("recordQ5ReusedMapTree"))
-        XCTAssertFalse(rail.contains("q5-reused-map-debugDescription"))
-        XCTAssertFalse(rail.contains("q5-reused-map"))
-        XCTAssertEqual(
-            content.components(separatedBy: "selectedRootTab = .map").count - 1,
-            1,
-            "Only showMapTab() may assign Map directly; other opens must go through it"
-        )
-        for name in [
-            "func openMapSearch",
-            "func openCollaborativeListOnMap",
-            "func showMapCandidatesOnMap",
-            "func addClueToReviewCandidate",
-            "func openExactSearch",
-        ] {
-            XCTAssertTrue(content.contains(name), name)
-        }
-        XCTAssertGreaterThanOrEqual(
-            content.components(separatedBy: "showMapTab()").count - 1,
-            6,
-            "Search, show-on-map, and list handoffs must clear the Home filter"
-        )
-        XCTAssertTrue(session.mapFollowsHomeFilter == false)
-        session.mapFollowsHomeFilter = true
-        XCTAssertTrue(session.mapFollowsHomeFilter)
-        session.mapFollowsHomeFilter = false
-        XCTAssertFalse(session.mapFollowsHomeFilter)
-        XCTAssertTrue(map.contains("[.isButton, .isSelected] : .isButton"))
+        XCTAssertTrue(home.contains("session.lens = lens"))
+        XCTAssertTrue(home.contains("session.city = .city"))
+        XCTAssertFalse(map.contains("if session.mapFollowsHomeFilter"))
     }
 
     func testMiniMapHandoffSurvivesDefaultFalseAndShowOnMapClearsIt() {

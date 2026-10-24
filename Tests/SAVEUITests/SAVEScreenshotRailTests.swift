@@ -649,16 +649,23 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.eat"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["home.go"].exists)
         XCTAssertTrue(app.buttons["home.place.\(taipeiCafeID)"].waitForExistence(timeout: stepTimeout))
+        let homeEatCount = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
+        ).count
 
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(
-            app.buttons["map.go"].waitForExistence(timeout: stepTimeout),
-            "Direct Map tab still shows Eat/Go; pins stay unfiltered until a chip or mini-map applies the session"
-        )
+        XCTAssertTrue(app.buttons["map.eat"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["map.eat"].isSelected, "298-7: Map shares Home's Eat lens")
         XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.\(taipeiCafeID)"].waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.\(tainanCafeID)"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["map.tilePin.\(taipeiParkID)"].exists)
+        XCTAssertFalse(
+            app.descendants(matching: .any)["map.tilePin.\(taipeiParkID)"].exists,
+            "298-3: Map draws only saved places matching Eat/Go + city"
+        )
+        let mapEatCount = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.'")
+        ).count
+        XCTAssertEqual(mapEatCount, homeEatCount, "298-3: pin count equals Home list rows")
 
         openRootTab("Home", app: app)
         tapReachable(app.buttons["home.go"])
@@ -3407,13 +3414,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "five-tab-home")
         // 298-3: Home and Map from the same Tiantan data, same launch.
         attach(app, name: "298-3-home")
-        // 298-7: tap the Map tab directly — not the Home mini-map.
         XCTAssertTrue(app.descendants(matching: .any)["home.miniMap"].exists)
         openRootTab("Map", app: app)
-        XCTAssertTrue(
-            app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout),
-            "298-7: tapping the Map tab directly must open Map"
-        )
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "298-7-map-tab")
         XCTAssertTrue(app.buttons["map.city"].waitForExistence(timeout: stepTimeout))
         let eatPin = "30000000-0000-0000-0000-000000000001"
@@ -3428,19 +3431,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         for pin in [noodlePin, cafePin] {
             XCTAssertTrue(
                 app.descendants(matching: .any)["map.tilePin.\(pin)"].exists,
-                "298-3: Map Eat pins must match Home's filtered Eat list"
+                "298-3: Map draws saved Eat places under the shared city filter"
             )
         }
         XCTAssertFalse(
             app.descendants(matching: .any)["map.tilePin.\(parkPin)"].exists
                 || app.descendants(matching: .any)["map.tilePin.\(lanternPin)"].exists
                 || app.descendants(matching: .any)["map.tilePin.\(jingshanPin)"].exists,
-            "298-3: Go stamps stay off the Eat pin set"
+            "298-3: Map draws only saved places matching Eat/Go + city"
         )
         let mapPinCount = app.descendants(matching: .any).matching(
             NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.'")
         ).count
-        XCTAssertEqual(mapPinCount, homeEatCount, "298-3: pin count matches Home's filtered list")
+        XCTAssertEqual(mapPinCount, homeEatCount, "298-3: pin count equals Home list rows")
         attach(app, name: "298-3-map")
         attach(app, name: "298-4-coral-pins")
         XCTAssertEqual(app.buttons["map.eat"].isSelected, true, "298-11: Eat stays selected with Home")
