@@ -3923,11 +3923,36 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
     }
 
-    /// Live Home is the Doodle Eat/Go list with no map component. The Atlas gate still
-    /// compares `five-tab-home` to `ProductionTargets/home.png` unmasked at
-    /// 0.90. Capture that raster from the Codex Tiantan
-    /// fixture at the Tiantan fix; a denied-location Taipei Home is a
-    /// different state and scores ~0.66. Do not retune the gate script here.
+    /// HoP 298-2 / 298-5 / 298-6 / 298-8: MapKit canvas, 我來過了, city+Eat/Go,
+    /// and provider-backed Directions. Names stay off `five-tab-*`.
+    @MainActor
+    private func attachHoP298ChromeEvidence(_ app: XCUIApplication) {
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.liveSurface"].waitForExistence(timeout: stepTimeout),
+            "298-2: product Map must be a live Apple MapKit surface"
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["tileTown.root"].exists,
+            "298-2: product Map is not tile-town"
+        )
+        attach(app, name: "298-2-mapkit")
+
+        XCTAssertTrue(app.buttons["map.card.beenHere"].exists || app.buttons["map.card.beenHere.undo"].exists,
+                      "298-5: place sheet must offer 我來過了 / I've been here")
+        attach(app, name: "298-5-been-here")
+
+        XCTAssertTrue(app.buttons["map.city"].exists, "298-6: city chrome")
+        XCTAssertTrue(app.buttons["map.eat"].exists, "298-6: Eat chrome")
+        XCTAssertTrue(app.buttons["map.go"].exists, "298-6: Go chrome")
+        attach(app, name: "298-6-city-eat-go")
+
+        XCTAssertTrue(app.buttons["map.directions"].exists,
+                      "298-8: selected place keeps provider-backed Directions")
+        attach(app, name: "298-8-provider")
+    }
+
+    /// HoP 298-10 / 298-12 / 298-13: Taipei H1/M1 fixture with saved,
+    /// unsaved, and visited pins together. City title in en and zh.
     @MainActor
     func testMapSavedUnsavedVisitedTaipeiFixture() throws {
         try captureTaipeiMapStates(language: "en", attachM1: true)
