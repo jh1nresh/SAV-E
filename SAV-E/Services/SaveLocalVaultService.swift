@@ -30,6 +30,10 @@ nonisolated struct SaveAccountDeletionIntent: Codable, Sendable, Equatable {
     /// Pre-deletion ownerless Share-queue fingerprints. Later ownerless rows
     /// and other owners are not in this set and must stay.
     let initialOwnerlessQueueItemKeys: Set<String>
+    /// Queue files that existed but could not be read at prepare. Purge drops
+    /// every ownerless row in them once they are readable; still-unreadable
+    /// files keep the receipt.
+    let unreadableQueueFileNames: Set<String>
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -37,6 +41,7 @@ nonisolated struct SaveAccountDeletionIntent: Codable, Sendable, Equatable {
         case initialOwnerlessRecordIDs
         case remoteOutcome
         case initialOwnerlessQueueItemKeys
+        case unreadableQueueFileNames
     }
 
     init(
@@ -44,13 +49,15 @@ nonisolated struct SaveAccountDeletionIntent: Codable, Sendable, Equatable {
         owner: String,
         initialOwnerlessRecordIDs: Set<UUID>,
         remoteOutcome: RemoteOutcome,
-        initialOwnerlessQueueItemKeys: Set<String> = []
+        initialOwnerlessQueueItemKeys: Set<String> = [],
+        unreadableQueueFileNames: Set<String> = []
     ) {
         self.id = id
         self.owner = owner
         self.initialOwnerlessRecordIDs = initialOwnerlessRecordIDs
         self.remoteOutcome = remoteOutcome
         self.initialOwnerlessQueueItemKeys = initialOwnerlessQueueItemKeys
+        self.unreadableQueueFileNames = unreadableQueueFileNames
     }
 
     init(from decoder: Decoder) throws {
@@ -62,6 +69,9 @@ nonisolated struct SaveAccountDeletionIntent: Codable, Sendable, Equatable {
         initialOwnerlessQueueItemKeys = try container.decodeIfPresent(
             Set<String>.self, forKey: .initialOwnerlessQueueItemKeys
         ) ?? []
+        unreadableQueueFileNames = try container.decodeIfPresent(
+            Set<String>.self, forKey: .unreadableQueueFileNames
+        ) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -71,6 +81,7 @@ nonisolated struct SaveAccountDeletionIntent: Codable, Sendable, Equatable {
         try container.encode(initialOwnerlessRecordIDs, forKey: .initialOwnerlessRecordIDs)
         try container.encode(remoteOutcome, forKey: .remoteOutcome)
         try container.encode(initialOwnerlessQueueItemKeys, forKey: .initialOwnerlessQueueItemKeys)
+        try container.encode(unreadableQueueFileNames, forKey: .unreadableQueueFileNames)
     }
 
     func includes(recordID: UUID, ownerSubject: String?) -> Bool {
@@ -271,7 +282,8 @@ final class SaveLocalVaultService: Sendable {
     /// used by vault writers/readers, before any remote DELETE may be sent.
     func prepareAccountDeletion(
         belongingTo owner: String,
-        initialOwnerlessQueueItemKeys: Set<String> = []
+        initialOwnerlessQueueItemKeys: Set<String> = [],
+        unreadableQueueFileNames: Set<String> = []
     ) throws -> SaveAccountDeletionIntent {
         try withLock {
             try withCoordinatedVaultWrite { url in
@@ -283,7 +295,8 @@ final class SaveLocalVaultService: Sendable {
                     id: UUID(), owner: owner,
                     initialOwnerlessRecordIDs: Set(records.filter { $0.ownerSubject == nil }.map(\.id)),
                     remoteOutcome: .awaitingRemoteResult,
-                    initialOwnerlessQueueItemKeys: initialOwnerlessQueueItemKeys
+                    initialOwnerlessQueueItemKeys: initialOwnerlessQueueItemKeys,
+                    unreadableQueueFileNames: unreadableQueueFileNames
                 )
                 try JSONEncoder().encode(intent).write(to: accountDeletionIntentURL(for: url), options: .atomic)
                 return intent
@@ -604,6 +617,10 @@ final class SaveLocalVaultService: Sendable {
                     rating: place.rating ?? place.googleRating,
                     createdAt: place.createdAt,
                     googlePlaceId: place.googlePlaceId,
+                    coordinateSystem: place.coordinateSystem,
+                    locationProvider: place.locationProvider,
+                    providerPlaceId: place.providerPlaceId,
+                    providerMapUrl: place.providerMapUrl,
                     sourceImageUrl: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
                     businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
                     mergedPlaceIDs: place.mergedPlaceIDs,
@@ -946,6 +963,10 @@ private extension SaveMemoryRecord {
             note: sourceText,
             sourceUrl: sourceURL,
             sourcePlatform: SourcePlatform.from(urlString: sourceURL),
+            coordinateSystem: coordinateSystem,
+            locationProvider: locationProvider,
+            providerPlaceId: providerPlaceId,
+            providerMapUrl: providerMapUrl,
             sourceImageUrl: GooglePlacesPhotoURL.persistableString(sourceImageUrl),
             businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(businessPhotoUrls),
             extractedDishes: recommendedItems.map(\.name).nilIfEmpty,

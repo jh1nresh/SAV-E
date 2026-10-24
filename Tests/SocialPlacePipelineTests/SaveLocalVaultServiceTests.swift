@@ -751,6 +751,35 @@ final class SaveLocalVaultServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testConfirmedPlaceRoundTripPreservesAmapIdentityForCapProjection() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        var stamp = makePlace(id: UUID(), name: "Harbor Cafe", address: "1 Harbor", googlePlaceId: nil)
+        stamp.coordinateSystem = .gcj02
+        stamp.locationProvider = .amap
+        stamp.providerPlaceId = "amap-harbor"
+        stamp.providerMapUrl = "https://uri.amap.com/marker?position=121.519,25.051"
+        _ = try vault.saveConfirmedPlace(stamp, ownerSubject: "did:privy:a")
+        let restored = try XCTUnwrap(
+            SaveLocalVaultService(overrideVaultURL: url).confirmedPlaces(belongingTo: "did:privy:a").first
+        )
+        XCTAssertEqual(restored.coordinateSystem, .gcj02)
+        XCTAssertEqual(restored.locationProvider, .amap)
+        XCTAssertEqual(restored.providerPlaceId, "amap-harbor")
+        XCTAssertEqual(restored.providerMapUrl, stamp.providerMapUrl)
+        var incoming = makePlace(id: UUID(), name: "Harbor Cafe", address: "1 Harbor", googlePlaceId: nil)
+        incoming.coordinateSystem = .gcj02
+        incoming.locationProvider = .amap
+        incoming.providerPlaceId = "amap-harbor"
+        incoming.latitude = stamp.latitude
+        incoming.longitude = stamp.longitude
+        XCTAssertTrue(restored.matches(incoming))
+        XCTAssertEqual(Place.consolidated([restored, incoming]).count, 1)
+    }
+
+    @MainActor
     private func makePendingCandidate(localID: UUID?) -> PendingReviewCandidate {
         PendingReviewCandidate(candidateName: "Source clue", address: "", category: "food",
             sourceURL: "https://example.com/shared-post", sourceText: "Original caption",

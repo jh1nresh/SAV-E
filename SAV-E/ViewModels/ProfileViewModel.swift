@@ -220,10 +220,11 @@ final class ProfileViewModel: ObservableObject {
                 isRecovery = true
             } else {
                 guard let deletingUserID = currentOwner else { return false }
-                let queueKeys = try pendingPlaceImportService.ownerlessItemKeysForAccountDeletion()
+                let queueSnapshot = try pendingPlaceImportService.ownerlessQueueSnapshotForAccountDeletion()
                 let prepared = try saveLocalVaultService.prepareAccountDeletion(
                     belongingTo: deletingUserID,
-                    initialOwnerlessQueueItemKeys: queueKeys
+                    initialOwnerlessQueueItemKeys: queueSnapshot.ownerlessItemKeys,
+                    unreadableQueueFileNames: queueSnapshot.unreadableFileNames
                 )
                 activeIntentID = prepared.id
                 Self.inFlightAccountDeletionIDs.insert(prepared.id)
@@ -293,7 +294,8 @@ final class ProfileViewModel: ObservableObject {
         // failure cannot leave those rows consumable while the receipt stays.
         try pendingPlaceImportService.purgeAccountDeletionItems(
             belongingTo: intent.owner,
-            initialOwnerlessItemKeys: intent.initialOwnerlessQueueItemKeys
+            initialOwnerlessItemKeys: intent.initialOwnerlessQueueItemKeys,
+            unreadableFileNames: intent.unreadableQueueFileNames
         )
         try avatarStore.remove(for: intent.owner)
         try saveLocalVaultService.completeAccountDeletionCleanup(intentID: intent.id)

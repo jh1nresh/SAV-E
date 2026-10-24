@@ -885,6 +885,11 @@ struct ProviderPlaceLocation: Hashable {
     var mapURL: URL
 }
 
+struct PendingQueueAccountDeletionSnapshot: Equatable {
+    var ownerlessItemKeys: Set<String>
+    var unreadableFileNames: Set<String>
+}
+
 struct PendingImportRestorationToken {
     fileprivate let containerURL: URL
     fileprivate let ownerGenerations: [String: Int]
@@ -947,21 +952,31 @@ final class PendingPlaceImportService {
     /// another owner's items.
     ///
     /// Best-effort uncoordinated read: taking the Share write lock here
-    /// deadlocks admitted late writers that already hold it. Skip missing or
-    /// unreadable files so prepare and remote DELETE can proceed. Purge stays
-    /// fail-closed and retains the deletion receipt until retry.
-    func ownerlessItemKeysForAccountDeletion() throws -> Set<String> {
+    /// deadlocks admitted late writers that already hold it. Existing files
+    /// that cannot be read are named on the intent so purge can drop every
+    /// ownerless row in them once they are readable. Prepare never throws
+    /// for unreadable JSON; purge stays fail-closed.
+    func ownerlessQueueSnapshotForAccountDeletion() throws -> PendingQueueAccountDeletionSnapshot {
         var keys = Set<String>()
+        var unreadable = Set<String>()
         for name in [SAVEProductionConfig.pendingPlacesFileName, SAVEProductionConfig.pendingReviewCandidatesFileName] {
             guard let url = pendingFileURL(named: name) else { throw SaveLocalVaultError.storageUnavailable }
             guard fileManager.fileExists(atPath: url.path) else { continue }
             guard let data = try? Data(contentsOf: url),
                   let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                unreadable.insert(name)
                 continue
             }
             keys.formUnion(rows.compactMap(Self.ownerlessQueueItemKey))
         }
-        return keys
+        return PendingQueueAccountDeletionSnapshot(
+            ownerlessItemKeys: keys,
+            unreadableFileNames: unreadable
+        )
+    }
+
+    func ownerlessItemKeysForAccountDeletion() throws -> Set<String> {
+        try ownerlessQueueSnapshotForAccountDeletion().ownerlessItemKeys
     }
 
     /// Runs after the deleted owner's Share cache is invalidated. The same
@@ -970,18 +985,20 @@ final class PendingPlaceImportService {
     /// rows. Keep later ownerless rows, other owners and unrecognized fields.
     func purgeAccountDeletionItems(
         belongingTo owner: String,
-        initialOwnerlessItemKeys: Set<String> = []
+        initialOwnerlessItemKeys: Set<String> = [],
+        unreadableFileNames: Set<String> = []
     ) throws {
         guard let firstURL = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else {
             throw SaveLocalVaultError.storageUnavailable
         }
         let container = Self.canonicalContainer(for: firstURL)
         Self.restorationGenerations[container, default: [:]][owner, default: 0] += 1
-        try withAccountDeletionQueueFiles(writeChanges: true) { rows in
+        try withAccountDeletionQueueFiles(writeChanges: true) { fileName, rows in
             rows.filter { row in
                 if let subject = row["ownerSubject"] as? String, !subject.isEmpty {
                     return subject != owner
                 }
+                if unreadableFileNames.contains(fileName) { return false }
                 guard let key = Self.ownerlessQueueItemKey(row) else { return true }
                 return !initialOwnerlessItemKeys.contains(key)
             }
@@ -1010,7 +1027,7 @@ final class PendingPlaceImportService {
 
     private func withAccountDeletionQueueFiles(
         writeChanges: Bool,
-        _ body: ([[String: Any]]) throws -> [[String: Any]]
+        _ body: (String, [[String: Any]]) throws -> [[String: Any]]
     ) throws {
         for name in [SAVEProductionConfig.pendingPlacesFileName, SAVEProductionConfig.pendingReviewCandidatesFileName] {
             guard let url = pendingFileURL(named: name) else { throw SaveLocalVaultError.storageUnavailable }
@@ -1023,7 +1040,7 @@ final class PendingPlaceImportService {
                     guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
                         throw CocoaError(.fileReadCorruptFile)
                     }
-                    let next = try body(rows)
+                    let next = try body(name, rows)
                     guard writeChanges, next.count != rows.count else { return }
                     try JSONSerialization.data(withJSONObject: next, options: [.sortedKeys])
                         .write(to: coordinatedURL, options: .atomic)

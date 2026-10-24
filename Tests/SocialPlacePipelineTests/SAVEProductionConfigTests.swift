@@ -2715,6 +2715,79 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(confirmed.name, stamp.name)
     }
 
+    /// P2 4365825799: vault-restored Amap/GCJ stamps must keep provider identity
+    /// so a fetch-failed local cap projection does not treat the same venue as new.
+    @MainActor
+    func testLocalCapProjectionPreservesAmapIdentityFromConfirmedVault() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        defer {
+            auth.authState = originalAuth
+            SavePlaceLimitHandoff.testDefaults = originalDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        let owner = "amap-vault-cap-owner"
+        auth.authState = .authenticated(userId: owner)
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.amap-vault-cap.\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vaultURL = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        var stamps = makeCappedPlaces(50)
+        for index in stamps.indices {
+            stamps[index].googlePlaceId = nil
+            stamps[index].coordinateSystem = .gcj02
+            stamps[index].locationProvider = .amap
+            stamps[index].providerPlaceId = "amap-cap-\(index)"
+            stamps[index].providerMapUrl = "https://uri.amap.com/marker?position=120.00,24.00"
+            _ = try vault.saveConfirmedPlace(stamps[index], ownerSubject: owner)
+        }
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET", request.url?.path == "/places" {
+                throw URLError(.notConnectedToInternet)
+            }
+            return (200, "[]")
+        }
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+        await map.loadPlaces()
+        XCTAssertEqual(map.places.count, 50)
+        let restored = try XCTUnwrap(map.places.first { $0.providerPlaceId == "amap-cap-0" })
+        XCTAssertEqual(restored.coordinateSystem, .gcj02)
+        XCTAssertEqual(restored.locationProvider, .amap)
+        var incoming = stamps[0]
+        incoming = Place(
+            id: UUID(),
+            name: incoming.name,
+            address: incoming.address,
+            latitude: incoming.latitude,
+            longitude: incoming.longitude,
+            googlePlaceId: nil,
+            category: incoming.category,
+            status: incoming.status,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            coordinateSystem: .gcj02,
+            locationProvider: .amap,
+            providerPlaceId: "amap-cap-0",
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
+        )
+        XCTAssertTrue(restored.matches(incoming))
+        XCTAssertEqual(Place.consolidated(map.places + [incoming]).count, 50, "same Amap venue must not grow the local cap projection")
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+    }
+
     @MainActor
     func testMatchedReviewMergeCapParksOriginalCandidate() async throws {
         let auth = PrivyAuthService.shared
@@ -3483,8 +3556,12 @@ final class SAVEProductionConfigTests: XCTestCase {
             "P2 4365547385: remove the initial source record after a successful Share import"
         )
         XCTAssertTrue(
-            profile.contains("ownerlessItemKeysForAccountDeletion"),
+            profile.contains("ownerlessQueueSnapshotForAccountDeletion"),
             "P1 4365547382: snapshot ownerless Share rows before remote deletion"
+        )
+        XCTAssertTrue(
+            profile.contains("unreadableFileNames: intent.unreadableQueueFileNames"),
+            "P1 4365825794: unreadable queue files stay on the receipt until purge can drop their ownerless rows"
         )
         XCTAssertTrue(
             profile.contains("initialOwnerlessItemKeys: intent.initialOwnerlessQueueItemKeys"),

@@ -37,6 +37,10 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
     var createdAt: Date
     var semanticSource: SemanticSourceIdentity?
     var googlePlaceId: String?
+    var coordinateSystem: PlaceCoordinateSystem?
+    var locationProvider: PlaceMatchProvider?
+    var providerPlaceId: String?
+    var providerMapUrl: String?
     var sourceImageUrl: String?
     var businessPhotoUrls: [String]?
     var mergedPlaceIDs: [UUID]?
@@ -66,6 +70,10 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         rating: Double? = nil,
         createdAt: Date = Date(),
         googlePlaceId: String? = nil,
+        coordinateSystem: PlaceCoordinateSystem? = nil,
+        locationProvider: PlaceMatchProvider? = nil,
+        providerPlaceId: String? = nil,
+        providerMapUrl: String? = nil,
         sourceImageUrl: String? = nil,
         businessPhotoUrls: [String]? = nil,
         mergedPlaceIDs: [UUID]? = nil,
@@ -95,6 +103,10 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         self.createdAt = createdAt
         self.semanticSource = semanticSource
         self.googlePlaceId = googlePlaceId
+        self.coordinateSystem = coordinateSystem
+        self.locationProvider = locationProvider
+        self.providerPlaceId = providerPlaceId
+        self.providerMapUrl = providerMapUrl
         self.sourceImageUrl = GooglePlacesPhotoURL.persistableString(sourceImageUrl)
         self.businessPhotoUrls = GooglePlacesPhotoURL.persistableStrings(businessPhotoUrls)
         self.mergedPlaceIDs = mergedPlaceIDs
@@ -130,6 +142,10 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         case createdAt
         case semanticSource
         case googlePlaceId
+        case coordinateSystem
+        case locationProvider
+        case providerPlaceId
+        case providerMapUrl
         case sourceImageUrl
         case businessPhotoUrls
         case mergedPlaceIDs
@@ -165,6 +181,10 @@ struct SaveMemoryRecord: Identifiable, Codable, Hashable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         semanticSource = try container.decodeIfPresent(SemanticSourceIdentity.self, forKey: .semanticSource)
         googlePlaceId = try container.decodeIfPresent(String.self, forKey: .googlePlaceId)
+        coordinateSystem = try container.decodeIfPresent(PlaceCoordinateSystem.self, forKey: .coordinateSystem)
+        locationProvider = try container.decodeIfPresent(PlaceMatchProvider.self, forKey: .locationProvider)
+        providerPlaceId = try container.decodeIfPresent(String.self, forKey: .providerPlaceId)
+        providerMapUrl = try container.decodeIfPresent(String.self, forKey: .providerMapUrl)
         sourceImageUrl = GooglePlacesPhotoURL.persistableString(
             try container.decodeIfPresent(String.self, forKey: .sourceImageUrl)
         )

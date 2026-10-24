@@ -1290,6 +1290,71 @@ final class ProfileAvatarStoreTests: XCTestCase {
         XCTAssertEqual(service.consumePendingReviewCandidates(ownerSubject: "account-b").map(\.candidateName), ["Later"])
     }
 
+    /// P1 4365825794: unreadable queues must not block remote DELETE. Mark them
+    /// on the intent; once readable, purge every ownerless row in those files
+    /// and keep B. Receipt stays if the file is still unreadable.
+    @MainActor
+    func testUnreadableQueueSnapshotDeletesRemotelyAndPurgesOwnerlessWhenReadable() async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        defer { auth.authState = previousAuth }
+        auth.authState = .authenticated(userId: "account-a")
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a"))
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        let places: [PendingSharedPlace] = [
+            pendingDeletionPlace(owner: "account-a", name: "A"),
+            pendingDeletionPlace(owner: "account-b", name: "B"),
+            pendingDeletionPlace(owner: nil, name: "Legacy")
+        ]
+        let reviews: [PendingReviewCandidate] = [
+            pendingDeletionReview(owner: "account-a", name: "A"),
+            pendingDeletionReview(owner: "account-b", name: "B"),
+            pendingDeletionReview(owner: nil, name: "Legacy")
+        ]
+        queue.restorePendingPlaces(places)
+        queue.restorePendingReviewCandidates(reviews)
+        let placeURL = directory.appendingPathComponent(SAVEProductionConfig.pendingPlacesFileName)
+        let reviewURL = directory.appendingPathComponent(SAVEProductionConfig.pendingReviewCandidatesFileName)
+        try Data("broken-json".utf8).write(to: placeURL)
+        try Data("broken-json".utf8).write(to: reviewURL)
+        let snapshot = try queue.ownerlessQueueSnapshotForAccountDeletion()
+        XCTAssertTrue(snapshot.ownerlessItemKeys.isEmpty)
+        XCTAssertEqual(
+            snapshot.unreadableFileNames,
+            [
+                SAVEProductionConfig.pendingPlacesFileName,
+                SAVEProductionConfig.pendingReviewCandidatesFileName
+            ]
+        )
+        var requests = 0
+        let model = ProfileViewModel(
+            supabaseService: SupabaseService(apiBaseURL: nil),
+            accountDeletionService: ClosureAccountDeletionService {
+                requests += 1
+                try JSONEncoder().encode(places).write(to: placeURL, options: .atomic)
+                try JSONEncoder().encode(reviews).write(to: reviewURL, options: .atomic)
+            },
+            avatarStore: ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("avatars")),
+            saveLocalVaultService: vault,
+            pendingPlaceImportService: queue,
+            currentUserIDProvider: { "account-a" }, reviewerDemoProvider: { false }
+        )
+        let deleted = await model.deleteAccount()
+        XCTAssertTrue(deleted)
+        XCTAssertEqual(requests, 1)
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+        let remainingPlaces = queue.consumePendingPlaces(ownerSubject: "account-a")
+            + queue.consumePendingPlaces(ownerSubject: "account-b")
+        XCTAssertEqual(remainingPlaces.map(\.name), ["B"])
+        XCTAssertFalse(remainingPlaces.contains { $0.name == "Legacy" || $0.ownerSubject == "account-a" })
+        let remainingReviews = queue.consumePendingReviewCandidates(ownerSubject: "account-a")
+            + queue.consumePendingReviewCandidates(ownerSubject: "account-b")
+        XCTAssertEqual(remainingReviews.map(\.candidateName), ["B"])
+        XCTAssertFalse(remainingReviews.contains { $0.candidateName == "Legacy" || $0.ownerSubject == "account-a" })
+    }
+
     @MainActor
     private func pendingDeletionPlace(owner: String?, name: String) -> PendingSharedPlace {
         PendingSharedPlace(ownerSubject: owner, name: name, address: "Fixture address", category: "cafe",
