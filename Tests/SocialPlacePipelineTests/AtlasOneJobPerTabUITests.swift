@@ -365,7 +365,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(script.contains("five-tab-home*)"))
         XCTAssertTrue(script.contains("five-tab-capture*)"))
         XCTAssertTrue(script.contains("five-tab-paywall*)"))
-        XCTAssertTrue(script.contains("five-tab-passport*)"))
+        XCTAssertFalse(script.contains("five-tab-passport*)"))
         XCTAssertTrue(script.contains("priority=1"))
         XCTAssertTrue(script.contains("--ignore-rects"))
         XCTAssertTrue(script.contains("24,132,354,176;24,444,354,22;24,698,354,50"))

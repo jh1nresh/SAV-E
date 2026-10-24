@@ -50,7 +50,12 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertFalse(leftoverTown.contains("enum SaveTileTownMapLens"))
         XCTAssertFalse(leftoverTown.contains("struct SaveTileTownPeekCard"))
         let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
-        XCTAssertTrue(friends.contains("friends.mapStrip"))
+        XCTAssertFalse(friends.contains("friends.mapStrip"))
+        XCTAssertTrue(friends.contains("friends.root"))
+        XCTAssertTrue(friends.contains("friends.list"))
+        XCTAssertTrue(friends.contains("friends.empty"))
+        XCTAssertTrue(friends.contains("friends.findFriends"))
+        XCTAssertTrue(friends.contains("friends.author."))
         XCTAssertFalse(friends.contains("SaveTileTownCanvas"))
         XCTAssertFalse(friends.contains("SaveTileTownPin"))
         let design = try source(at: "DESIGN.md")
@@ -112,8 +117,10 @@ final class SaveTileTownLockTests: XCTestCase {
 
     func testTownPinsRemainTappableOnHomeAndMap() throws {
         let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
-        XCTAssertTrue(town.contains("map.tilePin.\\(pin.id.uuidString)"))
-        XCTAssertTrue(town.contains("showsPins"))
+        XCTAssertTrue(town.contains("enum SaveTileTownProductLock"))
+        XCTAssertFalse(town.contains("map.tilePin."))
+        XCTAssertFalse(town.contains("showsPins"))
+        XCTAssertFalse(town.contains("struct SaveTileTownCanvas"))
         let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertFalse(home.contains("home.miniMap"))
         XCTAssertFalse(home.contains("Map("))
@@ -258,7 +265,9 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertFalse(root.contains("SaveAtlasInteractiveRootMap("))
         let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
         XCTAssertFalse(friends.contains("SaveTileTownCanvas("))
-        XCTAssertTrue(friends.contains("friends.mapStrip"))
+        XCTAssertFalse(friends.contains("friends.mapStrip"))
+        XCTAssertTrue(friends.contains("friends.root"))
+        XCTAssertTrue(friends.contains("friends.list"))
     }
 
     func testStampLanguageIsOneSystem() throws {
