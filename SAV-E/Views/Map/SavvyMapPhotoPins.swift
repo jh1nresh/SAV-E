@@ -1527,6 +1527,14 @@ enum SavvyMapPhotoPinSnapshotExport {
             to: cardBack
         )
         written.append(cardBack)
+        let zhCardBack = directory.appendingPathComponent("zh-Hant-coralCardBack.png")
+        try write(
+            previewPage(.coralCardHero, scheme: .light, language: .traditionalChinese, isFlipped: true),
+            size: pinSize,
+            scheme: .light,
+            to: zhCardBack
+        )
+        written.append(zhCardBack)
         return written
     }
 
