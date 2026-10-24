@@ -5460,6 +5460,9 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     /// Mirrors backend/src/server.ts providerCoordinateFieldError.
+    /// SAVE defaults to MainActor; this XCTest target is nonisolated, so the
+    /// helper must be isolated to read `Place` members.
+    @MainActor
     private func backendProviderCoordinateFieldError(for place: Place) -> String? {
         let coordinateSystem = place.coordinateSystem?.rawValue
         let provider = place.locationProvider?.rawValue
