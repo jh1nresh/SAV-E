@@ -27,6 +27,26 @@ func ids(_ owner: String?) -> Set<UUID> {
     Set(MessagesVaultReader.confirmedPlaces(vaultURL: url, currentOwner: owner).map(\.id))
 }
 expect(ids(nil) == [oldID, laterID], "old schema without receipt must remain compatible")
+// P1 4365848914: owner captured before the coordinated read must not leak A after a switch.
+let switched = Set(
+    MessagesVaultReader.confirmedPlaces(
+        vaultURL: url,
+        currentOwner: "account-a",
+        ownerProvider: { "account-b" }
+    ).map(\.id)
+)
+expect(!switched.contains(aID), "A's places must not return after the owner switches to B")
+expect(switched == [bID], "stable B after the switch retries once for B")
+var ownerReads = 0
+let discarded = MessagesVaultReader.confirmedPlaces(
+    vaultURL: url,
+    currentOwner: "account-a",
+    ownerProvider: {
+        ownerReads += 1
+        return ownerReads == 1 ? "account-b" : "account-c"
+    }
+)
+expect(discarded.isEmpty, "a second owner mismatch must discard")
 let receipt: [String: Any] = ["id": UUID().uuidString, "owner": "account-a",
     "initialOwnerlessRecordIDs": [oldID.uuidString], "remoteOutcome": "awaitingRemoteResult"]
 let receiptData = try JSONSerialization.data(withJSONObject: receipt)

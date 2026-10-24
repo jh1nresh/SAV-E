@@ -25,10 +25,11 @@ final class MessagesViewController: MSMessagesAppViewController {
         // Read/decode the vault off the main thread so a growing JSON file never
         // stalls the Messages extension UI; render back on main.
         Task { [weak self] in
-            let places = await Task.detached(priority: .userInitiated) {
-                MessagesVaultReader.confirmedPlaces()
+            let read = await Task.detached(priority: .userInitiated) {
+                MessagesVaultReader.confirmedPlaceRead()
             }.value
-            self?.renderPicker(with: places)
+            guard MessagesVaultReader.cachedActiveOwner() == read.owner else { return }
+            self?.renderPicker(with: read.places)
         }
     }
 

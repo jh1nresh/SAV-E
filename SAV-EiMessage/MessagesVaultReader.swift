@@ -54,15 +54,75 @@ nonisolated enum MessagesVaultReader {
         let remoteOutcome: RemoteOutcome
     }
 
+    static func cachedActiveOwner() -> String? {
+        UserDefaults(suiteName: appGroupSuiteName)?.string(forKey: cachedOwnerKey)
+    }
+
     static func confirmedPlaces(limit: Int = 250) -> [MessagesPlace] {
-        guard let url = vaultURL() else { return [] }
-        let currentOwner = UserDefaults(suiteName: appGroupSuiteName)?.string(forKey: cachedOwnerKey)
-        return confirmedPlaces(vaultURL: url, currentOwner: currentOwner, limit: limit)
+        confirmedPlaceRead(limit: limit).places
+    }
+
+    /// Snapshot of confirmed Map Stamps plus the owner used to filter them.
+    /// The picker must re-check `cachedActiveOwner()` against `owner` before render.
+    static func confirmedPlaceRead(limit: Int = 250) -> (places: [MessagesPlace], owner: String?) {
+        let currentOwner = cachedActiveOwner()
+        guard let url = vaultURL() else { return ([], currentOwner) }
+        return confirmedPlaceRead(
+            vaultURL: url,
+            currentOwner: currentOwner,
+            limit: limit,
+            ownerProvider: cachedActiveOwner
+        )
     }
 
     /// Both files are read while holding the vault's coordination lock, matching
     /// the app's receipt/purge writes. Malformed or inaccessible receipts fail closed.
-    static func confirmedPlaces(vaultURL: URL, currentOwner: String?, limit: Int = 250) -> [MessagesPlace] {
+    ///
+    /// When `ownerProvider` is set, the cached owner is re-read after the coordinated
+    /// read. A mismatch retries once with the new owner; a second mismatch discards
+    /// the result so a stale account's Map Stamps are never returned.
+    static func confirmedPlaces(
+        vaultURL: URL,
+        currentOwner: String?,
+        limit: Int = 250,
+        ownerProvider: (() -> String?)? = nil
+    ) -> [MessagesPlace] {
+        confirmedPlaceRead(
+            vaultURL: vaultURL,
+            currentOwner: currentOwner,
+            limit: limit,
+            ownerProvider: ownerProvider
+        ).places
+    }
+
+    static func confirmedPlaceRead(
+        vaultURL: URL,
+        currentOwner: String?,
+        limit: Int = 250,
+        ownerProvider: (() -> String?)? = nil
+    ) -> (places: [MessagesPlace], owner: String?) {
+        let captured = currentOwner
+        let places = coordinatedConfirmedPlaces(vaultURL: vaultURL, currentOwner: captured, limit: limit)
+        guard let ownerProvider else {
+            return (places, captured)
+        }
+        let latest = ownerProvider()
+        guard latest != captured else {
+            return (places, captured)
+        }
+        let retried = coordinatedConfirmedPlaces(vaultURL: vaultURL, currentOwner: latest, limit: limit)
+        let afterRetry = ownerProvider()
+        guard afterRetry == latest else {
+            return ([], afterRetry)
+        }
+        return (retried, latest)
+    }
+
+    private static func coordinatedConfirmedPlaces(
+        vaultURL: URL,
+        currentOwner: String?,
+        limit: Int
+    ) -> [MessagesPlace] {
         let coordinator = NSFileCoordinator(filePresenter: nil)
         var coordinationError: NSError?
         var result: [MessagesPlace] = []

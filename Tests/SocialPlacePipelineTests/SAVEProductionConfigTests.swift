@@ -4001,6 +4001,76 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(auth.contains("SavePlaceLimitHandoff.syncActiveOwner(nil)"))
     }
 
+    /// P1 4365848914: owner captured before the coordinated read must be revalidated.
+    func testIMessageReaderDiscardsStaleOwnerAfterCoordinatedRead() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("save-memory-records.json")
+        let aID = UUID()
+        let bID = UUID()
+        let rows: [[String: Any]] = [
+            [
+                "id": aID.uuidString,
+                "state": "confirmed_place",
+                "title": "A Private Cafe",
+                "latitude": 25.0,
+                "longitude": 121.0,
+                "ownerSubject": "account-a",
+            ],
+            [
+                "id": bID.uuidString,
+                "state": "confirmed_place",
+                "title": "B Public Park",
+                "latitude": 25.1,
+                "longitude": 121.1,
+                "ownerSubject": "account-b",
+            ],
+        ]
+        try JSONSerialization.data(withJSONObject: rows).write(to: url, options: .atomic)
+
+        let stableA = MessagesVaultReader.confirmedPlaces(
+            vaultURL: url,
+            currentOwner: "account-a",
+            ownerProvider: { "account-a" }
+        )
+        XCTAssertEqual(stableA.map(\.id), [aID])
+
+        let switched = MessagesVaultReader.confirmedPlaces(
+            vaultURL: url,
+            currentOwner: "account-a",
+            ownerProvider: { "account-b" }
+        )
+        XCTAssertFalse(
+            switched.contains { $0.id == aID },
+            "A's private Map Stamps must not return after the owner switches to B"
+        )
+        XCTAssertEqual(switched.map(\.id), [bID])
+
+        var ownerReads = 0
+        let discarded = MessagesVaultReader.confirmedPlaces(
+            vaultURL: url,
+            currentOwner: "account-a",
+            ownerProvider: {
+                ownerReads += 1
+                return ownerReads == 1 ? "account-b" : "account-c"
+            }
+        )
+        XCTAssertTrue(discarded.isEmpty, "a second owner mismatch must discard rather than return A")
+        XCTAssertFalse(discarded.contains { $0.id == aID })
+
+        let reader = try source(at: "SAV-EiMessage/MessagesVaultReader.swift")
+        XCTAssertTrue(reader.contains("ownerProvider"))
+        XCTAssertTrue(reader.contains("cachedActiveOwner()"))
+        XCTAssertTrue(reader.contains("ownerProvider: cachedActiveOwner"))
+        let picker = try source(at: "SAV-EiMessage/MessagesViewController.swift")
+        XCTAssertTrue(picker.contains("MessagesVaultReader.confirmedPlaceRead()"))
+        XCTAssertTrue(
+            picker.contains("guard MessagesVaultReader.cachedActiveOwner() == read.owner else { return }"),
+            "presentPicker must not render a snapshot whose owner no longer matches"
+        )
+    }
+
     @MainActor
     func testShareExtensionUnplacedCandidateKeepsInboxMarker() throws {
         let share = try source(at: "SAV-EShareExtension/ShareViewController.swift")
