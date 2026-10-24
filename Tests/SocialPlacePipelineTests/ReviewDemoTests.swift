@@ -253,6 +253,30 @@ final class ReviewDemoTests: XCTestCase {
         )
     }
 
+    /// Isolated demo vault only. Another owner's matching seed name must stay
+    /// that owner's row; adopt claims ownerless fixtures only.
+    @MainActor
+    func testAdoptOwnerlessDemoFixturesDoesNotClaimAnotherOwnersSeed() throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("review-demo-other-owner-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let seed = ReviewDemoSeed.places()[0]
+        _ = try vault.saveConfirmedPlace(seed, ownerSubject: "other-reviewer")
+
+        ReviewDemoSeed.adoptOwnerlessDemoFixtures(in: vault)
+
+        XCTAssertEqual(
+            try vault.confirmedPlaces(limit: 500, belongingTo: "other-reviewer").map(\.id),
+            [seed.id]
+        )
+        XCTAssertTrue(try vault.confirmedPlaces(limit: 500, belongingTo: ReviewDemo.userId).isEmpty)
+        XCTAssertEqual(
+            try vault.confirmedPlaceRecords(limit: 500).first { $0.id == seed.id }?.ownerSubject,
+            "other-reviewer"
+        )
+    }
+
     @MainActor
     func testGuestTokenHolderRoundTrips() {
         let holder = ReviewDemoGuestTokenHolder()

@@ -3440,6 +3440,14 @@ final class SAVEProductionConfigTests: XCTestCase {
             demoSeed.contains("belongingTo: ReviewDemo.userId"),
             "P2 4365174273: seed-presence checks must use the demo-owner scope"
         )
+        XCTAssertTrue(
+            demoSeed.contains("record.ownerSubject == nil"),
+            "demo adopt claims ownerless fixtures only; another owner's seed-named row stays put"
+        )
+        XCTAssertTrue(
+            map.contains("removeLocalReviewMirror"),
+            "P1 4365254805: a successful Review import must delete the local vault mirror"
+        )
         XCTAssertTrue(map.contains("try persistParkedReviewCandidate(candidate)"))
         XCTAssertTrue(
             map.contains("SAVEPendingImportSessionScope.$current.withValue((importGeneration, userId))"),
@@ -5480,6 +5488,103 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         }
         XCTAssertEqual(persisted.count, queuedCount, "Add-all N must persist every queued place on the first scene-active, not only the first batch")
         XCTAssertEqual(Set(map.reviewCandidates.map(\.name)).count, queuedCount)
+    }
+
+    /// P1 4365254805: a successful Review import must drop the local vault
+    /// mirror so Share / Add-all refresh shows one entry, not local+remote.
+    @MainActor
+    func testSuccessfulReviewImportRemovesLocalMirrorAndShowsOneEntry() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        let owner = "review-import-mirror-fixture"
+        auth.authState = .authenticated(userId: owner)
+        defer {
+            auth.authState = original
+            AnalysisRequestURLProtocol.reset()
+        }
+
+        AnalysisRequestURLProtocol.reset()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let remoteID = UUID()
+        let workOrder = "{\"id\":\"\(UUID())\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"intent\":\"recover\",\"input_type\":\"social_url\",\"evaluator_policy_id\":\"fixture\",\"settlement_mode\":\"fixture\",\"status\":\"pending\"}"
+        func workflowJSON(id: UUID) -> String {
+            "{\"id\":\"\(id)\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"source_type\":\"social_url\",\"status\":\"pending\",\"evidence_tier\":\"weak\",\"result_evidence_refs\":[],\"result_candidate_refs\":[],\"credit_reserved\":1,\"credit_settlement\":\"pending\"}"
+        }
+        var remoteRow = ""
+        AnalysisRequestURLProtocol.handler = { request in
+            let path = request.url?.path ?? ""
+            if path == "/v0/analysis" {
+                let id = try XCTUnwrap(AnalysisRequestURLProtocol.body(request)["id"] as? String)
+                return (200, "{\"analysis_id\":\"\(id)\"}")
+            }
+            if path.hasSuffix("/captures") && request.httpMethod == "POST" {
+                return (200, "{\"id\":\"\(UUID())\"}")
+            }
+            if path.hasSuffix("/work-orders") { return (200, workOrder) }
+            if path.hasSuffix("/runs") {
+                let run = UUID()
+                return (200, workflowJSON(id: run))
+            }
+            if path.hasSuffix("/result") {
+                let run = UUID()
+                let receipt = "{\"id\":\"\(UUID())\",\"run_id\":\"\(run)\",\"workflow_id\":\"fixture\",\"verdict\":\"review\",\"settlement\":\"pending\",\"evaluator_summary\":\"fixture\",\"evidence_refs\":[],\"candidate_refs\":[],\"receipt_hash\":\"fixture\",\"anchor_status\":\"none\"}"
+                return (200, "{\"run\":\(workflowJSON(id: run)),\"receipt\":\(receipt)}")
+            }
+            if path.hasSuffix("/candidates") {
+                if request.httpMethod == "POST" {
+                    let body = try AnalysisRequestURLProtocol.body(request)
+                    let name = body["name"] as? String ?? "Place"
+                    let address = body["address"] as? String ?? ""
+                    let lat = body["latitude"] as? Double ?? 25.03
+                    let lon = body["longitude"] as? Double ?? 121.56
+                    remoteRow = "{\"id\":\"\(remoteID)\",\"name\":\"\(name)\",\"address\":\"\(address)\",\"latitude\":\(lat),\"longitude\":\(lon),\"status\":\"review\",\"created_at\":\"2020-01-02T03:04:05Z\"}"
+                    return (200, remoteRow)
+                }
+                if request.url?.query?.contains("capture_id") == true { return (200, "[]") }
+                return (200, remoteRow.isEmpty ? "[]" : "[\(remoteRow)]")
+            }
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let vaultURL = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        let map = MapViewModel(
+            supabaseService: service,
+            pendingImportService: queue,
+            saveLocalVaultService: vault
+        )
+        await map.loadPlaces(force: true)
+
+        queue.restorePendingReviewCandidates([
+            PendingReviewCandidate(
+                ownerSubject: owner,
+                candidateName: "Mirror Cafe",
+                address: "1 Import Road, Taipei",
+                category: "cafe",
+                latitude: 25.033,
+                longitude: 121.565,
+                sourceURL: "https://maps.app.goo.gl/mirror-cafe",
+                sourceText: "Google Maps saved place: Mirror Cafe",
+                evidence: ["Extracted from Google Maps list share"],
+                confidence: 0.9,
+                missingInfo: [],
+                savedAt: Date(),
+                reviewState: "map_match_ready"
+            )
+        ])
+        await map.handleSceneDidBecomeActive()
+
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [remoteID])
+        XCTAssertEqual(map.reviewCandidates.map(\.name), ["Mirror Cafe"])
+        XCTAssertTrue(
+            try vault.reviewCandidates(limit: 500, belongingTo: owner).isEmpty,
+            "the local vault mirror must be removed after the remote Review candidate exists"
+        )
     }
 
     func testImportRecoveryRejectsAccountSwitchBeforeApplyingResults() async throws {

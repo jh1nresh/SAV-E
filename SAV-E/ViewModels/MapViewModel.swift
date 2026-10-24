@@ -1410,6 +1410,7 @@ final class MapViewModel: ObservableObject {
                             let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
                             await SAVEAnalysisScope.current?.addCapture(captureId)
                             if try await reuseImportedCandidate(refinedCandidate, captureId: captureId, userId: userId, queuedForAnalysis: true) != nil {
+                                removeLocalReviewMirror(localRecordID, ownerSubject: candidate.ownerSubject)
                                 return
                             }
                             let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(
@@ -1429,6 +1430,7 @@ final class MapViewModel: ObservableObject {
                                 userId: userId,
                                 workflowRunId: createdRun.id
                             )
+                            removeLocalReviewMirror(localRecordID, ownerSubject: candidate.ownerSubject)
                             if !refinedCandidate.isSourceOnly { await SAVEAnalysisScope.current?.foundReviewCandidate() }
                             failedStep = "write_receipt"
                             _ = try await supabaseService.recordPlaceRecoveryResult(
@@ -1672,6 +1674,7 @@ final class MapViewModel: ObservableObject {
                     await SAVEAnalysisScope.current?.addCapture(captureId)
                     if let existingIDs = try await reuseImportedCandidate(candidate, captureId: captureId, userId: userId) {
                         importedCandidateIDs.append(contentsOf: existingIDs)
+                        removeLocalReviewMirror(candidate.id, ownerSubject: candidate.ownerSubject ?? userId)
                         continue
                     }
                     let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(sourceURL: candidate.sourceURL, sourceType: nil)
@@ -1685,6 +1688,7 @@ final class MapViewModel: ObservableObject {
                         workflowRunId: createdRun.id
                     )
                     importedCandidateIDs.append(candidateId)
+                    removeLocalReviewMirror(candidate.id, ownerSubject: candidate.ownerSubject ?? userId)
                     if !candidate.isSourceOnly { await SAVEAnalysisScope.current?.foundReviewCandidate() }
                     failedStep = "write_receipt"
                     _ = try await supabaseService.recordPlaceRecoveryResult(
@@ -3278,6 +3282,10 @@ final class MapViewModel: ObservableObject {
 
     nonisolated static func shouldRecordPlaceRecoveryTechnicalFailure(for error: Error) -> Bool {
         !(error is DecodingError)
+    }
+
+    private func removeLocalReviewMirror(_ recordID: UUID, ownerSubject: String?) {
+        try? saveLocalVaultService.removeReviewCandidate(recordID, ownerSubject: ownerSubject)
     }
 
     private func mirrorToLocalVault(_ candidate: PendingReviewCandidate) {

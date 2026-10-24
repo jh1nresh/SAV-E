@@ -387,12 +387,9 @@ enum ReviewDemoSeed {
     /// MapViewModel only shows `ReviewDemo.userId` rows.
     static func adoptOwnerlessDemoFixtures(in vault: SaveLocalVaultService) {
         let seedPlaces = places()
-        let ownedIDs = Set(
-            ((try? vault.confirmedPlaces(limit: 500, belongingTo: ReviewDemo.userId)) ?? [])
-                .flatMap(\.savedIDs)
-        )
-        for place in (try? vault.confirmedPlaces(limit: 500)) ?? [] {
-            guard place.savedIDs.isDisjoint(with: ownedIDs) else { continue }
+        for record in (try? vault.confirmedPlaceRecords(limit: 500)) ?? [] {
+            guard record.ownerSubject == nil,
+                  let place = confirmedPlaceIdentity(from: record) else { continue }
             let matchesSeed = seedPlaces.contains { $0.matches(place) }
                 || seedPlaces.contains {
                     $0.name.localizedCaseInsensitiveCompare(place.name) == .orderedSame
@@ -449,5 +446,46 @@ enum ReviewDemoSeed {
             }
         }
         defaults.set(true, forKey: ReviewDemo.seededDefaultsKey)
+    }
+
+    /// Public `SaveMemoryRecord` fields only. `confirmedPlace` is fileprivate.
+    private static func confirmedPlaceIdentity(from record: SaveMemoryRecord) -> Place? {
+        guard record.state == .confirmedPlace,
+              let latitude = record.latitude,
+              let longitude = record.longitude,
+              latitude != 0 || longitude != 0 else { return nil }
+        let name = record.displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+        let address = (record.address ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return Place(
+            id: record.id,
+            name: name,
+            address: address,
+            latitude: latitude,
+            longitude: longitude,
+            googlePlaceId: record.googlePlaceId,
+            category: record.category ?? PlaceCategory.inferred(from: "\(name) \(address)"),
+            status: record.status ?? .wantToGo,
+            rating: record.rating,
+            note: record.sourceText,
+            sourceUrl: record.sourceURL,
+            sourcePlatform: SourcePlatform.from(urlString: record.sourceURL),
+            sourceImageUrl: record.sourceImageUrl,
+            businessPhotoUrls: record.businessPhotoUrls,
+            extractedDishes: record.recommendedItems.map(\.name).isEmpty ? nil : record.recommendedItems.map(\.name),
+            priceRange: nil,
+            recommender: record.sourceHandle,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: record.createdAt,
+            visibility: .privateMemory,
+            placeHighlights: record.placeHighlights.isEmpty ? nil : record.placeHighlights,
+            recommendedItems: record.recommendedItems.isEmpty ? nil : record.recommendedItems,
+            vibeTags: record.vibeTags.isEmpty ? nil : record.vibeTags,
+            accessNotes: record.accessNotes.isEmpty ? nil : record.accessNotes,
+            sourceHandle: record.sourceHandle,
+            mergedPlaceIDs: record.mergedPlaceIDs
+        )
     }
 }
