@@ -4826,6 +4826,216 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(try vault.reviewCandidates(belongingTo: "did:privy:owner-a").contains { $0.id == parked.id })
     }
 
+    /// P2 PRRT_kwDOTYZUp86v209C: Keep Source Only on a remote-backed park
+    /// must become a Source Clue. The overlay cannot survive refresh.
+    @MainActor
+    func testRemoteBackedSourceOnlyClearsUnplacedOverlayAndRefreshKeepsSourceClue() async throws {
+        let auth = PrivyAuthService.shared
+        let oldAuth = auth.authState
+        defer { auth.authState = oldAuth; AnalysisRequestURLProtocol.reset() }
+        for route in ["legacy", "workflow"] {
+            let owner = "remote-source-only-\(route)"
+            auth.authState = .authenticated(userId: owner)
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+            var candidate = contextualReviewCandidate(owner: owner, workflow: route == "workflow")
+            candidate.missingInfo.append(PlaceReviewCandidate.unplacedInboxMarker)
+            XCTAssertTrue(candidate.isUnplacedInbox)
+            XCTAssertTrue(MapViewModel.hasRemoteDecisionLink(candidate))
+            try vault.saveReviewCandidate(candidate, preservingParkedContext: true)
+            var remoteStatus = "review"
+            var shouldFail = true
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { request in
+                let path = request.url?.path ?? ""
+                if request.httpMethod == "PATCH", path == "/memory/candidates/\(candidate.id.uuidString)" {
+                    XCTAssertEqual(route, "legacy")
+                    let body = try AnalysisRequestURLProtocol.body(request)
+                    XCTAssertEqual(body["status"] as? String, "source_only")
+                    if shouldFail { return (500, #"{"error":"unavailable"}"#) }
+                    return (200, "{}")
+                }
+                if request.httpMethod == "POST",
+                   path == "/v0/workflows/place-recovery/runs/\(candidate.workflowRunId?.uuidString ?? "")/decision" {
+                    XCTAssertEqual(route, "workflow")
+                    let body = try AnalysisRequestURLProtocol.body(request)
+                    XCTAssertEqual(body["action"] as? String, "source_only")
+                    if shouldFail { return (500, #"{"error":"unavailable"}"#) }
+                    let run = candidate.workflowRunId!
+                    let workflow = "{\"id\":\"\(run)\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"source_type\":\"social_url\",\"status\":\"pending\",\"evidence_tier\":\"weak\",\"result_evidence_refs\":[],\"result_candidate_refs\":[],\"credit_reserved\":1,\"credit_settlement\":\"pending\"}"
+                    let receipt = "{\"id\":\"\(UUID())\",\"run_id\":\"\(run)\",\"workflow_id\":\"fixture\",\"verdict\":\"source_only\",\"settlement\":\"pending\",\"evaluator_summary\":\"fixture\",\"evidence_refs\":[],\"candidate_refs\":[],\"receipt_hash\":\"fixture\",\"anchor_status\":\"none\"}"
+                    return (200, "{\"run\":\(workflow),\"receipt\":\(receipt)}")
+                }
+                if request.url?.path == "/memory/candidates" {
+                    var row: [String: Any] = [
+                        "id": candidate.id.uuidString,
+                        "name": candidate.name,
+                        "address": candidate.address,
+                        "status": remoteStatus,
+                        "missing_info": [],
+                        "created_at": "2023-11-14T22:13:20Z",
+                    ]
+                    if let capture = candidate.captureId { row["capture_id"] = capture.uuidString }
+                    if let run = candidate.workflowRunId { row["workflow_run_id"] = run.uuidString }
+                    return (200, String(data: try JSONSerialization.data(withJSONObject: [row]), encoding: .utf8)!)
+                }
+                return (200, request.httpMethod == "GET" ? "[]" : "{}")
+            }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+            let service = SupabaseService(
+                apiBaseURL: "https://remote-source-only.test",
+                session: URLSession(configuration: configuration),
+                accessTokenProvider: { "fixture-token" }
+            )
+            let map = MapViewModel(
+                supabaseService: service,
+                saveLocalVaultService: vault,
+                correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("events.json")),
+                usesRemotePersistence: true
+            )
+            map.reviewCandidates = [candidate]
+            map.selectedReviewCandidate = candidate
+            do {
+                try await map.saveReviewCandidateAsSourceOnly(candidate)
+                XCTFail("remote source-only failure cannot report success")
+            } catch {
+                XCTAssertFalse(error is CancellationError)
+            }
+            XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+            XCTAssertTrue(
+                try vault.reviewCandidates(belongingTo: owner).contains { $0.id == candidate.id && $0.isUnplacedInbox }
+            )
+            shouldFail = false
+            try await map.saveReviewCandidateAsSourceOnly(candidate)
+            XCTAssertEqual(map.reviewCandidates.first?.status, "source_only")
+            XCTAssertEqual(map.selectedReviewCandidate?.status, "source_only")
+            XCTAssertFalse(map.reviewCandidates.first?.isUnplacedInbox == true, "Keep Source Only must leave Unplaced")
+            XCTAssertFalse(
+                try vault.reviewCandidates(belongingTo: owner).contains { $0.id == candidate.id && $0.isUnplacedInbox },
+                "remote-backed overlay must be removed after source-only commits"
+            )
+            remoteStatus = "source_only"
+            try await map.refreshReviewCandidates()
+            XCTAssertEqual(map.reviewCandidates.first?.status, "source_only")
+            XCTAssertFalse(map.reviewCandidates.first?.isUnplacedInbox == true)
+            // Leftover overlay still cannot restore Unplaced onto a Source Clue.
+            var leftover = candidate
+            leftover.status = "source_only"
+            leftover.missingInfo.append(PlaceReviewCandidate.unplacedInboxMarker)
+            try vault.saveReviewCandidate(leftover, preservingParkedContext: true)
+            try await map.refreshReviewCandidates()
+            XCTAssertEqual(map.reviewCandidates.first?.status, "source_only")
+            XCTAssertFalse(
+                map.reviewCandidates.first?.isUnplacedInbox == true,
+                "refresh must not restore Unplaced onto a remote source_only row"
+            )
+            remoteStatus = "needs_more_evidence"
+            try await map.refreshReviewCandidates()
+            XCTAssertTrue(
+                map.reviewCandidates.first?.isUnplacedInbox == true,
+                "investigate/more-evidence still restores Unplaced from the leftover overlay"
+            )
+        }
+    }
+
+    /// P2 PRRT_kwDOTYZUp86v209G: remote reject/archive must not drop the
+    /// overlay before the server accepts. Failure keeps Unplaced.
+    @MainActor
+    func testRemoteBackedUnplacedRejectFailureKeepsOverlayAndRefreshStaysUnplaced() async throws {
+        let auth = PrivyAuthService.shared
+        let oldAuth = auth.authState
+        defer { auth.authState = oldAuth; AnalysisRequestURLProtocol.reset() }
+        for route in ["legacy", "workflow"] {
+            for decision in ["reject", "archive"] {
+                let owner = "remote-unplaced-\(decision)-\(route)"
+                auth.authState = .authenticated(userId: owner)
+                let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                defer { try? FileManager.default.removeItem(at: directory) }
+                let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+                var candidate = contextualReviewCandidate(owner: owner, workflow: route == "workflow")
+                candidate.missingInfo.append(PlaceReviewCandidate.unplacedInboxMarker)
+                try vault.saveReviewCandidate(candidate, preservingParkedContext: true)
+                var shouldFail = true
+                AnalysisRequestURLProtocol.reset()
+                AnalysisRequestURLProtocol.handler = { request in
+                    let path = request.url?.path ?? ""
+                    if request.httpMethod == "PATCH", path == "/memory/candidates/\(candidate.id.uuidString)" {
+                        XCTAssertEqual(route, "legacy")
+                        if shouldFail { return (500, #"{"error":"unavailable"}"#) }
+                        return (200, "{}")
+                    }
+                    if request.httpMethod == "POST",
+                       path == "/v0/workflows/place-recovery/runs/\(candidate.workflowRunId?.uuidString ?? "")/decision" {
+                        XCTAssertEqual(route, "workflow")
+                        if shouldFail { return (500, #"{"error":"unavailable"}"#) }
+                        let run = candidate.workflowRunId!
+                        let workflow = "{\"id\":\"\(run)\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"source_type\":\"social_url\",\"status\":\"pending\",\"evidence_tier\":\"weak\",\"result_evidence_refs\":[],\"result_candidate_refs\":[],\"credit_reserved\":1,\"credit_settlement\":\"pending\"}"
+                        let receipt = "{\"id\":\"\(UUID())\",\"run_id\":\"\(run)\",\"workflow_id\":\"fixture\",\"verdict\":\"rejected\",\"settlement\":\"pending\",\"evaluator_summary\":\"fixture\",\"evidence_refs\":[],\"candidate_refs\":[],\"receipt_hash\":\"fixture\",\"anchor_status\":\"none\"}"
+                        return (200, "{\"run\":\(workflow),\"receipt\":\(receipt)}")
+                    }
+                    if request.url?.path == "/memory/candidates" {
+                        var row: [String: Any] = [
+                            "id": candidate.id.uuidString,
+                            "name": candidate.name,
+                            "address": candidate.address,
+                            "status": shouldFail ? "review" : "rejected",
+                            "missing_info": [],
+                            "created_at": "2023-11-14T22:13:20Z",
+                        ]
+                        if let capture = candidate.captureId { row["capture_id"] = capture.uuidString }
+                        if let run = candidate.workflowRunId { row["workflow_run_id"] = run.uuidString }
+                        return (200, String(data: try JSONSerialization.data(withJSONObject: [row]), encoding: .utf8)!)
+                    }
+                    return (200, request.httpMethod == "GET" ? "[]" : "{}")
+                }
+                let configuration = URLSessionConfiguration.ephemeral
+                configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+                let service = SupabaseService(
+                    apiBaseURL: "https://remote-unplaced-reject.test",
+                    session: URLSession(configuration: configuration),
+                    accessTokenProvider: { "fixture-token" }
+                )
+                let map = MapViewModel(
+                    supabaseService: service,
+                    saveLocalVaultService: vault,
+                    correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("events.json")),
+                    usesRemotePersistence: true
+                )
+                map.reviewCandidates = [candidate]
+                map.selectedReviewCandidate = candidate
+                do {
+                    if decision == "reject" { try await map.rejectReviewCandidate(candidate) }
+                    else { try await map.archiveReviewCandidate(candidate) }
+                    XCTFail("remote \(decision) failure cannot report success")
+                } catch {
+                    XCTAssertFalse(error is CancellationError)
+                }
+                XCTAssertEqual(map.reviewCandidates.map(\.id), [candidate.id])
+                XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+                XCTAssertTrue(
+                    try vault.reviewCandidates(belongingTo: owner).contains { $0.id == candidate.id && $0.isUnplacedInbox },
+                    "failed remote \(decision) must keep the Unplaced overlay"
+                )
+                try await map.refreshReviewCandidates()
+                XCTAssertEqual(map.reviewCandidates.first?.id, candidate.id)
+                XCTAssertTrue(
+                    map.reviewCandidates.first?.isUnplacedInbox == true,
+                    "refresh must not turn a still-active remote row into an ordinary Review Candidate"
+                )
+                shouldFail = false
+                if decision == "reject" { try await map.rejectReviewCandidate(candidate) }
+                else { try await map.archiveReviewCandidate(candidate) }
+                XCTAssertTrue(map.reviewCandidates.isEmpty)
+                XCTAssertFalse(
+                    try vault.reviewCandidates(belongingTo: owner).contains { $0.id == candidate.id },
+                    "successful remote \(decision) clears the overlay"
+                )
+            }
+        }
+    }
+
     /// P2 4366334149: a successful remote confirm must not swallow Unplaced
     /// vault-delete failure. The parked row stays until cleanup succeeds.
     @MainActor
@@ -5142,6 +5352,13 @@ final class SAVEProductionConfigTests: XCTestCase {
             "successful shared-post retry deletes the parked row instead of inferring cover"
         )
         XCTAssertTrue(map.contains("removeLocalOnlyUnplacedBeforeDecision"))
+        XCTAssertTrue(map.contains("guard !Self.hasRemoteDecisionLink(candidate) else { return }"))
+        XCTAssertTrue(map.contains("func clearRemoteBackedUnplacedOverlayAfterDecision"))
+        XCTAssertTrue(map.contains("func restoresUnplacedParkingOverlay(forRemoteStatus"))
+        XCTAssertFalse(MapViewModel.restoresUnplacedParkingOverlay(forRemoteStatus: "source_only"))
+        XCTAssertFalse(MapViewModel.restoresUnplacedParkingOverlay(forRemoteStatus: "confirmed"))
+        XCTAssertTrue(MapViewModel.restoresUnplacedParkingOverlay(forRemoteStatus: "review"))
+        XCTAssertTrue(MapViewModel.restoresUnplacedParkingOverlay(forRemoteStatus: "needs_more_evidence"))
     }
 
     @MainActor

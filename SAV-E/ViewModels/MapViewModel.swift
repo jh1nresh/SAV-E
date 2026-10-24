@@ -1528,7 +1528,13 @@ final class MapViewModel: ObservableObject {
             }
             var candidate = remoteCandidate
             candidate.ownerSubject = parked.ownerSubject
-            if !candidate.isUnplacedInbox { candidate.missingInfo.append(PlaceReviewCandidate.unplacedInboxMarker) }
+            // Keep Source Only and confirmed are not place-candidate inbox
+            // states. Restoring Unplaced onto those rows would hide a Source
+            // Clue (or stamp) after every refresh.
+            if Self.restoresUnplacedParkingOverlay(forRemoteStatus: candidate.status),
+               !candidate.isUnplacedInbox {
+                candidate.missingInfo.append(PlaceReviewCandidate.unplacedInboxMarker)
+            }
             candidate.captureId = candidate.captureId ?? parked.captureId
             candidate.workflowRunId = candidate.workflowRunId ?? parked.workflowRunId
             candidate.correctionScopeKey = candidate.correctionScopeKey ?? parked.correctionScopeKey
@@ -1933,7 +1939,12 @@ final class MapViewModel: ObservableObject {
             afterCandidate: updatedCandidate,
             reason: "User kept the source without confirming a place."
         )
-        updateLocalCandidate(candidate.id, status: "source_only")
+        try clearRemoteBackedUnplacedOverlayAfterDecision(candidate)
+        updateLocalCandidate(
+            candidate.id,
+            status: "source_only",
+            stripUnplacedInbox: candidate.isUnplacedInbox && Self.hasRemoteDecisionLink(candidate)
+        )
         clearExactSearchResolution(matching: candidate.id)
     }
 
@@ -3152,9 +3163,18 @@ final class MapViewModel: ObservableObject {
         return match
     }
 
-    private func updateLocalCandidate(_ candidateId: UUID, status: String) {
+    private func updateLocalCandidate(
+        _ candidateId: UUID,
+        status: String,
+        stripUnplacedInbox: Bool = false
+    ) {
         guard let index = reviewCandidates.firstIndex(where: { $0.id == candidateId }) else { return }
         reviewCandidates[index].status = status
+        if stripUnplacedInbox {
+            reviewCandidates[index].missingInfo.removeAll {
+                $0.caseInsensitiveCompare(PlaceReviewCandidate.unplacedInboxMarker) == .orderedSame
+            }
+        }
         if selectedReviewCandidate?.id == candidateId {
             selectedReviewCandidate = reviewCandidates[index]
         }
@@ -3320,10 +3340,32 @@ final class MapViewModel: ObservableObject {
         try saveLocalVaultService.removeReviewCandidate(recordID, ownerSubject: ownerSubject)
     }
 
+    nonisolated static func hasRemoteDecisionLink(_ candidate: PlaceReviewCandidate) -> Bool {
+        candidate.captureId != nil || candidate.workflowRunId != nil
+    }
+
+    /// `review` and `needs_more_evidence` are still place-candidate inbox
+    /// states. `source_only` is a Source Clue; `confirmed` is a stamp.
+    nonisolated static func restoresUnplacedParkingOverlay(forRemoteStatus status: String) -> Bool {
+        status == "review" || status == "needs_more_evidence"
+    }
+
     /// Local-only Unplaced has no remote row. Vault delete is the durable
     /// mutation and must succeed before the UI reports the reject/archive.
+    /// Remote-backed Unplaced still has an active server row: keep the
+    /// overlay until that reject/archive commits.
     private func removeLocalOnlyUnplacedBeforeDecision(_ candidate: PlaceReviewCandidate) throws {
         guard candidate.isUnplacedInbox else { return }
+        guard !Self.hasRemoteDecisionLink(candidate) else { return }
+        try saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
+    }
+
+    /// After Keep Source Only commits on a remote-backed park, drop the
+    /// overlay so refresh cannot restore Unplaced onto the source_only row.
+    /// Local-only parked source-only keeps its overlay via the vault
+    /// decision writer.
+    private func clearRemoteBackedUnplacedOverlayAfterDecision(_ candidate: PlaceReviewCandidate) throws {
+        guard candidate.isUnplacedInbox, Self.hasRemoteDecisionLink(candidate) else { return }
         try saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
     }
 
@@ -3339,10 +3381,16 @@ final class MapViewModel: ObservableObject {
         }
     }
 
-    /// After a server-accepted decision, keep local cleanup best-effort so a
-    /// vault write cannot roll that decision back. Unplaced already deleted.
+    /// After a server-accepted reject/archive, keep ordinary review cleanup
+    /// best-effort so a vault write cannot roll that decision back.
+    /// Local-only Unplaced was already deleted. Remote-backed Unplaced
+    /// waits until this point so a failed remote request keeps the overlay.
     private func removeReviewCandidateFromVaultAfterDecision(_ candidate: PlaceReviewCandidate) throws {
-        guard !candidate.isUnplacedInbox else { return }
+        if candidate.isUnplacedInbox {
+            guard Self.hasRemoteDecisionLink(candidate) else { return }
+            try saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
+            return
+        }
         try? saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
     }
 
