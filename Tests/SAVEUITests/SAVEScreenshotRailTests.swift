@@ -607,7 +607,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.staticTexts["Unplaced Harbor Cafe"].firstMatch.waitForExistence(timeout: stepTimeout),
             "Parked Unplaced Harbor Cafe must appear as a Review candidate."
         )
-        XCTAssertTrue(app.staticTexts["Review Candidate"].firstMatch.exists)
+        XCTAssertTrue(
+            app.staticTexts["Unplaced"].firstMatch.waitForExistence(timeout: stepTimeout),
+            "B8-4: Unplaced must be visible text, not only saves.unplaced."
+        )
+        XCTAssertTrue(
+            app.staticTexts["Held after 50 places saved. Not on the map yet."].firstMatch.exists,
+            "B8-1: the parked section must say why the row is off the map."
+        )
         XCTAssertTrue(
             app.staticTexts["Confirm the place before adding it to your map."].firstMatch.exists
         )

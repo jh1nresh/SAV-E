@@ -1,5 +1,7 @@
 import XCTest
 import CoreLocation
+import SwiftUI
+import UIKit
 @testable import SAVE
 
 final class SAVEProductionConfigTests: XCTestCase {
@@ -191,6 +193,19 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertTrue(rail.contains("Review Candidate"))
         XCTAssertTrue(
+            rail.contains("staticTexts[\"Unplaced\"]"),
+            "B8-4: E4 Unplaced still must assert visible Unplaced text, not only the identifier"
+        )
+        XCTAssertTrue(
+            rail.contains("Held after 50 places saved. Not on the map yet."),
+            "B8-1: E4 Unplaced still must assert the parked-off-map sentence"
+        )
+        XCTAssertTrue(
+            try source(at: "Tests/SocialPlacePipelineTests/SAVEProductionConfigTests.swift")
+                .contains("func testUnplacedVisibleLabelAt375And430"),
+            "B8-5: 375/430 true-width Unplaced stills stay in SAVETests"
+        )
+        XCTAssertTrue(
             rail.contains("Settings Pro row requires a confirmed Map Stamp on Home first."),
             "E4 Settings waits for home.featuredName before opening the gated Pro row"
         )
@@ -204,6 +219,14 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(
             saves.contains("if candidate.isUnplacedInbox {\n            return localized(\"Unplaced\", \"暫未放入\")"),
             "P2 4366181909: candidateKindTitle must distinguish parked items from Review Candidate"
+        )
+        XCTAssertTrue(
+            saves.contains("Held after 50 places saved. Not on the map yet."),
+            "B8-1: Unplaced section must explain the 50-place park in English"
+        )
+        XCTAssertTrue(
+            saves.contains("已存 50 個地點，所以暫放，還沒放上地圖。"),
+            "B8-2: Unplaced section must explain the 50-place park in zh-Hant"
         )
         XCTAssertTrue(saves.contains("localized(\"Review Candidate\", \"待確認地點\")"))
         let candidate = try source(at: "SAV-E/Services/PendingPlaceImportService.swift")
@@ -4236,6 +4259,35 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertTrue(saves.contains("localized(\"Review Candidate\", \"待確認地點\")"))
         XCTAssertTrue(saves.contains(".accessibilityAddTraits(.isHeader)"))
+        XCTAssertTrue(
+            saves.contains("Held after 50 places saved. Not on the map yet."),
+            "B8-1/B8-2: English Unplaced reason must stay visible"
+        )
+        XCTAssertTrue(
+            saves.contains("已存 50 個地點，所以暫放，還沒放上地圖。"),
+            "B8-2: zh-Hant Unplaced reason must stay visible"
+        )
+    }
+
+    /// B8-4/B8-5: parked Unplaced copy must be a visible UILabel at the
+    /// 375pt and 430pt canvases, not only an accessibility identifier or a
+    /// source-string match. Attachments are true-width stills.
+    @MainActor
+    func testUnplacedVisibleLabelAt375And430() throws {
+        try assertUnplacedVisibleLabel(
+            width: 375,
+            height: 812,
+            language: .english,
+            expectedTitle: "Unplaced",
+            expectedReason: "Held after 50 places saved. Not on the map yet."
+        )
+        try assertUnplacedVisibleLabel(
+            width: 430,
+            height: 932,
+            language: .traditionalChinese,
+            expectedTitle: "暫未放入",
+            expectedReason: "已存 50 個地點，所以暫放，還沒放上地圖。"
+        )
     }
 
     func testEntitlementRefreshResyncsAppGroupCacheInSource() throws {
@@ -5733,6 +5785,146 @@ final class SAVEProductionConfigTests: XCTestCase {
         let url = repositoryRoot.appendingPathComponent(relativePath)
         let data = try Data(contentsOf: url)
         return try XCTUnwrap(PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+    }
+
+    @MainActor
+    private func assertUnplacedVisibleLabel(
+        width: CGFloat,
+        height: CGFloat,
+        language: AppLanguage,
+        expectedTitle: String,
+        expectedReason: String
+    ) throws {
+        XCTAssertFalse(
+            SaveAtlasRuntime.usesParityFixture,
+            "unit tests must render savesContent, not the Atlas parity fixture"
+        )
+        let suite = "save.b8.unplaced.\(language.rawValue).\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set(language.rawValue, forKey: "save.appLanguage")
+        let settings = AppLanguageSettings(userDefaults: defaults)
+        XCTAssertEqual(settings.language, language)
+
+        let parked = PlaceReviewCandidate(
+            id: UUID(uuidString: "E4000000-0000-4000-8000-000000000051")!,
+            captureId: nil,
+            name: "Unplaced Harbor Cafe",
+            address: "Harbor Street",
+            city: nil,
+            latitude: 25.15,
+            longitude: 121.78,
+            evidence: [],
+            confidence: 0.9,
+            missingInfo: [PlaceReviewCandidate.unplacedInboxMarker],
+            status: "review",
+            createdAt: Date()
+        )
+        let host = UIHostingController(
+            rootView: SaveLibraryView(
+                places: [],
+                reviewCandidates: [parked],
+                onOpenCapture: {},
+                onOpenReviewCandidate: { _ in },
+                onOpenSavedPlace: { _ in },
+                onOpenPassport: {}
+            )
+            .environment(\.appLanguageSettings, settings)
+            .frame(width: width, height: height)
+        )
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: width, height: height))
+        window.rootViewController = host
+        window.isHidden = false
+        window.makeKeyAndVisible()
+        host.view.frame = window.bounds
+        host.view.layoutIfNeeded()
+        let deadline = Date().addingTimeInterval(1)
+        var labels: [String] = []
+        while Date() < deadline {
+            labels = visibleTexts(in: host.view)
+            if labels.contains(where: { $0 == expectedTitle || $0.hasPrefix("\(expectedTitle),") }),
+               labels.contains(where: { $0 == expectedReason || $0.contains(expectedReason) }) {
+                break
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            host.view.layoutIfNeeded()
+        }
+        XCTAssertTrue(
+            labels.contains(where: { $0 == expectedTitle || $0.hasPrefix("\(expectedTitle),") }),
+            "B8-4: visible \(language.rawValue) title must be \(expectedTitle), not only saves.unplaced. saw=\(labels)"
+        )
+        XCTAssertTrue(
+            labels.contains(where: { $0 == expectedReason || $0.contains(expectedReason) }),
+            "B8-4: visible \(language.rawValue) reason must appear as label/text. saw=\(labels)"
+        )
+        XCTAssertFalse(
+            labels.contains("Review Candidate"),
+            "B8-3: parked fixture must not use Review Candidate as the kind title. saw=\(labels)"
+        )
+        XCTAssertFalse(
+            labels.contains("待確認地點"),
+            "B8-3: parked fixture must not use 待確認地點 as the kind title. saw=\(labels)"
+        )
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let size = CGSize(width: width, height: height)
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            host.view.layer.render(in: context.cgContext)
+        }
+        XCTAssertEqual(image.size.width, width, accuracy: 0.5, "B8-5: still must be \(Int(width))pt wide")
+        let attachment = XCTAttachment(image: image)
+        attachment.name = "e4-unplaced-candidate-\(Int(width))-\(language.rawValue)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        if let data = image.pngData() {
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("save-b8-unplaced", isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let file = directory.appendingPathComponent(
+                "e4-unplaced-candidate-\(Int(width))-\(language.rawValue).png"
+            )
+            try data.write(to: file)
+            let note = XCTAttachment(string: file.path)
+            note.name = "e4-unplaced-candidate-\(Int(width))-\(language.rawValue)-path"
+            note.lifetime = .keepAlways
+            add(note)
+        }
+        defaults.removePersistentDomain(forName: suite)
+        window.isHidden = true
+    }
+
+    private func visibleTexts(in view: UIView) -> [String] {
+        var texts: [String] = []
+        if let label = view as? UILabel {
+            if let text = label.text, !text.isEmpty { texts.append(text) }
+            if let attributed = label.attributedText?.string, !attributed.isEmpty {
+                texts.append(attributed)
+            }
+        }
+        if let text = view.accessibilityLabel, !text.isEmpty {
+            texts.append(text)
+        }
+        if let value = view.accessibilityValue, !value.isEmpty {
+            texts.append(value)
+        }
+        for subview in view.subviews {
+            texts.append(contentsOf: visibleTexts(in: subview))
+        }
+        if let elements = view.accessibilityElements as? [NSObject] {
+            for element in elements {
+                if let text = element.accessibilityLabel, !text.isEmpty {
+                    texts.append(text)
+                }
+                if let value = element.accessibilityValue, !value.isEmpty {
+                    texts.append(value)
+                }
+            }
+        }
+        return texts
     }
 
     private func source(at relativePath: String) throws -> String {

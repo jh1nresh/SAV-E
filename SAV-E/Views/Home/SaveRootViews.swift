@@ -280,6 +280,16 @@ struct SaveLibraryView: View {
                                 .padding(.bottom, 2)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .accessibilityAddTraits(.isHeader)
+                            Text(localized(
+                                "Held after 50 places saved. Not on the map yet.",
+                                "已存 50 個地點，所以暫放，還沒放上地圖。"
+                            ))
+                            .font(SaveAtlasType.body(12))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             ForEach(unplaced) { candidate in
                                 reviewTicket(candidate)
                                 if candidate.id != unplaced.last?.id || !others.isEmpty {
