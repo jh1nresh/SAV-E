@@ -35,12 +35,14 @@ Expected files:
 - `simulator-catalog-dark.png`
 - `simulator-catalog-zh-Hant.png`
 - `simulator-dark-coralCard.png`
+- `simulator-map-light.png`
 - `simulator-motion-end.png`
 - `gate5-motion-60fps.mp4`
 
 Named ImageRenderer stills now also include `zh-Hant-coralCardVisitedBack.png`
-(去過 + locale date), `dark-coralCardBack.png`, and `zh-Hant-foodCardHero.png`
-(美食 · 吃).
+(去過 + locale date), `dark-coralCardBack.png`, `zh-Hant-foodCardHero.png`
+(美食 · 吃), `light-shoppingBadge.png` (8-letter arc), and
+`xxxLarge-photoBadge.png` (word path).
 
 Committed copies of the named stills also live in this folder after a
 green `ios-fast` run.

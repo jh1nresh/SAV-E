@@ -67,8 +67,11 @@ screenshot "$OUT/simulator-dark-coralCard.png"
 
 xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1 || true
 grant_location
-# Record from launch: fixture holds small pins for 5s, then zooms to badges.
+xcrun simctl ui "$UDID" appearance light
+# Light Apple Map with pins, then record: fixture holds small pins for 5s.
 launch_app --uitest-map-photo-pin-motion "${FIXTURE_ARGS[@]}"
+sleep 2
+screenshot "$OUT/simulator-map-light.png"
 xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$OUT/gate5-motion-60fps.mp4" &
 rec_pid=$!
 sleep 14

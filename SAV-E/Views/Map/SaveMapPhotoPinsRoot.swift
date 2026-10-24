@@ -309,14 +309,10 @@ struct SaveMapPhotoPinsRoot: View {
     }
 
     private var savvyCardPlace: Place? {
-        guard let place = mapViewModel.selectedPlace,
-              SavvyMapStampPolicy.qualifiesForSavvyPin(
-                place,
-                confirmedPlaces: mapViewModel.places
-              ) else {
-            return nil
-        }
-        return place
+        SavvyMapPOITap.opensSavvyCard(
+            mapViewModel.selectedPlace,
+            confirmedPlaces: mapViewModel.places
+        )
     }
 
     private func isVisited(_ place: Place) -> Bool {

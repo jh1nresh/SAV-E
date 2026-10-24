@@ -41,10 +41,15 @@ enum SavvyMapPinMetrics {
     static let badgeStickerHeight: CGFloat = 89
     static let badgePhoto: CGFloat = 59
     static let badgeLabelReserve: CGFloat = 14
-    /// Shared lift for the arc and the word. English arc stays on this value.
-    static let badgeArcLabelOffsetY: CGFloat = 18
-    /// Extra lift for the CJK word path so 「景點」clears the photo circle.
-    static let badgeWordLabelExtraLift: CGFloat = 8
+    /// Paper-circle center. `-sticker/2 + this` is 0 so the English arc is concentric.
+    static let badgeArcLabelOffsetY: CGFloat = badgeStickerWidth / 2
+    /// Word-path lift from the paper center. Do not share the arc offset.
+    static let badgeWordLabelOffsetY: CGFloat = -32
+    /// Extra lift on the CJK word so the top edge clears the paper rim.
+    static let badgeWordLabelExtraLift: CGFloat = 5.5
+    /// Photo circle sits this far below the paper center.
+    static let badgePhotoOffsetY: CGFloat = 8
+    static let badgeArcFontSize: CGFloat = 13
     static let badgeTail: CGFloat = 17
     static let badgeScaleFromPin = smallPinOuter / badgeWidth
     /// Gate 5: paper badge base is a circle (capsule-equivalent when square).
@@ -286,6 +291,71 @@ enum SavvyMapStampPolicy {
             return pins
         }
         return pins + [selected]
+    }
+}
+
+/// P14: unsaved Apple POI taps stay on the native feature card / save flow.
+/// Only a confirmed saved Map Stamp opens the Savvy paper card.
+enum SavvyMapPOITap {
+    enum Path: Equatable {
+        case savvyPin
+        case nativeAppleCard
+    }
+
+    static func path(isConfirmedSaved: Bool) -> Path {
+        isConfirmedSaved ? .savvyPin : .nativeAppleCard
+    }
+
+    static func opensSavvyCard(_ place: Place?, confirmedPlaces: [Place]) -> Place? {
+        guard let place,
+              path(isConfirmedSaved: SavvyMapStampPolicy.qualifiesForSavvyPin(
+                place,
+                confirmedPlaces: confirmedPlaces
+              )) == .savvyPin else {
+            return nil
+        }
+        return place
+    }
+}
+
+enum SavvyMapBadgeLettering {
+    static func usesArc(
+        text: String,
+        language: AppLanguage,
+        dynamicTypeSize: DynamicTypeSize
+    ) -> Bool {
+        dynamicTypeSize < .xxxLarge
+            && language != .traditionalChinese
+            && text.count > 4
+    }
+}
+
+/// Radial gaps for the English arc (paper-concentric, 13pt backup).
+enum SavvyMapArcGeometry {
+    static let paperRadius = SavvyMapPinMetrics.badgeStickerWidth / 2
+    static let photoRadius = SavvyMapPinMetrics.badgePhoto / 2
+    static let letterHalfHeight = SavvyMapPinMetrics.badgeArcFontSize / 2
+
+    struct Gaps: Equatable {
+        var paperOuterFromLetterCenter: CGFloat
+        var photoFromLetterCenter: CGFloat
+        var paperOuterFromGlyph: CGFloat
+        var photoFromGlyph: CGFloat
+    }
+
+    static func gaps(atAngleDegrees angle: Double) -> Gaps {
+        let radius = SavvyMapArcText.radius
+        let radians = angle * .pi / 180
+        let letter = CGPoint(x: radius * sin(radians), y: -radius * cos(radians))
+        let paperFromCenter = paperRadius - radius
+        let photoCenter = CGPoint(x: 0, y: SavvyMapPinMetrics.badgePhotoOffsetY)
+        let photoFromCenter = hypot(letter.x - photoCenter.x, letter.y - photoCenter.y) - photoRadius
+        return Gaps(
+            paperOuterFromLetterCenter: paperFromCenter,
+            photoFromLetterCenter: photoFromCenter,
+            paperOuterFromGlyph: paperFromCenter - letterHalfHeight,
+            photoFromGlyph: photoFromCenter - letterHalfHeight
+        )
     }
 }
 
@@ -790,7 +860,7 @@ struct SavvyMapPhotoPinView: View {
                                 )
                         }
                     }
-                    .offset(y: 8)
+                    .offset(y: SavvyMapPinMetrics.badgePhotoOffsetY)
 
                 badgeLabel
                     .offset(y: -SavvyMapPinMetrics.badgeStickerWidth / 2 + SavvyMapPinMetrics.badgeArcLabelOffsetY)
@@ -811,17 +881,18 @@ struct SavvyMapPhotoPinView: View {
     private var badgeLabel: some View {
         let text = place.category.displayName(language: languageSettings.language)
         // P1: 「景點」 stays a word. Arc lettering splits two CJK characters.
-        let usesArc = dynamicTypeSize < .xxxLarge
-            && languageSettings.language != .traditionalChinese
-            && text.count > 4
+        let usesArc = SavvyMapBadgeLettering.usesArc(
+            text: text,
+            language: languageSettings.language,
+            dynamicTypeSize: dynamicTypeSize
+        )
         if usesArc {
             SavvyMapArcText(
                 text: text,
                 radius: SavvyMapArcText.radius,
-                font: .system(size: 15, weight: .heavy, design: .rounded)
+                font: .system(size: SavvyMapPinMetrics.badgeArcFontSize, weight: .heavy, design: .rounded)
             )
             .foregroundStyle(SaveAtlasPalette.ink)
-            .frame(width: 86, height: 28)
         } else {
             Text(text)
                 .font(SaveAtlasType.strong(15))
@@ -829,6 +900,7 @@ struct SavvyMapPhotoPinView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .padding(.horizontal, 8)
+                .offset(y: SavvyMapPinMetrics.badgeWordLabelOffsetY)
                 .offset(y: -SavvyMapPinMetrics.badgeWordLabelExtraLift)
         }
     }
@@ -936,13 +1008,12 @@ struct SavvyMapCalloutTail: Shape {
 struct SavvyMapArcText: View {
     let text: String
     var radius: CGFloat
-    var font: Font = .system(size: 15, weight: .heavy, design: .rounded)
+    var font: Font = .system(size: SavvyMapPinMetrics.badgeArcFontSize, weight: .heavy, design: .rounded)
 
-    /// Letters sit on one arc. End glyphs used to hit ~±110° because each
-    /// character was rotated before *and* after the radius offset.
-    static let radius: CGFloat = 38
-    static let maxSpreadDegrees: Double = 150
-    static let degreesPerCharacter: Double = 20
+    /// Letters sit on one arc concentric with the 89pt paper circle.
+    static let radius: CGFloat = 34.5
+    static let maxSpreadDegrees: Double = 112
+    static let degreesPerCharacter: Double = 20 * 112 / 150
 
     static func spreadDegrees(characterCount: Int) -> Double {
         min(maxSpreadDegrees, Double(max(characterCount, 1)) * degreesPerCharacter)
@@ -1412,6 +1483,7 @@ struct SavvyMapPhotoPinPreviewCell: View {
     var placeName: String? = nil
     var visitCount: Int = 0
     var lastVisit: Date? = nil
+    var dynamicTypeSize: DynamicTypeSize = .large
     private let visits: SavvyMapVisitStore
 
     init(
@@ -1421,7 +1493,8 @@ struct SavvyMapPhotoPinPreviewCell: View {
         category: PlaceCategory = .attraction,
         placeName: String? = nil,
         visitCount: Int = 0,
-        lastVisit: Date? = nil
+        lastVisit: Date? = nil,
+        dynamicTypeSize: DynamicTypeSize = .large
     ) {
         self.state = state
         self.language = language
@@ -1430,6 +1503,7 @@ struct SavvyMapPhotoPinPreviewCell: View {
         self.placeName = placeName
         self.visitCount = visitCount
         self.lastVisit = lastVisit
+        self.dynamicTypeSize = dynamicTypeSize
         let suite = "savvy.map.preview.\(language.rawValue).\(state.rawValue).\(category.rawValue).flip\(isFlipped).v\(visitCount)"
         let defaults = UserDefaults(suiteName: suite) ?? .standard
         defaults.removePersistentDomain(forName: suite)
@@ -1485,6 +1559,7 @@ struct SavvyMapPhotoPinPreviewCell: View {
             }
         }
         .environment(\.appLanguageSettings, settings)
+        .environment(\.dynamicTypeSize, dynamicTypeSize)
         .environment(
             \.savvyMapPreviewPhoto,
             state.usesFixturePhoto ? SavvyMapPhotoPinPreviewFixtures.photo() : nil
@@ -1741,6 +1816,31 @@ enum SavvyMapPhotoPinSnapshotExport {
             to: zhFoodFront
         )
         written.append(zhFoodFront)
+        let shoppingBadge = directory.appendingPathComponent("light-shoppingBadge.png")
+        try write(
+            previewPage(
+                .photoBadge,
+                scheme: .light,
+                category: .shopping,
+                placeName: "Isetan"
+            ),
+            size: pinSize,
+            scheme: .light,
+            to: shoppingBadge
+        )
+        written.append(shoppingBadge)
+        let xxxLargeBadge = directory.appendingPathComponent("xxxLarge-photoBadge.png")
+        try write(
+            previewPage(
+                .photoBadge,
+                scheme: .light,
+                dynamicTypeSize: .xxxLarge
+            ),
+            size: pinSize,
+            scheme: .light,
+            to: xxxLargeBadge
+        )
+        written.append(xxxLargeBadge)
         return written
     }
 
@@ -1924,7 +2024,8 @@ func previewPage(
     category: PlaceCategory = .attraction,
     placeName: String? = nil,
     visitCount: Int = 0,
-    lastVisit: Date? = nil
+    lastVisit: Date? = nil,
+    dynamicTypeSize: DynamicTypeSize = .large
 ) -> some View {
     ZStack {
         SaveAtlasPalette.paper.ignoresSafeArea()
@@ -1939,13 +2040,15 @@ func previewPage(
                 category: category,
                 placeName: placeName,
                 visitCount: visitCount,
-                lastVisit: lastVisit
+                lastVisit: lastVisit,
+                dynamicTypeSize: dynamicTypeSize
             )
         }
         .padding(24)
     }
     .environment(\.colorScheme, scheme)
     .preferredColorScheme(scheme)
+    .environment(\.dynamicTypeSize, dynamicTypeSize)
 }
 
 /// Interactive paper card for XCUITest flip / swipe-down. DEBUG only.

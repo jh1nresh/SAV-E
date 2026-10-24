@@ -51,8 +51,11 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(SavvyMapPinMetrics.badgeBaseIsCircle)
         XCTAssertEqual(SavvyMapPinMetrics.badgeStickerWidth, SavvyMapPinMetrics.badgeStickerHeight)
         XCTAssertEqual(SavvyMapPinMetrics.cardCoralIcon, 64)
-        XCTAssertEqual(SavvyMapPinMetrics.badgeArcLabelOffsetY, 18)
-        XCTAssertEqual(SavvyMapPinMetrics.badgeWordLabelExtraLift, 8)
+        XCTAssertEqual(SavvyMapPinMetrics.badgeArcLabelOffsetY, SavvyMapPinMetrics.badgeStickerWidth / 2)
+        XCTAssertEqual(SavvyMapPinMetrics.badgeWordLabelOffsetY, -32)
+        XCTAssertEqual(SavvyMapPinMetrics.badgeWordLabelExtraLift, 5.5)
+        XCTAssertEqual(SavvyMapPinMetrics.badgeArcFontSize, 13)
+        XCTAssertEqual(SavvyMapPinMetrics.badgePhotoOffsetY, 8)
     }
 
     func testP1HostedPinHitFrameIsAtLeastFortyFourPoints() {
@@ -480,6 +483,11 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
 
         let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(root.contains("SavvyMapDirectionsLaunch.open"))
+        XCTAssertTrue(
+            root.contains("onDirections: { openDirections(place) }"),
+            "card Directions / 怎麼去 must call openDirections; an empty closure must fail"
+        )
+        XCTAssertFalse(root.contains("onDirections: {}"))
         let directionsFn = try XCTUnwrap(root.range(of: "private func openDirections"))
         let directionsBody = String(root[directionsFn.lowerBound...].prefix(220))
         XCTAssertTrue(directionsBody.contains("SavvyMapDirectionsLaunch.open(place)"))
@@ -727,6 +735,53 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertFalse(root.contains("ReviewCandidateMapPin"))
         XCTAssertTrue(root.contains("visibleSocialPlaces"))
         XCTAssertFalse(root.contains("return social.isEmpty ? mapViewModel.socialPlaces : social"))
+        XCTAssertTrue(root.contains("SavvyMapPOITap.opensSavvyCard"))
+        XCTAssertTrue(root.contains("mapViewModel.selectPlace(place)"))
+        XCTAssertTrue(root.contains("mapViewModel.selectMapFeature(feature)"))
+    }
+
+    @MainActor
+    func testP14UnsavedPOITapOpensNativeCardAndSavedOpensSavvyPin() {
+        XCTAssertEqual(SavvyMapPOITap.path(isConfirmedSaved: false), .nativeAppleCard)
+        XCTAssertEqual(SavvyMapPOITap.path(isConfirmedSaved: true), .savvyPin)
+
+        let saved = samplePlace()
+        let unsaved = samplePlace(
+            name: "Unsaved Cafe",
+            latitude: 40.012,
+            longitude: 116.401
+        )
+        XCTAssertNil(SavvyMapPOITap.opensSavvyCard(unsaved, confirmedPlaces: [saved]))
+        XCTAssertEqual(SavvyMapPOITap.opensSavvyCard(saved, confirmedPlaces: [saved])?.id, saved.id)
+        XCTAssertEqual(
+            SavvyMapStampPolicy.pinKind(isConfirmedSaved: false, hasPhotoURL: true),
+            .nativeApplePOI
+        )
+
+        let map = MapViewModel()
+        map.selectMapPOI(
+            title: "Unsaved Cafe",
+            coordinate: unsaved.coordinate,
+            pointOfInterestCategory: "MKPOICategoryCafe"
+        )
+        XCTAssertNotNil(map.selectedMapCandidate, "unsaved POI tap stays on the native candidate card")
+        XCTAssertNil(map.selectedPlace)
+        XCTAssertNil(
+            SavvyMapPOITap.opensSavvyCard(map.selectedPlace, confirmedPlaces: map.places)
+        )
+
+        map.places = [saved]
+        map.selectMapPOI(
+            title: saved.name,
+            coordinate: saved.coordinate,
+            pointOfInterestCategory: nil
+        )
+        XCTAssertEqual(map.selectedPlace?.id, saved.id)
+        XCTAssertNil(map.selectedMapCandidate)
+        XCTAssertEqual(
+            SavvyMapPOITap.opensSavvyCard(map.selectedPlace, confirmedPlaces: map.places)?.id,
+            saved.id
+        )
     }
 
     func testP15LoadFailureStaysCoralWithoutBrokenImage() throws {
@@ -854,7 +909,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(pins.contains("Circle()"))
         XCTAssertTrue(pins.contains("badgeBaseIsCircle"))
         XCTAssertTrue(pins.contains("usesArc"))
-        XCTAssertTrue(pins.contains("languageSettings.language != .traditionalChinese"))
+        XCTAssertTrue(pins.contains("language != .traditionalChinese"))
         XCTAssertTrue(pins.contains("snapshotLayout"))
         XCTAssertTrue(pins.contains("overrideUserInterfaceStyle"))
         XCTAssertTrue(pins.contains("SavvyMapPinMetrics.cardPhotoInset - 6"))
@@ -870,9 +925,39 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(pins.contains(".offset(y: -radius)\n                    .rotationEffect(.degrees(angle))"))
         XCTAssertTrue(pins.contains("badgeWordLabelExtraLift"))
         XCTAssertTrue(pins.contains("badgeArcLabelOffsetY"))
-        XCTAssertEqual(SavvyMapArcText.spreadDegrees(characterCount: 10), 150)
-        XCTAssertGreaterThan(SavvyMapArcText.maxSpreadDegrees, 110)
-        XCTAssertGreaterThan(SavvyMapArcText.degreesPerCharacter, 16)
+        XCTAssertTrue(pins.contains("badgeWordLabelOffsetY"))
+        XCTAssertTrue(pins.contains("SavvyMapBadgeLettering.usesArc"))
+        XCTAssertEqual(SavvyMapArcText.radius, 34.5, accuracy: 0.0001)
+        XCTAssertEqual(SavvyMapArcText.maxSpreadDegrees, 112, accuracy: 0.0001)
+        XCTAssertEqual(SavvyMapArcText.degreesPerCharacter, 20 * 112 / 150, accuracy: 0.0001)
+        XCTAssertEqual(SavvyMapArcText.spreadDegrees(characterCount: 10), 112, accuracy: 0.0001)
+        XCTAssertEqual(SavvyMapArcText.spreadDegrees(characterCount: 8), 112, accuracy: 0.0001)
+        XCTAssertEqual(SavvyMapPinMetrics.badgeArcFontSize, 13)
+        XCTAssertFalse(SavvyMapBadgeLettering.usesArc(
+            text: "Attraction",
+            language: .traditionalChinese,
+            dynamicTypeSize: .large
+        ))
+        XCTAssertFalse(SavvyMapBadgeLettering.usesArc(
+            text: "Attraction",
+            language: .english,
+            dynamicTypeSize: .xxxLarge
+        ))
+        XCTAssertTrue(SavvyMapBadgeLettering.usesArc(
+            text: "Shopping",
+            language: .english,
+            dynamicTypeSize: .large
+        ))
+
+        let top = SavvyMapArcGeometry.gaps(atAngleDegrees: 0)
+        XCTAssertEqual(top.paperOuterFromLetterCenter, 10, accuracy: 0.01)
+        XCTAssertEqual(top.photoFromLetterCenter, 13, accuracy: 0.01)
+        XCTAssertEqual(top.paperOuterFromGlyph, 3.5, accuracy: 0.01)
+        XCTAssertEqual(top.photoFromGlyph, 6.5, accuracy: 0.01)
+        let end = SavvyMapArcGeometry.gaps(atAngleDegrees: 56)
+        XCTAssertEqual(end.paperOuterFromLetterCenter, 10, accuracy: 0.01)
+        XCTAssertEqual(end.photoFromLetterCenter, 10.03, accuracy: 0.05)
+        XCTAssertEqual(end.photoFromGlyph, 3.53, accuracy: 0.05)
     }
 
     func testGate5ImageRendererExportWritesLightDarkAndChinese() throws {
@@ -891,8 +976,14 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(names.contains("zh-Hant-coralCardVisitedBack.png"))
         XCTAssertTrue(names.contains("dark-coralCardBack.png"))
         XCTAssertTrue(names.contains("zh-Hant-foodCardHero.png"))
+        XCTAssertTrue(names.contains("light-shoppingBadge.png"))
+        XCTAssertTrue(names.contains("xxxLarge-photoBadge.png"))
         XCTAssertTrue(names.contains("p14-saved-unsaved-visited.png"))
         XCTAssertTrue(names.contains("light-coralCardBack.png"))
+        XCTAssertTrue(names.contains("light-photoBadge.png"))
+        XCTAssertTrue(names.contains("dark-photoBadge.png"))
+        XCTAssertTrue(names.contains("light-coralBadge.png"))
+        XCTAssertTrue(names.contains("dark-coralBadge.png"))
         let lightCard = try Data(contentsOf: directory.appendingPathComponent("light-coralCardHero.png"))
         let darkCard = try Data(contentsOf: directory.appendingPathComponent("dark-coralCardHero.png"))
         XCTAssertNotEqual(
