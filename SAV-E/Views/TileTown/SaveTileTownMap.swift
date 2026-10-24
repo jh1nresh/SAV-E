@@ -102,11 +102,17 @@ struct SaveTileTownPin: Identifiable, Equatable {
     let isSelected: Bool
 }
 
+struct SaveTileTownFocusRequest: Equatable {
+    let pinID: UUID
+    let token: UUID
+}
+
 struct SaveTileTownCanvas: View {
     var pins: [SaveTileTownPin] = []
     var showsPins = true
     var clipsToPaper = true
     var allowsPan = false
+    var focusRequest: SaveTileTownFocusRequest? = nil
     var onSelect: (UUID) -> Void = { _ in }
     @State private var pan = CGSize.zero
     @State private var panAnchor = CGSize.zero
@@ -136,11 +142,59 @@ struct SaveTileTownCanvas: View {
             }
             .offset(pan)
             .clipShape(RoundedRectangle(cornerRadius: clipsToPaper ? 18 : 0, style: .continuous))
+            .onAppear { applyFocus(focusRequest, in: size) }
+            .onChange(of: focusRequest) { _, request in
+                applyFocus(request, in: size)
+            }
         }
         .clipped()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.tileTown")
         .accessibilityLabel("Tile-town map")
+    }
+
+    private func applyFocus(_ request: SaveTileTownFocusRequest?, in size: CGSize) {
+        guard let request else { return }
+        let next = Self.pan(to: request.pinID, pins: pins, in: size)
+        pan = next
+        panAnchor = next
+    }
+
+    static func pan(to pinID: UUID, pins: [SaveTileTownPin], in size: CGSize) -> CGSize {
+        let assigned = SaveTileTownLayout.assignments(for: pins.map(\.id))
+        guard let index = assigned[pinID] else { return .zero }
+        let lot = SaveTileTownLayout.lots[index]
+        return clamp(
+            CGSize(
+                width: size.width / 2 - lot.x * size.width,
+                height: size.height / 2 - lot.y * size.height
+            ),
+            in: size
+        )
+    }
+
+    static func pinPoint(
+        _ pinID: UUID,
+        pins: [SaveTileTownPin],
+        in size: CGSize,
+        pan: CGSize
+    ) -> CGPoint? {
+        let assigned = SaveTileTownLayout.assignments(for: pins.map(\.id))
+        guard let index = assigned[pinID] else { return nil }
+        let lot = SaveTileTownLayout.lots[index]
+        return CGPoint(
+            x: lot.x * size.width + pan.width,
+            y: lot.y * size.height + pan.height
+        )
+    }
+
+    static func clamp(_ proposed: CGSize, in size: CGSize) -> CGSize {
+        let limitX = max(24, size.width * 0.35)
+        let limitY = max(24, size.height * 0.35)
+        return CGSize(
+            width: min(limitX, max(-limitX, proposed.width)),
+            height: min(limitY, max(-limitY, proposed.height))
+        )
     }
 
     private func pinsLayer(in size: CGSize) -> some View {
@@ -180,12 +234,7 @@ struct SaveTileTownCanvas: View {
     }
 
     private func clamped(_ proposed: CGSize, in size: CGSize) -> CGSize {
-        let limitX = max(24, size.width * 0.35)
-        let limitY = max(24, size.height * 0.35)
-        return CGSize(
-            width: min(limitX, max(-limitX, proposed.width)),
-            height: min(limitY, max(-limitY, proposed.height))
-        )
+        Self.clamp(proposed, in: size)
     }
 }
 

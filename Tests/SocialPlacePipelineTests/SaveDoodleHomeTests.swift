@@ -1732,7 +1732,10 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(search.contains("homeUSStates"))
         XCTAssertTrue(root.contains("scenePhase"))
         XCTAssertTrue(root.contains("forceRefresh: true"))
-        XCTAssertTrue(home.contains("replaceMissingCitySelection"))
+        XCTAssertTrue(home.contains("syncPersistedCitySelection"))
+        XCTAssertTrue(home.contains("persistedCityAfterCollectionChange"))
+        XCTAssertTrue(home.contains("collectionReady: !allPlaces.isEmpty"))
+        XCTAssertTrue(home.contains("visitedAt: SaveDoodleVisitStore().latestVisit"))
         let locationService = try source(at: "SAV-E/Services/LocationService.swift")
         XCTAssertTrue(locationService.contains("SaveLocationFreshness"))
         XCTAssertTrue(locationService.contains("forceRefresh"))
@@ -2033,6 +2036,111 @@ final class SaveDoodleHomeTests: XCTestCase {
             | UInt32(bytes[1]) << 16
             | UInt32(bytes[2]) << 8
             | UInt32(bytes[3])
+    }
+
+    func testColdLaunchEmptyCollectionDoesNotWashPersistedCityToNearYou() {
+        let tokyo = place(
+            "Ichiran",
+            "1-22-7 Jinnan, Shibuya City, Tokyo, Japan",
+            .food,
+            status: .visited
+        )
+        let taipei = place(
+            "Fujin",
+            "No. 353, Section 1, Fuxing S Rd, Da'an District, Taipei",
+            .cafe
+        )
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: tokyo), "tokyo")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: taipei), "taipei")
+        let current = SaveDoodleCitySelection.city("tokyo")
+
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+                current: current,
+                places: [],
+                locationDenied: false,
+                collectionReady: false
+            ),
+            current,
+            "Cold launch empty collection is not a deleted-city fallback"
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+                current: current,
+                places: [tokyo],
+                locationDenied: false,
+                collectionReady: true
+            ),
+            current
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+                current: current,
+                places: [taipei],
+                locationDenied: false,
+                collectionReady: true
+            ),
+            .nearYou
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+                current: current,
+                places: [taipei],
+                locationDenied: true,
+                collectionReady: true
+            ),
+            .city("taipei")
+        )
+    }
+
+    func testHomeRowMetaUsesRecordedVisitNotCreatedAt() throws {
+        let suite = "save.doodle.visit-meta.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+        let created = now.addingTimeInterval(-30 * 86_400)
+        let cafe = place(
+            "Grey",
+            "Beijing, China",
+            .cafe,
+            status: .visited,
+            createdAt: created
+        )
+        let withoutHistory = SaveDoodleHomeCatalog.rowMetaText(
+            distance: 120,
+            place: cafe,
+            now: now,
+            language: .english
+        )
+        XCTAssertTrue(withoutHistory.contains("visited"), withoutHistory)
+        XCTAssertFalse(
+            withoutHistory.contains("visited 30d ago"),
+            "Save date must not be presented as the visit date"
+        )
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let store = SaveDoodleVisitStore(defaults: defaults, calendar: calendar, now: { now })
+        XCTAssertTrue(store.recordVisit(for: cafe.id))
+        let visitedAt = try XCTUnwrap(store.latestVisit(for: cafe.id))
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.visitStatusText(
+                status: .visited,
+                visitedAt: visitedAt,
+                now: now,
+                language: .english
+            ),
+            "visited today"
+        )
+        let withHistory = SaveDoodleHomeCatalog.rowMetaText(
+            distance: 120,
+            place: cafe,
+            visitedAt: visitedAt,
+            now: now,
+            language: .english
+        )
+        XCTAssertTrue(withHistory.hasPrefix("120m · visited today"), withHistory)
+        XCTAssertFalse(withHistory.contains("30d"))
     }
 
     func testHomeReviewActionUsesFounderC8442AOnLightOnly() throws {

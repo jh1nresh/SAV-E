@@ -16,6 +16,7 @@ struct SaveTileTownRootMap: View {
     @ObservedObject private var locationService = LocationService.shared
     @State private var lens: SaveTileTownMapLens = .saved
     @State private var showsHomeSessionChrome = false
+    @State private var canvasFocus: SaveTileTownFocusRequest?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -34,6 +35,7 @@ struct SaveTileTownRootMap: View {
                         pins: visiblePins,
                         clipsToPaper: false,
                         allowsPan: true,
+                        focusRequest: canvasFocus,
                         onSelect: selectPin
                     )
                     .accessibilityIdentifier("map.liveSurface")
@@ -254,6 +256,7 @@ struct SaveTileTownRootMap: View {
         lens = .saved
         if let place = mapViewModel.places.first(where: { $0.id == id }) {
             mapViewModel.selectPlace(place)
+            canvasFocus = SaveTileTownFocusRequest(pinID: place.id, token: UUID())
             mapViewModel.cameraPosition = .region(
                 MKCoordinateRegion(
                     center: place.coordinate,

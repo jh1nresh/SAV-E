@@ -202,6 +202,9 @@ final class SaveTileTownLockTests: XCTestCase {
         )
         XCTAssertTrue(map.contains("map.eatGo"))
         XCTAssertTrue(map.contains("pendingShowOnMapPlaceID"))
+        XCTAssertTrue(map.contains("canvasFocus"))
+        XCTAssertTrue(map.contains("focusRequest: canvasFocus"))
+        XCTAssertTrue(map.contains("SaveTileTownFocusRequest"))
         XCTAssertFalse(map.contains("mapFollowsHomeFilter"))
         let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
         XCTAssertTrue(panel.contains("Spacer(minLength: 0)"))
@@ -209,6 +212,39 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(panel.contains("SaveTileTownProductLock.mapChromeHeight"))
         XCTAssertTrue(root.contains("SaveTileTownRootMap("))
         XCTAssertFalse(root.contains("SaveAtlasInteractiveRootMap("))
+    }
+
+    func testViewOnMapFocusPansOffscreenStampBackIntoCanvas() throws {
+        let size = CGSize(width: 400, height: 400)
+        let canvas = CGRect(origin: .zero, size: size)
+        var pinID: UUID?
+        var drifted = CGSize.zero
+        for n in 0..<256 {
+            let candidate = UUID(uuidString: String(format: "20000000-0000-0000-0000-%012d", n))!
+            guard SaveTileTownLayout.lotIndex(for: candidate) == 0 else { continue }
+            pinID = candidate
+            drifted = SaveTileTownCanvas.clamp(CGSize(width: -400, height: -400), in: size)
+            break
+        }
+        let offscreen = try XCTUnwrap(pinID)
+        let pins = [SaveTileTownPin(id: offscreen, name: "Ichiran", isSelected: true)]
+        let driftedPoint = try XCTUnwrap(
+            SaveTileTownCanvas.pinPoint(offscreen, pins: pins, in: size, pan: drifted)
+        )
+        XCTAssertFalse(
+            canvas.contains(driftedPoint),
+            "Failure fixture: a panned-away stamp sits off the canvas"
+        )
+
+        let focused = SaveTileTownCanvas.pan(to: offscreen, pins: pins, in: size)
+        let focusedPoint = try XCTUnwrap(
+            SaveTileTownCanvas.pinPoint(offscreen, pins: pins, in: size, pan: focused)
+        )
+        XCTAssertTrue(
+            canvas.insetBy(dx: 24, dy: 24).contains(focusedPoint),
+            "View on map must reposition pan so the stamp is on the canvas"
+        )
+        XCTAssertNotEqual(focused, drifted)
     }
 
     func testStampLanguageIsOneSystem() throws {

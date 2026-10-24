@@ -224,6 +224,21 @@ enum SaveDoodleHomeCatalog {
         return newestResolvableCity(in: places) ?? selection
     }
 
+    /// Cold launch starts with an empty collection. That empty list is not
+    /// "the selected city's last save disappeared" — wait until the initial
+    /// load has produced places before persisting a replacement.
+    static func persistedCityAfterCollectionChange(
+        current: SaveDoodleCitySelection,
+        places: [Place],
+        locationDenied: Bool,
+        collectionReady: Bool
+    ) -> SaveDoodleCitySelection {
+        guard collectionReady else { return current }
+        let resolved = resolvedSelection(current, places: places, locationDenied: locationDenied)
+        guard current != resolved, case .city = current else { return current }
+        return resolved
+    }
+
     private static func newestResolvableCity(in places: [Place]) -> SaveDoodleCitySelection? {
         guard let match = places.sorted(by: moreRecent).first(where: { cityID(for: $0) != nil }),
               let id = cityID(for: match)
@@ -405,7 +420,7 @@ enum SaveDoodleHomeCatalog {
             ?? neighborhoodText(for: place, language: language)
         let status = visitStatusText(
             status: place.status,
-            visitedAt: place.status == .visited ? (visitedAt ?? place.createdAt) : nil,
+            visitedAt: place.status == .visited ? visitedAt : nil,
             now: now,
             language: language
         )
@@ -425,7 +440,9 @@ enum SaveDoodleHomeCatalog {
         case .wantToGo:
             return language.localized(english: "saved, not yet", traditionalChinese: "已存，還沒去")
         case .visited:
-            let reference = visitedAt ?? now
+            guard let reference = visitedAt else {
+                return language.localized(english: "visited", traditionalChinese: "已去過")
+            }
             let days = max(0, Calendar.current.dateComponents([.day], from: reference, to: now).day ?? 0)
             if days == 0 {
                 return language.localized(english: "visited today", traditionalChinese: "今天去過")
@@ -597,6 +614,10 @@ final class SaveDoodleVisitStore {
     func hasVisitedToday(_ id: UUID) -> Bool {
         let today = now()
         return dates(for: id).contains { calendar.isDate($0, inSameDayAs: today) }
+    }
+
+    func latestVisit(for id: UUID) -> Date? {
+        dates(for: id).max()
     }
 
     @discardableResult
