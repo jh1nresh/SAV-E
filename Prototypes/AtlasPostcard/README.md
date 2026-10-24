@@ -45,25 +45,31 @@ Scripts/run-visual-parity.sh \
   --artifacts /absolute/path/to/new-empty-artifact-directory
 ```
 
-The runner captures Home, Saves, Plan, and Map, then writes matching
-`reference/`, `output/`, `diff/`, and `results/` directories. All four pages
-must score at least `0.90`. XCTest locks the application window to 402 × 874
-points; the comparator accepts only exact, uniform Retina pixel multiples of
-that viewport and rejects other dimensions.
+`--destination` runs the prototype XCTest `testCaptureFourLockedScreens`
+and compares only Home, Saves, Plan, and Map. That prototype shell has
+no Friends tab, so a local four-screen pass is not Friends evidence.
+CI result-bundle mode gates live `five-tab-friends` at 0.90 against
+`ProductionTargets/friends.png` (the DESIGN v2 `friends-light.png`
+lock). Home deferral on #290 does not apply to Friends. Codex packet spec §7.4 remains the people-first layout reference. Live
+`five-tab-friends` attachments still ship in the iOS First-Run
+artifact. XCTest locks the application window to 402 × 874 points;
+the Home/Saves/Plan/Map comparator accepts only exact, uniform Retina
+pixel multiples of that viewport and rejects other dimensions.
 
 Production parity uses `Reference/ProductionTargets`. The original
 `Reference/Targets` remain the immutable inputs for deterministic illustration
 extraction, so approving a UI refresh cannot silently alter generated assets.
 
-The Home production target was refreshed for the 2026-10-14 v5 tile-town lock
-from CI run `38694512939`, head
-`b98b3ef63d275ecce199c8516dbe29a9149f1287` (`five-tab-home` attachment).
-The capture is uniformly downsampled from 3× to the 402 × 874 target size,
-with no content edits. The locked face is SAVVY, quiet header controls, the
-nearest-neighbor tile-town peek, clues, recent kraft stamps, and the five-tab
-rail. Predecessor run `38672287517` / `bc89b9a` remains the earlier tile-town
-Home before the v5 mock pass. The comparator, other targets, and `0.90`
-threshold remain unchanged.
+The Home production target is DESIGN v2's exact 402×874
+`home-light.png` from `design/doodle-targets-2026-10-20` at `eade369`.
+`home-dark.png` sits next to it for DESIGN comparison.
+`home-mask.png` is the ignore mask (white = ignore). Grade position,
+size, color and font style. v1 is retired. Those rasters are rendered
+at 1× 402×874, not a crop. `VisualParity.swift` still accepts only a
+1× 402 × 874 target. Founder sign-off 2026-10-20:
+「改成跟手繪稿比對，門檻維持 0.90」. Saves, Plan, and Map targets stay
+on their current locks until those Doodle PRs. The `0.90` threshold
+remains unchanged.
 
 ## Boundaries
 

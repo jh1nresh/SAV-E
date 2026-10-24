@@ -10,17 +10,15 @@ struct SaveHomeView: View {
     let onOpenTrips: () -> Void
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
+    let onOpenMap: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject private var locationService = LocationService.shared
 
     var body: some View {
-        Group {
-            if SaveAtlasRuntime.usesParityFixture {
-                HomeAtlasScreen()
-            } else {
-                SaveTileTownHomeView()
-            }
-        }
+        SaveDoodleHomeView(
+            locationService: locationService,
+            onOpenMap: onOpenMap
+        )
         .environment(\.atlasPresentation, atlasPresentation)
         .task(id: locationService.authorizationStatus) {
             guard !ReviewDemo.isOfflineUITestMode,
@@ -68,6 +66,7 @@ struct SaveLibraryView: View {
     let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onOpenPassport: () -> Void
+    var onOpenTrips: () -> Void = {}
     var captureResultCount: Int? = nil
     var onLoadDuplicateAudit: () async throws -> [SaveReviewDuplicateGroup] = { [] }
     @State private var showsDuplicateAudit = false
@@ -93,6 +92,20 @@ struct SaveLibraryView: View {
         // back control when the child's toolbar modifier won.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("saves.root")
+        .toolbar {
+            if captureResultCount == nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: onOpenTrips) {
+                        Text(localized("Trips ›", "行程 ›"))
+                            .font(SaveAtlasType.strong(15))
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(localized("Trips", "行程"))
+                    .accessibilityIdentifier("saves.trips")
+                }
+            }
+        }
         .sheet(isPresented: $showsDuplicateAudit, onDismiss: {
             if let candidate = auditSelection {
                 auditSelection = nil
@@ -529,6 +542,7 @@ struct SaveMapRootView: View {
     let onPlanAroundPlace: (Place) -> Void
     let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
+    @EnvironmentObject private var session: SaveDoodleSession
 
     var body: some View {
         Group {
@@ -548,6 +562,7 @@ struct SaveMapRootView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
+            session.consumeMiniMapHandoff()
 #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--uitest-map-place-selected"),
                mapViewModel.selectedPlace == nil,

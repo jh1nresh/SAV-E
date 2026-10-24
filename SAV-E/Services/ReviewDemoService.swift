@@ -190,12 +190,18 @@ enum ReviewDemoSeed {
 #if DEBUG
         if ReviewDemo.isOfflineUITestMode,
            ReviewDemo.uiTestStorageIdentifier != nil,
+           ProcessInfo.processInfo.arguments.contains("--uitest-doodle-parity-fixture") {
+            return doodleParityPlaces(now: now)
+        }
+        if ReviewDemo.isOfflineUITestMode,
+           ReviewDemo.uiTestStorageIdentifier != nil,
            ProcessInfo.processInfo.arguments.contains("--uitest-home-memory-fixture") {
             return [
                 ("Taipei Window Cafe", "台北市大安區", PlaceCategory.cafe),
                 ("Tainan Garden Cafe", "台南市中西區", PlaceCategory.cafe),
                 ("New Taipei Corner Cafe", "新北市板橋區", PlaceCategory.cafe),
                 ("Taipei Lunch", "台北市信義區", PlaceCategory.food),
+                ("Taipei Riverside Park", "台北市中山區", PlaceCategory.attraction),
             ].enumerated().map { index, value in
                 Place(id: UUID(uuidString: String(format: "10000000-0000-0000-0000-%012d", index + 1))!,
                       name: value.0, address: value.1, latitude: 25.04, longitude: 121.54,
@@ -370,6 +376,44 @@ enum ReviewDemoSeed {
         }
 #endif
         return repairForUITests || (!wasSeeded && existingPlaces.isEmpty)
+    }
+
+    /// Temple of Heaven (天壇) Eat rows plus the Map sheet park. Distances
+    /// match the Codex packet / spec §8 Tiantan face: 450m / 800m / 1.1km.
+    /// Twelve Tiantan saves, four visited (2 Eat + 2 Go). Only the three
+    /// nearby Eat rows are mappable on Home; extra city saves stay outside
+    /// the 3 km Near you radius so the packet pins stay aligned.
+    /// Coordinates must be real: `SaveMemoryRecord.confirmedPlace` drops
+    /// `0,0`, which made UI Collected read 3/4 instead of 4/12.
+    /// The 0.90 score is not evidence.
+    static func doodleParityPlaces(now: Date = Date()) -> [Place] {
+        let seeds: [(Int, String, PlaceCategory, PlaceStatus, Double, Double)] = [
+            (0, "Siji Minfu Roast Duck", .food, .visited, 39.886242, 116.4066),
+            (1, "Fangzhuangchang Noodles", .food, .visited, 39.889387, 116.4066),
+            (2, "Grey Cafe", .cafe, .wantToGo, 39.892082, 116.4066),
+            (3, "Temple of Heaven Park", .attraction, .visited, 39.884895, 116.4066),
+            (4, "Lantern Alley", .attraction, .visited, 39.9410, 116.4030),
+            (5, "Jingshan", .attraction, .wantToGo, 39.9265, 116.3898),
+            (6, "Houhai Bridge", .attraction, .wantToGo, 39.9408, 116.3835),
+            (7, "Page One", .shopping, .wantToGo, 39.9540, 116.4670),
+            (8, "Houhai Bicycle", .attraction, .wantToGo, 39.9422, 116.3860),
+            (9, "Chaoyang Park Wheel", .attraction, .wantToGo, 39.9435, 116.4780),
+            (10, "Summer Palace", .attraction, .wantToGo, 39.9997, 116.2755),
+            (11, "Beihai Park", .attraction, .wantToGo, 39.9280, 116.3890),
+        ]
+        return seeds.map { index, name, category, status, latitude, longitude in
+            Place(
+                id: UUID(uuidString: String(format: "30000000-0000-0000-0000-%012d", index + 1))!,
+                name: name,
+                address: "Tiantan",
+                latitude: latitude,
+                longitude: longitude,
+                category: category,
+                status: status,
+                sourcePlatform: .other,
+                createdAt: now.addingTimeInterval(Double(-index))
+            )
+        }
     }
 
     /// Harbor Oven is the Review demo face. Isolated offline UI tests that

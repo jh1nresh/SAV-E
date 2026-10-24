@@ -138,7 +138,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(home.contains("home.capture"))
         XCTAssertFalse(home.contains("Paste a link"))
         let saveHome = try typeBody("SaveHomeView", in: try source(at: "SAV-E/Views/Home/SaveRootViews.swift"))
-        XCTAssertTrue(saveHome.contains("HomeAtlasScreen()"))
+        XCTAssertTrue(saveHome.contains("SaveDoodleHomeView("))
+        XCTAssertFalse(saveHome.contains("HomeAtlasScreen()"))
         XCTAssertTrue(saveHome.contains("SaveHomeReviewQueue.previewIDs"))
         XCTAssertFalse(saveHome.contains("SaveHomeMemoryPile"))
         let bridge = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
@@ -362,6 +363,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
 
         XCTAssertTrue(script.contains("five-tab-home*)"))
+        XCTAssertTrue(script.contains("five-tab-friends*)"))
         XCTAssertTrue(script.contains("priority=1"))
         // Failure fixture: PR #220 moved UI selectors out of ci.yml into
         // select-ios-tests.py. The required `ios` job (now in ios.yml) must
@@ -380,10 +382,16 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(workflow.contains("run-visual-parity.sh"))
         XCTAssertTrue(workflow.contains("$RUNNER_TEMP/SAVE-UI.xcresult"))
         XCTAssertTrue(rail.contains("waitForHomeCoverImagery(app)"))
-        XCTAssertTrue(rail.contains("home.search"))
-        XCTAssertTrue(rail.contains("home.featuredName"))
+        XCTAssertTrue(rail.contains("func captureFiveTabHomeParityRaster"))
+        XCTAssertTrue(rail.contains("--uitest-location-tiantan"))
+        XCTAssertTrue(rail.contains("--uitest-doodle-parity-fixture"))
+        XCTAssertTrue(rail.contains("home.miniMap"))
+        XCTAssertTrue(rail.contains("home.eat"))
+        XCTAssertTrue(rail.contains("home.passport"))
         XCTAssertTrue(rail.contains("testHomeListProgressiveSearch"))
         XCTAssertTrue(selector.contains("testHomeListProgressiveSearch"))
+        XCTAssertTrue(rail.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertTrue(selector.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {
@@ -648,7 +656,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         let saveHome = try typeBody("SaveHomeView", in: root)
         let screens = try source(at: "Prototypes/AtlasPostcard/Sources/Screens.swift")
         let home = try typeBody("HomeAtlasScreen", in: screens)
-        XCTAssertTrue(saveHome.contains("HomeAtlasScreen()"))
+        XCTAssertTrue(saveHome.contains("SaveDoodleHomeView("))
+        XCTAssertFalse(saveHome.contains("HomeAtlasScreen()"))
         XCTAssertFalse(saveHome.contains("SaveHomeMemoryView"))
         XCTAssertFalse(saveHome.contains("SaveHomeMemoryPile"))
         XCTAssertTrue(saveHome.contains("onOpenPassport: onOpenPassport"))

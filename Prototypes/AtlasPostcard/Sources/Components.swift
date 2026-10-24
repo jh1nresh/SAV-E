@@ -118,7 +118,7 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
     var isRaisedControl: (Item) -> Bool = { _ in false }
     /// Raised capture keeps its VoiceOver name but drops the visible "Save" label.
     var hidesTitle: (Item) -> Bool = { _ in false }
-    /// Production injects 24pt pixel line icons. The prototype keeps SF Symbols.
+    /// Production injects 24pt hand-drawn template icons. The prototype keeps SF Symbols.
     var iconView: ((Item) -> AnyView)? = nil
     let onSelect: (Item) -> Void
 

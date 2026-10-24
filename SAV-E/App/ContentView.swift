@@ -177,6 +177,7 @@ struct ContentView: View {
     @StateObject private var tripStore: TripPackStore
     @StateObject private var drawerVM = AIDrawerViewModel()
     @StateObject private var planConversation = SavePlanConversation()
+    @StateObject private var doodleSession = SaveDoodleSession()
     @Binding private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     @Binding private var pendingOnboardingClue: String
     private let storageScope: ContentStorageScope
@@ -202,6 +203,9 @@ struct ContentView: View {
     @State private var suppressPendingOnboardingCaptureResume = false
     @State private var exactSearchRequestID: UUID?
     @State private var isExactSearchSessionActive = false
+    /// Survives a search-panel reopen that would otherwise drop
+    /// `exactSearchResolution` before the saved-stamp tap.
+    @State private var exactSearchClueID: UUID?
     @State private var pendingOriginPlanCandidateID: UUID?
     /// True while chrome is swapping one exclusive presentation for another.
     /// Dismiss handlers must not resume capture or re-present a sheet mid-swap.
@@ -253,6 +257,9 @@ struct ContentView: View {
             if tab != .map, isMapPanelExpanded {
                 collapseMapPanel()
             }
+        }
+        .onChange(of: doodleSession.mapVisitResidueID) { _, _ in
+            resetMapVisitResidue()
         }
         .onChange(of: fullScreenRoute?.id) { _, routeID in
             if routeID != nil {
@@ -509,15 +516,19 @@ struct ContentView: View {
             requestsConnections: $requestsSocialConnections
         )
         .environment(\.appLanguageSettings, languageSettings)
+        .environmentObject(doodleSession)
     }
 
     /// Tab bar selection. `.capture` is a control, not a destination: it opens
     /// the capture cover and leaves the current tab selected, so tapping it and
     /// cancelling returns the user exactly where they were.
-    private func selectRootTab(_ tab: SaveRootTab) {
+    private func selectRootTab(_ tab: SaveRootTab, mapFollowsHomeFilter: Bool = false) {
         guard !tab.isCaptureControl else {
             openDrawer(.addLink, tripID: nil)
             return
+        }
+        if tab == .map {
+            doodleSession.applyMapTabSelection(followsHomeFilter: mapFollowsHomeFilter)
         }
         // Root destinations must leave any pushed Saves, Trips, or Trip route.
         // The tab bar can remain in the accessibility tree behind those
@@ -527,6 +538,36 @@ struct ContentView: View {
             afterSelecting: tab,
             current: selectedRootTab
         )
+    }
+
+    /// Mini-map does not go through `selectRootTab` so a default-false Map
+    /// write cannot clear the handoff before Map appears.
+    private func openMapFromMiniMap() {
+        doodleSession.beginMiniMapHandoff()
+        rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
+        selectedRootTab = SaveChromeNavigation.destination(
+            afterSelecting: .map,
+            current: selectedRootTab
+        )
+    }
+
+    /// Drop leftover Map-tab chrome so a reused Map remounts Eat/Go.
+    private func resetMapVisitResidue() {
+        mapVM.clearSelectedMapObject()
+        mapDetailDrawerItem = nil
+        isMapPanelExpanded = false
+        drawerVM.returnToCommands()
+    }
+
+    /// Search, show-on-map, and list handoffs must drop a leftover Home
+    /// Eat/Go+city filter so the place the caller asked to show is visible.
+    /// Review correction keeps the session: abandoning remounts Map and
+    /// drops `preservesExactSearchClue`.
+    private func showMapTab() {
+        if !isExactSearchSessionActive {
+            doodleSession.abandonMiniMapHandoff()
+        }
+        selectedRootTab = .map
     }
 
     private var capturePresentation: Binding<SaveFullScreenRoute?> {
@@ -548,7 +589,10 @@ struct ContentView: View {
     }
 
     private var rootTabs: some View {
-        NavigationStack(path: $rootPath) {
+        // Read identity outside the switch so a Home-tab mini-map bump is
+        // observed before Map remounts with the leftover wordmark header.
+        let mapIdentity = doodleSession.mapSurfaceID
+        return NavigationStack(path: $rootPath) {
             ReferenceViewport {
                 ZStack(alignment: .topLeading) {
                     Group {
@@ -570,7 +614,6 @@ struct ContentView: View {
                                     )
                                 },
                                 onOpenTrips: {
-                                    // Existing trips remain available through Home's More menu.
                                     rootPath = SaveChromeNavigation.pathByOpening(
                                         .trips,
                                         currently: rootPath
@@ -582,7 +625,8 @@ struct ContentView: View {
                                         currently: rootPath
                                     )
                                 },
-                                onOpenPassport: openPassport
+                                onOpenPassport: openPassport,
+                                onOpenMap: { openMapFromMiniMap() }
                             )
                         case .map:
                             SaveMapRootView(
@@ -596,10 +640,13 @@ struct ContentView: View {
                                 onPlanAroundPlace: openPlanAround,
                                 onOpenPassport: openPassport
                             )
+                            .id(mapIdentity)
                         case .friends:
                             SaveFriendsView(
                                 currentUserID: PrivyAuthService.shared.currentUserId,
                                 onSaved: { await mapVM.loadPlaces(force: true) },
+                                // Invite / 邀請: ProfileView.requestsConnections
+                                // presents PassportConnectionsView (Friends section).
                                 onParkedAtFreeLimit: { try mapVM.parkPlaceInUnplacedInbox($0, requestPaywall: false) },
                                 onRemoveParkedAtFreeLimit: { try mapVM.removeParkedUnplacedInboxItem($0) },
                                 onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
@@ -625,13 +672,13 @@ struct ContentView: View {
                         hidesTitle: { $0.isCaptureControl },
                         iconView: { item in
                             AnyView(
-                                SavePixelChromeIcon(
+                                SaveDoodleTabIcon(
                                     kind: .tab(iconName: item.atlasIcon),
                                     pointSize: 24
                                 )
                             )
                         },
-                        onSelect: selectRootTab
+                        onSelect: { selectRootTab($0) }
                     )
                     .placed(
                         x: AtlasTabBarMetrics.leadingInset,
@@ -644,6 +691,7 @@ struct ContentView: View {
                 }
             }
             .tint(SaveAtlasPalette.forest)
+            .environmentObject(doodleSession)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: SaveRootRoute.self) { route in
                 switch route {
@@ -764,7 +812,8 @@ struct ContentView: View {
                         mapViewModel: mapVM,
                         initialQuery: drawerLaunchRequest.initialQuery ?? "",
                         focusesSearch: drawerLaunchRequest.focusesSearch,
-                        preservesExactSearchClue: drawerLaunchRequest.preservesExactSearchClue,
+                        preservesExactSearchClue: isExactSearchSessionActive
+                            || exactSearchClueID != nil,
                         onClose: collapseMapPanel,
                         onOpenPlace: { openSavedPlaceFromMapSearch($0) },
                         onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
@@ -1001,16 +1050,27 @@ struct ContentView: View {
                 await mapVM.prepareMapCandidatesForDrawerQuery(
                     query,
                     preservesExactSearchClue: isExactSearchSessionActive
+                        || exactSearchClueID != nil
+                        || mapVM.hasActiveExactSearchResolution
                 )
             },
             onBeginExactSearchResolution: { candidate in
-                isExactSearchSessionActive = true
-                mapVM.beginExactSearchResolution(for: candidate)
+                activateExactSearchSession(for: candidate)
             },
-            onClearMapSearchResults: {
-                isExactSearchSessionActive = false
+            onClearMapSearchResults: { endsExactSearch in
+                if endsExactSearch {
+                    isExactSearchSessionActive = false
+                    exactSearchClueID = nil
+                }
                 guard exactSearchRequestID == nil else { return }
-                mapVM.clearMapSearchResults()
+                // Launch/refine remounts wipe pins. Keep the live Review
+                // correction so a saved-stamp tap still retires the clue.
+                mapVM.clearMapSearchResults(
+                    preservesExactSearchClue: !endsExactSearch
+                        && (isExactSearchSessionActive
+                            || exactSearchClueID != nil
+                            || mapVM.hasActiveExactSearchResolution)
+                )
             },
             collaborativeLists: mapVM.collaborativeLists,
             onCreateList: { title, note in
@@ -1088,14 +1148,27 @@ struct ContentView: View {
 
     private func openMapSearch(initialQuery: String? = nil, focusesSearch: Bool = true) {
         guard incomingPlaceReceipt == nil else { return }
-        invalidateExactSearchRequest()
+        // Expanding or focusing the Map drawer must not drop an in-flight
+        // Review correction. The previous invalidate made saved-stamp taps
+        // open the stamp without retiring the clue.
+        let preserveExactSearchClue = isExactSearchSessionActive
+            || mapVM.hasActiveExactSearchResolution
+            || exactSearchClueID != nil
+        if !preserveExactSearchClue {
+            invalidateExactSearchRequest()
+        }
         mapDetailDrawerItem = nil
         mapVM.clearSelectedMapObject()
         drawerVM.returnToCommands()
         rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
-        selectedRootTab = .map
+        showMapTab()
         presentAfterClearingExclusiveChrome(.mapDrawer(
-            DrawerLaunchRequest(target: .ask, initialQuery: initialQuery, focusesSearch: focusesSearch)
+            DrawerLaunchRequest(
+                target: .ask,
+                initialQuery: initialQuery,
+                focusesSearch: focusesSearch,
+                preservesExactSearchClue: preserveExactSearchClue
+            )
         ))
     }
 
@@ -1221,7 +1294,7 @@ struct ContentView: View {
 
     private func openCollaborativeListOnMap(_ list: SaveCollaborativeList) {
         isPassportPresented = false
-        selectedRootTab = .map
+        showMapTab()
         rootPath.removeAll()
         Task {
             await mapVM.planCollaborativeList(list)
@@ -1238,6 +1311,12 @@ struct ContentView: View {
             onOpenReviewCandidate: { openReviewCandidate($0, tripID: captureResultIDs == nil ? nil : pendingCaptureTripID) },
             onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
             onOpenPassport: openPassport,
+            onOpenTrips: {
+                rootPath = SaveChromeNavigation.pathByOpening(
+                    .trips,
+                    currently: rootPath
+                )
+            },
             captureResultCount: captureResultIDs?.count,
             onLoadDuplicateAudit: { try await mapVM.reviewDuplicateAudit() }
         )
@@ -1366,7 +1445,7 @@ struct ContentView: View {
         isRootSheetPresented = false
         isMapPanelExpanded = false
         rootPath.removeAll()
-        selectedRootTab = .map
+        showMapTab()
         drawerVM.returnToCommands()
     }
 
@@ -1375,7 +1454,6 @@ struct ContentView: View {
         if mapVM.focusReviewCandidateOnMap(candidate) {
             fullScreenRoute = nil
             rootPath.removeAll()
-            selectedRootTab = .map
             showMapCandidatesOnMap()
             return
         }
@@ -1388,9 +1466,8 @@ struct ContentView: View {
         guard incomingPlaceReceipt == nil else { return }
         exactSearchRequestID = nil
         rootPath.removeAll()
-        selectedRootTab = .map
-        isExactSearchSessionActive = true
-        mapVM.beginExactSearchResolution(for: candidate)
+        activateExactSearchSession(for: candidate)
+        showMapTab()
         openExactSearchRefine(query: candidate.refinementQuery)
     }
 
@@ -1405,9 +1482,8 @@ struct ContentView: View {
         }
         fullScreenRoute = nil
         rootPath.removeAll()
-        selectedRootTab = .map
-        isExactSearchSessionActive = true
-        mapVM.beginExactSearchResolution(for: candidate)
+        activateExactSearchSession(for: candidate)
+        showMapTab()
         // The tile-town canvas shows saved stamps, not unconfirmed search pins.
         // Let the existing search panel perform one query and keep its results
         // actionable while retaining the original clue-resolution session.
@@ -1425,8 +1501,31 @@ struct ContentView: View {
 
     /// Saved-row taps in ordinary map search just open the stamp. During
     /// Review correction they must also resolve the active clue onto it.
+    /// Peek-card taps use this same path so a selected 64pt sticker cannot
+    /// open the stamp while leaving the correction session unresolved.
+    private func activateExactSearchSession(for candidate: PlaceReviewCandidate) {
+        exactSearchClueID = candidate.id
+        isExactSearchSessionActive = true
+        mapVM.beginExactSearchResolution(for: candidate)
+    }
+
+    private func restoreExactSearchResolutionIfNeeded() {
+        guard !mapVM.hasActiveExactSearchResolution,
+              let id = exactSearchClueID,
+              let clue = mapVM.reviewCandidates.first(where: { $0.id == id })
+        else { return }
+        mapVM.beginExactSearchResolution(for: clue)
+    }
+
     private func openSavedPlaceFromMapSearch(_ place: Place) {
-        guard drawerLaunchRequest.preservesExactSearchClue else {
+        restoreExactSearchResolutionIfNeeded()
+        // The launch request can keep `preservesExactSearchClue` after an
+        // explicit close or a successful resolve. Only a live session may
+        // claim the next saved-pin tap; otherwise the peek never opens.
+        let shouldResolveClue = isExactSearchSessionActive
+            || mapVM.hasActiveExactSearchResolution
+            || exactSearchClueID != nil
+        guard shouldResolveClue else {
             openMapDetail(.savedPlace(place))
             return
         }
@@ -1434,16 +1533,28 @@ struct ContentView: View {
             // Stay on the Map search/correction surface. The embedded drawer
             // binds `mapVM.correctionDrawerError` so a failed decision does
             // not open the stamp as if it were already corrected.
+            restoreExactSearchResolutionIfNeeded()
             if let resolved = await mapVM.chooseSavedStampFromExactSearch(place) {
+                // Successful attach retires the ContentView session too.
+                // mapVM already cleared exactSearchResolution; leaving this
+                // true would send the next ordinary saved tap into
+                // chooseSavedStampFromExactSearch → noActiveCorrectionSession
+                // (P2 4335565262).
+                exactSearchClueID = nil
+                isExactSearchSessionActive = false
                 openMapDetail(.savedPlace(resolved))
             }
         }
     }
 
     private func invalidateExactSearchRequest() {
-        guard exactSearchRequestID != nil || isExactSearchSessionActive else { return }
+        guard exactSearchRequestID != nil || isExactSearchSessionActive || exactSearchClueID != nil else { return }
         exactSearchRequestID = nil
         isExactSearchSessionActive = false
+        exactSearchClueID = nil
+        // Real abandon drops the model session so a later ordinary saved
+        // tap cannot attach the leftover clue (P1 4336392024).
+        mapVM.abandonExactSearchCorrection()
         mapVM.clearMapSearchResults()
     }
 
