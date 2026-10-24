@@ -2470,10 +2470,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(selectedName.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         XCTAssertTrue(app.staticTexts["map.peek.subtitle"].exists,
             "The selected Map Stamp should show its saved-date context.")
-        let selectedPin = app.buttons.matching(
+        // MapKit annotations surface as Other, not Button. Query the same
+        // tree the Taipei pin-count tests already use.
+        let selectedPin = app.descendants(matching: .any).matching(
             NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.' AND label BEGINSWITH 'Selected Map Stamp, '")
         ).firstMatch
-        XCTAssertTrue(selectedPin.exists)
+        XCTAssertTrue(selectedPin.waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(selectedPin.label, "Selected Map Stamp, \(selectedName.label)")
 
         let openMapDetails = app.buttons["map.peek.card"]

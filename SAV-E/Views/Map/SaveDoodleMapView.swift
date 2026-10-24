@@ -185,6 +185,7 @@ struct SaveDoodleMapView: View {
                             ) {
                                 mapViewModel.selectPlace(item.place)
                             }
+                            .accessibilityElement(children: .combine)
                             .accessibilityLabel(
                                 mapViewModel.selectedPlace?.id == item.place.id
                                     ? "Selected Map Stamp, \(item.place.name)"

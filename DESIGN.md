@@ -999,7 +999,9 @@ list. Unsaved places keep native Apple Markers.
 HoP P-4 (founder 2026-10-24): `map.png` / `map-dark.png` are live
 Taipei Apple Maps screenshots from #298 CI iPhone 16 Pro (402pt / 3×
 1206×2622) head `ae37a7d1` (Taipei fixture `298-10` / `M1`, English
-`dark-map`). Do not apply `map-mask.png` to the 0.90 score. Home and
+`dark-map`). Do not apply `map-mask.png` to the 0.90 score. Head
+`8ea05f5e` ios `40048795885` scored map `0.999988` against that
+Taipei golden with no mask (298-10, iPhone 16 Pro 402pt). Home and
 Map still fail CI below 0.90. DESIGN still signs off on city / Eat-Go /
 sheet / tab chrome. City and Eat/Go sit on a cream `paper` header band,
 not on the live map. Pins are coral outline lollipops. The place sheet

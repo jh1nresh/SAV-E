@@ -527,8 +527,17 @@ struct SaveMapRootView: View {
             }
 #endif
         }
+        // MapKit's Map reports a short a11y frame (307pt on 375pt). Keep
+        // map.root on a full-bleed stand-in so XCTest measures the canvas,
+        // not the padded header/sheet union.
+        .background {
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement()
+                .accessibilityIdentifier("map.root")
+                .allowsHitTesting(false)
+        }
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("map.root")
     }
 
     private var atlasPresentation: AtlasPresentation {
