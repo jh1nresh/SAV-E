@@ -364,8 +364,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(script.contains("five-tab-home*)"))
         XCTAssertTrue(script.contains("priority=1"))
         // Failure fixture: PR #220 moved UI selectors out of ci.yml into
-        // select-ios-tests.py. The required `ios` job (now in ios.yml) must
-        // keep that wiring. The live five-tab Home capture must stay in
+        // select-ios-tests.py. The `ios` job (manual full suite in ios.yml)
+        // must keep that wiring. The live five-tab Home capture must stay in
         // BASELINE (every UI route) and the frozen full list, or visual
         // parity falls back to the older atlas-home attachment.
         XCTAssertTrue(selector.contains("\"testCaptureFiveTabLanding\""))
