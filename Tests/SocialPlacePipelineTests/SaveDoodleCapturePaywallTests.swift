@@ -122,7 +122,7 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(paywall.contains("paywall.scroll"))
         XCTAssertTrue(
             paywall.contains(".accessibilityElement(children: .contain)\n            .accessibilityIdentifier(\"paywall.scroll\")"),
-            "paywall.scroll must stay on a contain wrapper so SE / large type can see it"
+            "paywall.scroll must stay on a non-ScrollView contain wrapper so SE / large type can see it"
         )
         XCTAssertFalse(paywall.contains("aiAssistExhausted"))
         XCTAssertFalse(paywall.contains("$6.99"))
