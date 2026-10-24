@@ -2874,7 +2874,7 @@ final class MapViewModel: ObservableObject {
         else { return nil }
         return CLLocation(latitude: lat1, longitude: lon1)
             .distance(from: CLLocation(latitude: lat2, longitude: lon2))
-
+    }
 
     /// Terminal actions for this clue (reject / archive / source-only / confirm)
     /// drop the rollback lock so a retired clue cannot block later corrections.
