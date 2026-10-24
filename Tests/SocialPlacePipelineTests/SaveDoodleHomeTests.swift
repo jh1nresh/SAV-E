@@ -1584,7 +1584,13 @@ final class SaveDoodleHomeTests: XCTestCase {
         let map = try source(at: "SAV-E/Views/TileTown/SaveTileTownRootMap.swift")
         XCTAssertTrue(map.contains("map.wordmark"))
         XCTAssertTrue(map.contains("map.lensRail"))
-        XCTAssertFalse(map.contains("cityGroups.first(where: { $0.id == id })"))
+        XCTAssertTrue(
+            map.contains("cityGroups.first(where: { $0.id == id })"),
+            "B-5 city label after View on map reads Home's current city"
+        )
+        XCTAssertTrue(map.contains("pendingShowOnMapPlaceID"))
+        XCTAssertTrue(map.contains("map.eatGo"))
+        XCTAssertFalse(map.contains("mapFollowsHomeFilter"))
         let contentView = try source(at: "SAV-E/App/ContentView.swift")
         XCTAssertTrue(contentView.contains(".environmentObject(doodleSession)"))
     }

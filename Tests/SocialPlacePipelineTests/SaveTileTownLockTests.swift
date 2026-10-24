@@ -190,10 +190,19 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(map.contains("map.lens.nearby") || map.contains("map.lensRail"))
         XCTAssertTrue(map.contains("SaveTileTownMapLens"))
         XCTAssertTrue(map.contains("map.liveSurface"))
-        XCTAssertFalse(map.contains("SaveDoodleSession"))
+        XCTAssertTrue(
+            map.contains("SaveDoodleSession"),
+            "B-5 one-shot View on map reads Home session for Eat/Go + city"
+        )
         XCTAssertFalse(map.contains("SaveDoodleHomeCatalog.visiblePlaces("))
         XCTAssertFalse(map.contains("mapAccessibilityIdentifier"))
-        XCTAssertFalse(map.contains("\"map.city\""))
+        XCTAssertTrue(
+            map.contains("\"map.city\""),
+            "B-5 shows Home city on Map after View on map; two-way sharing stays #298"
+        )
+        XCTAssertTrue(map.contains("map.eatGo"))
+        XCTAssertTrue(map.contains("pendingShowOnMapPlaceID"))
+        XCTAssertFalse(map.contains("mapFollowsHomeFilter"))
         let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
         XCTAssertTrue(panel.contains("Spacer(minLength: 0)"))
         XCTAssertTrue(panel.contains("alignment: .bottom"))
