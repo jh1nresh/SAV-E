@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 import unittest
 
 
@@ -96,6 +97,163 @@ class ReleaseReadinessTests(unittest.TestCase):
         self.assertIn('"backendCI": "passed"', writer)
         self.assertIn('"saveRnContractCI": "passed"', writer)
         self.assertIn('"evidenceRubricCI": "passed"', writer)
+
+
+SHA = "32ef5f957067eee05daa7daae6587ac84876f91a"
+REPO = "jh1nresh/SAV-E"
+
+
+def ci_run(
+    run_id: int,
+    *,
+    sha: str = SHA,
+    path: str = ".github/workflows/ci.yml",
+    status: str = "completed",
+    conclusion: str | None = "success",
+    created_at: str = "2026-10-23T23:48:12Z",
+) -> dict:
+    return {
+        "id": run_id,
+        "head_sha": sha,
+        "path": path,
+        "status": status,
+        "conclusion": conclusion,
+        "created_at": created_at,
+    }
+
+
+class LatestCIRunTests(unittest.TestCase):
+    def setUp(self):
+        self._api_get = require_ci.api_get
+        self.urls: list[str] = []
+
+    def tearDown(self):
+        require_ci.api_get = self._api_get
+
+    def fake_api(self, handler):
+        def wrapper(url: str, token: str):
+            self.assertEqual(token, "test-token")
+            self.urls.append(url)
+            return handler(url)
+
+        require_ci.api_get = wrapper
+
+    def assert_queries_ci_workflow(self, url: str, *, sha: str = SHA):
+        parsed = urlparse(url)
+        self.assertTrue(
+            parsed.path.endswith(f"/repos/{REPO}/actions/workflows/ci.yml/runs"),
+            url,
+        )
+        self.assertNotIn("/actions/runs?", url)
+        query = parse_qs(parsed.query)
+        self.assertEqual(query.get("head_sha"), [sha])
+
+    def test_returns_ci_run_when_other_workflows_flood_generic_list(self):
+        target = ci_run(40041681337)
+        # More than 20 Auto-rerun flaky rows for the same SHA — the live
+        # failure mode of the generic /actions/runs?per_page=20 list.
+        other_workflow_runs = [
+            ci_run(
+                40057000000 + index,
+                path=".github/workflows/auto-rerun-flaky.yml",
+                created_at=f"2026-10-24T03:{index:02d}:00Z",
+            )
+            for index in range(25)
+        ]
+
+        def handler(url: str):
+            self.assert_queries_ci_workflow(url)
+            if "/actions/workflows/ci.yml/runs" in url:
+                return {"workflow_runs": [target]}
+            return {"workflow_runs": other_workflow_runs}
+
+        self.fake_api(handler)
+        found = require_ci.latest_ci_run(REPO, SHA, "test-token")
+        self.assertIsNotNone(found)
+        self.assertEqual(found["id"], target["id"])
+        self.assertEqual(found["path"], require_ci.CI_WORKFLOW_PATH)
+        self.assertTrue(self.urls)
+        self.assert_queries_ci_workflow(self.urls[0])
+
+    def test_no_run_is_clear_not_found(self):
+        self.fake_api(lambda url: {"workflow_runs": []})
+        found = require_ci.latest_ci_run(REPO, SHA, "test-token")
+        self.assertIsNone(found)
+        self.assertEqual(require_ci.describe_ci_run(found), require_ci.CI_NOT_FOUND)
+        self.assertEqual(require_ci.describe_ci_run(found), "CI not found")
+        self.assert_queries_ci_workflow(self.urls[0])
+
+    def test_multiple_runs_for_sha_use_the_latest(self):
+        older = ci_run(10, created_at="2026-10-20T09:00:00Z")
+        newest = ci_run(5, created_at="2026-10-24T01:00:00Z")
+        same_time_older = ci_run(20, created_at="2026-10-24T01:00:00Z")
+        pages = {
+            1: [older, newest],
+            2: [same_time_older],
+        }
+
+        def handler(url: str):
+            self.assert_queries_ci_workflow(url)
+            query = parse_qs(urlparse(url).query)
+            page = int(query.get("page", ["1"])[0])
+            return {"workflow_runs": pages.get(page, [])}
+
+        self.fake_api(handler)
+        found = require_ci.latest_ci_run(REPO, SHA, "test-token", per_page=2)
+        self.assertEqual(found["id"], same_time_older["id"])
+        self.assertGreaterEqual(len(self.urls), 2)
+
+    def test_in_progress_run_is_returned(self):
+        pending = ci_run(88, status="in_progress", conclusion=None)
+        self.fake_api(lambda url: {"workflow_runs": [pending]})
+        found = require_ci.latest_ci_run(REPO, SHA, "test-token")
+        self.assertEqual(found["id"], 88)
+        self.assertEqual(found["status"], "in_progress")
+        self.assertIsNone(found["conclusion"])
+        self.assertIn("status=in_progress", require_ci.describe_ci_run(found))
+        self.assertIn("conclusion=none", require_ci.describe_ci_run(found))
+
+    def test_failed_run_is_returned(self):
+        failed = ci_run(77, conclusion="failure")
+        self.fake_api(lambda url: {"workflow_runs": [failed]})
+        found = require_ci.latest_ci_run(REPO, SHA, "test-token")
+        self.assertEqual(found["id"], 77)
+        self.assertEqual(found["conclusion"], "failure")
+        self.assertIn("conclusion=failure", require_ci.describe_ci_run(found))
+
+    def test_paginates_past_a_full_first_page_to_reach_latest(self):
+        first_page = [
+            ci_run(1000 + index, created_at=f"2026-10-20T00:00:{index:02d}Z")
+            for index in range(2)
+        ]
+        latest = ci_run(2000, created_at="2026-10-24T00:00:00Z")
+
+        def handler(url: str):
+            self.assert_queries_ci_workflow(url)
+            query = parse_qs(urlparse(url).query)
+            page = int(query.get("page", ["1"])[0])
+            if page == 1:
+                return {"workflow_runs": first_page}
+            if page == 2:
+                return {"workflow_runs": [latest]}
+            return {"workflow_runs": []}
+
+        self.fake_api(handler)
+        found = require_ci.latest_ci_run(REPO, SHA, "test-token", per_page=2)
+        self.assertEqual(found["id"], 2000)
+        self.assertEqual(len(self.urls), 2)
+
+    def test_ignores_other_sha_or_workflow_rows_on_the_ci_endpoint(self):
+        other_sha = ci_run(1, sha="a" * 40)
+        other_workflow = ci_run(
+            2, path=".github/workflows/auto-rerun-flaky.yml"
+        )
+        target = ci_run(3)
+        self.fake_api(
+            lambda url: {"workflow_runs": [other_sha, other_workflow, target]}
+        )
+        found = require_ci.latest_ci_run(REPO, SHA, "test-token")
+        self.assertEqual(found["id"], 3)
 
 
 if __name__ == "__main__":
