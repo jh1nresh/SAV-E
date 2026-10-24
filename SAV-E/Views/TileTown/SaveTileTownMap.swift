@@ -369,38 +369,78 @@ struct SaveTileTownPeekCard: View {
     var subtitle: String? = nil
     var photoURL: URL? = nil
     var accessibilityNameID: String? = nil
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var cardWidth: CGFloat = 343
 
     var body: some View {
-        HStack(spacing: 10) {
-            SaveKraftStampFaceView(face: .photo(photoURL), glyph: "photo")
-                .frame(width: 44, height: 44)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(SaveAtlasType.strong(16))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier(accessibilityNameID ?? "map.peek.name")
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(SaveAtlasType.regular(12))
-                        .foregroundStyle(SaveAtlasPalette.muted)
+        VStack(alignment: .leading, spacing: GooglePlacesPhotoSourceMarkMetrics.gapAbove) {
+            HStack(spacing: 10) {
+                SaveKraftStampFaceView(face: resolvedFace, glyph: "photo")
+                    .frame(width: 44, height: 44)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(SaveAtlasType.strong(16))
+                        .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityIdentifier("map.peek.subtitle")
+                        .accessibilityLabel(peekTitleAccessibilityLabel)
+                        .accessibilityIdentifier(accessibilityNameID ?? "map.peek.name")
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(SaveAtlasType.regular(12))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("map.peek.subtitle")
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            if showsGooglePhoto {
+                GooglePlacesPhotoSourceMark()
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { cardWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, width in cardWidth = width }
+            }
+        }
         .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(SaveAtlasPalette.kraft.opacity(0.72), lineWidth: 1)
         }
         .clipped()
+    }
+
+    private var showsGooglePhoto: Bool {
+        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
+            photoURL,
+            availableWidth: cardWidth,
+            dynamicType: dynamicTypeSize
+        )
+    }
+
+    private var resolvedFace: SaveKraftStampFace {
+        if let photoURL,
+           GooglePlacesPhotoURL.isGooglePlacesPhotoURL(photoURL),
+           !showsGooglePhoto {
+            return .scene(SaveKraftStampScene.from(name: title))
+        }
+        return .photo(photoURL)
+    }
+
+    private var peekTitleAccessibilityLabel: String {
+        if showsGooglePhoto {
+            return "\(title), \(GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: languageSettings.language))"
+        }
+        return title
     }
 }

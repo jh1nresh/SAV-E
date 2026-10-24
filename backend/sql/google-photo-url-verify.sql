@@ -16,5 +16,6 @@ select
         or source_image_url ilike '%places.googleapis.com%/%/media%'
         or source_image_url ilike '%photo_reference=%'
         or source_image_url ~* '^places/.+/photos/'
+        or source_image_url ilike '%googleusercontent.com%/places/%'
       )
   ) as leftover_google_source_image_urls;

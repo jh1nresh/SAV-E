@@ -265,36 +265,44 @@ private struct SaveSearchAssistantMessage: View {
 
 private struct SaveSearchResultNotebookRow: View {
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let result: SaveSearchResult
     var onSelectResult: (SaveSearchResult) -> Void
+    @State private var cardWidth: CGFloat = 343
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             Button {
                 onSelectResult(result)
             } label: {
-                HStack(alignment: .top, spacing: 10) {
-                    resultThumbnail
+                VStack(alignment: .leading, spacing: GooglePlacesPhotoSourceMarkMetrics.gapAbove) {
+                    HStack(alignment: .top, spacing: 10) {
+                        resultThumbnail
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(result.title)
-                            .font(.subheadline.weight(.bold))
-                            .foregroundColor(.saveInk)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(result.subtitle)
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.saveMutedText)
-                            .lineLimit(2)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(result.title)
+                                .font(.subheadline.weight(.bold))
+                                .foregroundColor(.saveInk)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(result.subtitle)
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.saveMutedText)
+                                .lineLimit(2)
+                        }
+
+                        Spacer(minLength: 0)
+                        Image(systemName: canOpenDetails ? "chevron.right" : "circle.dotted")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(.saveCocoa.opacity(0.8))
                     }
-
-                    Spacer(minLength: 0)
-                    Image(systemName: canOpenDetails ? "chevron.right" : "circle.dotted")
-                        .font(.caption.weight(.bold))
-                        .foregroundColor(.saveCocoa.opacity(0.8))
+                    if showsGooglePhoto {
+                        GooglePlacesPhotoSourceMark()
+                    }
                 }
             }
             .buttonStyle(.plain)
             .disabled(!canOpenDetails)
+            .accessibilityLabel(drawerRowAccessibilityLabel)
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
@@ -328,6 +336,13 @@ private struct SaveSearchResultNotebookRow: View {
             }
         }
         .padding(12)
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { cardWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, width in cardWidth = width }
+            }
+        }
         .background(SaveAtlasPalette.canvas.opacity(0.9))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -336,10 +351,30 @@ private struct SaveSearchResultNotebookRow: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
+    private var resultPhotoURL: URL? {
+        result.businessPhotoURLStrings.first.flatMap(URL.init(string:))
+    }
+
+    private var showsGooglePhoto: Bool {
+        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
+            resultPhotoURL,
+            availableWidth: cardWidth,
+            dynamicType: dynamicTypeSize
+        )
+    }
+
+    private var drawerRowAccessibilityLabel: String {
+        if showsGooglePhoto {
+            return "\(result.title), \(GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: languageSettings.language))"
+        }
+        return result.title
+    }
+
     @ViewBuilder
     private var resultThumbnail: some View {
         if result.objectType == .mapVisibleUnsavedPlace,
-           let url = result.businessPhotoURLStrings.first.flatMap(URL.init(string:)) {
+           let url = resultPhotoURL,
+           !GooglePlacesPhotoURL.isGooglePlacesPhotoURL(url) || showsGooglePhoto {
             CachedAsyncImage(url: url) { phase in
                 switch phase {
                 case .success(let image):

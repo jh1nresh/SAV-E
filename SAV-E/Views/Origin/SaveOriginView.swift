@@ -156,9 +156,138 @@ struct SaveOriginView: View {
     }
 
     private func foodCard(_ place: Place, isActive: Bool) -> some View {
+        SaveOriginFoodCard(
+            place: place,
+            isActive: isActive,
+            swipeOverlay: AnyView(swipeDecisionOverlay)
+        )
+        .offset(isActive ? dragOffset : .zero)
+        .rotationEffect(.degrees(isActive ? Double(dragOffset.width / 22) : 0))
+        .gesture(swipeGesture(for: place), including: isActive ? .all : .none)
+    }
+
+    @ViewBuilder
+    private var swipeDecisionOverlay: some View {
+        if abs(dragOffset.width) > 38 {
+            Text(dragOffset.width < 0
+                 ? localized("SAVE", "收藏")
+                 : localized("SKIP", "跳過"))
+                .font(AtlasType.display(22))
+                .tracking(1.2)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    dragOffset.width < 0 ? SaveAtlasPalette.coral : SaveAtlasPalette.forest,
+                    in: Capsule()
+                )
+                .padding(18)
+                .frame(maxWidth: .infinity, maxHeight: .infinity,
+                       alignment: dragOffset.width < 0 ? .topTrailing : .topLeading)
+        }
+    }
+
+    private var swipeControls: some View {
+        HStack(spacing: 12) {
+            Button {
+                guard let place = foodPlaces.first else { return }
+                completeSwipe(.save, place: place)
+            } label: {
+                Label(localized("Save place", "儲存地點"), systemImage: "arrow.left")
+                    .frame(maxWidth: .infinity, minHeight: 46)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(SaveAtlasPalette.coral)
+            .disabled(foodPlaces.isEmpty || workingPlaceID != nil)
+            .accessibilityIdentifier("origin.save")
+
+            Button {
+                guard let place = foodPlaces.first else { return }
+                completeSwipe(.skip, place: place)
+            } label: {
+                Label(localized("Skip", "跳過"), systemImage: "arrow.right")
+                    .frame(width: 96)
+                    .frame(minHeight: 46)
+            }
+            .buttonStyle(.bordered)
+            .tint(SaveAtlasPalette.forest)
+            .disabled(foodPlaces.isEmpty || workingPlaceID != nil)
+            .accessibilityIdentifier("origin.skip")
+        }
+    }
+
+    private var foodPlaces: [Place] {
+        places.filter { place in
+            place.socialSignal != nil && [.food, .cafe, .bar].contains(place.category)
+        }
+    }
+
+    private func swipeGesture(for place: Place) -> some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                guard workingPlaceID == nil else { return }
+                dragOffset = value.translation
+            }
+            .onEnded { value in
+                let decision = OriginSwipeDecision.resolve(translation: value.translation.width)
+                guard decision != .none else {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                        dragOffset = .zero
+                    }
+                    return
+                }
+                completeSwipe(decision, place: place)
+            }
+    }
+
+    private func completeSwipe(_ decision: OriginSwipeDecision, place: Place) {
+        guard workingPlaceID == nil else { return }
+        workingPlaceID = place.id
+        withAnimation(.easeIn(duration: 0.2)) {
+            dragOffset.width = decision == .save ? -520 : 520
+        }
+
+        Task {
+            do {
+                try await Task.sleep(for: .milliseconds(210))
+                if decision == .save {
+                    try await onSave(place)
+                } else {
+                    try await onSkip(place)
+                }
+                dragOffset = .zero
+                workingPlaceID = nil
+            } catch {
+                dragOffset = .zero
+                workingPlaceID = nil
+                actionError = error.localizedDescription
+            }
+        }
+    }
+
+    private var atlasPresentation: AtlasPresentation {
+        var presentation = AtlasPresentation.reference
+        presentation.onOpenPassport = onOpenPassport
+        return presentation
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.language.localized(english: english, traditionalChinese: traditionalChinese)
+    }
+}
+
+struct SaveOriginFoodCard: View {
+    let place: Place
+    var isActive: Bool = true
+    var swipeOverlay: AnyView = AnyView(EmptyView())
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var cardWidth: CGFloat = 343
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .bottomLeading) {
-                foodPhoto(place)
+                foodPhoto
 
                 LinearGradient(
                     colors: [.clear, SaveAtlasPalette.ink.opacity(0.82)],
@@ -176,10 +305,11 @@ struct SaveOriginView: View {
                         .font(AtlasType.display(30))
                         .foregroundStyle(.white)
                         .lineLimit(2)
+                        .accessibilityLabel(nameAccessibilityLabel)
                 }
                 .padding(18)
 
-                swipeDecisionOverlay
+                swipeOverlay
             }
             .overlay(alignment: .topLeading) {
                 Label(
@@ -198,6 +328,12 @@ struct SaveOriginView: View {
             }
             .frame(height: 326)
             .clipped()
+
+            if showsGooglePhoto {
+                GooglePlacesPhotoSourceMark()
+                    .padding(.horizontal, 16)
+                    .padding(.top, GooglePlacesPhotoSourceMarkMetrics.gapAbove)
+            }
 
             VStack(alignment: .leading, spacing: 7) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -270,7 +406,18 @@ struct SaveOriginView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
         }
-        .frame(maxWidth: .infinity, minHeight: 476, alignment: .top)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: showsGooglePhoto ? 500 : 476,
+            alignment: .top
+        )
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { cardWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, width in cardWidth = width }
+            }
+        }
         .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay {
@@ -278,30 +425,46 @@ struct SaveOriginView: View {
                 .stroke(SaveAtlasPalette.line.opacity(0.45), lineWidth: 1)
         }
         .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 10, y: 6)
-        .offset(isActive ? dragOffset : .zero)
-        .rotationEffect(.degrees(isActive ? Double(dragOffset.width / 22) : 0))
-        .gesture(swipeGesture(for: place), including: isActive ? .all : .none)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("origin.foodCard.\(place.id.uuidString)")
     }
 
+    private var photoURL: URL? {
+        place.businessPhotoURLStrings.first.flatMap(URL.init(string:))
+    }
+
+    private var showsGooglePhoto: Bool {
+        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
+            photoURL,
+            availableWidth: cardWidth,
+            dynamicType: dynamicTypeSize
+        )
+    }
+
+    private var nameAccessibilityLabel: String {
+        if showsGooglePhoto {
+            return "\(place.name), \(GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: languageSettings.language))"
+        }
+        return place.name
+    }
+
     @ViewBuilder
-    private func foodPhoto(_ place: Place) -> some View {
-        if let value = place.businessPhotoURLStrings.first,
-           let url = URL(string: value) {
+    private var foodPhoto: some View {
+        if let url = photoURL,
+           !GooglePlacesPhotoURL.isGooglePlacesPhotoURL(url) || showsGooglePhoto {
             CachedAsyncImage(url: url) { phase in
                 if case .success(let image) = phase {
                     image.resizable().scaledToFill()
                 } else {
-                    foodPhotoFallback(place)
+                    foodPhotoFallback
                 }
             }
         } else {
-            foodPhotoFallback(place)
+            foodPhotoFallback
         }
     }
 
-    private func foodPhotoFallback(_ place: Place) -> some View {
+    private var foodPhotoFallback: some View {
         ZStack {
             SaveAtlasPalette.kraft.opacity(0.55)
             Image(systemName: place.category.iconName)
@@ -310,114 +473,9 @@ struct SaveOriginView: View {
         }
     }
 
-    @ViewBuilder
-    private var swipeDecisionOverlay: some View {
-        if abs(dragOffset.width) > 38 {
-            Text(dragOffset.width < 0
-                 ? localized("SAVE", "收藏")
-                 : localized("SKIP", "跳過"))
-                .font(AtlasType.display(22))
-                .tracking(1.2)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(
-                    dragOffset.width < 0 ? SaveAtlasPalette.coral : SaveAtlasPalette.forest,
-                    in: Capsule()
-                )
-                .padding(18)
-                .frame(maxWidth: .infinity, maxHeight: .infinity,
-                       alignment: dragOffset.width < 0 ? .topTrailing : .topLeading)
-        }
-    }
-
-    private var swipeControls: some View {
-        HStack(spacing: 12) {
-            Button {
-                guard let place = foodPlaces.first else { return }
-                completeSwipe(.save, place: place)
-            } label: {
-                Label(localized("Save place", "儲存地點"), systemImage: "arrow.left")
-                    .frame(maxWidth: .infinity, minHeight: 46)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(SaveAtlasPalette.coral)
-            .disabled(foodPlaces.isEmpty || workingPlaceID != nil)
-            .accessibilityIdentifier("origin.save")
-
-            Button {
-                guard let place = foodPlaces.first else { return }
-                completeSwipe(.skip, place: place)
-            } label: {
-                Label(localized("Skip", "跳過"), systemImage: "arrow.right")
-                    .frame(width: 96)
-                    .frame(minHeight: 46)
-            }
-            .buttonStyle(.bordered)
-            .tint(SaveAtlasPalette.forest)
-            .disabled(foodPlaces.isEmpty || workingPlaceID != nil)
-            .accessibilityIdentifier("origin.skip")
-        }
-    }
-
-    private var foodPlaces: [Place] {
-        places.filter { place in
-            place.socialSignal != nil && [.food, .cafe, .bar].contains(place.category)
-        }
-    }
-
     private func signalLabel(_ signal: PlaceSocialSignal) -> String {
         guard signal.kind == .communityRecommendation else { return signal.displayText }
         return localized("Shared by \(signal.sourceLabel)", "由 \(signal.sourceLabel) 分享")
-    }
-
-    private func swipeGesture(for place: Place) -> some Gesture {
-        DragGesture(minimumDistance: 12)
-            .onChanged { value in
-                guard workingPlaceID == nil else { return }
-                dragOffset = value.translation
-            }
-            .onEnded { value in
-                let decision = OriginSwipeDecision.resolve(translation: value.translation.width)
-                guard decision != .none else {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
-                        dragOffset = .zero
-                    }
-                    return
-                }
-                completeSwipe(decision, place: place)
-            }
-    }
-
-    private func completeSwipe(_ decision: OriginSwipeDecision, place: Place) {
-        guard workingPlaceID == nil else { return }
-        workingPlaceID = place.id
-        withAnimation(.easeIn(duration: 0.2)) {
-            dragOffset.width = decision == .save ? -520 : 520
-        }
-
-        Task {
-            do {
-                try await Task.sleep(for: .milliseconds(210))
-                if decision == .save {
-                    try await onSave(place)
-                } else {
-                    try await onSkip(place)
-                }
-                dragOffset = .zero
-                workingPlaceID = nil
-            } catch {
-                dragOffset = .zero
-                workingPlaceID = nil
-                actionError = error.localizedDescription
-            }
-        }
-    }
-
-    private var atlasPresentation: AtlasPresentation {
-        var presentation = AtlasPresentation.reference
-        presentation.onOpenPassport = onOpenPassport
-        return presentation
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {

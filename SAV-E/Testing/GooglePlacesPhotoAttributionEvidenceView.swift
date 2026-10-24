@@ -45,6 +45,12 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
         case mapPins
         case cityPage
         case reportEntry
+        case homeThumbs
+        case drawerThumbs
+        case tripStop
+        case originFood
+        case layout375
+        case layoutXXXL
 
         var id: String { rawValue }
 
@@ -61,6 +67,12 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
             case .mapPins: return "Map pins"
             case .cityPage: return "City page"
             case .reportEntry: return "Report"
+            case .homeThumbs: return "Home thumbs"
+            case .drawerThumbs: return "Drawer"
+            case .tripStop: return "Trip stop"
+            case .originFood: return "Origin food"
+            case .layout375: return "375 width"
+            case .layoutXXXL: return "XXXL"
             }
         }
     }
@@ -254,7 +266,175 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
+        case .homeThumbs:
+            homeThumbsScene
+        case .drawerThumbs:
+            ScrollView { drawerThumbsContent }
+                .onAppear(perform: seedPhotoFixtures)
+        case .tripStop:
+            ScrollView { tripStopContent }
+                .onAppear(perform: seedPhotoFixtures)
+        case .originFood:
+            ScrollView { originFoodContent }
+                .onAppear(perform: seedPhotoFixtures)
+        case .layout375:
+            widthLockedScene(width: 375, identifier: "evidence.layout375")
+        case .layoutXXXL:
+            xxxlScene
         }
+    }
+
+    private var homeThumbsScene: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Home featured 44pt and recent 52pt. Google thumbs say Google Maps.")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.saveInk)
+                .accessibilityIdentifier("evidence.homeThumbs")
+            SaveTileTownPeekCard(
+                title: "Harbor Oven",
+                subtitle: "Featured · Google",
+                photoURL: Self.googleThumbURL,
+                accessibilityNameID: "evidence.homeThumbs.featuredGoogle"
+            )
+            SaveTileTownPeekCard(
+                title: "Own shot",
+                subtitle: "Featured · own",
+                photoURL: Self.ownThumbURL,
+                accessibilityNameID: "evidence.homeThumbs.featuredOwn"
+            )
+            HStack(alignment: .top, spacing: 16) {
+                SaveKraftStamp(
+                    title: "Harbor Oven",
+                    face: .photo(Self.googleThumbURL),
+                    size: .recent,
+                    accessibilityIdentifier: "evidence.homeThumbs.recentGoogle"
+                )
+                SaveKraftStamp(
+                    title: "Own shot",
+                    face: .photo(Self.ownThumbURL),
+                    size: .recent,
+                    accessibilityIdentifier: "evidence.homeThumbs.recentOwn"
+                )
+                SaveKraftStamp(
+                    title: "Friend shot",
+                    face: .photo(Self.friendThumbURL),
+                    size: .recent,
+                    accessibilityIdentifier: "evidence.homeThumbs.recentFriend"
+                )
+            }
+        }
+        .onAppear(perform: seedPhotoFixtures)
+    }
+
+    private var drawerThumbsContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Drawer search rows. Google thumbs say Google Maps in the footer.")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.saveInk)
+                .accessibilityIdentifier("evidence.drawerThumbs")
+            Text("Drawer · Google")
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.saveCocoa)
+                .accessibilityIdentifier("evidence.drawer.google")
+            SaveSearchResultsComponent(response: Self.drawerResponse(photoURL: Self.googleThumbURL))
+            Text("Drawer · own")
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.saveCocoa)
+                .accessibilityIdentifier("evidence.drawer.own")
+            SaveSearchResultsComponent(response: Self.drawerResponse(photoURL: Self.ownThumbURL, title: "Own shot"))
+        }
+    }
+
+    private var tripStopContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Trip stop paper card. Mark sits in the footer under the photo.")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.saveInk)
+                .accessibilityIdentifier("evidence.tripStop")
+            Text("Trip · Google")
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.saveCocoa)
+                .accessibilityIdentifier("evidence.trip.google")
+            TripStopRow(
+                stop: Self.tripStop(id: Self.tripGoogleStopID, name: "Harbor Oven"),
+                place: Self.originPlace(id: Self.tripGooglePlaceID, name: "Harbor Oven", photoURL: Self.googleThumbURL),
+                position: 1,
+                isLast: false,
+                canMoveEarlier: false,
+                canMoveLater: true,
+                onEdit: {},
+                onMoveEarlier: {},
+                onMoveLater: {}
+            )
+            Text("Trip · own")
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.saveCocoa)
+                .accessibilityIdentifier("evidence.trip.own")
+            TripStopRow(
+                stop: Self.tripStop(id: Self.tripOwnStopID, name: "Own shot"),
+                place: Self.originPlace(id: Self.tripOwnPlaceID, name: "Own shot", photoURL: Self.ownThumbURL),
+                position: 2,
+                isLast: true,
+                canMoveEarlier: true,
+                canMoveLater: false,
+                onEdit: {},
+                onMoveEarlier: {},
+                onMoveLater: {}
+            )
+        }
+    }
+
+    private var originFoodContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Origin food card. Mark sits in the footer under the photo, not over it.")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.saveInk)
+                .accessibilityIdentifier("evidence.originFood")
+            Text("Origin · Google")
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.saveCocoa)
+                .accessibilityIdentifier("evidence.origin.google")
+            SaveOriginFoodCard(
+                place: Self.originPlace(
+                    id: Self.originGooglePlaceID,
+                    name: "Harbor Oven",
+                    photoURL: Self.googleThumbURL
+                )
+            )
+            Text("Origin · own")
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.saveCocoa)
+                .accessibilityIdentifier("evidence.origin.own")
+            SaveOriginFoodCard(
+                place: Self.originPlace(
+                    id: Self.originOwnPlaceID,
+                    name: "Own shot",
+                    photoURL: Self.ownThumbURL
+                )
+            )
+        }
+    }
+
+    private func widthLockedScene(width: CGFloat, identifier: String) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("All marked surfaces at \(Int(width))pt.")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.saveInk)
+                    .accessibilityIdentifier(identifier)
+                homeThumbsScene
+                drawerThumbsContent
+                tripStopContent
+                originFoodContent
+            }
+            .frame(width: width, alignment: .leading)
+        }
+        .onAppear(perform: seedPhotoFixtures)
+    }
+
+    private var xxxlScene: some View {
+        widthLockedScene(width: 402, identifier: "evidence.layoutXXXL")
+            .dynamicTypeSize(.xxxLarge)
     }
 
     private var googleCarouselPage: some View {
@@ -395,6 +575,122 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
     /// Ink that stays 3A2415 in Dark Mode so title/body remain visible on white.
     static let destinationInk = Color(hex: "3A2415")
     static let destinationMuted = Color(hex: "7A5D45")
+
+    static let googleThumbURL = URL(
+        string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=home-thumb"
+    )!
+    static let ownThumbURL = URL(string: "https://example.com/own-home-thumb.jpg")!
+    static let friendThumbURL = URL(string: "https://cdn.instagram.com/friend-home-thumb.jpg")!
+
+    static let tripGoogleStopID = UUID(uuidString: "20000000-0000-0000-0000-000000000306")!
+    static let tripOwnStopID = UUID(uuidString: "20000000-0000-0000-0000-000000000307")!
+    static let tripGooglePlaceID = UUID(uuidString: "21000000-0000-0000-0000-000000000306")!
+    static let tripOwnPlaceID = UUID(uuidString: "21000000-0000-0000-0000-000000000307")!
+    static let originGooglePlaceID = UUID(uuidString: "30000000-0000-0000-0000-000000000306")!
+    static let originOwnPlaceID = UUID(uuidString: "30000000-0000-0000-0000-000000000307")!
+
+    static func drawerResponse(photoURL: URL, title: String = "Harbor Oven") -> SaveSearchResponse {
+        let result = SaveSearchResult(
+            id: "evidence-drawer-\(title)",
+            objectType: .mapVisibleUnsavedPlace,
+            userState: .unsaved,
+            title: title,
+            subtitle: "Da'an, Taipei",
+            statusLabel: "Not saved yet",
+            sourceURL: nil,
+            sourcePlatform: .googleMaps,
+            category: .cafe,
+            cityOrArea: "Taipei",
+            latitude: 25.04,
+            longitude: 121.54,
+            rating: 4.6,
+            reviewCount: 128,
+            confidence: 0.82,
+            missingInfo: [],
+            evidence: [],
+            recoveryQueries: [],
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            canRunRecovery: false,
+            isRecommendationShell: false,
+            primaryAction: .savePlace,
+            photoURL: photoURL.absoluteString
+        )
+        return SaveSearchResponse(
+            query: title,
+            fromYourSave: SaveSearchSection(
+                id: "from-your-save",
+                title: "From your Savvy",
+                subtitle: "Memory first",
+                results: []
+            ),
+            newRecommendations: SaveSearchSection(
+                id: "public-discovery",
+                label: "PUBLIC DISCOVERY",
+                title: "Nearby",
+                subtitle: "Not saved yet",
+                results: [result]
+            )
+        )
+    }
+
+    static func tripStop(id: UUID, name: String) -> TripStop {
+        TripStop(
+            id: id,
+            placeId: id,
+            placeName: name,
+            day: 1,
+            orderIndex: 0,
+            startTime: "10:00 AM",
+            duration: 60,
+            note: "Cafe stop"
+        )
+    }
+
+    static func originPlace(id: UUID, name: String, photoURL: URL) -> Place {
+        Place(
+            id: id,
+            name: name,
+            address: "Da'an District, Taipei",
+            latitude: 25.04,
+            longitude: 121.54,
+            category: .cafe,
+            status: .wantToGo,
+            note: "Neighborhood bakery",
+            sourcePlatform: .other,
+            businessPhotoUrls: [photoURL.absoluteString],
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+    }
+
+    private func seedPhotoFixtures() {
+        CachedImageStore.shared.store(
+            Self.renderPhoto(
+                top: UIColor(red: 0.93, green: 0.90, blue: 0.82, alpha: 1),
+                bottom: UIColor(red: 0.78, green: 0.84, blue: 0.74, alpha: 1),
+                symbol: "cup.and.saucer.fill",
+                tint: UIColor(red: 0.42, green: 0.28, blue: 0.16, alpha: 1)
+            ),
+            for: Self.googleThumbURL
+        )
+        CachedImageStore.shared.store(
+            Self.renderPhoto(
+                top: UIColor(red: 0.98, green: 0.86, blue: 0.70, alpha: 1),
+                bottom: UIColor(red: 0.90, green: 0.55, blue: 0.42, alpha: 1),
+                symbol: "person.crop.square",
+                tint: UIColor(red: 0.28, green: 0.16, blue: 0.12, alpha: 1)
+            ),
+            for: Self.ownThumbURL
+        )
+        CachedImageStore.shared.store(
+            Self.renderPhoto(
+                top: UIColor(red: 0.72, green: 0.82, blue: 0.94, alpha: 1),
+                bottom: UIColor(red: 0.42, green: 0.55, blue: 0.78, alpha: 1),
+                symbol: "person.2.fill",
+                tint: UIColor(red: 0.16, green: 0.22, blue: 0.38, alpha: 1)
+            ),
+            for: Self.friendThumbURL
+        )
+    }
 
     static let evidencePlace = Place(
         id: UUID(uuidString: "10000000-0000-0000-0000-000000000306")!,

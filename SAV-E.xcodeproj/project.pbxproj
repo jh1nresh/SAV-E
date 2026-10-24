@@ -114,6 +114,7 @@
 		8F19E2D31087563F35CA0A16 /* SaveLLMClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFC9BC0C7A83CBF9C8941D35 /* SaveLLMClient.swift */; };
 		8F831A3D5B6DDC849A75F123 /* GoogleTakeoutImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE5D64894A6DE1E5916BF6 /* GoogleTakeoutImport.swift */; };
 		8F948E6B162F7A83125B0421 /* CachedAsyncImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20323F7C6699CFBFD967B6A3 /* CachedAsyncImage.swift */; };
+		A3060001C0FFEE0000000002 /* GooglePlacesPhotoSourceMark.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3060001C0FFEE0000000001 /* GooglePlacesPhotoSourceMark.swift */; };
 		8F94B9DBB26C7E23C4BB5077 /* SaveCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 146D4B13678DF31140133614 /* SaveCard.swift */; };
 		9214690FCE4C303443620FFE /* SavePlaceCorrectionEventTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AC4469B9D694ED480F9EAE1 /* SavePlaceCorrectionEventTests.swift */; };
 		92D7423DD70EA7DDFFD61450 /* SaveLocationIntentRecommendationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 425593995B5ED04867AD5D34 /* SaveLocationIntentRecommendationService.swift */; };
@@ -337,6 +338,7 @@
 		1EB51FCB4905E86D751E570C /* SaveRootViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveRootViews.swift; sourceTree = "<group>"; };
 		1F6F8442BD1B86791E0C2A26 /* TripGapLocalOptionsServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TripGapLocalOptionsServiceTests.swift; sourceTree = "<group>"; };
 		20323F7C6699CFBFD967B6A3 /* CachedAsyncImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedAsyncImage.swift; sourceTree = "<group>"; };
+		A3060001C0FFEE0000000001 /* GooglePlacesPhotoSourceMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooglePlacesPhotoSourceMark.swift; sourceTree = "<group>"; };
 		20C3E36D76FC12C5F397674A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		2165B79CDD65BE4B0A3392B1 /* MaatAnalysisCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaatAnalysisCache.swift; sourceTree = "<group>"; };
 		24848A1006E5A3FFBB38324D /* AccountSessionGateLogic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSessionGateLogic.swift; sourceTree = "<group>"; };
@@ -834,6 +836,7 @@
 			isa = PBXGroup;
 			children = (
 				20323F7C6699CFBFD967B6A3 /* CachedAsyncImage.swift */,
+				A3060001C0FFEE0000000001 /* GooglePlacesPhotoSourceMark.swift */,
 				E122FBBAACCE5011D59A9897 /* SavePlaceShareButton.swift */,
 			);
 			path = Components;
@@ -1564,6 +1567,7 @@
 				1F79DA008704EED14416137B /* AppLanguageSettings.swift in Sources */,
 				DEFD9661422D70531B103B4B /* AskSaveMemoryIntent.swift in Sources */,
 				8F948E6B162F7A83125B0421 /* CachedAsyncImage.swift in Sources */,
+				A3060001C0FFEE0000000002 /* GooglePlacesPhotoSourceMark.swift in Sources */,
 				6834F63ABDFBD48BAB5825EA /* CategoryPill.swift in Sources */,
 				CDC6527B4176C047D3886751 /* ClipContentPreview.swift in Sources */,
 				47A407D635778BAE0217C7EF /* Color+Theme.swift in Sources */,

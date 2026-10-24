@@ -239,8 +239,9 @@ import {
   assertSavedPlaceGrowthAllowed,
 } from "./savedPlaceLimit.js";
 import {
-  placeWriteIsSilentPhotoNoop,
-  sanitizePlaceWriteBody,
+  sanitizePlacePatchBody,
+  sanitizePlacePostBody,
+  sanitizePlaceWorkflowBody,
 } from "./googlePlacesPhotoWrite.js";
 import {
   FriendRatingError, listFriendRatings, getFriendRating, ownFriendRatings,
@@ -1592,7 +1593,7 @@ async function handlePlaces(
       return sendJson(response, { error: message }, 400);
     }
 
-    const body = sanitizePlaceWriteBody(withOwner(rawBody, userId));
+    const body = sanitizePlacePostBody(rawBody, userId);
     if (friendShareCode) {
       const link = await friendShareLinkForEvent(friendShareCode);
       if (friendShareLinkIsExpired(link)) {
@@ -1696,8 +1697,7 @@ async function handlePlaces(
     if (createdAt !== undefined && (typeof createdAt !== "string" || !Number.isFinite(Date.parse(createdAt)))) {
       return sendJson(response, { error: "created_at must be a valid timestamp" }, 400);
     }
-    const writable = writableFields(rawBody, ["id", "user_id", "created_at", "updated_at"]);
-    const body = sanitizePlaceWriteBody(writable);
+    const { persist: body, silentPhotoNoop } = sanitizePlacePatchBody(rawBody);
     let update = buildUpdate("places", body, placeFields);
     if (typeof createdAt === "string") {
       const separator = update ? "," : "";
@@ -1708,7 +1708,7 @@ async function handlePlaces(
       update.sql += `${separator} created_at = least(created_at, $${update.values.length}::timestamptz)`;
     }
     if (!update) {
-      if (placeWriteIsSilentPhotoNoop(writable)) {
+      if (silentPhotoNoop) {
         const { rows } = await pool.query(
           "select * from places where id = $1 and user_id = $2 limit 1",
           [placeId, userId],
@@ -6030,7 +6030,7 @@ async function insertFinalPlaceForDecision(
   }
   await assertNewSavedPlaceAllowed(client, userId, decision.finalPlace);
 
-  const body = withOwner(pickFields(sanitizePlaceWriteBody(decision.finalPlace), placeFields), userId);
+  const body = withOwner(pickFields(sanitizePlaceWorkflowBody(decision.finalPlace), placeFields), userId);
   const insert = buildInsert("places", body, [...placeFields, "user_id"]);
   const { rows } = await client.query(`${insert.sql} on conflict (id) do nothing returning id`, insert.values);
   if (!rows[0]) throw new WorkflowConflictError("final_place.id already exists; use an existing-place decision without final_place");

@@ -21,8 +21,20 @@ Light and dark sets:
 | `*-map-pins.png` | G6 | Apple Map symbol pins, no Google photos |
 | `*-city-page.png` | G7 | City card uses coral art, no Google photo |
 | `*-report-entry.png` | G8 | Viewer “View on Google Maps” report entry |
+| `*-home-thumbs.png` | G2 v2 | Home featured 44pt footer + recent 52pt below-thumb; single-line Google Maps |
+| `*-drawer-thumbs.png` | G2 v2 | Drawer search rows; mark in the card footer under the photo |
+| `*-trip-stop.png` | G2 v2 | Trip stop paper card; mark in the footer, not overlaid |
+| `*-origin-food.png` | G2 v2 | Origin food card; mark under the 326pt photo |
+| `375-all-surfaces.png` | G2 v2 | 375pt width: Home, Drawer, Trip, Origin (Google + own) |
+| `xxxl-all-surfaces.png` | G2 v2 | XXXL Dynamic Type, 16sp cap: same four surfaces |
+
+CI artifact (DESIGN judges these PNGs, not the Linux checkout):
+
+`pr306-google-photo-attribution-<sha>` from the `ios` workflow, written to `$RUNNER_TEMP/pr306-google-photo-attribution` by `SAVEGooglePhotoAttributionTests`.
 
 Launch argument: `--uitest-google-photo-attribution`.
+
+v2 mark: untranslated single-line “Google Maps”, Regular 400, 12sp–16sp, light `#1F1F1F` / dark white. If the complete string cannot fit, the surface shows a non-Google image instead.
 
 Contrast (P1-4): white author type over the cream fixture at gradient
 top 0.55 measures **5.62:1** in `testAttributionWhiteTextMeetsContrastOnLightPhoto`.
@@ -62,6 +74,7 @@ select
         or source_image_url ilike '%places.googleapis.com%/%/media%'
         or source_image_url ilike '%photo_reference=%'
         or source_image_url ~* '^places/.+/photos/'
+        or source_image_url ilike '%googleusercontent.com%/places/%'
       )
   ) as leftover_google_source_image_urls;
 ```

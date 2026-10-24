@@ -171,6 +171,77 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
             "G8 report entry is View on Google Maps on the viewer"
         )
         saveEvidence(app, name: "\(appearance)-report-entry")
+
+        openScene(app, "homeThumbs")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.homeThumbs"]
+                .waitForExistence(timeout: stepTimeout),
+            "Home 44pt featured and 52pt recent thumbs must render in the harness"
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.homeThumbs.featuredGoogle"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.homeThumbs.recentGoogle"]
+                .waitForExistence(timeout: stepTimeout)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.homeThumbs.recentOwn"].exists
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.homeThumbs.recentFriend"].exists
+        )
+        saveEvidence(app, name: "\(appearance)-home-thumbs")
+
+        openScene(app, "drawerThumbs")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.drawerThumbs"]
+                .waitForExistence(timeout: stepTimeout),
+            "Drawer search rows must render Google and own thumbs"
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["evidence.drawer.google"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["evidence.drawer.own"].exists)
+        saveEvidence(app, name: "\(appearance)-drawer-thumbs")
+
+        openScene(app, "tripStop")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.tripStop"]
+                .waitForExistence(timeout: stepTimeout),
+            "Trip stop paper cards must render Google and own thumbs"
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["evidence.trip.google"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["evidence.trip.own"].exists)
+        saveEvidence(app, name: "\(appearance)-trip-stop")
+
+        openScene(app, "originFood")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.originFood"]
+                .waitForExistence(timeout: stepTimeout),
+            "Origin food cards must render Google and own photos"
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["evidence.origin.google"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["evidence.origin.own"].exists)
+        app.swipeUp()
+        saveEvidence(app, name: "\(appearance)-origin-food")
+
+        if appearance == "light" {
+            openScene(app, "layout375")
+            XCTAssertTrue(
+                app.descendants(matching: .any)["evidence.layout375"]
+                    .waitForExistence(timeout: stepTimeout),
+                "375pt layout scene must render every marked surface"
+            )
+            saveEvidence(app, name: "375-all-surfaces")
+
+            openScene(app, "layoutXXXL")
+            XCTAssertTrue(
+                app.descendants(matching: .any)["evidence.layoutXXXL"]
+                    .waitForExistence(timeout: stepTimeout),
+                "XXXL Dynamic Type scene must render every marked surface"
+            )
+            saveEvidence(app, name: "xxxl-all-surfaces")
+        }
     }
 
     @MainActor
@@ -179,7 +250,7 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         XCTAssertTrue(button.waitForExistence(timeout: stepTimeout), "Scene \(scene) missing")
         if !button.isHittable {
             for _ in 0..<4 where !button.isHittable {
-                app.swipeLeft()
+                app.swipeUp()
             }
         }
         if !waitUntilHittable(button) {

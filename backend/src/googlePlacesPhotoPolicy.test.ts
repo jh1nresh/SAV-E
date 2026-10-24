@@ -22,6 +22,8 @@ test("founder Google photo cleanup SQL is transactional and non-destructive", ()
   assert.doesNotMatch(cleanup, /drop\s+(table|column)/i);
   assert.match(cleanup, /business_photo_urls = '\{\}'/);
   assert.match(cleanup, /source_image_url = null/);
+  assert.match(cleanup, /googleusercontent\.com%\/places\/%/);
+  assert.match(verify, /googleusercontent\.com%\/places\/%/);
   assert.match(verify, /leftover_business_photo_urls/);
   assert.match(verify, /leftover_google_source_image_urls/);
   assert.match(runbook, /railway run --service save-backend/);

@@ -55,9 +55,11 @@ struct SaveKraftStamp: View {
     let face: SaveKraftStampFace
     var size: SaveKraftStampSize = .grid
     var accessibilityIdentifier: String = "stamp.kraft"
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: GooglePlacesPhotoSourceMarkMetrics.gapAbove) {
             ZStack {
                 SavePostcardScallopedRectangle(depth: 3, pitch: 8)
                     .fill(SaveAtlasPalette.paper)
@@ -67,11 +69,15 @@ struct SaveKraftStamp: View {
                     }
                     .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 2, y: 1)
 
-                SaveKraftStampFaceView(face: illustratedFace, glyph: fallbackGlyph)
+                SaveKraftStampFaceView(face: resolvedFace, glyph: fallbackGlyph)
                     .padding(5)
             }
             .frame(width: size.face, height: size.face)
             .accessibilityHidden(true)
+
+            if showsGooglePhoto {
+                GooglePlacesPhotoSourceMark()
+            }
 
             Text(visibleTitle)
                 .font(SaveAtlasType.strong(size.title))
@@ -79,11 +85,40 @@ struct SaveKraftStamp: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.75)
-                .frame(maxWidth: size.face + 12)
+                .frame(maxWidth: tileWidth + 12)
         }
+        .frame(width: tileWidth)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(face == .locked ? "Locked stamp" : "Map Stamp, \(visibleTitle)")
+        .accessibilityLabel(stampAccessibilityLabel)
         .accessibilityIdentifier(accessibilityIdentifier)
+    }
+
+    private var tileWidth: CGFloat {
+        showsGooglePhoto
+            ? max(size.face, GooglePlacesPhotoSourceMarkMetrics.markWidth(for: dynamicTypeSize))
+            : size.face
+    }
+
+    private var photoURL: URL? {
+        if case .photo(let url) = face { return url }
+        return nil
+    }
+
+    private var showsGooglePhoto: Bool {
+        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
+            photoURL,
+            availableWidth: max(size.face, GooglePlacesPhotoSourceMarkMetrics.markWidth(for: dynamicTypeSize)),
+            dynamicType: dynamicTypeSize
+        )
+    }
+
+    private var stampAccessibilityLabel: String {
+        if case .locked = face { return "Locked stamp" }
+        let base = "Map Stamp, \(visibleTitle)"
+        if showsGooglePhoto {
+            return "\(base), \(GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: languageSettings.language))"
+        }
+        return base
     }
 
     private var visibleTitle: String {
@@ -108,6 +143,16 @@ struct SaveKraftStamp: View {
             return .scene(SaveKraftStampScene.from(name: title))
         }
     }
+
+    private var resolvedFace: SaveKraftStampFace {
+        if case .photo(let url) = face,
+           let url,
+           GooglePlacesPhotoURL.isGooglePlacesPhotoURL(url),
+           !showsGooglePhoto {
+            return .scene(SaveKraftStampScene.from(name: title))
+        }
+        return illustratedFace
+    }
 }
 
 struct SaveKraftStampFaceView: View {
@@ -125,19 +170,6 @@ struct SaveKraftStampFaceView: View {
                         switch phase {
                         case .success(let image):
                             image.resizable().scaledToFill()
-                                .overlay(alignment: .bottom) {
-                                    if let mark = GooglePlacesPhotoURL.thumbnailAttributionText(for: url) {
-                                        Text(mark)
-                                            .font(.system(size: 6, weight: .semibold))
-                                            .foregroundStyle(Color.white)
-                                            .lineLimit(1)
-                                            .minimumScaleFactor(0.6)
-                                            .padding(.horizontal, 2)
-                                            .padding(.vertical, 1)
-                                            .frame(maxWidth: .infinity)
-                                            .background(Color.black.opacity(0.55))
-                                    }
-                                }
                         default:
                             SaveKraftStampPixelArt(scene: SaveKraftStampScene.from(name: glyph))
                         }

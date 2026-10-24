@@ -412,7 +412,7 @@ private struct TripPlanTitleBlock: View {
     }
 }
 
-private struct TripStopRow: View {
+struct TripStopRow: View {
     let stop: TripStop
     let place: Place?
     let position: Int
@@ -424,6 +424,7 @@ private struct TripStopRow: View {
     let onMoveLater: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var cardWidth: CGFloat = 343
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -435,37 +436,67 @@ private struct TripStopRow: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .padding(10)
+            .background {
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { cardWidth = proxy.size.width }
+                        .onChange(of: proxy.size.width) { _, width in cardWidth = width }
+                }
+            }
             .saveAtlasPaper(radius: 18, shadow: true)
         }
     }
 
+    private var stopPhotoURL: URL? {
+        place?.businessPhotoURLStrings.first.flatMap(URL.init(string:))
+    }
+
+    private var showsGooglePhoto: Bool {
+        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
+            stopPhotoURL,
+            availableWidth: cardWidth,
+            dynamicType: dynamicTypeSize
+        )
+    }
+
+    private var editAccessibilityLabel: String {
+        let base = localized("Edit \(stop.placeName)", "編輯 \(stop.placeName)")
+        guard showsGooglePhoto else { return base }
+        return "\(base), \(GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: languageSettings.language))"
+    }
+
     private var editButton: some View {
         Button(action: onEdit) {
-            Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 10) {
-                        TripStopThumbnail(place: place)
-                        stopDetails
-                        Image(systemName: "chevron.right")
-                            .foregroundStyle(SaveAtlasPalette.ink)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
+            VStack(alignment: .leading, spacing: GooglePlacesPhotoSourceMarkMetrics.gapAbove) {
+                Group {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: 10) {
+                            TripStopThumbnail(place: place, showsGooglePhoto: showsGooglePhoto)
+                            stopDetails
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(SaveAtlasPalette.ink)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                    } else {
+                        HStack(spacing: 12) {
+                            TripStopThumbnail(place: place, showsGooglePhoto: showsGooglePhoto)
+                            stopDetails
+                            Spacer(minLength: 2)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(SaveAtlasPalette.ink)
+                        }
                     }
-                } else {
-                    HStack(spacing: 12) {
-                        TripStopThumbnail(place: place)
-                        stopDetails
-                        Spacer(minLength: 2)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(SaveAtlasPalette.ink)
-                    }
+                }
+                if showsGooglePhoto {
+                    GooglePlacesPhotoSourceMark()
                 }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityLabel(localized("Edit \(stop.placeName)", "編輯 \(stop.placeName)"))
+        .accessibilityLabel(editAccessibilityLabel)
         .accessibilityIdentifier("trip.stop.\(stop.id.uuidString).edit")
     }
 
@@ -597,11 +628,13 @@ private struct TripRouteNode: View {
 
 private struct TripStopThumbnail: View {
     let place: Place?
+    var showsGooglePhoto = false
 
     var body: some View {
         Group {
             if let urlString = place?.businessPhotoURLStrings.first,
-               let url = URL(string: urlString) {
+               let url = URL(string: urlString),
+               !GooglePlacesPhotoURL.isGooglePlacesPhotoURL(url) || showsGooglePhoto {
                 CachedAsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
