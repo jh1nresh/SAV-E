@@ -3,6 +3,27 @@ import XCTest
 
 final class ShareRouteCodecTests: XCTestCase {
     @MainActor
+    func testEmbeddedReceiptIdentityIsStableAcrossEncodingAndInputKeyOrder() throws {
+        let inputs = [
+            #"{"address":"7 Cap Road","category":"Cafe","id":"","lat":25.2,"lng":121.61,"name":"Offline Receipt","photoURLs":[],"sourceLabel":"Savvy"}"#,
+            #"{"sourceLabel":"Savvy","photoURLs":[],"name":"Offline Receipt","lng":121.61,"lat":25.2,"id":"","category":"Cafe","address":"7 Cap Road"}"#
+        ]
+        let expectedReceiptID = "embedded:fafc194c67fcbe46ca2d550ecd127c97572605925e236fe16e89db985e177f39"
+        var ownerAIDs = Set<UUID>()
+        for input in inputs {
+            let payload = try JSONDecoder().decode(SharedPlaceData.self, from: Data(input.utf8))
+            let receipt = SharedPlaceReceipt.embedded(payload)
+            for _ in 0..<32 {
+                XCTAssertEqual(receipt.id, expectedReceiptID)
+                let ownerA = receipt.privatePlace(ownerSubject: "account-a").id
+                ownerAIDs.insert(ownerA)
+                XCTAssertNotEqual(ownerA, receipt.privatePlace(ownerSubject: "account-b").id)
+            }
+        }
+        XCTAssertEqual(ownerAIDs.count, 1, "Repeated receipt saves must retain one recipient-owned identity")
+    }
+
+    @MainActor
     func testSharedPlaceShortCodeKeepsPRouteWithoutDecodingAsPayload() throws {
         let url = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/p/AbC123_x"))
 
@@ -465,6 +486,9 @@ final class ShareRouteCodecTests: XCTestCase {
 
         let receipt = try SharedPlaceReceipt.decode(data: data, code: "AbC123_x")
         let savedPlace = receipt.privatePlace()
+        XCTAssertEqual(receipt.privatePlace(ownerSubject: "a").id, receipt.privatePlace(ownerSubject: "a").id)
+        XCTAssertNotEqual(receipt.privatePlace(ownerSubject: "a").id, receipt.privatePlace(ownerSubject: "b").id)
+        XCTAssertNotEqual(receipt.privatePlace(ownerSubject: "a").id.uuidString.lowercased(), receipt.sourcePlaceID?.lowercased())
 
         XCTAssertEqual(receipt.verifiedSenderLabel, "Mina")
         XCTAssertEqual(receipt.sourcePlaceID, "11111111-2222-3333-4444-555555555555")

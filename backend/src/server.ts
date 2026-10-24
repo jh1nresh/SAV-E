@@ -111,8 +111,6 @@ import {
 import {
   clipListPlaceIdentities,
   clipListSaveResponse,
-  clipOnePlaceQuotaDecision,
-  clipSavedPlaceLimitBody,
   planClipListSave,
 } from "./clipListSave.js";
 import {
@@ -242,6 +240,15 @@ import {
   appAccountTokenFor, isEntitlementSchemaUnavailable,
 } from "./entitlementPersistence.js";
 import { deleteAccount } from "./accountDeletion.js";
+import {
+  SavedPlaceLimitError,
+  assertNewSavedPlaceAllowed,
+  updateSavedPlaceWithinLimit,
+  deleteSavedPlace,
+  savedPlaceDeleteScope,
+  savedPlaceGrowthSnapshot,
+  assertSavedPlaceGrowthAllowed,
+} from "./savedPlaceLimit.js";
 import {
   FriendRatingError, listFriendRatings, getFriendRating, ownFriendRatings,
   putFriendRating, withdrawFriendRating, saveFriendRating, savedFriendAttributions,
@@ -1283,7 +1290,7 @@ createServer(async (request, response) => {
       const result = await new LinkPlaceIntelligence(pool).sources(userId,id);
       return result ? sendJson(response,result) : sendJson(response,{error:"Place not found"},404);
     }
-    if (resource === "places") return await handlePlaces(request, response, id, userId);
+    if (resource === "places") return await handlePlaces(request, response, id, userId, url);
     if (resource === "trips") return await handleTrips(request, response, id, userId);
     if (resource === "profile") return await handleProfile(request, response, userId);
     if (resource === "follows") {
@@ -1311,6 +1318,7 @@ createServer(async (request, response) => {
     return sendJson(response, { error: "Not found" }, 404);
   } catch (error) {
     if (error instanceof FriendRatingError) return sendJson(response, { error: error.message }, error.status);
+    if (error instanceof SavedPlaceLimitError) return sendJson(response, error.body, error.status);
     if (error instanceof AnalysisProviderError) return sendJson(response,{error:"Gemini upstream request failed",status:error.upstreamStatus},502);
     if (error instanceof AnalysisControlError) return sendJson(response,{error:error.message,code:error.code},error.status);
     const status = error instanceof ApiError
@@ -1600,6 +1608,7 @@ async function handlePlaces(
   response: ServerResponse,
   placeId: string | undefined,
   userId: string,
+  url: URL,
 ): Promise<void> {
   if (request.method === "GET" && !placeId) {
     const rows = await fetchPlacesWithOptionalVisibility(userId);
@@ -1646,53 +1655,8 @@ async function handlePlaces(
       const client = await pool.connect();
       try {
         await client.query("begin");
-        await client.query("select pg_advisory_xact_lock(hashtext($1))", [`clip-list-save:${userId}`]);
-        const existing = await client.query(
-          "select id, name, latitude, longitude, google_place_id, provider_place_id from places where user_id = $1",
-          [userId],
-        );
-        const plan = planClipListSave({
-          items: [body],
-          existingIdentities: existing.rows.flatMap((row) => clipListPlaceIdentities(row)),
-          existingPlaces: existing.rows,
-          savedPlaceCount: existing.rows.length,
-        });
-        const decision = clipOnePlaceQuotaDecision(plan);
-        if (decision === "cap") {
-          await client.query("rollback");
-          return sendJson(response, clipSavedPlaceLimitBody, 403);
-        }
-        if (decision === "duplicate") {
-          const existingId = plan.alreadyExisting[0]?.id;
-          const existingRow = typeof existingId === "string"
-            ? (await client.query(
-              "select * from places where id = $1 and user_id = $2 limit 1",
-              [existingId, userId],
-            )).rows[0]
-            : undefined;
-          if (!existingRow) {
-            await client.query("rollback");
-            return sendJson(response, clipSavedPlaceLimitBody, 403);
-          }
-          await client.query(
-            `insert into friend_share_events (
-               shared_place_link_id,
-               sender_user_id,
-               recipient_user_id,
-               recipient_place_id,
-               event_type,
-               surface
-             )
-             values ($1, $2, $3, $4, $5, 'server')
-             on conflict do nothing`,
-            [link.id, link.user_id, userId, existingRow.id, "friend_share_duplicate_blocked"],
-          );
-          await client.query("commit");
-          return sendJson(response, {
-            place: formatPlace(asObject(existingRow)),
-            outcome: "already_saved",
-          }, 201);
-        }
+        await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+        const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
         const { rows } = await client.query(
           `${insert.sql}
            ${friendSharePlaceOriginConflictClause}
@@ -1717,6 +1681,7 @@ async function handlePlaces(
            on conflict do nothing`,
           [link.id, link.user_id, userId, canonicalPlace.id, terminalEvent],
         );
+        await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
         await client.query("commit");
         return sendJson(response, {
           place: formatPlace(canonicalPlace),
@@ -1731,16 +1696,34 @@ async function handlePlaces(
     }
 
     const insert = buildInsert("places", body, [...placeFields, "user_id"]);
-    const { rows } = await pool.query(
-      `${insert.sql}
-       on conflict (id) do update
-       set id = excluded.id
-       where places.user_id = excluded.user_id
-       returning *`,
-      insert.values,
-    );
-    if (!rows[0]) return sendJson(response, { error: "Place id conflict" }, 409);
-    return sendJson(response, formatPlace(rows[0]), 201);
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+      const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
+      const { rows } = await client.query(
+        `${insert.sql}
+         on conflict (id) do update
+         set id = excluded.id
+         where places.user_id = excluded.user_id
+         returning *`,
+        insert.values,
+      );
+      if (!rows[0]) {
+        await client.query("rollback");
+        return sendJson(response, { error: "Place id conflict" }, 409);
+      }
+      // PostgreSQL may coerce accepted JSON fields (for example string float8
+      // coordinates). Gate actual stored rows, not a raw-request approximation.
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
+      await client.query("commit");
+      return sendJson(response, formatPlace(rows[0]), 201);
+    } catch (error) {
+      await client.query("rollback");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   if (request.method === "PATCH" && placeId) {
@@ -1763,21 +1746,15 @@ async function handlePlaces(
     }
     if (!update) return sendJson(response, { error: "No writable fields" }, 400);
 
-    const values = [...update.values, placeId, userId];
-    const { rows } = await pool.query(
-      `${update.sql} where id = $${values.length - 1} and user_id = $${values.length} returning *`,
-      values,
-    );
-    if (!rows[0]) return sendJson(response, { error: "Place not found" }, 404);
-    return sendJson(response, formatPlace(rows[0]));
+    const updated = await updateSavedPlaceWithinLimit(pool, userId, placeId, update);
+    if (!updated) return sendJson(response, { error: "Place not found" }, 404);
+    return sendJson(response, formatPlace(updated));
   }
 
   if (request.method === "DELETE" && placeId) {
-    const { rows } = await pool.query(
-      "delete from places where id = $1 and user_id = $2 returning id",
-      [placeId, userId],
-    );
-    if (!rows[0]) return sendJson(response, { error: "Place not found" }, 404);
+    const scope = savedPlaceDeleteScope(url.searchParams.getAll("scope"));
+    if (!scope) return sendJson(response, { error: "Unsupported place delete scope" }, 400);
+    await deleteSavedPlace(pool, userId, placeId, scope);
     return sendJson(response, null, 204);
   }
 
@@ -4666,6 +4643,8 @@ async function handleCaptureSearchRecovery(
         try {
           await client.query("begin");
           await client.query("set local statement_timeout='10s'");
+          await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+          const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
           const originalRun = workflowRunId ? await lockedWorkflowRun(client, workflowRunId, userId) : undefined;
           await client.query("select id from captures where id=$1 and user_id=$2 for update",[captureId,userId]);
           const assignedRuns = new Set<string>();
@@ -4702,6 +4681,7 @@ async function handleCaptureSearchRecovery(
           if (recovery.semanticStatus === "no_place_evidence" && recovery.errors.length === 0) await completeEmptySourceAnalysis(client, captureId, workflowRunId);
           await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,captureId,userId]);
           await client.query("update captures set status='review',source_resolution=case when $3::jsonb is null then source_resolution else coalesce(source_resolution,'{}'::jsonb) || $3::jsonb end,updated_at=now() where id=$1 and user_id=$2",[captureId,userId,sourceResolution?JSON.stringify(sourceResolution):null]);
+          await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
           await client.query("commit");
         } catch(error) { await client.query("rollback"); throw error; } finally { client.release(); }
         if(!requestedAnalysis) await analysisUsageStore.finish(userId,aid,recovery.receipt.failureReason?.kind === "provider_failure" ? "failed" : recovery.candidates.length ? "review_candidate":"source_only",[captureId]);
@@ -4819,11 +4799,14 @@ async function handleMemoryCaptures(
     const client = await pool.connect();
     try {
       await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+      const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
       if(aid) await analysisUsageStore.owner(userId,aid,client);
       const reused = await reuseCapture(client, userId, body);
       const rows = reused ? [reused] : (await client.query(`${insert.sql} returning *`, insert.values)).rows;
       if (!reused) rows[0] = await recordCapturedSourceText(client, rows[0], body.raw_text);
       if(aid) await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,rows[0].id,userId]);
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
       await client.query("commit");
       return sendJson(response, formatCapture(rows[0]), 201);
     } catch(error) { await client.query("rollback"); throw error; }
@@ -4885,9 +4868,12 @@ async function handleMemoryCandidates(
     const client = await pool.connect();
     try {
       await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+      const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
       const prepared = await prepareCandidate(client, body);
       const insert = buildInsert("place_candidates", prepared.body, placeCandidateFields);
       const row = prepared.existing ?? (await client.query(`${insert.sql} returning *`, insert.values)).rows[0];
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
       await client.query("commit");
       return sendJson(response, formatPlaceCandidate(row), prepared.existing ? 200 : 201);
     } catch (error) { await client.query("rollback"); throw error; }
@@ -4905,6 +4891,8 @@ async function handleMemoryCandidates(
     const client = await pool.connect();
     try {
       await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+      const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
       await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [`candidate-decision:${userId}`]);
       const { rows } = await client.query(
         `${update.sql}
@@ -4916,6 +4904,7 @@ async function handleMemoryCandidates(
       );
       if (!rows[0]) throw new ApiError(404, "Candidate not found");
       if (body.status === "saved" || body.status === "confirmed") await reconcileSavedCandidates(client, userId, candidateId);
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
       await client.query("commit");
       return sendJson(response, formatPlaceCandidate(rows[0]));
     } catch (error) { await client.query("rollback"); throw error; }
@@ -5840,6 +5829,8 @@ async function recordPlaceRecoveryDecision(
   const client = await pool.connect();
   try {
     await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+    const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
     let run = await lockedWorkflowRun(client, runId, userId);
     let currentReceipt = await currentAnalysisReceipt(client, runId);
     if (!currentReceipt) {
@@ -5932,6 +5923,7 @@ async function recordPlaceRecoveryDecision(
           "select * from workflow_receipts where id = $1",
           [replay.receipt_id],
         );
+        await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
         await client.query("commit");
         return {
           created: false,
@@ -5956,6 +5948,7 @@ async function recordPlaceRecoveryDecision(
     });
     if (plan.kind === "idempotent") {
       const { rows: receiptRows } = await client.query("select * from workflow_receipts where id = $1", [plan.receiptId]);
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
       await client.query("commit");
       return {
         created: false,
@@ -5964,6 +5957,7 @@ async function recordPlaceRecoveryDecision(
       };
     }
 
+    // Call site only. The places insert and cap check live inside the helper.
     await insertFinalPlaceForDecision(client, userId, decision);
     await validateDecisionReferences(client, runId, userId, stringValue(run.result_type), decision);
     validateDecisionAttempt({
@@ -6074,6 +6068,7 @@ async function recordPlaceRecoveryDecision(
     }
     await refreshWorkflowReputationSnapshot(client, userId, updatedRun, currentReceipt);
 
+    await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
     await client.query("commit");
     return {
       created: true,
@@ -6107,6 +6102,17 @@ async function insertFinalPlaceForDecision(
   ) {
     throw new WorkflowContractError("final_place requires name, address, latitude, and longitude");
   }
+
+  // recordPlaceRecoveryDecision already owns the raw-user lock, acquired
+  // before the workflow/candidate row locks and held through the final guard.
+  const existing = await client.query(
+    "select id from places where id = $1 and user_id = $2",
+    [decision.finalPlaceId, userId],
+  );
+  if (existing.rows[0]) {
+    throw new WorkflowConflictError("final_place.id already exists; use an existing-place decision without final_place");
+  }
+  await assertNewSavedPlaceAllowed(client, userId, decision.finalPlace);
 
   const body = withOwner(pickFields(decision.finalPlace, placeFields), userId);
   const insert = buildInsert("places", body, [...placeFields, "user_id"]);

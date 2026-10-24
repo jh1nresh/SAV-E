@@ -147,6 +147,10 @@ struct SaveTileTownHomeView: View {
         }
         .shadow(color: SaveAtlasPalette.ink.opacity(0.12), radius: 12, y: 6)
         .fixedSize(horizontal: false, vertical: true)
+        // Without `.contain`, XCTest merges the sheet into one Button whose
+        // label is "Manage saved places" — the same as header `home.saves` —
+        // and `home.more.saves` never appears as its own control.
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.more.sheet")
     }
 
