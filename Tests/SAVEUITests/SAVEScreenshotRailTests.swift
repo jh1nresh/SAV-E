@@ -651,6 +651,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             home.descendants(matching: .any)["home.miniMap"].exists,
             "Home has no map component"
         )
+        let homeEatSelected = app.buttons["home.eat"].isSelected
+        let homeGoSelected = app.buttons["home.go"].isSelected
+        let homeCity = app.descendants(matching: .any)["home.citySwitcher"].label
         let cafe = app.buttons["home.place.10000000-0000-0000-0000-000000000001"]
         XCTAssertTrue(cafe.waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(
@@ -667,12 +670,38 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let peek = app.descendants(matching: .any)["map.peek.card"]
         XCTAssertTrue(peek.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(peek.label.contains("Taipei Window Cafe"))
-        XCTAssertTrue(app.descendants(matching: .any)["map.eat"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["map.city"].exists)
+        let peekName = app.staticTexts["map.peek.name"]
+        if peekName.exists {
+            XCTAssertTrue(peekName.label.contains("Taipei Window Cafe"), peekName.label)
+        }
+        let mapEat = app.descendants(matching: .any)["map.eat"]
+        let mapGo = app.descendants(matching: .any)["map.go"]
+        let mapCity = app.descendants(matching: .any)["map.city"]
+        XCTAssertTrue(mapEat.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(mapGo.exists)
+        XCTAssertTrue(mapCity.exists)
+        XCTAssertEqual(mapEat.isSelected, homeEatSelected)
+        XCTAssertEqual(mapGo.isSelected, homeGoSelected)
+        if homeCity.contains("Near you") {
+            XCTAssertEqual(mapCity.label, "Near you")
+        } else if homeCity.contains("附近") {
+            XCTAssertEqual(mapCity.label, "附近")
+        }
+        let pin = app.descendants(matching: .any)["map.tilePin.10000000-0000-0000-0000-000000000001"]
+        XCTAssertTrue(
+            pin.waitForExistence(timeout: stepTimeout),
+            "Map exposes map.tilePin.<id> for the focused Home place"
+        )
+        XCTAssertTrue(
+            pin.isSelected || pin.label.contains("Selected Map Stamp"),
+            "View on map must select the Home place pin: \(pin.label)"
+        )
+        attach(app, name: "B5-show-on-map")
     }
 
     @MainActor
     func testCaptureAtlasProductionParity() throws {
+        try captureAtlasHomeTPEA()
         let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
@@ -687,7 +716,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemo(app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
-        attach(app, name: "atlas-home")
 
         openSavesFromHome(app: app)
         XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
@@ -3215,6 +3243,67 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         return elements.first(where: \.exists) ?? elements[0]
     }
 
+    /// Home-only TPE-A raster for `atlas-home`. Does not use
+    /// `--uitest-atlas-parity-fixture`, so saves/plan/map/friends keep their
+    /// existing fixture and md5s. Does not replace `ProductionTargets/home.png`.
+    @MainActor
+    private func captureAtlasHomeTPEA() throws {
+        let app = makeApp(
+            launchArguments: tpeaLaunchArguments(
+                language: "en",
+                location: "daan",
+                hintCount: 1,
+                clock: "2026-10-24T20:00:00",
+                dark: false
+            ),
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
+        )
+        launch(app)
+        defer { terminate(app) }
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        XCTAssertFalse(app.descendants(matching: .any)["home.locationPrompt"].exists)
+        let hint = app.descendants(matching: .any)["home.review"]
+        XCTAssertTrue(hint.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(hint.label.contains("Good evening · 1 clue waiting · Review ›"), hint.label)
+        XCTAssertTrue(app.buttons["home.eat"].isSelected)
+        XCTAssertFalse(app.buttons["home.go"].isSelected)
+        for suffix in 1...5 {
+            let id = String(format: "home.place.60000000-0000-0000-0000-%012d", suffix)
+            XCTAssertTrue(app.buttons[id].waitForExistence(timeout: stepTimeout), id)
+        }
+        XCTAssertTrue(app.buttons["home.place.60000000-0000-0000-0000-000000000001"].label.contains("Fujin Tree 353 Cafe"))
+        XCTAssertFalse(app.buttons["home.place.60000000-0000-0000-0000-000000000006"].exists)
+        attach(app, name: "atlas-home")
+    }
+
+    private func tpeaLaunchArguments(
+        language: String,
+        location: String,
+        hintCount: Int,
+        clock: String,
+        dark: Bool,
+        fixture: String = "tpea"
+    ) -> [String] {
+        var arguments = [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed",
+            "--uitest-home-\(fixture)",
+            "--uitest-location-\(location)",
+            "--uitest-home-hint-count=\(hintCount)",
+            "--uitest-fixed-now=\(clock)",
+            "-save.appLanguage", language,
+        ]
+        if dark {
+            arguments.append(contentsOf: ["--uitest-force-dark", "-AppleInterfaceStyle", "Dark"])
+        } else {
+            arguments.append("--uitest-force-light")
+        }
+        return arguments
+    }
+
     /// Live Home is the Doodle Eat/Go list with no map component. The Atlas gate still
     /// compares `five-tab-home` to `ProductionTargets/home.png` unmasked at
     /// 0.90. Capture that raster from the Codex Tiantan
@@ -3489,6 +3578,243 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.place.50000000-0000-0000-0000-000000000001"].exists)
         XCTAssertTrue(app.buttons["home.place.50000000-0000-0000-0000-000000000003"].exists)
         attach(app, name: name)
+    }
+
+    /// TPE evidence attachments only. Not a parity baseline. CI boots
+    /// iPhone 16 Pro (~402pt). #295's 375pt SE shots are a dedicated
+    /// workflow step this PR is not allowed to add; TPE-D records 402pt
+    /// at the injected 14:00 clock instead of faking 375pt images.
+    @MainActor
+    func testHomeTPEAEvidence() throws {
+        try captureTPEAHome(
+            language: "en",
+            dark: true,
+            name: "TPE-A-dark-en"
+        )
+        try captureTPEAHome(
+            language: "zh-Hant",
+            dark: false,
+            name: "TPE-A-light-zh"
+        )
+        try captureTPEAHome(
+            language: "zh-Hant",
+            dark: true,
+            name: "TPE-A-dark-zh"
+        )
+        try captureTPEAGoFilter()
+        try captureTPEBDenied(language: "en", name: "TPE-B-denied-light-en")
+        try captureTPEBDenied(language: "zh-Hant", name: "TPE-B-denied-light-zh")
+        try captureTPEHint(
+            count: 0,
+            language: "en",
+            clock: "2026-10-24T20:00:00",
+            name: "TPE-C-n0-light-en"
+        )
+        try captureTPEHint(
+            count: 100,
+            language: "en",
+            clock: "2026-10-24T20:00:00",
+            name: "TPE-C-n99-light-en"
+        )
+        for language in ["en", "zh-Hant"] {
+            let tag = language == "en" ? "en" : "zh"
+            for count in [0, 1, 100] {
+                let label = count > 99 ? "n99" : "n\(count)"
+                try captureTPEHint(
+                    count: count,
+                    language: language,
+                    clock: "2026-10-24T14:00:00",
+                    name: "TPE-D-402pt-\(label)-\(tag)-1400"
+                )
+            }
+        }
+        try captureTPEELongWrap()
+        try captureTPEAHome(
+            language: "en",
+            dark: false,
+            clock: "2026-10-24T08:00:00",
+            name: "TPE-A-clock-0800-en",
+            expectedGreeting: "Good morning"
+        )
+        try captureTPEAHome(
+            language: "en",
+            dark: false,
+            clock: "2026-10-24T14:00:00",
+            name: "TPE-A-clock-1400-en",
+            expectedGreeting: "Good afternoon"
+        )
+    }
+
+    @MainActor
+    private func captureTPEAHome(
+        language: String,
+        dark: Bool,
+        clock: String = "2026-10-24T20:00:00",
+        name: String,
+        expectedGreeting: String? = nil
+    ) throws {
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        if dark {
+            XCUIDevice.shared.appearance = .dark
+        }
+        let app = makeApp(
+            launchArguments: tpeaLaunchArguments(
+                language: language,
+                location: "daan",
+                hintCount: 1,
+                clock: clock,
+                dark: dark
+            ),
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
+        )
+        launch(app)
+        defer { terminate(app) }
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        XCTAssertFalse(app.descendants(matching: .any)["home.locationPrompt"].exists)
+        XCTAssertTrue(app.buttons["home.eat"].isSelected)
+        for suffix in 1...5 {
+            let id = String(format: "home.place.60000000-0000-0000-0000-%012d", suffix)
+            XCTAssertTrue(app.buttons[id].waitForExistence(timeout: stepTimeout), id)
+        }
+        if let expectedGreeting {
+            XCTAssertTrue(
+                app.descendants(matching: .any)["home.review"].label.contains(expectedGreeting),
+                app.descendants(matching: .any)["home.review"].label
+            )
+        }
+        let width = Int(app.frame.width.rounded())
+        let metadata = XCTAttachment(string: "viewport=\(app.frame); name=\(name); width=\(width)")
+        metadata.name = "\(name)-viewport-\(width)"
+        metadata.lifetime = .keepAlways
+        add(metadata)
+        attach(app, name: name)
+    }
+
+    @MainActor
+    private func captureTPEAGoFilter() throws {
+        let app = makeApp(
+            launchArguments: tpeaLaunchArguments(
+                language: "en",
+                location: "daan",
+                hintCount: 1,
+                clock: "2026-10-24T20:00:00",
+                dark: false
+            ),
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
+        )
+        launch(app)
+        defer { terminate(app) }
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        tapReachable(app.buttons["home.go"])
+        XCTAssertTrue(app.buttons["home.go"].isSelected)
+        for suffix in 6...8 {
+            let id = String(format: "home.place.60000000-0000-0000-0000-%012d", suffix)
+            XCTAssertTrue(app.buttons[id].waitForExistence(timeout: stepTimeout), id)
+        }
+        XCTAssertFalse(app.buttons["home.place.60000000-0000-0000-0000-000000000001"].exists)
+        attach(app, name: "TPE-A-go-light-en")
+    }
+
+    @MainActor
+    private func captureTPEBDenied(language: String, name: String) throws {
+        let app = makeApp(
+            launchArguments: tpeaLaunchArguments(
+                language: language,
+                location: "denied",
+                hintCount: 1,
+                clock: "2026-10-24T20:00:00",
+                dark: false
+            ),
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
+        )
+        launch(app)
+        defer { terminate(app) }
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.locationPrompt"].waitForExistence(timeout: stepTimeout))
+        let labels = (1...5).compactMap { suffix -> String? in
+            let id = String(format: "home.place.60000000-0000-0000-0000-%012d", suffix)
+            let row = app.buttons[id]
+            XCTAssertTrue(row.waitForExistence(timeout: stepTimeout), id)
+            return row.label
+        }
+        let districts = ["大安區", "信義區", "中山區", "松山區"].filter { token in
+            labels.contains { $0.contains(token) }
+        }
+        XCTAssertGreaterThanOrEqual(districts.count, 2, "TPE-B must show ≥2 districts: \(labels)")
+        attach(app, name: name)
+    }
+
+    @MainActor
+    private func captureTPEHint(
+        count: Int,
+        language: String,
+        clock: String,
+        name: String
+    ) throws {
+        let app = makeApp(
+            launchArguments: tpeaLaunchArguments(
+                language: language,
+                location: "daan",
+                hintCount: count,
+                clock: clock,
+                dark: false
+            ),
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
+        )
+        launch(app)
+        defer { terminate(app) }
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        let hint = app.descendants(matching: .any)["home.review"]
+        XCTAssertTrue(hint.waitForExistence(timeout: stepTimeout))
+        if count == 0 {
+            XCTAssertFalse(app.buttons["home.review.action"].exists)
+        } else {
+            XCTAssertTrue(app.buttons["home.review.action"].waitForExistence(timeout: stepTimeout))
+        }
+        let width = Int(app.frame.width.rounded())
+        let metadata = XCTAttachment(string: "viewport=\(app.frame); hint=\(hint.label); name=\(name)")
+        metadata.name = "\(name)-viewport-\(width)"
+        metadata.lifetime = .keepAlways
+        add(metadata)
+        attach(app, name: name)
+    }
+
+    @MainActor
+    private func captureTPEELongWrap() throws {
+        let app = makeApp(
+            launchArguments: tpeaLaunchArguments(
+                language: "en",
+                location: "denied",
+                hintCount: 0,
+                clock: "2026-10-24T20:00:00",
+                dark: false,
+                fixture: "tpee"
+            ),
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
+        )
+        launch(app)
+        defer { terminate(app) }
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        let longName = app.buttons["home.place.70000000-0000-0000-0000-000000000001"]
+        XCTAssertTrue(longName.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(longName.label.contains("Very Long Corner Breakfast"))
+        XCTAssertTrue(
+            longName.label.contains("District") || longName.label.contains("區"),
+            "TPE-E must keep the district visible: \(longName.label)"
+        )
+        attach(app, name: "TPE-E-long-wrap-denied-en")
     }
 
     @MainActor

@@ -747,12 +747,15 @@ row. Collected opens
 Passport. Wordmark is Caveat SemiBold 34; the city line is Caveat 20 with
 a 2pt coral underline under the city word only. Body copy stays
 `SaveAtlasType`. Coral is `SaveAtlasPalette.coral` (#F26B4A light,
-#D97861 dark). Founder-approved DESIGN v2 is the Home target. H1–H4 CI
-rasters are judged manually by DESIGN;
-the 0.90 visual-parity score is not evidence. Historical DESIGN v2
-`design/doodle-targets-2026-10-20/home-light.png` at `eade369`
-(exact 402×874; `home-dark.png`)
-is archive only. v1 is retired.
+#D97861 dark). DESIGN v2 is the Home layout contract. The Home
+visual-parity TARGET remains `ProductionTargets/home.png`
+(md5 `79ae24aaf02002cd10f429c2869dcfc0`), the pre-v2 baseline, until
+the founder personally approves a new raster. H1–H4 CI rasters are
+judged manually by DESIGN; the 0.90 visual-parity score is not
+evidence and is an expected FAIL on the current list-only Home.
+Historical DESIGN v2 `design/doodle-targets-2026-10-20/home-light.png`
+at `eade369` (exact 402×874; `home-dark.png`) is archive only. v1 is
+retired.
 
 ### Sign-In
 

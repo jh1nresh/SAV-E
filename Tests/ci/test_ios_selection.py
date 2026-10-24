@@ -26,6 +26,7 @@ class CoverageTests(unittest.TestCase):
             selection.RAIL + "testHomeShowOnMapFocusesPlace",
             selection.RAIL + "testHomeHintCountEvidence",
             selection.RAIL + "testHomeTaipeiGrantedDistances",
+            selection.RAIL + "testHomeTPEAEvidence",
         })
         self.assertTrue(full["trip"])
         self.assertTrue(full["units"])

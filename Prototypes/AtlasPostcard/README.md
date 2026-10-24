@@ -55,16 +55,20 @@ Production parity uses `Reference/ProductionTargets`. The original
 `Reference/Targets` remain the immutable inputs for deterministic illustration
 extraction, so approving a UI refresh cannot silently alter generated assets.
 
-The Home production target is DESIGN v2's exact 402×874
-`home-light.png` from `design/doodle-targets-2026-10-20` at `eade369`.
-`home-dark.png` sits next to it for DESIGN comparison.
-Home grades unmasked against `ProductionTargets/home.png`. Grade position,
-size, color and font style. v1 is retired. Those rasters are rendered
-at 1× 402×874, not a crop. `VisualParity.swift` still accepts only a
-1× 402 × 874 target. Founder sign-off 2026-10-20:
-「改成跟手繪稿比對，門檻維持 0.90」. Saves, Plan, and Map targets stay
-on their current locks until those Doodle PRs. The `0.90` threshold
-remains unchanged.
+The Home production TARGET is still the old
+`Reference/ProductionTargets/home.png` baseline
+(md5 `79ae24aaf02002cd10f429c2869dcfc0`), **not** DESIGN v2
+`home-light.png` at `eade369`. That v2 raster is archive / DESIGN
+comparison only until the founder personally approves a new Home
+baseline. Home grades unmasked against the old target at 0.90; the
+score is expected to FAIL on the current list-only Home and is not
+evidence. Do not swap `home.png`, do not add a Home mask, and do not
+lower the threshold. `home-dark.png` is DESIGN comparison only and
+does not enter parity. `VisualParity.swift` still accepts only a
+1× 402 × 874 target. Unmasked Home uses the legacy composite; the
+optional `--mask` path reports position, size, color, and fontStyle
+sub-scores but is not applied to Home. Saves, Plan, and Map targets
+stay on their current locks until those Doodle PRs.
 
 ## Boundaries
 

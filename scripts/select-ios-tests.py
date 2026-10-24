@@ -67,6 +67,7 @@ FULL = list(BASELINE) + [
     RAIL + "testHomeShowOnMapFocusesPlace",
     RAIL + "testHomeHintCountEvidence",
     RAIL + "testHomeTaipeiGrantedDistances",
+    RAIL + "testHomeTPEAEvidence",
 ]
 
 # Temporary #279 iteration profiles. Empty SAVE_UI_TEST_FOCUS keeps default

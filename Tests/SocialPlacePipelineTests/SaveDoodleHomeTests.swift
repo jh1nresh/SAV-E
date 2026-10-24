@@ -938,6 +938,85 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(afternoon.leadingFull, "Good afternoon")
     }
 
+    func testUITestClockParsesDeviceLocalFixedNow() throws {
+        let evening = try XCTUnwrap(SaveUITestClock.parseLocal("2026-10-24T20:00:00"))
+        XCTAssertEqual(Calendar.current.component(.hour, from: evening), 20)
+        XCTAssertEqual(SaveDoodleHomeHint.period(at: evening), .evening)
+        let morning = try XCTUnwrap(SaveUITestClock.parseLocal("2026-10-24T08:00:00"))
+        XCTAssertEqual(SaveDoodleHomeHint.period(at: morning), .morning)
+        let afternoon = try XCTUnwrap(SaveUITestClock.parseLocal("2026-10-24T14:00:00"))
+        XCTAssertEqual(SaveDoodleHomeHint.period(at: afternoon), .afternoon)
+        XCTAssertNil(SaveUITestClock.parseLocal("not-a-date"))
+    }
+
+    func testHomeTPEAFixtureDefaultEatShowsFiveComputedDistances() throws {
+        let now = try XCTUnwrap(SaveUITestClock.parseLocal("2026-10-24T20:00:00"))
+        let places = ReviewDemoSeed.homeTPEAPlaces(now: now)
+        XCTAssertEqual(places.count, 8)
+        XCTAssertEqual(places[0].name, "Fujin Tree 353 Cafe")
+        XCTAssertNil(places[0].businessPhotoUrls)
+        XCTAssertNil(places[0].sourceImageUrl)
+        let daan = CLLocation(latitude: 25.0296, longitude: 121.5347)
+        let eat = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .nearYou,
+            location: daan,
+            locationDenied: false
+        )
+        XCTAssertEqual(eat.map(\.place.name), [
+            "Fujin Tree 353 Cafe",
+            "Lunch Noodle",
+            "Roast Duck Kitchen",
+            "Window Cafe",
+            "Night Market Bar",
+        ])
+        let expected: [CLLocationDistance] = [280, 650, 1_200, 2_100, 2_990]
+        for (item, meters) in zip(eat, expected) {
+            let distance = try XCTUnwrap(item.distance)
+            XCTAssertEqual(distance, meters, accuracy: 25, item.place.name)
+            XCTAssertEqual(
+                SaveDoodleHomeCatalog.distanceText(distance),
+                SaveDoodleHomeCatalog.distanceText(meters)
+            )
+        }
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.visitStatusText(
+                status: .visited,
+                visitedAt: places[0].createdAt,
+                now: now,
+                language: .english
+            ),
+            "visited today"
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.visitStatusText(
+                status: .visited,
+                visitedAt: places[2].createdAt,
+                now: now,
+                language: .english
+            ),
+            "visited 3d ago"
+        )
+        let go = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .go,
+            selection: .nearYou,
+            location: daan,
+            locationDenied: false
+        )
+        XCTAssertEqual(go.map(\.place.name), [
+            "Temple Courtyard",
+            "Lantern Alley Park",
+            "Forest Walk",
+        ])
+        XCTAssertEqual(SaveDoodleOfficialSticker.named(for: .cafe, placeName: "Fujin Tree 353 Cafe"), .coffee)
+        XCTAssertEqual(SaveDoodleOfficialSticker.named(for: .food, placeName: "Lunch Noodle"), .noodle)
+        XCTAssertEqual(SaveDoodleOfficialSticker.named(for: .food, placeName: "Roast Duck Kitchen"), .duck)
+        XCTAssertEqual(SaveDoodleOfficialSticker.named(for: .bar, placeName: "Night Market Bar"), .lantern)
+        XCTAssertEqual(SaveDoodleOfficialSticker.named(for: .attraction, placeName: "Temple Courtyard"), .temple)
+    }
+
     func testTaipeiFixtureFirstRowDistanceIsNotEmpty() throws {
         let here = CLLocation(latitude: 25.0330, longitude: 121.5654)
         let cafe = place(
@@ -1452,7 +1531,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(design.contains("small Memo elephant"))
         XCTAssertTrue(design.contains("68pt"))
         XCTAssertTrue(design.contains("hint row is always shown"))
-        XCTAssertTrue(design.contains("Founder-approved DESIGN v2 is the Home target"))
+        XCTAssertTrue(design.contains("DESIGN v2 is the Home layout contract"))
+        XCTAssertTrue(design.contains("79ae24aaf02002cd10f429c2869dcfc0"))
         XCTAssertTrue(design.contains("0.90 visual-parity score is not evidence"))
         XCTAssertTrue(home.contains("placeCases"))
         XCTAssertFalse(home.contains("SaveDoodleElephant"), "Home no longer displays the retired elephant artwork")
@@ -1472,6 +1552,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         let readme = try source(at: "Prototypes/AtlasPostcard/README.md")
         XCTAssertTrue(readme.contains("home-light.png"))
         XCTAssertTrue(readme.contains("eade369"))
+        XCTAssertTrue(readme.contains("79ae24aaf02002cd10f429c2869dcfc0"))
+        XCTAssertTrue(readme.contains("not** DESIGN v2") || readme.contains("**not** DESIGN v2"))
         XCTAssertFalse(readme.contains("home-mask.png"))
         XCTAssertTrue(readme.contains("unmasked"))
         XCTAssertTrue(readme.contains("position"))
@@ -1589,8 +1671,20 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(selector.contains("testHomeDesignProductStates"))
         XCTAssertTrue(selector.contains("testHomeHintCountEvidence"))
         XCTAssertTrue(selector.contains("testHomeTaipeiGrantedDistances"))
+        XCTAssertTrue(selector.contains("testHomeTPEAEvidence"))
         XCTAssertTrue(rail.contains("func testHomeHintCountEvidence"))
         XCTAssertTrue(rail.contains("func testHomeTaipeiGrantedDistances"))
+        XCTAssertTrue(rail.contains("func testHomeTPEAEvidence"))
+        XCTAssertTrue(rail.contains("func captureAtlasHomeTPEA"))
+        XCTAssertTrue(rail.contains("--uitest-home-tpea"))
+        XCTAssertTrue(rail.contains("--uitest-fixed-now=2026-10-24T20:00:00"))
+        XCTAssertTrue(rail.contains("TPE-A-dark-en"))
+        XCTAssertTrue(rail.contains("TPE-A-go-light-en"))
+        XCTAssertTrue(rail.contains("TPE-B-denied-light-en"))
+        XCTAssertTrue(rail.contains("TPE-C-n0-light-en"))
+        XCTAssertTrue(rail.contains("TPE-D-402pt-n99-en-1400"))
+        XCTAssertTrue(rail.contains("TPE-E-long-wrap-denied-en"))
+        XCTAssertTrue(rail.contains("B5-show-on-map"))
         XCTAssertTrue(rail.contains("waiting · Review ›"))
         XCTAssertTrue(rail.contains("待看 · 去看看 ›"))
         XCTAssertTrue(rail.contains("H3b-n0-en"))
@@ -1613,8 +1707,13 @@ final class SaveDoodleHomeTests: XCTestCase {
         let location = try source(at: "SAV-E/Services/LocationService.swift")
         XCTAssertTrue(location.contains("--uitest-location-allowed"))
         XCTAssertTrue(location.contains("--uitest-location-tiantan"))
+        XCTAssertTrue(location.contains("--uitest-location-daan"))
         XCTAssertTrue(location.contains("uiTestTiantan"))
+        XCTAssertTrue(location.contains("uiTestDaan"))
         XCTAssertTrue(location.contains("39.882192"))
+        XCTAssertTrue(location.contains("25.0296"))
+        XCTAssertTrue(location.contains("25.0330"))
+        XCTAssertTrue(location.contains("121.5654"))
         XCTAssertTrue(location.contains("simulatesAllowedAuthorization"))
         XCTAssertTrue(rail.contains("func captureFiveTabHomeParityRaster"))
         XCTAssertTrue(rail.contains("--uitest-location-tiantan"))
@@ -1622,6 +1721,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         let seed = try source(at: "SAV-E/Services/ReviewDemoService.swift")
         XCTAssertTrue(seed.contains("--uitest-doodle-parity-fixture"))
         XCTAssertTrue(seed.contains("--uitest-home-taipei-granted"))
+        XCTAssertTrue(seed.contains("--uitest-home-tpea"))
+        XCTAssertTrue(seed.contains("func homeTPEAPlaces"))
         XCTAssertTrue(seed.contains("func taipeiGrantedPlaces"))
         XCTAssertTrue(seed.contains("Codex packet / spec §8"))
         XCTAssertTrue(seed.contains("SaveMemoryRecord.confirmedPlace"))

@@ -389,6 +389,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(rail.contains("func testHomeShowOnMapFocusesPlace"))
         XCTAssertTrue(rail.contains("func testHomeHintCountEvidence"))
         XCTAssertTrue(rail.contains("func testHomeTaipeiGrantedDistances"))
+        XCTAssertTrue(rail.contains("func testHomeTPEAEvidence"))
         XCTAssertTrue(rail.contains("home.eat"))
         XCTAssertTrue(rail.contains("home.passport"))
         XCTAssertTrue(rail.contains("testHomeListProgressiveSearch"))

@@ -8,6 +8,11 @@ tile-town (`DESIGN.md`, `SaveTileTownCanvas`). This file remains the
 `--uitest-atlas-parity-fixture` and illustrated-atlas reference. It does not
 win over `DESIGN.md` for the shipped product Map base.
 
+**Home parity TARGET (2026-10-24):** `Reference/ProductionTargets/home.png`
+is still the old baseline (md5 `79ae24aaf02002cd10f429c2869dcfc0`), not
+DESIGN v2. Do not treat v2 `home-light.png` as the 0.90 target until the
+founder approves a replacement. Dark Home does not enter parity.
+
 This file is the canonical Atlas fixture specification for Home, Saves, Trips,
 Trip Plan, and the illustrated Root Map. Where an older production spec
 conflicts with the fixed fixture composition, assets, type scale, or

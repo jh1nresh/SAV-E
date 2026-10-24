@@ -99,6 +99,35 @@ final class SaveDoodleSession: ObservableObject {
     static var cityKey: String { "save.doodle.city.\(suiteSuffix)" }
 }
 
+/// DEBUG-only injectable clock for UI tests. Production always uses `Date()`.
+/// Pass `--uitest-fixed-now=yyyy-MM-dd'T'HH:mm:ss` (device-local, not UTC).
+enum SaveUITestClock {
+    static var now: Date {
+#if DEBUG
+        if let injected = injectedNow { return injected }
+#endif
+        return Date()
+    }
+
+    /// Device-local `yyyy-MM-dd'T'HH:mm:ss`. Not UTC.
+    static func parseLocal(_ raw: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return formatter.date(from: raw)
+    }
+
+#if DEBUG
+    static var injectedNow: Date? {
+        let prefix = "--uitest-fixed-now="
+        guard let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) })
+        else { return nil }
+        return parseLocal(String(argument.dropFirst(prefix.count)))
+    }
+#endif
+}
+
 enum SaveDoodleHomeCatalog {
     /// Walking-scale "near you" radius. Empty state uses the same bound.
     static let nearbyRadius: CLLocationDistance = 3_000

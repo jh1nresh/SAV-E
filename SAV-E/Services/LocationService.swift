@@ -36,12 +36,18 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     /// Near you without a springboard permission alert.
     private let simulatesTiantanFix = ProcessInfo.processInfo.arguments
         .contains("--uitest-location-tiantan")
+    private let simulatesDaanFix = ProcessInfo.processInfo.arguments
+        .contains("--uitest-location-daan")
     private let simulatesAllowedAuthorization = ProcessInfo.processInfo.arguments
         .contains("--uitest-location-allowed")
         || ProcessInfo.processInfo.arguments.contains("--uitest-location-tiantan")
+        || ProcessInfo.processInfo.arguments.contains("--uitest-location-daan")
+    /// `--uitest-location-allowed` simulated fix: Taipei 101. Not real GPS.
     private static let uiTestTaipei = CLLocation(latitude: 25.0330, longitude: 121.5654)
     /// Codex / spec §8 Tiantan face: 450 m / 800 m / 1.1 km from the three Eat rows.
     private static let uiTestTiantan = CLLocation(latitude: 39.882192, longitude: 116.4066)
+    /// Home TPE-A simulated fix: Da'an Forest Park. Not real GPS.
+    private static let uiTestDaan = CLLocation(latitude: 25.0296, longitude: 121.5347)
 #else
     private let simulatesDeniedAuthorization = false
     private let simulatesAllowedAuthorization = false
@@ -71,7 +77,13 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
 #if DEBUG
         if simulatesAllowedAuthorization {
-            currentLocation = simulatesTiantanFix ? Self.uiTestTiantan : Self.uiTestTaipei
+            if simulatesTiantanFix {
+                currentLocation = Self.uiTestTiantan
+            } else if simulatesDaanFix {
+                currentLocation = Self.uiTestDaan
+            } else {
+                currentLocation = Self.uiTestTaipei
+            }
         }
 #endif
     }

@@ -207,7 +207,7 @@ struct SaveDoodleHomeView: View {
     private var cluesLine: some View {
         let copy = SaveDoodleHomeHint.copy(
             clueCount: presentation.reviewCount,
-            at: Date(),
+            at: SaveUITestClock.now,
             language: languageSettings.language
         )
         return HStack(alignment: .center, spacing: SaveSpace.tight) {
@@ -626,6 +626,7 @@ struct SaveDoodleHomeView: View {
         SaveDoodleHomeCatalog.rowMetaText(
             distance: item.distance,
             place: item.place,
+            now: SaveUITestClock.now,
             language: languageSettings.language
         )
     }

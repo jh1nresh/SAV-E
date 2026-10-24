@@ -186,7 +186,7 @@ enum ReviewDemoSeed {
     /// immediately when the reviewer enters demo mode. Coordinates, category, a
     /// short note, and a source platform are all set so map pins + place detail
     /// render fully.
-    static func places(now: Date = Date()) -> [Place] {
+    static func places(now: Date = SaveUITestClock.now) -> [Place] {
 #if DEBUG
         // Isolated visual acceptance data; the production parity fixture is unchanged.
         if ReviewDemo.isOfflineUITestMode, ReviewDemo.uiTestStorageIdentifier != nil {
@@ -200,6 +200,12 @@ enum ReviewDemoSeed {
             }
             if arguments.contains("--uitest-home-design-fixture") {
                 return Array(doodleParityPlaces(now: now).prefix(3))
+            }
+            if arguments.contains("--uitest-home-tpea") {
+                return homeTPEAPlaces(now: now)
+            }
+            if arguments.contains("--uitest-home-tpee") {
+                return homeTPEEPlaces(now: now)
             }
             if arguments.contains("--uitest-home-taipei-granted") {
                 return taipeiGrantedPlaces(now: now)
@@ -336,7 +342,7 @@ enum ReviewDemoSeed {
     /// App Review fixture for the unresolved Postcard. Never Quarter Sheets.
     static let harborOvenPizzaName = "Harbor Oven Pizza"
 
-    static func reviewCandidates(now: Date = Date()) -> [PendingReviewCandidate] {
+    static func reviewCandidates(now: Date = SaveUITestClock.now) -> [PendingReviewCandidate] {
 #if DEBUG
         if ReviewDemo.isOfflineUITestMode, ReviewDemo.uiTestStorageIdentifier != nil,
            ProcessInfo.processInfo.arguments.contains("--uitest-home-design-fixture") {
@@ -374,7 +380,7 @@ enum ReviewDemoSeed {
 
     static func missingReviewCandidates(
         from existingCandidates: [PlaceReviewCandidate],
-        now: Date = Date()
+        now: Date = SaveUITestClock.now
     ) -> [PendingReviewCandidate] {
         reviewCandidates(now: now).filter { seed in
             !existingCandidates.contains { existing in
@@ -384,7 +390,7 @@ enum ReviewDemoSeed {
     }
 
     /// Repairs partial or stale demo vaults without duplicating existing seeds.
-    static func missingPlaces(from existingPlaces: [Place], now: Date = Date()) -> [Place] {
+    static func missingPlaces(from existingPlaces: [Place], now: Date = SaveUITestClock.now) -> [Place] {
         places(now: now).filter { seed in
             !existingPlaces.contains { existing in
                 existing.id == seed.id || existing.matches(seed)
@@ -405,6 +411,67 @@ enum ReviewDemoSeed {
         }
 #endif
         return repairForUITests || (!wasSeeded && existingPlaces.isEmpty)
+    }
+
+    /// Home-only TPE-A capture fixture. Distances are computed from the
+    /// simulated Da'an Forest Park fix (25.0296, 121.5347), not hard-coded
+    /// strings. Nearby radius is 3000 m, so E5/G3 sit at 2990 m (spec asked
+    /// 3.4 km / 4.0 km) so default Eat + Near you still lists 5 / 3 rows.
+    /// IDs 60000000-… do not collide with memory / Tiantan / Taipei-granted.
+    /// No Google photos.
+    static func homeTPEAPlaces(now: Date = SaveUITestClock.now) -> [Place] {
+        let earlier = now.addingTimeInterval(-3 * 86_400)
+        let seeds: [(Int, String, String, PlaceCategory, PlaceStatus, Double, Double, Date)] = [
+            (0, "Fujin Tree 353 Cafe", "台北市大安區", .cafe, .visited, 25.0321181, 121.5347000, now),
+            (1, "Lunch Noodle", "台北市大安區", .food, .wantToGo, 25.0295999, 121.5411515, now.addingTimeInterval(-86_400)),
+            (2, "Roast Duck Kitchen", "台北市信義區", .food, .visited, 25.0372308, 121.5431224, earlier),
+            (3, "Window Cafe", "台北市中山區", .cafe, .wantToGo, 25.0107142, 121.5347000, now.addingTimeInterval(-4 * 86_400)),
+            (4, "Night Market Bar", "台北市松山區", .bar, .wantToGo, 25.0295971, 121.5050233, now.addingTimeInterval(-5 * 86_400)),
+            (5, "Temple Courtyard", "台北市大安區", .attraction, .wantToGo, 25.0238766, 121.5410161, now.addingTimeInterval(-2 * 86_400)),
+            (6, "Lantern Alley Park", "台北市中山區", .attraction, .visited, 25.0194249, 121.5234717, now.addingTimeInterval(-6 * 86_400)),
+            (7, "Forest Walk", "台北市信義區", .attraction, .wantToGo, 25.0486124, 121.5137122, now.addingTimeInterval(-7 * 86_400)),
+        ]
+        return seeds.map { index, name, address, category, status, latitude, longitude, createdAt in
+            Place(
+                id: UUID(uuidString: String(format: "60000000-0000-0000-0000-%012d", index + 1))!,
+                name: name,
+                address: address,
+                latitude: latitude,
+                longitude: longitude,
+                category: category,
+                status: status,
+                sourcePlatform: .other,
+                createdAt: createdAt
+            )
+        }
+    }
+
+    /// TPE-E wrapping evidence: very long place name + long district, denied.
+    static func homeTPEEPlaces(now: Date = SaveUITestClock.now) -> [Place] {
+        [
+            Place(
+                id: UUID(uuidString: "70000000-0000-0000-0000-000000000001")!,
+                name: "The Very Long Corner Breakfast And Afternoon Tea House Beside The Park",
+                address: "No. 353, Extraordinarily Long Riverside Administrative District, Taipei City, Taiwan",
+                latitude: 25.0330,
+                longitude: 121.5430,
+                category: .cafe,
+                status: .wantToGo,
+                sourcePlatform: .other,
+                createdAt: now
+            ),
+            Place(
+                id: UUID(uuidString: "70000000-0000-0000-0000-000000000002")!,
+                name: "Another Extraordinarily Long Night Market Food Stall Name That Must Wrap",
+                address: "No. 1, Extraordinarily Long Northern Market District, Taipei City, Taiwan",
+                latitude: 25.0400,
+                longitude: 121.5600,
+                category: .food,
+                status: .visited,
+                sourcePlatform: .other,
+                createdAt: now.addingTimeInterval(-86_400)
+            ),
+        ]
     }
 
     /// Taipei B-2 evidence: location-granted, 6 own saves in 台北 (mix of
