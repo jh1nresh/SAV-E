@@ -366,7 +366,7 @@ final class PrivyAuthService: ObservableObject {
             return
         }
 #endif
-        guard currentUserId == owner, sessionGeneration == generation else { return
+        guard currentUserId == owner, sessionGeneration == generation else { return }
         if isReviewerDemo {
             clearReviewerDemoState()
             sessionOrigin = .restored
