@@ -2715,6 +2715,79 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(confirmed.name, stamp.name)
     }
 
+    /// P2 4366041520: parking a pending import whose ID is a confirmed alias
+    /// must mint a new Unplaced ID so the same venue is not a stamp and a candidate.
+    @MainActor
+    func testParkRemintsWhenConfirmedAliasOwnsThePendingID() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        defer {
+            auth.authState = originalAuth
+            SavePlaceLimitHandoff.testDefaults = originalDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        let owner = "alias-park-owner"
+        auth.authState = .authenticated(userId: owner)
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.alias-park.\(UUID())")
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.url?.path.contains("/memory/candidates") == true { return (200, "[]") }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("alias-park-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let aliasID = UUID()
+        var stamp = makeCappedPlaces(1)[0]
+        stamp.mergedPlaceIDs = [aliasID]
+        XCTAssertTrue(stamp.savedIDs.contains(aliasID))
+        XCTAssertNotEqual(stamp.id, aliasID)
+        let incoming = Place(
+            id: aliasID,
+            name: "Alias Import Cafe",
+            address: "1 Alias Road",
+            latitude: 25.31,
+            longitude: 121.71,
+            googlePlaceId: "alias-import-cafe",
+            category: .cafe,
+            status: .wantToGo,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
+        )
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+        map.places = [stamp]
+        let parked = try map.parkPlaceInUnplacedInbox(incoming)
+        XCTAssertNotEqual(parked.id, stamp.id)
+        XCTAssertNotEqual(parked.id, aliasID, "must not reuse the confirmed alias ID")
+        XCTAssertEqual(parked.correctionLearningPlaceID, stamp.id)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == aliasID })
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == stamp.id })
+        XCTAssertEqual(map.reviewCandidates.count, 1)
+
+        try await map.refreshReviewCandidates()
+        XCTAssertEqual(map.reviewCandidates.count, 1)
+        XCTAssertEqual(map.reviewCandidates.first?.id, parked.id)
+        XCTAssertFalse(
+            map.reviewCandidates.contains { $0.id == aliasID },
+            "refresh must not resurrect Unplaced under a confirmed alias ID"
+        )
+        XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+        XCTAssertFalse(try vault.reviewCandidates(belongingTo: owner).contains { $0.id == aliasID })
+        XCTAssertEqual(try vault.confirmedPlaces(belongingTo: owner).count, 0)
+    }
+
     /// P2 4365825799: vault-restored Amap/GCJ stamps must keep provider identity
     /// so a fetch-failed local cap projection does not treat the same venue as new.
     @MainActor
@@ -3181,8 +3254,16 @@ final class SAVEProductionConfigTests: XCTestCase {
             "P1 4365096518: pending merges must not park under the confirmed stamp ID"
         )
         XCTAssertTrue(
+            inbox.contains("$0.savedIDs.contains(candidate.id)"),
+            "P2 4366041520: remint when any confirmed alias owns the pending ID"
+        )
+        XCTAssertTrue(
             inbox.contains("candidate.correctionLearningPlaceID = confirmedID"),
             "keep a reference to the confirmed stamp after minting a new Unplaced ID"
+        )
+        XCTAssertTrue(
+            map.contains(#"let confirmedIDs = Set(places.flatMap(\.savedIDs))"#),
+            "P2 4366041520: Unplaced refresh must hide alias IDs that belong to a stamp"
         )
         XCTAssertTrue(map.contains("requestSavedPlaceLimitPaywall()"))
     }
@@ -3454,8 +3535,12 @@ final class SAVEProductionConfigTests: XCTestCase {
             "P2 4365127948: stale savedIDs miss other-device aliases already removed by deletePlaceGroup"
         )
         XCTAssertTrue(
-            map.contains("deletedRemoteGroup"),
-            "P2 4365127948: remaining count must come from the group deletePlaceGroup actually removed"
+            map.contains("return !selectedGroup.savedIDs.contains(record.id)"),
+            "P2 4366041524: remaining count subtracts only the resolved group's IDs"
+        )
+        XCTAssertFalse(
+            map.contains("deletedRemoteGroup.contains(where: { $0.matches(record) })"),
+            "P2 4366041524: do not drop a separate group that only matches a deleted alias"
         )
         XCTAssertTrue(
             map.contains("let selectedID = place.id"),
@@ -4541,6 +4626,146 @@ final class SAVEProductionConfigTests: XCTestCase {
             Place.consolidated(remotePlaces.filter { !deleted.contains($0.id) }).map(\.id),
             [placeB.id]
         )
+    }
+
+    /// P2 4366041524: group C matches alias B but not representative A.
+    /// Deleting A's group must keep C in the authoritative count.
+    @MainActor
+    func testDeletePlaceCountKeepsNonTransitiveGroupMatchingDeletedAlias() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:nontransitive-count-owner")
+        defer {
+            PrivyAuthService.shared.authState = previousAuth
+            AnalysisRequestURLProtocol.reset()
+        }
+
+        func identityPlace(
+            id: UUID = UUID(),
+            name: String,
+            latitude: Double,
+            longitude: Double,
+            googlePlaceId: String?,
+            createdAt: Date
+        ) -> Place {
+            Place(
+                id: id,
+                name: name,
+                address: "1 Identity Road",
+                latitude: latitude,
+                longitude: longitude,
+                googlePlaceId: googlePlaceId,
+                category: .cafe,
+                status: .wantToGo,
+                rating: nil,
+                note: nil,
+                sourceUrl: nil,
+                sourcePlatform: .other,
+                sourceImageUrl: nil,
+                extractedDishes: nil,
+                priceRange: nil,
+                recommender: nil,
+                googleRating: nil,
+                googlePriceLevel: nil,
+                openingHours: nil,
+                createdAt: createdAt
+            )
+        }
+
+        let placeA = identityPlace(
+            name: "Alpha Cafe",
+            latitude: 25.0,
+            longitude: 121.0,
+            googlePlaceId: "g-shared-ab",
+            createdAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let placeB = identityPlace(
+            name: "Beta Cafe",
+            latitude: 26.0,
+            longitude: 122.0,
+            googlePlaceId: "g-shared-ab",
+            createdAt: Date(timeIntervalSince1970: 2_000)
+        )
+        let placeC = identityPlace(
+            name: "Beta Cafe",
+            latitude: 26.0,
+            longitude: 122.0,
+            googlePlaceId: nil,
+            createdAt: Date(timeIntervalSince1970: 3_000)
+        )
+        XCTAssertTrue(placeA.matches(placeB), "A and B are one canonical group")
+        XCTAssertTrue(placeB.matches(placeC), "C matches alias B")
+        XCTAssertFalse(placeA.matches(placeC), "C does not match representative A")
+
+        let others = makeCappedPlaces(48)
+        let remotePlaces = others + [placeA, placeB, placeC]
+        XCTAssertEqual(Place.consolidated(remotePlaces).count, 50)
+        let selectedGroup = try XCTUnwrap(
+            Place.consolidated(remotePlaces).first { $0.savedIDs.contains(placeA.id) }
+        )
+        XCTAssertEqual(selectedGroup.savedIDs, [placeA.id, placeB.id])
+        XCTAssertFalse(selectedGroup.savedIDs.contains(placeC.id))
+        let transitiveDrop = Place.consolidated(
+            remotePlaces.filter { record in
+                ![placeA, placeB].contains(where: { $0.matches(record) })
+            }
+        ).count
+        XCTAssertEqual(transitiveDrop, 48, "matching every deleted alias would drop independent C")
+        XCTAssertEqual(
+            Place.consolidated(remotePlaces.filter { !selectedGroup.savedIDs.contains($0.id) }).count,
+            49
+        )
+
+        func rowJSON(_ place: Place, createdAt: String, googlePlaceID: String?) -> String {
+            let placeID = googlePlaceID.map { ",\"google_place_id\":\"\($0)\"" } ?? ""
+            return """
+            {"id":"\(place.id.uuidString)","user_id":"owner","name":"\(place.name)","address":"\(place.address)","latitude":\(place.latitude),"longitude":\(place.longitude),"category":"cafe","status":"wantToGo","source_platform":"other"\(placeID),"created_at":"\(createdAt)"}
+            """
+        }
+        let otherRows = others.enumerated().map { index, place in
+            cappedPlaceRowJSON(id: place.id, index: index, name: "Cap Place", googlePlaceID: place.googlePlaceId)
+        }
+        let rows = (
+            otherRows + [
+                rowJSON(placeA, createdAt: "2020-01-01T00:00:00Z", googlePlaceID: placeA.googlePlaceId),
+                rowJSON(placeB, createdAt: "2020-01-02T00:00:00Z", googlePlaceID: placeB.googlePlaceId),
+                rowJSON(placeC, createdAt: "2020-01-03T00:00:00Z", googlePlaceID: nil),
+            ]
+        ).joined(separator: ",")
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET", request.url?.path == "/places" {
+                return (200, "[\(rows)]")
+            }
+            if request.httpMethod == "DELETE", request.url?.path.hasPrefix("/places/") == true {
+                return (200, "{}")
+            }
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                return (201, "{}")
+            }
+            if request.url?.path.contains("/memory/candidates") == true { return (200, "[]") }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(
+            suiteName: "save.delete-nontransitive-count.\(UUID().uuidString)"
+        )
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("delete-nontransitive-count-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        var displayed = placeA
+        displayed.mergedPlaceIDs = [placeB.id]
+        _ = try vault.saveConfirmedPlace(displayed, ownerSubject: "did:privy:nontransitive-count-owner")
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+        map.places = [displayed]
+
+        try await map.deletePlace(displayed)
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertEqual(
+            SavePlaceLimitHandoff.testDefaults?.integer(forKey: "save.cachedSavedPlaceCount"),
+            49,
+            "authoritative count must keep independent C after deleting A's group"
+        )
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed)
     }
 
     @MainActor

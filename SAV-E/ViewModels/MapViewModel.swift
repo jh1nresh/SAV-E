@@ -948,10 +948,11 @@ final class MapViewModel: ObservableObject {
             from: place,
             ownerSubject: authService.currentUserId
         )
-        // A pending merge keeps the confirmed stamp's ID. Parking under that
-        // ID makes upsertReviewRecord return the stamp and drop the capture.
-        if places.contains(where: { $0.id == candidate.id }) {
-            let confirmedID = candidate.id
+        // A pending merge can reuse a confirmed stamp ID or one of its
+        // aliases. Parking under either makes upsertReviewRecord return the
+        // stamp and drop the capture, or show the same venue twice.
+        if let confirmed = places.first(where: { $0.savedIDs.contains(candidate.id) }) {
+            let confirmedID = confirmed.id
             candidate.id = UUID()
             candidate.correctionLearningPlaceID = confirmedID
         }
@@ -1544,7 +1545,7 @@ final class MapViewModel: ObservableObject {
         let terminalIDs = Set(candidates.filter {
             !$0.replacementCandidateIDs.isEmpty || !["review", "confirmed", "needs_more_evidence", "source_only"].contains($0.status)
         }.map(\.id))
-        let confirmedIDs = Set(places.map(\.id))
+        let confirmedIDs = Set(places.flatMap(\.savedIDs))
         let localOnly = local.filter { local in
             !remoteIDs.contains(local.id) && !confirmedIDs.contains(local.id)
                 && !(local.isUnplacedInbox && terminalIDs.contains(local.id))
@@ -2708,7 +2709,7 @@ final class MapViewModel: ObservableObject {
     /// Accept the authenticated server save result without importing any friend
     /// memory. The server owns dedupe and preserves an existing recipient row.
     func acceptFriendRestaurantSave(_ place: Place) {
-        if let index = places.firstIndex(where: { $0.id == place.id }) {
+        if let index = places.firstIndex(where: { $0.savedIDs.contains(place.id) }) {
             places[index] = place
         } else if isOverFreeSavedPlaceLimit {
             do {
@@ -4301,24 +4302,21 @@ final class MapViewModel: ObservableObject {
                 // independent groups after another device edited them apart.
                 let remote = try await supabaseService.fetchPlaces(for: userID)
                 try ensureConfirmationSession(userID, generation)
-                var deletedRemoteGroup: [Place] = []
                 let selectedID = place.id
                 let selectedGroup = Place.consolidated(remote).first { $0.savedIDs.contains(selectedID) }
                 try await SAVEPendingImportSessionScope.$current.withValue((generation, userID)) {
                     try await supabaseService.deletePlaceGroup(selectedGroup?.id ?? selectedID)
                 }
                 try ensureConfirmationSession(userID, generation)
-                if let selectedGroup {
-                    deletedRemoteGroup = remote.filter { selectedGroup.savedIDs.contains($0.id) }
-                }
-                // deletePlaceGroup removes the whole venue, including aliases
-                // another device added after this snapshot's savedIDs went stale.
+                // Count only the resolved group's IDs. Matching every deleted
+                // alias transitively can drop a separate group that matches an
+                // alias but not the representative (backend group delete keeps it).
                 remainingAuthoritativeCount = Place.consolidated(
                     remote.filter { record in
-                        if deletedRemoteGroup.contains(where: { $0.matches(record) }) {
-                            return false
+                        if let selectedGroup {
+                            return !selectedGroup.savedIDs.contains(record.id)
                         }
-                        return deletedRemoteGroup.isEmpty || !place.matches(record)
+                        return record.id != selectedID
                     }
                 ).count
             }
@@ -4631,7 +4629,7 @@ final class MapViewModel: ObservableObject {
             didPersist: { place in
                 guard authService.currentUserId == remoteUserId,
                       authService.sessionGeneration == importGeneration else { return }
-                if places.contains(where: { $0.id == place.id }) { return }
+                if places.contains(where: { $0.savedIDs.contains(place.id) }) { return }
                 if reviewCandidates.contains(where: { $0.id == place.id }) { return }
                 places.insert(place, at: 0)
                 incrementAuthoritativeSavedPlaceCountIfNeeded()
