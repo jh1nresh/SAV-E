@@ -21,7 +21,9 @@ Light and dark sets:
 | `*-map-pins.png` | G6 | Apple Map symbol pins, no Google photos |
 | `*-city-page.png` | G7 | City card uses coral art, no Google photo |
 | `*-report-entry.png` | G8 | Viewer “View on Google Maps” report entry |
-| `*-home-thumbs.png` | G2 v2 | Home featured 44pt footer + recent 52pt below-thumb; single-line Google Maps |
+| `*-home-thumbs.png` | Home DESIGN | Featured 44pt + recent 52pt; two-line Google / Maps under the thumb |
+| `*-home-thumbs-en.png` | Home DESIGN | Same Home thumbs, English VoiceOver environment |
+| `*-home-thumbs-zh-Hant.png` | Home DESIGN | Same Home thumbs, zh-Hant VoiceOver environment |
 | `*-drawer-thumbs.png` | G2 v2 | Drawer search rows; mark in the card footer under the photo |
 | `*-trip-stop.png` | G2 v2 | Trip stop paper card; mark in the footer, not overlaid |
 | `*-origin-food.png` | G2 v2 | Origin food card; mark under the 326pt photo |
@@ -34,7 +36,9 @@ CI artifact (DESIGN judges these PNGs, not the Linux checkout):
 
 Launch argument: `--uitest-google-photo-attribution`.
 
-v2 mark: untranslated single-line “Google Maps”, Regular 400, 12sp–16sp, light `#1F1F1F` / dark white. If the complete string cannot fit, the surface shows a non-Google image instead.
+Home thumbs (DESIGN 2026-10-24): untranslated two-line `Google` / `Maps`, 10pt semibold, 2pt under the thumb, paper background, no bar. Light `#1F1F1F` on `#FFF9EB` and white on `#1E1C19` both ≥ 4.5:1. Google terms on wording/placement are still unverified; HoP / founder must confirm before treating overlay-on-photo as required.
+
+Drawer / Trip / Origin still use the single-line footer mark. If that footer cannot fit, those surfaces show a non-Google image.
 
 Contrast (P1-4): white author type over the cream fixture at gradient
 top 0.55 measures **5.62:1** in `testAttributionWhiteTextMeetsContrastOnLightPhoto`.

@@ -46,6 +46,7 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
         case cityPage
         case reportEntry
         case homeThumbs
+        case homeThumbsZh
         case drawerThumbs
         case tripStop
         case originFood
@@ -68,6 +69,7 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
             case .cityPage: return "City page"
             case .reportEntry: return "Report"
             case .homeThumbs: return "Home thumbs"
+            case .homeThumbsZh: return "Home zh-Hant"
             case .drawerThumbs: return "Drawer"
             case .tripStop: return "Trip stop"
             case .originFood: return "Origin food"
@@ -268,6 +270,10 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
             }
         case .homeThumbs:
             homeThumbsScene
+                .environment(\.appLanguageSettings, Self.languageSettings(.english))
+        case .homeThumbsZh:
+            homeThumbsScene(identifier: "evidence.homeThumbsZh", languageNote: "zh-Hant VoiceOver")
+                .environment(\.appLanguageSettings, Self.languageSettings(.traditionalChinese))
         case .drawerThumbs:
             ScrollView { drawerThumbsContent }
                 .onAppear(perform: seedPhotoFixtures)
@@ -284,12 +290,15 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
         }
     }
 
-    private var homeThumbsScene: some View {
+    private func homeThumbsScene(
+        identifier: String = "evidence.homeThumbs",
+        languageNote: String = "en VoiceOver"
+    ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Home featured 44pt and recent 52pt. Google thumbs say Google Maps.")
+            Text("Home featured 44pt and recent 52pt. Two-line Google / Maps under the thumb. \(languageNote).")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.saveInk)
-                .accessibilityIdentifier("evidence.homeThumbs")
+                .accessibilityIdentifier(identifier)
             SaveTileTownPeekCard(
                 title: "Harbor Oven",
                 subtitle: "Featured · Google",
@@ -644,6 +653,13 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
             duration: 60,
             note: "Cafe stop"
         )
+    }
+
+    static func languageSettings(_ language: AppLanguage) -> AppLanguageSettings {
+        let suite = "save.evidence.lang.\(language.rawValue)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.set(language.rawValue, forKey: "save.appLanguage")
+        return AppLanguageSettings(userDefaults: defaults)
     }
 
     static func originPlace(id: UUID, name: String, photoURL: URL) -> Place {

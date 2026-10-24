@@ -193,6 +193,15 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
             app.descendants(matching: .any)["evidence.homeThumbs.recentFriend"].exists
         )
         saveEvidence(app, name: "\(appearance)-home-thumbs")
+        saveEvidence(app, name: "\(appearance)-home-thumbs-en")
+
+        openScene(app, "homeThumbsZh")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.homeThumbsZh"]
+                .waitForExistence(timeout: stepTimeout),
+            "Home thumbs zh-Hant scene must render featured and recent"
+        )
+        saveEvidence(app, name: "\(appearance)-home-thumbs-zh-Hant")
 
         openScene(app, "drawerThumbs")
         XCTAssertTrue(

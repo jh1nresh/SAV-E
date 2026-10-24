@@ -59,7 +59,7 @@ struct SaveKraftStamp: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(spacing: GooglePlacesPhotoSourceMarkMetrics.gapAbove) {
+        VStack(alignment: .leading, spacing: 0) {
             ZStack {
                 SavePostcardScallopedRectangle(depth: 3, pitch: 8)
                     .fill(SaveAtlasPalette.paper)
@@ -76,7 +76,8 @@ struct SaveKraftStamp: View {
             .accessibilityHidden(true)
 
             if showsGooglePhoto {
-                GooglePlacesPhotoSourceMark()
+                GooglePlacesPhotoSourceMark(style: .homeStacked)
+                    .padding(.top, GooglePlacesPhotoSourceMarkMetrics.homeGapAbove)
             }
 
             Text(visibleTitle)
@@ -85,9 +86,10 @@ struct SaveKraftStamp: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.75)
+                .padding(.top, showsGooglePhoto ? 6 : GooglePlacesPhotoSourceMarkMetrics.homeGapAbove)
                 .frame(maxWidth: tileWidth + 12)
         }
-        .frame(width: tileWidth)
+        .frame(width: tileWidth, alignment: .leading)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(stampAccessibilityLabel)
         .accessibilityIdentifier(accessibilityIdentifier)
@@ -95,7 +97,7 @@ struct SaveKraftStamp: View {
 
     private var tileWidth: CGFloat {
         showsGooglePhoto
-            ? max(size.face, GooglePlacesPhotoSourceMarkMetrics.markWidth(for: dynamicTypeSize))
+            ? max(size.face, GooglePlacesPhotoSourceMarkMetrics.homeMarkWidth(for: dynamicTypeSize))
             : size.face
     }
 
@@ -105,11 +107,7 @@ struct SaveKraftStamp: View {
     }
 
     private var showsGooglePhoto: Bool {
-        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
-            photoURL,
-            availableWidth: max(size.face, GooglePlacesPhotoSourceMarkMetrics.markWidth(for: dynamicTypeSize)),
-            dynamicType: dynamicTypeSize
-        )
+        GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(photoURL)
     }
 
     private var stampAccessibilityLabel: String {
@@ -145,13 +143,7 @@ struct SaveKraftStamp: View {
     }
 
     private var resolvedFace: SaveKraftStampFace {
-        if case .photo(let url) = face,
-           let url,
-           GooglePlacesPhotoURL.isGooglePlacesPhotoURL(url),
-           !showsGooglePhoto {
-            return .scene(SaveKraftStampScene.from(name: title))
-        }
-        return illustratedFace
+        illustratedFace
     }
 }
 

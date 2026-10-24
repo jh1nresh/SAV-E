@@ -117,7 +117,7 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
-    func testGooglePhotoSourceMarkLayoutRulesAndFallback() throws {
+    func testHomeThumbnailMarksGooglePhotosWithGoogleMapsText() throws {
         let google = try XCTUnwrap(URL(
             string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref"
         ))
@@ -127,15 +127,21 @@ final class SaveCollaborativeListTests: XCTestCase {
         let own = try XCTUnwrap(URL(string: "https://example.com/own.jpg"))
         let friend = try XCTUnwrap(URL(string: "https://cdn.instagram.com/private-post.jpg"))
 
-        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.text, "Google Maps")
-        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.minPointSize, 12)
-        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.maxPointSize, 16)
-        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.gapAbove, 6)
-        XCTAssertGreaterThanOrEqual(GooglePlacesPhotoSourceMarkMetrics.rowHeight, 22)
-        XCTAssertLessThanOrEqual(GooglePlacesPhotoSourceMarkMetrics.rowHeight, 26)
-        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.pointSize(for: .large), 12)
-        XCTAssertLessThanOrEqual(GooglePlacesPhotoSourceMarkMetrics.pointSize(for: .xxxLarge), 16)
-        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.pointSize(for: .accessibility3), 16)
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.homeLines, ["Google", "Maps"])
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.homeMinPointSize, 10)
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.homeGapAbove, 2)
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.homeReservedHeight, 24)
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.homePointSize(for: .large), 10)
+        XCTAssertGreaterThanOrEqual(
+            GooglePlacesPhotoSourceMarkMetrics.homePointSize(for: .xxxLarge),
+            10
+        )
+        XCTAssertGreaterThanOrEqual(GooglePlacesPhotoSourceMarkMetrics.homeMarkHeight(for: .large), 24)
+        XCTAssertTrue(GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(google))
+        XCTAssertTrue(GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(placesMedia))
+        XCTAssertFalse(GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(own))
+        XCTAssertFalse(GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(friend))
+        XCTAssertFalse(GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(nil))
         XCTAssertEqual(
             GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: .english),
             "Photo: Google Maps"
@@ -144,50 +150,51 @@ final class SaveCollaborativeListTests: XCTestCase {
             GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: .traditionalChinese),
             "照片來源：Google Maps"
         )
-
-        XCTAssertTrue(GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(google, availableWidth: 343, dynamicType: .large))
-        XCTAssertTrue(GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(placesMedia, availableWidth: 343, dynamicType: .xxxLarge))
-        XCTAssertFalse(GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(own, availableWidth: 343, dynamicType: .large))
-        XCTAssertFalse(GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(friend, availableWidth: 343, dynamicType: .large))
-        XCTAssertFalse(GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(nil, availableWidth: 343, dynamicType: .large))
-        XCTAssertFalse(
-            GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: 40, dynamicType: .large),
-            "A complete single-line mark must not be squeezed; fall back to a non-Google image"
-        )
-        XCTAssertFalse(
-            GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(google, availableWidth: 40, dynamicType: .large)
-        )
-
-        for width in [375, 402, 430] as [CGFloat] {
-            let usable = width - 32
-            XCTAssertTrue(
-                GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: usable, dynamicType: .large),
-                "\(Int(width))pt must fit the 12sp mark"
-            )
-            XCTAssertTrue(
-                GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: usable, dynamicType: .xxxLarge),
-                "\(Int(width))pt must fit the 16sp cap"
-            )
-        }
+        XCTAssertGreaterThanOrEqual(GooglePlacesPhotoSourceMarkMetrics.lightContrastRatio(), 4.5)
+        XCTAssertGreaterThanOrEqual(GooglePlacesPhotoSourceMarkMetrics.darkContrastRatio(), 4.5)
 
         let mark = try source(at: "SAV-E/Views/Components/GooglePlacesPhotoSourceMark.swift")
-        XCTAssertTrue(mark.contains("weight: .regular"))
+        XCTAssertTrue(mark.contains("case homeStacked"))
+        XCTAssertTrue(mark.contains("weight: .semibold"))
+        XCTAssertTrue(mark.contains("homeMinPointSize: CGFloat = 10"))
+        XCTAssertTrue(mark.contains("homeGapAbove: CGFloat = 2"))
+        XCTAssertTrue(mark.contains("minimumScaleFactor(1.0)"))
+        XCTAssertFalse(mark.contains("minimumScaleFactor(0."))
         XCTAssertTrue(mark.contains("Color(hex: \"1F1F1F\")"))
         XCTAssertTrue(mark.contains("Color.white"))
         XCTAssertFalse(mark.contains("5E5E5E"))
-        XCTAssertTrue(mark.contains(".lineLimit(1)"))
-        XCTAssertTrue(mark.contains("place.photo.sourceMark"))
+        XCTAssertFalse(mark.contains("accessibilityHidden(true)"))
+        XCTAssertFalse(mark.contains(".font(.system(size: 6, weight: .semibold))"))
 
         let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
-        XCTAssertTrue(stamp.contains("GooglePlacesPhotoSourceMark()"))
-        XCTAssertTrue(stamp.contains("max(size.face, GooglePlacesPhotoSourceMarkMetrics.markWidth"))
-        XCTAssertTrue(stamp.contains("SaveKraftStampScene.from(name: title)"))
+        XCTAssertTrue(stamp.contains("GooglePlacesPhotoSourceMark(style: .homeStacked)"))
+        XCTAssertTrue(stamp.contains("homeGapAbove"))
         XCTAssertFalse(stamp.contains("GoogleMapsAttributionLogo"))
         XCTAssertFalse(stamp.contains(".font(.system(size: 6, weight: .semibold))"))
 
         let peek = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
-        XCTAssertTrue(peek.contains("GooglePlacesPhotoSourceMark()"))
-        XCTAssertTrue(peek.contains("spacing: GooglePlacesPhotoSourceMarkMetrics.gapAbove"))
+        XCTAssertTrue(peek.contains("GooglePlacesPhotoSourceMark(style: .homeStacked)"))
+        XCTAssertTrue(peek.contains("homeGapAbove"))
+        XCTAssertFalse(peek.contains("ZStack(alignment: .bottom"))
+    }
+
+    @MainActor
+    func testGooglePhotoSourceMarkLayoutRulesAndFallback() throws {
+        let google = try XCTUnwrap(URL(
+            string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref"
+        ))
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.text, "Google Maps")
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.minPointSize, 12)
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.maxPointSize, 16)
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.pointSize(for: .large), 12)
+        XCTAssertLessThanOrEqual(GooglePlacesPhotoSourceMarkMetrics.pointSize(for: .xxxLarge), 16)
+        XCTAssertFalse(
+            GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: 40, dynamicType: .large),
+            "Footer cards that cannot fit a single line must not squeeze the mark"
+        )
+        XCTAssertFalse(
+            GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(google, availableWidth: 40, dynamicType: .large)
+        )
 
         let drawer = try source(at: "SAV-E/Views/Drawer/Components/SaveSearchResultsComponent.swift")
         XCTAssertTrue(drawer.contains("GooglePlacesPhotoSourceMark()"))
@@ -243,20 +250,17 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
-    func testFeaturedPeekFallsBackWhenGoogleMarkCannotFit() throws {
+    func testHomeThumbnailsKeepGooglePhotoWhenStackedMarkIsUsed() throws {
         let google = try XCTUnwrap(URL(
-            string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=narrow-test"
+            string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=home-stacked"
         ))
-        XCTAssertFalse(
-            GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
-                google,
-                availableWidth: 40,
-                dynamicType: .xxxLarge
-            )
-        )
+        XCTAssertTrue(GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(google))
         let peek = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
-        XCTAssertTrue(peek.contains("!showsGooglePhoto"))
-        XCTAssertTrue(peek.contains("SaveKraftStampScene.from(name: title)"))
+        XCTAssertTrue(peek.contains("isGooglePhotoURL(photoURL)"))
+        XCTAssertTrue(peek.contains("style: .homeStacked"))
+        let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
+        XCTAssertTrue(stamp.contains("isGooglePhotoURL(photoURL)"))
+        XCTAssertTrue(stamp.contains("style: .homeStacked"))
     }
 
     @MainActor
