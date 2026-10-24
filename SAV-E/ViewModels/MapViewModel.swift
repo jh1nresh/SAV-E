@@ -3104,6 +3104,13 @@ final class MapViewModel: ObservableObject {
                 let payload = confirmed.map(ClipListHandoff.placeBody)
                 let (status, data) = try await supabaseService.saveClipListPlaces(payload)
                 try requireSession()
+                if SavePlaceLimitError.matchesServerResponse(
+                    status: status,
+                    body: String(data: data, encoding: .utf8) ?? ""
+                ) {
+                    try parkNovelHandoffItems(confirmed)
+                    throw SavePlaceLimitError.parkedInUnplacedInbox
+                }
                 guard let remote = ClipListHandoff.parseRemote(status: status, data: data),
                       let insertedPlaces = ClipListHandoff.placesFromRemoteRows(
                         confirmed: confirmed,
@@ -3133,6 +3140,7 @@ final class MapViewModel: ObservableObject {
                 ) {
                     throw ClipListHandoffError.unconfirmed
                 }
+                try parkHandoffOverflowIfNeeded(confirmed: confirmed, overCap: remote.counts.overCap)
                 return (Self.stampedHandoffItems(confirmed: confirmed, imported: insertedPlaces), remote.counts)
             } catch SupabaseError.notConfigured {
                 try requireSession()
@@ -3146,7 +3154,22 @@ final class MapViewModel: ObservableObject {
             savedPlaceCount: places.count
         )
         applyHandoffPlaces(planned.toStamp.map { $0.asPlace(includeSenderMemory: false) })
+        try parkHandoffOverflowIfNeeded(confirmed: confirmed, overCap: planned.counts.overCap)
         return planned
+    }
+
+    private func parkHandoffOverflowIfNeeded(confirmed: [SaveListItem], overCap: Int) throws {
+        guard overCap > 0 else { return }
+        try parkNovelHandoffItems(confirmed)
+        throw SavePlaceLimitError.parkedInUnplacedInbox
+    }
+
+    private func parkNovelHandoffItems(_ confirmed: [SaveListItem]) throws {
+        for item in confirmed {
+            let place = item.asPlace(includeSenderMemory: false)
+            if existingSavedPlace(matching: place) != nil { continue }
+            try parkPlaceInUnplacedInbox(place)
+        }
     }
 
     private static func stampedHandoffItems(confirmed: [SaveListItem], imported: [Place]) -> [SaveListItem] {

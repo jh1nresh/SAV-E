@@ -400,6 +400,88 @@ test("place create route wraps only receipt saves and keeps origin internal", ()
   assert.match(serverSource, /origin_shared_place_link_id: _originSharedPlaceLinkId/);
 });
 
+test("H-3 friend-share checks identity before insert without restoring the planner", () => {
+  const serverSource = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+  const handler = serverSource.slice(
+    serverSource.indexOf("async function handlePlaces"),
+    serverSource.indexOf("async function handleTrips"),
+  );
+  const friendBranch = handler.slice(
+    handler.indexOf("if (friendShareCode)"),
+    handler.indexOf("const insert = buildInsert(\"places\", body, [...placeFields, \"user_id\"])"),
+  );
+
+  assert.match(
+    friendBranch,
+    /existingPlaceMatchingClipIdentity/,
+    "same identity on a different row must be recognized before insert",
+  );
+  assert.ok(
+    friendBranch.indexOf("existingPlaceMatchingClipIdentity") < friendBranch.indexOf("buildInsert"),
+    "identity check must run after the lock and before a new places row",
+  );
+  assert.match(friendBranch, /pg_advisory_xact_lock\(hashtextextended\(\$1, 0\)\)/);
+  assert.match(friendBranch, /savedPlaceGrowthSnapshot/);
+  assert.match(friendBranch, /assertSavedPlaceGrowthAllowed/);
+  assert.doesNotMatch(
+    friendBranch,
+    /planClipListSave/,
+    "do not restore the clip list planner on friend-share",
+  );
+  assert.doesNotMatch(friendBranch, /clipOnePlaceQuotaDecision/);
+  assert.doesNotMatch(friendBranch, /clipSavedPlaceLimitBody/);
+  assert.match(
+    friendBranch,
+    /friend_share_duplicate_blocked/,
+    "an identity match records the existing duplicate event, not a second row",
+  );
+});
+
+test("H-4 friend-share at cap uses SavedPlaceLimitError, not a clip 403 body", () => {
+  const serverSource = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+  const handler = serverSource.slice(
+    serverSource.indexOf("async function handlePlaces"),
+    serverSource.indexOf("async function handleTrips"),
+  );
+  const friendBranch = handler.slice(
+    handler.indexOf("if (friendShareCode)"),
+    handler.indexOf("const insert = buildInsert(\"places\", body, [...placeFields, \"user_id\"])"),
+  );
+
+  assert.match(friendBranch, /assertSavedPlaceGrowthAllowed/);
+  assert.doesNotMatch(friendBranch, /clipSavedPlaceLimitBody/);
+  assert.doesNotMatch(friendBranch, /newly_saved/);
+  assert.doesNotMatch(friendBranch, /over_cap/);
+  assert.doesNotMatch(friendBranch, /clipOnePlaceQuotaDecision/);
+  assert.match(serverSource, /error instanceof SavedPlaceLimitError/);
+  assert.match(serverSource, /error\.body, error\.status/);
+  assert.doesNotMatch(
+    serverSource,
+    /from "\.\/clipListSave\.js"[\s\S]*clipSavedPlaceLimitBody|clipSavedPlaceLimitBody[\s\S]*from "\.\/clipListSave\.js"/,
+  );
+});
+
+test("H-5 App Clip list-save keeps the #293 atomic cap", () => {
+  const serverSource = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+  const listSave = serverSource.slice(
+    serverSource.indexOf("async function saveClipListPlaces"),
+    serverSource.indexOf("function providerCoordinateFieldError"),
+  );
+
+  assert.match(listSave, /pg_advisory_xact_lock\(hashtextextended\(\$1, 0\)\)/);
+  assert.match(listSave, /savedPlaceGrowthSnapshot/);
+  assert.match(listSave, /planClipListSave/);
+  assert.match(listSave, /assertSavedPlaceGrowthAllowed/);
+  assert.ok(
+    listSave.indexOf("savedPlaceGrowthSnapshot") < listSave.indexOf("planClipListSave"),
+    "snapshot must precede planned inserts",
+  );
+  assert.ok(
+    listSave.indexOf("buildInsert") < listSave.indexOf("assertSavedPlaceGrowthAllowed"),
+    "assert must run after the list inserts",
+  );
+});
+
 test("friend share opaque refs are stable, scoped, and token-rotatable", () => {
   const token = "internal-token-that-is-at-least-32-characters";
   const shareRef = friendShareOpaqueRef("share", "private-link-id", token);

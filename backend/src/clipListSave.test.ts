@@ -7,12 +7,13 @@ import {
   promoteGooglePlaceId,
   clipListSaveResponse,
   clipOnePlaceQuotaDecision,
-  clipSavedPlaceLimitBody,
   FREE_LIST_SAVE_LIMIT,
   planClipListSave,
   uniqueClipListItems,
   clipListPlacesAreNearbyDuplicate,
+  existingPlaceMatchingClipIdentity,
 } from "./clipListSave.js";
+import { SavedPlaceLimitError } from "./savedPlaceLimit.js";
 
 const cafe = (id: string, name = "Onibus Coffee") => ({
   id,
@@ -274,8 +275,11 @@ test("one-place Clip save uses the same planner as a list", () => {
     })),
     "insert",
   );
-  assert.equal(clipSavedPlaceLimitBody.code, "over_free_limit");
-  assert.equal(clipSavedPlaceLimitBody.limit, 50);
+  assert.deepEqual(new SavedPlaceLimitError().body, {
+    error: "saved_place_limit",
+    code: "over_free_limit",
+    limit: 50,
+  });
 });
 
 test("SL2 #293 section B: a full account saves none and reports remaining 0", () => {
@@ -425,5 +429,51 @@ test("HoP R2 A1: phone Clip import increments that account by one and does not c
     server,
     /update places[\s\S]{0,80}set user_id/,
     "saves are not moved onto a different Privy account",
+  );
+});
+
+test("H-3 same identity different row matches an existing place", () => {
+  const owned = {
+    id: "11111111-1111-4111-8111-111111111111",
+    name: "Onibus Coffee",
+    latitude: 35.644,
+    longitude: 139.699,
+    google_place_id: "ChIJSameIdentity",
+  };
+  const incomingDifferentRow = {
+    id: "22222222-2222-4222-8222-222222222222",
+    name: "Onibus Coffee",
+    latitude: 35.6441,
+    longitude: 139.6991,
+    google_place_id: "ChIJSameIdentity",
+  };
+  const nearbyRename = {
+    id: "33333333-3333-4333-8333-333333333333",
+    name: "Onibus Coffee",
+    latitude: 35.6442,
+    longitude: 139.699,
+  };
+  const otherVenue = {
+    id: "44444444-4444-4444-8444-444444444444",
+    name: "Blue Bottle",
+    latitude: 35.682,
+    longitude: 139.798,
+    google_place_id: "ChIJOtherVenue",
+  };
+
+  assert.equal(
+    existingPlaceMatchingClipIdentity([owned], incomingDifferentRow)?.id,
+    owned.id,
+    "same Google id is one place even when the row id differs",
+  );
+  assert.equal(
+    existingPlaceMatchingClipIdentity([owned], nearbyRename)?.id,
+    owned.id,
+    "same name within 120m is one place even when the row id differs",
+  );
+  assert.equal(
+    existingPlaceMatchingClipIdentity([owned], otherVenue),
+    undefined,
+    "a different venue must still occupy a new slot",
   );
 });

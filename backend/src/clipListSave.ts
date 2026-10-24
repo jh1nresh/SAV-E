@@ -75,6 +75,19 @@ export function clipListPlaceIdentities(place: {
   return keys;
 }
 
+export function existingPlaceMatchingClipIdentity(
+  existingPlaces: Record<string, unknown>[],
+  incoming: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const incomingKeys = new Set(clipListPlaceIdentities(incoming));
+  if (incomingKeys.size === 0) return undefined;
+  for (const row of existingPlaces) {
+    if (clipListPlaceIdentities(row).some((key) => incomingKeys.has(key))) return row;
+    if (clipListPlacesAreNearbyDuplicate(incoming, row)) return row;
+  }
+  return undefined;
+}
+
 export function clipListPlacesAreNearbyDuplicate(
   left: { name?: unknown; latitude?: unknown; longitude?: unknown },
   right: { name?: unknown; latitude?: unknown; longitude?: unknown },
@@ -258,12 +271,6 @@ export function clipOnePlaceQuotaDecision(
   if (plan.alreadySaved > 0) return "duplicate";
   return "cap";
 }
-
-export const clipSavedPlaceLimitBody = {
-  error: "saved_place_limit",
-  code: "over_free_limit",
-  limit: FREE_LIST_SAVE_LIMIT,
-} as const;
 
 export type ClipListSavedIdentity = {
   id: string;

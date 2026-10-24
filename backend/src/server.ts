@@ -111,6 +111,7 @@ import {
 import {
   clipListPlaceIdentities,
   clipListSaveResponse,
+  existingPlaceMatchingClipIdentity,
   planClipListSave,
 } from "./clipListSave.js";
 import {
@@ -1643,46 +1644,80 @@ async function handlePlaces(
         return sendJson(response, { error: "Place does not match the shared place" }, 409);
       }
 
-      const receiptBody: JsonBody = {
-        ...body,
-        origin_shared_place_link_id: link.id,
-      };
-      const insert = buildInsert(
-        "places",
-        receiptBody,
-        [...placeFields, "user_id", "origin_shared_place_link_id"],
-      );
       const client = await pool.connect();
       try {
         await client.query("begin");
         await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
         const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
-        const { rows } = await client.query(
-          `${insert.sql}
-           ${friendSharePlaceOriginConflictClause}
-           returning *, (xmax = 0) as friend_share_receipt_created`,
-          insert.values,
+        const existing = await client.query(
+          "select * from places where user_id = $1",
+          [userId],
         );
-        const result = asObject(rows[0]);
-        const { friend_share_receipt_created: created, ...canonicalPlace } = result;
-        const terminalEvent = created === true
-          ? "friend_share_saved"
-          : "friend_share_duplicate_blocked";
-        await client.query(
-          `insert into friend_share_events (
-             shared_place_link_id,
-             sender_user_id,
-             recipient_user_id,
-             recipient_place_id,
-             event_type,
-             surface
-           )
-           values ($1, $2, $3, $4, $5, 'server')
-           on conflict do nothing`,
-          [link.id, link.user_id, userId, canonicalPlace.id, terminalEvent],
-        );
+        const matched = existingPlaceMatchingClipIdentity(existing.rows, body);
+        let created: unknown;
+        let canonicalPlace: JsonBody | undefined;
+        if (matched) {
+          await client.query(
+            `insert into friend_share_events (
+               shared_place_link_id,
+               sender_user_id,
+               recipient_user_id,
+               recipient_place_id,
+               event_type,
+               surface
+             )
+             values ($1, $2, $3, $4, $5, 'server')
+             on conflict do nothing`,
+            [link.id, link.user_id, userId, matched.id, "friend_share_duplicate_blocked"],
+          );
+        } else {
+          const receiptBody: JsonBody = {
+            ...body,
+            origin_shared_place_link_id: link.id,
+          };
+          const insert = buildInsert(
+            "places",
+            receiptBody,
+            [...placeFields, "user_id", "origin_shared_place_link_id"],
+          );
+          const { rows } = await client.query(
+            `${insert.sql}
+             ${friendSharePlaceOriginConflictClause}
+             returning *, (xmax = 0) as friend_share_receipt_created`,
+            insert.values,
+          );
+          const result = asObject(rows[0]);
+          const { friend_share_receipt_created: nextCreated, ...nextPlace } = result;
+          created = nextCreated;
+          canonicalPlace = nextPlace;
+          const terminalEvent = nextCreated === true
+            ? "friend_share_saved"
+            : "friend_share_duplicate_blocked";
+          await client.query(
+            `insert into friend_share_events (
+               shared_place_link_id,
+               sender_user_id,
+               recipient_user_id,
+               recipient_place_id,
+               event_type,
+               surface
+             )
+             values ($1, $2, $3, $4, $5, 'server')
+             on conflict do nothing`,
+            [link.id, link.user_id, userId, nextPlace.id, terminalEvent],
+          );
+        }
         await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
         await client.query("commit");
+        if (matched) {
+          return sendJson(response, {
+            place: formatPlace(asObject(matched)),
+            outcome: "already_saved",
+          }, 201);
+        }
+        if (!canonicalPlace) {
+          throw new Error("Friend share insert returned no place");
+        }
         return sendJson(response, {
           place: formatPlace(canonicalPlace),
           outcome: created === true ? "saved" : "already_saved",

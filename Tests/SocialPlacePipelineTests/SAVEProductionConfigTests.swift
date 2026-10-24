@@ -1271,6 +1271,81 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
+    func testHandoffAlreadySavedPlaceDoesNotGrowOrError() async throws {
+        let map = makeCappedMap(tier: .free)
+        await map.loadPlaces()
+        let existing = makeCappedPlaces(1)[0]
+        map.places = [existing]
+        let receipt = SharedPlaceReceipt.embedded(
+            SharedPlaceData(
+                id: UUID().uuidString,
+                name: existing.name,
+                address: existing.address,
+                lat: existing.latitude,
+                lng: existing.longitude,
+                category: "Cafe",
+                rating: nil,
+                reviewCount: nil,
+                priceRange: nil,
+                hours: nil,
+                sourceLabel: "Savvy",
+                sourceURL: nil,
+                photoURLs: [],
+                note: nil
+            )
+        )
+
+        let outcome = try await map.saveSharedPlaceReceipt(receipt)
+        XCTAssertTrue(outcome.isDuplicate)
+        XCTAssertEqual(map.places.count, 1)
+        XCTAssertEqual(map.places.first?.id, existing.id)
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    @MainActor
+    func testListHandoffAlreadySavedPlaceDoesNotGrowOrError() async throws {
+        let map = makeCappedMap(tier: .free)
+        await map.loadPlaces()
+        let existing = makeCappedPlaces(1)[0]
+        map.places = [existing]
+        let list = SaveCollaborativeList(title: "Handoff", items: [SaveListItem.from(place: existing)])
+
+        let result = try await map.saveClipListHandoff(list)
+        XCTAssertEqual(result.counts.newlySaved, 0)
+        XCTAssertEqual(result.counts.alreadySaved, 1)
+        XCTAssertEqual(result.counts.overCap, 0)
+        XCTAssertEqual(map.places.count, 1)
+        XCTAssertEqual(map.places.first?.id, existing.id)
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    @MainActor
+    func testListHandoffAtCapParksOverflowWithoutFullCapCopy() async throws {
+        let map = makeCappedMap(tier: .free)
+        await map.loadPlaces()
+        map.places = makeCappedPlaces(50)
+        let novel = makeCappedPlaces(1, indexOffset: 80)[0]
+        let list = SaveCollaborativeList(title: "Handoff", items: [SaveListItem.from(place: novel)])
+
+        do {
+            _ = try await map.saveClipListHandoff(list)
+            XCTFail("a list handoff at the free cap must not become a Map Stamp")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+            XCTAssertEqual(map.places.count, 50)
+            XCTAssertEqual(map.reviewCandidates.first?.name, novel.name)
+            XCTAssertEqual(map.reviewCandidates.first?.status, "review")
+            XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        }
+
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+        XCTAssertFalse(content.contains("Free Savvy is full (50 places)."))
+        XCTAssertFalse(content.contains("免費版 Savvy 已滿 50 個地點。"))
+        XCTAssertFalse(content.contains("已滿 50 個"))
+    }
+
+    @MainActor
     func testEmbeddedReceiptServerCapParksInsteadOfConfirmingLocally() async throws {
         let previousAuth = PrivyAuthService.shared.authState
         PrivyAuthService.shared.authState = .authenticated(userId: "receipt-owner")

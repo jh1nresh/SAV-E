@@ -1626,6 +1626,7 @@ struct ContentView: View {
             },
             failed: { error in
                 guard !(error is CancellationError) else { return }
+                if error is SavePlaceLimitError { return }
                 handoffToastText = languageSettings.localized(
                     english: "Couldn't save the list. Try again.",
                     traditionalChinese: "清單沒存好，請再試一次。"
@@ -1677,16 +1678,10 @@ struct ContentView: View {
             if handoffToastText != nil {
                 handoffToastText = nil
             }
-        } catch ClipListHandoffError.capReached {
+        } catch is SavePlaceLimitError {
             autoSaveIncomingShare = false
-            handoffToastText = languageSettings.localized(
-                english: "Free Savvy is full (50 places).",
-                traditionalChinese: "免費版 Savvy 已滿 50 個地點。"
-            )
-            try? await Task.sleep(for: .seconds(3))
-            if handoffToastText != nil {
-                handoffToastText = nil
-            }
+            incomingPlaceReceipt = nil
+            PendingShareStore.clear()
         } catch {
             autoSaveIncomingShare = false
             presentExclusiveRootSheet()
