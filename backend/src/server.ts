@@ -1776,7 +1776,9 @@ async function saveClipListPlaces(
   const client = await pool.connect();
   try {
     await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
     await client.query("select pg_advisory_xact_lock(hashtext($1))", [`clip-list-save:${userId}`]);
+    const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
     const existing = await client.query(
       "select id, name, latitude, longitude, google_place_id, provider_place_id from places where user_id = $1",
       [userId],
@@ -1786,7 +1788,7 @@ async function saveClipListPlaces(
       items,
       existingIdentities,
       existingPlaces: existing.rows,
-      savedPlaceCount: existing.rows.length,
+      savedPlaceCount: savedPlaceCountBefore ?? existing.rows.length,
     });
 
     const inserted: Record<string, unknown>[] = [];
@@ -1808,6 +1810,7 @@ async function saveClipListPlaces(
       inserted.push(rows[0]);
     }
 
+    await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
     await client.query("commit");
     return sendJson(response, clipListSaveResponse(plan, inserted), 201);
   } catch (error) {
