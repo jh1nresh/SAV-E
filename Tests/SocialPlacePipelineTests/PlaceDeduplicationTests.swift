@@ -105,6 +105,47 @@ final class PlaceDeduplicationTests: XCTestCase {
                        "Different venues must never be treated as duplicates")
     }
 
+    /// Punctuation placement is a word boundary. Backend savedPlaceLimit.normalized
+    /// must stay in lockstep so a 51st distinct venue is not counted as a duplicate.
+    @MainActor
+    func testPunctuationPlacementKeepsNearbyVenuesDistinct() {
+        let first = makePlace(
+            name: "AB-C",
+            address: "1 Example Road",
+            latitude: 25.0,
+            longitude: 121.0,
+            googlePlaceId: nil,
+            sourceUrl: nil
+        )
+        let second = makePlace(
+            name: "A-BC",
+            address: "1 Example Road",
+            latitude: 25.0,
+            longitude: 121.0,
+            googlePlaceId: nil,
+            sourceUrl: nil
+        )
+        XCTAssertFalse(first.matches(second))
+        XCTAssertEqual(Place.consolidated([first, second]).count, 2)
+        let folded = makePlace(
+            name: "Ｃａｆé!",
+            address: "1 Main St",
+            latitude: 25.0,
+            longitude: 121.0,
+            googlePlaceId: nil,
+            sourceUrl: nil
+        )
+        let ascii = makePlace(
+            name: "cafe",
+            address: "1 Main St",
+            latitude: 25.0005,
+            longitude: 121.0,
+            googlePlaceId: nil,
+            sourceUrl: nil
+        )
+        XCTAssertTrue(folded.matches(ascii))
+    }
+
     @MainActor
     func testOnePostCanRecommendDifferentVenuesAtTheSameCoordinate() {
         let first = makePlace(name: "Cafe", address: "Mall floor 1", googlePlaceId: nil, sourceUrl: "https://instagram.com/p/list")

@@ -278,12 +278,17 @@ final class ProfileViewModel: ObservableObject {
             // purge so a storage failure cannot leave A able to consume Share
             // queues. Sign out before the queue purge so admitted late writers
             // finish under the same per-file lock, then cannot recreate A.
+            var bindingClearError: Error?
             if !reviewerDemoProvider() {
                 let activeOwner = authService.currentUserId
                 if activeOwner == intent.owner,
                    currentUserIDProvider() == intent.owner,
                    authService.sessionGeneration == sessionGeneration {
-                    try? accountReferenceStore.clear()
+                    do {
+                        try accountReferenceStore.clear()
+                    } catch {
+                        bindingClearError = error
+                    }
                     await authService.signOut()
                     resetForCurrentSession()
                 } else if activeOwner == nil {
@@ -299,6 +304,9 @@ final class ProfileViewModel: ObservableObject {
             if authService.currentUserId != intent.owner,
                SavePlaceLimitHandoff.cachedActiveOwner() == intent.owner {
                 SavePlaceLimitHandoff.syncActiveOwner(nil)
+            }
+            if let bindingClearError {
+                throw bindingClearError
             }
         }
         // Quarantine both Share queues before the fallible vault-record purge

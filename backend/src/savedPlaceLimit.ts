@@ -181,7 +181,8 @@ function nonEmpty(value: unknown): string | undefined {
 function normalized(value: unknown): string {
   return typeof value === "string"
     ? value.normalize("NFKD").toLowerCase().replace(/ß/g, "ss").replace(/ς/g, "σ")
-      .replace(/[^\p{L}\p{N}]/gu, "")
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim()
     : "";
 }
 

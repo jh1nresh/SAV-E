@@ -4133,9 +4133,28 @@ final class SAVEProductionConfigTests: XCTestCase {
             profile.contains("else if activeOwner == nil"),
             "P2 4366334143: signed-out recovery must still clear the stale account binding"
         )
-        XCTAssertTrue(
+        XCTAssertFalse(
             profile.contains("try? accountReferenceStore.clear()"),
-            "P2 4366334143: the still-signed-in branch still swallows Keychain clear"
+            "P2 PRRT_kwDOTYZUp86v3W8L: neither branch swallows Keychain clear"
+        )
+        XCTAssertTrue(
+            profile.contains("bindingClearError = error"),
+            "P2 PRRT_kwDOTYZUp86v3W8L: signed-in clear failure is captured"
+        )
+        XCTAssertTrue(
+            profile.contains("if let bindingClearError"),
+            "P2 PRRT_kwDOTYZUp86v3W8L: rethrow after sign-out and cache sync"
+        )
+        let clearErrorStart = try XCTUnwrap(profile.range(of: "if let bindingClearError"))
+        XCTAssertLessThan(
+            try XCTUnwrap(profile.range(of: "SavePlaceLimitHandoff.syncActiveOwner(nil)")).lowerBound,
+            clearErrorStart.lowerBound,
+            "P2 PRRT_kwDOTYZUp86v3W8L: cache sync must run before rethrowing clear"
+        )
+        XCTAssertLessThan(
+            clearErrorStart.lowerBound,
+            purgeStart.lowerBound,
+            "P2 PRRT_kwDOTYZUp86v3W8L: rethrow before queue purge so the receipt stays"
         )
         let nilOwnerStart = try XCTUnwrap(profile.range(of: "else if activeOwner == nil"))
         let nilOwnerSlice = String(profile[nilOwnerStart.lowerBound...].prefix(500))
@@ -4146,6 +4165,11 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(
             nilOwnerSlice.contains("try? accountReferenceStore.clear()"),
             "P2 PRRT_kwDOTYZUp86v3Mrb: do not swallow Keychain clear after Privy is signed out"
+        )
+        let keychain = try source(at: "SAV-E/Services/AccountReferenceStore.swift")
+        XCTAssertTrue(
+            keychain.contains("status == errSecSuccess || status == errSecItemNotFound"),
+            "clear() must treat an empty Keychain item as success now that errors propagate"
         )
         let liveDeleteStart = try XCTUnwrap(profile.range(of: "try await accountDeletionService.deleteAccount"))
         let liveFinishStart = try XCTUnwrap(

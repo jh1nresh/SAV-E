@@ -1657,8 +1657,24 @@ private extension String {
 
 private extension String {
     var normalizedVenueIdentity: String {
-        folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
-            .unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.map(String.init).joined()
+        // Keep word boundaries: "AB-C" and "A-BC" stay distinct. Mirrors
+        // backend savedPlaceLimit.normalized (separators → one space).
+        let folded = folding(
+            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+            locale: Locale(identifier: "en_US_POSIX")
+        )
+        var scalars: [Unicode.Scalar] = []
+        var pendingSpace = false
+        for scalar in folded.unicodeScalars {
+            if CharacterSet.alphanumerics.contains(scalar) {
+                if pendingSpace, !scalars.isEmpty { scalars.append(" ") }
+                scalars.append(scalar)
+                pendingSpace = false
+            } else {
+                pendingSpace = true
+            }
+        }
+        return String(String.UnicodeScalarView(scalars))
     }
 }
 

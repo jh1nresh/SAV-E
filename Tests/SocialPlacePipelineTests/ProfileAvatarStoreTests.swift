@@ -176,6 +176,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
             avatarStore: ProfileAvatarStore(baseDirectory: directory),
             saveLocalVaultService: vault,
             pendingPlaceImportService: PendingPlaceImportService(overrideContainerURL: directory),
+            accountReferenceStore: InMemoryAccountReferenceStore(),
             currentUserIDProvider: { "did:privy:b" },
             reviewerDemoProvider: { false }
         )
@@ -216,6 +217,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
             },
             avatarStore: store, saveLocalVaultService: vault,
             pendingPlaceImportService: PendingPlaceImportService(overrideContainerURL: directory),
+            accountReferenceStore: InMemoryAccountReferenceStore(),
             currentUserIDProvider: { currentOwner }, reviewerDemoProvider: { false }
         )
         let deleted = await model.deleteAccount()
@@ -593,6 +595,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
             accountDeletionService: ClosureAccountDeletionService { requests += 1 },
             avatarStore: store, saveLocalVaultService: vault,
             pendingPlaceImportService: PendingPlaceImportService(overrideContainerURL: directory),
+            accountReferenceStore: InMemoryAccountReferenceStore(),
             currentUserIDProvider: { "account-a" }, reviewerDemoProvider: { false }
         )
         let result = await model.deleteAccount()
@@ -642,6 +645,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
             accountDeletionService: ClosureAccountDeletionService { requests += 1 },
             avatarStore: store, saveLocalVaultService: vault,
             pendingPlaceImportService: queue,
+            accountReferenceStore: InMemoryAccountReferenceStore(),
             currentUserIDProvider: { "account-a" }, reviewerDemoProvider: { false }
         )
         let result = await model.deleteAccount()
@@ -690,6 +694,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
             avatarStore: ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("avatars")),
             saveLocalVaultService: vault,
             pendingPlaceImportService: queue,
+            accountReferenceStore: InMemoryAccountReferenceStore(),
             currentUserIDProvider: { "account-a" },
             reviewerDemoProvider: { false }
         )
@@ -1011,6 +1016,59 @@ final class ProfileAvatarStoreTests: XCTestCase {
         XCTAssertNil(auth.currentUserId)
     }
 
+    /// P2 PRRT_kwDOTYZUp86v3W8L: signed-in clear failure must still sign out
+    /// and keep the receipt so signed-out retry can finish the binding.
+    @MainActor
+    func testSignedInDeletionSignsOutAndKeepsReceiptWhenBindingClearFailsThenRetryCompletes() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        let suite = "delete-signed-in-clear-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        SavePlaceLimitHandoff.testDefaults = defaults
+        defer {
+            auth.authState = previousAuth
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let deletedRef = "save_account_" + String(repeating: "A", count: 43)
+        let store = InMemoryAccountReferenceStore(value: deletedRef)
+        store.clearError = ProfileUpdateTestError.offline
+        let vault = SaveLocalVaultService(
+            overrideVaultURL: directory.appendingPathComponent("signed-in-clear-fail.json")
+        )
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a"))
+        auth.authState = .authenticated(userId: "account-a")
+        SavePlaceLimitHandoff.syncActiveOwner("account-a")
+
+        let model = deletionModel(
+            vault: vault,
+            currentOwner: { auth.currentUserId },
+            accountReferenceStore: store
+        ) {}
+
+        let first = await model.deleteAccount()
+        XCTAssertFalse(first)
+        XCTAssertNil(auth.currentUserId)
+        XCTAssertNil(SavePlaceLimitHandoff.cachedActiveOwner())
+        XCTAssertTrue(
+            model.errorMessage?.localizedCaseInsensitiveContains("retry to finish") == true,
+            model.errorMessage ?? "missing error"
+        )
+        let kept = try XCTUnwrap(vault.pendingAccountDeletionIntent())
+        XCTAssertEqual(kept.remoteOutcome, .succeeded)
+        XCTAssertEqual(store.value, deletedRef)
+        XCTAssertEqual(store.clearCount, 0)
+
+        store.clearError = nil
+        let retry = await model.deleteAccount()
+        XCTAssertTrue(retry)
+        XCTAssertNil(store.value)
+        XCTAssertEqual(store.clearCount, 1)
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+        XCTAssertNil(auth.currentUserId)
+    }
+
     @MainActor
     func testBothPendingQueuesPurgeAdmittedLateWritersBeforeClearingIntent() async throws {
         let auth = PrivyAuthService.shared
@@ -1149,6 +1207,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
                 accountDeletionService: ClosureAccountDeletionService { requests += 1 },
                 avatarStore: ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("avatars")),
                 saveLocalVaultService: vault, pendingPlaceImportService: pending,
+                accountReferenceStore: InMemoryAccountReferenceStore(),
                 currentUserIDProvider: { auth.currentUserId }, reviewerDemoProvider: { false })
             let deleted = await model.deleteAccount()
             XCTAssertFalse(deleted)
@@ -1164,6 +1223,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
                 accountDeletionService: ClosureAccountDeletionService { XCTFail("Retry must not delete B remotely") },
                 avatarStore: ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("avatars")),
                 saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: url), pendingPlaceImportService: pending,
+                accountReferenceStore: InMemoryAccountReferenceStore(),
                 currentUserIDProvider: { auth.currentUserId }, reviewerDemoProvider: { false })
             await fresh.loadProfile()
             XCTAssertNil(try vault.pendingAccountDeletionIntent())
@@ -1540,6 +1600,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
             avatarStore: ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("avatars")),
             saveLocalVaultService: vault,
             pendingPlaceImportService: queue,
+            accountReferenceStore: InMemoryAccountReferenceStore(),
             currentUserIDProvider: { "account-a" }, reviewerDemoProvider: { false }
         )
         let deleted = await model.deleteAccount()
@@ -1574,7 +1635,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
     private func deletionModel(
         vault: SaveLocalVaultService,
         currentOwner: @escaping () -> String?,
-        accountReferenceStore: AccountReferenceStoring = KeychainAccountReferenceStore.shared,
+        accountReferenceStore: AccountReferenceStoring = InMemoryAccountReferenceStore(),
         delete: @escaping @MainActor () async throws -> Void
     ) -> ProfileViewModel {
         ProfileViewModel(

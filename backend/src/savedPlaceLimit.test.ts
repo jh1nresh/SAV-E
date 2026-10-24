@@ -330,6 +330,14 @@ test("canonical identity honors provider conflicts, coordinates, addresses and U
   assert.equal(savedPlacesMatch({ ...base, location_provider: "amap", provider_place_id: "a1", google_place_id: "g1" },
     { ...base, id: "b", location_provider: "amap", provider_place_id: "a2", google_place_id: "g1" }), false);
   assert.equal(savedPlacesMatch({ name: "", address: "same" }, { name: "", address: "same" }), false);
+  assert.equal(savedPlacesMatch(
+    { id: "ab-c", name: "AB-C", address: "1 Example Road", latitude: 25, longitude: 121 },
+    { id: "a-bc", name: "A-BC", address: "1 Example Road", latitude: 25, longitude: 121 },
+  ), false);
+  assert.equal(consolidatedSavedPlaces([
+    { id: "ab-c", name: "AB-C", address: "1 Example Road", latitude: 25, longitude: 121 },
+    { id: "a-bc", name: "A-BC", address: "1 Example Road", latitude: 25, longitude: 121 },
+  ]).length, 2);
   // WGS84 meridional distances either side of 120 m, including high latitude.
   assert.equal(savedPlacesMatch({ ...base, latitude: 80 }, { ...base, id: "b", latitude: 80.00107 }), true);
   assert.equal(savedPlacesMatch({ ...base, latitude: 80 }, { ...base, id: "b", latitude: 80.00108 }), false);
