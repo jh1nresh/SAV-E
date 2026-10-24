@@ -110,6 +110,14 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertEqual(PlaceCategory.attraction.savvyEatGo, .go)
         XCTAssertEqual(PlaceCategory.food.savvyEatGo, .eat)
         XCTAssertEqual(PlaceCategory.cafe.savvyEatGo, .eat)
+        XCTAssertEqual(SavvyMapEatGo.go.label(language: .english), "Go")
+        XCTAssertEqual(SavvyMapEatGo.eat.label(language: .english), "Eat")
+        XCTAssertEqual(SavvyMapEatGo.go.label(language: .traditionalChinese), "去")
+        XCTAssertEqual(SavvyMapEatGo.eat.label(language: .traditionalChinese), "吃")
+        XCTAssertEqual(
+            "\(PlaceCategory.attraction.displayName(language: .traditionalChinese)) · \(SavvyMapEatGo.go.label(language: .traditionalChinese)) · 279m",
+            "景點 · 去 · 279m"
+        )
     }
 
     func testP4CameraPansNorthWithoutChangingLongitude() {
@@ -313,10 +321,59 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
             pin.range(of: "traditionalChinese: \"我來過了\"")!.lowerBound
                 < pin.range(of: "accessibilityIdentifier(\"map.card.beenHere\")")!.lowerBound
         )
-        XCTAssertTrue(pin.contains("\"\\(place.name), \\(category), \\(visit)\""))
+        XCTAssertTrue(pin.contains("SavvyMapCardCopy.pinAccessibilityLabel"))
         XCTAssertTrue(pin.contains("accessibilityFocused($nameFocused)"))
         XCTAssertTrue(pin.contains("nameFocused = true"))
         XCTAssertTrue(pin.contains("english: \"See details\""))
+    }
+
+    func testZhHantCardCopyUsesDesignWordsAndKeepsEnglish() throws {
+        XCTAssertEqual(SavvyMapCardCopy.directionsTitle(language: .english), "Directions")
+        XCTAssertEqual(SavvyMapCardCopy.directionsTitle(language: .traditionalChinese), "怎麼去")
+        XCTAssertEqual(
+            SavvyMapCardCopy.pinAccessibilityLabel(
+                name: "Temple of Heaven",
+                category: "Attraction",
+                visit: "not visited",
+                language: .english
+            ),
+            "Temple of Heaven, Attraction, not visited"
+        )
+        XCTAssertEqual(
+            SavvyMapCardCopy.pinAccessibilityLabel(
+                name: "天壇",
+                category: "景點",
+                visit: "沒去過",
+                language: .traditionalChinese
+            ),
+            "天壇、景點、沒去過"
+        )
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        let date = try XCTUnwrap(
+            calendar.date(from: DateComponents(year: 2026, month: 10, day: 24))
+        )
+        let englishDate = SavvyMapCardCopy.visitDateText(date, language: .english)
+        let chineseDate = SavvyMapCardCopy.visitDateText(date, language: .traditionalChinese)
+        XCTAssertTrue(englishDate.contains("Oct"))
+        XCTAssertFalse(chineseDate.contains("Oct"))
+        XCTAssertFalse(chineseDate.contains("October"))
+        XCTAssertTrue(chineseDate.contains("10") && chineseDate.contains("24"))
+
+        let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        XCTAssertTrue(pins.contains("SavvyMapCardCopy.directionsTitle"))
+        XCTAssertFalse(pins.contains("Text(\"Directions\")"))
+        XCTAssertTrue(pins.contains("traditionalChinese: \"怎麼去\""))
+        XCTAssertTrue(pins.contains("traditionalChinese: \"吃\""))
+        XCTAssertTrue(pins.contains("traditionalChinese: \"去\""))
+        XCTAssertTrue(pins.contains("traditionalChinese: \"我來過了\""))
+        XCTAssertFalse(pins.contains("SaveDoodleLens"))
+        XCTAssertEqual(pins.components(separatedBy: "SavvyMapCardCopy.directionsTitle").count - 1, 2)
+
+        let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
+        XCTAssertTrue(root.contains("place.appleMapsURL"))
+        XCTAssertTrue(root.contains("UIApplication.shared.open(url)"))
     }
 
     func testP11ThirtyPinsStayIndividualAnnotations() throws {

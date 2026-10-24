@@ -340,10 +340,34 @@ enum SavvyMapEatGo: String {
     func label(language: AppLanguage) -> String {
         switch self {
         case .eat:
-            return language.localized(english: "Eat", traditionalChinese: "Eat")
+            return language.localized(english: "Eat", traditionalChinese: "吃")
         case .go:
-            return language.localized(english: "Go", traditionalChinese: "Go")
+            return language.localized(english: "Go", traditionalChinese: "去")
         }
+    }
+}
+
+enum SavvyMapCardCopy {
+    static func directionsTitle(language: AppLanguage) -> String {
+        language.localized(english: "Directions", traditionalChinese: "怎麼去")
+    }
+
+    static func pinAccessibilityLabel(
+        name: String,
+        category: String,
+        visit: String,
+        language: AppLanguage
+    ) -> String {
+        let joiner = language == .traditionalChinese ? "、" : ", "
+        return "\(name)\(joiner)\(category)\(joiner)\(visit)"
+    }
+
+    static func visitDateText(_ date: Date, language: AppLanguage) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: language == .traditionalChinese ? "zh_Hant_TW" : "en_US")
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
     }
 }
 
@@ -754,7 +778,12 @@ struct SavvyMapPhotoPinView: View {
         let visit = isVisited
             ? languageSettings.localized(english: "visited", traditionalChinese: "去過")
             : languageSettings.localized(english: "not visited", traditionalChinese: "沒去過")
-        return "\(place.name), \(category), \(visit)"
+        return SavvyMapCardCopy.pinAccessibilityLabel(
+            name: place.name,
+            category: category,
+            visit: visit,
+            language: languageSettings.language
+        )
     }
 }
 
@@ -951,7 +980,7 @@ struct SavvyMapPlaceCard: View {
 
             HStack(spacing: 12) {
                 Button(action: onDirections) {
-                    Text("Directions")
+                    Text(SavvyMapCardCopy.directionsTitle(language: languageSettings.language))
                         .font(SaveAtlasType.strong(16))
                         .foregroundStyle(SaveAtlasPalette.paper)
                         .frame(maxWidth: .infinity, minHeight: SavvyMapPinMetrics.cardButtonHeight)
@@ -1106,7 +1135,7 @@ struct SavvyMapPlaceCard: View {
                 }
 
                 Button(action: onDirections) {
-                    Text("Directions")
+                    Text(SavvyMapCardCopy.directionsTitle(language: languageSettings.language))
                         .font(SaveAtlasType.strong(16))
                         .foregroundStyle(SaveAtlasPalette.paper)
                         .frame(maxWidth: .infinity, minHeight: SavvyMapPinMetrics.cardButtonHeight)
@@ -1174,7 +1203,7 @@ struct SavvyMapPlaceCard: View {
             return languageSettings.localized(english: "Not visited yet", traditionalChinese: "還沒來過")
         }
         let count = back.visitCount
-        let date = back.lastVisit?.formatted(date: .abbreviated, time: .omitted) ?? ""
+        let date = back.lastVisit.map { SavvyMapCardCopy.visitDateText($0, language: languageSettings.language) } ?? ""
         if languageSettings.language == .traditionalChinese {
             return date.isEmpty ? "去過 \(count) 次" : "去過 \(count) 次 · 最近 \(date)"
         }
