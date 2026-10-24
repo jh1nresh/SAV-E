@@ -280,10 +280,49 @@ struct SaveLibraryView: View {
                 .accessibilityIdentifier("saves.review.empty")
             } else {
                 let candidates = sortedCandidates
+                let unplaced = candidates.filter(\.isUnplacedInbox)
+                let others = candidates.filter { !$0.isUnplacedInbox }
                 LazyVStack(spacing: 0) {
-                    ForEach(candidates) { candidate in
+                    if !unplaced.isEmpty {
+                        VStack(alignment: .leading, spacing: 0) {
+                            let unplacedTitle = localized("Unplaced", "暫未放入")
+                            let unplacedReason = localized(
+                                "Held after 50 places saved. Not on the map yet.",
+                                "已存 50 個地點，所以暫放，還沒放上地圖。"
+                            )
+                            Text(unplacedTitle)
+                                .font(SaveAtlasType.strong(12))
+                                .foregroundStyle(SaveAtlasPalette.forest)
+                                .padding(.horizontal, 14)
+                                .padding(.top, 12)
+                                .padding(.bottom, 2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityAddTraits(.isHeader)
+                                .accessibilityLabel(unplacedTitle)
+                                .accessibilityIdentifier("saves.unplaced.title")
+                            Text(unplacedReason)
+                            .font(SaveAtlasType.body(12))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 14)
+                            .padding(.bottom, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityLabel(unplacedReason)
+                            .accessibilityIdentifier("saves.unplaced.reason")
+                            ForEach(unplaced) { candidate in
+                                reviewTicket(candidate)
+                                if candidate.id != unplaced.last?.id || !others.isEmpty {
+                                    Divider().overlay(SaveAtlasPalette.line.opacity(0.18))
+                                        .padding(.leading, 64)
+                                }
+                            }
+                        }
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("saves.unplaced")
+                    }
+                    ForEach(others) { candidate in
                         reviewTicket(candidate)
-                        if candidate.id != candidates.last?.id {
+                        if candidate.id != others.last?.id {
                             Divider().overlay(SaveAtlasPalette.line.opacity(0.18))
                                 .padding(.leading, 64)
                         }
@@ -441,7 +480,11 @@ struct SaveLibraryView: View {
             "Open this clue in Review",
             "在待確認中打開這個線索"
         ))
-        .accessibilityIdentifier("saves.reviewCandidate.\(candidate.id.uuidString)")
+        .accessibilityIdentifier(
+            candidate.isUnplacedInbox
+                ? "saves.unplaced.row.\(candidate.id.uuidString)"
+                : "saves.reviewCandidate.\(candidate.id.uuidString)"
+        )
     }
 
     private func mapStampTicket(_ place: Place) -> some View {
@@ -473,7 +516,10 @@ struct SaveLibraryView: View {
     }
 
     private func candidateKindTitle(_ candidate: PlaceReviewCandidate) -> String {
-        candidateKind(candidate) == .sourceClue
+        if candidate.isUnplacedInbox {
+            return localized("Unplaced", "暫未放入")
+        }
+        return candidateKind(candidate) == .sourceClue
             ? localized("Source Clue", "來源線索")
             : localized("Review Candidate", "待確認地點")
     }
@@ -662,7 +708,10 @@ private struct SaveAtlasReviewTicket: View {
     }
 
     private var kindTitle: String {
-        kind == .sourceClue
+        if candidate.isUnplacedInbox {
+            return localized("Unplaced", "暫未放入")
+        }
+        return kind == .sourceClue
             ? localized("Source Clue", "來源線索")
             : localized("Review Candidate", "待確認地點")
     }

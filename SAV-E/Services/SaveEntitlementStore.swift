@@ -20,6 +20,15 @@ final class SaveEntitlementStore {
         guard stateSession == currentSession() else { return .free }
         return isFailingOpen ? (storeKit.serverVerifiedTier ?? .free) : confirmedTier
     }
+
+    /// Local saved-place refusal may run only after this session received a
+    /// server quota. Unresolved and fail-open stay off so a Pro account is
+    /// not parked as free before `refresh()`.
+    var hasAuthoritativeSavedPlaceTier: Bool {
+        stateSession == currentSession()
+            && ["free", "pro"].contains(quota?.tier ?? "")
+            && !isFailingOpen
+    }
     private(set) var quota: SaveUsageQuotaPreview?
     private(set) var isRefreshing = false
     /// True when the server could not be reached, so the UI can avoid making
@@ -79,6 +88,7 @@ final class SaveEntitlementStore {
             quota = preview
             confirmedTier = preview.resolvedTier
             isFailingOpen = false
+            NotificationCenter.default.post(name: .saveEntitlementDidRefresh, object: nil)
         } catch {
             guard isCurrent(session, operation: operation) else { return }
             quota = nil
@@ -193,4 +203,8 @@ nonisolated struct SaveEntitlementResponse: Codable, Equatable, Sendable {
     var resolvedTier: SaveProTier {
         SaveProTier(rawValue: tier) ?? .free
     }
+}
+
+extension Notification.Name {
+    static let saveEntitlementDidRefresh = Notification.Name("save.entitlementDidRefresh")
 }

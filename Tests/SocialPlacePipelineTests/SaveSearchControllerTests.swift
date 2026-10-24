@@ -3410,6 +3410,230 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testLocalOnlyConfirmDoesNotMirrorIntoANewSession() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        auth.authState = .authenticated(userId: "owner-a")
+        defer { auth.authState = previousAuth }
+
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-only-session-swap-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-only-session-swap-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.onSavePlace = {
+            auth.authState = .authenticated(userId: "owner-b")
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        let parked = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Session Swap Cafe",
+            address: "1 Swap Road",
+            city: nil,
+            latitude: 25.0,
+            longitude: 121.0,
+            evidence: [],
+            confidence: 0.9,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        _ = try vault.saveReviewCandidate(parked)
+        map.reviewCandidates = [parked]
+        map.places = []
+
+        do {
+            _ = try await map.saveReviewCandidateAsPlace(parked)
+            XCTFail("a session change after /places must not continue locally")
+        } catch ReviewCandidateError.sessionChangedAfterCommit {
+            // Account A already saved. Do not write that stamp into B.
+        }
+        XCTAssertEqual(supabase.savedPlaces.count, 1, "account A already saved on the server")
+        XCTAssertEqual(supabase.fetchPlacesCalls, 0, "must not refresh the new account")
+        XCTAssertTrue(map.places.isEmpty, "must not insert account A's stamp into the new session")
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == parked.id })
+        XCTAssertTrue(try vault.confirmedPlaces().isEmpty)
+        XCTAssertEqual(try vault.reviewCandidates().first?.id, parked.id)
+    }
+
+    @MainActor
+    func testSocialSaveDoesNotMirrorIntoANewSession() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        auth.authState = .authenticated(userId: "owner-a")
+        defer { auth.authState = previousAuth }
+
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("social-session-swap-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let supabase = RecordingSupabaseService()
+        supabase.onSavePlace = {
+            auth.authState = .authenticated(userId: "owner-b")
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        let social = Place(
+            id: UUID(),
+            name: "Social Session Cafe",
+            address: "2 Swap Road",
+            latitude: 25.1,
+            longitude: 121.1,
+            googlePlaceId: "social-session-cafe",
+            category: .cafe,
+            status: .wantToGo,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: "Alex",
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
+        )
+        map.socialPlaces = [social]
+        map.places = []
+
+        do {
+            _ = try await map.saveSocialPlaceToMySave(social)
+            XCTFail("a session change after /places must not continue locally")
+        } catch ReviewCandidateError.sessionChangedAfterCommit {
+            // Account A already saved. Do not write that stamp into B.
+        }
+        XCTAssertEqual(supabase.savedPlaces.count, 1, "account A already saved on the server")
+        XCTAssertTrue(map.places.isEmpty, "must not insert account A's stamp into the new session")
+        XCTAssertTrue(try vault.confirmedPlaces().isEmpty)
+        XCTAssertTrue(try vault.confirmedPlaceRecords().allSatisfy { $0.ownerSubject != "owner-b" })
+    }
+
+    @MainActor
+    func testTakeoutSaveDoesNotPublishIntoANewSession() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        auth.authState = .authenticated(userId: "owner-a")
+        defer { auth.authState = previousAuth }
+
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("takeout-session-swap-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let supabase = RecordingSupabaseService()
+        supabase.onSavePlace = {
+            auth.authState = .authenticated(userId: "owner-b")
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        map.places = []
+        let drafts = [
+            ImportedPlaceDraft(
+                name: "Takeout Session Cafe",
+                address: "3 Swap Road",
+                latitude: 25.2,
+                longitude: 121.2,
+                sourceFile: "Saved Places.json",
+                sourceFormat: "json",
+                reviewState: .readyToSave
+            )
+        ]
+
+        do {
+            _ = try await map.saveImportedPlaces(drafts)
+            XCTFail("a session change after /places must not publish into the new session")
+        } catch ReviewCandidateError.sessionChangedAfterCommit {
+            // Account A already saved. Do not insert that stamp into B.
+        }
+        XCTAssertEqual(supabase.savedPlaces.count, 1, "account A already saved on the server")
+        XCTAssertTrue(map.places.isEmpty, "must not insert account A's Takeout stamp into the new session")
+    }
+
+    @MainActor
+    func testLocalOnlyConfirmDoesNotMirrorAfterRefreshSessionChange() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        auth.authState = .authenticated(userId: "owner-a")
+        defer { auth.authState = previousAuth }
+
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-only-refresh-swap-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("local-only-refresh-swap-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.onFetchPlaces = {
+            auth.authState = .authenticated(userId: "owner-b")
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        let parked = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Refresh Swap Cafe",
+            address: "2 Swap Road",
+            city: nil,
+            latitude: 25.1,
+            longitude: 121.1,
+            evidence: [],
+            confidence: 0.9,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        _ = try vault.saveReviewCandidate(parked)
+        map.reviewCandidates = [parked]
+        map.places = []
+
+        do {
+            _ = try await map.saveReviewCandidateAsPlace(parked)
+            XCTFail("a session change during confirmed-place refresh must not continue locally")
+        } catch ReviewCandidateError.sessionChangedAfterCommit {
+            // Account A already saved. Do not write that stamp into B.
+        }
+        XCTAssertEqual(supabase.savedPlaces.count, 1)
+        XCTAssertEqual(supabase.fetchPlacesCalls, 1)
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == parked.id })
+        XCTAssertTrue(try vault.confirmedPlaces().isEmpty)
+        XCTAssertEqual(try vault.reviewCandidates().first?.id, parked.id)
+    }
+
+    @MainActor
     func testExactSearchResolutionDoesNotRollBackAfterCommittedDecision() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("exact-search-committed-no-rollback-\(UUID().uuidString).json")
@@ -6440,7 +6664,8 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(drawer.contains("guard case .reviewCandidate = mapDetailDrawerItem else { return false }"))
         XCTAssertTrue(drawer.contains("if shouldEndExactSearch"))
         XCTAssertTrue(mapModel.contains("func clearMapSearchResults(preservesExactSearchClue: Bool = false)"))
-        XCTAssertTrue(mapModel.contains("retireResolvedReviewClue"))
+        XCTAssertTrue(mapModel.contains("removeReviewCandidateAfterRemoteConfirm"))
+        XCTAssertTrue(mapModel.contains("Unplaced cleanup must succeed"))
         XCTAssertTrue(mapModel.contains("reviewCandidates.first(where: { $0.id == candidate.id }) ?? candidate"))
         XCTAssertTrue(mapModel.contains("$0.id == clue.id"))
         XCTAssertFalse(mapModel.contains("retireSameNameReviewClues"))
@@ -6717,6 +6942,7 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     var failingUpdatePlaceCalls: Set<Int> = []
     var recordDecisionError: Error?
     var onRecordDecision: (() -> Void)?
+    var onSavePlace: (() -> Void)?
     private var holdUpdatePlace = false
     private var resumeUpdatePlace: (() -> Void)?
 
@@ -6734,12 +6960,15 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
 
     func startAnalysis(id: UUID) async throws -> UUID? { nil }
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {}
+    var onFetchPlaces: (() -> Void)?
     func fetchPlaces(for userId: String) async throws -> [Place] {
         fetchPlacesCalls += 1
+        onFetchPlaces?()
         return []
     }
     func savePlace(_ place: Place, userId: String) async throws {
         savedPlaces.append(place)
+        onSavePlace?()
     }
     func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult {
         throw SupabaseError.notConfigured
