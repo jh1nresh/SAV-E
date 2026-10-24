@@ -29,8 +29,8 @@ map.png, and friends.png. The result-bundle mode prefers the live
 five-tab-home attachment for Home and falls back to atlas-home for
 prototype-only runs. Saves, Plan, and Map use the stable atlas-saves,
 atlas-plan, and atlas-map XCTest attachments. Friends is a real 0.90
-gate against `friends.png` (Home deferral on #290 does not apply to
-Friends). Compare the populated `five-tab-friends` attachment, not
+gate against `friends.png` (Home deferral on #290 does not apply to Friends).
+Compare the populated `five-tab-friends` attachment, not
 `five-tab-friends-empty`.
 
 --destination runs the prototype XCTest testCaptureFourLockedScreens
