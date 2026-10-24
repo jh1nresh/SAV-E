@@ -71,9 +71,9 @@ private func parseOptions() throws -> Options {
         let key = CommandLine.arguments[index]
         let value = CommandLine.arguments[index + 1]
         if key == "--ignore-rect" {
-            let parts = value.split(separator: ",").compactMap { Double($0) }
-            guard parts.count == 4 else { throw ParityError.usage }
-            ignoreRects.append(CGRect(x: parts[0], y: parts[1], width: parts[2], height: parts[3]))
+            ignoreRects.append(try parseIgnoreRect(value))
+        } else if key == "--ignore-rects" {
+            ignoreRects.append(contentsOf: try parseIgnoreRects(value))
         } else if key == "--ignore-mask" {
             ignoreMask = URL(fileURLWithPath: value)
         } else {
@@ -98,6 +98,20 @@ private func parseOptions() throws -> Options {
         threshold: Double(values["--threshold"] ?? "0.90") ?? 0.90,
         ignoreRects: ignoreRects,
         ignoreMask: ignoreMask    )
+}
+
+
+private func parseIgnoreRect(_ raw: String) throws -> CGRect {
+    let parts = raw.split(separator: ",").compactMap { Double($0) }
+    guard parts.count == 4 else { throw ParityError.usage }
+    return CGRect(x: parts[0], y: parts[1], width: parts[2], height: parts[3])
+}
+
+/// Paywall uses one `--ignore-rects` flag with a semicolon-separated list.
+private func parseIgnoreRects(_ raw: String) throws -> [CGRect] {
+    try raw.split(separator: ";", omittingEmptySubsequences: true).map { token in
+        try parseIgnoreRect(String(token))
+    }
 }
 
 private func strictRGBA(

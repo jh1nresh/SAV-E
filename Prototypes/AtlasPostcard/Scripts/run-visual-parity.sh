@@ -12,6 +12,7 @@ RESULT_BUNDLE=""
 SCREENSHOTS_DIR=""
 DESTINATION="${ATLAS_DESTINATION:-}"
 BOOTED_BEFORE=""
+SKIP_SCREENS=""
 
 usage() {
     cat <<'EOF'
@@ -23,6 +24,8 @@ Usage:
 Options:
   --artifacts DIR       Write reference/output/diff/results under DIR.
   --threshold NUMBER    Gate threshold. Must be at least 0.90 (default 0.90).
+  --skip-screens LIST   Comma-separated screens to omit when the selected
+                        UI set did not capture them (e.g. paywall,capture).
 
 The screenshots directory must contain home.png, saves.png, plan.png,
 and map.png. The result-bundle mode prefers the live five-tab-home
@@ -30,6 +33,9 @@ attachment for Home and falls back to atlas-home for prototype-only
 runs. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
 and atlas-map XCTest attachments. Friends is a real 0.90 gate against
 `friends.png` (Home deferral on #290 does not apply to Friends).
+Capture and paywall use five-tab-capture and five-tab-paywall when
+those rails ran. Paywall comparison passes `--ignore-rects` over the
+hero, sale-state line, and legal sentence.
 
 --destination runs the prototype XCTest testCaptureFourLockedScreens
 (Home, Saves, Plan, Map only). Friends is not in that prototype shell;
@@ -59,6 +65,10 @@ while (($#)); do
             THRESHOLD="${2:?missing value for --threshold}"
             shift 2
             ;;
+        --skip-screens)
+            SKIP_SCREENS="${2:?missing value for --skip-screens}"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -77,6 +87,10 @@ then
     echo "error: threshold must be between 0.90 and 1.0" >&2
     exit 2
 fi
+
+should_skip_screen() {
+    [[ ",${SKIP_SCREENS}," == *",$1,"* ]]
+}
 
 input_count=0
 [[ -n "$DESTINATION" ]] && ((input_count += 1))
@@ -207,10 +221,14 @@ mkdir -p \
 # Prototype --destination still compares four screens (no Friends tab).
 # Production result-bundle also gates Friends at 0.90 against friends.png.
 destination_screens=(home saves plan map)
-parity_screens=(home saves plan map friends)
+parity_screens=(home saves plan map friends capture paywall)
 captured_from_prototype=0
 
-for screen in home saves plan map friends; do
+for screen in home saves plan map friends capture paywall; do
+    if should_skip_screen "$screen"; then
+        echo "note: skipping $screen reference (not in this coverage set)"
+        continue
+    fi
     source="$REFERENCE_SOURCE/$screen.png"
     if [[ ! -f "$source" ]]; then
         echo "error: missing reference image: $source" >&2
@@ -344,6 +362,14 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                     screen="friends"
                     priority=1
                     ;;
+                five-tab-capture*)
+                    screen="capture"
+                    priority=1
+                    ;;
+                five-tab-paywall*)
+                    screen="paywall"
+                    priority=1
+                    ;;
                 atlas-friends*)
                     screen="friends"
                     priority=0
@@ -374,6 +400,10 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
     fi
 
     for screen in "${extract_screens[@]}"; do
+        if should_skip_screen "$screen"; then
+            echo "note: skipping $screen (not in this coverage set)"
+            continue
+        fi
         newest="$(
             printf '%s' "$candidates" |
                 awk -F"$tab" -v want="$screen" '
@@ -436,6 +466,9 @@ mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
 # map-mask.png to the 0.90 score. Home still uses home-mask.png.
 # Home and Map fail the job below 0.90 the same way as Saves and Plan.
 for screen in "${compare_screens[@]}"; do
+    if should_skip_screen "$screen"; then
+        continue
+    fi
     actual="$ARTIFACT_DIR/output/$screen.png"
     if [[ ! -f "$actual" ]]; then
         echo "error: missing exported attachment for $screen" >&2
@@ -444,6 +477,9 @@ for screen in "${compare_screens[@]}"; do
 
     extra_args=()
     mask_args=()
+    if [[ "$screen" == "paywall" ]]; then
+        extra_args=(--ignore-rects "24,132,354,176;24,444,354,22;24,698,354,50")
+    fi
     if [[ "$screen" == home && -f "$ARTIFACT_DIR/reference/home-mask.png" ]]; then
         mask_args+=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
     fi

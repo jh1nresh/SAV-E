@@ -759,6 +759,27 @@ at `eade369` (exact 402×874; `home-dark.png`) is archive only. v1 is
 retired. Home and Map still fail CI below 0.90; do not apply
 `map-mask.png` to the Map score.
 
+### Capture and Pro factual state
+
+Capture's photo action opens the system photo picker and reads text locally.
+The extracted text is editable and is only analyzed after the user taps Save;
+a photo never creates a confirmed Map Stamp directly. Empty or unreadable
+photos show an actionable error. Existing draft text is preserved.
+Search nearby opens the Map search drawer. It does not leave the user typing
+in Capture. Before analysis, Capture shows no invented suggestion from old
+saves. Its saved count is the actual count, without a fabricated 50-place cap.
+Pro retains the current modal layout. Settings / Passport open the same
+wall without an extra "Upgrade" or "not on sale" line. The 51st-save
+trigger uses "You've saved 50 places. Keep going." / "已存 50 個地點，繼續存下去".
+StoreKit prices come from the `SAVEPro.storekit` test catalog in DEBUG /
+UI tests and from App Store Connect once products are live; a failed load
+shows retry, never a hardcoded $6.99. An exhausted AI assist never opens
+this wall; the assist surface shows a neutral `ai.quotaExhausted` message
+instead. Product navigation does not mount TileTown Home, RootMap, or Canvas.
+The 200pt hero is the colored hand-drawn park (official color stickers
+plus a pencil). Do not use SF Symbols inside filled circles as place
+stickers.
+
 ### Sign-In
 
 First impression:

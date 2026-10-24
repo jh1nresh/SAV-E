@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C4P100000000000000000001 /* SaveCaptureFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4P100000000000000000002 /* SaveCaptureFlowView.swift */; };
+		C4P100000000000000000003 /* SaveDoodleCapturePaywallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4P100000000000000000004 /* SaveDoodleCapturePaywallTests.swift */; };
 		F815A0000000000000000001 /* SaveFriendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F815A0000000000000000002 /* SaveFriendsView.swift */; };
 		T7A100000000000000000001 /* SaveTileTownMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000002 /* SaveTileTownMap.swift */; };
 		T7A100000000000000000003 /* SaveKraftStamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000004 /* SaveKraftStamp.swift */; };
@@ -312,6 +314,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C4P100000000000000000002 /* SaveCaptureFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCaptureFlowView.swift; sourceTree = "<group>"; };
+		C4P100000000000000000004 /* SaveDoodleCapturePaywallTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleCapturePaywallTests.swift; sourceTree = "<group>"; };
 		F815A0000000000000000002 /* SaveFriendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveFriendsView.swift; sourceTree = "<group>"; };
 		T7A100000000000000000002 /* SaveTileTownMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownMap.swift; sourceTree = "<group>"; };
 		T7A100000000000000000004 /* SaveKraftStamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveKraftStamp.swift; sourceTree = "<group>"; };
@@ -641,6 +645,14 @@
 			path = "SAV-E/DebugBridge/Sources/DebugBridgeTouch/include";
 			sourceTree = "<group>";
 		};
+		C4P100000000000000000005 /* Capture */ = {
+			isa = PBXGroup;
+			children = (
+				C4P100000000000000000002 /* SaveCaptureFlowView.swift */,
+			);
+			path = Capture;
+			sourceTree = "<group>";
+		};
 		1C3D7D3EC0790BB3B200433A /* Home */ = {
 			isa = PBXGroup;
 			children = (
@@ -813,6 +825,7 @@
 				68F2C25133736DAABDAA1B57 /* Atlas */,
 				7DA644A8D1177F8E30A9F0E3 /* Components */,
 				9139D454B1CF7369056FEAD9 /* Drawer */,
+				C4P100000000000000000005 /* Capture */,
 				1C3D7D3EC0790BB3B200433A /* Home */,
 				T7A10000000000000000000B /* TileTown */,
 				0DEF737A97EB8D779D03246B /* Import */,
@@ -936,6 +949,7 @@
 				5CD5DE6A80F7B22D67182A2C /* AtlasHomeHeroPresentationTests.swift */,
 				6F3BF7069E799A11086D07F7 /* AtlasOneFaceUITests.swift */,
 				T7A10000000000000000000A /* SaveTileTownLockTests.swift */,
+				C4P100000000000000000004 /* SaveDoodleCapturePaywallTests.swift */,
 				D2E100000000000000000006 /* SaveDoodleHomeTests.swift */,
 				F815A0000000000000000004 /* SaveDoodleFriendsTests.swift */,
 				D3E100000000000000000006 /* SaveDoodleMapTests.swift */,
@@ -1486,6 +1500,7 @@
 				1C753DEBFAB2D59B79856E1C /* AtlasHomeHeroPresentationTests.swift in Sources */,
 				3A214817A2A61AB5299EEC7E /* AtlasOneFaceUITests.swift in Sources */,
 				T7A100000000000000000009 /* SaveTileTownLockTests.swift in Sources */,
+				C4P100000000000000000003 /* SaveDoodleCapturePaywallTests.swift in Sources */,
 				D2E100000000000000000005 /* SaveDoodleHomeTests.swift in Sources */,
 				F815A0000000000000000003 /* SaveDoodleFriendsTests.swift in Sources */,
 				D3E100000000000000000005 /* SaveDoodleMapTests.swift in Sources */,
@@ -1662,6 +1677,7 @@
 				4BA3ABE34DD36248725F3003 /* SavePlaceShareButton.swift in Sources */,
 				11765646BAB7447D0F52747F /* SavePlanAroundController.swift in Sources */,
 				4EF9CBE70CD4A87789905A9B /* SavePlanAroundModels.swift in Sources */,
+				C4P100000000000000000001 /* SaveCaptureFlowView.swift in Sources */,
 				1D6E5C96BBB9574AE9A78211 /* SaveProPaywallView.swift in Sources */,
 				1FD4E4A282E15C3348A91111 /* SaveRootViews.swift in Sources */,
 				FD27CCBFEDABF6FCDAF3AB57 /* SaveSearchController.swift in Sources */,
