@@ -3355,26 +3355,48 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             for count in [0, 1, 100] {
                 try captureHomeHintCount(
                     count: count,
-                    language: language
+                    language: language,
+                    dark: false
+                )
+            }
+            // Dark evidence is UI-test artifacts only. N=0 and N=1 are the
+            // DESIGN re-judge states; N=99+ stays light to keep the rail short.
+            for count in [0, 1] {
+                try captureHomeHintCount(
+                    count: count,
+                    language: language,
+                    dark: true
                 )
             }
         }
     }
 
     @MainActor
-    private func captureHomeHintCount(count: Int, language: String) throws {
+    private func captureHomeHintCount(count: Int, language: String, dark: Bool) throws {
         let label = count > 99 ? "n99" : "n\(count)"
         let languageTag = language == "en" ? "en" : "zh"
+        let appearanceTag = dark ? "-dark" : ""
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        if dark {
+            XCUIDevice.shared.appearance = .dark
+        }
+        var arguments = [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-location-allowed",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed", "--uitest-home-taipei-granted",
+            "--uitest-home-hint-count=\(count)",
+            "-save.appLanguage", language,
+        ]
+        if dark {
+            arguments.append(contentsOf: ["--uitest-force-dark", "-AppleInterfaceStyle", "Dark"])
+        } else {
+            arguments.append("--uitest-force-light")
+        }
         let app = makeApp(
-            launchArguments: [
-                "--uitest-complete-onboarding", "--skip-map-tour",
-                "--uitest-location-allowed",
-                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
-                "--uitest-repair-review-demo-seed", "--uitest-home-taipei-granted",
-                "--uitest-home-hint-count=\(count)",
-                "--uitest-force-light",
-                "-save.appLanguage", language,
-            ],
+            launchArguments: arguments,
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
         )
         launch(app)
@@ -3410,23 +3432,25 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             }
         }
         let width = Int(app.frame.width.rounded())
-        let metadata = XCTAttachment(string: "viewport=\(app.frame); hint=\(hint.label); language=\(language); count=\(count)")
-        metadata.name = "H3b-\(label)-\(languageTag)-viewport-\(width)"
+        let metadata = XCTAttachment(string: "viewport=\(app.frame); hint=\(hint.label); language=\(language); count=\(count); dark=\(dark)")
+        metadata.name = "H3b-\(label)-\(languageTag)\(appearanceTag)-viewport-\(width)"
         metadata.lifetime = .keepAlways
         add(metadata)
-        attach(app, name: "H3b-\(label)-\(languageTag)")
+        attach(app, name: "H3b-\(label)-\(languageTag)\(appearanceTag)")
     }
 
-    /// B-2 Taipei distances with location granted. Light and dark English.
+    /// B-2 Taipei distances with location granted. Light and dark, en and zh.
     /// Leaves the Tiantan parity fixture and home.png baseline unchanged.
     @MainActor
     func testHomeTaipeiGrantedDistances() throws {
-        try captureTaipeiGrantedHome(dark: false, name: "taipei-granted-light-en")
-        try captureTaipeiGrantedHome(dark: true, name: "taipei-granted-dark-en")
+        try captureTaipeiGrantedHome(dark: false, language: "en", name: "taipei-granted-light-en")
+        try captureTaipeiGrantedHome(dark: true, language: "en", name: "taipei-granted-dark-en")
+        try captureTaipeiGrantedHome(dark: false, language: "zh-Hant", name: "taipei-granted-light-zh")
+        try captureTaipeiGrantedHome(dark: true, language: "zh-Hant", name: "taipei-granted-dark-zh")
     }
 
     @MainActor
-    private func captureTaipeiGrantedHome(dark: Bool, name: String) throws {
+    private func captureTaipeiGrantedHome(dark: Bool, language: String, name: String) throws {
         addTeardownBlock {
             XCUIDevice.shared.appearance = .light
         }
@@ -3439,7 +3463,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
             "--uitest-repair-review-demo-seed", "--uitest-home-taipei-granted",
             "--uitest-home-hint-count=0",
-            "-save.appLanguage", "en",
+            "-save.appLanguage", language,
         ]
         if dark {
             arguments.append(contentsOf: ["--uitest-force-dark", "-AppleInterfaceStyle", "Dark"])
