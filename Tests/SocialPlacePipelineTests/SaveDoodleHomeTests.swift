@@ -1585,6 +1585,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(parity.contains("white = ignore"))
         XCTAssertTrue(parity.contains("\"position\""))
         XCTAssertTrue(parity.contains("\"fontStyle\""))
+        XCTAssertTrue(parity.contains("0.35 * edgeF1 + 0.65 * appearanceSimilarity"))
+        XCTAssertTrue(parity.contains("mask == nil ? legacyComposite : gradedComposite"))
         let parityRunner = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
         XCTAssertFalse(parityRunner.contains("home-mask.png"))
         XCTAssertFalse(parityRunner.contains("--mask"))

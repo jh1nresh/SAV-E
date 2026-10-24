@@ -651,6 +651,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             home.descendants(matching: .any)["home.miniMap"].exists,
             "Home has no map component"
         )
+        let homeEat = app.buttons["home.eat"]
+        XCTAssertTrue(homeEat.waitForExistence(timeout: stepTimeout))
+        let homeEatSelected = homeEat.isSelected
+        let homeCity = app.descendants(matching: .any)["home.citySwitcher"].label
         let cafe = app.buttons["home.place.10000000-0000-0000-0000-000000000001"]
         XCTAssertTrue(cafe.waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(
@@ -667,8 +671,21 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let peek = app.descendants(matching: .any)["map.peek.card"]
         XCTAssertTrue(peek.waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(peek.label.contains("Taipei Window Cafe"))
-        XCTAssertTrue(app.descendants(matching: .any)["map.eat"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["map.city"].exists)
+        let mapEat = app.descendants(matching: .any)["map.eat"]
+        let mapCity = app.descendants(matching: .any)["map.city"]
+        XCTAssertTrue(mapEat.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(mapCity.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(mapEat.isSelected, homeEatSelected)
+        if homeCity.contains("Near you") {
+            XCTAssertEqual(mapCity.label, "Near you")
+        } else if homeCity.contains("附近") {
+            XCTAssertEqual(mapCity.label, "附近")
+        } else {
+            XCTAssertTrue(
+                homeCity.contains(mapCity.label),
+                "map.city \(mapCity.label) must equal Home city \(homeCity)"
+            )
+        }
     }
 
     @MainActor
