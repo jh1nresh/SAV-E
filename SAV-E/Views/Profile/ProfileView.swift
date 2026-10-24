@@ -6,6 +6,8 @@ struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.appLanguageSettings) private var languageSettings
+    @EnvironmentObject private var session: SaveDoodleSession
+    @ObservedObject private var locationService = LocationService.shared
     @StateObject private var viewModel = ProfileViewModel()
     @StateObject private var posts = SharedPostsStore()
     @State private var showSettings = false
@@ -49,6 +51,7 @@ struct ProfileView: View {
     var onUpdatePlace: (Place) async throws -> Void = { _ in }
     var onOpenPlace: (Place) -> Void = { _ in }
     var isRootTab = false
+    var collectionMode: SavePassportCollectionMode = .collection
     @Binding var requestsConnections: Bool
     @State private var opensConnections = false
     @State private var opensListsDirectly = false
@@ -67,6 +70,17 @@ struct ProfileView: View {
 
     private var passportPlaces: [Place] {
         localSavedPlaces
+    }
+
+    private var cityStampPlaces: [Place] {
+        // Use the supplied collection before the local snapshot finishes loading.
+        let source = localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces
+        return collectionMode.places(
+            from: source,
+            selection: session.city,
+            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
+            locationDenied: locationService.isAuthorizationDenied
+        )
     }
 
     private var todayMissions: [SavePassportTodayMission] {
@@ -99,10 +113,8 @@ struct ProfileView: View {
                             : SaveTheme.Spacing.lg
                     )
 
-                    if isRootTab {
-                        PassportTileTownCollection(places: passportPlaces, onOpenPlace: onOpenPlace)
-                            .padding(.horizontal, 16)
-                    }
+                    PassportTileTownCollection(places: cityStampPlaces, collectionMode: collectionMode, onOpenPlace: onOpenPlace)
+                        .padding(.horizontal, 16)
 
                     passportIdentity
                         .padding(.horizontal, 16)
@@ -392,6 +404,10 @@ struct ProfileView: View {
         }
         .onAppear {
             if requestsConnections { opensConnections = true; requestsConnections = false }
+            if localSavedPlaces.isEmpty { localSavedPlaces = savedPlaces }
+        }
+        .onChange(of: savedPlaces.count) { _, _ in
+            localSavedPlaces = savedPlaces
         }
         .task(id: posts.filter) { await posts.refresh(.mine) }
         .task(id: currentUserID) {
@@ -596,10 +612,11 @@ struct ProfileView: View {
                 visitError = nil
                 Task {
                     defer { isUpdatingVisit = false }
-                    var updated = place
-                    updated.status = .visited
                     do {
+                        var updated = place
+                        updated.status = .visited
                         try await onUpdatePlace(updated)
+                        SaveDoodleVisitStore().recordVisit(for: place.id)
                         SavePassportFieldStreakStore.shared.recordFieldAction()
                         refreshFieldStreak()
                         if let index = localSavedPlaces.firstIndex(where: { $0.id == place.id }) {
@@ -2297,10 +2314,15 @@ private struct PassportBadge: View {
 private struct PassportTileTownCollection: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let places: [Place]
+    let collectionMode: SavePassportCollectionMode
     var onOpenPlace: (Place) -> Void = { _ in }
 
     private var goal: Int {
         SaveTileTownProductLock.passportGoal(for: places.count)
+    }
+
+    private var collectionProgress: (completed: Int, total: Int) {
+        collectionMode.progress(in: places)
     }
 
     private var lockedCount: Int {
@@ -2315,9 +2337,12 @@ private struct PassportTileTownCollection: View {
             )
             .accessibilityLabel(languageSettings.localized(english: "Passport", traditionalChinese: "護照"))
             HStack {
-                Text("\(places.count)/\(goal)")
+                Text("\(collectionProgress.completed)/\(collectionProgress.total)")
                     .font(SaveAtlasType.strong(13))
                     .foregroundStyle(SaveAtlasPalette.forest)
+                    .accessibilityIdentifier("profile.stampProgress")
+                    .accessibilityLabel("\(collectionProgress.completed)/\(collectionProgress.total)")
+                    .accessibilityValue("\(collectionProgress.completed) of \(collectionProgress.total)")
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(SaveAtlasPalette.kraft.opacity(0.45))
@@ -2327,10 +2352,8 @@ private struct PassportTileTownCollection: View {
                     }
                 }
                 .frame(height: 8)
+                .accessibilityHidden(true)
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("profile.stampProgress")
-            .accessibilityValue("\(places.count) of \(goal)")
 
             LazyVGrid(
                 columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
@@ -2358,12 +2381,13 @@ private struct PassportTileTownCollection: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.stampGrid")
     }
 
     private var progress: CGFloat {
-        guard goal > 0 else { return 0 }
-        return min(1, CGFloat(places.count) / CGFloat(goal))
+        guard collectionProgress.total > 0 else { return 0 }
+        return min(1, CGFloat(collectionProgress.completed) / CGFloat(collectionProgress.total))
     }
 }
 
@@ -2954,4 +2978,5 @@ private struct LanguageSettingsSheet: View {
 #Preview {
     ProfileView(requestsConnections: .constant(false))
         .environment(\.appLanguageSettings, AppLanguageSettings())
+        .environmentObject(SaveDoodleSession())
 }

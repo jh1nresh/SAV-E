@@ -3,6 +3,7 @@ import SwiftUI
 struct SaveHomeView: View {
     @ObservedObject var store: TripPackStore
     @ObservedObject var mapViewModel: MapViewModel
+    let headerTopPadding: CGFloat
     let onCapture: () -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
@@ -10,25 +11,34 @@ struct SaveHomeView: View {
     let onOpenTrips: () -> Void
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
+    let onOpenCollectedPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var locationService = LocationService.shared
 
     var body: some View {
-        Group {
-            if SaveAtlasRuntime.usesParityFixture {
-                HomeAtlasScreen()
-            } else {
-                SaveTileTownHomeView()
-            }
-        }
+        SaveDoodleHomeView(
+            locationService: locationService,
+            onOpenCollectedPassport: onOpenCollectedPassport,
+            headerTopPadding: headerTopPadding
+        )
         .environment(\.atlasPresentation, atlasPresentation)
         .task(id: locationService.authorizationStatus) {
-            guard !ReviewDemo.isOfflineUITestMode,
-                  [.authorizedAlways, .authorizedWhenInUse].contains(locationService.authorizationStatus) else { return }
-            _ = await locationService.requestCurrentLocation()
+            await refreshHomeLocation(forceRefresh: false)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await refreshHomeLocation(forceRefresh: true) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.root")
+    }
+
+    private func refreshHomeLocation(forceRefresh: Bool) async {
+        guard !ReviewDemo.isOfflineUITestMode,
+              [.authorizedAlways, .authorizedWhenInUse].contains(locationService.authorizationStatus)
+        else { return }
+        _ = await locationService.requestCurrentLocation(forceRefresh: forceRefresh)
     }
 
     private var atlasPresentation: AtlasPresentation {
@@ -68,6 +78,7 @@ struct SaveLibraryView: View {
     let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onOpenPassport: () -> Void
+    var onOpenTrips: () -> Void = {}
     var captureResultCount: Int? = nil
     var onLoadDuplicateAudit: () async throws -> [SaveReviewDuplicateGroup] = { [] }
     @State private var showsDuplicateAudit = false
@@ -93,6 +104,20 @@ struct SaveLibraryView: View {
         // back control when the child's toolbar modifier won.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("saves.root")
+        .toolbar {
+            if captureResultCount == nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: onOpenTrips) {
+                        Text(localized("Trips ›", "行程 ›"))
+                            .font(SaveAtlasType.strong(15))
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(localized("Trips", "行程"))
+                    .accessibilityIdentifier("saves.trips")
+                }
+            }
+        }
         .sheet(isPresented: $showsDuplicateAudit, onDismiss: {
             if let candidate = auditSelection {
                 auditSelection = nil

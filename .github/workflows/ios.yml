@@ -370,7 +370,9 @@ jobs:
         if: steps.scope.outputs.ui == 'true'
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-UI-tests.log
+          SAVE_SCREENSHOT_DIR: ${{ runner.temp }}/SAVE-First-Run
         run: |
+          mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
           if [[ ! -s "$RUNNER_TEMP/ios-ui-args.txt" ]]; then
             echo 'UI coverage was selected but no test arguments were produced.' >&2
             exit 1
@@ -387,6 +389,48 @@ jobs:
           if ((${#iteration_args[@]} > 0)); then
             max_attempts=3
           fi
+          # Host `env:` does not reach the xctestrun UI runner. Inject a
+          # simulator-writable fallback (`/tmp/...`); the host $RUNNER_TEMP
+          # path is not creatable inside the XCTest sandbox. Copy those
+          # files out with the device data root after the suite. Xcode 26.6
+          # rejects the extra xcodebuild environment flag, so the plist is
+          # the only inject path.
+          python3 - "${{ steps.products.outputs.xctestrun }}" /tmp/SAVE-First-Run <<'PY'
+          import plistlib, sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          screenshot_dir = sys.argv[2]
+          data = plistlib.loads(path.read_bytes())
+
+          def inject(obj):
+              if isinstance(obj, dict):
+                  for key in ("EnvironmentVariables", "TestingEnvironmentVariables"):
+                      existing = obj.get(key)
+                      if isinstance(existing, dict):
+                          existing["SAVE_SCREENSHOT_DIR"] = screenshot_dir
+                      elif key in obj:
+                          obj[key] = {"SAVE_SCREENSHOT_DIR": screenshot_dir}
+                  if any(k in obj for k in (
+                      "BlueprintName",
+                      "TestHostBundleIdentifier",
+                      "ProductModuleName",
+                  )):
+                      env = obj.setdefault("EnvironmentVariables", {})
+                      if isinstance(env, dict):
+                          env["SAVE_SCREENSHOT_DIR"] = screenshot_dir
+                      testing = obj.setdefault("TestingEnvironmentVariables", {})
+                      if isinstance(testing, dict):
+                          testing["SAVE_SCREENSHOT_DIR"] = screenshot_dir
+                  for value in obj.values():
+                      inject(value)
+              elif isinstance(obj, list):
+                  for value in obj:
+                      inject(value)
+
+          inject(data)
+          path.write_bytes(plistlib.dumps(data, fmt=plistlib.FMT_XML))
+          print(f"injected SAVE_SCREENSHOT_DIR into {path}")
+          PY
           scripts/run-ios-xcodebuild-retry.sh \
             --max-attempts "$max_attempts" \
             --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
@@ -412,11 +456,39 @@ jobs:
               --threshold 0.90
 
       - name: Export first-run visual evidence
-        if: always() && (steps.ui_tests.outcome == 'success' || steps.ui_tests.outcome == 'failure')
+        if: always()
         run: |
-          xcrun xcresulttool export attachments \
-            --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
-            --output-path "$RUNNER_TEMP/SAVE-First-Run"
+          mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
+          # XCTest wrote `/tmp/SAVE-First-Run` inside the simulator. Copy
+          # that tree to the host artifact dir before xcresult export and
+          # before any later erase/shutdown.
+          SIM_UDID='${{ steps.simulator.outputs.udid }}'
+          SIM_SHOTS="$HOME/Library/Developer/CoreSimulator/Devices/${SIM_UDID}/data/tmp/SAVE-First-Run"
+          if [[ -n "$SIM_UDID" && -d "$SIM_SHOTS" ]]; then
+            cp -R "$SIM_SHOTS/." "$RUNNER_TEMP/SAVE-First-Run/"
+            echo "copied simulator SAVE_SCREENSHOT_DIR from $SIM_SHOTS"
+          else
+            echo "no simulator SAVE_SCREENSHOT_DIR at $SIM_SHOTS"
+          fi
+          if [[ -f "$RUNNER_TEMP/SAVE-UI.xcresult/Info.plist" ]]; then
+            xcrun xcresulttool export attachments \
+              --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
+              --output-path "$RUNNER_TEMP/SAVE-First-Run" \
+              || echo "xcresulttool export failed; keep SAVE_SCREENSHOT_DIR rasters."
+          else
+            echo "No readable UI result bundle; keep SAVE_SCREENSHOT_DIR rasters."
+          fi
+          echo "DESIGN Home rasters in SAVE-First-Run:"
+          for name in five-tab-home light-home dark-home \
+            H1 H1-allowed-clues H2 H2-denied-clues H3 H3-no-clues-saves H4 H4-empty \
+            H2-en-light H2-en-dark H2-zh-light H2-zh-dark; do
+            path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
+            if [[ -f "$path" ]]; then
+              wc -c "$path"
+            else
+              echo "missing $name.png"
+            fi
+          done
 
       - name: Reset focused simulator before Trip sheet UI test
         if: steps.scope.outputs.trip == 'true'
