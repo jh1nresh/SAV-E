@@ -14,7 +14,56 @@ struct ShareAnalysisCredential: Codable, Equatable, Sendable {
     }
 }
 
+/// Binds newly captured share data to the active app account, independently of
+/// the optional analysis-only credential. An explicit nil snapshot stays signed
+/// out; it must never be rebound to an account that signs in during parsing.
+struct ShareOwnerSnapshot: Sendable {
+    let ownerSubject: String?
+
+    init(cachedActiveOwner: String?) {
+        ownerSubject = cachedActiveOwner.flatMap { $0.isEmpty ? nil : $0 }
+    }
+
+    func validate(cachedActiveOwner: String?, credential: ShareAnalysisCredential?) throws {
+        do {
+            try SaveActiveOwnerSnapshot(ownerSubject: ownerSubject)
+                .revalidate(currentOwner: cachedActiveOwner)
+        } catch {
+            throw ShareAnalysisError.sessionChanged
+        }
+        guard credential == nil || credential?.ownerSubject == ownerSubject else {
+            throw ShareAnalysisError.sessionChanged
+        }
+    }
+
+    /// Validate the exact credential that will be sent, rather than a separate
+    /// keychain read which may belong to the previous account.
+    func validatedAnalysisCredential(
+        cachedActiveOwner: String?, credential: ShareAnalysisCredential?
+    ) throws -> ShareAnalysisCredential {
+        try validate(cachedActiveOwner: cachedActiveOwner, credential: credential)
+        guard let credential, credential.isUsable() else {
+            throw ShareAnalysisError.sessionUnavailable
+        }
+        return credential
+    }
+
+    /// Only newly captured input is stamped. Existing queue/vault rows are not
+    /// passed here, and a candidate already owned by another account is rejected.
+    func ownerForNewItem(existingOwner: String?) throws -> String? {
+        guard existingOwner == nil || existingOwner == ownerSubject else {
+            throw ShareAnalysisError.sessionChanged
+        }
+        return ownerSubject
+    }
+}
+
 enum ShareAnalysisKeychain {
+#if DEBUG
+    static var usesTestStore = false
+    static var testStore: ShareAnalysisCredential?
+#endif
+
     private static var query: [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,
          kSecAttrService as String: "com.wanderly.share-analysis",
@@ -24,6 +73,9 @@ enum ShareAnalysisKeychain {
     }
 
     static func read() -> ShareAnalysisCredential? {
+#if DEBUG
+        if usesTestStore { return testStore }
+#endif
         var request = query
         request[kSecReturnData as String] = true
         request[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -34,6 +86,12 @@ enum ShareAnalysisKeychain {
     }
 
     static func write(_ credential: ShareAnalysisCredential) throws {
+#if DEBUG
+        if usesTestStore {
+            testStore = credential
+            return
+        }
+#endif
         let data = try JSONEncoder().encode(credential)
         let attributes: [String: Any] = [kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]
@@ -44,7 +102,15 @@ enum ShareAnalysisKeychain {
         guard status == errSecSuccess else { throw ShareAnalysisError.sessionUnavailable }
     }
 
-    static func clear() { SecItemDelete(query as CFDictionary) }
+    static func clear() {
+#if DEBUG
+        if usesTestStore {
+            testStore = nil
+            return
+        }
+#endif
+        SecItemDelete(query as CFDictionary)
+    }
 }
 
 enum ShareAnalysisError: LocalizedError {

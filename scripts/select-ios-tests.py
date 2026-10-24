@@ -34,6 +34,9 @@ BASELINE = [RAIL + name for name in (
     "testSocialPassportGridAndComposer",
     "testPassportListsEntryOpensListsDirectly",
     "testFriendsComingSoon",
+    "testSavedPlaceLimitPaywallStatesFreeCap",
+    "testSavedPlaceLimitPaywallRetryIsActionable",
+    "testUnplacedLabelFullScreenAtDeviceWidth",
 )] + [ONBOARDING, RAIL + "testPassportTutorialReplaysWithoutAddingPlaces"]
 
 # Exact-file allowlist: adding another view/service requires coverage review.

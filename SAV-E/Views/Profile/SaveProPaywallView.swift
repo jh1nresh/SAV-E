@@ -15,10 +15,14 @@ import SwiftUI
 /// Purchases, EULA link, privacy policy link, renewal period, cancellation path.
 struct SaveProPaywallView: View {
     enum Trigger: Equatable {
-        /// Settings / Passport Pro row. Neutral copy, no save count.
+        /// Settings Pro row. Neutral copy, no save count.
         case settings
+        /// Passport Pro row. Same neutral copy as settings (#293 name).
+        case passport
         /// The 51st save. Names the free 50-place allowance.
         case savedPlacesCap
+        /// A free save was parked in Unplaced because the 50-place cap is full.
+        case savedPlaceLimit
     }
 
     let trigger: Trigger
@@ -78,7 +82,7 @@ struct SaveProPaywallView: View {
         .interactiveDismissDisabled(isPurchasing)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("paywall.root")
-        .accessibilityValue(trigger == .savedPlacesCap ? "savedPlacesCap" : "settings")
+        .accessibilityValue(showsSavedPlaceNote ? "savedPlacesCap" : "settings")
         .task {
             await refreshProducts()
         }
@@ -156,9 +160,23 @@ struct SaveProPaywallView: View {
         .accessibilityLabel(title)
     }
 
+    private var showsSavedPlaceNote: Bool {
+        if trigger == .savedPlaceLimit { return true }
+        return trigger == .savedPlacesCap
+    }
+
     @ViewBuilder
     private var savedNote: some View {
-        if trigger == .savedPlacesCap {
+        if trigger == .savedPlaceLimit {
+            Text(languageSettings.localized(
+                english: "You've saved 50 places. Keep going.",
+                traditionalChinese: "已存 50 個地點，繼續存下去"
+            ))
+            .font(SaveAtlasType.body(15))
+            .foregroundStyle(SaveAtlasPalette.muted)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier("paywall.savedNote")
+        } else if trigger == .savedPlacesCap {
             Text(languageSettings.localized(
                 english: SaveProPaywallCopy.savedNote(for: trigger, english: true),
                 traditionalChinese: SaveProPaywallCopy.savedNote(for: trigger, english: false)
@@ -172,6 +190,24 @@ struct SaveProPaywallView: View {
 
     @ViewBuilder
     private var offers: some View {
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall-retry") {
+            retryOffers(
+                message: languageSettings.localized(
+                    english: "Couldn't load subscription options.",
+                    traditionalChinese: "無法載入訂閱方案。"
+                )
+            )
+        } else {
+            liveOffers
+        }
+#else
+        liveOffers
+#endif
+    }
+
+    @ViewBuilder
+    private var liveOffers: some View {
         if storeKit.products.isEmpty, !didFinishProductLoad {
             ProgressView()
                 .frame(maxWidth: .infinity)
@@ -202,6 +238,33 @@ struct SaveProPaywallView: View {
                 Task { await refreshProducts() }
             } label: {
                 Text(languageSettings.localized(english: "Retry", traditionalChinese: "再試一次"))
+                    .font(SaveAtlasType.strong(17))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 52)
+                    .background(
+                        SaveAtlasPalette.coral,
+                        in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("paywall.retry")
+        }
+    }
+
+    @ViewBuilder
+    private func retryOffers(message: String) -> some View {
+        VStack(alignment: .leading, spacing: SaveSpace.sm) {
+            Text(message)
+                .font(SaveAtlasType.body(15))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("paywall.unavailable")
+
+            Button {
+                Task { await refreshProducts() }
+            } label: {
+                Text(languageSettings.localized(english: "Try again", traditionalChinese: "再試一次"))
                     .font(SaveAtlasType.strong(17))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
@@ -612,11 +675,11 @@ nonisolated struct SaveDoodlePaywallPaths: Shape {
 nonisolated enum SaveProPaywallCopy {
     static func savedNote(for trigger: SaveProPaywallView.Trigger, english: Bool) -> String {
         switch trigger {
-        case .savedPlacesCap:
+        case .savedPlacesCap, .savedPlaceLimit:
             return english
                 ? "You've saved 50 places. Keep going."
                 : "已存 50 個地點，繼續存下去"
-        case .settings:
+        case .settings, .passport:
             return ""
         }
     }
