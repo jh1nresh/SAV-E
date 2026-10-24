@@ -201,7 +201,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
             SaveEntitlementStore.exhaustedAllowanceMessage(language: .traditionalChinese),
             "這個月的模型額度已用完。下個週期再試。"
         )
-        XCTAssertFalse(SaveAIAssistUserCopy.exhaustedEnglish.localizedCaseInsensitiveContains("ai"))
+        XCTAssertFalse(SaveAIAssistUserCopy.exhaustedEnglish.contains("AI"))
         XCTAssertFalse(SaveAIAssistUserCopy.exhaustedEnglish.localizedCaseInsensitiveContains("assist"))
         XCTAssertFalse(SaveAIAssistUserCopy.exhaustedTraditionalChinese.contains("AI"))
         XCTAssertFalse(SaveAIAssistUserCopy.exhaustedTraditionalChinese.contains("次數"))

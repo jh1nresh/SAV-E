@@ -5768,8 +5768,14 @@ final class SAVEProductionConfigTests: XCTestCase {
         let store = try source(at: "SAV-E/Services/SaveEntitlementStore.swift")
         let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
         let listing = try source(at: "specs/app-store-listing.md")
-        XCTAssertTrue(listing.contains("Monthly AI-assist allowance is higher on Pro (Free 20, Pro 500)."))
-        XCTAssertFalse(listing.contains("Monthly AI-assist allowance is the same on Free and Pro"))
+        XCTAssertTrue(
+            listing.contains(
+                "Savvy Pro is an optional auto-renewing subscription for unlimited saved places. Free includes 50 saved places."
+            )
+        )
+        XCTAssertFalse(listing.contains("AI-assist"))
+        XCTAssertFalse(listing.contains("Free 20"))
+        XCTAssertFalse(listing.contains("Pro 500"))
         let supabase = try source(at: "SAV-E/Services/SupabaseService.swift")
         XCTAssertTrue(
             supabase.contains("func saveFriendRestaurant(placeID: UUID) async throws -> Place"),
