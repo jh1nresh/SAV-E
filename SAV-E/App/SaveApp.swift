@@ -22,7 +22,7 @@ private struct UITestAppearanceOverride: ViewModifier {
 
     init() {
         let arguments = ProcessInfo.processInfo.arguments
-        if arguments.contains("--uitest-force-dark") {
+        if arguments.contains("--uitest-force-dark") || arguments.contains("--uitest-dark") {
             scheme = .dark
             style = .dark
         } else if arguments.contains("--uitest-force-light") {
@@ -94,6 +94,10 @@ struct SaveApp: App {
     private let relatedSourcesHarnessActive = SaveSmokeHarness.isRelatedSourcesLaunchEnabled
     @State private var forceOnboardingForUITests = ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding")
     private let stampFeedFixtureActive = ProcessInfo.processInfo.arguments.contains("--uitest-stamp-feed-fixture")
+    private let mapPhotoPinCatalogActive = ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-catalog")
+    private let mapPhotoPinMotionActive = ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-motion")
+    private let mapPhotoPinCoralCardActive = ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-coral-card")
+    private let mapPhotoPinCardActive = ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-card")
 #endif
 
     private let supabaseService = SupabaseService.shared
@@ -215,6 +219,21 @@ struct SaveApp: App {
 #if DEBUG
         if stampFeedFixtureActive {
             SaveStampFeedFixtureView()
+        } else if mapPhotoPinCatalogActive {
+            SavvyMapPhotoPinPreviewCatalog(
+                colorScheme: ProcessInfo.processInfo.arguments.contains("--uitest-dark") ? .dark : .light,
+                language: ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-zh") ? .traditionalChinese : .english
+            )
+        } else if mapPhotoPinMotionActive {
+            SavvyMapPhotoPinMotionFixtureRoot()
+        } else if mapPhotoPinCoralCardActive {
+            previewPage(
+                .coralCardHero,
+                scheme: ProcessInfo.processInfo.arguments.contains("--uitest-dark") ? .dark : .light
+            )
+            .accessibilityIdentifier("map.fixture.coralCard")
+        } else if mapPhotoPinCardActive {
+            SavvyMapPhotoPinCardFlowFixtureRoot()
         } else if relatedSourcesHarnessActive {
             SaveRelatedSourcesHarnessView()
         } else if smokeHarnessActive {

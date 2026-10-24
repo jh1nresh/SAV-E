@@ -2447,15 +2447,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         let selectedName = app.staticTexts["map.peek.name"]
         XCTAssertTrue(selectedName.waitForExistence(timeout: stepTimeout),
-            "The tile-town selection should expose its real place name.")
+            "The selected callout should expose its real place name.")
         XCTAssertFalse(selectedName.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         XCTAssertTrue(app.staticTexts["map.peek.subtitle"].exists,
-            "The selected Map Stamp should show its saved-date context.")
-        let selectedPin = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.' AND label BEGINSWITH 'Selected Map Stamp, '")
-        ).firstMatch
-        XCTAssertTrue(selectedPin.exists)
-        XCTAssertEqual(selectedPin.label, "Selected Map Stamp, \(selectedName.label)")
+            "The selected Map Stamp should show category, Eat/Go, and distance context.")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.card"].waitForExistence(timeout: stepTimeout),
+            "Selected pin grows the paper callout; the pin itself is hidden."
+        )
 
         let openMapDetails = app.buttons["map.peek.card"]
         XCTAssertTrue(openMapDetails.waitForExistence(timeout: stepTimeout))

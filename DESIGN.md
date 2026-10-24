@@ -4,12 +4,12 @@
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** still governs paper, type, kraft, and coral
 > chrome, with the 2026-10-19 v5 cream/ink/stroke lock below. **Tile-town** is
-> the product Map / Home peek / Friends strip base (founder lock 2026-10-14).
-> The 2026-10-19 founder decision replaces the Home hero and Map tab with a
-> full-pixel **isometric** tile town; that renderer is a follow-up PR. **Soft
-> Pixel** is accents-only *on* tile-town (pins / seals / Memo). **Cream-notebook**
-> tokens are legacy-surface-only. See "Tile Town", "Atlas Postcard Tokens",
-> and "Legacy Cream-Notebook Tokens" below.
+> the Home peek / Friends strip base (founder lock 2026-10-14). Product Map is
+> default Apple MapKit with coral photo pins (HoP 2026-10-21). The 2026-10-19
+> founder decision still governs the Home hero as a full-pixel **isometric**
+> tile town. **Soft Pixel** is accents-only *on* tile-town (pins / seals /
+> Memo). **Cream-notebook** tokens are legacy-surface-only. See "Tile Town",
+> "Atlas Postcard Tokens", and "Legacy Cream-Notebook Tokens" below.
 
 ## Product Frame
 
@@ -23,9 +23,9 @@ for place memory, evidence, and review.
 
 Assumptions locked by current code:
 
-- Native app is SwiftUI. Product Map and Home peek use `SaveTileTownCanvas`,
-  not a live MapKit basemap. MapKit remains for Trip maps and Apple Maps
-  handoff only.
+- Native app is SwiftUI. Home peek uses `SaveTileTownCanvas`. The product Map
+  tab uses default Apple MapKit with coral photo pins (founder HoP 2026-10-21).
+  MapKit also remains for Trip maps and Apple Maps handoff.
 - `Color+Theme.swift` owns the current palette tokens, including
   `SaveTileTownPalette`.
 - `MemoMascotMark` owns the Memo elephant mark.
@@ -114,16 +114,32 @@ silent-partial Soft Pixel: a MapKit atlas with pixel pins is not the lock.
 
 Rules:
 
-- Product Map tab (`SaveTileTownRootMap`) and Home peek (`SaveTileTownHomeView`)
-  render `SaveTileTownCanvas`. Friends may show a small peek strip of the same
-  town. One town language, three sizes.
+- Home peek (`SaveTileTownHomeView`) and Friends strip still render
+  `SaveTileTownCanvas`. The product Map tab (`SaveMapPhotoPinsRoot`) is default
+  Apple MapKit with coral photo pins (HoP 2026-10-21). One town language remains
+  on Home / Friends; Map is the collection map, not a second town.
 - Tile-town is a memory map. Pins hash to village lots. It does not silently
-  confirm places and it does not invent GPS truth. Navigate / Trip maps may
-  still hand off to MapKit or Apple Maps.
+  confirm places and it does not invent GPS truth. Navigate / Trip maps stay
+  MapKit. The product Map tab is also MapKit as of 2026-10-21.
 - Nearby / Saved / Friends filter chips live on **Map only**. Home must not
   reuse that chrome.
-- Coral pins only. Selected stamp elevates to a kraft peek card (name + date/area).
-  Source-only clues still have no pin.
+- Coral pins only on Map, and only on **saved Map Stamps**. Pins stay coral
+  until someone has shared a photo of that place in Savvy. Own photo means
+  the user's own shared-post photos (`/v0/shared-posts/{id}/photos/{n}`).
+  This PR cannot bind those posts to a Map Stamp (`SharedPlacePost` has no
+  place id), so production pins stay coral. Friend photos are a later PR.
+  Google Places photos must not appear on this Apple Map. Unsaved places
+  stay as Apple's native POI markers — never a photo or Savvy pin, even when
+  a photo URL exists. A later own-photo load failure stays coral, never a
+  broken image. Visited adds a coral ring on the Savvy pin. Tapping an
+  unsaved POI opens the existing save flow (or Apple's native place card);
+  once the user confirms, that place is immediately a Savvy pin. Selected
+  stamp grows a paper callout (name, Eat/Go, Directions, 我來過了) instead of
+  a kraft peek. Source-only clues still have no pin. Five-second test: Savvy
+  pin = saved, coral ring = visited saved, Apple POI = unsaved. DESIGN
+  gate 5 / QA verify photo-pin variants (round photo, visited ring, badge,
+  card hero, plus coral) from `#if DEBUG` SwiftUI Previews
+  (`SavvyMapPhotoPinPreviewCatalog`) — fixtures, not shipping data.
 - Tile-town is nearest-neighbor integer tiles (`SaveTileTownRaster`): buildings,
   roofs, trees, water, and roads are crisp cells. No anti-aliased vector houses
   or curved roads. Do not blurry-upscale pixel art.
@@ -389,7 +405,7 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | Saves drawer + search results | Atlas |
 | Plan (`SavePlanView`) | Atlas |
 | Trips (`TripPackViews`) | Atlas |
-| Map shell and drawer panel (`SaveTileTownRootMap`, `SaveMapDrawerPanel`) | Tile-town base + Atlas chrome |
+| Map shell and drawer panel (`SaveMapPhotoPinsRoot`, `SaveMapDrawerPanel`) | Default Apple MapKit + Atlas chrome |
 | Ask drawer (`AIDrawerView`) | Atlas |
 | Onboarding | Atlas |
 | Google Takeout import | Atlas (some legacy tokens remain inline) |
@@ -635,14 +651,16 @@ Every UI object must map to one of these states:
 | --- | --- | --- | --- |
 | Source Clue | Savvy preserved source evidence but lacks a confirmed place | No | Find exact place |
 | Review Candidate | Likely place match, user confirmation needed | Only with reliable coordinates | Confirm or reject |
-| Unsaved Candidate | Recommendation or visible map object not saved | Optional if map-originated | Save or inspect |
-| Map Stamp | Confirmed saved place | Yes | Navigate or plan |
-| Visited Map Stamp | Confirmed place with visited memory | Yes | Update memory |
+| Unsaved Candidate | Recommendation or visible map object not saved | Apple native POI only — never a Savvy/photo pin | Save or inspect |
+| Map Stamp | Confirmed saved place | Yes — Savvy pin | Navigate or plan |
+| Visited Map Stamp | Confirmed place with visited memory | Yes — Savvy pin + coral ring | Update memory |
 | Private Review | User review proof or note, private by default | No by itself | Add proof |
 | Trip Stop | Route/planning object, not necessarily saved | In trip context only | Review plan |
 | Travel window | Arrival, departure, check-in, or check-out constraint on a Trip Plan | No pin of its own | Adjust time |
 
 Never collapse Source Clue, Review Candidate, and Map Stamp into one visual state.
+On the product Map, saved vs unsaved must also be obvious in five seconds:
+Savvy pin = Map Stamp, coral ring = Visited Map Stamp, Apple POI = unsaved.
 
 ## Screen Rules
 
@@ -735,8 +753,8 @@ private input, or adds a place.
 
 ### Map
 
-The map is the spatial memory canvas. The product Map tab is tile-town, not
-live MapKit.
+The map is the spatial memory canvas. The product Map tab is default Apple
+Maps with coral photo pins (HoP 2026-10-21). Home peek stays tile-town.
 
 Rules:
 
@@ -745,20 +763,43 @@ Rules:
   48pt status band. The search drawer never covers them: large stop ends
   below `SaveTileTownProductLock.mapChromeHeight`, and only the visible
   paper hits so pins stay tappable through medium.
-- The town canvas pans with a drag. Pin tap selects the kraft peek card.
+- The basemap is native Apple Maps (`.standard`, automatic emphasis, POIs
+  on). Pin size does not follow zoom. `latitudeDelta ≤ 0.02` grows a circular
+  paper badge; `> 0.025` returns to the small pin. No clustering. Pin tap
+  pans with `MapCamera` (pitch 0) and keeps the live distance — it must not
+  square the span.
+- Places without a Savvy-shared photo use a coral round. This PR has no
+  clean own-photo field, so production pins are coral. Photo-pin states
+  (round, visited ring, zoomed-in badge, card hero) are captured from
+  SwiftUI `ImageRenderer` snapshots and iOS Simulator screenshots on CI
+  for DESIGN gate 5 — they are not shipping data. A no-photo card hero is
+  a full coral well with a cream category icon (~64pt), never a lone coral
+  dot.
+  Visited adds a coral ring. Only confirmed saved Map Stamps get those
+  Savvy pins; unsaved places use Apple's native POI markers only. Google
+  Places photos are not pin art.
+  Shadows and springs stay on Map pins, the callout, and the delayed camera
+  move. Other Map chrome stays doodle-flat. Reduce Motion replaces springs
+  with a 0.25s fade and jumps the camera.
+- Pin tap grows a paper callout from the pin (name, category · Eat/Go ·
+  distance, Directions, 我來過了). Tap blank flips to notes / album /
+  visits / address. Swipe down > 60pt or tap empty map collapses; the
+  camera does not move on collapse.
 - Drawer search (collapsed capsule) still opens the parked search panel.
   Category, Want to try, Visited, and Nearby-distance chips may remain in
   the drawer as Map Stamp lenses; they are not Home chrome.
-- Only reliable states get pins on the town. Source-only clues have no pin.
-- Unsaved nearby candidates are shown only after an explicit drawer action.
-- Selected stamp shows a kraft peek (name + date/area), not a default card
-  at rest.
+- Only reliable states get pins. Source-only clues have no pin. Unsaved
+  places never become Savvy / photo pins; they remain Apple native POIs.
+- Unsaved nearby candidates are shown only after an explicit drawer action
+  or a native POI tap into the existing save flow. After save, the stamp
+  appears as a Savvy pin immediately.
 - Tapping the collapsed search shelf opens the existing full-height panel,
   focuses the search field, and shows the keyboard.
 - Dragging the handle or panel resizes through parked stages and must not
   request keyboard focus. Tapping the resize handle remains a resize control.
-- Trip maps and Navigate may still use MapKit / Apple Maps. That is not the
-  product Map base.
+- Trip maps and Navigate keep MapKit. Home peek stays the owned tile-town
+  renderer. The 2026-10-14 tile-town lock remains the Home / Friends map
+  base; it is superseded for the product Map tab only.
 
 ### Plan
 

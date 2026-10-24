@@ -43,7 +43,14 @@ struct MapView: View {
 
             ZStack {
                 Map(position: $viewModel.cameraPosition, selection: $viewModel.selectedMapFeature) {
+#if DEBUG
+                    if ProcessInfo.processInfo.environment["SAVE_SKIP_LOCATION_PROMPT"] != "1"
+                        && !ProcessInfo.processInfo.arguments.contains("--uitest-location-denied") {
+                        UserAnnotation()
+                    }
+#else
                     UserAnnotation()
+#endif
 
                     ForEach((displayedPlaces ?? viewModel.filteredPlaces).filter(\.isMapKitMappable)) { place in
                         Annotation("", coordinate: place.coordinate) {
@@ -274,7 +281,7 @@ struct MapView: View {
 
 /// Spec P4: Atlas-style notice with an Open Settings recovery path, shown
 /// when locating fails because permission is denied or restricted.
-private struct SaveLocationDeniedNotice: View {
+struct SaveLocationDeniedNotice: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let onOpenSettings: () -> Void
     let onDismiss: () -> Void
