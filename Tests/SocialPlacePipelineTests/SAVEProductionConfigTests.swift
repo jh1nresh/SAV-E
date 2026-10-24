@@ -3382,6 +3382,22 @@ final class SAVEProductionConfigTests: XCTestCase {
             map.contains("deletedRemoteGroup"),
             "P2 4365127948: remaining count must come from the group deletePlaceGroup actually removed"
         )
+        XCTAssertTrue(
+            map.contains("let selectedID = place.id"),
+            "P1 4365661196: delete the fresh group that contains the selected representative"
+        )
+        XCTAssertTrue(
+            map.contains("Place.consolidated(remote).first { $0.savedIDs.contains(selectedID) }"),
+            "P1 4365661196: resolve the current canonical group from the fresh fetch"
+        )
+        XCTAssertTrue(
+            map.contains("deletePlaceGroup(selectedGroup?.id ?? selectedID)"),
+            "P1 4365661196: one group delete for the selected venue, not every historical alias"
+        )
+        XCTAssertFalse(
+            map.contains("for record in remote where place.savedIDs.contains(record.id)"),
+            "P1 4365661196: looping savedIDs deletes a now-independent B stamp"
+        )
         XCTAssertFalse(
             map.contains("alignAuthoritativeSavedPlaceCountWithPlaces"),
             "P2 4347594688: assigning places.count after delete keeps a stale vault row at 50"
@@ -4298,6 +4314,75 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertEqual(saved.name, "Freed After Alias Delete Cafe")
         XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    /// P1 4365661196: a locally cached merge of A+B must not group-delete B
+    /// after the fresh fetch returns them as distinct venues.
+    @MainActor
+    func testDeletePlaceRemovesOnlyTheSelectedCurrentCanonicalGroup() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:split-group-owner")
+        defer {
+            PrivyAuthService.shared.authState = previousAuth
+            AnalysisRequestURLProtocol.reset()
+        }
+
+        let placeA = makeCappedPlaces(1, indexOffset: 10)[0]
+        let placeB = makeCappedPlaces(1, indexOffset: 20)[0]
+        XCTAssertFalse(placeA.matches(placeB), "A and B are distinct venues after the remote edit")
+        var displayed = placeA
+        displayed.mergedPlaceIDs = [placeB.id]
+        XCTAssertEqual(displayed.savedIDs, [placeA.id, placeB.id])
+        XCTAssertEqual(displayed.id, placeA.id)
+
+        let remotePlaces = [placeA, placeB]
+        XCTAssertEqual(Place.consolidated(remotePlaces).count, 2)
+        let rows = remotePlaces.enumerated().map { index, place in
+            cappedPlaceRowJSON(
+                id: place.id,
+                index: index,
+                name: place.name,
+                googlePlaceID: place.googlePlaceId
+            )
+        }.joined(separator: ",")
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET", request.url?.path == "/places" {
+                return (200, "[\(rows)]")
+            }
+            if request.httpMethod == "DELETE", request.url?.path.hasPrefix("/places/") == true {
+                return (200, "{}")
+            }
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                return (201, "{}")
+            }
+            if request.url?.path.contains("/memory/candidates") == true { return (200, "[]") }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(
+            suiteName: "save.delete-selected-group.\(UUID().uuidString)"
+        )
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("delete-selected-group-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        _ = try vault.saveConfirmedPlace(displayed, ownerSubject: "did:privy:split-group-owner")
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+        map.places = [displayed]
+
+        try await map.deletePlace(displayed)
+        XCTAssertTrue(map.places.isEmpty)
+        let deleted = AnalysisRequestURLProtocol.requests.compactMap { request -> UUID? in
+            guard request.httpMethod == "DELETE",
+                  request.url?.path.hasPrefix("/places/") == true else { return nil }
+            return UUID(uuidString: request.url?.lastPathComponent ?? "")
+        }
+        XCTAssertEqual(deleted, [placeA.id], "only the selected current group may be deleted")
+        XCTAssertFalse(deleted.contains(placeB.id), "the now-independent B stamp must stay")
+        XCTAssertEqual(
+            Place.consolidated(remotePlaces.filter { !deleted.contains($0.id) }).map(\.id),
+            [placeB.id]
+        )
     }
 
     @MainActor

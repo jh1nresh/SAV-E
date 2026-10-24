@@ -4296,17 +4296,20 @@ final class MapViewModel: ObservableObject {
             if usesRemotePersistence {
                 guard let userID = startedBy else { throw SupabaseError.notAuthenticated }
                 try ensureConfirmationSession(userID, generation)
-                // The user's Delete action applies to the whole displayed venue.
-                // Only delete aliases that actually exist in this account.
+                // The user's Delete action applies to the current displayed
+                // venue. Historical aliases in place.savedIDs may now be
+                // independent groups after another device edited them apart.
                 let remote = try await supabaseService.fetchPlaces(for: userID)
                 try ensureConfirmationSession(userID, generation)
                 var deletedRemoteGroup: [Place] = []
-                for record in remote where place.savedIDs.contains(record.id) {
-                    try await SAVEPendingImportSessionScope.$current.withValue((generation, userID)) {
-                        try await supabaseService.deletePlaceGroup(record.id)
-                    }
-                    try ensureConfirmationSession(userID, generation)
-                    deletedRemoteGroup.append(record)
+                let selectedID = place.id
+                let selectedGroup = Place.consolidated(remote).first { $0.savedIDs.contains(selectedID) }
+                try await SAVEPendingImportSessionScope.$current.withValue((generation, userID)) {
+                    try await supabaseService.deletePlaceGroup(selectedGroup?.id ?? selectedID)
+                }
+                try ensureConfirmationSession(userID, generation)
+                if let selectedGroup {
+                    deletedRemoteGroup = remote.filter { selectedGroup.savedIDs.contains($0.id) }
                 }
                 // deletePlaceGroup removes the whole venue, including aliases
                 // another device added after this snapshot's savedIDs went stale.
