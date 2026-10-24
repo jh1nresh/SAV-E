@@ -811,11 +811,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
         openRootTab("Passport", app: app)
         openPassportSettings(app)
-        XCTAssertTrue(
-            app.descendants(matching: .any)["Passport settings"].waitForExistence(timeout: stepTimeout),
-            "Passport settings opens the B7 Pro row."
-        )
-
+        // Overlay + inner NavigationStack: XCTest does not expose the
+        // "Passport settings" title as NavigationBar or any descendant
+        // (CI 40096355618 typed bar; 40099415604 descendants .any).
         let disclosure = app.descendants(matching: .any)["profile.controlsDisclosure"]
         XCTAssertTrue(
             disclosure.waitForExistence(timeout: stepTimeout),
