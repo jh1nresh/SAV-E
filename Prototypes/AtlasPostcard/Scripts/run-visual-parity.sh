@@ -25,11 +25,13 @@ Options:
   --threshold NUMBER    Gate threshold. Must be at least 0.90 (default 0.90).
 
 The screenshots directory must contain home.png, saves.png, plan.png,
-and map.png. The result-bundle mode prefers the live five-tab-home
-attachment for Home and falls back to atlas-home for prototype-only
-runs. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
-and atlas-map XCTest attachments. Friends is a real 0.90 gate against
-`friends.png` (Home deferral on #290 does not apply to Friends).
+map.png, and friends.png. The result-bundle mode prefers the live
+five-tab-home attachment for Home and falls back to atlas-home for
+prototype-only runs. Saves, Plan, and Map use the stable atlas-saves,
+atlas-plan, and atlas-map XCTest attachments. Friends is a real 0.90
+gate against `friends.png` (Home deferral on #290 does not apply to
+Friends). Compare the populated `five-tab-friends` attachment, not
+`five-tab-friends-empty`.
 
 --destination runs the prototype XCTest testCaptureFourLockedScreens
 (Home, Saves, Plan, Map only). Friends is not in that prototype shell;
@@ -340,6 +342,9 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                 five-tab-friends-coming-soon*)
                     continue
                     ;;
+                five-tab-friends-empty*)
+                    continue
+                    ;;
                 five-tab-friends*)
                     screen="friends"
                     priority=1
@@ -416,7 +421,7 @@ else
         echo "error: screenshots directory not found: $SCREENSHOTS_DIR" >&2
         exit 2
     fi
-    for screen in home saves plan map; do
+    for screen in "${parity_screens[@]}"; do
         if [[ ! -f "$SCREENSHOTS_DIR/$screen.png" ]]; then
             echo "error: missing screenshot: $SCREENSHOTS_DIR/$screen.png" >&2
             exit 2
