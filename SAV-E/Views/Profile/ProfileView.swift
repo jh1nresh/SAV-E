@@ -75,7 +75,8 @@ struct ProfileView: View {
     private var cityStampPlaces: [Place] {
         // Use the supplied collection before the local snapshot finishes loading.
         let source = localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces
-        return collectionMode.places(            from: source,
+        return collectionMode.places(
+            from: source,
             selection: session.city,
             location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
             locationDenied: locationService.isAuthorizationDenied
@@ -112,7 +113,8 @@ struct ProfileView: View {
                             : SaveTheme.Spacing.lg
                     )
 
-                    PassportTileTownCollection(places: cityStampPlaces, collectionMode: collectionMode, onOpenPlace: onOpenPlace)                        .padding(.horizontal, 16)
+                    PassportTileTownCollection(places: cityStampPlaces, collectionMode: collectionMode, onOpenPlace: onOpenPlace)
+                        .padding(.horizontal, 16)
 
                     passportIdentity
                         .padding(.horizontal, 16)
@@ -2320,7 +2322,8 @@ private struct PassportTileTownCollection: View {
     }
 
     private var collectionProgress: (completed: Int, total: Int) {
-        collectionMode.progress(in: places)    }
+        collectionMode.progress(in: places)
+    }
 
     private var lockedCount: Int {
         max(places.count < goal ? 1 : 0, min(6, goal - places.count))
@@ -2339,7 +2342,8 @@ private struct PassportTileTownCollection: View {
                     .foregroundStyle(SaveAtlasPalette.forest)
                     .accessibilityIdentifier("profile.stampProgress")
                     .accessibilityLabel("\(collectionProgress.completed)/\(collectionProgress.total)")
-                    .accessibilityValue("\(collectionProgress.completed) of \(collectionProgress.total)")                GeometryReader { geo in
+                    .accessibilityValue("\(collectionProgress.completed) of \(collectionProgress.total)")
+                GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(SaveAtlasPalette.kraft.opacity(0.45))
                         Capsule()
@@ -2383,7 +2387,8 @@ private struct PassportTileTownCollection: View {
 
     private var progress: CGFloat {
         guard collectionProgress.total > 0 else { return 0 }
-        return min(1, CGFloat(collectionProgress.completed) / CGFloat(collectionProgress.total))    }
+        return min(1, CGFloat(collectionProgress.completed) / CGFloat(collectionProgress.total))
+    }
 }
 
 private struct PassportStampSection: View {

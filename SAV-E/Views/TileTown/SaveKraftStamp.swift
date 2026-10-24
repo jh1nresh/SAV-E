@@ -598,6 +598,7 @@ nonisolated struct SaveDoodlePinOutline: Shape {
         return p
     }
 }
+
 /// Hand-drawn 24pt template tab icons. Coral when selected, muted when idle.
 /// Stroke is 1.5pt; the tab bar supplies the template color.
 enum SaveDoodleTabIconKind: Equatable {
@@ -683,7 +684,8 @@ nonisolated struct SaveDoodleTabIconShape: Shape {
             penLine(to: CGPoint(x: w * 0.84, y: h * 0.50))
         case .friends:
             path.addPath(SaveDoodleInkOval().path(in: CGRect(x: w * 0.13, y: h * 0.09, width: w * 0.34, height: h * 0.34)))
-            path.addPath(SaveDoodleInkOval().path(in: CGRect(x: w * 0.49, y: h * 0.13, width: w * 0.32, height: h * 0.32)))            path.move(to: CGPoint(x: w * 0.10, y: h * 0.82))
+            path.addPath(SaveDoodleInkOval().path(in: CGRect(x: w * 0.49, y: h * 0.13, width: w * 0.32, height: h * 0.32)))
+            path.move(to: CGPoint(x: w * 0.10, y: h * 0.82))
             path.addQuadCurve(
                 to: CGPoint(x: w * 0.50, y: h * 0.82),
                 control: CGPoint(x: w * 0.30, y: h * 0.46)
@@ -699,7 +701,8 @@ nonisolated struct SaveDoodleTabIconShape: Shape {
                 cornerSize: CGSize(width: w * 0.08, height: h * 0.08)
             )
             path.move(to: CGPoint(x: w * 0.34, y: h * 0.10))
-            penLine(to: CGPoint(x: w * 0.34, y: h * 0.90))            path.addEllipse(in: CGRect(x: w * 0.46, y: h * 0.36, width: w * 0.22, height: h * 0.22))
+            penLine(to: CGPoint(x: w * 0.34, y: h * 0.90))
+            path.addEllipse(in: CGRect(x: w * 0.46, y: h * 0.36, width: w * 0.22, height: h * 0.22))
         }
         return path
     }

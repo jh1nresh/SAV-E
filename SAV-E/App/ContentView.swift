@@ -259,9 +259,6 @@ struct ContentView: View {
                 collapseMapPanel()
             }
         }
-        .onChange(of: doodleSession.mapVisitResidueID) { _, _ in
-            resetMapVisitResidue()
-        }
         .onChange(of: fullScreenRoute?.id) { _, routeID in
             if routeID != nil {
                 invalidateExactSearchRequest()
@@ -669,7 +666,8 @@ struct ContentView: View {
                             width: AtlasTabBarMetrics.width,
                             height: AtlasTabBarMetrics.height
                         )
-                    }                }
+                    }
+                }
             }
             .tint(SaveAtlasPalette.forest)
             .environmentObject(doodleSession)
@@ -795,7 +793,8 @@ struct ContentView: View {
                         focusesSearch: drawerLaunchRequest.focusesSearch,
                         preservesExactSearchClue: isExactSearchSessionActive
                             || exactSearchClueID != nil,
-                        onClose: closeMapSearch,                        onOpenPlace: { openSavedPlaceFromMapSearch($0) },
+                        onClose: closeMapSearch,
+                        onOpenPlace: { openSavedPlaceFromMapSearch($0) },
                         onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
                     )
                 }
@@ -828,7 +827,8 @@ struct ContentView: View {
 
     private func closeMapSearch() {
         invalidateExactSearchRequest()
-        collapseMapPanel()    }
+        collapseMapPanel()
+    }
 
     @ViewBuilder
     private var rootSheetContent: some View {
@@ -1007,7 +1007,8 @@ struct ContentView: View {
                     mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
                 } ?? false
                 let place = try await mapVM.saveMapCandidateAsPlace(candidate)
-                endExactSearchSessionAfterCandidateSave()                if resolvesOriginPlan {
+                endExactSearchSessionAfterCandidateSave()
+                if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
                     requestTripAssignment(for: place)
                 }
@@ -1406,7 +1407,8 @@ struct ContentView: View {
                     mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
                 } ?? false
                 let place = try await mapVM.saveMapCandidateAsPlace(candidate)
-                endExactSearchSessionAfterCandidateSave()                if resolvesOriginPlan {
+                endExactSearchSessionAfterCandidateSave()
+                if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
                     requestTripAssignment(for: place)
                 } else {
@@ -1471,7 +1473,8 @@ struct ContentView: View {
         exactSearchRequestID = nil
         rootPath.removeAll()
         activateExactSearchSession(for: candidate)
-        showMapTab()        openExactSearchRefine(query: candidate.refinementQuery)
+        showMapTab()
+        openExactSearchRefine(query: candidate.refinementQuery)
     }
 
     private func openExactSearch(_ candidate: PlaceReviewCandidate) {
@@ -1486,7 +1489,8 @@ struct ContentView: View {
         fullScreenRoute = nil
         rootPath.removeAll()
         activateExactSearchSession(for: candidate)
-        showMapTab()        // The tile-town canvas shows saved stamps, not unconfirmed search pins.
+        showMapTab()
+        // The tile-town canvas shows saved stamps, not unconfirmed search pins.
         // Let the existing search panel perform one query and keep its results
         // actionable while retaining the original clue-resolution session.
         openExactSearchRefine(query: query)
@@ -1523,7 +1527,8 @@ struct ContentView: View {
         restoreExactSearchResolutionIfNeeded()
         // The launch request can keep `preservesExactSearchClue` after an
         // explicit close or a successful resolve. Only a live session may
-        // claim the next saved-pin tap; otherwise the peek never opens.        let shouldResolveClue = isExactSearchSessionActive
+        // claim the next saved-pin tap; otherwise the peek never opens.
+        let shouldResolveClue = isExactSearchSessionActive
             || mapVM.hasActiveExactSearchResolution
             || exactSearchClueID != nil
         guard shouldResolveClue else {
@@ -1537,7 +1542,8 @@ struct ContentView: View {
             restoreExactSearchResolutionIfNeeded()
             if let resolved = await mapVM.chooseSavedStampFromExactSearch(place) {
                 exactSearchClueID = nil
-                isExactSearchSessionActive = false                openMapDetail(.savedPlace(resolved))
+                isExactSearchSessionActive = false
+                openMapDetail(.savedPlace(resolved))
             }
         }
     }
@@ -1551,7 +1557,8 @@ struct ContentView: View {
     }
 
     private func invalidateExactSearchRequest() {
-        guard exactSearchRequestID != nil || isExactSearchSessionActive || exactSearchClueID != nil || mapVM.hasActiveExactSearchResolution else { return }        exactSearchRequestID = nil
+        guard exactSearchRequestID != nil || isExactSearchSessionActive || exactSearchClueID != nil || mapVM.hasActiveExactSearchResolution else { return }
+        exactSearchRequestID = nil
         isExactSearchSessionActive = false
         exactSearchClueID = nil
         mapVM.clearMapSearchResults()

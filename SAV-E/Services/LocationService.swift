@@ -47,7 +47,8 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     /// Codex / spec §8 Tiantan face: 450 m / 800 m / 1.1 km from the three Eat rows.
     private static let uiTestTiantan = CLLocation(latitude: 39.882192, longitude: 116.4066)
     /// Home TPE-A simulated fix: Da'an Forest Park. Not real GPS.
-    private static let uiTestDaan = CLLocation(latitude: 25.0296, longitude: 121.5347)#else
+    private static let uiTestDaan = CLLocation(latitude: 25.0296, longitude: 121.5347)
+#else
     private let simulatesDeniedAuthorization = false
     private let simulatesAllowedAuthorization = false
 #endif

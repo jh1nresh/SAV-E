@@ -1368,7 +1368,8 @@ struct AIDrawerView: View {
         viewModel.reset()
         // Loading and error states have empty `mapCandidates`. Closing the
         // drawer is cancellation and must still end an exact-search session.
-        onClearMapSearchResults(true)        searchFocused = false
+        onClearMapSearchResults(true)
+        searchFocused = false
         withAnimation { drawerDetent = collapsedDrawerDetent }
     }
 

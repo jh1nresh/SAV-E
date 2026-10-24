@@ -218,11 +218,6 @@ enum ReviewDemoSeed {
         }
         if ReviewDemo.isOfflineUITestMode,
            ReviewDemo.uiTestStorageIdentifier != nil,
-           ProcessInfo.processInfo.arguments.contains("--uitest-doodle-parity-fixture") {
-            return doodleParityPlaces(now: now)
-        }
-        if ReviewDemo.isOfflineUITestMode,
-           ReviewDemo.uiTestStorageIdentifier != nil,
            ProcessInfo.processInfo.arguments.contains("--uitest-home-memory-fixture") {
             return [
                 ("Taipei Window Cafe", "台北市大安區", PlaceCategory.cafe),
@@ -506,6 +501,7 @@ enum ReviewDemoSeed {
             )
         }
     }
+
     /// Temple of Heaven (天壇) Eat rows plus the Map sheet park. Distances
     /// match the Codex packet / spec §8 Tiantan face: 450m / 800m / 1.1km.
     /// Twelve Tiantan saves, four visited (2 Eat + 2 Go). Only the three

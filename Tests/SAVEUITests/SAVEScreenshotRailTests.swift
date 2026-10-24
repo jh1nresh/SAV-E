@@ -827,7 +827,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         // Home B has no mini-map `home.featuredName`. A confirmed stamp is an
         // Eat/Go row (`home.place.*`). Near you without a fix lists none;
         // B-1/B-3 city switcher shows the review-demo Tokyo/Taipei stamps.
-        waitForConfirmedHomeStampBeforeSettings(app)        openRootTab("Passport", app: app)
+        waitForConfirmedHomeStampBeforeSettings(app)
+        openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         let settings = app.buttons["profile.settings"]
         XCTAssertTrue(settings.waitForExistence(timeout: stepTimeout), "Passport settings opens the B7 Pro row.")
@@ -965,7 +966,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.descendants(matching: .any)["home.root"]
                 .descendants(matching: .any)["home.miniMap"].exists,
             "Home has no map component"
-        )        XCTAssertFalse(app.descendants(matching: .any)["home.saves"].exists)
+        )
+        XCTAssertFalse(app.descendants(matching: .any)["home.saves"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["home.locationPrompt"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["home.locationAllow"].waitForExistence(timeout: stepTimeout))
         XCTAssertFalse(app.descendants(matching: .any)["home.trips"].exists)
@@ -976,7 +978,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app.buttons["map.go"].exists,
             "Map tab stays unfiltered; Home has no mini-map handoff"
         )
-        XCTAssertFalse(app.descendants(matching: .any)["map.city"].exists)        openRootTab("Home", app: app)
+        XCTAssertFalse(app.descendants(matching: .any)["map.city"].exists)
+        openRootTab("Home", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(app.state, .runningForeground)
         XCTAssertTrue(rootTabButton("Save", app: app).isHittable)
@@ -1001,7 +1004,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 hintCount: 1,
                 clock: "2026-10-24T20:00:00",
                 dark: false
-            ),            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
+            ),
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
         )
         launch(app)
         try signInViaReviewDemoRequired(app: app)
@@ -1131,7 +1135,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     func testCaptureFiveTabLanding() throws {
         try assertFriendsComingSoonLanguages()
         try captureFiveTabHomeParityRaster()
-        try captureHomeSavesWithoutClues(names: ["H3-no-clues-saves-en"])        let app = makeApp(
+        try captureHomeSavesWithoutClues(names: ["H3-no-clues-saves-en"])
+        let app = makeApp(
             launchArguments: [
                 "--uitest-complete-onboarding",
                 "--skip-map-tour",
@@ -1285,7 +1290,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             language: "en",
             homeName: "dark-home",
             passportName: "dark-passport",
-            referenceName: "H2-en-dark",            expectedRed: 0x1E,
+            referenceName: "H2-en-dark",
+            expectedRed: 0x1E,
             expectedGreen: 0x1C,
             expectedBlue: 0x19
         )
@@ -1296,7 +1302,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             language: "en",
             homeName: "light-home",
             passportName: "light-passport",
-            referenceName: "H2-en-light",            expectedRed: 0xFF,
+            referenceName: "H2-en-light",
+            expectedRed: 0xFF,
             expectedGreen: 0xF9,
             expectedBlue: 0xEB
         )
@@ -1307,7 +1314,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             language: "zh-Hant",
             homeName: "light-home-zh",
             passportName: "light-passport-zh",
-            referenceName: "H2-zh-light",            expectedRed: 0xFF,
+            referenceName: "H2-zh-light",
+            expectedRed: 0xFF,
             expectedGreen: 0xF9,
             expectedBlue: 0xEB
         )
@@ -1318,7 +1326,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             language: "zh-Hant",
             homeName: "dark-home-zh",
             passportName: "dark-passport-zh",
-            referenceName: "H2-zh-dark",            expectedRed: 0x1E,
+            referenceName: "H2-zh-dark",
+            expectedRed: 0x1E,
             expectedGreen: 0x1C,
             expectedBlue: 0x19
         )
@@ -1417,7 +1426,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-location-denied",
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
-                "--uitest-home-memory-fixture",                "-save.appLanguage", language,
+                "--uitest-home-memory-fixture",
+                "-save.appLanguage", language,
                 "-AppleInterfaceStyle", appleInterfaceStyle,
                 forceArgument,
                 "--uitest-map-place-selected",
@@ -4872,7 +4882,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(
             home.descendants(matching: .any)["home.miniMap"].exists,
             "Home has no map component"
-        )        let firstPlace = app.buttons.matching(
+        )
+        let firstPlace = app.buttons.matching(
             NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
         ).firstMatch
         XCTAssertTrue(firstPlace.waitForExistence(timeout: stepTimeout))

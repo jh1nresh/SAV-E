@@ -37,10 +37,8 @@ struct SaveDoodleMapView: View {
 
     var body: some View {
         let followsHomeFilter = session.mapFollowsHomeFilter
-        let visitResidue = session.mapVisitResidueID
         return VStack(spacing: 0) {
             header(followsHomeFilter: followsHomeFilter)
-                .id(visitResidue)
                 .padding(.horizontal, SaveLayout.screenMargin)
                 .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.xs)
                 .padding(.bottom, SaveSpace.md)
@@ -95,13 +93,7 @@ struct SaveDoodleMapView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             _ = onPlanAroundPlace
-            applyMiniMapHandoff()
             mapViewModel.seedUITestUnsavedCandidateIfNeeded()
-            selectParityPlaceIfNeeded()
-            fitVisiblePlaces()
-        }
-        .onChange(of: session.mapVisitResidueID) { _, _ in
-            applyMiniMapHandoff()
             selectParityPlaceIfNeeded()
             fitVisiblePlaces()
         }
@@ -153,12 +145,6 @@ struct SaveDoodleMapView: View {
     private func openSystemSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
-    }
-
-    /// Mini-map residue remounts Eat/Go on a reused Map tab identity.
-    private func applyMiniMapHandoff() {
-        session.consumeMiniMapHandoff()
-        showsCityPicker = false
     }
 
     private var mapCanvas: some View {
