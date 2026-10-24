@@ -1666,7 +1666,7 @@ final class MapViewModel: ObservableObject {
             var importedCandidateIDs: [UUID] = []
             for candidate in candidates {
                 try checkSession()
-                mirrorToLocalVault(candidate)
+                let localMirrorID = mirrorToLocalVault(candidate)
                 var run: PlaceRecoveryWorkflowRun?
                 var failedStep = "validate_input"
                 do {
@@ -1674,7 +1674,9 @@ final class MapViewModel: ObservableObject {
                     await SAVEAnalysisScope.current?.addCapture(captureId)
                     if let existingIDs = try await reuseImportedCandidate(candidate, captureId: captureId, userId: userId) {
                         importedCandidateIDs.append(contentsOf: existingIDs)
-                        removeLocalReviewMirror(candidate.id, ownerSubject: candidate.ownerSubject ?? userId)
+                        if let localMirrorID {
+                            removeLocalReviewMirror(localMirrorID, ownerSubject: candidate.ownerSubject ?? userId)
+                        }
                         continue
                     }
                     let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(sourceURL: candidate.sourceURL, sourceType: nil)
@@ -1688,7 +1690,9 @@ final class MapViewModel: ObservableObject {
                         workflowRunId: createdRun.id
                     )
                     importedCandidateIDs.append(candidateId)
-                    removeLocalReviewMirror(candidate.id, ownerSubject: candidate.ownerSubject ?? userId)
+                    if let localMirrorID {
+                        removeLocalReviewMirror(localMirrorID, ownerSubject: candidate.ownerSubject ?? userId)
+                    }
                     if !candidate.isSourceOnly { await SAVEAnalysisScope.current?.foundReviewCandidate() }
                     failedStep = "write_receipt"
                     _ = try await supabaseService.recordPlaceRecoveryResult(
@@ -3288,15 +3292,20 @@ final class MapViewModel: ObservableObject {
         try? saveLocalVaultService.removeReviewCandidate(recordID, ownerSubject: ownerSubject)
     }
 
-    private func mirrorToLocalVault(_ candidate: PendingReviewCandidate) {
+    @discardableResult
+    private func mirrorToLocalVault(_ candidate: PendingReviewCandidate) -> UUID? {
         do {
             var stamped = candidate
             if stamped.ownerSubject == nil {
                 stamped.ownerSubject = authService.currentUserId
             }
-            _ = try saveLocalVaultService.saveReviewCandidate(stamped)
+            return try saveLocalVaultService.saveReviewCandidate(
+                stamped,
+                recordID: stamped.localVaultRecordID
+            ).id
         } catch {
             print("MapViewModel: failed to mirror pending candidate to local vault: \(error)")
+            return nil
         }
     }
 

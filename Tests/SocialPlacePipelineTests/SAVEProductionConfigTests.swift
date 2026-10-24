@@ -3448,6 +3448,14 @@ final class SAVEProductionConfigTests: XCTestCase {
             map.contains("removeLocalReviewMirror"),
             "P1 4365254805: a successful Review import must delete the local vault mirror"
         )
+        XCTAssertTrue(
+            map.contains("let localMirrorID = mirrorToLocalVault(candidate)"),
+            "P1 4365254805: Share import removes the vault record mirrorToLocalVault actually wrote"
+        )
+        XCTAssertFalse(
+            map.contains("removeLocalReviewMirror(candidate.id"),
+            "PendingReviewCandidate has no id; do not pass candidate.id to removeLocalReviewMirror"
+        )
         XCTAssertTrue(map.contains("try persistParkedReviewCandidate(candidate)"))
         XCTAssertTrue(
             map.contains("SAVEPendingImportSessionScope.$current.withValue((importGeneration, userId))"),
@@ -5584,6 +5592,73 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         XCTAssertTrue(
             try vault.reviewCandidates(limit: 500, belongingTo: owner).isEmpty,
             "the local vault mirror must be removed after the remote Review candidate exists"
+        )
+    }
+
+    /// P1 4365254805 Share path: `PendingReviewCandidate` has no `id`. The
+    /// local vault record returned by `mirrorToLocalVault` must be the one
+    /// removed after persist.
+    @MainActor
+    func testSuccessfulShareReviewImportRemovesLocalMirrorAndShowsOneEntry() async throws {
+        final class PendingAnalyzer: SocialSemanticAnalyzing {
+            func analyze(caption: String, ocrText: String?) async -> SocialSemanticResult { .pending }
+        }
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        let owner = "share-import-mirror-fixture"
+        auth.authState = .authenticated(userId: owner)
+        defer {
+            auth.authState = original
+            AnalysisRequestURLProtocol.reset()
+        }
+
+        AnalysisRequestURLProtocol.reset()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let remoteID = UUID()
+        let capture = UUID()
+        let run = UUID()
+        let order = UUID()
+        let row = "{\"id\":\"\(remoteID)\",\"capture_id\":\"\(capture)\",\"workflow_run_id\":\"\(run)\",\"name\":\"Source clue\",\"status\":\"source_only\",\"missing_info\":[\"Analysis pending\"],\"created_at\":\"2020-01-02T03:04:05Z\"}"
+        let workflow = "{\"id\":\"\(run)\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"source_type\":\"social_url\",\"status\":\"pending\",\"evidence_tier\":\"weak\",\"result_evidence_refs\":[],\"result_candidate_refs\":[],\"credit_reserved\":1,\"credit_settlement\":\"pending\"}"
+        let workOrder = "{\"id\":\"\(order)\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"intent\":\"recover\",\"input_type\":\"social_url\",\"evaluator_policy_id\":\"fixture\",\"settlement_mode\":\"fixture\",\"status\":\"pending\"}"
+        let receipt = "{\"id\":\"\(UUID())\",\"run_id\":\"\(run)\",\"workflow_id\":\"fixture\",\"verdict\":\"source_only\",\"settlement\":\"pending\",\"evaluator_summary\":\"fixture\",\"evidence_refs\":[],\"candidate_refs\":[],\"receipt_hash\":\"fixture\",\"anchor_status\":\"none\"}"
+        AnalysisRequestURLProtocol.handler = { request in
+            let path = request.url?.path ?? ""
+            if request.url?.host == "www.instagram.com" { return (200, "<meta property='og:title' content='Log in • Instagram'>") }
+            if path == "/v0/analysis" {
+                let body = try AnalysisRequestURLProtocol.body(request)
+                return (200, String(decoding: try JSONSerialization.data(withJSONObject: ["analysis_id": body["id"]!]), as: UTF8.self))
+            }
+            if path.hasSuffix("/search-recovery") { return (200, #"{"created_candidates":[]}"#) }
+            if path.hasSuffix("/captures") && request.httpMethod == "POST" { return (200, "{\"id\":\"\(capture)\"}") }
+            if path.hasSuffix("/work-orders") { return (200, workOrder) }
+            if path.hasSuffix("/runs") { return (200, workflow) }
+            if path.hasSuffix("/result") { return (200, "{\"run\":\(workflow),\"receipt\":\(receipt)}") }
+            if path.hasSuffix("/candidates") {
+                if request.httpMethod == "POST" { return (200, row) }
+                if request.url?.query?.contains("capture_id") == true { return (200, "[]") }
+                return (200, "[\(row)]")
+            }
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let social = SocialLinkReviewCandidateService(socialSemanticAnalyzer: PendingAnalyzer(), metadataSession: session())
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let map = MapViewModel(
+            supabaseService: service,
+            socialLinkReviewCandidateService: social,
+            saveLocalVaultService: vault
+        )
+        let ids = try await map.importSharedTextAsReviewCandidates("https://www.instagram.com/p/share-mirror/")
+        XCTAssertEqual(ids, [remoteID])
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [remoteID])
+        XCTAssertTrue(
+            try vault.reviewCandidates(limit: 500, belongingTo: owner).isEmpty,
+            "Share import must remove the localVaultRecordID mirror, not look up PendingReviewCandidate.id"
         )
     }
 
