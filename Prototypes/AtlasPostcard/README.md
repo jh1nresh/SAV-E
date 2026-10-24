@@ -60,15 +60,14 @@ The Home production target is DESIGN v2's exact 402×874
 `home-dark.png` sits next to it for DESIGN comparison.
 `home-mask.png` is the ignore mask (white = ignore). Grade position,
 size, color and font style. v1 is retired. Those rasters are rendered
-at 1× 402×874, not a crop. `VisualParity.swift` still accepts only a
-1× 402 × 874 target. Founder sign-off 2026-10-20:
-「改成跟手繪稿比對，門檻維持 0.90」. The Map production target is DESIGN
-v2's exact 402×874 `map-light.png` from the same commit, with
-`map-dark.png` for DESIGN comparison and `map-mask.png` (white =
-ignore the live Apple Maps area). Saves and Plan stay on their current
-locks until those Doodle PRs. The `0.90` threshold remains the CI gate
-for Home, Map, Saves, and Plan. Masks stay unchanged and do not waive
-the score.
+at 1× 402×874, not a crop. Home's target stays 1× 402 × 874.
+Founder sign-off 2026-10-20:
+「改成跟手繪稿比對，門檻維持 0.90」. The Map production target is the
+live Taipei Apple Maps CI capture (iPhone 16 Pro, 402pt, 3× 1206×2622)
+from #298; `map-mask.png` is not applied to the 0.90 score. Saves and
+Plan stay on their current locks until those Doodle PRs. The `0.90`
+threshold remains the CI gate for Home, Map, Saves, and Plan. Home's
+mask does not waive the score.
 
 ## Boundaries
 

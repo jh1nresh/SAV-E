@@ -344,6 +344,8 @@ final class SaveDoodleMapTests: XCTestCase {
         let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
         XCTAssertTrue(parity.contains("ignoreRects"))
         XCTAssertTrue(parity.contains("--ignore-mask"))
+        XCTAssertTrue(parity.contains("allowedPixelScales: 1...4"))
+        XCTAssertTrue(parity.contains("Map goldens are the 3× CI Taipei capture"))
         XCTAssertTrue(script.contains("--threshold 0.90") || script.contains("THRESHOLD=\"0.90\""))
         XCTAssertTrue(script.contains("five-tab-map*)"))
         XCTAssertTrue(script.contains("298-10-saved-unsaved-visited"))
@@ -440,11 +442,14 @@ final class SaveDoodleMapTests: XCTestCase {
         let targets = repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets"
         )
-        for name in ["map.png", "map-light.png", "map-dark.png", "map-mask.png"] {
+        for name in ["map.png", "map-light.png", "map-dark.png"] {
             let image = try XCTUnwrap(UIImage(contentsOfFile: targets.appendingPathComponent(name).path))
-            XCTAssertEqual(Int(image.size.width), 402, name)
-            XCTAssertEqual(Int(image.size.height), 874, name)
+            XCTAssertEqual(Int(image.size.width), 1206, name)
+            XCTAssertEqual(Int(image.size.height), 2622, name)
         }
+        let mask = try XCTUnwrap(UIImage(contentsOfFile: targets.appendingPathComponent("map-mask.png").path))
+        XCTAssertEqual(Int(mask.size.width), 402)
+        XCTAssertEqual(Int(mask.size.height), 874)
         let light = try XCTUnwrap(UIImage(contentsOfFile: targets.appendingPathComponent("map.png").path))
         XCTAssertGreaterThan(
             light.pngData()?.count ?? 0,

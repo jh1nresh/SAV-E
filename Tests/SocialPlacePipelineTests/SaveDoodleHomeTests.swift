@@ -913,8 +913,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         let mapPNG = try Data(contentsOf: repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets/map.png"
         ))
-        XCTAssertEqual(pngDimension(mapPNG, at: 16), 402)
-        XCTAssertEqual(pngDimension(mapPNG, at: 20), 874)
+        XCTAssertEqual(pngDimension(mapPNG, at: 16), 1206)
+        XCTAssertEqual(pngDimension(mapPNG, at: 20), 2622)
         XCTAssertTrue(root.contains("SaveDoodleHomeView("))
         XCTAssertFalse(root.contains("HomeAtlasScreen()"))
         XCTAssertTrue(root.contains("saves.trips"))

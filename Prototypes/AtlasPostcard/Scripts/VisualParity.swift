@@ -406,7 +406,8 @@ private func score(
 
 do {
     let options = try parseOptions()
-    let target = try strictRGBA(from: options.target, allowedPixelScales: 1...1)
+    // Home stays 1× 402×874. Map goldens are the 3× CI Taipei capture.
+    let target = try strictRGBA(from: options.target, allowedPixelScales: 1...4)
     let actual = try strictRGBA(from: options.actual, allowedPixelScales: 1...4)
     let maskURL = options.mask ?? options.ignoreMask
     let mask = try maskURL.map { try strictRGBA(from: $0, allowedPixelScales: 1...1) }
