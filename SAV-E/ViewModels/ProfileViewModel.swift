@@ -17,6 +17,7 @@ final class ProfileViewModel: ObservableObject {
     private let avatarStore: ProfileAvatarStore
     private let saveLocalVaultService: SaveLocalVaultService
     private let pendingPlaceImportService: PendingPlaceImportService
+    private let accountReferenceStore: AccountReferenceStoring
     private let updateProfileRemotely: (UserProfile) async throws -> Void
     private let currentUserIDProvider: () -> String?
     private let reviewerDemoProvider: () -> Bool
@@ -31,6 +32,7 @@ final class ProfileViewModel: ObservableObject {
         avatarStore: ProfileAvatarStore = .shared,
         saveLocalVaultService: SaveLocalVaultService = .shared,
         pendingPlaceImportService: PendingPlaceImportService = .shared,
+        accountReferenceStore: AccountReferenceStoring = KeychainAccountReferenceStore.shared,
         updateProfileRemotely: ((UserProfile) async throws -> Void)? = nil,
         currentUserIDProvider: @escaping () -> String? = { PrivyAuthService.shared.currentUserId },
         reviewerDemoProvider: @escaping () -> Bool = { PrivyAuthService.shared.isReviewerDemo }
@@ -40,6 +42,7 @@ final class ProfileViewModel: ObservableObject {
         self.avatarStore = avatarStore
         self.saveLocalVaultService = saveLocalVaultService
         self.pendingPlaceImportService = pendingPlaceImportService
+        self.accountReferenceStore = accountReferenceStore
         self.updateProfileRemotely = updateProfileRemotely ?? { profile in
             try await supabaseService.updateProfile(profile)
         }
@@ -275,13 +278,21 @@ final class ProfileViewModel: ObservableObject {
             // purge so a storage failure cannot leave A able to consume Share
             // queues. Sign out before the queue purge so admitted late writers
             // finish under the same per-file lock, then cannot recreate A.
-            if currentUserIDProvider() == intent.owner,
-               authService.currentUserId == intent.owner,
-               authService.sessionGeneration == sessionGeneration,
-               !reviewerDemoProvider() {
-                try? KeychainAccountReferenceStore.shared.clear()
-                await authService.signOut()
-                resetForCurrentSession()
+            if !reviewerDemoProvider() {
+                let activeOwner = authService.currentUserId
+                if activeOwner == intent.owner,
+                   currentUserIDProvider() == intent.owner,
+                   authService.sessionGeneration == sessionGeneration {
+                    try? accountReferenceStore.clear()
+                    await authService.signOut()
+                    resetForCurrentSession()
+                } else if activeOwner == nil {
+                    // Recovery after Privy already reports signed out: the
+                    // durable receipt is about to be removed, so the stale
+                    // binding must go too. Preserve it only when a different
+                    // active account has already replaced the deleted owner.
+                    try? accountReferenceStore.clear()
+                }
             }
             // The owner may already be signed out or replaced by B. Only remove
             // the deleted owner's stale cache; this synchronous check never clears B.

@@ -914,6 +914,57 @@ final class ProfileAvatarStoreTests: XCTestCase {
         XCTAssertNil(try vault.pendingAccountDeletionIntent())
     }
 
+    /// P2 4366334143: signed-out recovery after a recorded successful DELETE
+    /// must clear the stale Keychain binding before the receipt is removed.
+    /// A replacement account's binding stays.
+    @MainActor
+    func testSignedOutSuccessfulDeletionRecoveryClearsStaleAccountBinding() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        defer { auth.authState = previousAuth }
+        let deletedRef = "save_account_" + String(repeating: "A", count: 43)
+        let replacementRef = "save_account_" + String(repeating: "B", count: 43)
+
+        let signedOutStore = InMemoryAccountReferenceStore(value: deletedRef)
+        let signedOutVault = SaveLocalVaultService(
+            overrideVaultURL: directory.appendingPathComponent("signed-out-binding.json")
+        )
+        try signedOutVault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a"))
+        let signedOutIntent = try signedOutVault.prepareAccountDeletion(belongingTo: "account-a")
+        _ = try signedOutVault.recordRemoteAccountDeletionSuccess(intentID: signedOutIntent.id)
+        auth.authState = .unauthenticated
+        let signedOut = deletionModel(
+            vault: signedOutVault,
+            currentOwner: { auth.currentUserId },
+            accountReferenceStore: signedOutStore
+        ) { XCTFail("Signed-out recovery must not send DELETE") }
+        await signedOut.loadProfile()
+        XCTAssertNil(auth.currentUserId)
+        XCTAssertNil(signedOutStore.value, "stale deleted-account binding must not survive receipt removal")
+        XCTAssertEqual(signedOutStore.clearCount, 1)
+        XCTAssertNil(try signedOutVault.pendingAccountDeletionIntent())
+
+        let replacementStore = InMemoryAccountReferenceStore(value: replacementRef)
+        let replacementVault = SaveLocalVaultService(
+            overrideVaultURL: directory.appendingPathComponent("replacement-binding.json")
+        )
+        try replacementVault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a"))
+        try replacementVault.append(SaveMemoryRecord(state: .sourceOnly, title: "B clue", ownerSubject: "account-b"))
+        let replacementIntent = try replacementVault.prepareAccountDeletion(belongingTo: "account-a")
+        _ = try replacementVault.recordRemoteAccountDeletionSuccess(intentID: replacementIntent.id)
+        auth.authState = .authenticated(userId: "account-b")
+        let replacement = deletionModel(
+            vault: replacementVault,
+            currentOwner: { auth.currentUserId },
+            accountReferenceStore: replacementStore
+        ) { XCTFail("B recovery must not send DELETE") }
+        await replacement.loadProfile()
+        XCTAssertEqual(auth.currentUserId, "account-b")
+        XCTAssertEqual(replacementStore.value, replacementRef, "B's binding must survive A's cleanup")
+        XCTAssertEqual(replacementStore.clearCount, 0)
+        XCTAssertNil(try replacementVault.pendingAccountDeletionIntent())
+    }
+
     @MainActor
     func testBothPendingQueuesPurgeAdmittedLateWritersBeforeClearingIntent() async throws {
         let auth = PrivyAuthService.shared
@@ -1477,6 +1528,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
     private func deletionModel(
         vault: SaveLocalVaultService,
         currentOwner: @escaping () -> String?,
+        accountReferenceStore: AccountReferenceStoring = KeychainAccountReferenceStore.shared,
         delete: @escaping @MainActor () async throws -> Void
     ) -> ProfileViewModel {
         ProfileViewModel(
@@ -1485,6 +1537,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
             avatarStore: ProfileAvatarStore(baseDirectory: directory.appendingPathComponent("avatars")),
             saveLocalVaultService: vault,
             pendingPlaceImportService: PendingPlaceImportService(overrideContainerURL: directory),
+            accountReferenceStore: accountReferenceStore,
             currentUserIDProvider: currentOwner, reviewerDemoProvider: { false }
         )
     }

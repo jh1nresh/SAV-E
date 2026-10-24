@@ -3692,6 +3692,18 @@ final class SAVEProductionConfigTests: XCTestCase {
             "P2 4366239483: pending import must fail closed when the local mirror cannot be removed"
         )
         XCTAssertTrue(
+            map.contains("try removeReviewCandidateAfterRemoteConfirm(candidate)"),
+            "P2 4366334149: Unplaced confirm must not swallow vault-delete failure"
+        )
+        XCTAssertTrue(
+            map.contains("private func removeReviewCandidateAfterRemoteConfirm(_ candidate: PlaceReviewCandidate) throws"),
+            "P2 4366334149: same-class remote-confirm cleanup for merge and new-stamp paths"
+        )
+        XCTAssertFalse(
+            map.contains("try? saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)\n            try mirrorToLocalVault"),
+            "P2 4366334149: do not try? the Unplaced vault delete before mirroring the stamp"
+        )
+        XCTAssertTrue(
             map.contains("let localMirrorID = mirrorToLocalVault(candidate)"),
             "P1 4365254805: Share import removes the vault record mirrorToLocalVault actually wrote"
         )
@@ -3747,6 +3759,14 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertLessThan(
             purgeStart.lowerBound, vaultPurgeStart.lowerBound,
             "P1 4366239479: quarantine Share queues before purgeAccountDeletionRecords"
+        )
+        XCTAssertTrue(
+            profile.contains("else if activeOwner == nil"),
+            "P2 4366334143: signed-out recovery must still clear the stale account binding"
+        )
+        XCTAssertTrue(
+            profile.contains("try? accountReferenceStore.clear()"),
+            "P2 4366334143: clear the device binding, not only the active-owner cache"
         )
         let liveDeleteStart = try XCTUnwrap(profile.range(of: "try await accountDeletionService.deleteAccount"))
         let liveFinishStart = try XCTUnwrap(
@@ -4378,6 +4398,78 @@ final class SAVEProductionConfigTests: XCTestCase {
         vault.removeReviewCandidateError = nil
         try await map.rejectReviewCandidate(parked)
         XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(try vault.reviewCandidates(belongingTo: "did:privy:owner-a").contains { $0.id == parked.id })
+    }
+
+    /// P2 4366334149: a successful remote confirm must not swallow Unplaced
+    /// vault-delete failure. The parked row stays until cleanup succeeds.
+    @MainActor
+    func testConfirmingUnplacedPropagatesVaultDeleteFailureAndKeepsTheRow() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:owner-a")
+        defer {
+            PrivyAuthService.shared.authState = previousAuth
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.confirm-unplaced.\(UUID().uuidString)")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "PATCH", request.url?.path.contains("/memory/candidates/") == true {
+                return (404, #"{"error":"not_found"}"#)
+            }
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                return (201, "{}")
+            }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(
+            apiBaseURL: "https://analysis.test",
+            session: URLSession(configuration: configuration),
+            accessTokenProvider: { "test-token" }
+        )
+        let map = MapViewModel(
+            supabaseService: service,
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        let place = Place(
+            id: UUID(),
+            name: "Parked Harbor Cafe",
+            address: "1 Harbor",
+            latitude: 25.15,
+            longitude: 121.78,
+            category: .cafe,
+            status: .wantToGo,
+            sourcePlatform: .other,
+            createdAt: Date()
+        )
+        let parked = try map.parkPlaceInUnplacedInbox(place, requestPaywall: false)
+        XCTAssertTrue(parked.isUnplacedInbox)
+        XCTAssertEqual(map.reviewCandidates.count, 1)
+        vault.removeReviewCandidateError = NSError(domain: "test.vault", code: 9)
+        do {
+            _ = try await map.saveReviewCandidateAsPlace(parked)
+            XCTFail("Unplaced confirm must propagate a vault delete failure")
+        } catch {
+            XCTAssertEqual((error as NSError).domain, "test.vault")
+        }
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [parked.id])
+        XCTAssertTrue(try vault.reviewCandidates(belongingTo: "did:privy:owner-a").contains { $0.id == parked.id })
+        XCTAssertFalse(map.places.contains { $0.id == parked.id })
+        vault.removeReviewCandidateError = nil
+        let saved = try await map.saveReviewCandidateAsPlace(parked)
+        XCTAssertEqual(saved.name, "Parked Harbor Cafe")
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == parked.id })
         XCTAssertFalse(try vault.reviewCandidates(belongingTo: "did:privy:owner-a").contains { $0.id == parked.id })
     }
 

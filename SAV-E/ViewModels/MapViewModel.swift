@@ -2036,7 +2036,7 @@ final class MapViewModel: ObservableObject {
             try ensureConfirmationSession(userId, confirmationGeneration)
             existing = await refreshedConfirmedPlace(existing)
             try ensureConfirmationSession(userId, confirmationGeneration)
-            try? saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
+            try removeReviewCandidateAfterRemoteConfirm(candidate)
             try mirrorToLocalVault(existing, startedBy: userId, generation: confirmationGeneration)
             places = Place.consolidated(places.filter { $0.id != existing.id } + [existing])
             reviewCandidates.removeAll { $0.id == candidate.id }
@@ -2107,7 +2107,7 @@ final class MapViewModel: ObservableObject {
         try ensureConfirmationSession(userId, confirmationGeneration)
         let confirmedPlace = await refreshedConfirmedPlace(place)
         try ensureConfirmationSession(userId, confirmationGeneration)
-        try? saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
+        try removeReviewCandidateAfterRemoteConfirm(candidate)
         try mirrorToLocalVault(confirmedPlace, startedBy: userId, generation: confirmationGeneration)
         places = [confirmedPlace] + places
         incrementAuthoritativeSavedPlaceCountIfNeeded()
@@ -2578,10 +2578,12 @@ final class MapViewModel: ObservableObject {
         }
 
         // Remote persistence must succeed before the local clue disappears.
-        // After the decision commits, local cleanup is best-effort so a vault
-        // write cannot roll back a stamp the server already accepted.
+        // After the decision commits, ordinary review rows stay best-effort
+        // so a vault write cannot roll back a stamp the server already
+        // accepted. Unplaced cleanup must succeed or the parked row can
+        // reappear and be confirmed again.
         if committed {
-            try? saveLocalVaultService.removeReviewCandidate(clue.id, ownerSubject: clue.ownerSubject)
+            try removeReviewCandidateAfterRemoteConfirm(clue)
         } else {
             try saveLocalVaultService.removeReviewCandidate(clue.id, ownerSubject: clue.ownerSubject)
         }
@@ -3316,6 +3318,18 @@ final class MapViewModel: ObservableObject {
     private func removeLocalOnlyUnplacedBeforeDecision(_ candidate: PlaceReviewCandidate) throws {
         guard candidate.isUnplacedInbox else { return }
         try saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
+    }
+
+    /// After a remote confirm succeeds, Unplaced vault delete is durable
+    /// cleanup. Swallowing it leaves a parked row that can reappear in
+    /// Review and be confirmed twice. Ordinary review rows stay
+    /// best-effort so a vault write cannot roll back an accepted stamp.
+    private func removeReviewCandidateAfterRemoteConfirm(_ candidate: PlaceReviewCandidate) throws {
+        if candidate.isUnplacedInbox {
+            try saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
+        } else {
+            try? saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
+        }
     }
 
     /// After a server-accepted decision, keep local cleanup best-effort so a
