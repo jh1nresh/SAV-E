@@ -492,15 +492,9 @@ struct ContentView: View {
         )
     }
 
-    /// Mini-map does not go through `selectRootTab` so a default-false Map
-    /// write cannot clear the handoff before Map appears.
+    /// HoP 298-7: mini-map is only a Map-tab entry. Map keeps its own state.
     private func openMapFromMiniMap() {
-        doodleSession.beginMiniMapHandoff()
-        rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
-        selectedRootTab = SaveChromeNavigation.destination(
-            afterSelecting: .map,
-            current: selectedRootTab
-        )
+        selectRootTab(.map)
     }
 
     /// Drop leftover Map-tab chrome so a reused Map remounts Eat/Go.

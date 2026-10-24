@@ -389,8 +389,9 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(rail.contains("home.passport"))
         XCTAssertTrue(rail.contains("testHomeListProgressiveSearch"))
         XCTAssertTrue(selector.contains("testHomeListProgressiveSearch"))
-        XCTAssertTrue(rail.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
-        XCTAssertTrue(selector.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertTrue(rail.contains("298-7: Map tab uses Map's own state"))
+        XCTAssertFalse(rail.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertFalse(selector.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {

@@ -991,6 +991,8 @@ Rules:
 
 ### Doodle Map verification boundary
 
+HoP 298-7: Map always uses its own state. A Map-tab entry does not
+import Home's Eat/Go + city from a mini-map handoff.
 HoP P-4 (founder 2026-10-24): `map.png` / `map-dark.png` are live
 Taipei Apple Maps screenshots from #298 CI iPhone 16 Pro (402pt / 3×
 1206×2622) head `ae37a7d1` (Taipei fixture `298-10` / `M1`, English

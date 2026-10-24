@@ -36,11 +36,8 @@ struct SaveDoodleMapView: View {
     @State private var visitError: String?
 
     var body: some View {
-        let followsHomeFilter = session.mapFollowsHomeFilter
-        let visitResidue = session.mapVisitResidueID
-        return VStack(spacing: 0) {
-            header(followsHomeFilter: followsHomeFilter)
-                .id(visitResidue)
+        VStack(spacing: 0) {
+            header()
                 .padding(.horizontal, SaveLayout.screenMargin)
                 .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.xs)
                 .padding(.bottom, SaveSpace.md)
@@ -95,13 +92,7 @@ struct SaveDoodleMapView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             _ = onPlanAroundPlace
-            applyMiniMapHandoff()
             mapViewModel.seedUITestUnsavedCandidateIfNeeded()
-            selectParityPlaceIfNeeded()
-            fitVisiblePlaces()
-        }
-        .onChange(of: session.mapVisitResidueID) { _, _ in
-            applyMiniMapHandoff()
             selectParityPlaceIfNeeded()
             fitVisiblePlaces()
         }
@@ -113,21 +104,11 @@ struct SaveDoodleMapView: View {
             fitVisiblePlaces()
         }
         .onChange(of: session.lens) { _, _ in
-            if followsHomeFilter {
-                onClearSelection()
-            }
+            onClearSelection()
             fitVisiblePlaces()
         }
         .onChange(of: session.city) { _, _ in
-            if followsHomeFilter {
-                onClearSelection()
-            }
-            fitVisiblePlaces()
-        }
-        .onChange(of: session.mapFollowsHomeFilter) { _, follows in
-            if follows {
-                onClearSelection()
-            }
+            onClearSelection()
             fitVisiblePlaces()
         }
         .onChange(of: mapViewModel.selectedMapFeature) { _, feature in
@@ -153,12 +134,6 @@ struct SaveDoodleMapView: View {
     private func openSystemSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
-    }
-
-    /// Mini-map residue remounts Eat/Go on a reused Map tab identity.
-    private func applyMiniMapHandoff() {
-        session.consumeMiniMapHandoff()
-        showsCityPicker = false
     }
 
     private var mapCanvas: some View {
@@ -228,7 +203,7 @@ struct SaveDoodleMapView: View {
     }
 
     @ViewBuilder
-    private func header(followsHomeFilter: Bool) -> some View {
+    private func header() -> some View {
         VStack(alignment: .leading, spacing: SaveSpace.sm) {
             Button { showsCityPicker = true } label: {
                 HStack(alignment: .firstTextBaseline, spacing: SaveSpace.tight) {
@@ -271,7 +246,6 @@ struct SaveDoodleMapView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
-        .accessibilityValue(followsHomeFilter ? "filtered" : "all")
     }
 
     private var eatGoRail: some View {
@@ -281,7 +255,6 @@ struct SaveDoodleMapView: View {
                 Button {
                     SaveHaptics.select()
                     session.lens = item
-                    session.mapFollowsHomeFilter = true
                     onClearSelection()
                     fitVisiblePlaces()
                 } label: {
@@ -498,7 +471,6 @@ struct SaveDoodleMapView: View {
                 if !locationService.isAuthorizationDenied {
                     Button {
                         session.city = .nearYou
-                        session.mapFollowsHomeFilter = true
                         showsCityPicker = false
                     } label: {
                         HStack {
@@ -518,7 +490,6 @@ struct SaveDoodleMapView: View {
                 ForEach(cityGroups) { group in
                     Button {
                         session.city = .city(group.id)
-                        session.mapFollowsHomeFilter = true
                         showsCityPicker = false
                     } label: {
                         HStack {
@@ -729,37 +700,12 @@ struct SaveDoodleMapView: View {
         }
     }
 
-    /// Pins in the current city (or nearby, when a mini-map handoff still
-    /// follows Home's Eat/Go + Near you). Tab-direct Map fits every saved
-    /// stamp in that city — never the 3 km slice that left only two pins.
-    /// Never fits the worldwide set — that opens over Europe/Africa.
+    /// HoP 298-7: Map always uses its own city stamps. Do not import Home's
+    /// Eat/Go + Near you slice from a mini-map handoff. Never fit the
+    /// worldwide set — that opens over Europe/Africa.
     private func cityOpeningPins() -> [CLLocationCoordinate2D] {
         let denied = locationService.isAuthorizationDenied
         let location = denied ? nil : locationService.currentLocation
-        if session.mapFollowsHomeFilter {
-            var selection = SaveDoodleHomeCatalog.resolvedSelection(
-                session.city,
-                places: mapViewModel.places,
-                locationDenied: denied
-            )
-            if case .nearYou = selection, location == nil {
-                let newest = mapViewModel.places.sorted(by: SaveDoodleHomeCatalog.moreRecent).first
-                if let newest, let id = SaveDoodleHomeCatalog.cityID(for: newest) {
-                    selection = .city(id)
-                }
-            }
-            var coords: [CLLocationCoordinate2D] = []
-            for place in SaveDoodleHomeCatalog.visiblePlaces(
-                from: mapViewModel.places,
-                lens: session.lens,
-                selection: selection,
-                location: location,
-                locationDenied: denied
-            ) where place.isMapKitMappable {
-                coords.append(place.coordinate)
-            }
-            return coords
-        }
         guard let cityID = openingCityID(denied: denied, location: location) else {
             return addresslessOpeningPins(location: location)
         }
