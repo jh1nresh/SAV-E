@@ -94,7 +94,7 @@ struct SaveProPaywallView: View {
         ZStack {
             HStack(spacing: SaveSpace.xs) {
                 SaveDisplayTitle(text: "Savvy", pointSize: 34, relativeTo: .largeTitle)
-                SaveDoodleElephant(size: 28)
+                MemoMascotMark(size: 28, framed: false)
             }
             HStack {
                 Button {
