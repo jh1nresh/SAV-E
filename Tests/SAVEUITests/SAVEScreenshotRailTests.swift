@@ -4042,11 +4042,48 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
         XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-000000000002"].exists)
         XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-000000000003"].exists)
+        let homeEatCount = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
+        ).count
         let geometry = XCTAttachment(string: app.debugDescription)
         geometry.name = "home-reference-geometry"
         geometry.lifetime = .keepAlways
         add(geometry)
         attach(app, name: "five-tab-home")
+        // 298-3: Home and Map from the same Tiantan data, same launch.
+        attach(app, name: "298-3-home")
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "298-7-map-tab")
+        XCTAssertTrue(app.buttons["map.city"].waitForExistence(timeout: stepTimeout))
+        let eatPin = "30000000-0000-0000-0000-000000000001"
+        let noodlePin = "30000000-0000-0000-0000-000000000002"
+        let cafePin = "30000000-0000-0000-0000-000000000003"
+        let parkPin = "30000000-0000-0000-0000-000000000004"
+        let lanternPin = "30000000-0000-0000-0000-000000000005"
+        let jingshanPin = "30000000-0000-0000-0000-000000000006"
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.tilePin.\(eatPin)"].waitForExistence(timeout: stepTimeout)
+        )
+        for pin in [noodlePin, cafePin] {
+            XCTAssertTrue(
+                app.descendants(matching: .any)["map.tilePin.\(pin)"].exists,
+                "298-3: Map draws saved Eat places under the shared city filter"
+            )
+        }
+        XCTAssertFalse(
+            app.descendants(matching: .any)["map.tilePin.\(parkPin)"].exists
+                || app.descendants(matching: .any)["map.tilePin.\(lanternPin)"].exists
+                || app.descendants(matching: .any)["map.tilePin.\(jingshanPin)"].exists,
+            "298-3: Map draws only saved places matching Eat/Go + city"
+        )
+        let mapPinCount = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.'")
+        ).count
+        XCTAssertEqual(mapPinCount, homeEatCount, "298-3: pin count equals Home list rows")
+        attach(app, name: "298-3-map")
+        attach(app, name: "298-4-coral-pins")
+        XCTAssertEqual(app.buttons["map.eat"].isSelected, true, "298-11: Eat stays selected with Home")
         terminate(app)
     }
 

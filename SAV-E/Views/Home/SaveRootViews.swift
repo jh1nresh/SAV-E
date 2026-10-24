@@ -753,7 +753,6 @@ private struct SaveAtlasMapStampTicket: View {
             "Open the lifted saved postcard",
             "打開收藏明信片詳情"
         ))
-        .accessibilityIdentifier("saves.mapStamp.postcard")
     }
 
     private var detail: String {
