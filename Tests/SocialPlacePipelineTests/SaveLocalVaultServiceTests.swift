@@ -160,7 +160,7 @@ final class SaveLocalVaultServiceTests: XCTestCase {
         XCTAssertTrue(try service.confirmedPlaces().isEmpty)
     }
 
-    /// Deleting A's stamp must not erase B's matching venue on the same device.
+    /// D3 / P1 4345427432: deleting A's stamp must not erase B's matching venue.
     @MainActor
     func testRemoveConfirmedPlaceKeepsAnotherAccountMatchingVenue() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -190,6 +190,42 @@ final class SaveLocalVaultServiceTests: XCTestCase {
         XCTAssertEqual(remaining.count, 1, "account B must keep the shared-venue stamp after A deletes")
         XCTAssertEqual(remaining.first?.id, ownerB.id)
         XCTAssertEqual(remaining.first?.googlePlaceId, "ChIJ-shared-harbor")
+    }
+
+    /// P1 4366239481: replacing a signed-in confirmed row must not delete an
+    /// ownerless pre-upgrade mirror that shares the same ID.
+    @MainActor
+    func testSaveConfirmedPlaceDoesNotReplaceOwnerlessConfirmedMirror() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let sharedID = UUID()
+        var ownerless = makePlace(
+            id: sharedID,
+            name: "Harbor Cafe",
+            address: "1 Harbor Way",
+            googlePlaceId: "ChIJ-ownerless-harbor"
+        )
+        ownerless.note = "Legacy private note"
+        _ = try vault.saveConfirmedPlace(ownerless)
+        var signedIn = makePlace(
+            id: sharedID,
+            name: "Harbor Cafe",
+            address: "1 Harbor Way",
+            googlePlaceId: "ChIJ-ownerless-harbor"
+        )
+        signedIn.note = "Signed-in edit"
+        _ = try vault.saveConfirmedPlace(signedIn, ownerSubject: "did:privy:a")
+
+        let records = try vault.confirmedPlaceRecords()
+        let legacy = try XCTUnwrap(records.first { $0.ownerSubject == nil })
+        XCTAssertEqual(legacy.id, sharedID)
+        XCTAssertEqual(legacy.sourceText, "Legacy private note")
+        XCTAssertTrue(legacy.evidence.contains("Legacy private note"))
+        let owned = try XCTUnwrap(records.first { $0.ownerSubject == "did:privy:a" })
+        XCTAssertEqual(owned.id, sharedID)
+        XCTAssertEqual(owned.sourceText, "Signed-in edit")
+        XCTAssertEqual(records.count, 2, "ownerless and signed-in confirmed rows must both remain")
     }
 
     @MainActor
@@ -424,7 +460,7 @@ final class SaveLocalVaultServiceTests: XCTestCase {
     }
 
     @MainActor
-    func testExactIDUpsertsStayWithinTheOwningAccount() throws {
+    func testExactIDUpsertsAndRemovalStayWithinTheOwningAccount() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
@@ -444,7 +480,7 @@ final class SaveLocalVaultServiceTests: XCTestCase {
         XCTAssertEqual(savedA.ownerSubject, "owner-a")
         XCTAssertEqual(savedB.ownerSubject, "owner-b")
         XCTAssertEqual(savedB.title, "Cafe B")
-        var bReview = try XCTUnwrap(try vault.reviewCandidates().first { $0.ownerSubject == "owner-b" })
+        var bReview = try XCTUnwrap(vault.reviewCandidates(belongingTo: "owner-b").first)
         XCTAssertEqual(bReview.id, savedB.id)
         bReview.name = "B refined"
         _ = try vault.saveReviewCandidate(bReview)
@@ -452,32 +488,331 @@ final class SaveLocalVaultServiceTests: XCTestCase {
         XCTAssertEqual(stored.count, 2)
         XCTAssertEqual(stored.first { $0.ownerSubject == "owner-a" }?.name, "Cafe A")
         XCTAssertEqual(stored.first { $0.ownerSubject == "owner-b" }?.name, "B refined")
+        try vault.removeReviewCandidate(sharedID, ownerSubject: "owner-b")
+        XCTAssertEqual(try vault.reviewCandidates().map(\.ownerSubject), ["owner-a"])
     }
 
+    /// D3 / P1 4343590029: AskSaveMemoryIntent must not speak another account's
+    /// recent titles. Filter by owner before applying the limit.
     @MainActor
-    func testOwnerlessLegacyRowDoesNotMatchOwnedIDUpsert() throws {
+    func testRecentRecordsBelongingToActiveAccountHideOtherOwnersBeforeLimit() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
-        let sharedID = UUID()
-        var legacy = makePendingCandidate(localID: sharedID)
-        legacy.isSourceOnly = false
-        legacy.candidateName = "Legacy Cafe"
-        legacy.latitude = 25
-        legacy.longitude = 121
-        let savedLegacy = try vault.saveReviewCandidate(legacy, recordID: sharedID)
-        var owned = legacy
-        owned.ownerSubject = "owner-b"
-        owned.candidateName = "Owned Cafe"
-        owned.evidence = ["Owned clue"]
-        let savedOwned = try vault.saveReviewCandidate(owned, recordID: sharedID, preservingExisting: true)
-        XCTAssertNil(savedLegacy.ownerSubject)
-        XCTAssertEqual(savedOwned.ownerSubject, "owner-b")
-        XCTAssertEqual(savedOwned.title, "Owned Cafe")
-        let stored = try vault.reviewCandidates()
-        XCTAssertEqual(stored.count, 2)
-        XCTAssertEqual(stored.first { $0.ownerSubject == nil }?.name, "Legacy Cafe")
-        XCTAssertEqual(stored.first { $0.ownerSubject == "owner-b" }?.name, "Owned Cafe")
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "B older clue", ownerSubject: "did:privy:b"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A newer clue 2", ownerSubject: "did:privy:a"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A newest clue 1", ownerSubject: "did:privy:a"))
+
+        XCTAssertEqual(try vault.recentRecords(limit: 2).map(\.title), ["A newest clue 1", "A newer clue 2"])
+        XCTAssertEqual(
+            try vault.recentRecords(limit: 2, belongingTo: "did:privy:b").map(\.title),
+            ["B older clue"],
+            "owner filter must run before prefix so B is not truncated by A's newer rows"
+        )
+        XCTAssertTrue(try vault.recentRecords(limit: 5, belongingTo: "did:privy:a").allSatisfy { $0.ownerSubject == "did:privy:a" })
+        XCTAssertTrue(try vault.recentRecords(limit: 5, belongingTo: "did:privy:missing").isEmpty)
+        XCTAssertTrue(try vault.recentRecords(limit: 5, belongingTo: nil).isEmpty, "signed-in scope with nil owner hides stamped rows")
+    }
+
+    /// D3 / P1 4347594673: Memory & Preferences must hide the previous owner.
+    @MainActor
+    func testMemoryInspectorShowsOnlyTheCurrentOwnerRecords() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        try vault.append(SaveMemoryRecord(
+            state: .confirmedPlace,
+            title: "A Harbor Cafe",
+            address: "1 Harbor Way",
+            evidence: ["Source URL: https://example.com/a"],
+            ownerSubject: "did:privy:a"
+        ))
+        try vault.append(SaveMemoryRecord(
+            state: .sourceOnly,
+            title: "B secret clue",
+            address: "9 Private Road",
+            evidence: ["Source URL: https://example.com/b"],
+            ownerSubject: "did:privy:b"
+        ))
+
+        let visibleToB = try SaveMemoryInspector.records(in: vault, belongingTo: "did:privy:b")
+        XCTAssertEqual(visibleToB.map(\.title), ["B secret clue"])
+        XCTAssertEqual(visibleToB.first?.address, "9 Private Road")
+        XCTAssertFalse(visibleToB.contains { $0.ownerSubject == "did:privy:a" })
+        XCTAssertEqual(
+            try SaveMemoryInspector.records(in: vault, belongingTo: "did:privy:a").map(\.title),
+            ["A Harbor Cafe"]
+        )
+        XCTAssertTrue(
+            try SaveMemoryInspector.records(in: vault, belongingTo: nil).isEmpty,
+            "signed-in inspector with no owner must not dump the shared vault"
+        )
+    }
+
+    /// D3 / P1 4347594680: deleting B must not erase A's shared-device rows.
+    @MainActor
+    func testDeleteRecordsBelongingToOwnerLeavesOtherAccounts() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "did:privy:a"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "B clue", ownerSubject: "did:privy:b"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Ownerless clue"))
+
+        try vault.deleteRecords(belongingTo: "did:privy:b")
+
+        let remaining = try vault.recentRecords(limit: 10)
+        XCTAssertEqual(Set(remaining.compactMap(\.title)), ["A clue", "Ownerless clue"])
+        XCTAssertFalse(remaining.contains { $0.ownerSubject == "did:privy:b" })
+    }
+
+    @MainActor
+    func testExplicitLocalDecisionCannotMintOrMutateStaleForeignConfirmedOrQuarantinedRows() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        var candidate = PlaceReviewCandidate(id: UUID(), captureId: nil, name: "Local clue", address: "1 Road", city: "Taipei",
+            latitude: 25, longitude: 121, evidence: ["Original source clue"], confidence: 0.6,
+            missingInfo: ["Analysis pending"], status: "source_only", createdAt: Date(), ownerSubject: "account-a")
+        try vault.append(SaveMemoryRecord(id: candidate.id, state: .reviewCandidate, sourceText: "Original private input",
+            title: candidate.name, ownerSubject: "account-a"))
+        let before = try Data(contentsOf: url)
+        let original = candidate
+        for failure in ["absent", "foreign", "remote", "invalid-status"] {
+            candidate = original
+            if failure == "absent" { candidate.id = UUID() }
+            if failure == "foreign" { candidate.ownerSubject = "account-b" }
+            if failure == "remote" { candidate.captureId = UUID() }
+            if failure == "invalid-status" { candidate.status = "saved" }
+            XCTAssertThrowsError(try vault.saveLocalReviewDecision(candidate))
+            XCTAssertEqual(try Data(contentsOf: url), before)
+        }
+        candidate = original
+        _ = try vault.prepareAccountDeletion(belongingTo: "account-a")
+        XCTAssertThrowsError(try vault.saveLocalReviewDecision(candidate))
+        XCTAssertEqual(try Data(contentsOf: url), before)
+        let intent = try XCTUnwrap(vault.pendingAccountDeletionIntent())
+        try vault.completeAccountDeletionCleanup(intentID: intent.id)
+        try vault.append(SaveMemoryRecord(id: candidate.id, state: .confirmedPlace, title: "Confirmed stamp", ownerSubject: "account-a"))
+        let confirmed = try Data(contentsOf: url)
+        XCTAssertThrowsError(try vault.saveLocalReviewDecision(candidate))
+        XCTAssertEqual(try Data(contentsOf: url), confirmed)
+        XCTAssertTrue(try vault.reviewCandidates().isEmpty)
+    }
+
+    @MainActor
+    func testDurableDeletionIntentQuarantinesExactScopeAcrossReloadAndPreservesNewRows() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        let old = SaveMemoryRecord(state: .confirmedPlace, sourceText: "Private note", title: "Legacy name", latitude: 25, longitude: 121)
+        let a = SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a")
+        let b = SaveMemoryRecord(state: .sourceOnly, title: "B clue", ownerSubject: "account-b")
+        for row in [old, a, b] { try vault.append(row) }
+        let rawBefore = try Data(contentsOf: url)
+        let intent = try vault.prepareAccountDeletion(belongingTo: "account-a")
+        XCTAssertEqual(try Data(contentsOf: url), rawBefore, "Intent must not discard recoverable payload")
+        XCTAssertEqual(intent.initialOwnerlessRecordIDs, [old.id])
+        let later = SaveMemoryRecord(state: .sourceOnly, title: "Later ownerless")
+        try vault.append(later)
+        let reloaded = SaveLocalVaultService(overrideVaultURL: url)
+        XCTAssertEqual(try reloaded.pendingAccountDeletionIntent(), intent)
+        XCTAssertEqual(Set(try reloaded.recentRecords().map(\.id)), [b.id, later.id])
+        XCTAssertEqual(try reloaded.recentRecords(belongingTo: nil).map(\.id), [later.id])
+        XCTAssertTrue(try reloaded.confirmedPlaces(belongingTo: nil).isEmpty)
+        XCTAssertTrue(try reloaded.confirmedPlaceRecords().isEmpty)
+        XCTAssertTrue(try reloaded.reviewCandidates(belongingTo: "account-a").isEmpty)
+        XCTAssertThrowsError(try reloaded.prepareAccountDeletion(belongingTo: "account-b"))
+        try reloaded.purgeAccountDeletionRecords(intentID: intent.id)
+        XCTAssertNotNil(try reloaded.pendingAccountDeletionIntent(), "Purge alone must not clear avatar cleanup intent")
+        // Cross-process append between purge and completion is included for A only.
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Late A", ownerSubject: "account-a"))
+        try reloaded.completeAccountDeletionCleanup(intentID: intent.id)
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+        XCTAssertEqual(Set(try vault.recentRecords().map(\.id)), [b.id, later.id])
+    }
+
+    @MainActor
+    func testCorruptDeletionReceiptFailsClosedAndOldIDsCannotModifyNewIntent() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Private legacy clue"))
+        let first = try vault.prepareAccountDeletion(belongingTo: "account-a")
+        let receiptURL = url.appendingPathExtension("account-deletion.json")
+        let receipt = try Data(contentsOf: receiptURL)
+        try Data("corrupt".utf8).write(to: receiptURL, options: .atomic)
+        let fresh = SaveLocalVaultService(overrideVaultURL: url)
+        XCTAssertThrowsError(try fresh.recentRecords())
+        XCTAssertThrowsError(try fresh.reviewCandidates())
+        XCTAssertThrowsError(try fresh.confirmedPlaces())
+        XCTAssertThrowsError(try fresh.confirmedPlaceRecords())
+        XCTAssertThrowsError(try fresh.purgeAccountDeletionRecords(intentID: first.id))
+        try receipt.write(to: receiptURL, options: .atomic)
+        try fresh.purgeAccountDeletionRecords(intentID: first.id)
+        try fresh.completeAccountDeletionCleanup(intentID: first.id)
+        let second = try fresh.prepareAccountDeletion(belongingTo: "account-b")
+        XCTAssertThrowsError(try vault.recordRemoteAccountDeletionSuccess(intentID: first.id))
+        XCTAssertThrowsError(try vault.purgeAccountDeletionRecords(intentID: first.id))
+        XCTAssertThrowsError(try vault.completeAccountDeletionCleanup(intentID: first.id))
+        XCTAssertEqual(try fresh.pendingAccountDeletionIntent(), second)
+    }
+
+    @MainActor
+    func testAccountDeletionPurgesLegacySnapshotWithoutClaimingOrDeletingOtherOwners() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("vault.json")
+        // The old on-disk schema has no ownerSubject key, not an assigned account.
+        let legacyIDs = (0..<30).map { _ in UUID() }
+        let legacyRows: [[String: Any]] = legacyIDs.enumerated().map { index, id in
+            ["id": id.uuidString, "state": index == 0 ? "confirmed_place" : "source_only",
+             "title": "Legacy private name \(index)", "sourceText": "Legacy private note \(index)",
+             "evidence": ["Legacy private clue \(index)"], "createdAt": "2026-01-01T00:00:00Z"]
+        }
+        try JSONSerialization.data(withJSONObject: legacyRows).write(to: url)
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        let a = SaveMemoryRecord(state: .sourceOnly, title: "A private clue", ownerSubject: "account-a")
+        let b = SaveMemoryRecord(state: .sourceOnly, title: "B private clue", ownerSubject: "account-b")
+        try vault.append(a)
+        try vault.append(b)
+        let snapshot = try vault.ownerlessRecordIDsForAccountDeletion()
+        XCTAssertEqual(snapshot, Set(legacyIDs), "Snapshot must not use the 25-row UI limit")
+        XCTAssertEqual(try vault.recentRecords(limit: 100, belongingTo: nil).count, 30)
+        XCTAssertEqual(try vault.recentRecords(belongingTo: "account-a").map(\.id), [a.id])
+
+        // Simulate an independently proven stamp arriving after the snapshot.
+        // Deletion must recheck the current row, not delete IDs indiscriminately.
+        var rows = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [[String: Any]])
+        let stampedIndex = try XCTUnwrap(rows.firstIndex { $0["id"] as? String == legacyIDs[0].uuidString })
+        rows[stampedIndex]["ownerSubject"] = "account-b"
+        try JSONSerialization.data(withJSONObject: rows).write(to: url, options: .atomic)
+        let later = SaveMemoryRecord(state: .sourceOnly, sourceText: "Later note", title: "Later ownerless clue")
+        try vault.append(later)
+
+        try vault.deleteAccountRecords(belongingTo: "account-a", initialOwnerlessRecordIDs: snapshot)
+
+        let reloaded = SaveLocalVaultService(overrideVaultURL: url)
+        XCTAssertEqual(Set(try reloaded.recentRecords(limit: 100).map(\.id)), [b.id, legacyIDs[0], later.id])
+        XCTAssertEqual(try reloaded.recentRecords(belongingTo: nil).map(\.id), [later.id])
+        XCTAssertEqual(Set(try reloaded.recentRecords(belongingTo: "account-b").map(\.id)), [b.id, legacyIDs[0]])
+        XCTAssertTrue(try reloaded.recentRecords(belongingTo: "account-a").isEmpty)
+        let persisted = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [[String: Any]])
+        let signedOutMessageRows = persisted.filter {
+            SaveVaultOwnerScope.belongsToActiveAccount($0["ownerSubject"] as? String, currentUserId: nil)
+        }
+        XCTAssertEqual(signedOutMessageRows.compactMap { $0["id"] as? String }, [later.id.uuidString])
+        XCTAssertFalse(try String(contentsOf: url, encoding: .utf8).contains("Legacy private note 1\""))
+        // The operation is locally idempotent; retry preserves later ownerless data.
+        try reloaded.deleteAccountRecords(belongingTo: "account-a", initialOwnerlessRecordIDs: snapshot)
+        XCTAssertEqual(try reloaded.recentRecords(belongingTo: nil).map(\.id), [later.id])
+    }
+
+    /// D3 / P2 4343590036: Review 500-row cap is per account, not the shared file.
+    @MainActor
+    func testReviewCandidatesBelongingToActiveAccountFilterBeforeLimit() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let older = Date(timeIntervalSince1970: 1_700_000_000)
+        let newer = Date(timeIntervalSince1970: 1_800_000_000)
+        try vault.append(SaveMemoryRecord(
+            state: .reviewCandidate,
+            title: "B older review",
+            createdAt: older,
+            ownerSubject: "did:privy:b"
+        ))
+        try vault.append(SaveMemoryRecord(
+            state: .reviewCandidate,
+            title: "A newer review",
+            createdAt: newer,
+            ownerSubject: "did:privy:a"
+        ))
+        try vault.append(SaveMemoryRecord(
+            state: .reviewCandidate,
+            title: "A newest review",
+            createdAt: newer.addingTimeInterval(10),
+            ownerSubject: "did:privy:a"
+        ))
+
+        XCTAssertEqual(
+            try vault.reviewCandidates(limit: 2, belongingTo: "did:privy:b").map(\.name),
+            ["B older review"],
+            "owner filter must run before the Review limit so B survives A's newer rows"
+        )
+        XCTAssertEqual(
+            try vault.reviewCandidates(limit: 2, belongingTo: "did:privy:a").map(\.name),
+            ["A newest review", "A newer review"]
+        )
+    }
+
+    /// D3 / P1 4344606407: iMessage decodes this JSON; ownerSubject must be present
+    /// so `MessagesVaultReader` can apply `SaveVaultOwnerScope`.
+    @MainActor
+    func testPersistedVaultJSONIncludesOwnerSubjectForIMessageReads() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        try vault.append(SaveMemoryRecord(
+            state: .confirmedPlace,
+            title: "A Cafe",
+            placeName: "A Cafe",
+            latitude: 25.03,
+            longitude: 121.56,
+            ownerSubject: "did:privy:a"
+        ))
+        let rows = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [[String: Any]]
+        )
+        XCTAssertEqual(rows.first?["ownerSubject"] as? String, "did:privy:a")
+        XCTAssertEqual(rows.first?["state"] as? String, "confirmed_place")
+        XCTAssertFalse(
+            SaveVaultOwnerScope.belongsToActiveAccount(
+                rows.first?["ownerSubject"] as? String,
+                currentUserId: "did:privy:b"
+            ),
+            "signed-in B must not see A's iMessage vault row"
+        )
+        XCTAssertTrue(
+            SaveVaultOwnerScope.belongsToActiveAccount(
+                rows.first?["ownerSubject"] as? String,
+                currentUserId: "did:privy:a"
+            )
+        )
+    }
+
+    @MainActor
+    func testConfirmedPlaceRoundTripPreservesAmapIdentityForCapProjection() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        var stamp = makePlace(id: UUID(), name: "Harbor Cafe", address: "1 Harbor", googlePlaceId: nil)
+        stamp.coordinateSystem = .gcj02
+        stamp.locationProvider = .amap
+        stamp.providerPlaceId = "amap-harbor"
+        stamp.providerMapUrl = "https://uri.amap.com/marker?position=121.519,25.051"
+        _ = try vault.saveConfirmedPlace(stamp, ownerSubject: "did:privy:a")
+        let restored = try XCTUnwrap(
+            SaveLocalVaultService(overrideVaultURL: url).confirmedPlaces(belongingTo: "did:privy:a").first
+        )
+        XCTAssertEqual(restored.coordinateSystem, .gcj02)
+        XCTAssertEqual(restored.locationProvider, .amap)
+        XCTAssertEqual(restored.providerPlaceId, "amap-harbor")
+        XCTAssertEqual(restored.providerMapUrl, stamp.providerMapUrl)
+        var incoming = makePlace(id: UUID(), name: "Harbor Cafe", address: "1 Harbor", googlePlaceId: nil)
+        incoming.coordinateSystem = .gcj02
+        incoming.locationProvider = .amap
+        incoming.providerPlaceId = "amap-harbor"
+        incoming.latitude = stamp.latitude
+        incoming.longitude = stamp.longitude
+        XCTAssertTrue(restored.matches(incoming))
+        XCTAssertEqual(Place.consolidated([restored, incoming]).count, 1)
     }
 
     @MainActor
@@ -518,63 +853,5 @@ final class SaveLocalVaultServiceTests: XCTestCase {
             openingHours: nil,
             createdAt: Date()
         )
-    }
-
-    @MainActor
-    func testSaveLocalReviewDecisionPersistsSourceOnlyAndInvestigate() throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
-        var candidate = PlaceReviewCandidate(
-            id: UUID(),
-            captureId: nil,
-            name: "Vault Decision Cafe",
-            address: "1 Vault Road",
-            city: nil,
-            latitude: 25.01,
-            longitude: 121.51,
-            evidence: ["Source URL: https://example.com/vault-decision"],
-            confidence: 0.5,
-            missingInfo: [],
-            status: "review",
-            createdAt: Date()
-        )
-        _ = try vault.saveReviewCandidate(candidate, preservingParkedContext: true)
-
-        candidate.status = "source_only"
-        try vault.saveLocalReviewDecision(candidate)
-        XCTAssertEqual(try vault.reviewCandidates().first?.status, "source_only")
-
-        candidate.status = "needs_more_evidence"
-        try vault.saveLocalReviewDecision(candidate)
-        XCTAssertEqual(try vault.reviewCandidates().first?.status, "needs_more_evidence")
-        XCTAssertEqual(try vault.reviewCandidates().first?.id, candidate.id)
-    }
-
-    @MainActor
-    func testSaveLocalReviewDecisionRejectsRemoteOrUnknownCandidates() throws {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
-        var candidate = PlaceReviewCandidate(
-            id: UUID(),
-            captureId: UUID(),
-            name: "Remote Cafe",
-            address: "2 Vault Road",
-            city: nil,
-            latitude: nil,
-            longitude: nil,
-            evidence: [],
-            confidence: nil,
-            missingInfo: [],
-            status: "source_only",
-            createdAt: Date()
-        )
-        XCTAssertThrowsError(try vault.saveLocalReviewDecision(candidate))
-        candidate.captureId = nil
-        candidate.workflowRunId = UUID()
-        XCTAssertThrowsError(try vault.saveLocalReviewDecision(candidate))
-        candidate.workflowRunId = nil
-        XCTAssertThrowsError(try vault.saveLocalReviewDecision(candidate))
     }
 }

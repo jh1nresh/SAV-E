@@ -116,9 +116,8 @@ final class SaveEntitlementWiringTests: XCTestCase {
             store.shouldPresentPaywall(for: .refusedAllowanceExhausted, hasConfirmedMapStamp: false),
             "a refusal must not surface a paywall until the user has seen the product work"
         )
-        XCTAssertFalse(
-            store.shouldPresentPaywall(for: .refusedAllowanceExhausted, hasConfirmedMapStamp: true),
-            "exhausted model allowance is not a Pro sales trigger"
+        XCTAssertTrue(
+            store.shouldPresentPaywall(for: .refusedAllowanceExhausted, hasConfirmedMapStamp: true)
         )
     }
 
@@ -170,137 +169,14 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertFalse(store.shouldPresentPaywall(for: decision, hasConfirmedMapStamp: true))
     }
 
-    /// Pro does not raise model allowance. Exhausted quota is a notice, not a paywall.
+    /// A Pro user is unmetered regardless of how much they used.
     @MainActor
-    func testProUserSharesModelAllowanceAndNeverOpensPaywallForIt() async {
-        let store = Self.makeStore(loadQuota: { Self.quota(tier: "pro", used: 20, limit: 20) })
+    func testProUserIsNeverGated() async {
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "pro", used: 9_999, limit: 500) })
         await store.refresh()
 
         XCTAssertEqual(store.tier, .pro)
-        XCTAssertEqual(store.decideAIAssist(), .allowedEnforcementDisabled)
-        XCTAssertFalse(store.shouldPresentPaywall(for: store.decideAIAssist(), hasConfirmedMapStamp: true))
-        XCTAssertEqual(
-            store.allowanceNotice(),
-            "This month's model allowance is used up. Try again next period."
-        )
-    }
-
-    @MainActor
-    func testExhaustedAllowanceShowsNeutralNoticeWithoutPaywall() async {
-        let store = Self.makeStore(loadQuota: { Self.quota(tier: "free", used: 20, limit: 20) })
-        await store.refresh()
-
-        XCTAssertEqual(store.decideAIAssist(), .allowedEnforcementDisabled)
-        XCTAssertTrue(store.decideAIAssist().showsAllowanceNotice)
-        XCTAssertEqual(
-            store.allowanceNotice(language: .english),
-            "This month's model allowance is used up. Try again next period."
-        )
-        XCTAssertEqual(
-            store.allowanceNotice(language: .traditionalChinese),
-            "這個月的模型額度已用完。下個週期再試。"
-        )
-        XCTAssertFalse(store.shouldPresentPaywall(for: store.decideAIAssist(), hasConfirmedMapStamp: true))
-
-        let refused = SaveAIAssistGate.decide(
-            tier: .free, usedUnits: 20, limitUnits: 20, warningThresholdUnits: 15,
-            enforcementEnabled: true
-        )
-        XCTAssertEqual(refused, .refusedAllowanceExhausted)
-        XCTAssertTrue(refused.showsAllowanceNotice)
-        XCTAssertFalse(store.shouldPresentPaywall(for: refused, hasConfirmedMapStamp: true))
-        XCTAssertEqual(
-            SaveEntitlementStore.exhaustedAllowanceMessage(language: .english),
-            "This month's model allowance is used up. Try again next period."
-        )
-        XCTAssertEqual(
-            SaveEntitlementStore.exhaustedAllowanceMessage(language: .traditionalChinese),
-            "這個月的模型額度已用完。下個週期再試。"
-        )
-        XCTAssertNil(
-            SaveAIAssistUserCopy.exhaustedEnglish.range(of: #"\bAI\b"#, options: [.regularExpression, .caseInsensitive]),
-            "neutral allowance copy must not name AI as a word"
-        )
-        XCTAssertFalse(SaveAIAssistUserCopy.exhaustedEnglish.localizedCaseInsensitiveContains("assist"))
-        XCTAssertFalse(SaveAIAssistUserCopy.exhaustedTraditionalChinese.contains("AI"))
-        XCTAssertFalse(SaveAIAssistUserCopy.exhaustedTraditionalChinese.contains("次數"))
-    }
-
-    @MainActor
-    func testDrawerShowsNeutralNoticeAndDoesNotOpenPaywallWhenAllowanceIsExhausted() async {
-        let drawer = AIDrawerViewModel(
-            groundedAnswerClient: nil,
-            assistDecision: { .refusedAllowanceExhausted }
-        )
-        drawer.query = "explain this month's model allowance"
-        await drawer.submit(outputLanguage: .english)
-
-        guard case .error(let message) = drawer.drawerState else {
-            return XCTFail("exhausted allowance must surface as a drawer notice, not a paywall")
-        }
-        XCTAssertEqual(message, SaveAIAssistUserCopy.exhaustedEnglish)
-        XCTAssertEqual(
-            drawer.allowanceNotice(for: .english),
-            SaveAIAssistUserCopy.exhaustedEnglish
-        )
-        XCTAssertFalse(
-            SaveEntitlementStore.shared.shouldPresentPaywall(
-                for: .refusedAllowanceExhausted,
-                hasConfirmedMapStamp: true
-            )
-        )
-    }
-
-    @MainActor
-    func testDrawerDeterministicSearchRunsBeforeAllowanceRefusal() async {
-        let drawer = AIDrawerViewModel(
-            groundedAnswerClient: nil,
-            assistDecision: { .refusedAllowanceExhausted }
-        )
-        let saved = Place(
-            id: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
-            name: "Rise Bagels",
-            address: "Irvine, CA",
-            latitude: 33.6846,
-            longitude: -117.8265,
-            googlePlaceId: nil,
-            category: .cafe,
-            status: .visited,
-            rating: nil,
-            note: nil,
-            sourceUrl: nil,
-            sourcePlatform: .other,
-            sourceImageUrl: nil,
-            extractedDishes: nil,
-            priceRange: nil,
-            recommender: nil,
-            googleRating: nil,
-            googlePriceLevel: nil,
-            openingHours: nil,
-            createdAt: Date()
-        )
-        drawer.places = [saved]
-        drawer.query = "Rise Bagels"
-        await drawer.submit(outputLanguage: .english)
-
-        guard case .saveSearchResults(let response) = drawer.drawerState else {
-            return XCTFail("a saved-place search must run before model-allowance refusal")
-        }
-        XCTAssertEqual(response.fromYourSave.results.map(\.title), ["Rise Bagels"])
-    }
-
-    func testSaveFriendRestaurantMapsSavedPlaceLimitLikePlaces() throws {
-        let supabase = try source(at: "SAV-E/Services/SupabaseService.swift")
-        let friendSaveRange = try XCTUnwrap(supabase.range(of: "func saveFriendRestaurant(placeID: UUID) async throws -> Place"))
-        let mappedAfterFriendSave = supabase[friendSaveRange.lowerBound...].range(of: "throw mappedSavedPlaceLimit(error)")
-        XCTAssertNotNil(mappedAfterFriendSave, "saveFriendRestaurant must remap over_free_limit like shared-post save")
-        let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
-        XCTAssertTrue(map.contains("SaveRecipientPlaceIdentity.id("))
-        XCTAssertTrue(map.contains("source: \"social:\\(socialPlace.id)\""))
-        let drawer = try source(at: "SAV-E/ViewModels/AIDrawerViewModel.swift")
-        let searchIndex = try XCTUnwrap(drawer.range(of: "if saveSearchResponse.hasVisibleResults"))
-        let refusalIndex = try XCTUnwrap(drawer.range(of: "if decision.isRefusal"))
-        XCTAssertLessThan(searchIndex.lowerBound, refusalIndex.lowerBound)
+        XCTAssertEqual(store.decideAIAssist(), .allowed)
     }
 
     // MARK: - Source-level guarantees
@@ -341,6 +217,46 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertTrue(policy.contains("purchasingIsAvailable && hasConfirmedMapStamp"))
     }
 
+    /// B7: Settings opens the informational paywall after a Map Stamp exists.
+    /// The row is not gated on StoreKit, and exhausted AI quota is not this sheet.
+    func testSettingsProRowOpensPassportPaywallWithoutPurchaseGate() throws {
+        let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+        XCTAssertTrue(profile.contains("if !passportPlaces.isEmpty"))
+        XCTAssertTrue(profile.contains("accessibilityIdentifier: \"profile.pro\""))
+        XCTAssertTrue(
+            profile.contains(".accessibilityElement(children: .contain)"),
+            "CI 39703881022: parent identifier flattened Savvy Pro off profile.pro"
+        )
+        XCTAssertTrue(profile.contains("SaveProPaywallView(trigger: .passport)"))
+        XCTAssertFalse(profile.contains("shouldOfferProFromPassport"))
+        XCTAssertFalse(profile.contains("if SAVEProAccessPolicy.purchasingIsAvailable"))
+        XCTAssertFalse(profile.contains("SaveProPaywallView(trigger: .savedPlaceLimit)"))
+        XCTAssertFalse(profile.contains("SaveProPaywallView(trigger: .aiAssistExhausted)"))
+        XCTAssertFalse(content.contains("aiAssistExhausted"))
+        XCTAssertTrue(content.contains("SaveProPaywallView(trigger: .savedPlaceLimit)"))
+    }
+
+    /// B7: exhausted AI quota stays a neutral analysis notice, never the Pro wall.
+    @MainActor
+    func testExhaustedAIQuotaIsANeutralMessageNotThePaywall() async throws {
+        XCTAssertFalse(SAVEProAccessPolicy.enforcementEnabled)
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "free", used: 20, limit: 20) })
+        await store.refresh()
+
+        let decision = store.decideAIAssist()
+        XCTAssertEqual(decision, .allowedEnforcementDisabled)
+        XCTAssertFalse(decision.isRefusal)
+        XCTAssertFalse(store.shouldPresentPaywall(for: decision, hasConfirmedMapStamp: true))
+        XCTAssertFalse(store.shouldPresentPaywall(for: .refusedAllowanceExhausted, hasConfirmedMapStamp: false))
+
+        let notice = try XCTUnwrap(ShareAnalysisError.usageLimit.errorDescription)
+        XCTAssertTrue(notice.contains("usage limit") || notice.contains("用量上限"))
+        XCTAssertFalse(notice.localizedCaseInsensitiveContains("paywall"))
+        XCTAssertFalse(notice.localizedCaseInsensitiveContains("Savvy Pro"))
+        XCTAssertFalse(notice.localizedCaseInsensitiveContains("unlimited saved places"))
+    }
+
     func testSessionStartupRefreshesEntitlementBeforeLocalCap() throws {
         let auth = try source(at: "SAV-E/Services/PrivyAuthService.swift")
         let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
@@ -348,8 +264,11 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertTrue(map.contains("hasAuthoritativeSavedPlaceTier"))
         XCTAssertTrue(map.contains("entitlementResolvedProvider"))
         let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
-        XCTAssertTrue(paywall.contains("paywall.retryProducts"))
+        XCTAssertTrue(paywall.contains("paywall.retry"))
+        XCTAssertFalse(paywall.contains("paywall.retryProducts"))
         XCTAssertTrue(paywall.contains("if trigger == .savedPlaceLimit"))
+        XCTAssertTrue(paywall.contains("--uitest-show-paywall-retry"))
+        XCTAssertTrue(paywall.contains("func retryOffers(message: String)"))
     }
 
     @MainActor

@@ -14,13 +14,15 @@ struct SavePlaceFromURLIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let startedBy = PrivyAuthService.shared.currentUserId
-        let generation = PrivyAuthService.shared.sessionGeneration
+        let auth = PrivyAuthService.shared
+        let snapshot = try await auth.resolvedActiveOwner()
+        let startedBy = snapshot.ownerSubject
         let candidates: [PendingReviewCandidate]
         do {
             candidates = try await SocialLinkReviewCandidateService.shared.reviewCandidates(from: url)
         } catch {
-            try Self.ensureInitiatingSession(startedBy, generation)
+            try auth.revalidateActiveOwner(snapshot)
+            try Self.ensureInitiatingSession(snapshot)
             let record = try SaveLocalVaultService.shared.saveSourceOnly(
                 url: url,
                 note: note.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -29,7 +31,8 @@ struct SavePlaceFromURLIntent: AppIntent {
             return .result(dialog: "Saved \(record.displayTitle) as a Savvy source clue. Open Savvy to review it.")
         }
 
-        try Self.ensureInitiatingSession(startedBy, generation)
+        try auth.revalidateActiveOwner(snapshot)
+        try Self.ensureInitiatingSession(snapshot)
 
         var savedCount = 0
         var failedCount = 0
@@ -58,10 +61,12 @@ struct SavePlaceFromURLIntent: AppIntent {
     }
 
     /// A late analysis result must not persist into a different signed-in account.
+    /// Reuse the resolved snapshot; do not re-bind a pre-restore generation.
     @MainActor
-    static func ensureInitiatingSession(_ userId: String?, _ generation: Int) throws {
-        let auth = PrivyAuthService.shared
-        guard auth.currentUserId == userId, auth.sessionGeneration == generation else {
+    static func ensureInitiatingSession(_ snapshot: SaveActiveOwnerSnapshot) throws {
+        do {
+            try PrivyAuthService.shared.revalidateActiveOwner(snapshot)
+        } catch {
             throw ReviewCandidateError.sessionChangedAfterCommit
         }
     }

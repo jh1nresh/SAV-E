@@ -109,6 +109,7 @@ private enum SaveFullScreenRoute: Identifiable {
 private enum PendingChromePresentation {
     case rootSheet
     case passport
+    case savedPlaceLimitPaywall
     case cover(SaveFullScreenRoute)
     case mapDrawer(DrawerLaunchRequest)
     case plan
@@ -119,6 +120,8 @@ private enum PendingChromePresentation {
             return .rootSheet
         case .passport:
             return .passport
+        case .savedPlaceLimitPaywall:
+            return .savedPlaceLimitPaywall
         case .cover:
             return .cover
         case .mapDrawer, .plan:
@@ -205,6 +208,10 @@ struct ContentView: View {
     @State private var suppressChromeDismissSideEffects = false
     @State private var pendingChromePresentation: PendingChromePresentation? = nil
     @State private var showSavedPlaceLimitPaywall = false
+#if DEBUG
+    @State private var showAIQuotaNotice = false
+    @State private var didApplyUnplacedCandidateFixture = false
+#endif
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
@@ -258,10 +265,19 @@ struct ContentView: View {
 #endif
         .environment(\.appLanguageSettings, languageSettings)
 #if DEBUG
+        .alert(
+            languageSettings.localized(english: "Couldn’t finish that action", traditionalChinese: "無法完成這個動作"),
+            isPresented: $showAIQuotaNotice
+        ) {
+            Button(languageSettings.text(.ok)) { showAIQuotaNotice = false }
+        } message: {
+            Text(ShareAnalysisError.usageLimit.errorDescription ?? "")
+        }
         .task {
             if DebugLegacyMigrator.isRequested {
                 await DebugLegacyMigrator.run()
             }
+            await applyFreeCapE4UITestFixturesWhenSignedIn()
         }
 #endif
     }
@@ -301,6 +317,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showSavedPlaceLimitPaywall, onDismiss: {
             mapVM.acknowledgeSavedPlaceLimitPaywall()
+            handleExclusiveChromeDismiss()
         }) {
             SaveProPaywallView(trigger: .savedPlaceLimit)
         }
@@ -354,7 +371,7 @@ struct ContentView: View {
             Task { await drawerVM.loadMemoryPreferences() }
         }
         .onReceive(NotificationCenter.default.publisher(for: SavePlaceLimitHandoff.paywallRequestedNotification)) { _ in
-            showSavedPlaceLimitPaywall = true
+            presentSavedPlaceLimitPaywall()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
@@ -363,7 +380,7 @@ struct ContentView: View {
         }
         .onChange(of: mapVM.shouldPresentSavedPlaceLimitPaywall) { _, shouldPresent in
             guard shouldPresent else { return }
-            showSavedPlaceLimitPaywall = true
+            presentSavedPlaceLimitPaywall()
         }
         .task {
             await loadInitialContent()
@@ -395,14 +412,19 @@ struct ContentView: View {
         runRapidChromeTransitionUITestFixtureIfNeeded()
 #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("--uitest-show-saved-place-limit-paywall") {
-            showSavedPlaceLimitPaywall = true
+            presentSavedPlaceLimitPaywall()
         }
 #endif
     }
 
+    private func presentSavedPlaceLimitPaywall() {
+        guard !showSavedPlaceLimitPaywall else { return }
+        presentAfterClearingExclusiveChrome(.savedPlaceLimitPaywall)
+    }
+
     private func presentSavedPlaceLimitPaywallIfNeeded() {
         if mapVM.consumePendingSavedPlaceLimitPaywall() {
-            showSavedPlaceLimitPaywall = true
+            presentSavedPlaceLimitPaywall()
         }
     }
 
@@ -579,6 +601,7 @@ struct ContentView: View {
                                 currentUserID: PrivyAuthService.shared.currentUserId,
                                 onSaved: { await mapVM.loadPlaces(force: true) },
                                 onParkedAtFreeLimit: { try mapVM.parkPlaceInUnplacedInbox($0, requestPaywall: false) },
+                                onRemoveParkedAtFreeLimit: { try mapVM.removeParkedUnplacedInboxItem($0) },
                                 onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
                             )
                         case .profile:
@@ -1124,7 +1147,8 @@ struct ContentView: View {
             hasCover: fullScreenRoute != nil,
             isTripComposerPresented: false,
             isPassportPresented: isPassportPresented,
-            isRootSheetPresented: isRootSheetPresented
+            isRootSheetPresented: isRootSheetPresented,
+            isSavedPlaceLimitPaywallPresented: showSavedPlaceLimitPaywall
         )
     }
 
@@ -1157,6 +1181,7 @@ struct ContentView: View {
             suppressChromeDismissSideEffects = true
             isRootSheetPresented = false
             isPassportPresented = false
+            showSavedPlaceLimitPaywall = false
             fullScreenRoute = nil
         }
     }
@@ -1167,6 +1192,8 @@ struct ContentView: View {
             isRootSheetPresented = true
         case .passport:
             isPassportPresented = true
+        case .savedPlaceLimitPaywall:
+            showSavedPlaceLimitPaywall = true
         case .cover(let route):
             fullScreenRoute = route
         case .plan:
@@ -1452,6 +1479,54 @@ struct ContentView: View {
         state.qaReviewCandidateCount = snapshot.reviewCandidateCount
         state.qaMapCandidateCount = snapshot.mapCandidateCount
         state.qaHasIncomingReceipt = snapshot.hasIncomingReceipt
+    }
+
+    /// E4 fixtures. Park and present only after a signed-in account exists so
+    /// Unplaced is owned by that session and the quota alert is not the
+    /// sign-in card.
+    private func applyFreeCapE4UITestFixturesWhenSignedIn() async {
+        let arguments = ProcessInfo.processInfo.arguments
+        let wantsUnplaced = arguments.contains("--uitest-show-unplaced-candidate")
+        let wantsQuotaNotice = arguments.contains("--uitest-show-ai-quota-notice")
+        guard wantsUnplaced || wantsQuotaNotice else { return }
+
+        for _ in 0..<480 {
+            if PrivyAuthService.shared.currentUserId != nil { break }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+        }
+        guard PrivyAuthService.shared.currentUserId != nil else { return }
+
+        if wantsUnplaced {
+            applyUnplacedCandidateUITestFixtureIfNeeded()
+        }
+        if wantsQuotaNotice {
+            showAIQuotaNotice = true
+        }
+    }
+
+    private func applyUnplacedCandidateUITestFixtureIfNeeded() {
+        guard !didApplyUnplacedCandidateFixture else { return }
+        let name = "Unplaced Harbor Cafe"
+        if mapVM.reviewCandidates.contains(where: { $0.name == name }) {
+            didApplyUnplacedCandidateFixture = true
+            return
+        }
+        let place = Place(
+            id: UUID(uuidString: "e4000000-0000-4000-8000-000000000051")!,
+            name: name,
+            address: "Harbor Street",
+            latitude: 25.1500,
+            longitude: 121.7800,
+            category: .cafe,
+            status: .wantToGo,
+            sourcePlatform: .other,
+            createdAt: Date()
+        )
+        _ = try? mapVM.parkPlaceInUnplacedInbox(place, requestPaywall: false)
+        // A leftover App Group handoff from the 51st-save launch, or from
+        // park-with-paywall, would cover Home and swallow Saves taps.
+        _ = mapVM.consumePendingSavedPlaceLimitPaywall()
+        didApplyUnplacedCandidateFixture = true
     }
 #endif
 

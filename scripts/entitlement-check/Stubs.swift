@@ -1,11 +1,4 @@
 import Foundation
-
-/// Isolated `swiftc` host for `SaveEntitlementStore` does not compile AppLanguageSettings.
-enum AppLanguage {
-    case english
-    case traditionalChinese
-}
-
 @MainActor final class PrivyAuthService {
     static let shared = PrivyAuthService()
     var sessionGeneration = 1

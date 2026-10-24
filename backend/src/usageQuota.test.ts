@@ -105,26 +105,20 @@ test("the preview defaults to the free tier for callers that predate entitlement
   assert.equal(preview.warning_threshold_units, betaUsageQuotaPolicy.warningThresholdUnits);
 });
 
-test("Pro shares the free model allowance; a custom limit only changes warning math", () => {
-  const shared = buildUsageQuotaPreview({
-    usedUnits: 4,
-    meteringAvailable: true,
-    tier: "pro",
-  });
-  assert.equal(shared.tier, "pro");
-  assert.equal(shared.limit_units, betaUsageQuotaPolicy.monthlyLimitUnits);
-  assert.equal(shared.warning_threshold_units, betaUsageQuotaPolicy.warningThresholdUnits);
-
-  const custom = buildUsageQuotaPreview({
+test("a Pro caller gets the larger allowance and a proportional warning threshold", () => {
+  const preview = buildUsageQuotaPreview({
     usedUnits: 30,
     meteringAvailable: true,
     tier: "pro",
     limitUnits: 500,
   });
-  assert.equal(custom.limit_units, 500);
-  assert.equal(custom.remaining_units, 470);
-  assert.equal(custom.warning_threshold_units, 375);
-  assert.equal(custom.state, "available");
+
+  assert.equal(preview.tier, "pro");
+  assert.equal(preview.limit_units, 500);
+  assert.equal(preview.remaining_units, 470);
+  // A Pro user must not be warned at the free threshold of 15.
+  assert.equal(preview.warning_threshold_units, 375);
+  assert.equal(preview.state, "available");
 });
 
 test("enforcement stays off regardless of tier or exhaustion", () => {

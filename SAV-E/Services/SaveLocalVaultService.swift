@@ -2,15 +2,90 @@ import Foundation
 
 enum SaveLocalVaultError: LocalizedError {
     case storageUnavailable
+    case accountDeletionScopeChanged
     case invalidLocalReviewDecision
 
     var errorDescription: String? {
         switch self {
         case .storageUnavailable:
             return "Savvy local memory storage is unavailable."
+        case .accountDeletionScopeChanged:
+            return "The pending account cleanup changed. Retry to reload its saved scope."
         case .invalidLocalReviewDecision:
-            return "This review decision can only be saved for a local clue."
+            return "The local review candidate changed. Reload it before making this decision."
         }
+    }
+}
+
+/// Minimal durable intent; no names, notes, tokens or other private payload.
+nonisolated struct SaveAccountDeletionIntent: Codable, Sendable, Equatable {
+    enum RemoteOutcome: String, Codable, Sendable {
+        case awaitingRemoteResult
+        case succeeded
+    }
+    let id: UUID
+    let owner: String
+    let initialOwnerlessRecordIDs: Set<UUID>
+    var remoteOutcome: RemoteOutcome
+    /// Pre-deletion ownerless Share-queue fingerprints. Later ownerless rows
+    /// and other owners are not in this set and must stay.
+    let initialOwnerlessQueueItemKeys: Set<String>
+    /// Queue files that existed but could not be read at prepare. Purge drops
+    /// every ownerless row in them once they are readable; still-unreadable
+    /// files keep the receipt.
+    let unreadableQueueFileNames: Set<String>
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case owner
+        case initialOwnerlessRecordIDs
+        case remoteOutcome
+        case initialOwnerlessQueueItemKeys
+        case unreadableQueueFileNames
+    }
+
+    init(
+        id: UUID,
+        owner: String,
+        initialOwnerlessRecordIDs: Set<UUID>,
+        remoteOutcome: RemoteOutcome,
+        initialOwnerlessQueueItemKeys: Set<String> = [],
+        unreadableQueueFileNames: Set<String> = []
+    ) {
+        self.id = id
+        self.owner = owner
+        self.initialOwnerlessRecordIDs = initialOwnerlessRecordIDs
+        self.remoteOutcome = remoteOutcome
+        self.initialOwnerlessQueueItemKeys = initialOwnerlessQueueItemKeys
+        self.unreadableQueueFileNames = unreadableQueueFileNames
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        owner = try container.decode(String.self, forKey: .owner)
+        initialOwnerlessRecordIDs = try container.decode(Set<UUID>.self, forKey: .initialOwnerlessRecordIDs)
+        remoteOutcome = try container.decode(RemoteOutcome.self, forKey: .remoteOutcome)
+        initialOwnerlessQueueItemKeys = try container.decodeIfPresent(
+            Set<String>.self, forKey: .initialOwnerlessQueueItemKeys
+        ) ?? []
+        unreadableQueueFileNames = try container.decodeIfPresent(
+            Set<String>.self, forKey: .unreadableQueueFileNames
+        ) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(owner, forKey: .owner)
+        try container.encode(initialOwnerlessRecordIDs, forKey: .initialOwnerlessRecordIDs)
+        try container.encode(remoteOutcome, forKey: .remoteOutcome)
+        try container.encode(initialOwnerlessQueueItemKeys, forKey: .initialOwnerlessQueueItemKeys)
+        try container.encode(unreadableQueueFileNames, forKey: .unreadableQueueFileNames)
+    }
+
+    func includes(recordID: UUID, ownerSubject: String?) -> Bool {
+        ownerSubject == owner || (ownerSubject == nil && initialOwnerlessRecordIDs.contains(recordID))
     }
 }
 
@@ -23,6 +98,7 @@ final class SaveLocalVaultService: Sendable {
 #if DEBUG
     nonisolated(unsafe) var removeReviewCandidateError: Error?
     nonisolated(unsafe) var saveReviewCandidateError: Error?
+    nonisolated(unsafe) var purgeAccountDeletionRecordsError: Error?
 #endif
 
     init(overrideVaultURL: URL? = nil) {
@@ -40,9 +116,33 @@ final class SaveLocalVaultService: Sendable {
     }
 
     func recentRecords(limit: Int = 25) throws -> [SaveMemoryRecord] {
+        try recentRecords(limit: limit, belongingTo: nil, scopedToActiveAccount: false)
+    }
+
+    func recentRecords(
+        limit: Int = 25,
+        belongingTo currentUserId: String?
+    ) throws -> [SaveMemoryRecord] {
+        try recentRecords(limit: limit, belongingTo: currentUserId, scopedToActiveAccount: true)
+    }
+
+    private func recentRecords(
+        limit: Int,
+        belongingTo currentUserId: String?,
+        scopedToActiveAccount: Bool
+    ) throws -> [SaveMemoryRecord] {
         try withLock {
             try withCoordinatedVaultRead { url in
-                Array(try loadRecords(from: url).prefix(limit))
+                let records = try visibleRecords(from: url)
+                let scoped = scopedToActiveAccount
+                    ? records.filter {
+                        MapViewModel.localVaultRecordBelongsToActiveAccount(
+                            $0.ownerSubject,
+                            currentUserId: currentUserId
+                        )
+                    }
+                    : records
+                return Array(scoped.prefix(limit))
             }
         }
     }
@@ -67,7 +167,7 @@ final class SaveLocalVaultService: Sendable {
             try withCoordinatedVaultRead { url in
                 Array(
                     Place.consolidated(
-                        try loadRecords(from: url).compactMap { record -> Place? in
+                        try visibleRecords(from: url).compactMap { record -> Place? in
                             guard record.state == .confirmedPlace else { return nil }
                             if scopedToActiveAccount,
                                !MapViewModel.localVaultRecordBelongsToActiveAccount(
@@ -87,20 +187,40 @@ final class SaveLocalVaultService: Sendable {
     func confirmedPlaceRecords(limit: Int = 250) throws -> [SaveMemoryRecord] {
         try withLock {
             try withCoordinatedVaultRead { url in
-                Array(try loadRecords(from: url).filter { $0.state == .confirmedPlace }.prefix(limit))
+                Array(try visibleRecords(from: url).filter { $0.state == .confirmedPlace }.prefix(limit))
             }
         }
     }
 
     func reviewCandidates(limit: Int = 250) throws -> [PlaceReviewCandidate] {
+        try reviewCandidates(limit: limit, belongingTo: nil, scopedToActiveAccount: false)
+    }
+
+    func reviewCandidates(
+        limit: Int = 250,
+        belongingTo currentUserId: String?
+    ) throws -> [PlaceReviewCandidate] {
+        try reviewCandidates(limit: limit, belongingTo: currentUserId, scopedToActiveAccount: true)
+    }
+
+    private func reviewCandidates(
+        limit: Int,
+        belongingTo currentUserId: String?,
+        scopedToActiveAccount: Bool
+    ) throws -> [PlaceReviewCandidate] {
         try withLock {
             try withCoordinatedVaultRead { url in
-                Array(
-                    try loadRecords(from: url)
-                        .compactMap(\.reviewCandidate)
-                        .sorted(by: PlaceReviewCandidate.newestFirst)
-                        .prefix(limit)
-                )
+                let candidates = try visibleRecords(from: url)
+                    .compactMap(\.reviewCandidate)
+                    .filter { candidate in
+                        !scopedToActiveAccount
+                            || MapViewModel.localVaultRecordBelongsToActiveAccount(
+                                candidate.ownerSubject,
+                                currentUserId: currentUserId
+                            )
+                    }
+                    .sorted(by: PlaceReviewCandidate.newestFirst)
+                return Array(candidates.prefix(limit))
             }
         }
     }
@@ -111,6 +231,146 @@ final class SaveLocalVaultService: Sendable {
                 try save([], to: url)
             }
         }
+    }
+
+    /// Removes only rows stamped with `ownerSubject`. Ownerless rows and every
+    /// other account stay in the shared device vault.
+    func deleteRecords(belongingTo ownerSubject: String) throws {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                var records = try loadRecords(from: url)
+                records.removeAll { $0.ownerSubject == ownerSubject }
+                try save(records, to: url)
+            }
+        }
+    }
+
+    /// Capture legacy private data before the remote deletion suspends. This does
+    /// not infer ownership, and must read the entire vault rather than a UI page.
+    func ownerlessRecordIDsForAccountDeletion() throws -> Set<UUID> {
+        try withLock {
+            try withCoordinatedVaultRead { url in
+                Set(try loadRecords(from: url).filter { $0.ownerSubject == nil }.map(\.id))
+            }
+        }
+    }
+
+    /// Delete the account's rows and its initial legacy cleanup scope atomically.
+    /// A later owner stamp or newly created ownerless row is never swept up.
+    func deleteAccountRecords(
+        belongingTo ownerSubject: String,
+        initialOwnerlessRecordIDs: Set<UUID>
+    ) throws {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                var records = try loadRecords(from: url)
+                records.removeAll {
+                    $0.ownerSubject == ownerSubject
+                        || ($0.ownerSubject == nil && initialOwnerlessRecordIDs.contains($0.id))
+                }
+                try save(records, to: url)
+            }
+        }
+    }
+
+    func pendingAccountDeletionIntent() throws -> SaveAccountDeletionIntent? {
+        try withLock {
+            try withCoordinatedVaultRead { try loadAccountDeletionIntent(vaultURL: $0) }
+        }
+    }
+
+    /// The receipt and snapshot are committed under the same cross-process lock
+    /// used by vault writers/readers, before any remote DELETE may be sent.
+    func prepareAccountDeletion(
+        belongingTo owner: String,
+        initialOwnerlessQueueItemKeys: Set<String> = [],
+        unreadableQueueFileNames: Set<String> = []
+    ) throws -> SaveAccountDeletionIntent {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                guard try loadAccountDeletionIntent(vaultURL: url) == nil else {
+                    throw SaveLocalVaultError.accountDeletionScopeChanged
+                }
+                let records = try loadRecords(from: url)
+                let intent = SaveAccountDeletionIntent(
+                    id: UUID(), owner: owner,
+                    initialOwnerlessRecordIDs: Set(records.filter { $0.ownerSubject == nil }.map(\.id)),
+                    remoteOutcome: .awaitingRemoteResult,
+                    initialOwnerlessQueueItemKeys: initialOwnerlessQueueItemKeys,
+                    unreadableQueueFileNames: unreadableQueueFileNames
+                )
+                try JSONEncoder().encode(intent).write(to: accountDeletionIntentURL(for: url), options: .atomic)
+                return intent
+            }
+        }
+    }
+
+    func recordRemoteAccountDeletionSuccess(intentID: UUID) throws -> SaveAccountDeletionIntent {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                var intent = try matchingAccountDeletionIntent(intentID, vaultURL: url)
+                intent.remoteOutcome = .succeeded
+                try JSONEncoder().encode(intent).write(to: accountDeletionIntentURL(for: url), options: .atomic)
+                return intent
+            }
+        }
+    }
+
+    func purgeAccountDeletionRecords(intentID: UUID) throws {
+#if DEBUG
+        if let purgeAccountDeletionRecordsError { throw purgeAccountDeletionRecordsError }
+#endif
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                let intent = try matchingAccountDeletionIntent(intentID, vaultURL: url)
+                var records = try loadRecords(from: url)
+                records.removeAll { intent.includes(recordID: $0.id, ownerSubject: $0.ownerSubject) }
+                try save(records, to: url)
+            }
+        }
+    }
+
+    /// Caller must finish both vault and avatar cleanup first. Matching the ID
+    /// prevents an old process/response from clearing a newer deletion intent.
+    func completeAccountDeletionCleanup(intentID: UUID) throws {
+        try withLock {
+            try withCoordinatedVaultWrite { url in
+                let intent = try matchingAccountDeletionIntent(intentID, vaultURL: url)
+                // Recheck after avatar cleanup: an extension may have appended an
+                // A-owned row since the first purge. Later ownerless/B rows stay.
+                var records = try loadRecords(from: url)
+                records.removeAll { intent.includes(recordID: $0.id, ownerSubject: $0.ownerSubject) }
+                try save(records, to: url)
+                try FileManager.default.removeItem(at: accountDeletionIntentURL(for: url))
+            }
+        }
+    }
+
+    private func accountDeletionIntentURL(for vaultURL: URL) -> URL {
+        vaultURL.appendingPathExtension("account-deletion.json")
+    }
+
+    private func loadAccountDeletionIntent(vaultURL: URL) throws -> SaveAccountDeletionIntent? {
+        let url = accountDeletionIntentURL(for: vaultURL)
+        do {
+            return try JSONDecoder().decode(SaveAccountDeletionIntent.self, from: Data(contentsOf: url))
+        } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
+            return nil
+        }
+    }
+
+    private func matchingAccountDeletionIntent(_ id: UUID, vaultURL: URL) throws -> SaveAccountDeletionIntent {
+        guard let intent = try loadAccountDeletionIntent(vaultURL: vaultURL), intent.id == id else {
+            throw SaveLocalVaultError.accountDeletionScopeChanged
+        }
+        return intent
+    }
+
+    private func visibleRecords(from url: URL) throws -> [SaveMemoryRecord] {
+        let intent = try loadAccountDeletionIntent(vaultURL: url)
+        let records = try loadRecords(from: url)
+        guard let intent else { return records }
+        return records.filter { !intent.includes(recordID: $0.id, ownerSubject: $0.ownerSubject) }
     }
 
     func saveSourceOnly(url: URL, note: String? = nil, ownerSubject: String? = nil) throws -> SaveMemoryRecord {
@@ -209,12 +469,14 @@ final class SaveLocalVaultService: Sendable {
             semanticSource: candidate.semanticSource,
             ownerSubject: candidate.ownerSubject
         )
-        if preservingParkedContext {
+        if preservingParkedContext && candidate.isUnplacedInbox {
             record.parkedReviewCandidate = candidate
         }
         return try upsertReviewRecord(record, matchSourceIdentity: false)
     }
 
+    /// Explicit user decisions may downgrade a review to a source clue. Normal
+    /// evidence merges must still keep their existing protection against regressions.
     func saveLocalReviewDecision(_ candidate: PlaceReviewCandidate) throws {
         guard candidate.captureId == nil, candidate.workflowRunId == nil,
               ["source_only", "needs_more_evidence"].contains(candidate.status) else {
@@ -225,11 +487,17 @@ final class SaveLocalVaultService: Sendable {
 #endif
         try withLock {
             try withCoordinatedVaultWrite { url in
+                if let deletion = try loadAccountDeletionIntent(vaultURL: url),
+                   deletion.includes(recordID: candidate.id, ownerSubject: candidate.ownerSubject) {
+                    throw SaveLocalVaultError.accountDeletionScopeChanged
+                }
                 var records = try loadRecords(from: url)
                 guard let index = records.firstIndex(where: {
                     $0.id == candidate.id && $0.ownerSubject == candidate.ownerSubject
                         && ($0.state == .reviewCandidate || $0.state == .sourceOnly)
                 }) else { throw SaveLocalVaultError.invalidLocalReviewDecision }
+                // Keep the record's source payload, date, venue and merged context;
+                // replace the old parked snapshot so it cannot undo this decision.
                 records[index].state = candidate.status == "source_only" ? .sourceOnly : .reviewCandidate
                 records[index].parkedReviewCandidate = candidate
                 for evidence in candidate.evidence where !records[index].evidence.contains(evidence) {
@@ -238,6 +506,11 @@ final class SaveLocalVaultService: Sendable {
                 records[index].evidenceDiagnostic = preservingMissingInfo(
                     candidate.missingInfo, diagnostic: records[index].evidenceDiagnostic
                 )
+                if !candidate.isUnplacedInbox {
+                    records[index].evidenceDiagnostic = strippingUnplacedInbox(
+                        records[index].evidenceDiagnostic
+                    )
+                }
                 try save(records, to: url)
             }
         }
@@ -248,6 +521,16 @@ final class SaveLocalVaultService: Sendable {
         var result = diagnostic ?? SocialPlaceEvidenceDiagnostic(found: [], attempts: [], missingFields: [], nextBestClue: "")
         for field in fields where !result.missingFields.contains(field) { result.missingFields.append(field) }
         return result
+    }
+
+    private func strippingUnplacedInbox(
+        _ diagnostic: SocialPlaceEvidenceDiagnostic?
+    ) -> SocialPlaceEvidenceDiagnostic? {
+        guard var diagnostic else { return nil }
+        diagnostic.missingFields.removeAll {
+            $0.caseInsensitiveCompare(PlaceReviewCandidate.unplacedInboxMarker) == .orderedSame
+        }
+        return diagnostic
     }
 
     private func upsertReviewRecord(_ incoming: SaveMemoryRecord, matchSourceIdentity: Bool) throws -> SaveMemoryRecord {
@@ -296,7 +579,19 @@ final class SaveLocalVaultService: Sendable {
         merged.createdAt = min(existing.createdAt, incoming.createdAt)
         merged.sourceURL = existing.sourceURL ?? incoming.sourceURL
         var seen = Set<String>()
-        merged.evidence = (existing.evidence + incoming.evidence).filter { seen.insert($0).inserted }
+        // Re-parking a stable recipient ID carries the current live venue. Old
+        // provider coordinates must not remain the first active location after
+        // an author corrects that venue (or switches it back to WGS84).
+        let replacesVenue = incoming.id == existing.id
+            && incoming.reviewCandidate?.isUnplacedInbox == true
+            && incoming.reviewCandidate?.hasSavableLocation == true
+        let activeProviderPrefixes = PlaceReviewCandidate.providerVenueEvidencePrefixes
+        let previousEvidence = replacesVenue ? existing.evidence.filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !activeProviderPrefixes.contains { trimmed.lowercased().hasPrefix($0.lowercased()) }
+        } : existing.evidence
+        let evidence = replacesVenue ? incoming.evidence + previousEvidence : previousEvidence + incoming.evidence
+        merged.evidence = evidence.filter { seen.insert($0).inserted }
         let texts = [existing.sourceText, incoming.sourceText].compactMap { $0 }.filter { !$0.isEmpty }
         seen.removeAll()
         merged.sourceText = texts.filter { seen.insert($0).inserted }.joined(separator: "\n")
@@ -341,6 +636,10 @@ final class SaveLocalVaultService: Sendable {
                     rating: place.rating ?? place.googleRating,
                     createdAt: place.createdAt,
                     googlePlaceId: place.googlePlaceId,
+                    coordinateSystem: place.coordinateSystem,
+                    locationProvider: place.locationProvider,
+                    providerPlaceId: place.providerPlaceId,
+                    providerMapUrl: place.providerMapUrl,
                     sourceImageUrl: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
                     businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
                     mergedPlaceIDs: place.mergedPlaceIDs,
@@ -397,11 +696,7 @@ final class SaveLocalVaultService: Sendable {
         try withLock {
             try withCoordinatedVaultWrite { url in
                 var records = try loadRecords(from: url)
-                records.removeAll { record in
-                    guard record.state == .reviewCandidate || record.state == .sourceOnly,
-                          record.id == candidateID else { return false }
-                    return ownerSubject == nil || record.ownerSubject == ownerSubject
-                }
+                records.removeAll { ($0.state == .reviewCandidate || $0.state == .sourceOnly) && $0.id == candidateID && $0.ownerSubject == ownerSubject }
                 try save(records, to: url)
             }
         }
@@ -651,6 +946,8 @@ private extension SaveMemoryRecord {
            parked.id == id, parked.ownerSubject == ownerSubject,
            parked.isUnplacedInbox || (parked.captureId == nil && parked.workflowRunId == nil
                 && ["source_only", "needs_more_evidence"].contains(parked.status)) {
+            // The record owns merged venue/evidence fields; the validated snapshot
+            // supplies context the generic vault projection cannot represent.
             candidate.captureId = parked.captureId
             candidate.workflowRunId = parked.workflowRunId
             candidate.city = parked.city
@@ -687,6 +984,10 @@ private extension SaveMemoryRecord {
             note: sourceText,
             sourceUrl: sourceURL,
             sourcePlatform: SourcePlatform.from(urlString: sourceURL),
+            coordinateSystem: coordinateSystem,
+            locationProvider: locationProvider,
+            providerPlaceId: providerPlaceId,
+            providerMapUrl: providerMapUrl,
             sourceImageUrl: GooglePlacesPhotoURL.persistableString(sourceImageUrl),
             businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(businessPhotoUrls),
             extractedDishes: recommendedItems.map(\.name).nilIfEmpty,

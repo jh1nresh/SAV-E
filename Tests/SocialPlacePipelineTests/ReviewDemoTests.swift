@@ -169,6 +169,114 @@ final class ReviewDemoTests: XCTestCase {
         )
     }
 
+    /// P2 4365174273: an install seeded before owner stamps must still show
+    /// the App Review Map Stamps and Harbor Oven Review clue.
+    @MainActor
+    func testOwnerlessLegacyDemoFixturesRemainVisibleAfterUpgrade() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: ReviewDemo.userId)
+        defer { PrivyAuthService.shared.authState = previousAuth }
+
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("review-demo-upgrade-\(UUID().uuidString).json")
+        let suite = "review-demo-upgrade-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer {
+            defaults.removePersistentDomain(forName: suite)
+            try? FileManager.default.removeItem(at: vaultURL)
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let seeds = ReviewDemoSeed.places()
+        for place in seeds {
+            _ = try vault.saveConfirmedPlace(place)
+        }
+        _ = try vault.saveReviewCandidate(ReviewDemoSeed.reviewCandidates()[0])
+        _ = try vault.saveConfirmedPlace(
+            Place(
+                id: UUID(),
+                name: "Ownerless Seed Cafe",
+                address: "Irvine, CA",
+                latitude: 33.68,
+                longitude: -117.82,
+                googlePlaceId: nil,
+                category: .cafe,
+                status: .wantToGo,
+                rating: nil,
+                note: nil,
+                sourceUrl: nil,
+                sourcePlatform: .other,
+                sourceImageUrl: nil,
+                businessPhotoUrls: nil,
+                extractedDishes: nil,
+                priceRange: nil,
+                recommender: nil,
+                googleRating: nil,
+                googlePriceLevel: nil,
+                openingHours: nil,
+                createdAt: Date()
+            )
+        )
+        defaults.set(true, forKey: ReviewDemo.seededDefaultsKey)
+
+        XCTAssertTrue(
+            try vault.confirmedPlaces(limit: 500, belongingTo: ReviewDemo.userId).isEmpty,
+            "legacy ownerless fixtures are invisible to the demo owner before upgrade"
+        )
+        XCTAssertTrue(
+            try vault.reviewCandidates(limit: 500, belongingTo: ReviewDemo.userId).isEmpty
+        )
+
+        ReviewDemoSeed.seedIsolatedVaultIfNeeded(
+            vault: vault,
+            defaults: defaults,
+            repairForUITests: false,
+            isolatedOfflineUITest: false
+        )
+
+        let map = MapViewModel(
+            saveLocalVaultService: vault,
+            usesRemotePersistence: false
+        )
+        await map.loadPlaces(force: true)
+
+        XCTAssertEqual(Set(map.places.map(\.name)), Set(seeds.map(\.name)))
+        XCTAssertEqual(Set(map.places.map(\.id)), Set(seeds.map(\.id)))
+        XCTAssertFalse(map.places.contains { $0.name == "Ownerless Seed Cafe" })
+        XCTAssertEqual(map.reviewCandidates.map(\.name), [ReviewDemoSeed.harborOvenPizzaName])
+        XCTAssertEqual(
+            Set(try vault.confirmedPlaces(limit: 500, belongingTo: ReviewDemo.userId).map(\.id)),
+            Set(seeds.map(\.id))
+        )
+        XCTAssertEqual(
+            try vault.reviewCandidates(limit: 500, belongingTo: ReviewDemo.userId).map(\.name),
+            [ReviewDemoSeed.harborOvenPizzaName]
+        )
+    }
+
+    /// Isolated demo vault only. Another owner's matching seed name must stay
+    /// that owner's row; adopt claims ownerless fixtures only.
+    @MainActor
+    func testAdoptOwnerlessDemoFixturesDoesNotClaimAnotherOwnersSeed() throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("review-demo-other-owner-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let seed = ReviewDemoSeed.places()[0]
+        _ = try vault.saveConfirmedPlace(seed, ownerSubject: "other-reviewer")
+
+        ReviewDemoSeed.adoptOwnerlessDemoFixtures(in: vault)
+
+        XCTAssertEqual(
+            try vault.confirmedPlaces(limit: 500, belongingTo: "other-reviewer").map(\.id),
+            [seed.id]
+        )
+        XCTAssertTrue(try vault.confirmedPlaces(limit: 500, belongingTo: ReviewDemo.userId).isEmpty)
+        XCTAssertEqual(
+            try vault.confirmedPlaceRecords(limit: 500).first { $0.id == seed.id }?.ownerSubject,
+            "other-reviewer"
+        )
+    }
+
     @MainActor
     func testGuestTokenHolderRoundTrips() {
         let holder = ReviewDemoGuestTokenHolder()

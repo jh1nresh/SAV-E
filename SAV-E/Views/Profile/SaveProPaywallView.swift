@@ -3,16 +3,17 @@ import SwiftUI
 
 /// Savvy Pro paywall.
 ///
-/// Presented for a parked 51st free save, or pulled up deliberately from
-/// Passport. Never an automatic first-launch wall. Exhausted model allowance
-/// is a neutral notice, not this sheet. A Share Extension save over the free
-/// cap sets a pending handoff so this sheet can open the next time the app
-/// becomes active.
+/// Presented as a reaction to a refused AI assist, a parked 51st free save,
+/// or pulled up deliberately from Passport. Never an automatic first-launch
+/// wall. A Share Extension save over the free cap sets a pending handoff so
+/// this sheet can open the next time the app becomes active.
 ///
 /// App Store review requirements that must stay on this screen: Restore
 /// Purchases, EULA link, privacy policy link, renewal period, cancellation path.
 struct SaveProPaywallView: View {
     enum Trigger: Equatable {
+        /// The user asked for an AI assist and had none left.
+        case aiAssistExhausted
         /// The user opened Pro from Passport.
         case passport
         /// A free save was parked in Review because the 50-place cap is full.
@@ -89,7 +90,6 @@ struct SaveProPaywallView: View {
                 .font(SaveAtlasType.body(14))
                 .foregroundStyle(SaveAtlasPalette.muted)
                 .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("paywall.freePlaceLimit")
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("paywall.header")
@@ -109,9 +109,9 @@ struct SaveProPaywallView: View {
         )
     }
 
-    /// DESIGN §7.6: one free-tier line, one Pro benefit, and a keep-going note
-    /// only for the cap trigger. The free-tier sentence appears only in
-    /// `subheadline`.
+    /// DESIGN §7.6: one free-tier line, one Pro benefit, and the saved-50
+    /// note (`paywall.savedNote`) only for the cap trigger. No AI-quota copy.
+    /// The free-tier sentence appears only in `subheadline`.
     private var boundaryPanel: some View {
         VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
             HStack(alignment: .top, spacing: SaveTheme.Spacing.sm) {
@@ -128,7 +128,7 @@ struct SaveProPaywallView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
-            .accessibilityIdentifier("paywall.proBenefit")
+            .accessibilityIdentifier("paywall.benefit.unlimited")
 
             if trigger == .savedPlaceLimit {
                 Text(languageSettings.localized(
@@ -138,7 +138,7 @@ struct SaveProPaywallView: View {
                 .font(SaveAtlasType.body(15))
                 .foregroundStyle(SaveAtlasPalette.muted)
                 .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("paywall.keepGoing")
+                .accessibilityIdentifier("paywall.savedNote")
             }
         }
         .padding(SaveTheme.Spacing.lg)
@@ -154,6 +154,24 @@ struct SaveProPaywallView: View {
 
     @ViewBuilder
     private var offers: some View {
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall-retry") {
+            retryOffers(
+                message: languageSettings.localized(
+                    english: "Couldn't load subscription options.",
+                    traditionalChinese: "無法載入訂閱方案。"
+                )
+            )
+        } else {
+            liveOffers
+        }
+#else
+        liveOffers
+#endif
+    }
+
+    @ViewBuilder
+    private var liveOffers: some View {
         if !SAVEProAccessPolicy.purchasingIsAvailable {
             // Honest empty state. Showing a dead "Subscribe" button before the
             // products exist would imply a transaction that cannot happen.
@@ -182,31 +200,16 @@ struct SaveProPaywallView: View {
             ProgressView()
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, SaveTheme.Spacing.xl)
-                .accessibilityIdentifier("paywall.loadingProducts")
+                .accessibilityIdentifier("paywall.loading")
         } else if storeKit.products.isEmpty {
             // StoreKit miss or load failure must not trap the user. The 51st
             // save is already in Review; this retry reloads products only.
-            VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
-                Text(languageSettings.localized(
+            retryOffers(
+                message: languageSettings.localized(
                     english: storeKit.lastError ?? "Couldn't load subscription options.",
                     traditionalChinese: "無法載入訂閱方案。"
-                ))
-                .font(SaveTheme.Typography.cardTitle)
-                .foregroundStyle(SaveAtlasPalette.forest)
-
-                Button {
-                    Task { await storeKit.loadProducts() }
-                } label: {
-                    Text(languageSettings.localized(english: "Try again", traditionalChinese: "再試一次"))
-                }
-                .buttonStyle(SaveBrandPrimaryButtonStyle(fill: SaveAtlasPalette.honey))
-                .accessibilityIdentifier("paywall.retryProducts")
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(SaveTheme.Spacing.lg)
-            .background(SaveAtlasPalette.mint.opacity(0.22))
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .accessibilityIdentifier("paywall.productsRetry")
+                )
+            )
         } else {
             VStack(spacing: SaveTheme.Spacing.md) {
                 ForEach(storeKit.products, id: \.id) { product in
@@ -274,6 +277,28 @@ struct SaveProPaywallView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("paywall.offer.\(product.id)")
+    }
+
+    @ViewBuilder
+    private func retryOffers(message: String) -> some View {
+        VStack(alignment: .leading, spacing: SaveTheme.Spacing.sm) {
+            Text(message)
+                .font(SaveTheme.Typography.cardTitle)
+                .foregroundStyle(SaveAtlasPalette.forest)
+                .accessibilityIdentifier("paywall.unavailable")
+
+            Button {
+                Task { await storeKit.loadProducts() }
+            } label: {
+                Text(languageSettings.localized(english: "Try again", traditionalChinese: "再試一次"))
+            }
+            .buttonStyle(SaveBrandPrimaryButtonStyle(fill: SaveAtlasPalette.honey))
+            .accessibilityIdentifier("paywall.retry")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(SaveTheme.Spacing.lg)
+        .background(SaveAtlasPalette.mint.opacity(0.22))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private func renewalDescription(for product: Product) -> String {

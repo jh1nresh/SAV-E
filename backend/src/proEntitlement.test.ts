@@ -283,10 +283,10 @@ test("status reflects revocation before expiry", () => {
   );
 });
 
-test("model allowance is the same for free and Pro", () => {
+test("allowance is tier-dependent", () => {
   assert.equal(monthlyLimitUnits("free"), proEntitlementPolicy.freeMonthlyLimitUnits);
-  assert.equal(monthlyLimitUnits("pro"), proEntitlementPolicy.freeMonthlyLimitUnits);
-  assert.equal(proEntitlementPolicy.proMonthlyLimitUnits, proEntitlementPolicy.freeMonthlyLimitUnits);
+  assert.equal(monthlyLimitUnits("pro"), proEntitlementPolicy.proMonthlyLimitUnits);
+  assert.ok(monthlyLimitUnits("pro") > monthlyLimitUnits("free"));
 });
 
 // Charge-readiness regressions: malformed signed subscription timestamps and

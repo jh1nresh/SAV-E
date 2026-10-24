@@ -212,6 +212,12 @@ struct ProfileView: View {
                         .foregroundColor(.saveCocoa)
                 }
                 .padding(.horizontal, SaveTheme.Spacing.xs)
+                // Without `.contain`, XCTest copies this identifier onto every
+                // child row. CI 39703881022: Savvy Pro was on screen as
+                // `profile.controlsDisclosure` / "Savvy Pro, Free: 50 places"
+                // while `profile.pro` never existed (same flattening #290
+                // fixed on Home More).
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("profile.controlsDisclosure")
 
                 SettingsRow(

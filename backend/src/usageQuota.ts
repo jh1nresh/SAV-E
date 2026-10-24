@@ -74,8 +74,8 @@ export function buildUsageQuotaPreview(input: {
   const now = input.now ?? new Date();
   const tier = input.tier ?? "free";
   const limitUnits = input.limitUnits ?? betaUsageQuotaPolicy.monthlyLimitUnits;
-  // Warning stays proportional when a caller overrides the monthly limit.
-  // Production uses the same limit for free and Pro.
+  // Keep the warning proportional to the tier's own allowance instead of
+  // warning a Pro user at the free threshold.
   const warningThresholdUnits = limitUnits === betaUsageQuotaPolicy.monthlyLimitUnits
     ? betaUsageQuotaPolicy.warningThresholdUnits
     : Math.max(1, Math.floor(limitUnits * 0.75));

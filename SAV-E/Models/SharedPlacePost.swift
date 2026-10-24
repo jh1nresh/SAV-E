@@ -8,6 +8,10 @@ struct SharedPlacePost: Decodable, Identifiable, Equatable {
     var latitude: Double? = nil
     var longitude: Double? = nil
     var google_place_id: String? = nil
+    var coordinate_system: PlaceCoordinateSystem? = nil
+    var location_provider: PlaceMatchProvider? = nil
+    var provider_place_id: String? = nil
+    var provider_map_url: String? = nil
     let category: String
     let status: PlaceStatus
     let stars: Double?
@@ -29,7 +33,7 @@ struct SharedPlacePost: Decodable, Identifiable, Equatable {
     /// Caption, rating, and author stay off the device after withdraw/unfollow.
     /// Mint a recipient-owned ID; the author's `places.id` would 409 on confirm.
     func asUnplacedPlace(ownerSubject: String? = nil) -> Place {
-        Place(
+        return Place(
             id: SaveRecipientPlaceIdentity.id(source: "post:\(id)", ownerSubject: ownerSubject),
             name: name,
             address: address,
@@ -42,6 +46,10 @@ struct SharedPlacePost: Decodable, Identifiable, Equatable {
             note: nil,
             sourceUrl: nil,
             sourcePlatform: .other,
+            coordinateSystem: coordinate_system,
+            locationProvider: location_provider,
+            providerPlaceId: provider_place_id,
+            providerMapUrl: provider_map_url,
             sourceImageUrl: nil,
             extractedDishes: nil,
             priceRange: nil,

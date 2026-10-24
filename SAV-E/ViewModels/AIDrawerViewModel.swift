@@ -46,7 +46,6 @@ final class AIDrawerViewModel: ObservableObject {
     private let persistenceService: SupabaseServiceProtocol
     private let tripRouteService: TripRouteServiceProtocol
     private let tripHoursAnnotator: TripHoursAnnotator
-    private let assistDecision: () -> SaveAIAssistDecision
     private let logger = Logger(subsystem: "Savvy", category: "RecommendationAnalysisReceipt")
 
     /// Multi-turn conversation context for the current session.
@@ -63,10 +62,7 @@ final class AIDrawerViewModel: ObservableObject {
         groundedAnswerClient: SaveLLMClient? = GeminiSaveLLMClient.liveFromConfig(),
         persistenceService: SupabaseServiceProtocol = SupabaseService.shared,
         tripRouteService: TripRouteServiceProtocol = GoogleTripRouteService(),
-        tripHoursProvider: TripHoursProviding = GoogleTripHoursService(),
-        assistDecision: @escaping () -> SaveAIAssistDecision = {
-            SaveEntitlementStore.shared.decideAIAssist()
-        }
+        tripHoursProvider: TripHoursProviding = GoogleTripHoursService()
     ) {
         self.aiService = aiService
         self.saveSearchController = saveSearchController
@@ -77,13 +73,6 @@ final class AIDrawerViewModel: ObservableObject {
         self.persistenceService = persistenceService
         self.tripRouteService = tripRouteService
         self.tripHoursAnnotator = TripHoursAnnotator(hoursProvider: tripHoursProvider)
-        self.assistDecision = assistDecision
-    }
-
-    func allowanceNotice(for language: AppLanguage) -> String? {
-        assistDecision().showsAllowanceNotice
-            ? SaveEntitlementStore.exhaustedAllowanceMessage(language: language)
-            : nil
     }
 
     func submit(
@@ -160,12 +149,6 @@ final class AIDrawerViewModel: ObservableObject {
                 intent: resolvedIntent,
                 outputLanguage: outputLanguage
             )
-            return
-        }
-
-        let decision = assistDecision()
-        if decision.isRefusal {
-            drawerState = .error(SaveEntitlementStore.exhaustedAllowanceMessage(language: outputLanguage))
             return
         }
 

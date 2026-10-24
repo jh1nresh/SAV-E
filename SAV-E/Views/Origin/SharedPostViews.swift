@@ -538,9 +538,18 @@ struct SharedAuthorPassport: View {
             from: place,
             ownerSubject: PrivyAuthService.shared.currentUserId
         )
-        _ = try SaveLocalVaultService.shared.saveReviewCandidate(candidate)
+        _ = try SaveLocalVaultService.shared.saveReviewCandidate(
+            candidate,
+            preservingParkedContext: candidate.isUnplacedInbox
+        )
         SavePlaceLimitHandoff.markPaywallPending(notify: false)
         return candidate
+    }
+    var removeParkedOverLimitPlace: (Place) throws -> Void = { place in
+        try SaveLocalVaultService.shared.removeReviewCandidate(
+            place.id,
+            ownerSubject: PrivyAuthService.shared.currentUserId
+        )
     }
     @StateObject private var store = SharedPostsStore()
     @State private var selected: SharedPlacePost?
@@ -565,6 +574,7 @@ struct SharedAuthorPassport: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(language.localized(english: "Done", traditionalChinese: "完成")) { dismiss() } } }
             .task(id: store.filter) {
                 store.parkOverLimitPlace = parkOverLimitPlace
+                store.removeParkedOverLimitPlace = removeParkedOverLimitPlace
                 await store.refresh(.author(authorID))
             }
             .refreshable { await store.refresh(.author(authorID)) }

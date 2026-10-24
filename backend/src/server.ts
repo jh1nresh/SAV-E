@@ -4545,6 +4545,8 @@ async function handleCaptureSearchRecovery(
         try {
           await client.query("begin");
           await client.query("set local statement_timeout='10s'");
+          await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+          const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
           const originalRun = workflowRunId ? await lockedWorkflowRun(client, workflowRunId, userId) : undefined;
           await client.query("select id from captures where id=$1 and user_id=$2 for update",[captureId,userId]);
           const assignedRuns = new Set<string>();
@@ -4581,6 +4583,7 @@ async function handleCaptureSearchRecovery(
           if (recovery.semanticStatus === "no_place_evidence" && recovery.errors.length === 0) await completeEmptySourceAnalysis(client, captureId, workflowRunId);
           await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,captureId,userId]);
           await client.query("update captures set status='review',source_resolution=case when $3::jsonb is null then source_resolution else coalesce(source_resolution,'{}'::jsonb) || $3::jsonb end,updated_at=now() where id=$1 and user_id=$2",[captureId,userId,sourceResolution?JSON.stringify(sourceResolution):null]);
+          await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
           await client.query("commit");
         } catch(error) { await client.query("rollback"); throw error; } finally { client.release(); }
         if(!requestedAnalysis) await analysisUsageStore.finish(userId,aid,recovery.receipt.failureReason?.kind === "provider_failure" ? "failed" : recovery.candidates.length ? "review_candidate":"source_only",[captureId]);
@@ -4698,11 +4701,14 @@ async function handleMemoryCaptures(
     const client = await pool.connect();
     try {
       await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+      const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
       if(aid) await analysisUsageStore.owner(userId,aid,client);
       const reused = await reuseCapture(client, userId, body);
       const rows = reused ? [reused] : (await client.query(`${insert.sql} returning *`, insert.values)).rows;
       if (!reused) rows[0] = await recordCapturedSourceText(client, rows[0], body.raw_text);
       if(aid) await client.query("insert into analysis_captures(analysis_id,capture_id,user_id) values($1,$2,$3) on conflict do nothing",[aid,rows[0].id,userId]);
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
       await client.query("commit");
       return sendJson(response, formatCapture(rows[0]), 201);
     } catch(error) { await client.query("rollback"); throw error; }
@@ -4764,9 +4770,12 @@ async function handleMemoryCandidates(
     const client = await pool.connect();
     try {
       await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+      const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
       const prepared = await prepareCandidate(client, body);
       const insert = buildInsert("place_candidates", prepared.body, placeCandidateFields);
       const row = prepared.existing ?? (await client.query(`${insert.sql} returning *`, insert.values)).rows[0];
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
       await client.query("commit");
       return sendJson(response, formatPlaceCandidate(row), prepared.existing ? 200 : 201);
     } catch (error) { await client.query("rollback"); throw error; }
@@ -4784,6 +4793,8 @@ async function handleMemoryCandidates(
     const client = await pool.connect();
     try {
       await client.query("begin");
+      await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+      const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
       await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [`candidate-decision:${userId}`]);
       const { rows } = await client.query(
         `${update.sql}
@@ -4795,6 +4806,7 @@ async function handleMemoryCandidates(
       );
       if (!rows[0]) throw new ApiError(404, "Candidate not found");
       if (body.status === "saved" || body.status === "confirmed") await reconcileSavedCandidates(client, userId, candidateId);
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
       await client.query("commit");
       return sendJson(response, formatPlaceCandidate(rows[0]));
     } catch (error) { await client.query("rollback"); throw error; }
@@ -5719,6 +5731,8 @@ async function recordPlaceRecoveryDecision(
   const client = await pool.connect();
   try {
     await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+    const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
     let run = await lockedWorkflowRun(client, runId, userId);
     let currentReceipt = await currentAnalysisReceipt(client, runId);
     if (!currentReceipt) {
@@ -5811,6 +5825,7 @@ async function recordPlaceRecoveryDecision(
           "select * from workflow_receipts where id = $1",
           [replay.receipt_id],
         );
+        await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
         await client.query("commit");
         return {
           created: false,
@@ -5835,6 +5850,7 @@ async function recordPlaceRecoveryDecision(
     });
     if (plan.kind === "idempotent") {
       const { rows: receiptRows } = await client.query("select * from workflow_receipts where id = $1", [plan.receiptId]);
+      await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
       await client.query("commit");
       return {
         created: false,
@@ -5843,6 +5859,7 @@ async function recordPlaceRecoveryDecision(
       };
     }
 
+    // Call site only. The places insert and cap check live inside the helper.
     await insertFinalPlaceForDecision(client, userId, decision);
     await validateDecisionReferences(client, runId, userId, stringValue(run.result_type), decision);
     validateDecisionAttempt({
@@ -5953,6 +5970,7 @@ async function recordPlaceRecoveryDecision(
     }
     await refreshWorkflowReputationSnapshot(client, userId, updatedRun, currentReceipt);
 
+    await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
     await client.query("commit");
     return {
       created: true,
@@ -5987,7 +6005,8 @@ async function insertFinalPlaceForDecision(
     throw new WorkflowContractError("final_place requires name, address, latitude, and longitude");
   }
 
-  await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+  // recordPlaceRecoveryDecision already owns the raw-user lock, acquired
+  // before the workflow/candidate row locks and held through the final guard.
   const existing = await client.query(
     "select id from places where id = $1 and user_id = $2",
     [decision.finalPlaceId, userId],
