@@ -203,7 +203,20 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(
             try source(at: "Tests/SocialPlacePipelineTests/SAVEProductionConfigTests.swift")
                 .contains("func testUnplacedVisibleLabelAt375And430"),
-            "B8-5: 375/430 true-width Unplaced stills stay in SAVETests"
+            "B8-5: 375/430 true-width Unplaced stills stay in SAVETests as supplementary evidence"
+        )
+        XCTAssertTrue(
+            rail.contains("func testUnplacedLabelFullScreenAtDeviceWidth"),
+            "B8-5: required ios job must capture a real simulator full-screen Unplaced still"
+        )
+        XCTAssertTrue(
+            rail.contains("XCUIScreen.main.screenshot()"),
+            "B8-5: attach the unscaled device screenshot, not a fake-width render"
+        )
+        XCTAssertTrue(rail.contains("b8-5-unplaced-label-\\(language)-full"))
+        XCTAssertTrue(
+            try source(at: "scripts/select-ios-tests.py").contains("testUnplacedLabelFullScreenAtDeviceWidth"),
+            "B8-5 full-screen still must stay on the required ios/FULL selector list"
         )
         XCTAssertTrue(
             rail.contains("Settings Pro row requires a confirmed Map Stamp on Home first."),
@@ -3735,6 +3748,20 @@ final class SAVEProductionConfigTests: XCTestCase {
             purgeStart.lowerBound, vaultPurgeStart.lowerBound,
             "P1 4366239479: quarantine Share queues before purgeAccountDeletionRecords"
         )
+        let liveDeleteStart = try XCTUnwrap(profile.range(of: "try await accountDeletionService.deleteAccount"))
+        let liveFinishStart = try XCTUnwrap(
+            profile.range(of: "try await finishLocalAccountDeletion(cleanup, sessionGeneration: sessionGeneration)")
+        )
+        XCTAssertLessThan(liveDeleteStart.lowerBound, liveFinishStart.lowerBound)
+        let liveDeleteSlice = String(profile[liveDeleteStart.lowerBound..<liveFinishStart.lowerBound])
+        XCTAssertTrue(
+            liveDeleteSlice.contains("cleanup = prepared"),
+            "P1 4366314370: live DELETE throw must keep awaitingRemoteResult and still finish local cleanup"
+        )
+        XCTAssertTrue(
+            liveDeleteSlice.contains("} catch {"),
+            "P1 4366314370: unknown remote outcome must not jump out of deleteAccount before local quarantine"
+        )
         XCTAssertTrue(
             vault.contains("record.ownerSubject == ownerSubject\n                        && place.savedIDs.contains(record.id)"),
             "P1 4366239481: confirmed replacement must stay on the same owner"
@@ -4505,9 +4532,10 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
     }
 
-    /// B8-4/B8-5: parked Unplaced copy must be a visible UILabel at the
-    /// 375pt and 430pt canvases, not only an accessibility identifier or a
-    /// source-string match. Attachments are true-width stills.
+    /// B8-4 / supplementary B8-5: parked Unplaced copy must be a visible
+    /// UILabel at the 375pt and 430pt canvases. These view-render stills
+    /// cannot satisfy B8-5 alone; the required gate is the XCUITest
+    /// `testUnplacedLabelFullScreenAtDeviceWidth`.
     @MainActor
     func testUnplacedVisibleLabelAt375And430() throws {
         try assertUnplacedVisibleLabel(

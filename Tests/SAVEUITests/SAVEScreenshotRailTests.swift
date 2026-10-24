@@ -624,6 +624,72 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         terminate(app)
     }
 
+    /// B8-5: HoP requires a real simulator full-screen still at device width
+    /// (iPhone 16 Pro = 402pt). The 375/430 view-render tests stay
+    /// supplementary and cannot satisfy this gate alone.
+    @MainActor
+    func testUnplacedLabelFullScreenAtDeviceWidth() throws {
+        for language in ["en", "zh-Hant"] {
+            let app = makeApp(
+                launchArguments: [
+                    "--uitest-complete-onboarding",
+                    "--skip-map-tour",
+                    "--uitest-repair-review-demo-seed",
+                    "--uitest-show-unplaced-candidate",
+                    "-save.appLanguage", language,
+                ],
+                launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+            )
+            launch(app)
+            try signInViaReviewDemoRequired(app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+            XCTAssertTrue(
+                app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout),
+                "Home must settle before the Unplaced fixture can appear in Review."
+            )
+            openSavesFromHome(app: app)
+            XCTAssertTrue(
+                app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout),
+                "Unplaced evidence is the Review candidate list, not a Map Stamp."
+            )
+            let reviewSegment = app.buttons["saves.segment.review"]
+            if reviewSegment.waitForExistence(timeout: timeout(2)), !reviewSegment.isSelected {
+                tapReachable(reviewSegment)
+            }
+            XCTAssertTrue(
+                app.descendants(matching: .any)["saves.unplaced"].waitForExistence(timeout: launchTimeout),
+                "Parked Unplaced items use the HoP saves.unplaced section."
+            )
+            let title = language == "en"
+                ? app.staticTexts["Unplaced"].firstMatch
+                : app.staticTexts["暫未放入"].firstMatch
+            XCTAssertTrue(
+                title.waitForExistence(timeout: stepTimeout),
+                "B8-5: Unplaced title must be visible in \(language)"
+            )
+            XCTAssertTrue(
+                waitUntilHittable(title),
+                "B8-5: Unplaced title must be hittable at device width in \(language)"
+            )
+            let reason = language == "en"
+                ? app.staticTexts["Held after 50 places saved. Not on the map yet."].firstMatch
+                : app.staticTexts["已存 50 個地點，所以暫放，還沒放上地圖。"].firstMatch
+            XCTAssertTrue(
+                reason.waitForExistence(timeout: stepTimeout),
+                "B8-5: parked-off-map sentence must be visible in \(language)"
+            )
+            XCTAssertTrue(
+                app.staticTexts["Unplaced Harbor Cafe"].firstMatch.waitForExistence(timeout: stepTimeout),
+                "Parked Unplaced Harbor Cafe must appear as a Review candidate."
+            )
+            let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            attachment.name = "b8-5-unplaced-label-\(language)-full"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            terminate(app)
+        }
+    }
+
     @MainActor
     private func captureE4SettingsPaywall() throws {
         let app = makeE4App()

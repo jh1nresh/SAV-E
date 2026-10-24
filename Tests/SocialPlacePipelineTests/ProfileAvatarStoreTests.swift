@@ -231,11 +231,14 @@ final class ProfileAvatarStoreTests: XCTestCase {
 
     @MainActor
     func testAccountDeletionRemoteFailureDoesNotPurgeLocalData() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        defer { auth.authState = previousAuth }
+        auth.authState = .authenticated(userId: "account-a")
         let url = directory.appendingPathComponent("vault.json")
         let vault = SaveLocalVaultService(overrideVaultURL: url)
         try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Legacy private clue"))
         try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a"))
-        let before = try Data(contentsOf: url)
         var requests = 0
         let model = deletionModel(vault: vault, currentOwner: { "account-a" }) {
             requests += 1
@@ -244,12 +247,63 @@ final class ProfileAvatarStoreTests: XCTestCase {
         let deleted = await model.deleteAccount()
         XCTAssertFalse(deleted)
         XCTAssertEqual(requests, 1)
-        XCTAssertEqual(try Data(contentsOf: url), before)
-        XCTAssertTrue(model.errorMessage?.contains("Offline") == true)
+        XCTAssertEqual(auth.currentUserId, "account-a", "unknown outcome keeps A signed in")
+        XCTAssertTrue(model.errorMessage?.contains("remote account deletion result could not be confirmed") == true)
+        XCTAssertTrue(try vault.recentRecords().isEmpty)
         XCTAssertTrue(try vault.recentRecords(belongingTo: nil).isEmpty)
         XCTAssertTrue(try vault.recentRecords(belongingTo: "account-a").isEmpty)
-        XCTAssertEqual(try vault.pendingAccountDeletionIntent()?.remoteOutcome, .awaitingRemoteResult)
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
         XCTAssertFalse(model.isDeletingAccount)
+    }
+
+    /// P1 4366314370: a live DELETE throw must still quarantine both Share
+    /// queues while A stays signed in. Recovery is no longer the only path
+    /// that reaches `purgeAccountDeletionItems`.
+    @MainActor
+    func testLiveRemoteDeleteThrowQuarantinesBothShareQueuesAndKeepsUserSignedIn() async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        defer { auth.authState = previousAuth }
+        auth.authState = .authenticated(userId: "account-a")
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a"))
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([
+            pendingDeletionPlace(owner: "account-a", name: "A pending"),
+            pendingDeletionPlace(owner: "account-b", name: "B pending"),
+            pendingDeletionPlace(owner: nil, name: "Legacy pending"),
+        ])
+        queue.restorePendingReviewCandidates([
+            pendingDeletionReview(owner: "account-a", name: "A review"),
+            pendingDeletionReview(owner: "account-b", name: "B review"),
+            pendingDeletionReview(owner: nil, name: "Legacy review"),
+        ])
+        var requests = 0
+        let model = deletionModel(vault: vault, currentOwner: { "account-a" }) {
+            requests += 1
+            throw ProfileUpdateTestError.offline
+        }
+        let deleted = await model.deleteAccount()
+        XCTAssertFalse(deleted)
+        XCTAssertEqual(requests, 1)
+        XCTAssertEqual(auth.currentUserId, "account-a", "unknown outcome keeps A signed in")
+        XCTAssertTrue(model.errorMessage?.contains("remote account deletion result could not be confirmed") == true)
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+        let remainingPlaces = queue.consumePendingPlaces(ownerSubject: "account-a")
+            + queue.consumePendingPlaces(ownerSubject: "account-b")
+        XCTAssertEqual(Set(remainingPlaces.map(\.name)), ["B pending"])
+        XCTAssertFalse(
+            remainingPlaces.contains { $0.ownerSubject == "account-a" || $0.name == "Legacy pending" },
+            "A-owned and snapshotted ownerless pending places must be quarantined on live DELETE throw"
+        )
+        let remainingReviews = queue.consumePendingReviewCandidates(ownerSubject: "account-a")
+            + queue.consumePendingReviewCandidates(ownerSubject: "account-b")
+        XCTAssertEqual(Set(remainingReviews.map(\.candidateName)), ["B review"])
+        XCTAssertFalse(
+            remainingReviews.contains { $0.ownerSubject == "account-a" || $0.candidateName == "Legacy review" },
+            "A-owned and snapshotted ownerless pending reviews must be quarantined on live DELETE throw"
+        )
     }
 
     @MainActor
@@ -473,13 +527,13 @@ final class ProfileAvatarStoreTests: XCTestCase {
         let result = await original.deleteAccount()
         XCTAssertFalse(result)
         XCTAssertEqual(requests, 1)
-        XCTAssertEqual(try Data(contentsOf: url), before, "Remote failure retains physical data")
-        XCTAssertEqual(try vault.pendingAccountDeletionIntent()?.remoteOutcome, .awaitingRemoteResult)
-        // The lease ends with the request. The explicitly authorized local scope
-        // is recoverable after failure, without sending a B deletion or claiming success.
+        XCTAssertTrue(original.errorMessage?.contains("remote account deletion result could not be confirmed") == true)
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+        XCTAssertTrue(try vault.recentRecords().isEmpty)
+        // The lease ends with the request. Live unknown-outcome cleanup already
+        // finished; a later Profile must not send another DELETE.
         await fresh.loadProfile()
         XCTAssertEqual(requests, 1)
-        XCTAssertTrue(fresh.errorMessage?.contains("remote account deletion result could not be confirmed") == true)
         XCTAssertNil(try vault.pendingAccountDeletionIntent())
         XCTAssertTrue(try vault.recentRecords().isEmpty)
     }

@@ -229,11 +229,19 @@ final class ProfileViewModel: ObservableObject {
                 activeIntentID = prepared.id
                 Self.inFlightAccountDeletionIDs.insert(prepared.id)
                 isRecovery = false
-                try await accountDeletionService.deleteAccount(
-                    startedBy: deletingUserID, generation: sessionGeneration
-                )
-                remoteSuccessObserved = true
-                cleanup = try saveLocalVaultService.recordRemoteAccountDeletionSuccess(intentID: prepared.id)
+                do {
+                    try await accountDeletionService.deleteAccount(
+                        startedBy: deletingUserID, generation: sessionGeneration
+                    )
+                    remoteSuccessObserved = true
+                    cleanup = try saveLocalVaultService.recordRemoteAccountDeletionSuccess(intentID: prepared.id)
+                } catch {
+                    // Unknown remote outcome stays on the durable intent
+                    // (`.awaitingRemoteResult`). Finish the same local
+                    // quarantine cleanup as recovery so neither Share
+                    // queue remains consumable while A stays signed in.
+                    cleanup = prepared
+                }
             }
             if activeIntentID == nil {
                 activeIntentID = cleanup.id
