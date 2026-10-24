@@ -3504,8 +3504,9 @@ final class SAVEProductionConfigTests: XCTestCase {
             map.contains("Remote fetch remains the upgrade path"),
             "ownerless pre-upgrade rows stay hidden while signed in"
         )
-        XCTAssertTrue(intent.contains("let startedBy = PrivyAuthService.shared.currentUserId"))
-        XCTAssertTrue(intent.contains("let generation = PrivyAuthService.shared.sessionGeneration"))
+        XCTAssertTrue(intent.contains("let snapshot = try await auth.resolvedActiveOwner()"))
+        XCTAssertTrue(intent.contains("let startedBy = snapshot.ownerSubject"))
+        XCTAssertTrue(intent.contains("try auth.revalidateActiveOwner(snapshot)"))
         XCTAssertTrue(intent.contains("try Self.ensureInitiatingSession(startedBy, generation)"))
         XCTAssertTrue(
             intent.contains("ownerSubject: startedBy"),
@@ -3516,6 +3517,11 @@ final class SAVEProductionConfigTests: XCTestCase {
             "do not re-read the signed-in account after the analysis await"
         )
         XCTAssertTrue(share.contains("cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner()"))
+        XCTAssertTrue(
+            try source(at: "SAV-EShared/ShareAnalysisClient.swift")
+                .contains("SaveActiveOwnerSnapshot(ownerSubject: ownerSubject)"),
+            "Share revalidates through the same owner snapshot as intents and iMessage"
+        )
         XCTAssertTrue(
             share.contains("ownerSubject: shareOwnerSubject"),
             "locally parsed over-cap shares must keep the captured active owner"
@@ -3788,6 +3794,10 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(catchBody.contains("parkOverLimitPlace"))
         XCTAssertTrue(catchBody.contains("Task.isCancelled"))
         XCTAssertTrue(catchBody.contains("SavePlaceLimitError"))
+        XCTAssertTrue(
+            beforeCatch.contains("removeParkedOverLimitPlace(post.asUnplacedPlace(ownerSubject: account))"),
+            "P2 4366291053: a successful retry must drop the deterministic Unplaced row"
+        )
     }
 
     @MainActor
@@ -4113,8 +4123,17 @@ final class SAVEProductionConfigTests: XCTestCase {
         let intent = try source(at: "SAV-E/Intents/AskSaveMemoryIntent.swift")
         XCTAssertTrue(intent.contains("SaveLocalVaultService.shared.recentRecords"))
         XCTAssertTrue(
-            intent.contains("belongingTo: PrivyAuthService.shared.currentUserId"),
+            intent.contains("let snapshot = try await auth.resolvedActiveOwner()"),
+            "Ask Savvy Memory must resolve the cached owner before reading"
+        )
+        XCTAssertTrue(
+            intent.contains("belongingTo: snapshot.ownerSubject"),
             "Ask Savvy Memory must not speak another account's recent titles"
+        )
+        XCTAssertTrue(intent.contains("try auth.revalidateActiveOwner(snapshot)"))
+        XCTAssertFalse(
+            intent.contains("PrivyAuthService.shared.currentUserId"),
+            "cold-launch Ask Savvy Memory must not read currentUserId before owner resolve"
         )
         XCTAssertFalse(
             intent.contains("recentRecords(\n            limit: 5\n        )"),
@@ -4217,9 +4236,226 @@ final class SAVEProductionConfigTests: XCTestCase {
         let picker = try source(at: "SAV-EiMessage/MessagesViewController.swift")
         XCTAssertTrue(picker.contains("MessagesVaultReader.confirmedPlaceRead()"))
         XCTAssertTrue(
-            picker.contains("guard MessagesVaultReader.cachedActiveOwner() == read.owner else { return }"),
+            picker.contains("try MessagesVaultReader.revalidate(\n                    expectedOwner: read.owner,\n                    currentOwner: MessagesVaultReader.cachedActiveOwner()"),
             "presentPicker must not render a snapshot whose owner no longer matches"
         )
+        XCTAssertTrue(
+            picker.contains("insertCard(for: place, owner: owner)"),
+            "picker rows stay bound to the owner captured at read time"
+        )
+        XCTAssertTrue(
+            picker.contains("try MessagesVaultReader.revalidate(\n                    expectedOwner: owner,\n                    currentOwner: MessagesVaultReader.cachedActiveOwner()"),
+            "tap and insert must revalidate the owner after the render-time guard"
+        )
+    }
+
+    func testActiveOwnerResolverUsesCacheWhileUnresolvedAndFailsClosedWithoutOne() throws {
+        let cached = try SaveActiveOwnerResolver.resolve(
+            liveOwner: nil,
+            cachedOwner: "did:privy:a",
+            generation: 3,
+            authIsUnresolved: true
+        )
+        XCTAssertEqual(cached.ownerSubject, "did:privy:a")
+        XCTAssertEqual(cached.generation, 3)
+        XCTAssertThrowsError(
+            try SaveActiveOwnerResolver.resolve(
+                liveOwner: nil,
+                cachedOwner: nil,
+                generation: 0,
+                authIsUnresolved: true
+            )
+        ) { error in
+            XCTAssertEqual(error as? SaveActiveOwnerError, .unresolved)
+        }
+        let signedOut = try SaveActiveOwnerResolver.resolve(
+            liveOwner: nil,
+            cachedOwner: "stale-should-be-ignored",
+            generation: 1,
+            authIsUnresolved: false
+        )
+        XCTAssertNil(signedOut.ownerSubject)
+        let live = try SaveActiveOwnerResolver.resolve(
+            liveOwner: "did:privy:b",
+            cachedOwner: "did:privy:a",
+            generation: 2,
+            authIsUnresolved: false
+        )
+        XCTAssertEqual(live.ownerSubject, "did:privy:b")
+        XCTAssertNoThrow(try cached.revalidate(currentOwner: "did:privy:a", currentGeneration: 3))
+        XCTAssertThrowsError(try cached.revalidate(currentOwner: "did:privy:b", currentGeneration: 3))
+        XCTAssertThrowsError(try cached.revalidate(currentOwner: "did:privy:a", currentGeneration: 4))
+        XCTAssertNoThrow(try MessagesVaultReader.revalidate(expectedOwner: "did:privy:a", currentOwner: "did:privy:a"))
+        XCTAssertThrowsError(try MessagesVaultReader.revalidate(expectedOwner: "did:privy:a", currentOwner: "did:privy:b"))
+    }
+
+    @MainActor
+    func testResolvedActiveOwnerUsesCacheWithoutWipingUnknownAuth() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        let defaults = UserDefaults(suiteName: "save.owner.resolve.\(UUID().uuidString)")!
+        defaults.removePersistentDomain(forName: defaults.suiteName ?? "")
+        SavePlaceLimitHandoff.testDefaults = defaults
+        defer {
+            PrivyAuthService.shared.authState = previousAuth
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+        }
+        SavePlaceLimitHandoff.syncActiveOwner("did:privy:cached-a")
+        PrivyAuthService.shared.authState = .unknown
+        let snapshot = try await PrivyAuthService.shared.resolvedActiveOwner()
+        XCTAssertEqual(snapshot.ownerSubject, "did:privy:cached-a")
+        XCTAssertEqual(PrivyAuthService.shared.authState, .unknown)
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedActiveOwner(), "did:privy:cached-a")
+        XCTAssertNoThrow(try PrivyAuthService.shared.revalidateActiveOwner(snapshot))
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:b")
+        XCTAssertThrowsError(try PrivyAuthService.shared.revalidateActiveOwner(snapshot))
+    }
+
+    @MainActor
+    func testRejectingUnplacedPropagatesVaultDeleteFailureAndKeepsTheRow() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:owner-a")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let map = MapViewModel(
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: false
+        )
+        let place = Place(
+            id: UUID(),
+            name: "Parked Harbor Cafe",
+            address: "1 Harbor",
+            latitude: 25.15,
+            longitude: 121.78,
+            category: .cafe,
+            status: .wantToGo,
+            sourcePlatform: .other,
+            createdAt: Date()
+        )
+        let parked = try map.parkPlaceInUnplacedInbox(place, requestPaywall: false)
+        XCTAssertTrue(parked.isUnplacedInbox)
+        XCTAssertEqual(map.reviewCandidates.count, 1)
+        vault.removeReviewCandidateError = NSError(domain: "test.vault", code: 8)
+        do {
+            try await map.rejectReviewCandidate(parked)
+            XCTFail("Unplaced reject must propagate a vault delete failure")
+        } catch {
+            XCTAssertEqual((error as NSError).domain, "test.vault")
+        }
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [parked.id])
+        XCTAssertTrue(try vault.reviewCandidates(belongingTo: "did:privy:owner-a").contains { $0.id == parked.id })
+        vault.removeReviewCandidateError = nil
+        try await map.rejectReviewCandidate(parked)
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(try vault.reviewCandidates(belongingTo: "did:privy:owner-a").contains { $0.id == parked.id })
+    }
+
+    @MainActor
+    func testSharedPostSuccessfulRetryRemovesDeterministicUnplacedRow() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:owner-a")
+        defer { PrivyAuthService.shared.authState = previousAuth }
+        let store = SharedPostsStore()
+        let post = SharedPlacePost(
+            id: UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")!,
+            name: "Harbor Town",
+            address: "Water",
+            latitude: 25.033,
+            longitude: 121.565,
+            google_place_id: "ChIJcap-harbor",
+            category: "attraction",
+            status: .wantToGo,
+            stars: nil,
+            caption: nil,
+            shared_at: "2026-10-12T10:00:00Z",
+            author_id: "alex",
+            author_name: "Alex Last",
+            author_handle: "alex",
+            author_avatar_url: nil,
+            visible_to_followers: true
+        )
+        let stamp = Place(
+            id: UUID(),
+            name: post.name,
+            address: post.address,
+            latitude: post.latitude ?? 0,
+            longitude: post.longitude ?? 0,
+            googlePlaceId: post.google_place_id,
+            category: .attraction,
+            status: .wantToGo,
+            sourcePlatform: .other,
+            createdAt: Date()
+        )
+        var removed: Place?
+        store.saveSharedPost = { _ in stamp }
+        store.removeParkedOverLimitPlace = { place in removed = place }
+        let outcome = try await store.save(post)
+        XCTAssertEqual(outcome, .saved)
+        XCTAssertEqual(removed?.id, post.asUnplacedPlace(ownerSubject: "did:privy:owner-a").id)
+        XCTAssertEqual(removed?.googlePlaceId, "ChIJcap-harbor")
+    }
+
+    func testConfirmedStampCoversParkedUnplacedVenueIdentity() throws {
+        let post = SharedPlacePost(
+            id: UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")!,
+            name: "Harbor Town",
+            address: "Water",
+            latitude: 25.033,
+            longitude: 121.565,
+            google_place_id: "ChIJcap-harbor",
+            category: "attraction",
+            status: .wantToGo,
+            stars: nil,
+            caption: nil,
+            shared_at: "2026-10-12T10:00:00Z",
+            author_id: "alex",
+            author_name: "Alex Last",
+            author_handle: "alex",
+            author_avatar_url: nil,
+            visible_to_followers: true
+        )
+        let parkedPlace = post.asUnplacedPlace(ownerSubject: "did:privy:owner-a")
+        let parked = PlaceReviewCandidate.unplacedInboxItem(
+            from: parkedPlace,
+            ownerSubject: "did:privy:owner-a"
+        )
+        let stamp = Place(
+            id: UUID(),
+            name: "Harbor Town",
+            address: "Water",
+            latitude: 25.033,
+            longitude: 121.565,
+            googlePlaceId: "ChIJcap-harbor",
+            category: .attraction,
+            status: .wantToGo,
+            sourcePlatform: .other,
+            createdAt: Date()
+        )
+        XCTAssertTrue(stamp.coversUnplacedInbox(parked))
+        let other = Place(
+            id: UUID(),
+            name: "Other Cafe",
+            address: "Elsewhere",
+            latitude: 24.0,
+            longitude: 120.0,
+            googlePlaceId: "ChIJother",
+            category: .cafe,
+            status: .wantToGo,
+            sourcePlatform: .other,
+            createdAt: Date()
+        )
+        XCTAssertFalse(other.coversUnplacedInbox(parked))
+        let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
+        XCTAssertTrue(
+            map.contains("local.isUnplacedInbox && places.contains { $0.coversUnplacedInbox(local) }"),
+            "refresh must hide a parked post once the same venue is a Map Stamp"
+        )
+        XCTAssertTrue(map.contains("func removeParkedUnplacedInboxItem"))
+        XCTAssertTrue(map.contains("removeLocalOnlyUnplacedBeforeDecision"))
     }
 
     @MainActor

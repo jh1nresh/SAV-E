@@ -81,6 +81,31 @@ final class PrivyAuthService: ObservableObject {
         return nil
     }
 
+    /// Resolve the owner before a vault read or new write. Uses the cached
+    /// owner while auth is still `.unknown`; waits for restore only when
+    /// that cache is empty. Never treats unresolved auth as signed-out.
+    func resolvedActiveOwner() async throws -> SaveActiveOwnerSnapshot {
+        if authState == .unknown, SavePlaceLimitHandoff.cachedActiveOwner() == nil {
+            await restoreSession()
+        }
+        return try SaveActiveOwnerResolver.resolve(
+            liveOwner: currentUserId,
+            cachedOwner: SavePlaceLimitHandoff.cachedActiveOwner(),
+            generation: sessionGeneration,
+            authIsUnresolved: authState == .unknown
+        )
+    }
+
+    func revalidateActiveOwner(_ snapshot: SaveActiveOwnerSnapshot) throws {
+        let currentOwner: String?
+        if authState == .unknown {
+            currentOwner = SavePlaceLimitHandoff.cachedActiveOwner()
+        } else {
+            currentOwner = currentUserId
+        }
+        try snapshot.revalidate(currentOwner: currentOwner, currentGeneration: sessionGeneration)
+    }
+
     private init() {
         let appId = SAVEProductionConfig.configValue(for: ["PRIVY_APP_ID"]) ?? ""
         let clientId = SAVEProductionConfig.configValue(for: ["PRIVY_APP_CLIENT_ID"]) ?? ""

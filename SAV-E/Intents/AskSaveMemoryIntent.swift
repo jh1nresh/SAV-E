@@ -11,10 +11,13 @@ struct AskSaveMemoryIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        let auth = PrivyAuthService.shared
+        let snapshot = try await auth.resolvedActiveOwner()
         let records = try SaveLocalVaultService.shared.recentRecords(
             limit: 5,
-            belongingTo: PrivyAuthService.shared.currentUserId
+            belongingTo: snapshot.ownerSubject
         )
+        try auth.revalidateActiveOwner(snapshot)
         guard !records.isEmpty else {
             return .result(dialog: "Savvy has no Map Stamps or source clues yet. Share or save a place URL first.")
         }

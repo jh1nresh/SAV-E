@@ -601,6 +601,7 @@ struct ContentView: View {
                                 currentUserID: PrivyAuthService.shared.currentUserId,
                                 onSaved: { await mapVM.loadPlaces(force: true) },
                                 onParkedAtFreeLimit: { try mapVM.parkPlaceInUnplacedInbox($0, requestPaywall: false) },
+                                onRemoveParkedAtFreeLimit: { try mapVM.removeParkedUnplacedInboxItem($0) },
                                 onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
                             )
                         case .profile:

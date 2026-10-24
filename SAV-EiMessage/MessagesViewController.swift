@@ -28,14 +28,21 @@ final class MessagesViewController: MSMessagesAppViewController {
             let read = await Task.detached(priority: .userInitiated) {
                 MessagesVaultReader.confirmedPlaceRead()
             }.value
-            guard MessagesVaultReader.cachedActiveOwner() == read.owner else { return }
-            self?.renderPicker(with: read.places)
+            do {
+                try MessagesVaultReader.revalidate(
+                    expectedOwner: read.owner,
+                    currentOwner: MessagesVaultReader.cachedActiveOwner()
+                )
+            } catch {
+                return
+            }
+            self?.renderPicker(with: read.places, owner: read.owner)
         }
     }
 
-    private func renderPicker(with places: [MessagesPlace]) {
-        let root = PlacePickerView(places: places) { [weak self] place in
-            self?.insertCard(for: place)
+    private func renderPicker(with places: [MessagesPlace], owner: String?) {
+        let root = PlacePickerView(places: places, owner: owner) { [weak self] place in
+            self?.insertCard(for: place, owner: owner)
         }
 
         if let hostingController {
@@ -65,8 +72,16 @@ final class MessagesViewController: MSMessagesAppViewController {
 
     // MARK: - Card insertion
 
-    private func insertCard(for place: MessagesPlace) {
+    private func insertCard(for place: MessagesPlace, owner: String?) {
         guard let conversation = activeConversation else { return }
+        do {
+            try MessagesVaultReader.revalidate(
+                expectedOwner: owner,
+                currentOwner: MessagesVaultReader.cachedActiveOwner()
+            )
+        } catch {
+            return
+        }
 
         let layout = MSMessageTemplateLayout()
         layout.caption = place.name
@@ -77,7 +92,23 @@ final class MessagesViewController: MSMessagesAppViewController {
 
         // Render a MapKit snapshot off the main actor, then insert the card.
         Task { [weak self] in
+            do {
+                try MessagesVaultReader.revalidate(
+                    expectedOwner: owner,
+                    currentOwner: MessagesVaultReader.cachedActiveOwner()
+                )
+            } catch {
+                return
+            }
             let imageData = await Self.snapshotImageData(for: place)
+            do {
+                try MessagesVaultReader.revalidate(
+                    expectedOwner: owner,
+                    currentOwner: MessagesVaultReader.cachedActiveOwner()
+                )
+            } catch {
+                return
+            }
             layout.image = imageData.flatMap(UIImage.init(data:)) ?? Self.placeholderImage(for: place)
             message.layout = layout
             do {

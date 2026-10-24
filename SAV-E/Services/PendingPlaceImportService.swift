@@ -1259,6 +1259,14 @@ extension Place {
         return !leftAddress.isEmpty && leftAddress == other.address.normalizedVenueIdentity
     }
 
+    /// A successful shared-post retry mints a new stamp ID. Hide the parked
+    /// Unplaced row when the confirmed venue is the same place.
+    func coversUnplacedInbox(_ candidate: PlaceReviewCandidate) -> Bool {
+        guard candidate.isUnplacedInbox else { return false }
+        if savedIDs.contains(candidate.id) { return true }
+        return matches(Place.from(candidate))
+    }
+
 }
 
 private func sourceURL(from evidence: [String]) -> String? {

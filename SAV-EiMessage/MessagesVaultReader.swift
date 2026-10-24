@@ -58,6 +58,18 @@ nonisolated enum MessagesVaultReader {
         UserDefaults(suiteName: appGroupSuiteName)?.string(forKey: cachedOwnerKey)
     }
 
+    /// Same rule as `SaveActiveOwnerSnapshot.revalidate`. iMessage cannot
+    /// link SAV-EShared, so the snapshot is compared here before render/send.
+    static func revalidate(expectedOwner: String?, currentOwner: String?) throws {
+        let expected = expectedOwner.flatMap { $0.isEmpty ? nil : $0 }
+        let current = currentOwner.flatMap { $0.isEmpty ? nil : $0 }
+        guard expected == current else {
+            throw MessagesOwnerChangedError()
+        }
+    }
+
+    struct MessagesOwnerChangedError: Error {}
+
     static func confirmedPlaces(limit: Int = 250) -> [MessagesPlace] {
         confirmedPlaceRead(limit: limit).places
     }

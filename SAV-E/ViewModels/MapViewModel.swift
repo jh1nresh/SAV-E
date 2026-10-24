@@ -1551,6 +1551,7 @@ final class MapViewModel: ObservableObject {
         let localOnly = local.filter { local in
             !remoteIDs.contains(local.id) && !confirmedIDs.contains(local.id)
                 && !(local.isUnplacedInbox && terminalIDs.contains(local.id))
+                && !(local.isUnplacedInbox && places.contains { $0.coversUnplacedInbox(local) })
         }
         reviewCandidates = (localOnly + remoteWithParking).sorted(by: PlaceReviewCandidate.newestFirst)
         if let id = selectedReviewCandidate?.id {
@@ -1883,13 +1884,14 @@ final class MapViewModel: ObservableObject {
     func rejectReviewCandidate(_ candidate: PlaceReviewCandidate) async throws {
         var updatedCandidate = candidate
         updatedCandidate.status = "rejected"
+        try removeLocalOnlyUnplacedBeforeDecision(candidate)
         try await recordCorrectionEvent(
             for: candidate,
             eventType: .rejectCandidate,
             afterCandidate: updatedCandidate,
             reason: "User rejected review candidate."
         )
-        try? saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
+        try removeReviewCandidateFromVaultAfterDecision(candidate)
         reviewCandidates.removeAll { $0.id == candidate.id }
         if selectedReviewCandidate?.id == candidate.id {
             selectedReviewCandidate = nil
@@ -1900,13 +1902,14 @@ final class MapViewModel: ObservableObject {
     func archiveReviewCandidate(_ candidate: PlaceReviewCandidate) async throws {
         var updatedCandidate = candidate
         updatedCandidate.status = "rejected"
+        try removeLocalOnlyUnplacedBeforeDecision(candidate)
         try await recordCorrectionEvent(
             for: candidate,
             eventType: .rejectCandidate,
             afterCandidate: updatedCandidate,
             reason: "User archived review candidate."
         )
-        try? saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
+        try removeReviewCandidateFromVaultAfterDecision(candidate)
         reviewCandidates.removeAll { $0.id == candidate.id }
         if selectedReviewCandidate?.id == candidate.id {
             selectedReviewCandidate = nil
@@ -3306,6 +3309,31 @@ final class MapViewModel: ObservableObject {
 
     private func removeLocalReviewMirror(_ recordID: UUID, ownerSubject: String?) throws {
         try saveLocalVaultService.removeReviewCandidate(recordID, ownerSubject: ownerSubject)
+    }
+
+    /// Local-only Unplaced has no remote row. Vault delete is the durable
+    /// mutation and must succeed before the UI reports the reject/archive.
+    private func removeLocalOnlyUnplacedBeforeDecision(_ candidate: PlaceReviewCandidate) throws {
+        guard candidate.isUnplacedInbox else { return }
+        try saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
+    }
+
+    /// After a server-accepted decision, keep local cleanup best-effort so a
+    /// vault write cannot roll that decision back. Unplaced already deleted.
+    private func removeReviewCandidateFromVaultAfterDecision(_ candidate: PlaceReviewCandidate) throws {
+        guard !candidate.isUnplacedInbox else { return }
+        try? saveLocalVaultService.removeReviewCandidate(candidate.id, ownerSubject: candidate.ownerSubject)
+    }
+
+    func removeParkedUnplacedInboxItem(_ place: Place) throws {
+        try saveLocalVaultService.removeReviewCandidate(
+            place.id,
+            ownerSubject: authService.currentUserId
+        )
+        reviewCandidates.removeAll { $0.id == place.id }
+        if selectedReviewCandidate?.id == place.id {
+            selectedReviewCandidate = nil
+        }
     }
 
     @discardableResult

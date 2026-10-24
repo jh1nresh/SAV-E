@@ -25,9 +25,13 @@ struct ShareOwnerSnapshot: Sendable {
     }
 
     func validate(cachedActiveOwner: String?, credential: ShareAnalysisCredential?) throws {
-        let currentOwner = cachedActiveOwner.flatMap { $0.isEmpty ? nil : $0 }
-        guard currentOwner == ownerSubject,
-              credential == nil || credential?.ownerSubject == ownerSubject else {
+        do {
+            try SaveActiveOwnerSnapshot(ownerSubject: ownerSubject)
+                .revalidate(currentOwner: cachedActiveOwner)
+        } catch {
+            throw ShareAnalysisError.sessionChanged
+        }
+        guard credential == nil || credential?.ownerSubject == ownerSubject else {
             throw ShareAnalysisError.sessionChanged
         }
     }

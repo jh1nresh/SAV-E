@@ -307,3 +307,48 @@ nonisolated enum SaveAIAssistGate {
         return enforcementEnabled ? .refusedAllowanceExhausted : .allowedEnforcementDisabled
     }
 }
+
+/// One owner snapshot for App Intents, Share, iMessage, and host writes.
+/// `nil` means signed-out / ownerless only after auth has left `.unknown`.
+nonisolated enum SaveActiveOwnerError: Error, Equatable {
+    case unresolved
+    case ownerChanged
+}
+
+nonisolated struct SaveActiveOwnerSnapshot: Equatable, Sendable {
+    let ownerSubject: String?
+    let generation: Int?
+
+    init(ownerSubject: String?, generation: Int? = nil) {
+        self.ownerSubject = ownerSubject.flatMap { $0.isEmpty ? nil : $0 }
+        self.generation = generation
+    }
+
+    func revalidate(currentOwner: String?, currentGeneration: Int? = nil) throws {
+        let current = currentOwner.flatMap { $0.isEmpty ? nil : $0 }
+        guard current == ownerSubject else { throw SaveActiveOwnerError.ownerChanged }
+        if let generation, let currentGeneration, generation != currentGeneration {
+            throw SaveActiveOwnerError.ownerChanged
+        }
+    }
+}
+
+nonisolated enum SaveActiveOwnerResolver {
+    /// Live owner wins once auth is resolved. While auth is still restoring,
+    /// use the durable cached owner. Fail closed if both are missing so a
+    /// cold launch cannot read or stamp ownerless rows.
+    static func resolve(
+        liveOwner: String?,
+        cachedOwner: String?,
+        generation: Int? = nil,
+        authIsUnresolved: Bool
+    ) throws -> SaveActiveOwnerSnapshot {
+        if authIsUnresolved {
+            guard let cached = cachedOwner.flatMap({ $0.isEmpty ? nil : $0 }) else {
+                throw SaveActiveOwnerError.unresolved
+            }
+            return SaveActiveOwnerSnapshot(ownerSubject: cached, generation: generation)
+        }
+        return SaveActiveOwnerSnapshot(ownerSubject: liveOwner, generation: generation)
+    }
+}

@@ -12,6 +12,12 @@ struct SaveFriendsView: View {
         SavePlaceLimitHandoff.markPaywallPending(notify: false)
         return candidate
     }
+    var onRemoveParkedAtFreeLimit: (Place) throws -> Void = { place in
+        try SaveLocalVaultService.shared.removeReviewCandidate(
+            place.id,
+            ownerSubject: PrivyAuthService.shared.currentUserId
+        )
+    }
     var onConnections: () -> Void = {}
     @StateObject private var store = SharedPostsStore()
     @State private var selected: SharedPlacePost?
@@ -68,6 +74,7 @@ struct SaveFriendsView: View {
         .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await store.refresh(.feed) } } }
         .task(id: currentUserID) {
             store.parkOverLimitPlace = onParkedAtFreeLimit
+            store.removeParkedOverLimitPlace = onRemoveParkedAtFreeLimit
             await store.refresh(.feed)
         }
         .sheet(item: $selected) { SharedPostDetail(initialPost: $0, store: store, onSaved: onSaved) }

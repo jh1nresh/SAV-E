@@ -29,6 +29,12 @@ final class SharedPostsStore: ObservableObject {
         SavePlaceLimitHandoff.markPaywallPending(notify: false)
         return candidate
     }
+    var removeParkedOverLimitPlace: (Place) throws -> Void = { place in
+        try SaveLocalVaultService.shared.removeReviewCandidate(
+            place.id,
+            ownerSubject: PrivyAuthService.shared.currentUserId
+        )
+    }
 
     var isDemo: Bool { PrivyAuthService.shared.isReviewerDemo }
 
@@ -154,6 +160,7 @@ final class SharedPostsStore: ObservableObject {
             _ = try await saveSharedPost(post.id)
             guard account == PrivyAuthService.shared.currentUserId,
                   generation == PrivyAuthService.shared.sessionGeneration, !Task.isCancelled else { throw CancellationError() }
+            try removeParkedOverLimitPlace(post.asUnplacedPlace(ownerSubject: account))
             return .saved
         } catch {
             guard account == PrivyAuthService.shared.currentUserId,
