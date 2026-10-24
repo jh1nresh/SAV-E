@@ -7,13 +7,7 @@ import argparse
 import json
 from pathlib import Path
 
-try:
-    from PIL import Image, ImageDraw, ImageFont
-except ImportError as exc:
-    raise SystemExit(
-        "Pillow is required for compose-map-similarity.py. "
-        "Install with: python3 -m pip install Pillow"
-    ) from exc
+from PIL import Image, ImageDraw, ImageFont
 
 
 def parse_rect(value: str) -> tuple[int, int, int, int]:
@@ -108,21 +102,16 @@ def main() -> None:
         "edgeF1": payload.get("edgeF1"),
         "appearanceSimilarity": payload.get("appearanceSimilarity"),
         "mask": (
-            {
-                "kind": "image",
-                "path": str(args.mask_image),
-                "fallbackRectangle": {"x": x, "y": y, "width": w, "height": h},
-            }
+            {"image": str(args.mask_image), "coverage": "mask-image"}
             if used_mask_image
-            else {"kind": "rectangle", "x": x, "y": y, "width": w, "height": h}
+            else {"x": x, "y": y, "width": w, "height": h}
         ),
         "maskReason": (
-            f"Image mask {args.mask_image.name}: white pixels are live Apple Maps "
-            "(ignored). Rectangle bounds are provenance only when no image mask is supplied."
+            f"Mask image {args.mask_image.name} excludes the live MapKit pixels."
             if used_mask_image
             else (
-                f"Rectangle mask {x},{y},{w},{h} covers live MapKit in both "
-                "capture and mock."
+                "Founder lock: default Apple MapKit surface is excluded. "
+                f"Fallback rectangle {x},{y},{w},{h}."
             )
         ),
         "sideBySide": str(args.output),

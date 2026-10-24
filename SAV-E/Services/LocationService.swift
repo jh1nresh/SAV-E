@@ -1,6 +1,22 @@
 import CoreLocation
 import Foundation
 
+/// Home's 3 km Near-you filter must not keep a first-fix forever after travel
+/// or a resume. Callers still show the last known location while a refresh
+/// is in flight.
+enum SaveLocationFreshness {
+    static let maxAge: TimeInterval = 5 * 60
+
+    static func shouldRefresh(
+        cached: CLLocation?,
+        at now: Date = Date(),
+        maxAge: TimeInterval = maxAge
+    ) -> Bool {
+        guard let cached else { return true }
+        return now.timeIntervalSince(cached.timestamp) >= maxAge
+    }
+}
+
 @MainActor
 final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocationManagerDelegate {
     static let shared = LocationService()
@@ -9,26 +25,29 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     @Published private(set) var currentLocation: CLLocation?
 
     private let manager = CLLocationManager()
-    private var pendingContinuation: CheckedContinuation<CLLocation?, Never>?
+    private var pendingContinuations: [CheckedContinuation<CLLocation?, Never>] = []
 
 #if DEBUG
     /// Deterministic denied-state for UI tests — springboard permission
     /// alerts are too flaky to drive the spec P4 recovery path.
     private let simulatesDeniedAuthorization = ProcessInfo.processInfo.arguments
         .contains("--uitest-location-denied")
-    /// Deterministic allowed-state so Home can show Near you without a
-    /// springboard permission alert. The Codex Tiantan face uses the
-    /// Tiantan fix; other UI tests keep the Taipei fix.
+    /// Deterministic allowed-state with a Taipei fix so Home can show
+    /// Near you without a springboard permission alert.
     private let simulatesTiantanFix = ProcessInfo.processInfo.arguments
         .contains("--uitest-location-tiantan")
-        || ProcessInfo.processInfo.arguments.contains("--uitest-doodle-parity-face")
+    private let simulatesDaanFix = ProcessInfo.processInfo.arguments
+        .contains("--uitest-location-daan")
     private let simulatesAllowedAuthorization = ProcessInfo.processInfo.arguments
         .contains("--uitest-location-allowed")
         || ProcessInfo.processInfo.arguments.contains("--uitest-location-tiantan")
-        || ProcessInfo.processInfo.arguments.contains("--uitest-doodle-parity-face")
+        || ProcessInfo.processInfo.arguments.contains("--uitest-location-daan")
+    /// `--uitest-location-allowed` simulated fix: Taipei 101. Not real GPS.
     private static let uiTestTaipei = CLLocation(latitude: 25.0330, longitude: 121.5654)
     /// Codex / spec §8 Tiantan face: 450 m / 800 m / 1.1 km from the three Eat rows.
     private static let uiTestTiantan = CLLocation(latitude: 39.882192, longitude: 116.4066)
+    /// Home TPE-A simulated fix: Da'an Forest Park. Not real GPS.
+    private static let uiTestDaan = CLLocation(latitude: 25.0296, longitude: 121.5347)
 #else
     private let simulatesDeniedAuthorization = false
     private let simulatesAllowedAuthorization = false
@@ -58,39 +77,38 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
 #if DEBUG
         if simulatesAllowedAuthorization {
-            currentLocation = simulatesTiantanFix ? Self.uiTestTiantan : Self.uiTestTaipei
+            if simulatesTiantanFix {
+                currentLocation = Self.uiTestTiantan
+            } else if simulatesDaanFix {
+                currentLocation = Self.uiTestDaan
+            } else {
+                currentLocation = Self.uiTestTaipei
+            }
         }
 #endif
     }
 
     func requestCurrentLocation() async -> CLLocation? {
+        await requestCurrentLocation(forceRefresh: false)
+    }
+
+    func requestCurrentLocation(forceRefresh: Bool) async -> CLLocation? {
         if simulatesDeniedAuthorization {
             return nil
         }
         if simulatesAllowedAuthorization {
             return currentLocation
         }
-        if let currentLocation {
-            return currentLocation
-        }
-
-        guard pendingContinuation == nil else {
+        if !forceRefresh,
+           let currentLocation,
+           !SaveLocationFreshness.shouldRefresh(cached: currentLocation) {
             return currentLocation
         }
 
         return await withCheckedContinuation { continuation in
-            pendingContinuation = continuation
-
-            switch manager.authorizationStatus {
-            case .notDetermined:
-                manager.requestWhenInUseAuthorization()
-            case .authorizedAlways, .authorizedWhenInUse:
-                manager.requestLocation()
-            case .denied, .restricted:
-                finish(with: nil)
-            @unknown default:
-                finish(with: nil)
-            }
+            pendingContinuations.append(continuation)
+            guard pendingContinuations.count == 1 else { return }
+            startRequest()
         }
     }
 
@@ -98,7 +116,7 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         if simulatesDeniedAuthorization || simulatesAllowedAuthorization { return }
         authorizationStatus = manager.authorizationStatus
 
-        guard pendingContinuation != nil else { return }
+        guard !pendingContinuations.isEmpty else { return }
 
         switch manager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:
@@ -121,11 +139,26 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         finish(with: nil)
     }
 
+    private func startRequest() {
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+        case .authorizedAlways, .authorizedWhenInUse:
+            manager.requestLocation()
+        case .denied, .restricted:
+            finish(with: nil)
+        @unknown default:
+            finish(with: nil)
+        }
+    }
+
     private func finish(with location: CLLocation?) {
         if let location {
             currentLocation = location
         }
-        pendingContinuation?.resume(returning: location)
-        pendingContinuation = nil
+        let waiters = pendingContinuations
+        pendingContinuations = []
+        let result = location ?? currentLocation
+        waiters.forEach { $0.resume(returning: result) }
     }
 }

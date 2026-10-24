@@ -6,6 +6,7 @@ import Foundation
 final class SaveDoodleCheckInStore: ObservableObject {
     let objectWillChange = ObservableObjectPublisher()
     private let history: SaveDoodleVisitStore
+    private var persistInFlight: Set<UUID> = []
 
     init(
         defaults: UserDefaults = .standard,
@@ -18,6 +19,7 @@ final class SaveDoodleCheckInStore: ObservableObject {
     func visitCount(for placeID: UUID) -> Int { history.count(for: placeID) }
     func hasCheckedInToday(placeID: UUID) -> Bool { history.hasVisitedToday(placeID) }
     func canCheckIn(placeID: UUID) -> Bool { !hasCheckedInToday(placeID: placeID) }
+    func isPersisting(placeID: UUID) -> Bool { persistInFlight.contains(placeID) }
 
     @discardableResult
     func checkIn(placeID: UUID) -> Bool {
@@ -41,9 +43,13 @@ final class SaveDoodleCheckInStore: ObservableObject {
         priorStatus: PlaceStatus = .wantToGo,
         persist: () async throws -> Void
     ) async -> Bool {
-        guard canCheckIn(placeID: placeID) else { return false }
+        guard beginPersist(placeID) else { return false }
+        defer { endPersist(placeID) }
         history.rememberPriorStatus(priorStatus, for: placeID)
-        guard checkIn(placeID: placeID) else { return false }
+        guard checkIn(placeID: placeID) else {
+            history.clearPriorStatus(for: placeID)
+            return false
+        }
         do {
             try await persist()
             return true
@@ -62,6 +68,8 @@ final class SaveDoodleCheckInStore: ObservableObject {
         placeID: UUID,
         persist: (PlaceStatus) async throws -> Void
     ) async -> Bool {
+        guard beginPersist(placeID) else { return false }
+        defer { endPersist(placeID) }
         guard hasCheckedInToday(placeID: placeID) else { return false }
         let restoreStatus = history.previousStatus(for: placeID)
             ?? (visitCount(for: placeID) > 1 ? .visited : .wantToGo)
@@ -79,4 +87,15 @@ final class SaveDoodleCheckInStore: ObservableObject {
     }
 
     static var storageKey: String { SaveDoodleVisitStore.datesKey }
+
+    private func beginPersist(_ placeID: UUID) -> Bool {
+        guard persistInFlight.insert(placeID).inserted else { return false }
+        objectWillChange.send()
+        return true
+    }
+
+    private func endPersist(_ placeID: UUID) {
+        persistInFlight.remove(placeID)
+        objectWillChange.send()
+    }
 }

@@ -3,6 +3,7 @@ import SwiftUI
 struct SaveHomeView: View {
     @ObservedObject var store: TripPackStore
     @ObservedObject var mapViewModel: MapViewModel
+    let headerTopPadding: CGFloat
     let onCapture: () -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
@@ -10,23 +11,34 @@ struct SaveHomeView: View {
     let onOpenTrips: () -> Void
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
-    let onOpenMap: () -> Void
+    let onOpenCollectedPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var locationService = LocationService.shared
 
     var body: some View {
         SaveDoodleHomeView(
             locationService: locationService,
-            onOpenMap: onOpenMap
+            onOpenCollectedPassport: onOpenCollectedPassport,
+            headerTopPadding: headerTopPadding
         )
         .environment(\.atlasPresentation, atlasPresentation)
         .task(id: locationService.authorizationStatus) {
-            guard !ReviewDemo.isOfflineUITestMode,
-                  [.authorizedAlways, .authorizedWhenInUse].contains(locationService.authorizationStatus) else { return }
-            _ = await locationService.requestCurrentLocation()
+            await refreshHomeLocation(forceRefresh: false)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await refreshHomeLocation(forceRefresh: true) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.root")
+    }
+
+    private func refreshHomeLocation(forceRefresh: Bool) async {
+        guard !ReviewDemo.isOfflineUITestMode,
+              [.authorizedAlways, .authorizedWhenInUse].contains(locationService.authorizationStatus)
+        else { return }
+        _ = await locationService.requestCurrentLocation(forceRefresh: forceRefresh)
     }
 
     private var atlasPresentation: AtlasPresentation {
@@ -494,12 +506,6 @@ struct SaveLibraryView: View {
             SaveAtlasMapStampTicket(place: place)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(SaveAtlasMapStampTicket.label(for: place, language: languageSettings))
-        .accessibilityHint(localized(
-            "Open the lifted saved postcard",
-            "打開收藏明信片詳情"
-        ))
-        .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("saves.place.\(place.id.uuidString)")
     }
 
@@ -548,7 +554,6 @@ struct SaveMapRootView: View {
     let onPlanAroundPlace: (Place) -> Void
     let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
-    @EnvironmentObject private var session: SaveDoodleSession
 
     var body: some View {
         Group {
@@ -556,26 +561,33 @@ struct SaveMapRootView: View {
                 mapViewModel: mapViewModel,
                 presentation: atlasPresentation,
                 onClearSelection: mapViewModel.clearSelectedMapObject,
-                onPlanAroundPlace: onPlanAroundPlace
+                onPlanAroundPlace: onPlanAroundPlace,
+                shouldFocusOnUserLocation: shouldFocusOnUserLocation
             )
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
-            session.consumeMiniMapHandoff()
 #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--uitest-map-place-selected"),
-               mapViewModel.selectedPlace == nil,
-               let place = ReviewDemoSeed.paritySelectedPlace(from: mapViewModel.places) {
-                mapViewModel.selectedPlace = place
-                if ReviewDemo.usesDoodleParityFace,
-                   let id = SaveDoodleHomeCatalog.cityID(for: place) {
-                    session.city = .city(id)
+               mapViewModel.selectedPlace == nil {
+                let taipei = mapViewModel.places.first { place in
+                    abs(place.latitude - 25.04) < 0.35 && abs(place.longitude - 121.56) < 0.35
                 }
+                mapViewModel.selectedPlace = taipei ?? mapViewModel.places.first
             }
 #endif
         }
+        // MapKit's Map reports a short a11y frame (307pt on 375pt). Keep
+        // map.root on a full-bleed stand-in so XCTest measures the canvas,
+        // not the padded header/sheet union.
+        .background {
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement()
+                .accessibilityIdentifier("map.root")
+                .allowsHitTesting(false)
+        }
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("map.root")
     }
 
     private var atlasPresentation: AtlasPresentation {
@@ -729,35 +741,38 @@ private struct SaveAtlasMapStampTicket: View {
 
     var body: some View {
         SavePostcardTicket(
-            eyebrow: languageSettings.localized(
-                english: "Confirmed Map Stamp",
-                traditionalChinese: "已確認地圖章"
-            ),
+            eyebrow: localized("Confirmed Map Stamp", "已確認地圖章"),
             title: place.name,
-            detail: Self.detail(for: place, language: languageSettings),
-            actionTitle: languageSettings.localized(english: "Open", traditionalChinese: "打開"),
+            detail: detail,
+            actionTitle: localized("Open", "打開"),
             style: .confirmed
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(place.name), \(detail)")
+        .accessibilityHint(localized(
+            "Open the lifted saved postcard",
+            "打開收藏明信片詳情"
+        ))
     }
 
-    static func label(for place: Place, language: AppLanguageSettings) -> String {
-        "\(place.name), \(detail(for: place, language: language))"
-    }
-
-    static func detail(for place: Place, language: AppLanguageSettings) -> String {
+    private var detail: String {
         let area = place.shareAreaLabel.trimmingCharacters(in: .whitespacesAndNewlines)
         let location = area.isEmpty
             ? place.address.trimmingCharacters(in: .whitespacesAndNewlines)
             : area
         let source = place.sourcePlatform == .other
-            ? language.localized(english: "Saved memory", traditionalChinese: "已保存記憶")
-            : language.localized(
-                english: "From \(place.sourcePlatform.displayName)",
-                traditionalChinese: "來自 \(place.sourcePlatform.displayName)"
+            ? localized("Saved memory", "已保存記憶")
+            : localized(
+                "From \(place.sourcePlatform.displayName)",
+                "來自 \(place.sourcePlatform.displayName)"
             )
         let date = place.createdAt.formatted(date: .abbreviated, time: .omitted)
-        let saved = language.localized(english: "Saved \(date)", traditionalChinese: "收藏於 \(date)")
+        let saved = localized("Saved \(date)", "收藏於 \(date)")
         return [saved, location, source].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
+    private func localized(_ english: String, _ traditionalChinese: String) -> String {
+        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
     }
 }
 

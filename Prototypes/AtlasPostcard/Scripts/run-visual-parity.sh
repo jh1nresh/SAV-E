@@ -25,20 +25,21 @@ Options:
   --artifacts DIR       Write reference/output/diff/results under DIR.
   --threshold NUMBER    Gate threshold. Must be at least 0.90 (default 0.90).
   --skip-screens LIST   Comma-separated screens to omit when the selected
-                        UI set did not capture them (e.g. paywall).
+                        UI set did not capture them (e.g. paywall,capture).
 
 The screenshots directory must contain home.png, saves.png, plan.png,
-map.png, passport.png, capture.png, and paywall.png. The result-bundle
-mode prefers the live five-tab-home attachment for Home and falls back
-to atlas-home for prototype-only runs. Passport prefers five-tab-passport
-and falls back to atlas-passport. Capture and paywall use five-tab-capture
-and five-tab-paywall. Saves, Plan, and Map use the stable atlas-saves,
-atlas-plan, and atlas-map XCTest attachments. The Doodle v1 Capture and
-paywall mocks are the locked targets at threshold 0.90. Paywall comparison
-passes `--ignore-rects` over the v2 cut-mock hero, the live-only sale-state
-line, and the legal sentence. DESIGN eade369 is full-screen, one
-benefit row, Yearly/Monthly, and no tab bar. The Passport gate is exactly
-0.90 against the Doodle Passport mock. v1 (23cca55) is retired.
+and map.png. The result-bundle mode prefers the live five-tab-home
+attachment for Home and falls back to atlas-home for prototype-only
+runs. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
+and atlas-map XCTest attachments. Friends is a real 0.90 gate against
+`friends.png` (Home deferral on #290 does not apply to Friends).
+Capture and paywall use five-tab-capture and five-tab-paywall when
+those rails ran. Paywall comparison passes `--ignore-rects` over the
+hero, sale-state line, and legal sentence.
+
+--destination runs the prototype XCTest testCaptureFourLockedScreens
+(Home, Saves, Plan, Map only). Friends is not in that prototype shell;
+CI result-bundle mode still gates live `five-tab-friends` at 0.90.
 EOF
 }
 
@@ -217,7 +218,17 @@ mkdir -p \
     "$ARTIFACT_DIR/diff" \
     "$ARTIFACT_DIR/results"
 
-for screen in home saves plan map passport capture paywall; do
+# Prototype --destination still compares four screens (no Friends tab).
+# Production result-bundle also gates Friends at 0.90 against friends.png.
+destination_screens=(home saves plan map)
+parity_screens=(home saves plan map friends capture paywall)
+captured_from_prototype=0
+
+for screen in home saves plan map friends capture paywall; do
+    if should_skip_screen "$screen"; then
+        echo "note: skipping $screen reference (not in this coverage set)"
+        continue
+    fi
     source="$REFERENCE_SOURCE/$screen.png"
     if [[ ! -f "$source" ]]; then
         echo "error: missing reference image: $source" >&2
@@ -235,6 +246,7 @@ fi
 if [[ -n "$DESTINATION" ]]; then
     capture_booted_simulators
     trap cleanup_new_simulators EXIT
+    captured_from_prototype=1
 
     RESULT_BUNDLE="$ARTIFACT_DIR/AtlasPostcardVisualParity.xcresult"
     (
@@ -297,6 +309,11 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                 plutil -extract "$prefix.timestamp" raw -o - "$manifest" 2>/dev/null
             )" || timestamp=0
             case "$human_name" in
+                *-zh*)
+                    # light-home-zh becomes light-map-zh in the warm-dark rail.
+                    # Do not let that timestamp win the English DESIGN map pick.
+                    continue
+                    ;;
                 five-tab-home*)
                     screen="home"
                     priority=1
@@ -312,6 +329,11 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                 atlas-plan*)
                     screen="plan"
                     priority=0
+                    ;;
+                298-10-saved-unsaved-visited*|M1*)
+                    # HoP P-4: live Taipei Apple Maps is the Map golden.
+                    screen="map"
+                    priority=2
                     ;;
                 five-tab-map*)
                     screen="map"
@@ -333,13 +355,12 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                     screen="map"
                     priority=0
                     ;;
-                five-tab-passport*)
-                    screen="passport"
-                    priority=1
+                five-tab-friends-coming-soon*)
+                    continue
                     ;;
-                atlas-passport*)
-                    screen="passport"
-                    priority=0
+                five-tab-friends*)
+                    screen="friends"
+                    priority=1
                     ;;
                 five-tab-capture*)
                     screen="capture"
@@ -349,12 +370,16 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                     screen="paywall"
                     priority=1
                     ;;
+                atlas-friends*)
+                    screen="friends"
+                    priority=0
+                    ;;
                 *)
                     continue
                     ;;
             esac
             case "$human_name" in
-                five-tab-map*|doodle-map-light*|light-map*)
+                298-10-saved-unsaved-visited*|M1*|five-tab-map*|doodle-map-light*|light-map*)
                     if awk -v ts="$timestamp" -v best="$map_light_ts" 'BEGIN { exit !(ts+0 >= best+0) }'
                     then
                         map_light_file="$exported_name"
@@ -369,7 +394,12 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
         ((test_index += 1))
     done
 
-    for screen in home saves plan map passport capture paywall; do
+    extract_screens=("${parity_screens[@]}")
+    if ((captured_from_prototype)); then
+        extract_screens=("${destination_screens[@]}")
+    fi
+
+    for screen in "${extract_screens[@]}"; do
         if should_skip_screen "$screen"; then
             echo "note: skipping $screen (not in this coverage set)"
             continue
@@ -416,11 +446,7 @@ else
         echo "error: screenshots directory not found: $SCREENSHOTS_DIR" >&2
         exit 2
     fi
-    for screen in home saves plan map passport capture paywall; do
-        if should_skip_screen "$screen"; then
-            echo "note: skipping $screen (not in this coverage set)"
-            continue
-        fi
+    for screen in home saves plan map; do
         if [[ ! -f "$SCREENSHOTS_DIR/$screen.png" ]]; then
             echo "error: missing screenshot: $SCREENSHOTS_DIR/$screen.png" >&2
             exit 2
@@ -429,12 +455,17 @@ else
     done
 fi
 
+compare_screens=("${parity_screens[@]}")
+if ((captured_from_prototype)); then
+    compare_screens=("${destination_screens[@]}")
+fi
+
 gate_failed=0
 mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
-# DESIGN v2 map-mask.png: white = live Apple Maps (ignored). City strip,
-# place sheet, tab bar, and status bar count toward 0.90.
-MAP_MASK="$REFERENCE_SOURCE/map-mask.png"
-for screen in home saves plan map passport capture paywall; do
+# HoP P-4: Map goldens are live Taipei Apple Maps. Do not apply
+# map-mask.png to the 0.90 score. Home still uses home-mask.png.
+# Home and Map fail the job below 0.90 the same way as Saves and Plan.
+for screen in "${compare_screens[@]}"; do
     if should_skip_screen "$screen"; then
         continue
     fi
@@ -445,28 +476,18 @@ for screen in home saves plan map passport capture paywall; do
     fi
 
     extra_args=()
+    mask_args=()
     if [[ "$screen" == "paywall" ]]; then
-        # 402×874 DESIGN eade369 v2 mock. Unlimited row (y380–408) stays scored.
-        # 24,132,354,176 = cut-mock hero art vs SwiftUI doodle hero.
-        # 24,444,354,22 = live-only "Pro isn't on sale yet" above Yearly.
-        # 24,698,354,50 = legal sentence (DESIGN 24-hour copy vs
-        # renewalDescription). Mock is full-screen, one benefit, no tab bar.
         extra_args=(--ignore-rects "24,132,354,176;24,444,354,22;24,698,354,50")
     fi
-    mask_args=()
     if [[ "$screen" == home && -f "$ARTIFACT_DIR/reference/home-mask.png" ]]; then
-        mask_args=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
+        mask_args+=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
     fi
     if [[ "$screen" == "map" ]]; then
-        if [[ ! -f "$MAP_MASK" ]]; then
-            echo "error: missing DESIGN map mask: $MAP_MASK" >&2
-            exit 2
-        fi
-        echo "Map pixel coverage: DESIGN map-mask.png (white = Apple Maps)." >&2
-        extra_args=(--ignore-mask "$MAP_MASK")
+        echo "Map pixel coverage: full frame, no map-mask.png." >&2
     fi
     # macOS CI bash + set -u treats "${empty[@]}" as unbound. Only expand
-    # when the arrays have values (home mask / map mask / paywall rects).
+    # when the arrays have values (home mask / map ignore-mask).
     parity_cmd=(
         xcrun swift "$PARITY_SCRIPT"
         --target "$ARTIFACT_DIR/reference/$screen.png"
@@ -480,14 +501,14 @@ for screen in home saves plan map passport capture paywall; do
     if [[ ${#extra_args[@]} -gt 0 ]]; then
         parity_cmd+=("${extra_args[@]}")
     fi
-    if "${parity_cmd[@]}" \
-        >"$ARTIFACT_DIR/results/$screen.json"
+    if "${parity_cmd[@]}" \        >"$ARTIFACT_DIR/results/$screen.json"
     then
         status="PASS"
     else
         comparison_status=$?
         if ((comparison_status == 1)); then
             status="FAIL"
+            # Home, Map, Saves, and Plan all fail the job below 0.90.
             gate_failed=1
         else
             echo "error: parity comparison failed for $screen" >&2
@@ -511,8 +532,7 @@ for screen in home saves plan map passport capture paywall; do
             --result "$ARTIFACT_DIR/results/map.json"
             --output "$ARTIFACT_DIR/map-doodle-similarity/side-by-side.png"
             --report "$ARTIFACT_DIR/map-doodle-similarity/report.json"
-            --mask "0,160,402,618"
-            --mask-image "$MAP_MASK"
+            --mask "0,0,0,0"
             --status "$status"
             --threshold "$THRESHOLD"
             --modes-output "$ARTIFACT_DIR/map-doodle-similarity/mock-light-dark.png"

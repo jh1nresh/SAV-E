@@ -397,13 +397,19 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(rail.contains("func captureFiveTabHomeParityRaster"))
         XCTAssertTrue(rail.contains("--uitest-location-tiantan"))
         XCTAssertTrue(rail.contains("--uitest-doodle-parity-fixture"))
-        XCTAssertTrue(rail.contains("home.miniMap"))
+        XCTAssertTrue(rail.contains("Home has no map component"))
+        XCTAssertFalse(rail.contains("func testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertTrue(rail.contains("func testHomeShowOnMapFocusesPlace"))
+        XCTAssertTrue(rail.contains("func testHomeHintCountEvidence"))
+        XCTAssertTrue(rail.contains("func testHomeTaipeiGrantedDistances"))
+        XCTAssertTrue(rail.contains("func testHomeTPEAEvidence"))
+        XCTAssertTrue(rail.contains("func testMapSavedUnsavedVisitedTaipeiFixture"))
         XCTAssertTrue(rail.contains("home.eat"))
         XCTAssertTrue(rail.contains("home.passport"))
         XCTAssertTrue(rail.contains("testHomeListProgressiveSearch"))
         XCTAssertTrue(selector.contains("testHomeListProgressiveSearch"))
-        XCTAssertTrue(rail.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
-        XCTAssertTrue(selector.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertFalse(selector.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertTrue(selector.contains("testMapSavedUnsavedVisitedTaipeiFixture"))
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {
@@ -610,12 +616,8 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     @MainActor
     func testPassportTodayOnSavvySitsBetweenStampLedgerAndControlPocket() throws {
         let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
-        let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
 
-        XCTAssertFalse(SaveDoodlePassportFlags.showTodayMissions)
-        XCTAssertFalse(SaveDoodlePassportFlags.showFieldStreak)
-        XCTAssertFalse(SaveDoodlePassportFlags.showStampLedger)
         XCTAssertTrue(passport.contains("if !todayMissions.isEmpty"))
         XCTAssertTrue(passport.contains("PassportTodayOnSavvyStrip"))
         XCTAssertTrue(passport.contains("Your quests"))
@@ -624,8 +626,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passport.contains("profile.today.shareRecommendation"))
         XCTAssertTrue(passport.contains("profile.today.inviteFriend"))
         XCTAssertTrue(passport.contains("profile.connections"))
-        XCTAssertTrue(passport.contains("openPassportRoute(.connections)"))
-        XCTAssertTrue(passport.contains("opensCollected"))
+        XCTAssertTrue(passport.contains("opensConnections = true"))
         XCTAssertTrue(passport.contains("onReviewAll()"))
         XCTAssertTrue(content.contains("onReviewAll:"))
         XCTAssertTrue(content.contains("pathByOpening"))
@@ -635,12 +636,15 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passport.contains("PassportFieldStreakStrip"))
         XCTAssertTrue(passport.contains("profile.today.markVisitedStamp"))
         XCTAssertFalse(passport.contains("profile.activityDisclosure"))
-        XCTAssertTrue(page.contains("SaveDoodlePassportPage"))
-        XCTAssertTrue(passport.contains("SharedPostsGrid"))
-        XCTAssertTrue(passport.contains("profile.cover"))
-        XCTAssertTrue(passport.contains("profile.controlPocket"))
-        XCTAssertTrue(passport.contains("PassportCountingRulesPanel"))
-        XCTAssertTrue(passport.contains("PassportVisibilityPanel"))
+
+        XCTAssertTrue(passport.range(of: "profile.cover")!.lowerBound
+            < passport.range(of: "profile.fieldStreak")!.lowerBound)
+        XCTAssertTrue(passport.range(of: "profile.stampLedger")!.lowerBound
+            < passport.range(of: "profile.fieldStreak")!.lowerBound)
+        XCTAssertTrue(passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound
+            < passport.range(of: "SharedPostsGrid")!.lowerBound)
+        XCTAssertTrue(passport.range(of: "PassportTodayOnSavvyStrip")!.lowerBound
+            < passport.range(of: "profile.controlPocket")!.lowerBound)
         XCTAssertTrue(passport.range(of: "profile.controlPocket")!.lowerBound
             < passport.range(of: "PassportCountingRulesPanel")!.lowerBound)
         XCTAssertTrue(passport.range(of: "PassportCountingRulesPanel")!.lowerBound

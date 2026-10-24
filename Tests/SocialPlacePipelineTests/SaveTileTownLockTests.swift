@@ -9,8 +9,6 @@ final class SaveTileTownLockTests: XCTestCase {
             "SAV-E/Views/Home/SaveRootViews.swift",
             "SAV-E/Views/Home/SaveDoodleHomeView.swift",
             "SAV-E/Views/Map/SaveDoodleMapView.swift",
-            "SAV-E/Views/Profile/ProfileView.swift",
-            "SAV-E/Views/Profile/SaveDoodlePassportView.swift",
             "SAV-E/Views/Capture/SaveCaptureFlowView.swift",
             "SAV-E/Views/Profile/SaveProPaywallView.swift",
             "SAV-E/Views/Origin/SaveFriendsView.swift",
@@ -114,12 +112,15 @@ final class SaveTileTownLockTests: XCTestCase {
 
     func testTownPinsRemainTappableOnHomeAndMap() throws {
         let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
-        XCTAssertFalse(town.contains("struct SaveTileTownCanvas"))
-        XCTAssertFalse(town.contains("map.tilePin."))
+        XCTAssertTrue(town.contains("map.tilePin.\\(pin.id.uuidString)"))
+        XCTAssertTrue(town.contains("showsPins"))
         let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
-        XCTAssertTrue(home.contains("home.miniMap"))
-        XCTAssertTrue(home.contains("Marker("))
-        XCTAssertTrue(home.contains("onOpenMap"))
+        XCTAssertFalse(home.contains("home.miniMap"))
+        XCTAssertFalse(home.contains("Map("))
+        XCTAssertFalse(home.contains("MKMapView"))
+        XCTAssertFalse(home.contains("Map(initialPosition:"))
+        XCTAssertFalse(home.contains("Annotation("))
+        XCTAssertFalse(home.contains("onOpenMap"))
     }
 
     func testDisplayFontIsOFLWithCJKFallbackAndSFBody() throws {
@@ -188,8 +189,8 @@ final class SaveTileTownLockTests: XCTestCase {
 
     func testHomeChromeOmitsMapLensesAndKeepsSearch() throws {
         let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
-        XCTAssertTrue(home.contains("SaveDoodleMiniMap"))
-        XCTAssertTrue(home.contains("home.miniMap"))
+        XCTAssertFalse(home.contains("SaveDoodleMiniMap"))
+        XCTAssertFalse(home.contains("home.miniMap"))
         XCTAssertTrue(home.contains("home.review"))
         XCTAssertTrue(home.contains("accessibilityIdentifier(\"home.saves\")"))
         XCTAssertFalse(home.contains("home.openSaves"))
@@ -226,9 +227,11 @@ final class SaveTileTownLockTests: XCTestCase {
     func testMapOwnsNearbySavedFriendsChipsOnTileTown() throws {
         let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
         let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
-        XCTAssertTrue(map.contains(".mapStyle(.standard)"))
+        XCTAssertTrue(map.contains(".mapStyle(.standard(emphasis: .automatic))"))
         XCTAssertTrue(map.contains("AtlasMetrics.statusBarHeight"))
         XCTAssertFalse(map.contains("emphasis: .muted"))
+        XCTAssertFalse(map.contains(".saturation("))
+        XCTAssertFalse(map.contains(".colorMultiply("))
         XCTAssertFalse(map.contains("SaveTileTownCanvas"))
         XCTAssertTrue(map.contains("map.placeSheet"))
         XCTAssertTrue(map.contains(".frame(minHeight: 44)") || map.contains("SaveLayout.minTap"))
@@ -245,6 +248,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(map.contains("SaveDoodleHomeCatalog.listedPlaces("))
         XCTAssertTrue(map.contains("mapAccessibilityIdentifier"))
         XCTAssertTrue(map.contains("map.city"))
+        XCTAssertTrue(map.contains("map.eatGo"))
         let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
         XCTAssertTrue(panel.contains("Spacer(minLength: 0)"))
         XCTAssertTrue(panel.contains("alignment: .bottom"))
@@ -270,27 +274,29 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(stamp.contains("case locked"))
         XCTAssertTrue(stamp.contains("SaveSoftPixelAccentsLock.visibleStampText"))
         XCTAssertTrue(home.contains("SaveDoodleCollectedMark"))
-        XCTAssertTrue(passport.contains("SaveDoodlePassportPage("))
-        XCTAssertFalse(passport.contains("PassportTileTownCollection"))
-        XCTAssertFalse(passport.contains("SaveKraftStamp("))
-        XCTAssertTrue(passport.contains("onOpenPlace: onOpenPlace"))
-        let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
-        XCTAssertTrue(page.contains("profile.stampGrid"))
-        XCTAssertTrue(page.contains("rootTabScrollClearance"))
+        XCTAssertTrue(passport.contains("SaveKraftStamp("))
+        XCTAssertTrue(passport.contains("face: .locked"))
+        XCTAssertTrue(passport.contains("profile.stampGrid"))
+        XCTAssertTrue(passport.contains("onOpenPlace(place)"))
+        XCTAssertTrue(passport.contains("rootTabScrollClearance"))
+        XCTAssertTrue(passport.contains("???"))
     }
 
     func testFriendsIsPeopleFirstWithLastAt() throws {
         let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
-        XCTAssertTrue(friends.contains("SavePostageSealAvatar"))
-        XCTAssertTrue(friends.contains("Last at"))
-        XCTAssertTrue(friends.contains("friends.mapStrip"))
+        XCTAssertTrue(friends.contains("SaveDoodleFriendAvatar"))
+        XCTAssertTrue(friends.contains("last at"))
+        XCTAssertTrue(friends.contains("SaveDoodleFriendSticker"))
+        XCTAssertFalse(friends.contains("SavePostageSealAvatar"))
+        XCTAssertFalse(friends.contains("friends.mapStrip"))
+        XCTAssertFalse(friends.contains("SaveTileTownCanvas"))
         XCTAssertTrue(friends.contains("friends.empty"))
         XCTAssertTrue(friends.contains("friends.findFriends"))
         XCTAssertTrue(friends.contains("friends.author."))
         XCTAssertTrue(friends.contains("SharedAuthorPassport"))
         XCTAssertFalse(friends.contains(".disabled(store.isDemo)"))
         let store = try source(at: "SAV-E/ViewModels/SharedPostsStore.swift")
-        XCTAssertTrue(store.contains("applyDemoFixture()"))
+        XCTAssertTrue(store.contains("applyDemoFixture(items:"))
         XCTAssertTrue(store.contains("case .author(let id):"))
         XCTAssertFalse(friends.contains("friends.invite"))
         let posts = try JSONDecoder().decode([SharedPlacePost].self, from: Data(

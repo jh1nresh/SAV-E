@@ -24,8 +24,8 @@ nonisolated enum SaveSoftPixelAccentsLock: Sendable {
     /// fixture. Only `--uitest-atlas-parity-fixture` opts in.
     static let productionLocksOneFaceHomeComposition = false
 
-    /// Product Map, Home, Friends, Capture, and Pro no longer mount
-    /// `SaveTileTownCanvas`. The lock flag stays for Passport goal math.
+    /// Product Map / Friends strip still use `SaveTileTownCanvas` until those
+    /// Doodle PRs. Home no longer mounts the town.
     static let productMapBaseIsTileTown = true
 
     static let illustratedCityAtlasAssets: Set<String> = [
@@ -183,8 +183,24 @@ enum SaveAtlasPresentationFactory {
             onOpenReview(candidate)
         }
         presentation.onOpenPassport = onOpenPassport
+#if DEBUG
+        if let override = uiTestHintCountOverride() {
+            presentation.reviewCount = override
+        }
+#endif
         return presentation
     }
+
+#if DEBUG
+    /// Evidence-only override so N=0 / N=1 / N=99+ hint copy can be captured
+    /// without seeding 100 review candidates. Production never reads this.
+    static func uiTestHintCountOverride() -> Int? {
+        let prefix = "--uitest-home-hint-count="
+        guard let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) })
+        else { return nil }
+        return Int(argument.dropFirst(prefix.count))
+    }
+#endif
 
     static func orderedHomePlaces(_ places: [Place], location: CLLocation?) -> [Place] {
         places.sorted { lhs, rhs in

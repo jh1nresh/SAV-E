@@ -185,6 +185,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var isRootSheetPresented: Bool
     @State private var isPassportPresented = false
+    @State private var passportCollectionMode: SavePassportCollectionMode = .collection
     @State private var drawerDetent: PresentationDetent
     @State private var mapDetailDrawerItem: MapDetailDrawerItem?
     @State private var pendingReceiptMapDetail: MapDetailDrawerItem?
@@ -258,9 +259,6 @@ struct ContentView: View {
                 collapseMapPanel()
             }
         }
-        .onChange(of: doodleSession.mapVisitResidueID) { _, _ in
-            resetMapVisitResidue()
-        }
         .onChange(of: fullScreenRoute?.id) { _, routeID in
             if routeID != nil {
                 invalidateExactSearchRequest()
@@ -312,15 +310,15 @@ struct ContentView: View {
         }
         .sheet(item: capturePresentation, onDismiss: handleFullScreenDismiss) { route in
             fullScreenContent(for: route)
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.height(430), .large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(SaveAtlasPalette.paper)
+                .presentationBackground(SaveAtlasPalette.canvas)
         }
         .fullScreenCover(item: detailPresentation, onDismiss: handleFullScreenDismiss) { route in
             fullScreenContent(for: route)
         }
         .sheet(isPresented: $isPassportPresented, onDismiss: handleExclusiveChromeDismiss) {
-            passportView(isRootTab: false)
+            passportView(isRootTab: false, collectionMode: passportCollectionMode)
         }
         .sheet(isPresented: $showSavedPlaceLimitPaywall, onDismiss: {
             mapVM.acknowledgeSavedPlaceLimitPaywall()
@@ -454,7 +452,7 @@ struct ContentView: View {
     /// Profile root tab, and as the sheet the older surfaces still push. One
     /// definition so the two entry points cannot drift apart.
     @ViewBuilder
-    private func passportView(isRootTab: Bool) -> some View {
+    private func passportView(isRootTab: Bool, collectionMode: SavePassportCollectionMode = .collection) -> some View {
         ProfileView(
             savedPlaces: mapVM.places,
             waitingClues: mapVM.reviewCandidates.count,
@@ -528,6 +526,7 @@ struct ContentView: View {
             },
             onOpenPlace: { openMapDetail(.savedPlace($0)) },
             isRootTab: isRootTab,
+            collectionMode: collectionMode,
             requestsConnections: $requestsSocialConnections
         )
         .environment(\.appLanguageSettings, languageSettings)
@@ -537,13 +536,10 @@ struct ContentView: View {
     /// Tab bar selection. `.capture` is a control, not a destination: it opens
     /// the capture cover and leaves the current tab selected, so tapping it and
     /// cancelling returns the user exactly where they were.
-    private func selectRootTab(_ tab: SaveRootTab, mapFollowsHomeFilter: Bool = false) {
+    private func selectRootTab(_ tab: SaveRootTab) {
         guard !tab.isCaptureControl else {
             openDrawer(.addLink, tripID: nil)
             return
-        }
-        if tab == .map {
-            doodleSession.applyMapTabSelection(followsHomeFilter: mapFollowsHomeFilter)
         }
         // Root destinations must leave any pushed Saves, Trips, or Trip route.
         // The tab bar can remain in the accessibility tree behind those
@@ -555,33 +551,9 @@ struct ContentView: View {
         )
     }
 
-    /// Mini-map does not go through `selectRootTab` so a default-false Map
-    /// write cannot clear the handoff before Map appears.
-    private func openMapFromMiniMap() {
-        doodleSession.beginMiniMapHandoff()
-        rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
-        selectedRootTab = SaveChromeNavigation.destination(
-            afterSelecting: .map,
-            current: selectedRootTab
-        )
-    }
-
-    /// Drop leftover Map-tab chrome so a reused Map remounts Eat/Go.
-    private func resetMapVisitResidue() {
-        mapVM.clearSelectedMapObject()
-        mapDetailDrawerItem = nil
-        isMapPanelExpanded = false
-        drawerVM.returnToCommands()
-    }
-
-    /// Search, show-on-map, and list handoffs must drop a leftover Home
-    /// Eat/Go+city filter so the place the caller asked to show is visible.
-    /// Review correction keeps the session: abandoning remounts Map and
-    /// drops `preservesExactSearchClue`.
+    /// Search, show-on-map, and list handoffs open Map without a Home filter.
+    /// Review correction keeps the exact-search session.
     private func showMapTab() {
-        if !isExactSearchSessionActive {
-            doodleSession.abandonMiniMapHandoff()
-        }
         selectedRootTab = .map
     }
 
@@ -593,6 +565,16 @@ struct ContentView: View {
             }
         )
     }
+
+    private var detailPresentation: Binding<SaveFullScreenRoute?> {
+        Binding(
+            get: { if case .placeDetail = fullScreenRoute { return fullScreenRoute }; return nil },
+            set: { value in
+                if case .placeDetail = fullScreenRoute { fullScreenRoute = value }
+            }
+        )
+    }
+
 
     private var showsRootTabBar: Bool {
 #if DEBUG
@@ -612,88 +594,86 @@ struct ContentView: View {
     }
 #endif
 
-    private var detailPresentation: Binding<SaveFullScreenRoute?> {
-        Binding(
-            get: { if case .placeDetail = fullScreenRoute { return fullScreenRoute }; return nil },
-            set: { value in
-                if case .placeDetail = fullScreenRoute { fullScreenRoute = value }
-            }
-        )
-    }
-
     private var rootTabs: some View {
-        // Read identity outside the switch so a Home-tab mini-map bump is
-        // observed before Map remounts with the leftover wordmark header.
-        let mapIdentity = doodleSession.mapSurfaceID
-        return NavigationStack(path: $rootPath) {
-            ReferenceViewport {
-                ZStack(alignment: .topLeading) {
-                    Group {
-                        switch selectedRootTab {
-                        case .home:
-                            SaveHomeView(
-                                store: tripStore,
-                                mapViewModel: mapVM,
-                                onCapture: { openDrawer(.addLink, tripID: nil) },
-                                onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
-                                onOpenReviewCandidate: { openReviewCandidate($0, tripID: nil) },
-                                // Trips left the root bar; both it and Saves
-                                // are pushed children now, so neither surface
-                                // is lost by the restructure.
-                                onOpenSaves: {
-                                    rootPath = SaveChromeNavigation.pathByOpening(
-                                        .saves,
-                                        currently: rootPath
-                                    )
-                                },
-                                onOpenTrips: {
-                                    rootPath = SaveChromeNavigation.pathByOpening(
-                                        .trips,
-                                        currently: rootPath
-                                    )
-                                },
-                                onOpenTrip: {
-                                    rootPath = SaveChromeNavigation.pathByOpening(
-                                        .trip($0),
-                                        currently: rootPath
-                                    )
-                                },
-                                onOpenPassport: openPassport,
-                                onOpenMap: { openMapFromMiniMap() }
-                            )
-                        case .map:
-                            SaveMapRootView(
-                                mapViewModel: mapVM,
-                                shouldFocusOnUserLocation: true,
-                                // The single drawer panel owns the shelf now;
-                                // the canvas never draws its own copy.
-                                hidesCommandShelf: true,
-                                onOpenSearch: { openMapSearch() },
-                                onOpenSavedPlace: { openSavedPlaceFromMapSearch($0) },
-                                onPlanAroundPlace: openPlanAround,
-                                onOpenPassport: openPassport
-                            )
-                            .id(mapIdentity)
-                        case .friends:
-                            SaveFriendsView(
-                                currentUserID: PrivyAuthService.shared.currentUserId,
-                                onSaved: { await mapVM.loadPlaces(force: true) },
-                                onParkedAtFreeLimit: { try mapVM.parkPlaceInUnplacedInbox($0, requestPaywall: false) },
-                                onRemoveParkedAtFreeLimit: { try mapVM.removeParkedUnplacedInboxItem($0) },
-                                onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
-                            )
-                        case .profile:
-                            passportView(isRootTab: true)
-                        case .capture:
-                            // Unreachable: `.capture` is a control, and
-                            // `selectRootTab` opens the cover instead of
-                            // committing the selection.
-                            Color.clear
+        NavigationStack(path: $rootPath) {
+            GeometryReader { safeArea in
+                // ReferenceViewport draws from the full-screen origin and scales its canvas.
+                // Read real insets before that view ignores them; convert Home's physical
+                // safe-area + 8pt header origin into the reference canvas coordinates.
+                let viewportScale = max(0.01, min(
+                    (safeArea.size.width + safeArea.safeAreaInsets.leading + safeArea.safeAreaInsets.trailing) / AtlasMetrics.width,
+                    (safeArea.size.height + safeArea.safeAreaInsets.top + safeArea.safeAreaInsets.bottom) / AtlasMetrics.height
+                ))
+                ReferenceViewport {
+                    ZStack(alignment: .topLeading) {
+                        Group {
+                            switch selectedRootTab {
+                            case .home:
+                                SaveHomeView(
+                                    store: tripStore,
+                                    mapViewModel: mapVM,
+                                    headerTopPadding: (safeArea.safeAreaInsets.top + SaveSpace.xs) / viewportScale,
+                                    onCapture: { openDrawer(.addLink, tripID: nil) },
+                                    onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                    onOpenReviewCandidate: { openReviewCandidate($0, tripID: nil) },
+                                    // Trips left the root bar; both it and Saves
+                                    // are pushed children now, so neither surface
+                                    // is lost by the restructure.
+                                    onOpenSaves: {
+                                        rootPath = SaveChromeNavigation.pathByOpening(
+                                            .saves,
+                                            currently: rootPath
+                                        )
+                                    },
+                                    onOpenTrips: {
+                                        rootPath = SaveChromeNavigation.pathByOpening(
+                                            .trips,
+                                            currently: rootPath
+                                        )
+                                    },
+                                    onOpenTrip: {
+                                        rootPath = SaveChromeNavigation.pathByOpening(
+                                            .trip($0),
+                                            currently: rootPath
+                                        )
+                                    },
+                                    onOpenPassport: openPassport,
+                                    onOpenCollectedPassport: { openPassport(collectionMode: .homeCollected) }
+                                )
+                            case .map:
+                                SaveMapRootView(
+                                    mapViewModel: mapVM,
+                                    shouldFocusOnUserLocation: true,
+                                    // The single drawer panel owns the shelf now;
+                                    // the canvas never draws its own copy.
+                                    hidesCommandShelf: true,
+                                    onOpenSearch: { openMapSearch() },
+                                    onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                    onPlanAroundPlace: openPlanAround,
+                                    onOpenPassport: openPassport
+                                )
+                            case .friends:
+                                SaveFriendsView(
+                                    currentUserID: PrivyAuthService.shared.currentUserId,
+                                    onSaved: { await mapVM.loadPlaces(force: true) },
+                                    onParkedAtFreeLimit: { try mapVM.parkPlaceInUnplacedInbox($0, requestPaywall: false) },
+                                    onRemoveParkedAtFreeLimit: { try mapVM.removeParkedUnplacedInboxItem($0) },
+                                    // Invite / 邀請: ProfileView.requestsConnections
+                                    // presents PassportConnectionsView (Friends section).
+                                    onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
+                                )
+                            case .profile:
+                                passportView(isRootTab: true)
+                            case .capture:
+                                // Unreachable: `.capture` is a control, and
+                                // `selectRootTab` opens the cover instead of
+                                // committing the selection.
+                                Color.clear
+                            }
                         }
-                    }
 
-                    if showsRootTabBar {
-                        AtlasTabBar(
+                        if showsRootTabBar {
+                            AtlasTabBar(
                             items: SaveRootTab.allCases,
                             selection: selectedRootTab,
                             title: \.atlasTitle,
@@ -710,16 +690,20 @@ struct ContentView: View {
                                     )
                                 )
                             },
+                            raisedBackground: {
+                                AnyView(SaveDoodleInkOval().fill(SaveAtlasPalette.coral))
+                            },
                             onSelect: { selectRootTab($0) }
                         )
-                        .placed(
-                            x: AtlasTabBarMetrics.leadingInset,
-                            y: selectedRootTab == .map
-                                ? AtlasTabBarMetrics.mapY
-                                : AtlasTabBarMetrics.standardY,
-                            width: AtlasTabBarMetrics.width,
-                            height: AtlasTabBarMetrics.height
-                        )
+                            .placed(
+                                x: AtlasTabBarMetrics.leadingInset,
+                                y: selectedRootTab == .map
+                                    ? AtlasTabBarMetrics.mapY
+                                    : AtlasTabBarMetrics.standardY,
+                                width: AtlasTabBarMetrics.width,
+                                height: AtlasTabBarMetrics.height
+                            )
+                        }
                     }
                 }
             }
@@ -830,7 +814,7 @@ struct ContentView: View {
                 onExpand: { focusesSearch in
                     openMapSearch(focusesSearch: focusesSearch)
                 },
-                onCollapse: collapseMapPanel,
+                onCollapse: closeMapSearch,
                 onOpenPassport: openPassport
             ) {
                 if mapDetailDrawerItem != nil {
@@ -847,7 +831,7 @@ struct ContentView: View {
                         focusesSearch: drawerLaunchRequest.focusesSearch,
                         preservesExactSearchClue: isExactSearchSessionActive
                             || exactSearchClueID != nil,
-                        onClose: collapseMapPanel,
+                        onClose: closeMapSearch,
                         onOpenPlace: { openSavedPlaceFromMapSearch($0) },
                         onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
                     )
@@ -877,6 +861,27 @@ struct ContentView: View {
     private func collapseMapPanel() {
         isMapPanelExpanded = false
         handleRootSheetDismiss()
+    }
+
+    private func closeMapSearch() {
+        endCanceledExactSearchCorrection()
+        invalidateExactSearchRequest()
+        collapseMapPanel()
+    }
+
+    /// `map.search.close` cancels Review correction. Collapse/reopen still
+    /// keeps the session so a refine remount can finish; this explicit close
+    /// drops it so a later pin or peek cannot silently confirm the canceled
+    /// clue.
+    private func endCanceledExactSearchCorrection() {
+        invalidateExactSearchRequest()
+        guard drawerLaunchRequest.preservesExactSearchClue else { return }
+        drawerLaunchRequest = DrawerLaunchRequest(
+            target: drawerLaunchRequest.target,
+            initialQuery: drawerLaunchRequest.initialQuery,
+            focusesSearch: drawerLaunchRequest.focusesSearch,
+            preservesExactSearchClue: false
+        )
     }
 
     @ViewBuilder
@@ -956,6 +961,7 @@ struct ContentView: View {
                 onFindExactPlaceCandidate: openExactSearch,
                 onAddReviewClue: addClueToReviewCandidate,
                 onFocusReviewCandidateOnMap: focusReviewCandidateOnMap,
+                onShowPlaceOnMap: showSavedPlaceOnMap,
                 onSaveCandidate: saveFullScreenCandidate,
                 onRejectCandidate: rejectFullScreenCandidate,
                 onSaveCandidateAsSourceOnly: keepFullScreenCandidateSourceOnly,
@@ -1058,7 +1064,7 @@ struct ContentView: View {
                 let resolvesOriginPlan = pendingOriginPlanCandidateID.map {
                     mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
                 } ?? false
-                let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+                let place = try await saveMapCandidateAndEndExactSearchIfNeeded(candidate)
                 if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
                     requestTripAssignment(for: place)
@@ -1148,7 +1154,8 @@ struct ContentView: View {
             onShowMapCandidatesOnMap: showMapCandidatesOnMap,
             onAddReviewClue: addClueToReviewCandidate,
             onFindReviewPlace: openExactSearch,
-            onFocusReviewCandidateOnMap: focusReviewCandidateOnMap
+            onFocusReviewCandidateOnMap: focusReviewCandidateOnMap,
+            onShowPlaceOnMap: showSavedPlaceOnMap
         )
         .environment(\.appLanguageSettings, languageSettings)
     }
@@ -1241,7 +1248,12 @@ struct ContentView: View {
     }
 
     private func openPassport() {
+        openPassport(collectionMode: .collection)
+    }
+
+    private func openPassport(collectionMode: SavePassportCollectionMode) {
         guard !isPassportPresented else { return }
+        passportCollectionMode = collectionMode
         SaveHaptics.tap()
 
         if isMapPanelExpanded {
@@ -1451,7 +1463,7 @@ struct ContentView: View {
                 let resolvesOriginPlan = pendingOriginPlanCandidateID.map {
                     mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
                 } ?? false
-                let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+                let place = try await saveMapCandidateAndEndExactSearchIfNeeded(candidate)
                 if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
                     requestTripAssignment(for: place)
@@ -1473,6 +1485,19 @@ struct ContentView: View {
                 fullScreenActionError = error.localizedDescription
             }
         }
+    }
+
+    /// Home / saved-place detail "View on map". Focuses that stamp on Map
+    /// and shows Home's current Eat/Go + city. Not a mini-map handoff.
+    private func showSavedPlaceOnMap(_ place: Place) {
+        fullScreenRoute = nil
+        isRootSheetPresented = false
+        mapDetailDrawerItem = nil
+        rootPath.removeAll()
+        isMapPanelExpanded = false
+        doodleSession.pendingShowOnMapPlaceID = place.id
+        mapVM.selectPlace(place)
+        showMapTab()
     }
 
     /// "Find exact place" lands the user on the map with the candidate pins
@@ -1572,15 +1597,51 @@ struct ContentView: View {
             // not open the stamp as if it were already corrected.
             restoreExactSearchResolutionIfNeeded()
             if let resolved = await mapVM.chooseSavedStampFromExactSearch(place) {
-                exactSearchClueID = nil
-                isExactSearchSessionActive = false
+                clearResolvedExactSearchSession()
                 openMapDetail(.savedPlace(resolved))
             }
         }
     }
 
+    /// Saving an unsaved exact-search result retires the clue in MapViewModel
+    /// but used to leave this session live, so a later pin tap hit
+    /// `noActiveCorrectionSession` instead of opening the new stamp.
+    private func saveMapCandidateAndEndExactSearchIfNeeded(
+        _ candidate: SaveMapCandidate
+    ) async throws -> Place {
+        restoreExactSearchResolutionIfNeeded()
+        let endsExactSearch = isExactSearchSessionActive
+            && exactSearchClueID.map { mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0) } == true
+        let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+        if endsExactSearch {
+            clearResolvedExactSearchSession()
+        }
+        endExactSearchSessionAfterCandidateSave()
+        return place
+    }
+
+    private func clearResolvedExactSearchSession() {
+        exactSearchClueID = nil
+        isExactSearchSessionActive = false
+        guard drawerLaunchRequest.preservesExactSearchClue else { return }
+        drawerLaunchRequest = DrawerLaunchRequest(
+            target: drawerLaunchRequest.target,
+            initialQuery: drawerLaunchRequest.initialQuery,
+            focusesSearch: drawerLaunchRequest.focusesSearch,
+            preservesExactSearchClue: false
+        )
+    }
+
+    /// Saving a new map candidate resolves the clue in MapViewModel but
+    /// must also drop the ContentView session so the next saved-row tap
+    /// opens the stamp instead of `chooseSavedStampFromExactSearch`.
+    private func endExactSearchSessionAfterCandidateSave() {
+        exactSearchClueID = nil
+        isExactSearchSessionActive = false
+    }
+
     private func invalidateExactSearchRequest() {
-        guard exactSearchRequestID != nil || isExactSearchSessionActive || exactSearchClueID != nil else { return }
+        guard exactSearchRequestID != nil || isExactSearchSessionActive || exactSearchClueID != nil || mapVM.hasActiveExactSearchResolution else { return }
         exactSearchRequestID = nil
         isExactSearchSessionActive = false
         exactSearchClueID = nil
