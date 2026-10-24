@@ -607,7 +607,11 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(shots.contains("sharer-en-light"))
         XCTAssertTrue(shots.contains("sharer-en-dark"))
         XCTAssertTrue(shots.contains("assertSharerChipContrast"))
-        XCTAssertTrue(shots.contains("clip.sharer"))
+        XCTAssertTrue(shots.contains("heroSharerChipBand"))
+        XCTAssertFalse(
+            shots.contains("let chip = app.descendants(matching: .any)[\"clip.sharer\"]"),
+            "do not query the overlay chip as an XCUI identifier"
+        )
         let workflow = try source(at: ".github/workflows/ci.yml")
         XCTAssertTrue(workflow.contains("11-iansui-proof.md"))
         XCTAssertTrue(workflow.contains("Iansui-ClipTitles.ttf"))

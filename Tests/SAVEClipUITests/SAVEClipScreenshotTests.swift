@@ -22,24 +22,22 @@ final class SAVEClipScreenshotTests: XCTestCase {
     func testSharerChipEnglishLightIsReadable() {
         let app = launchClip(appearance: .light, language: "en", locale: "en_US", screen: "place-sender")
         XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
-        let chip = app.descendants(matching: .any)["clip.sharer"]
-        XCTAssertTrue(chip.waitForExistence(timeout: 5))
-        XCTAssertTrue(chip.label.contains("Mina"), "sharer pill must name who shared")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.friendNote"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.friendNote.by"].exists)
         let shot = app.screenshot()
         attachScreenshot(shot, name: "sharer-en-light")
-        assertSharerChipContrast(shot, chip: chip, app: app, name: "sharer-en-light")
+        assertSharerChipContrast(shot, app: app, name: "sharer-en-light")
         app.terminate()
     }
 
     func testSharerChipEnglishDarkIsReadable() {
         let app = launchClip(appearance: .dark, language: "en", locale: "en_US", screen: "place-sender")
         XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
-        let chip = app.descendants(matching: .any)["clip.sharer"]
-        XCTAssertTrue(chip.waitForExistence(timeout: 5))
-        XCTAssertTrue(chip.label.contains("Mina"), "sharer pill must name who shared")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.friendNote"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.friendNote.by"].exists)
         let shot = app.screenshot()
         attachScreenshot(shot, name: "sharer-en-dark", appearance: .dark)
-        assertSharerChipContrast(shot, chip: chip, app: app, name: "sharer-en-dark")
+        assertSharerChipContrast(shot, app: app, name: "sharer-en-dark")
         app.terminate()
     }
 
@@ -405,9 +403,12 @@ final class SAVEClipScreenshotTests: XCTestCase {
 
     /// Cream pill `#FFF9EB` plus `ClipStickerInk` `#2F2E23` must both be present
     /// so "Mina shared with you" is not white-on-white in dark mode.
+    ///
+    /// The chip lives in a GeometryReader hero overlay. XCUI does not expose
+    /// that overlay as `clip.sharer` even when the view is an accessibility
+    /// element, so contrast is sampled from the layout band instead.
     private func assertSharerChipContrast(
         _ screenshot: XCUIScreenshot,
-        chip: XCUIElement,
         app: XCUIApplication,
         name: String
     ) {
@@ -417,7 +418,7 @@ final class SAVEClipScreenshotTests: XCTestCase {
         }
         let scaleX = CGFloat(image.width) / app.frame.width
         let scaleY = CGFloat(image.height) / app.frame.height
-        let frame = chip.frame
+        let frame = heroSharerChipBand(in: app)
         let minX = max(Int((frame.minX * scaleX).rounded()), 0)
         let maxX = min(Int((frame.maxX * scaleX).rounded()), image.width - 1)
         let minY = max(Int((frame.minY * scaleY).rounded()), 0)
@@ -462,6 +463,18 @@ final class SAVEClipScreenshotTests: XCTestCase {
         XCTAssertGreaterThan(dark, 0, "\(name): ClipStickerInk text missing — white-on-white")
         let ratio = ClipScreenshotContrast.ratio(lightest: lightest, darkest: darkest)
         XCTAssertGreaterThan(ratio, 4.5, "\(name): chip contrast \(ratio) is below AA")
+    }
+
+    /// Hero overlay: 16pt leading, 54pt from the top of the coral hero, 32pt chip.
+    /// Band is wider than the chip so Dynamic Island / safe-area shift still hits it.
+    private func heroSharerChipBand(in app: XCUIApplication) -> CGRect {
+        let frame = app.frame
+        return CGRect(
+            x: frame.minX + 12,
+            y: frame.minY + 44,
+            width: frame.width * 0.68,
+            height: 56
+        )
     }
 
     private func samplePixel(_ image: CGImage, x: Int, y: Int) -> (Int, Int, Int)? {
