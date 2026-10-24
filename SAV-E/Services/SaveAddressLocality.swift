@@ -166,11 +166,16 @@ private extension SaveAddressLocality {
         if let code = australianStatePostcodeCode(in: trimmed) {
             return code
         }
-        let folded = normalizeIdentifier(trimmed)
+        // Strip a recognized trailing postcode before full region names
+        // so `Ontario M5V 3A8` and `Illinois 62703` still qualify.
+        let folded = normalizeIdentifier(strippingPostalCode(from: trimmed))
         if australianStateCodes.contains(folded) { return folded }
         if let code = usStateNames[folded] { return code }
         if let code = canadianProvinceNames[folded] { return code }
         if country == "australia", let code = australianStateNames[folded] {
+            return code
+        }
+        if country == "india", let code = indianStateNames[folded] {
             return code
         }
         return nil
@@ -187,6 +192,8 @@ private extension SaveAddressLocality {
             return canadian ? code : nil
         case "australia":
             return australian ? code : nil
+        case "india":
+            return indianStateCodes.contains(code) ? code : nil
         case nil:
             return (us || canadian || australian) ? code : nil
         default:
@@ -374,6 +381,7 @@ private extension SaveAddressLocality {
         "uk": "united kingdom", "u k": "united kingdom", "u.k.": "united kingdom",
         "england": "united kingdom", "britain": "united kingdom",
         "usa": "united states", "us": "united states",
+        "u s": "united states", "u s a": "united states",
         "united states of america": "united states",
         "korea": "south korea",
         "schweiz": "switzerland", "suisse": "switzerland", "svizzera": "switzerland",
@@ -462,5 +470,30 @@ private extension SaveAddressLocality {
         "tasmania": "tas",
         "australian capital territory": "act",
         "northern territory": "nt",
+    ]
+
+    /// Official names only. Delhi stays a locality (`Connaught Place, Delhi,
+    /// India`) so it is omitted; Chandigarh and Puducherry are omitted for
+    /// the same city-UT reason.
+    static let indianStateCodes: Set<String> = [
+        "ap", "ar", "as", "br", "cg", "ga", "gj", "hr", "hp", "jh",
+        "ka", "kl", "mp", "mh", "mn", "ml", "mz", "nl", "od", "pb",
+        "rj", "sk", "tn", "ts", "tr", "up", "ut", "wb",
+        "an", "dh", "jk", "la", "ld",
+    ]
+
+    static let indianStateNames: [String: String] = [
+        "andhra pradesh": "ap", "arunachal pradesh": "ar", "assam": "as",
+        "bihar": "br", "chhattisgarh": "cg", "goa": "ga", "gujarat": "gj",
+        "haryana": "hr", "himachal pradesh": "hp", "jharkhand": "jh",
+        "karnataka": "ka", "kerala": "kl", "madhya pradesh": "mp",
+        "maharashtra": "mh", "manipur": "mn", "meghalaya": "ml",
+        "mizoram": "mz", "nagaland": "nl", "odisha": "od", "punjab": "pb",
+        "rajasthan": "rj", "sikkim": "sk", "tamil nadu": "tn",
+        "telangana": "ts", "tripura": "tr", "uttar pradesh": "up",
+        "uttarakhand": "ut", "west bengal": "wb",
+        "andaman and nicobar islands": "an",
+        "dadra and nagar haveli and daman and diu": "dh",
+        "jammu and kashmir": "jk", "ladakh": "la", "lakshadweep": "ld",
     ]
 }

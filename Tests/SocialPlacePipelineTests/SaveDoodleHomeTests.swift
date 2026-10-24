@@ -311,6 +311,41 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: illinois), "illinois")
     }
 
+    /// Dotted US country forms, region+postcode, and Indian states.
+    func testLongTailLocalityDottedUSPostcodeAndIndianStates() {
+        XCTAssertEqual(SaveAddressLocality.country(in: "U.S."), "united states")
+        XCTAssertEqual(SaveAddressLocality.country(in: "U.S.A."), "united states")
+        XCTAssertEqual(SaveAddressLocality.country(in: "U.K."), "united kingdom")
+
+        let dotted = place("Cozy Dog", "Springfield, IL 62703, U.S.", .food)
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: dotted.address), "Springfield")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: dotted), "springfield,il")
+
+        let illinoisZip = place("Cozy Dog", "Springfield, Illinois 62703, USA", .food)
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: illinoisZip.address), "Springfield")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: illinoisZip), "springfield,il")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: illinoisZip), "illinois,united states")
+
+        let toronto = place("St Lawrence", "Toronto, Ontario M5V 3A8, Canada", .food)
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: toronto.address), "Toronto")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: toronto), "toronto,on")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: toronto), "ontario,canada")
+
+        let ottawa = place("ByWard", "Ottawa, Ontario K1P 5G8, Canada", .attraction)
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: ottawa.address), "Ottawa")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: ottawa), "ottawa,on")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: ottawa), "ontario,canada")
+
+        let pune = place("Vada Pav", "123 MG Road, Pune, Maharashtra 411001, India", .food)
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: pune.address), "Pune")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: pune), "pune,mh")
+        XCTAssertNotEqual(SaveDoodleHomeCatalog.cityID(for: pune), "maharashtra,india")
+
+        let delhi = place("CP", "Connaught Place, Delhi, India", .attraction)
+        XCTAssertEqual(SaveDoodleHomeCatalog.localityLabel(in: delhi.address), "Delhi")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: delhi), "delhi,india")
+    }
+
     /// Allowlisted `paris` is France, not Paris, TX.
     func testAllowlistedParisDoesNotAbsorbParisTexas() {
         let france = place(
@@ -394,7 +429,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(groups.first?.count, 5)
         XCTAssertEqual(SaveDoodleCitySelection(storageValue: "cambridge,uk"), .city("cambridge,united kingdom"))
         XCTAssertEqual(SaveDoodleCitySelection(storageValue: "springfield,il"), .city("springfield,il"))
-        for (alias, country) in [("USA", "united states"), ("US", "united states"), ("United States of America", "united states"), ("Schweiz", "switzerland"), ("Holland", "netherlands"), ("Österreich", "austria")] {
+        for (alias, country) in [("USA", "united states"), ("US", "united states"), ("U.S.", "united states"), ("U.S.A.", "united states"), ("United States of America", "united states"), ("Schweiz", "switzerland"), ("Holland", "netherlands"), ("Österreich", "austria")] {
             XCTAssertEqual(SaveHomeSearch.countryToken(in: alias), country, alias)
         }
         XCTAssertNil(SaveHomeSearch.metroKey(in: "London, Holland"))
@@ -478,6 +513,11 @@ final class SaveDoodleHomeTests: XCTestCase {
             Case(address: "8 Fort St, Springfield, MA 01103, USA", label: "Springfield", cityID: "springfield,ma", metro: nil),
             // Recognize full administrative-region names
             Case(address: "123 Main St, Springfield, Illinois, United States", label: "Springfield", cityID: "springfield,il", metro: nil),
+            Case(address: "Springfield, IL 62703, U.S.", label: "Springfield", cityID: "springfield,il", metro: nil),
+            Case(address: "Springfield, Illinois 62703, USA", label: "Springfield", cityID: "springfield,il", metro: nil),
+            Case(address: "Toronto, Ontario M5V 3A8, Canada", label: "Toronto", cityID: "toronto,on", metro: nil),
+            Case(address: "Ottawa, Ontario K1P 5G8, Canada", label: "Ottawa", cityID: "ottawa,on", metro: nil),
+            Case(address: "123 MG Road, Pune, Maharashtra 411001, India", label: "Pune", cityID: "pune,mh", metro: nil),
             // Qualify allowlisted city IDs by region
             Case(address: "172 Boulevard Saint-Germain, Paris, France", label: "Paris", cityID: "paris", metro: "paris"),
             Case(address: "Paris, TX 75460, USA", label: "Paris", cityID: "paris,tx", metro: nil),
