@@ -40,6 +40,7 @@ App / write path (this PR):
 | `SAV-E/Services/GooglePlacesService.swift` `GooglePlacesPhotoURL.persistableString` | Drops Places photo URLs and `photo_reference` values. `place_id` is the exempt durable field. |
 | `SAV-E/Services/SupabaseService.swift` (~307, ~2017, `business_photo_urls` omit) | Writes omit `business_photo_urls` so a #306 install cannot clear rows. |
 | `SAV-E/Services/SaveLocalVaultService.swift` | Local vault uses the same imported-nil + persistable-string path. |
+| `backend/src/googlePlacesPhotoWrite.ts` | Server silently drops `business_photo_urls` and stores Google `source_image_url` as null. Non-Google import images pass through. Photo-only PATCH is a 200 no-op. |
 | `backend/sql/google-photo-url-cleanup.sql` | Founder-only apply. Not run from this PR. |
 | `backend/sql/google-photo-url-verify.sql` | Read-only leftover count. |
 

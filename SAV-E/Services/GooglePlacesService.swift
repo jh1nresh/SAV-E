@@ -783,6 +783,14 @@ enum GooglePlacesPhotoURL {
         return false
     }
 
+    /// Home / stamp thumbs are 44–52pt. The 16–19dp logo plus 10/10/10/5
+    /// clear space cannot fit, so G2 uses the required “Google Maps” text.
+    /// Own and friend photos stay unlabeled.
+    nonisolated static func thumbnailAttributionText(for url: URL?) -> String? {
+        guard let url, isGooglePlacesPhotoURL(url) else { return nil }
+        return "Google Maps"
+    }
+
     nonisolated static func looksLikeGooglePlacesPhotoReference(_ value: String) -> Bool {
         let lower = value.lowercased()
         if lower.contains("photo_reference=") { return true }

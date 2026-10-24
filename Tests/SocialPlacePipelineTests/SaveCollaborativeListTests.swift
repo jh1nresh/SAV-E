@@ -115,6 +115,28 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
+    func testHomeThumbnailMarksGooglePhotosWithGoogleMapsText() throws {
+        let google = try XCTUnwrap(URL(
+            string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref"
+        ))
+        let placesMedia = try XCTUnwrap(URL(
+            string: "https://places.googleapis.com/v1/places/ChIJ123/photos/ABC/media"
+        ))
+        let own = try XCTUnwrap(URL(string: "https://example.com/own.jpg"))
+        let friend = try XCTUnwrap(URL(string: "https://cdn.instagram.com/private-post.jpg"))
+        XCTAssertEqual(GooglePlacesPhotoURL.thumbnailAttributionText(for: google), "Google Maps")
+        XCTAssertEqual(GooglePlacesPhotoURL.thumbnailAttributionText(for: placesMedia), "Google Maps")
+        XCTAssertNil(GooglePlacesPhotoURL.thumbnailAttributionText(for: own))
+        XCTAssertNil(GooglePlacesPhotoURL.thumbnailAttributionText(for: friend))
+        XCTAssertNil(GooglePlacesPhotoURL.thumbnailAttributionText(for: nil))
+
+        let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
+        XCTAssertTrue(stamp.contains("thumbnailAttributionText(for: url)"))
+        XCTAssertTrue(stamp.contains("Text(mark)"))
+        XCTAssertFalse(stamp.contains("GoogleMapsAttributionLogo"))
+    }
+
+    @MainActor
     func testPersistableStringDropsPhotoNamesAndPlacesMediaURLs() {
         XCTAssertNil(GooglePlacesPhotoURL.persistableString(
             "places/ChIJ123/photos/ABC"

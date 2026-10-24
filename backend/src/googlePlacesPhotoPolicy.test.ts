@@ -46,3 +46,15 @@ test("public city atlas pages do not embed Google Places photo hosts", () => {
     assert.doesNotMatch(text, forbidden, name);
   }
 });
+
+test("G7 N/A: no public unauthenticated city page route", () => {
+  const vercel = readFileSync(join(repoRoot, "vercel.json"), "utf8");
+  assert.doesNotMatch(vercel, /"source":\s*"\/city/);
+  const saveRn = walkFiles("save-rn/src", new Set([".ts", ".tsx", ".js"]));
+  for (const name of saveRn) {
+    const text = readFileSync(join(repoRoot, name), "utf8");
+    assert.doesNotMatch(text, /path:\s*['"`]\/city/, name);
+    assert.doesNotMatch(text, /business_photo_urls/, name);
+    assert.doesNotMatch(text, /photo_reference/, name);
+  }
+});

@@ -125,6 +125,19 @@ struct SaveKraftStampFaceView: View {
                         switch phase {
                         case .success(let image):
                             image.resizable().scaledToFill()
+                                .overlay(alignment: .bottom) {
+                                    if let mark = GooglePlacesPhotoURL.thumbnailAttributionText(for: url) {
+                                        Text(mark)
+                                            .font(.system(size: 6, weight: .semibold))
+                                            .foregroundStyle(Color.white)
+                                            .lineLimit(1)
+                                            .minimumScaleFactor(0.6)
+                                            .padding(.horizontal, 2)
+                                            .padding(.vertical, 1)
+                                            .frame(maxWidth: .infinity)
+                                            .background(Color.black.opacity(0.55))
+                                    }
+                                }
                         default:
                             SaveKraftStampPixelArt(scene: SaveKraftStampScene.from(name: glyph))
                         }
