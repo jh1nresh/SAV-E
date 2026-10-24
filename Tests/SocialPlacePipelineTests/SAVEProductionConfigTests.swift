@@ -2851,7 +2851,9 @@ final class SAVEProductionConfigTests: XCTestCase {
         let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
         XCTAssertTrue(paywall.contains("if trigger == .savedPlaceLimit"))
         XCTAssertTrue(paywall.contains("You've saved 50 places. Keep going."))
+        XCTAssertTrue(paywall.contains("已存 50 個地點，繼續存下去"))
         XCTAssertTrue(paywall.contains("Free: 50 places"))
+        XCTAssertTrue(paywall.contains("免費：50 個地點"))
         XCTAssertTrue(paywall.contains("paywall.savedNote"))
 
         AnalysisRequestURLProtocol.handler = { request in

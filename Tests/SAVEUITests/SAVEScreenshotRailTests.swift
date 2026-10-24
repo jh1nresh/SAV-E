@@ -810,11 +810,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Settings Pro row requires a confirmed Map Stamp on Home first."
         )
         openRootTab("Passport", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
-        let settings = app.buttons["profile.settings"]
-        XCTAssertTrue(settings.waitForExistence(timeout: stepTimeout), "Passport settings opens the B7 Pro row.")
-        tapReachable(settings)
-        XCTAssertTrue(app.navigationBars["Passport settings"].waitForExistence(timeout: stepTimeout))
+        openPassportSettings(app)
+        XCTAssertTrue(
+            app.navigationBars["Passport settings"].waitForExistence(timeout: stepTimeout),
+            "Passport settings opens the B7 Pro row."
+        )
 
         let disclosure = app.descendants(matching: .any)["profile.controlsDisclosure"]
         XCTAssertTrue(disclosure.waitForExistence(timeout: stepTimeout))

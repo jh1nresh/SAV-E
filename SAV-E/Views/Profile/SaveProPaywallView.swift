@@ -52,6 +52,8 @@ struct SaveProPaywallView: View {
                             .padding(.top, SaveSpace.xs)
                         headline
                             .padding(.top, SaveSpace.lg)
+                        freeTierLine
+                            .padding(.top, SaveSpace.xs)
                         benefitRow
                             .padding(.top, SaveSpace.md)
                         savedNote
@@ -138,10 +140,22 @@ struct SaveProPaywallView: View {
         .accessibilityIdentifier("paywall.header")
     }
 
+    /// One free-tier sentence on every entry. The 51st-save `savedNote`
+    /// is separate and must not repeat this line.
+    private var freeTierLine: some View {
+        Text(languageSettings.localized(
+            english: "Free: 50 places",
+            traditionalChinese: "免費：50 個地點"
+        ))
+        .font(SaveAtlasType.body(15))
+        .foregroundStyle(SaveAtlasPalette.muted)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var benefitRow: some View {
         let title = languageSettings.localized(
             english: "Unlimited saved places",
-            traditionalChinese: "收藏地點不設限"
+            traditionalChinese: "無限收藏地點"
         )
         return HStack(spacing: SaveLayout.stickerToText) {
             Image(systemName: "bookmark")

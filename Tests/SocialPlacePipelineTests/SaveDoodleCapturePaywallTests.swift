@@ -86,7 +86,15 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(paywall.contains("Monthly"))
         XCTAssertTrue(paywall.contains("Best value"))
         XCTAssertTrue(paywall.contains("Unlimited saved places"))
-        XCTAssertTrue(paywall.contains("收藏地點不設限"))
+        XCTAssertTrue(paywall.contains("無限收藏地點"))
+        XCTAssertFalse(paywall.contains("收藏地點不設限"))
+        XCTAssertTrue(paywall.contains("Free: 50 places"))
+        XCTAssertTrue(paywall.contains("免費：50 個地點"))
+        XCTAssertEqual(
+            paywall.components(separatedBy: "english: \"Free: 50 places\"").count - 1,
+            1,
+            "Free: 50 places must appear once, as the free-tier line"
+        )
         XCTAssertTrue(paywall.contains("You've saved 50 places. Keep going."))
         XCTAssertTrue(paywall.contains("已存 50 個地點，繼續存下去"))
         XCTAssertTrue(paywall.contains("paywall.savedNote"))
