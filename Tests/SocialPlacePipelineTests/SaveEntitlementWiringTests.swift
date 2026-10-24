@@ -116,8 +116,9 @@ final class SaveEntitlementWiringTests: XCTestCase {
             store.shouldPresentPaywall(for: .refusedAllowanceExhausted, hasConfirmedMapStamp: false),
             "a refusal must not surface a paywall until the user has seen the product work"
         )
-        XCTAssertTrue(
-            store.shouldPresentPaywall(for: .refusedAllowanceExhausted, hasConfirmedMapStamp: true)
+        XCTAssertFalse(
+            store.shouldPresentPaywall(for: .refusedAllowanceExhausted, hasConfirmedMapStamp: true),
+            "exhausted model allowance is not a Pro sales trigger"
         )
     }
 
@@ -169,14 +170,41 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertFalse(store.shouldPresentPaywall(for: decision, hasConfirmedMapStamp: true))
     }
 
-    /// A Pro user is unmetered regardless of how much they used.
+    /// Pro does not raise model allowance. Exhausted quota is a notice, not a paywall.
     @MainActor
-    func testProUserIsNeverGated() async {
-        let store = Self.makeStore(loadQuota: { Self.quota(tier: "pro", used: 9_999, limit: 500) })
+    func testProUserSharesModelAllowanceAndNeverOpensPaywallForIt() async {
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "pro", used: 20, limit: 20) })
         await store.refresh()
 
         XCTAssertEqual(store.tier, .pro)
-        XCTAssertEqual(store.decideAIAssist(), .allowed)
+        XCTAssertEqual(store.decideAIAssist(), .allowedEnforcementDisabled)
+        XCTAssertFalse(store.shouldPresentPaywall(for: store.decideAIAssist(), hasConfirmedMapStamp: true))
+        XCTAssertNil(store.allowanceNotice())
+    }
+
+    @MainActor
+    func testExhaustedAllowanceShowsNeutralNoticeWithoutPaywall() async {
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "free", used: 20, limit: 20) })
+        await store.refresh()
+
+        let decision = SaveAIAssistGate.decide(
+            tier: .free, usedUnits: 20, limitUnits: 20, warningThresholdUnits: 15,
+            enforcementEnabled: true
+        )
+        XCTAssertEqual(decision, .refusedAllowanceExhausted)
+        XCTAssertFalse(store.shouldPresentPaywall(for: decision, hasConfirmedMapStamp: true))
+        XCTAssertEqual(
+            SaveEntitlementStore.exhaustedAllowanceMessage(language: .english),
+            "This month's model allowance is used up. Try again next period."
+        )
+        XCTAssertEqual(
+            SaveEntitlementStore.exhaustedAllowanceMessage(language: .traditionalChinese),
+            "這個月的模型額度已用完。下個週期再試。"
+        )
+        XCTAssertFalse(SaveAIAssistUserCopy.exhaustedEnglish.localizedCaseInsensitiveContains("ai"))
+        XCTAssertFalse(SaveAIAssistUserCopy.exhaustedEnglish.localizedCaseInsensitiveContains("assist"))
+        XCTAssertFalse(SaveAIAssistUserCopy.exhaustedTraditionalChinese.contains("AI"))
+        XCTAssertFalse(SaveAIAssistUserCopy.exhaustedTraditionalChinese.contains("次數"))
     }
 
     // MARK: - Source-level guarantees
