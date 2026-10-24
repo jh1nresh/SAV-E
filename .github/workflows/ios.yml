@@ -153,10 +153,10 @@ jobs:
     needs: [ios-build]
     runs-on: macos-26
     # Products come from ios-build (no second compile). Setup + units +
-    # simulator is ~15-20m; UI step 60; three real-device width shots 15
+    # simulator is ~15-20m; UI step 100; three real-device width shots 15
     # each; Trip 15; slack for parity/teardown and the main-only Release
-    # compile. Run 39497842970: 75m job wall cut the 55m UI step at 52m50s
-    # after ~20m of rebuild and setup.
+    # compile. Founder 2026-10-24: #290/#293
+    # match A (UI 60→100, job 100→160). Other timeouts stay.
     timeout-minutes: 160
     env:
       # Re-enabled for the 2026-10-15 pixel-art pass. Disable again after the
@@ -365,9 +365,9 @@ jobs:
       # and stops before a third run. Retries are named by the next step.
       - name: Run selected UI regression tests
         id: ui_tests
-        # Job budget is 160. The step gets a real 60m of test time instead of
-        # whatever is left after a second compile (run 39497842970).
-        timeout-minutes: 60
+        # Job budget is 160. The step gets 100m of test time so the full
+        # UI + retry wall is not cut at 60 (run 40077344726).
+        timeout-minutes: 100
         if: steps.scope.outputs.ui == 'true'
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-UI-tests.log

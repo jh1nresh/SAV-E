@@ -114,6 +114,11 @@ export async function completeEmptySourceAnalysis(client: PoolClient, captureId:
       and exists(select 1 from unnest(missing_info) item where lower(item)='analysis pending')`, [captureId, workflowRunId ?? null]);
 }
 
+// Chronology changes below can change stable canonical venue representatives.
+// Production callers must hold the raw-user saved-place advisory lock before
+// capture/candidate row locks, snapshot the canonical count, and check actual
+// post-mutation rows before committing the existing transaction. A cap failure
+// rolls back source chronology, candidate evidence and place dates together.
 export async function reuseCapture(client: PoolClient, userId: string, body: Row): Promise<Row | undefined> {
   const key = normalizedCaptureURL(body.source_url);
   if (!key) return undefined;

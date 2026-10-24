@@ -218,6 +218,7 @@ struct SharedPostDetail: View {
     @State private var showEdit = false
     @State private var showWithdraw = false
     @State private var showAuthor = false
+    @State private var showSavedPlaceLimitPaywall = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.appLanguageSettings) private var language
@@ -256,8 +257,19 @@ struct SharedPostDetail: View {
                             Button {
                                 busy = true
                                 Task {
-                                    do { try await store.save(id: post.id); saved = true; await onSaved() }
-                                    catch { self.error = language.localized(english: "Couldn’t save this post. It may no longer be shared.", traditionalChinese: "無法收藏，這篇分享可能已撤回。") }
+                                    do {
+                                        switch try await store.save(post) {
+                                        case .saved:
+                                            saved = true
+                                            error = nil
+                                            await onSaved()
+                                        case .parkedAtFreeLimit:
+                                            error = nil
+                                            showSavedPlaceLimitPaywall = true
+                                        }
+                                    } catch {
+                                        self.error = language.localized(english: "Couldn’t save this post. It may no longer be shared.", traditionalChinese: "無法收藏，這篇分享可能已撤回。")
+                                    }
                                     busy = false
                                 }
                             } label: {
@@ -288,7 +300,16 @@ struct SharedPostDetail: View {
                 }
             }
             .sheet(isPresented: $showAuthor) {
-                SharedAuthorPassport(authorID: initialPost.author_id, onSaved: onSaved)
+                SharedAuthorPassport(
+                    authorID: initialPost.author_id,
+                    onSaved: onSaved,
+                    parkOverLimitPlace: { try store.parkOverLimitPlace($0) }
+                )
+            }
+            .sheet(isPresented: $showSavedPlaceLimitPaywall, onDismiss: {
+                store.acknowledgeSavedPlaceLimitPaywall()
+            }) {
+                SaveProPaywallView(trigger: .savedPlaceLimit)
             }
             .confirmationDialog(language.localized(english: "Withdraw this post?", traditionalChinese: "撤回這篇分享？"), isPresented: $showWithdraw, titleVisibility: .visible) {
                 Button(language.localized(english: "Withdraw post", traditionalChinese: "撤回分享"), role: .destructive) {
@@ -535,6 +556,24 @@ struct SharedPlacePicker: View {
 struct SharedAuthorPassport: View {
     let authorID: String
     var onSaved: () async -> Void = {}
+    var parkOverLimitPlace: (Place) throws -> PlaceReviewCandidate = { place in
+        let candidate = PlaceReviewCandidate.unplacedInboxItem(
+            from: place,
+            ownerSubject: PrivyAuthService.shared.currentUserId
+        )
+        _ = try SaveLocalVaultService.shared.saveReviewCandidate(
+            candidate,
+            preservingParkedContext: candidate.isUnplacedInbox
+        )
+        SavePlaceLimitHandoff.markPaywallPending(notify: false)
+        return candidate
+    }
+    var removeParkedOverLimitPlace: (Place) throws -> Void = { place in
+        try SaveLocalVaultService.shared.removeReviewCandidate(
+            place.id,
+            ownerSubject: PrivyAuthService.shared.currentUserId
+        )
+    }
     @StateObject private var store = SharedPostsStore()
     @State private var selected: SharedPlacePost?
     @Environment(\.dismiss) private var dismiss
@@ -556,7 +595,11 @@ struct SharedAuthorPassport: View {
             .navigationTitle(language.localized(english: "Passport", traditionalChinese: "護照"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button(language.localized(english: "Done", traditionalChinese: "完成")) { dismiss() } } }
-            .task(id: store.filter) { await store.refresh(.author(authorID)) }
+            .task(id: store.filter) {
+                store.parkOverLimitPlace = parkOverLimitPlace
+                store.removeParkedOverLimitPlace = removeParkedOverLimitPlace
+                await store.refresh(.author(authorID))
+            }
             .refreshable { await store.refresh(.author(authorID)) }
             .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await store.refresh(.author(authorID)) } } }
             .sheet(item: $selected) { SharedPostDetail(initialPost: $0, store: store, onSaved: onSaved) }

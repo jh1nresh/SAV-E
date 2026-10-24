@@ -24,6 +24,8 @@ class CoverageTests(unittest.TestCase):
             selection.RAIL + "testHomeCollectedOpensPassportWithCityCount",
             selection.RAIL + "testSavesTripsBackReturnsToSaves",
         })
+        self.assertIn(selection.RAIL + "testUnplacedLabelFullScreenAtDeviceWidth", full["tests"])
+        self.assertIn(selection.RAIL + "testUnplacedLabelFullScreenAtDeviceWidth", selection.select([])["tests"])
         self.assertTrue(full["trip"])
         self.assertTrue(full["units"])
         plan_only = (
@@ -246,11 +248,9 @@ class CoverageTests(unittest.TestCase):
             ios_workflow,
         )
         self.assertNotIn("Build without booting a simulator", ios_workflow)
-        # Real 375/390/430 boots need a 160m job wall (UI 60 + three
-        # 15m width shots + Trip + slack). 100m cuts the width steps.
-        # Run 40016723698: lock expected 100 vs ios.yml job 160.
         self.assertRegex(ios_workflow, r"(?m)^    timeout-minutes: 160\s*$")
-        self.assertIn("timeout-minutes: 60", ios_workflow)
+        self.assertIn("timeout-minutes: 100", ios_workflow)
+        self.assertNotIn("timeout-minutes: 60", ios_workflow)
 
     def test_unknown_focus_fails_loudly(self):
         with tempfile.TemporaryDirectory() as temp:

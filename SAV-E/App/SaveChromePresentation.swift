@@ -13,6 +13,7 @@ enum SaveChromeExclusive: Equatable {
     case passport
     case cover
     case tripComposer
+    case savedPlaceLimitPaywall
 }
 
 enum SaveChromeTransition: Equatable {
@@ -25,12 +26,14 @@ enum SaveChromeNavigation {
         hasCover: Bool,
         isTripComposerPresented: Bool,
         isPassportPresented: Bool,
-        isRootSheetPresented: Bool
+        isRootSheetPresented: Bool,
+        isSavedPlaceLimitPaywallPresented: Bool = false
     ) -> SaveChromeExclusive {
         if hasCover { return .cover }
         if isTripComposerPresented { return .tripComposer }
         if isPassportPresented { return .passport }
         if isRootSheetPresented { return .rootSheet }
+        if isSavedPlaceLimitPaywallPresented { return .savedPlaceLimitPaywall }
         return .none
     }
 
