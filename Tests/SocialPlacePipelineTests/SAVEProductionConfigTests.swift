@@ -3484,7 +3484,8 @@ final class SAVEProductionConfigTests: XCTestCase {
         let selectedPhotoEnd = try XCTUnwrap(map[selectedPhotoStart.lowerBound...].range(of: "func selectReviewCandidate("))
         let selectedPhoto = String(map[selectedPhotoStart.lowerBound..<selectedPhotoEnd.lowerBound])
         XCTAssertTrue(
-            selectedPhoto.contains("try await supabaseService.updatePlace(updatedPlace, previous: place)"),
+            selectedPhoto.contains("merged.businessPhotoUrls = updatedPlace.businessPhotoUrls")
+                && selectedPhoto.contains("try await supabaseService.updatePlace(merged, previous: latest)"),
             "P2 4366403967: selected-place enrichment PATCHes the enriched identity"
         )
         XCTAssertTrue(
