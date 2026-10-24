@@ -5519,7 +5519,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         let groups = Place.consolidated(places)
         return places.enumerated().map { index, place in
             let group = groups.first { $0.savedIDs.contains(place.id) }
-            LiveRemotePlace(
+            return LiveRemotePlace(
                 id: place.id,
                 savedIDs: group?.savedIDs ?? place.savedIDs,
                 json: row?(index, place) ?? cappedPlaceRowJSON(
