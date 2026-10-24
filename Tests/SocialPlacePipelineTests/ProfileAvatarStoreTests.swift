@@ -555,6 +555,56 @@ final class ProfileAvatarStoreTests: XCTestCase {
         XCTAssertEqual(fresh.errorMessage, "Previous account’s local cleanup is complete.")
     }
 
+    /// P1 4365736452: queue purge runs before fallible avatar removal so a
+    /// protected-storage failure cannot leave A-owned or snapshotted ownerless
+    /// Share rows consumable while the deletion receipt stays.
+    @MainActor
+    func testAvatarCleanupFailureStillPurgesPendingQueues() async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        defer { auth.authState = previousAuth }
+        auth.authState = .authenticated(userId: "account-a")
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "Legacy private clue", ownerSubject: "account-a"))
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([
+            pendingDeletionPlace(owner: "account-a", name: "A pending"),
+            pendingDeletionPlace(owner: "account-b", name: "B pending"),
+            pendingDeletionPlace(owner: nil, name: "Legacy")
+        ])
+        queue.restorePendingReviewCandidates([
+            pendingDeletionReview(owner: "account-a", name: "A review"),
+            pendingDeletionReview(owner: "account-b", name: "B review"),
+            pendingDeletionReview(owner: nil, name: "Legacy")
+        ])
+        let avatars = directory.appendingPathComponent("avatars")
+        let store = ProfileAvatarStore(fileManager: FailingAvatarRemovalFileManager(), baseDirectory: avatars)
+        try store.save(Data([1]), for: "account-a")
+        var requests = 0
+        let model = ProfileViewModel(
+            supabaseService: SupabaseService(apiBaseURL: nil),
+            accountDeletionService: ClosureAccountDeletionService { requests += 1 },
+            avatarStore: store, saveLocalVaultService: vault,
+            pendingPlaceImportService: queue,
+            currentUserIDProvider: { "account-a" }, reviewerDemoProvider: { false }
+        )
+        let result = await model.deleteAccount()
+        XCTAssertFalse(result)
+        XCTAssertEqual(requests, 1)
+        XCTAssertEqual(try vault.pendingAccountDeletionIntent()?.remoteOutcome, .succeeded)
+        XCTAssertNotNil(store.load(for: "account-a"))
+        let remainingPlaces = queue.consumePendingPlaces(ownerSubject: "account-a")
+            + queue.consumePendingPlaces(ownerSubject: "account-b")
+        XCTAssertEqual(Set(remainingPlaces.map(\.name)), ["B pending"])
+        XCTAssertFalse(remainingPlaces.contains { $0.name == "Legacy" || $0.ownerSubject == "account-a" })
+        let remainingReviews = queue.consumePendingReviewCandidates(ownerSubject: "account-a")
+            + queue.consumePendingReviewCandidates(ownerSubject: "account-b")
+        XCTAssertEqual(Set(remainingReviews.map(\.candidateName)), ["B review"])
+        XCTAssertFalse(remainingReviews.contains { $0.candidateName == "Legacy" || $0.ownerSubject == "account-a" })
+    }
+
     @MainActor
     func testDeletionAndKnownSuccessRecoveryKeepQuarantineThroughLogout() async throws {
         let auth = PrivyAuthService.shared
@@ -1041,7 +1091,7 @@ final class ProfileAvatarStoreTests: XCTestCase {
         let reviewLegacy = pendingDeletionReview(owner: nil, name: "Legacy")
         service.restorePendingPlaces([placeA, placeB, placeLegacy])
         service.restorePendingReviewCandidates([reviewA, reviewB, reviewLegacy])
-        let oldToken = try XCTUnwrap(service.restorationToken())
+        let oldToken = try XCTUnwrap(service.restorationToken(consumingOwner: "account-a"))
         let consumedPlaces = service.consumePendingPlaces(ownerSubject: "account-a") + service.consumePendingPlaces(ownerSubject: "account-b")
         let consumedReviews = service.consumePendingReviewCandidates(ownerSubject: "account-a") + service.consumePendingReviewCandidates(ownerSubject: "account-b")
         let intent = try vault.prepareAccountDeletion(belongingTo: "account-a")
@@ -1054,8 +1104,8 @@ final class ProfileAvatarStoreTests: XCTestCase {
         let fresh = PendingPlaceImportService(overrideContainerURL: container.appendingPathComponent("../consumed-batches"))
         fresh.restorePendingPlaces(consumedPlaces, restorationToken: oldToken)
         fresh.restorePendingReviewCandidates(consumedReviews, restorationToken: oldToken)
-        XCTAssertEqual(fresh.consumePendingPlaces(ownerSubject: "account-a").map(\.name), ["Legacy"])
-        XCTAssertEqual(fresh.consumePendingReviewCandidates(ownerSubject: "account-a").map(\.candidateName), ["Legacy"])
+        XCTAssertTrue(fresh.consumePendingPlaces(ownerSubject: "account-a").isEmpty)
+        XCTAssertTrue(fresh.consumePendingReviewCandidates(ownerSubject: "account-a").isEmpty)
         XCTAssertEqual(fresh.consumePendingPlaces(ownerSubject: "account-b").map(\.name), ["B"])
         XCTAssertEqual(fresh.consumePendingReviewCandidates(ownerSubject: "account-b").map(\.candidateName), ["B"])
         // A later account recreation/new batch, even with identical payloads,
@@ -1198,6 +1248,46 @@ final class ProfileAvatarStoreTests: XCTestCase {
         fresh.restorePendingReviewCandidates(reviews, restorationToken: token)
         XCTAssertTrue(fresh.consumePendingPlaces(ownerSubject: "account-a").isEmpty)
         XCTAssertTrue(fresh.consumePendingReviewCandidates(ownerSubject: "account-a").isEmpty)
+    }
+
+    /// P1 4365736453: ownerless rows consumed by the deleting session cannot
+    /// restore after that owner's generation advances. B's in-flight ownerless
+    /// batch is bound to B and still restores.
+    @MainActor
+    func testConsumedOwnerlessBatchCannotRestoreAfterDeletingAccount() throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let service = PendingPlaceImportService(overrideContainerURL: directory)
+        service.restorePendingPlaces([
+            pendingDeletionPlace(owner: nil, name: "Legacy"),
+            pendingDeletionPlace(owner: "account-b", name: "B")
+        ])
+        service.restorePendingReviewCandidates([
+            pendingDeletionReview(owner: nil, name: "Legacy"),
+            pendingDeletionReview(owner: "account-b", name: "B")
+        ])
+        let tokenA = try XCTUnwrap(service.restorationToken(consumingOwner: "account-a"))
+        let consumedByAPlaces = service.consumePendingPlaces(ownerSubject: "account-a")
+        let consumedByAReviews = service.consumePendingReviewCandidates(ownerSubject: "account-a")
+        XCTAssertEqual(consumedByAPlaces.map(\.name), ["Legacy"])
+        XCTAssertEqual(consumedByAReviews.map(\.candidateName), ["Legacy"])
+        try service.purgeAccountDeletionItems(belongingTo: "account-a")
+        service.restorePendingPlaces(consumedByAPlaces, restorationToken: tokenA)
+        service.restorePendingReviewCandidates(consumedByAReviews, restorationToken: tokenA)
+        XCTAssertTrue(service.consumePendingPlaces(ownerSubject: "account-a").isEmpty)
+        XCTAssertTrue(service.consumePendingReviewCandidates(ownerSubject: "account-a").isEmpty)
+        XCTAssertEqual(service.consumePendingPlaces(ownerSubject: "account-b").map(\.name), ["B"])
+        XCTAssertEqual(service.consumePendingReviewCandidates(ownerSubject: "account-b").map(\.candidateName), ["B"])
+
+        service.restorePendingPlaces([pendingDeletionPlace(owner: nil, name: "Later")])
+        service.restorePendingReviewCandidates([pendingDeletionReview(owner: nil, name: "Later")])
+        let tokenB = try XCTUnwrap(service.restorationToken(consumingOwner: "account-b"))
+        let consumedByBPlaces = service.consumePendingPlaces(ownerSubject: "account-b")
+        let consumedByBReviews = service.consumePendingReviewCandidates(ownerSubject: "account-b")
+        try service.purgeAccountDeletionItems(belongingTo: "account-a")
+        service.restorePendingPlaces(consumedByBPlaces, restorationToken: tokenB)
+        service.restorePendingReviewCandidates(consumedByBReviews, restorationToken: tokenB)
+        XCTAssertEqual(service.consumePendingPlaces(ownerSubject: "account-b").map(\.name), ["Later"])
+        XCTAssertEqual(service.consumePendingReviewCandidates(ownerSubject: "account-b").map(\.candidateName), ["Later"])
     }
 
     @MainActor

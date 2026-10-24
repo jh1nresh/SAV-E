@@ -888,6 +888,7 @@ struct ProviderPlaceLocation: Hashable {
 struct PendingImportRestorationToken {
     fileprivate let containerURL: URL
     fileprivate let ownerGenerations: [String: Int]
+    fileprivate let consumingOwner: String?
 }
 
 final class PendingPlaceImportService {
@@ -905,11 +906,14 @@ final class PendingPlaceImportService {
         self.overrideContainerURL = overrideContainerURL
     }
 
-    func restorationToken() -> PendingImportRestorationToken? {
+    func restorationToken(consumingOwner: String? = nil) -> PendingImportRestorationToken? {
         guard let url = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else { return nil }
         let container = Self.canonicalContainer(for: url)
-        return PendingImportRestorationToken(containerURL: container,
-            ownerGenerations: Self.restorationGenerations[container] ?? [:])
+        return PendingImportRestorationToken(
+            containerURL: container,
+            ownerGenerations: Self.restorationGenerations[container] ?? [:],
+            consumingOwner: consumingOwner
+        )
     }
 
     private static func canonicalContainer(for queueURL: URL) -> URL {
@@ -1061,7 +1065,15 @@ final class PendingPlaceImportService {
             do {
                 let container = Self.canonicalContainer(for: url)
                 let retained = items.filter { item in
-                    guard let token = restorationToken, let owner = ownerSubject(item) else { return true }
+                    guard let token = restorationToken else { return true }
+                    let subject = ownerSubject(item)
+                    let owner: String?
+                    if let subject, !subject.isEmpty {
+                        owner = subject
+                    } else {
+                        owner = token.consumingOwner
+                    }
+                    guard let owner, !owner.isEmpty else { return true }
                     return token.containerURL == container &&
                         token.ownerGenerations[owner, default: 0] ==
                         Self.restorationGenerations[container, default: [:]][owner, default: 0]

@@ -3492,6 +3492,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         let succeededStart = try XCTUnwrap(profile.range(of: "if intent.remoteOutcome == .succeeded"))
         let purgeStart = try XCTUnwrap(profile.range(of: "try pendingPlaceImportService.purgeAccountDeletionItems"))
+        let avatarRemoveStart = try XCTUnwrap(profile.range(of: "try avatarStore.remove(for: intent.owner)"))
         XCTAssertLessThan(
             succeededStart.lowerBound, purgeStart.lowerBound,
             "queue purge must not live only inside the succeeded-remote branch"
@@ -3499,6 +3500,14 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(
             String(profile[succeededStart.lowerBound..<purgeStart.lowerBound]).contains("purgeAccountDeletionItems"),
             "P1 4365399819: awaitingRemoteResult must still purge pending queues"
+        )
+        XCTAssertLessThan(
+            purgeStart.lowerBound, avatarRemoveStart.lowerBound,
+            "P1 4365736452: purge pending queues before fallible avatar removal"
+        )
+        XCTAssertTrue(
+            map.contains("restorationToken(consumingOwner:"),
+            "P1 4365736453: bind in-flight ownerless restores to the consuming account"
         )
         XCTAssertTrue(map.contains("try persistParkedReviewCandidate(candidate)"))
         XCTAssertTrue(

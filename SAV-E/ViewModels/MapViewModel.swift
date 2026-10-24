@@ -1143,7 +1143,7 @@ final class MapViewModel: ObservableObject {
     }
 
     func importPendingPlacesForLocalUse() {
-        let restorationToken = pendingImportService.restorationToken()
+        let restorationToken = pendingImportService.restorationToken(consumingOwner: authService.currentUserId)
         let pending = pendingImportService.consumePendingPlaces(ownerSubject: authService.currentUserId)
         guard !pending.isEmpty else { return }
 
@@ -1287,7 +1287,7 @@ final class MapViewModel: ObservableObject {
 
     private func importPendingPlacesForSession(for userId: String) async throws {
         let importGeneration = authService.sessionGeneration
-        let restorationToken = pendingImportService.restorationToken()
+        let restorationToken = pendingImportService.restorationToken(consumingOwner: userId)
         let pending = pendingImportService.consumePendingPlaces(ownerSubject: userId)
         guard !pending.isEmpty else { return }
 
@@ -1370,7 +1370,7 @@ final class MapViewModel: ObservableObject {
 
     private func importPendingReviewCandidatesForSession(for userId: String, runSourceRecovery: Bool) async throws {
         let importGeneration = authService.sessionGeneration
-        let restorationToken = pendingImportService.restorationToken()
+        let restorationToken = pendingImportService.restorationToken(consumingOwner: userId)
         var failedCandidates: [PendingReviewCandidate] = []
 
         while authService.sessionGeneration == importGeneration, authService.currentUserId == userId {

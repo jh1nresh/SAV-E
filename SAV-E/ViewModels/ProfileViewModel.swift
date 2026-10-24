@@ -262,10 +262,11 @@ final class ProfileViewModel: ObservableObject {
         _ intent: SaveAccountDeletionIntent, sessionGeneration: Int
     ) async throws {
         try saveLocalVaultService.purgeAccountDeletionRecords(intentID: intent.id)
-        try avatarStore.remove(for: intent.owner)
         if intent.remoteOutcome == .succeeded {
             // Keep the durable quarantine and its in-process lease through logout.
             // A crash or final write failure leaves the same scope recoverable.
+            // Sign out before the queue purge so admitted late writers finish
+            // under the same per-file lock, then cannot recreate A.
             if currentUserIDProvider() == intent.owner,
                authService.currentUserId == intent.owner,
                authService.sessionGeneration == sessionGeneration,
@@ -288,10 +289,13 @@ final class ProfileViewModel: ObservableObject {
         // Unknown remote outcomes still finish local cleanup while A stays
         // signed in. A-owned and snapshotted ownerless Share rows must not
         // become consumable again after the quarantine receipt is removed.
+        // Purge queues before fallible avatar removal so a protected-storage
+        // failure cannot leave those rows consumable while the receipt stays.
         try pendingPlaceImportService.purgeAccountDeletionItems(
             belongingTo: intent.owner,
             initialOwnerlessItemKeys: intent.initialOwnerlessQueueItemKeys
         )
+        try avatarStore.remove(for: intent.owner)
         try saveLocalVaultService.completeAccountDeletionCleanup(intentID: intent.id)
     }
 
