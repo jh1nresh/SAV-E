@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct PlaceBasicInfoPanel: View {
     @Environment(\.appLanguageSettings) private var languageSettings
@@ -510,44 +511,49 @@ struct PlaceBusinessPhotoCarousel: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     var imageURLs: [String]
     var isSearching = false
+    var googlePlaceId: String? = nil
+    var googleMapsURI: URL? = nil
+
+    @State private var expandedPhoto: PlacePhotoPage?
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            if photoURLs.isEmpty {
+        ZStack(alignment: showsGoogleAttribution ? .topLeading : .bottomLeading) {
+            if photoPages.isEmpty {
                 fallbackVisual
-                    .frame(height: 156)
+                    .frame(height: GoogleMapsAttributionMetrics.carouselHeight)
+                    .accessibilityIdentifier("place.photo.carousel.empty")
             } else {
                 TabView {
-                    ForEach(Array(photoURLs.enumerated()), id: \.offset) { index, url in
-                        CachedAsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image
-                                    .resizable()
-                                    .scaledToFill()
-                            case .failure:
-                                fallbackVisual
-                            case .empty:
-                                ProgressView()
-                                    .tint(.saveInk)
-                            @unknown default:
-                                fallbackVisual
+                    ForEach(Array(photoPages.enumerated()), id: \.offset) { index, page in
+                        GooglePlacesPhotoCardLayout.overlayCard {
+                            photoImage(page.url)
+                                .onTapGesture {
+                                    if page.isGooglePlacesPhoto {
+                                        expandedPhoto = page
+                                    }
+                                }
+                                .accessibilityIdentifier("place.photo.carousel.page")
+                        } overlay: {
+                            if page.isGooglePlacesPhoto {
+                                GooglePlacesPhotoAttributionBar(
+                                    authors: page.authors,
+                                    mapsURI: page.mapsURI,
+                                    compact: true,
+                                    onCompactTap: { expandedPhoto = page }
+                                )
                             }
                         }
-                        .frame(height: 156)
-                        .frame(maxWidth: .infinity)
-                        .clipped()
                         .tag(index)
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: photoURLs.count > 1 ? .automatic : .never))
-                .frame(height: 156)
+                .tabViewStyle(.page(indexDisplayMode: photoPages.count > 1 ? .automatic : .never))
+                .frame(height: GoogleMapsAttributionMetrics.carouselHeight)
             }
 
             HStack(spacing: 6) {
-                Image(systemName: photoURLs.isEmpty ? (isSearching ? "hourglass" : "photo") : "camera.fill")
+                Image(systemName: photoPages.isEmpty ? (isSearching ? "hourglass" : "photo") : "camera.fill")
                     .font(.caption2.weight(.bold))
-                Text(photoURLs.isEmpty ? emptyPhotoLabel : photoLabel)
+                Text(photoPages.isEmpty ? emptyPhotoLabel : photoLabel)
                     .font(.caption2.weight(.bold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
@@ -565,17 +571,31 @@ struct PlaceBusinessPhotoCarousel: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Color.saveNotebookLine.opacity(0.35), lineWidth: 1)
         )
+        .fullScreenCover(item: $expandedPhoto) { page in
+            GooglePlacesPhotoViewer(
+                page: page,
+                onClose: { expandedPhoto = nil }
+            )
+        }
     }
 
-    private var photoURLs: [URL] {
-        imageURLs.compactMap(URL.init(string:))
+    private var photoPages: [PlacePhotoPage] {
+        PlacePhotoPage.pages(
+            imageURLs: imageURLs,
+            googlePlaceId: googlePlaceId,
+            googleMapsURI: googleMapsURI
+        )
+    }
+
+    private var showsGoogleAttribution: Bool {
+        photoPages.contains(where: \.isGooglePlacesPhoto)
     }
 
     private var photoLabel: String {
-        photoURLs.count > 1
+        photoPages.count > 1
             ? languageSettings.localized(
-                english: "\(photoURLs.count) business photos",
-                traditionalChinese: "\(photoURLs.count) 張商家照片"
+                english: "\(photoPages.count) business photos",
+                traditionalChinese: "\(photoPages.count) 張商家照片"
             )
             : languageSettings.localized(english: "Business photo", traditionalChinese: "商家照片")
     }
@@ -588,11 +608,313 @@ struct PlaceBusinessPhotoCarousel: View {
 
     private var fallbackVisual: some View {
         Rectangle()
-            .fill(Color.saveNotebookPage.opacity(0.72))
+            .fill(SaveAtlasPalette.coral)
             .overlay {
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(.title2.weight(.semibold))
-                    .foregroundColor(.saveCocoa.opacity(0.66))
+                    .foregroundColor(SaveTheme.Colors.cream)
             }
+    }
+
+    @ViewBuilder
+    private func photoImage(_ url: URL) -> some View {
+        CachedAsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+            case .failure:
+                fallbackVisual
+            case .empty:
+                ProgressView()
+                    .tint(.saveInk)
+            @unknown default:
+                fallbackVisual
+            }
+        }
+    }
+}
+
+struct PlacePhotoPage: Identifiable, Hashable {
+    let id: String
+    let url: URL
+    let isGooglePlacesPhoto: Bool
+    let authors: [GooglePlacePhotoAuthor]
+    let mapsURI: URL?
+
+    static func pages(
+        imageURLs: [String],
+        googlePlaceId: String?,
+        googleMapsURI: URL?
+    ) -> [PlacePhotoPage] {
+        imageURLs.compactMap { value in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, let url = URL(string: trimmed) else { return nil }
+            let isGoogle = GooglePlacesPhotoURL.isGooglePlacesPhotoURL(url)
+            let record = GooglePlacePhotoSessionStore.record(for: url)
+            let authors = record?.authors ?? []
+            // G1: a Google photo without author data must not render as an
+            // unattributed image. Drop it so the coral placeholder can show.
+            if isGoogle && authors.isEmpty { return nil }
+            let mapsURI = record?.googleMapsURI
+                ?? googleMapsURI
+                ?? GooglePlacesHTMLAttribution.mapsURL(placeId: googlePlaceId)
+            return PlacePhotoPage(
+                id: trimmed,
+                url: url,
+                isGooglePlacesPhoto: isGoogle,
+                authors: authors,
+                mapsURI: isGoogle ? mapsURI : nil
+            )
+        }
+    }
+}
+
+/// Sized photo first, then the attribution overlay. A `scaledToFill` image
+/// must not expand the ZStack or `.clipped()` on the outer frame drops the
+/// author + Google Maps logo off the bottom of the card.
+enum GooglePlacesPhotoCardLayout {
+    @ViewBuilder
+    static func overlayCard<Photo: View, Overlay: View>(
+        @ViewBuilder photo: () -> Photo,
+        @ViewBuilder overlay: () -> Overlay
+    ) -> some View {
+        ZStack(alignment: .bottom) {
+            photo()
+                .frame(maxWidth: .infinity)
+                .frame(height: GoogleMapsAttributionMetrics.carouselHeight)
+                .clipped()
+            overlay()
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: GoogleMapsAttributionMetrics.carouselHeight)
+        .clipped()
+    }
+}
+
+struct GooglePlacesPhotoAttributionBar: View {
+    @Environment(\.openURL) private var openURL
+    @Environment(\.appLanguageSettings) private var languageSettings
+    var authors: [GooglePlacePhotoAuthor]
+    var mapsURI: URL?
+    var compact = false
+    var onCompactTap: (() -> Void)? = nil
+
+    var body: some View {
+        Group {
+            if compact {
+                compactRow
+            } else {
+                expandedStack
+            }
+        }
+        .padding(.leading, GoogleMapsAttributionMetrics.clearSpaceLeading)
+        .padding(.trailing, GoogleMapsAttributionMetrics.clearSpaceTrailing)
+        .padding(.top, GoogleMapsAttributionMetrics.clearSpaceTop)
+        .padding(.bottom, GoogleMapsAttributionMetrics.clearSpaceBottom)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(
+                colors: [
+                    .black.opacity(GoogleMapsAttributionMetrics.gradientTopOpacity),
+                    .black.opacity(GoogleMapsAttributionMetrics.gradientBottomOpacity),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
+    /// P1-1 / P1-5: one 44pt row (author left, logo right) opens the viewer.
+    /// The visual row is the Button label so XCTest's tap hits real content.
+    /// A clear overlay Button was visible to `app.buttons` but swallowed the
+    /// tap without running `onCompactTap`.
+    private var compactRow: some View {
+        Button {
+            onCompactTap?()
+        } label: {
+            compactVisualRow
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .accessibilityIdentifier("place.photo.attribution.row")
+        .accessibilityLabel(compactAccessibilityLabel)
+    }
+
+    /// No accessibility identifiers or hidden flags — those steal the Button
+    /// identifier in XCTest when they sit inside the label.
+    private var compactVisualRow: some View {
+        HStack(alignment: .center, spacing: 8) {
+            if let author = authors.first {
+                attributionText(author.displayName, style: .caption, weight: .semibold)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Image("GoogleMapsLogoOnImage")
+                .renderingMode(.original)
+                .resizable()
+                .scaledToFit()
+                .frame(height: GoogleMapsAttributionMetrics.logoHeight)
+        }
+        .frame(maxWidth: .infinity, minHeight: GoogleMapsAttributionMetrics.minimumTapTarget, alignment: .center)
+        .contentShape(Rectangle())
+    }
+
+    private var expandedStack: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            authorButtons
+
+            HStack(alignment: .center, spacing: 8) {
+                if let mapsURI {
+                    Button {
+                        openURL(mapsURI)
+                    } label: {
+                        attributionText(
+                            languageSettings.localized(
+                                english: "View on Google Maps",
+                                traditionalChinese: "在 Google Maps 查看"
+                            ),
+                            style: .footnote,
+                            weight: .regular
+                        )
+                        .frame(maxWidth: .infinity, minHeight: GoogleMapsAttributionMetrics.minimumTapTarget, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("place.photo.attribution.viewOnMaps")
+                }
+
+                Spacer(minLength: 8)
+                GoogleMapsAttributionLogo()
+            }
+        }
+    }
+
+    /// P1-3: every author is shown, joined with 「、」, each tappable.
+    private var authorButtons: some View {
+        HStack(alignment: .center, spacing: 0) {
+            ForEach(Array(authors.enumerated()), id: \.offset) { index, author in
+                if index > 0 {
+                    attributionText("、", style: .footnote, weight: .regular)
+                }
+                Button {
+                    if let uri = author.uri { openURL(uri) }
+                } label: {
+                    attributionText(author.displayName, style: .footnote, weight: .semibold)
+                        .underline(author.uri != nil)
+                        .frame(minHeight: GoogleMapsAttributionMetrics.minimumTapTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(author.uri == nil)
+                .accessibilityIdentifier(
+                    index == 0
+                        ? "place.photo.attribution.author"
+                        : "place.photo.attribution.author.\(index)"
+                )
+                .accessibilityLabel(
+                    languageSettings.localized(
+                        english: "Photo by \(author.displayName)",
+                        traditionalChinese: "照片作者 \(author.displayName)"
+                    )
+                )
+            }
+        }
+    }
+
+    private var compactAccessibilityLabel: String {
+        guard let author = authors.first else {
+            return languageSettings.localized(
+                english: "Open Google photo",
+                traditionalChinese: "開啟 Google 照片"
+            )
+        }
+        return languageSettings.localized(
+            english: "Photo by \(author.displayName)",
+            traditionalChinese: "照片作者 \(author.displayName)"
+        )
+    }
+
+    private func attributionText(_ text: String, style: Font, weight: Font.Weight) -> some View {
+        Text(text)
+            .font(style.weight(weight))
+            .foregroundStyle(.white)
+            .shadow(
+                color: .black.opacity(GoogleMapsAttributionMetrics.authorShadowOpacity),
+                radius: 2
+            )
+            .lineLimit(1)
+    }
+}
+
+struct GoogleMapsAttributionLogo: View {
+    /// Official on-imagery logo (light outline). Used on photos and the
+    /// black viewer; a separate white wordmark is not in the shipped assets.
+    var body: some View {
+        Image("GoogleMapsLogoOnImage")
+            .renderingMode(.original)
+            .resizable()
+            .scaledToFit()
+            .frame(height: GoogleMapsAttributionMetrics.logoHeight)
+            .accessibilityLabel("Google Maps")
+            .accessibilityIdentifier("place.photo.attribution.logo")
+    }
+}
+
+struct GooglePlacesPhotoViewer: View {
+    @Environment(\.appLanguageSettings) private var languageSettings
+    let page: PlacePhotoPage
+    var fixtureImage: Image? = nil
+    var onClose: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Group {
+                    if let fixtureImage {
+                        fixtureImage
+                            .resizable()
+                            .scaledToFit()
+                    } else {
+                        CachedAsyncImage(url: page.url) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image
+                                    .resizable()
+                                    .scaledToFit()
+                            case .empty:
+                                ProgressView().tint(.white)
+                            default:
+                                Image(systemName: "photo")
+                                    .font(.largeTitle)
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityIdentifier("place.photo.viewer.image")
+
+                if page.isGooglePlacesPhoto {
+                    GooglePlacesPhotoAttributionBar(
+                        authors: page.authors,
+                        mapsURI: page.mapsURI,
+                        compact: false
+                    )
+                }
+            }
+
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.white.opacity(0.92))
+                    .frame(width: GoogleMapsAttributionMetrics.minimumTapTarget, height: GoogleMapsAttributionMetrics.minimumTapTarget)
+            }
+            .padding(16)
+            .accessibilityIdentifier("place.photo.viewer.close")
+            .accessibilityLabel(languageSettings.localized(english: "Close", traditionalChinese: "關閉"))
+        }
     }
 }

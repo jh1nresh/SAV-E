@@ -4,6 +4,10 @@
 
 These are release instructions, not evidence of a current release. Signing, upload, and distribution require explicit approval under [AGENTS.md](../AGENTS.md). Run commands from the repository root.
 
+Before App Store submission, the founder-owned G5 photo-URL cleanup in
+[operations/google-photo-url-cleanup.md](operations/google-photo-url-cleanup.md)
+must be backed up, applied, and verified. Agents must not run it.
+
 Current in-repo identity (2026-10-13): marketing **1.0.0**, build **110**,
 bundle `com.wanderly.app`, team `JC6858UYM9`. What still blocks
 archive → TestFlight → ASC submit is listed in

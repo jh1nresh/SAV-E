@@ -773,7 +773,7 @@ struct SaveAtlasLivePlaceCard: View {
                 .frame(maxWidth: .infinity)
                 .accessibilityHidden(true)
 
-            HStack(alignment: .center, spacing: 11) {
+            HStack(alignment: .top, spacing: 11) {
                 SaveAtlasMapPlaceThumbnail(place: place)
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -781,6 +781,7 @@ struct SaveAtlasLivePlaceCard: View {
                         .font(AtlasType.strong(20))
                         .foregroundStyle(AtlasPalette.forest)
                         .lineLimit(1)
+                        .accessibilityLabel(nameAccessibilityLabel)
                         .accessibilityIdentifier("map.place.name")
 
                     Text(primaryLocation(for: place))
@@ -858,6 +859,10 @@ struct SaveAtlasLivePlaceCard: View {
         .accessibilityIdentifier("map.place.card")
     }
 
+    private var nameAccessibilityLabel: String {
+        place.name
+    }
+
     private func mapCardIcon(_ systemName: String) -> some View {
         Image(systemName: systemName)
             .font(.system(size: 13, weight: .bold))
@@ -883,13 +888,28 @@ struct SaveAtlasLivePlaceCard: View {
 
 }
 
+/// 56pt thumb on the selected-place card (`map.place.card` at 15,606
+/// 372×180). That card sits on a live Apple MapView, so it is a map
+/// callout (G6): Google photos are forbidden. Own / friend photos may
+/// show; otherwise coral. Detail (off the map) still marks Google photos.
 private struct SaveAtlasMapPlaceThumbnail: View {
     let place: Place
 
     var body: some View {
+        thumb
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(place.name)
+    }
+
+    private var photoURL: URL? {
+        GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL(
+            place.businessPhotoURLStrings.first.flatMap(URL.init(string:))
+        )
+    }
+
+    private var thumb: some View {
         Group {
-            if let value = place.businessPhotoURLStrings.first,
-               let url = URL(string: value) {
+            if let url = photoURL {
                 CachedAsyncImage(url: url) { phase in
                     if case .success(let image) = phase {
                         image.resizable().scaledToFill()
@@ -902,18 +922,19 @@ private struct SaveAtlasMapPlaceThumbnail: View {
             }
         }
         .frame(width: 56, height: 56)
-        .background(AtlasPalette.mint.opacity(0.72))
+        .background(AtlasPalette.coral)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(AtlasPalette.line.opacity(0.28), lineWidth: 1)
         }
+        .accessibilityHidden(true)
     }
 
     private var fallback: some View {
         Image(systemName: place.category.iconName)
             .font(.system(size: 24, weight: .semibold))
-            .foregroundStyle(AtlasPalette.forest)
+            .foregroundStyle(AtlasPalette.paper)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

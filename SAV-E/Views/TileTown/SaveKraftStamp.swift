@@ -55,9 +55,11 @@ struct SaveKraftStamp: View {
     let face: SaveKraftStampFace
     var size: SaveKraftStampSize = .grid
     var accessibilityIdentifier: String = "stamp.kraft"
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
             ZStack {
                 SavePostcardScallopedRectangle(depth: 3, pitch: 8)
                     .fill(SaveAtlasPalette.paper)
@@ -67,11 +69,16 @@ struct SaveKraftStamp: View {
                     }
                     .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 2, y: 1)
 
-                SaveKraftStampFaceView(face: illustratedFace, glyph: fallbackGlyph)
+                SaveKraftStampFaceView(face: resolvedFace, glyph: fallbackGlyph)
                     .padding(5)
             }
             .frame(width: size.face, height: size.face)
             .accessibilityHidden(true)
+
+            if showsGooglePhoto {
+                GooglePlacesPhotoSourceMark(style: .footer)
+                    .padding(.top, GooglePlacesPhotoSourceMarkMetrics.gapAbove)
+            }
 
             Text(visibleTitle)
                 .font(SaveAtlasType.strong(size.title))
@@ -79,11 +86,41 @@ struct SaveKraftStamp: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.75)
-                .frame(maxWidth: size.face + 12)
+                .padding(.top, GooglePlacesPhotoSourceMarkMetrics.gapAbove)
+                .frame(maxWidth: tileWidth + 12)
         }
+        .frame(width: tileWidth, alignment: .leading)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(face == .locked ? "Locked stamp" : "Map Stamp, \(visibleTitle)")
+        .accessibilityLabel(stampAccessibilityLabel)
         .accessibilityIdentifier(accessibilityIdentifier)
+    }
+
+    private var tileWidth: CGFloat {
+        showsGooglePhoto
+            ? max(size.face, GooglePlacesPhotoSourceMarkMetrics.markWidth(for: dynamicTypeSize))
+            : size.face
+    }
+
+    private var photoURL: URL? {
+        if case .photo(let url) = face { return url }
+        return nil
+    }
+
+    private var showsGooglePhoto: Bool {
+        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
+            photoURL,
+            availableWidth: max(size.face, GooglePlacesPhotoSourceMarkMetrics.markWidth(for: dynamicTypeSize)),
+            dynamicType: dynamicTypeSize
+        )
+    }
+
+    private var stampAccessibilityLabel: String {
+        if case .locked = face { return "Locked stamp" }
+        let base = "Map Stamp, \(visibleTitle)"
+        if showsGooglePhoto {
+            return "\(base), \(GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: languageSettings.language))"
+        }
+        return base
     }
 
     private var visibleTitle: String {
@@ -107,6 +144,13 @@ struct SaveKraftStamp: View {
         default:
             return .scene(SaveKraftStampScene.from(name: title))
         }
+    }
+
+    private var resolvedFace: SaveKraftStampFace {
+        if GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(photoURL), !showsGooglePhoto {
+            return .scene(SaveKraftStampScene.from(name: title))
+        }
+        return illustratedFace
     }
 }
 

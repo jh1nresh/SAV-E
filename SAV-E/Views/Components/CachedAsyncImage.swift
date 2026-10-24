@@ -103,6 +103,12 @@ final class CachedImageStore {
         return memoryCache.object(forKey: cacheURL as NSURL)
     }
 
+    /// Seed a decoded fixture so harness / view tests can render a Google
+    /// thumb without hitting Places. Does not change persist policy.
+    func store(_ image: UIImage, for url: URL) {
+        memoryCache.setObject(image, forKey: GooglePlacesPhotoURL.persistableURL(url) as NSURL)
+    }
+
     func loadImage(for url: URL) async throws -> UIImage {
         let cacheURL = GooglePlacesPhotoURL.persistableURL(url)
         if let cached = memoryCache.object(forKey: cacheURL as NSURL) {
@@ -110,6 +116,9 @@ final class CachedImageStore {
         }
 
         let isGooglePlacesPhoto = GooglePlacesPhotoURL.isGooglePlacesPhotoURL(cacheURL)
+        if isGooglePlacesPhoto && !GoogleMapsPlatformAvailability.isAllowed() {
+            throw URLError(.networkConnectionLost)
+        }
         guard var request = GooglePlacesService.shared.authorizedPhotoRequest(for: cacheURL) else {
             throw URLError(.userAuthenticationRequired)
         }

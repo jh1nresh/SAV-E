@@ -1,4 +1,6 @@
 import CoreLocation
+import SwiftUI
+import UIKit
 import XCTest
 @testable import SAVE
 
@@ -103,6 +105,512 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertEqual(response.placeIds, [saved.id.uuidString])
         XCTAssertEqual(response.itineraryDays.first?.stops.count, 2)
         XCTAssertTrue(response.itineraryDays.first?.stops.last?.note?.contains("Map result") == true)
+    }
+
+    @MainActor
+    func testRemoteBusinessPhotoColumnIsNeverImported() {
+        XCTAssertNil(PlaceBusinessPhotoPersistence.importedRemoteURLs([
+            "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref",
+            "https://example.com/own.jpg",
+        ]))
+        XCTAssertNil(PlaceBusinessPhotoPersistence.importedRemoteURLs(nil))
+    }
+
+    @MainActor
+    func testHomeThumbnailMarksGooglePhotosWithGoogleMapsText() throws {
+        let google = try XCTUnwrap(URL(
+            string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref"
+        ))
+        let placesMedia = try XCTUnwrap(URL(
+            string: "https://places.googleapis.com/v1/places/ChIJ123/photos/ABC/media"
+        ))
+        let own = try XCTUnwrap(URL(string: "https://example.com/own.jpg"))
+        let friend = try XCTUnwrap(URL(string: "https://cdn.instagram.com/private-post.jpg"))
+
+        // Was homeLines == ["Google", "Maps"] (stacked). Now one untranslated string.
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.text, "Google Maps")
+        // Was homeMinPointSize == 10 / homePointSize(.large) == 10. Now 12–16sp.
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.minPointSize, 12)
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.maxPointSize, 16)
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.pointSize(for: .large), 12)
+        let xxxl = GooglePlacesPhotoSourceMarkMetrics.pointSize(for: .xxxLarge)
+        XCTAssertGreaterThanOrEqual(xxxl, 12)
+        XCTAssertLessThanOrEqual(xxxl, 16)
+        // Was homeGapAbove == 2. Now 6pt.
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.gapAbove, 6)
+        // Was homeReservedHeight / homeMarkHeight >= 24. Single-line row stays 24.
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.rowHeight, 24)
+        XCTAssertTrue(GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(google))
+        XCTAssertTrue(GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(placesMedia))
+        XCTAssertFalse(GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(own))
+        XCTAssertFalse(GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(friend))
+        XCTAssertFalse(GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(nil))
+        XCTAssertEqual(
+            GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: .english),
+            "Photo: Google Maps"
+        )
+        XCTAssertEqual(
+            GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: .traditionalChinese),
+            "照片來源：Google Maps"
+        )
+        // Contrast uses each surface's actual token, not a generic stand-in.
+        for surface in [
+            GooglePlacesPhotoSourceMarkMetrics.SurfaceBackground.paper,
+            .recentCanvas,
+            .drawerCanvas,
+            .postcardPaper,
+            .atlasMaterial,
+        ] {
+            XCTAssertGreaterThanOrEqual(
+                GooglePlacesPhotoSourceMarkMetrics.contrastRatio(on: surface, dark: false),
+                4.5,
+                "Light mark on \(surface) must be ≥ 4.5:1"
+            )
+            XCTAssertGreaterThanOrEqual(
+                GooglePlacesPhotoSourceMarkMetrics.contrastRatio(on: surface, dark: true),
+                4.5,
+                "Dark mark on \(surface) must be ≥ 4.5:1"
+            )
+        }
+        XCTAssertGreaterThanOrEqual(GooglePlacesPhotoSourceMarkMetrics.lightContrastRatio(), 4.5)
+        XCTAssertGreaterThanOrEqual(GooglePlacesPhotoSourceMarkMetrics.darkContrastRatio(), 4.5)
+
+        let mark = try source(at: "SAV-E/Views/Components/GooglePlacesPhotoSourceMark.swift")
+        // Was case homeStacked / semibold / 10pt / 2pt gap.
+        XCTAssertFalse(mark.contains("homeStacked"))
+        XCTAssertFalse(mark.contains("homeLines"))
+        XCTAssertFalse(mark.contains("homeMinPointSize"))
+        XCTAssertFalse(mark.contains("homeGapAbove"))
+        XCTAssertFalse(mark.contains("displaysStackedGooglePhoto"))
+        XCTAssertTrue(mark.contains("case footer"))
+        XCTAssertTrue(mark.contains("weight: .regular"))
+        XCTAssertFalse(mark.contains("weight: .semibold"))
+        XCTAssertTrue(mark.contains("minPointSize: CGFloat = 12"))
+        XCTAssertTrue(mark.contains("maxPointSize: CGFloat = 16"))
+        XCTAssertTrue(mark.contains("gapAbove: CGFloat = 6"))
+        XCTAssertTrue(mark.contains("lineLimit(1)"))
+        XCTAssertTrue(mark.contains("minimumScaleFactor(1.0)"))
+        XCTAssertFalse(mark.contains("minimumScaleFactor(0."))
+        XCTAssertTrue(mark.contains("Color(hex: \"1F1F1F\")"))
+        XCTAssertTrue(mark.contains("Color.white"))
+        XCTAssertFalse(mark.contains("5E5E5E"))
+        XCTAssertFalse(mark.contains("accessibilityHidden(true)"))
+        XCTAssertFalse(mark.contains(".font(.system(size: 6, weight: .semibold))"))
+        XCTAssertFalse(mark.contains("ForEach("))
+
+        let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
+        XCTAssertTrue(stamp.contains("GooglePlacesPhotoSourceMark(style: .footer)"))
+        XCTAssertTrue(stamp.contains("displaysGooglePhoto("))
+        XCTAssertTrue(stamp.contains("gapAbove"))
+        XCTAssertFalse(stamp.contains("homeStacked"))
+        XCTAssertFalse(stamp.contains("displaysStackedGooglePhoto"))
+        XCTAssertFalse(stamp.contains("GoogleMapsAttributionLogo"))
+        XCTAssertFalse(stamp.contains(".font(.system(size: 6, weight: .semibold))"))
+
+        let peek = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
+        XCTAssertTrue(peek.contains("GooglePlacesPhotoSourceMark(style: .footer)"))
+        XCTAssertTrue(peek.contains("displaysGooglePhoto("))
+        XCTAssertTrue(peek.contains("availableWidth: rowWidth"))
+        XCTAssertFalse(peek.contains("homeStacked"))
+        XCTAssertFalse(peek.contains("availableWidth: 44"))
+        XCTAssertFalse(peek.contains("ZStack(alignment: .bottom"))
+    }
+
+    @MainActor
+    func testGooglePhotoSourceMarkLayoutRulesAndFallback() throws {
+        let google = try XCTUnwrap(URL(
+            string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref"
+        ))
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.text, "Google Maps")
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.minPointSize, 12)
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.maxPointSize, 16)
+        XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.pointSize(for: .large), 12)
+        XCTAssertLessThanOrEqual(GooglePlacesPhotoSourceMarkMetrics.pointSize(for: .xxxLarge), 16)
+
+        // Live single-line width. DESIGN 65–76pt is an estimate, not a constant.
+        let singleLineWidth = GooglePlacesPhotoSourceMarkMetrics.markWidth(for: .large)
+        XCTAssertGreaterThan(singleLineWidth, 0)
+        XCTAssertGreaterThan(
+            singleLineWidth,
+            40,
+            "Replaces stackedWidth <= 40 / canShow(40) == true. Single-line 12sp does not fit a thumb."
+        )
+        // Was canShow(40) / displaysGooglePhoto(40) == true (stacked). Now false.
+        XCTAssertFalse(
+            GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: 40, dynamicType: .large)
+        )
+        XCTAssertFalse(
+            GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(google, availableWidth: 40, dynamicType: .large)
+        )
+        let tooNarrow = max(singleLineWidth - 1, 1)
+        XCTAssertFalse(
+            GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: tooNarrow, dynamicType: .large),
+            "Was stackedWidth-1. A single-line mark that cannot fit must drop the Google photo."
+        )
+        XCTAssertFalse(
+            GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(google, availableWidth: tooNarrow, dynamicType: .large)
+        )
+        XCTAssertTrue(
+            GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: singleLineWidth, dynamicType: .large)
+        )
+        XCTAssertTrue(
+            GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
+                google,
+                availableWidth: singleLineWidth,
+                dynamicType: .large
+            )
+        )
+        // Was canShowStacked(44/52/56/70) == true. Thumb widths fall back when
+        // the live single-line width does not fit. 65–76pt is DESIGN estimate.
+        for thumbWidth: CGFloat in [44, 52, 56] {
+            XCTAssertGreaterThan(
+                singleLineWidth,
+                thumbWidth,
+                "Live 12sp 'Google Maps' must be wider than the \(Int(thumbWidth))pt thumb"
+            )
+            XCTAssertFalse(
+                GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: thumbWidth, dynamicType: .large),
+                "Thumb \(Int(thumbWidth))pt cannot fit the single-line mark"
+            )
+            XCTAssertFalse(
+                GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
+                    google,
+                    availableWidth: thumbWidth,
+                    dynamicType: .large
+                )
+            )
+        }
+        if singleLineWidth > 70 {
+            XCTAssertFalse(
+                GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: 70, dynamicType: .large),
+                "70pt Trip thumb cannot fit the live single-line mark"
+            )
+        }
+        // Was canShowStacked(20) == false / displaysStacked(20) == false.
+        XCTAssertFalse(
+            GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: 20, dynamicType: .large)
+        )
+        XCTAssertFalse(
+            GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(google, availableWidth: 20, dynamicType: .large)
+        )
+        XCTAssertNil(GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL(google))
+        XCTAssertNotNil(GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL(
+            URL(string: "https://example.com/own.jpg")
+        ))
+
+        let drawer = try source(at: "SAV-E/Views/Drawer/Components/SaveSearchResultsComponent.swift")
+        XCTAssertTrue(drawer.contains("GooglePlacesPhotoSourceMark(style: .footer)"))
+        XCTAssertTrue(drawer.contains("displaysGooglePhoto("))
+        XCTAssertTrue(drawer.contains("availableWidth: rowWidth"))
+        XCTAssertFalse(drawer.contains("availableWidth: 52"))
+        XCTAssertFalse(drawer.contains("homeStacked"))
+
+        let trip = try source(at: "SAV-E/Views/Trips/TripPackViews.swift")
+        XCTAssertTrue(trip.contains("GooglePlacesPhotoSourceMark(style: .footer)"))
+        XCTAssertTrue(trip.contains("displaysGooglePhoto("))
+        XCTAssertTrue(trip.contains("availableWidth: rowWidth"))
+        XCTAssertFalse(trip.contains("availableWidth: 70"))
+        XCTAssertFalse(trip.contains("homeStacked"))
+        XCTAssertTrue(trip.contains("struct TripStopRow: View"))
+        let supabasePersist = try source(at: "SAV-E/Services/SupabaseService.swift")
+        XCTAssertTrue(supabasePersist.contains("private struct TripStopPersistRow: Codable"))
+        XCTAssertFalse(
+            supabasePersist.contains("private struct TripStopRow:"),
+            "Persist DTO must not reuse the TripStopRow view name"
+        )
+
+        let origin = try source(at: "SAV-E/Views/Origin/SaveOriginView.swift")
+        XCTAssertTrue(origin.contains("GooglePlacesPhotoSourceMark(style: .footer)"))
+        XCTAssertTrue(origin.contains("displaysGooglePhoto("))
+        XCTAssertTrue(origin.contains("struct SaveOriginFoodCard"))
+        XCTAssertFalse(origin.contains("homeStacked"))
+
+        let atlas = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        // Was stacked mark on 56pt. HoP G6: map.place.card must not show Google photos.
+        XCTAssertFalse(atlas.contains("GooglePlacesPhotoSourceMark"))
+        XCTAssertFalse(atlas.contains("displaysGooglePhoto("))
+        XCTAssertFalse(atlas.contains("displaysStackedGooglePhoto"))
+        XCTAssertFalse(atlas.contains("homeStacked"))
+        XCTAssertTrue(atlas.contains("mapSafePhotoURL"))
+        XCTAssertTrue(atlas.contains("AtlasPalette.coral"))
+        XCTAssertTrue(atlas.contains("map.place.card"))
+        XCTAssertTrue(atlas.contains("callout"))
+        XCTAssertFalse(atlas.contains("PlaceMapPin("))
+
+        let postcard = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+        XCTAssertTrue(postcard.contains("struct SavedPostcardPhoto"))
+        XCTAssertTrue(postcard.contains("GooglePlacesPhotoSourceMark(style: .footer)"))
+        XCTAssertTrue(postcard.contains("displaysGooglePhoto("))
+        XCTAssertTrue(postcard.contains("availableWidth: 104"))
+
+        let carousel = try source(at: "SAV-E/Views/Map/PlaceBottomSheet.swift")
+        XCTAssertTrue(
+            carousel.contains("GooglePlacesPhotoAttributionBar"),
+            "Detail (off the map) still marks Google photos"
+        )
+    }
+
+    @MainActor
+    func testHomeThumbnailViewsAnnounceGoogleMapsPhoto() throws {
+        let google = try XCTUnwrap(URL(
+            string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=view-test"
+        ))
+        let own = try XCTUnwrap(URL(string: "https://example.com/own-view-test.jpg"))
+        let fixture = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16)).image { context in
+            UIColor.systemOrange.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 16, height: 16))
+        }
+        CachedImageStore.shared.store(fixture, for: google)
+        CachedImageStore.shared.store(fixture, for: own)
+
+        let english = hostedTexts(
+            language: .english,
+            google: google,
+            own: own
+        )
+        XCTAssertTrue(
+            english.contains(where: { $0.contains("Photo: Google Maps") }),
+            "Rendered 52pt Google stamp must expose a VoiceOver Google Maps label. saw=\(english)"
+        )
+        XCTAssertTrue(
+            english.contains(where: { $0.contains("Map Stamp, Harbor Oven") }),
+            "Rendered stamp must keep Map Stamp language. saw=\(english)"
+        )
+        XCTAssertTrue(
+            english.contains(where: { $0.contains("Harbor Oven, Photo: Google Maps") }),
+            "Rendered 44pt featured peek must announce Photo: Google Maps. saw=\(english)"
+        )
+        XCTAssertFalse(
+            english.contains(where: { $0.contains("Own shot") && $0.contains("Photo: Google Maps") }),
+            "Own photo must stay unlabeled. saw=\(english)"
+        )
+
+        let chinese = hostedTexts(language: .traditionalChinese, google: google, own: own)
+        XCTAssertTrue(
+            chinese.contains(where: { $0.contains("照片來源：Google Maps") }),
+            "zh-Hant VoiceOver must say 照片來源：Google Maps. saw=\(chinese)"
+        )
+    }
+
+    @MainActor
+    func testProductionSurfacesWalkSingleLineGooglePhotoGate() throws {
+        let google = try XCTUnwrap(URL(
+            string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=home-footer"
+        ))
+        let own = try XCTUnwrap(URL(string: "https://example.com/own-view-test.jpg"))
+        seedThumbFixture(google)
+        seedThumbFixture(own)
+
+        // Was displaysStacked(44/52) == true. Production views must not pass thumb width.
+        XCTAssertFalse(
+            GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(google, availableWidth: 44, dynamicType: .large)
+        )
+        XCTAssertFalse(
+            GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(google, availableWidth: 52, dynamicType: .large)
+        )
+
+        let peek = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
+        XCTAssertTrue(peek.contains("displaysGooglePhoto("))
+        XCTAssertTrue(peek.contains("availableWidth: rowWidth"))
+        XCTAssertTrue(peek.contains("style: .footer"))
+        XCTAssertFalse(peek.contains("displaysStackedGooglePhoto("))
+        XCTAssertFalse(peek.contains("style: .homeStacked"))
+
+        let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
+        XCTAssertTrue(stamp.contains("displaysGooglePhoto("))
+        XCTAssertTrue(stamp.contains("style: .footer"))
+        XCTAssertTrue(stamp.contains("max(size.face, GooglePlacesPhotoSourceMarkMetrics.markWidth"))
+        XCTAssertFalse(stamp.contains("displaysStackedGooglePhoto("))
+        XCTAssertFalse(stamp.contains("style: .homeStacked"))
+
+        let featuredWide = hostedTexts(
+            of: SaveTileTownPeekCard(title: "Harbor Oven", subtitle: "Featured", photoURL: google)
+                .frame(width: 280, height: 130)
+        )
+        XCTAssertTrue(
+            featuredWide.contains(where: { $0.contains("Photo: Google Maps") }),
+            "Featured production view must keep Google + footer when the row fits. saw=\(featuredWide)"
+        )
+
+        let featuredNarrow = hostedTexts(
+            of: SaveTileTownPeekCard(title: "Harbor Oven", subtitle: "Featured", photoURL: google)
+                .frame(width: 68, height: 90)
+        )
+        XCTAssertFalse(
+            featuredNarrow.contains(where: { $0.contains("Photo: Google Maps") }),
+            "Featured production view must drop the Google photo when the row is thumb-narrow. saw=\(featuredNarrow)"
+        )
+
+        let recent = hostedTexts(
+            of: SaveKraftStamp(title: "Harbor Oven", face: .photo(google), size: .recent)
+                .environment(\.dynamicTypeSize, .large)
+        )
+        XCTAssertTrue(
+            recent.contains(where: { $0.contains("Photo: Google Maps") }),
+            "Recent production stamp grows tileWidth to the live mark width. saw=\(recent)"
+        )
+
+        let drawer = hostedTexts(
+            of: SaveSearchResultsComponent(response: drawerResponse(photoURL: google, title: "Harbor Oven"))
+                .frame(width: 320)
+        )
+        XCTAssertTrue(
+            drawer.contains(where: { $0.contains("Photo: Google Maps") }),
+            "Drawer production row must call displaysGooglePhoto with row width. saw=\(drawer)"
+        )
+
+        let trip = hostedTexts(
+            of: TripStopRow(
+                stop: TripStop(
+                    id: UUID(),
+                    placeId: UUID(),
+                    placeName: "Harbor Oven",
+                    day: 1,
+                    orderIndex: 0,
+                    startTime: "10:00 AM",
+                    duration: 60,
+                    note: "Cafe stop"
+                ),
+                place: photoPlace(name: "Harbor Oven", photoURL: google),
+                position: 1,
+                isLast: true,
+                canMoveEarlier: false,
+                canMoveLater: false,
+                onEdit: {},
+                onMoveEarlier: {},
+                onMoveLater: {}
+            )
+            .frame(width: 320)
+        )
+        XCTAssertTrue(
+            trip.contains(where: { $0.contains("Photo: Google Maps") }),
+            "Trip production row must call displaysGooglePhoto with row width. saw=\(trip)"
+        )
+
+        let origin = hostedTexts(
+            of: SaveOriginFoodCard(place: photoPlace(name: "Harbor Oven", photoURL: google))
+                .frame(width: 320)
+        )
+        XCTAssertTrue(
+            origin.contains(where: { $0.contains("Photo: Google Maps") }),
+            "Origin production card must call displaysGooglePhoto with container width. saw=\(origin)"
+        )
+
+        let atlasGoogle = hostedTexts(
+            of: SaveAtlasLivePlaceCard(
+                place: photoPlace(name: "Harbor Oven", photoURL: google),
+                onClose: {},
+                onOpen: {},
+                onOpenAssistant: {},
+                onPlanAround: {}
+            )
+            .frame(width: 372, height: 180)
+        )
+        XCTAssertFalse(
+            atlasGoogle.contains(where: { $0.contains("Photo: Google Maps") }),
+            "map.place.card must not show a Google photo or mark. saw=\(atlasGoogle)"
+        )
+        XCTAssertNil(GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL(google))
+
+        let atlasOwn = hostedTexts(
+            of: SaveAtlasLivePlaceCard(
+                place: photoPlace(name: "Own shot", photoURL: own),
+                onClose: {},
+                onOpen: {},
+                onOpenAssistant: {},
+                onPlanAround: {}
+            )
+            .frame(width: 372, height: 180)
+        )
+        XCTAssertFalse(
+            atlasOwn.contains(where: { $0.contains("Photo: Google Maps") }),
+            "Own photo on the map card stays unmarked. saw=\(atlasOwn)"
+        )
+
+        let postcardGoogle = hostedTexts(
+            of: SavedPostcardPhoto(imageURLs: [google.absoluteString], isSearching: false)
+        )
+        XCTAssertTrue(
+            postcardGoogle.contains(where: { $0.contains("Photo: Google Maps") }),
+            "Detail postcard production view marks a Google URL. saw=\(postcardGoogle)"
+        )
+
+        let postcardOwn = hostedTexts(
+            of: SavedPostcardPhoto(imageURLs: [own.absoluteString], isSearching: false)
+        )
+        XCTAssertFalse(
+            postcardOwn.contains(where: { $0.contains("Photo: Google Maps") }),
+            "Detail postcard must not mark an own photo. saw=\(postcardOwn)"
+        )
+    }
+
+    @MainActor
+    func testPersistableStringDropsPhotoNamesAndPlacesMediaURLs() throws {
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "places/ChIJ123/photos/ABC"
+        ))
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "https://places.googleapis.com/v1/places/ChIJ123/photos/ABC/media"
+        ))
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "https://lh3.googleusercontent.com/places/ANXAkqG-places-path"
+        ))
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "https://lh3.googleusercontent.com/place-photos/AF1Qip-place-photos"
+        ))
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "https://lh3.googleusercontent.com/p/AF1Qip-generic"
+        ))
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "https://lh3.googleusercontent.com/gps-cs-s/photo-token"
+        ))
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "https://lh5.googleusercontent.com/gps-proxy/proxy-token"
+        ))
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "https://lh3.googleusercontent.com/%70/AF1Qip-encoded"
+        ))
+        XCTAssertEqual(
+            GooglePlacesPhotoURL.persistableString("https://lh3.googleusercontent.com/a/ACg8oc-avatar"),
+            "https://lh3.googleusercontent.com/a/ACg8oc-avatar"
+        )
+        XCTAssertEqual(
+            GooglePlacesPhotoURL.persistableString("https://lh3.googleusercontent.com/a-/AOh14Gh-avatar"),
+            "https://lh3.googleusercontent.com/a-/AOh14Gh-avatar"
+        )
+        XCTAssertEqual(
+            GooglePlacesPhotoURL.persistableString("https://example.com/own.jpg"),
+            "https://example.com/own.jpg"
+        )
+        XCTAssertTrue(
+            GooglePlacesPhotoURL.isGooglePlacesPhotoURL(
+                URL(string: "https://lh3.googleusercontent.com/p/AF1Qip-generic")!
+            )
+        )
+        XCTAssertFalse(
+            GooglePlacesPhotoURL.isGooglePlacesPhotoURL(
+                URL(string: "https://lh3.googleusercontent.com/a-/AOh14Gh-avatar")!
+            )
+        )
+        XCTAssertTrue(
+            GooglePlacesPhotoURL.isGooglePlacesPhotoURL(
+                URL(string: "https://lh3.googleusercontent.com/%70/AF1Qip-encoded")!
+            )
+        )
+
+        let supabase = try source(at: "SAV-E/Services/SupabaseService.swift")
+        XCTAssertTrue(
+            supabase.contains("GooglePlacesPhotoURL.persistableString(place.sourceImageUrl)"),
+            "create row payload and PATCH assignChangedOptional share persistableString"
+        )
+        XCTAssertTrue(
+            supabase.contains("GooglePlacesPhotoURL.persistableString(previous?.sourceImageUrl)"),
+            "PATCH compares the persistable previous source_image_url"
+        )
+        XCTAssertTrue(
+            supabase.contains("GooglePlacesPhotoURL.persistableString(finalPlace.sourceImageUrl)"),
+            "workflow create also uses persistableString"
+        )
     }
 
     @MainActor
@@ -258,16 +766,17 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
-    func testPersistedMemoryAndSharedListsStripLegacyGooglePhotoKeys() throws {
+    func testPersistedMemoryAndSharedListsDropGooglePhotoURLs() throws {
         let legacyURL = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref&key=TEST_ONLY_NON_SECRET_VALUE"
+        let ownPhoto = "https://example.com/own-photo.jpg"
         let record = SaveMemoryRecord(
             state: .confirmedPlace,
             title: "Legacy Cafe",
             sourceImageUrl: legacyURL,
-            businessPhotoUrls: [legacyURL]
+            businessPhotoUrls: [legacyURL, ownPhoto]
         )
-        XCTAssertFalse(try XCTUnwrap(record.sourceImageUrl).contains("key="))
-        XCTAssertFalse(try XCTUnwrap(record.businessPhotoUrls?.first).contains("key="))
+        XCTAssertNil(record.sourceImageUrl)
+        XCTAssertEqual(record.businessPhotoUrls, [ownPhoto])
 
         var legacyPlace = place(name: "Legacy Cafe", category: .cafe)
         legacyPlace.sourceImageUrl = legacyURL
@@ -277,7 +786,259 @@ final class SaveCollaborativeListTests: XCTestCase {
 
         let shareURL = try XCTUnwrap(list.shareURL())
         let payload = try XCTUnwrap(SaveSharedListPayload.from(url: shareURL))
-        XCTAssertFalse(try XCTUnwrap(payload.list.items.first?.photoURLs.first).contains("key="))
+        XCTAssertEqual(payload.list.items.first?.photoURLs ?? [], [])
+    }
+
+    @MainActor
+    func testHTMLAttributionsExposeAuthorNameAndLink() {
+        let authors = GooglePlacesHTMLAttribution.authors(from: [
+            #"<a href="https://maps.google.com/maps/contrib/123">Jane Doe</a>"#,
+            "Photo by the shop",
+        ])
+        XCTAssertEqual(authors.count, 2)
+        XCTAssertEqual(authors[0].displayName, "Jane Doe")
+        XCTAssertEqual(authors[0].uri?.absoluteString, "https://maps.google.com/maps/contrib/123")
+        XCTAssertEqual(authors[1].displayName, "Photo by the shop")
+        XCTAssertNil(authors[1].uri)
+    }
+
+    @MainActor
+    func testAttributionLogoHeightStaysInsideGoogleSpec() {
+        XCTAssertGreaterThanOrEqual(GoogleMapsAttributionMetrics.logoHeight, GoogleMapsAttributionMetrics.logoMinHeight)
+        XCTAssertLessThanOrEqual(GoogleMapsAttributionMetrics.logoHeight, GoogleMapsAttributionMetrics.logoMaxHeight)
+        XCTAssertEqual(GoogleMapsAttributionMetrics.clearSpaceLeading, 10)
+        XCTAssertEqual(GoogleMapsAttributionMetrics.clearSpaceTrailing, 10)
+        XCTAssertEqual(GoogleMapsAttributionMetrics.clearSpaceTop, 10)
+        XCTAssertEqual(GoogleMapsAttributionMetrics.clearSpaceBottom, 5)
+        XCTAssertEqual(GoogleMapsAttributionMetrics.minimumTapTarget, 44)
+        XCTAssertGreaterThanOrEqual(GoogleMapsAttributionMetrics.gradientTopOpacity, 0.25)
+        XCTAssertEqual(GoogleMapsAttributionMetrics.carouselHeight, 156)
+        XCTAssertGreaterThanOrEqual(GoogleMapsAttributionMetrics.authorShadowOpacity, 0.5)
+    }
+
+    @MainActor
+    func testAttributionWhiteTextMeetsContrastOnLightPhoto() {
+        let ratio = GoogleMapsAttributionContrast.whiteTextRatio(
+            photo: GoogleMapsAttributionMetrics.lightPhotoCream,
+            overlayOpacity: GoogleMapsAttributionMetrics.gradientTopOpacity
+        )
+        XCTAssertGreaterThanOrEqual(
+            ratio,
+            4.5,
+            "White attribution type over the cream fixture must stay at WCAG 4.5:1"
+        )
+    }
+
+    func testCompactAttributionRowIsAHittableButton() throws {
+        let sheet = try source(at: "SAV-E/Views/Map/PlaceBottomSheet.swift")
+        let uiTest = try source(at: "Tests/SAVEUITests/SAVEGooglePhotoAttributionTests.swift")
+        let evidence = try source(at: "SAV-E/Testing/GooglePlacesPhotoAttributionEvidenceView.swift")
+
+        guard let compactStart = sheet.range(of: "private var compactRow: some View"),
+              let compactEnd = sheet.range(of: "private var expandedStack: some View") else {
+            return XCTFail("Missing compactRow")
+        }
+        let compact = String(sheet[compactStart.lowerBound..<compactEnd.lowerBound])
+        XCTAssertTrue(compact.contains("Button {"), "Compact row must be a SwiftUI Button so app.buttons can see it")
+        XCTAssertTrue(compact.contains("compactVisualRow"), "Visual row must be the Button label so the tap hits content")
+        XCTAssertTrue(compact.contains("place.photo.attribution.row"))
+        XCTAssertFalse(compact.contains("foregroundStyle(.clear)"), "Clear overlay buttons swallow taps")
+        XCTAssertFalse(compact.contains("accessibilityHidden"), "Hidden children swallow the Button identifier")
+        XCTAssertFalse(compact.contains("place.photo.attribution.logo"), "Nested logo identifier splits the Button")
+        XCTAssertFalse(compact.contains("accessibilityElement(children:"), "AX containers are not hittable in XCTest")
+        XCTAssertFalse(compact.contains("UIViewRepresentable"), "UIKit hosts often land in otherElements, not buttons")
+        XCTAssertFalse(compact.contains("allowsHitTesting(false)"), "The Button label must receive the tap")
+        XCTAssertTrue(uiTest.contains("app.buttons[\"place.photo.attribution.row\"]"))
+        XCTAssertTrue(evidence.contains("sceneIdentifier: \"evidence.googleCarousel\""))
+        XCTAssertFalse(
+            evidence.contains("accessibilityElement(children: .contain)"),
+            "Contain-container identifiers are invisible to descendants(matching: .any)"
+        )
+        guard let bodyStart = evidence.range(of: "var body: some View"),
+              let pickerStart = evidence.range(of: "private var scenePicker: some View") else {
+            return XCTFail("Missing evidence body")
+        }
+        let body = String(evidence[bodyStart.lowerBound..<pickerStart.lowerBound])
+        XCTAssertTrue(
+            body.contains("Text(\"Evidence\")"),
+            "Root identifier must live on a leaf, not the stack that wraps the carousel"
+        )
+        XCTAssertTrue(body.contains(".accessibilityIdentifier(\"evidence.googlePhoto.root\")"))
+        XCTAssertFalse(
+            body.contains(".navigationBarTitleDisplayMode(.inline)\n            .accessibilityIdentifier(\"evidence.googlePhoto.root\")"),
+            "Parent root identifier overwrites Harbor Oven, the compact Button, and evidence.googleCarousel"
+        )
+        XCTAssertTrue(evidence.contains("GoogleMapsAttributionLogo()"))
+        XCTAssertTrue(
+            evidence.contains("LazyVGrid"),
+            "Scene chips must wrap. A horizontal ScrollView leaves Logo close-up off-screen"
+        )
+        XCTAssertFalse(
+            evidence.contains("ScrollView(.horizontal"),
+            "Horizontal scene picker makes logoCloseup exist but not hittable"
+        )
+        guard let sceneBodyStart = evidence.range(of: "private var sceneBody: some View"),
+              let carouselPageStart = evidence.range(of: "private var googleCarouselPage: some View") else {
+            return XCTFail("Missing evidence sceneBody")
+        }
+        let sceneBody = String(evidence[sceneBodyStart.lowerBound..<carouselPageStart.lowerBound])
+        guard let logoStart = sceneBody.range(of: "case .logoCloseup:"),
+              let noAuthorStart = sceneBody.range(of: "case .noAuthor:") else {
+            return XCTFail("Missing logoCloseup scene")
+        }
+        let logoScene = String(sceneBody[logoStart.lowerBound..<noAuthorStart.lowerBound])
+        XCTAssertTrue(logoScene.contains("GoogleMapsAttributionLogo()"))
+        XCTAssertTrue(
+            logoScene.contains(".accessibilityIdentifier(\"evidence.logoCloseup\")")
+        )
+        XCTAssertFalse(
+            logoScene.contains("}\n            .accessibilityIdentifier(\"evidence.logoCloseup\")"),
+            "Parent evidence.logoCloseup overwrites place.photo.attribution.logo"
+        )
+        XCTAssertTrue(
+            sheet.contains("enum GooglePlacesPhotoCardLayout"),
+            "Carousel must size the photo before overlaying the logo row"
+        )
+        XCTAssertTrue(sheet.contains("GooglePlacesPhotoCardLayout.overlayCard"))
+        XCTAssertTrue(evidence.contains("GooglePlacesPhotoCardLayout.overlayCard"))
+        XCTAssertFalse(
+            evidence.contains("url.host?.contains(\"contrib\")"),
+            "Author URLs put contrib in the path. Host maps.google.com never matches."
+        )
+        XCTAssertTrue(evidence.contains("isAuthorDestination"))
+        XCTAssertTrue(evidence.contains("Color(hex: \"3A2415\")"))
+        XCTAssertTrue(evidence.contains("evidence.openedPage.author"))
+        XCTAssertTrue(evidence.contains("evidence.openedPage.maps"))
+        XCTAssertTrue(evidence.contains("evidence.mixedCard"))
+        XCTAssertTrue(evidence.contains("evidence.mapPins"))
+        XCTAssertTrue(evidence.contains("evidence.cityPage"))
+        XCTAssertTrue(evidence.contains("evidence.reportEntry"))
+        XCTAssertTrue(evidence.contains("case homeThumbs"))
+        XCTAssertTrue(evidence.contains("private var homeThumbsScene: some View"))
+        XCTAssertTrue(evidence.contains("makeHomeThumbsScene("))
+        XCTAssertFalse(
+            evidence.contains("case .homeThumbs:\n            homeThumbsScene("),
+            "A default-argument function used as a View is a function value"
+        )
+        XCTAssertTrue(evidence.contains("SaveTileTownPeekCard("))
+        XCTAssertTrue(evidence.contains("size: .recent"))
+        XCTAssertTrue(evidence.contains("evidence.homeThumbs"))
+        XCTAssertTrue(evidence.contains("case atlasThumbs"))
+        XCTAssertTrue(evidence.contains("case layoutXSmall"))
+        XCTAssertTrue(evidence.contains("SaveAtlasLivePlaceCard("))
+        XCTAssertTrue(evidence.contains("evidence.atlasThumbs"))
+        XCTAssertTrue(evidence.contains("dynamicTypeSize(.xSmall)"))
+        XCTAssertTrue(uiTest.contains("evidence.openedPage.author"))
+        XCTAssertTrue(uiTest.contains("appearance)-mixed-card"))
+        XCTAssertTrue(uiTest.contains("appearance)-map-pins"))
+        XCTAssertTrue(uiTest.contains("appearance)-city-page"))
+        XCTAssertTrue(uiTest.contains("appearance)-report-entry"))
+        XCTAssertTrue(uiTest.contains("appearance)-home-thumbs"))
+        XCTAssertTrue(uiTest.contains("appearance)-atlas-thumbs"))
+        XCTAssertTrue(uiTest.contains("xsmall-all-surfaces"))
+    }
+
+    @MainActor
+    func testDestinationPageInkMeetsContrastOnWhite() {
+        let ratio = GoogleMapsAttributionContrast.ratio(
+            foreground: (r: 0x3A / 255.0, g: 0x24 / 255.0, b: 0x15 / 255.0),
+            background: (r: 1, g: 1, b: 1)
+        )
+        XCTAssertGreaterThanOrEqual(
+            ratio,
+            4.5,
+            "Maps/author page title on white must stay WCAG 4.5:1 in Dark Mode"
+        )
+    }
+
+    @MainActor
+    func testGooglePhotosWithoutAuthorsAreDroppedForG1() {
+        GooglePlacePhotoSessionStore.resetForTests()
+        let googleURL = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=no-author"
+        let ownURL = "https://example.com/own.jpg"
+        let pages = PlacePhotoPage.pages(
+            imageURLs: [googleURL, ownURL],
+            googlePlaceId: "ChIJ123",
+            googleMapsURI: URL(string: "https://maps.google.com/?cid=1")
+        )
+        XCTAssertEqual(pages.count, 1)
+        XCTAssertFalse(pages[0].isGooglePlacesPhoto)
+        XCTAssertEqual(pages[0].url.absoluteString, ownURL)
+    }
+
+    @MainActor
+    func testGooglePhotoRecordWithEmptyAuthorsIsDroppedForG1() {
+        GooglePlacePhotoSessionStore.resetForTests()
+        let googleURL = URL(string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=empty-authors")!
+        GooglePlacePhotoSessionStore.remember([
+            GooglePlacePhotoRecord(url: googleURL, authors: [], googleMapsURI: nil)
+        ])
+        XCTAssertNotNil(GooglePlacePhotoSessionStore.record(for: googleURL))
+        XCTAssertTrue(GooglePlacePhotoSessionStore.record(for: googleURL)?.authors.isEmpty == true)
+
+        let pages = PlacePhotoPage.pages(
+            imageURLs: [googleURL.absoluteString],
+            googlePlaceId: "ChIJEmpty",
+            googleMapsURI: nil
+        )
+        XCTAssertTrue(pages.isEmpty, "A stored Google photo with no authors must not render")
+    }
+
+    @MainActor
+    func testMainlandChinaUsersSkipGooglePhotoEnrichment() async {
+        var saved = place(name: "Memory Cafe", category: .cafe)
+        saved.latitude = 31.2304
+        saved.longitude = 121.4737
+        let service = HomePhotoGooglePlacesService()
+
+        let result = await PlaceBusinessEnricher.enrich(
+            saved,
+            service: service,
+            mapsPlatformAllowed: false
+        )
+
+        XCTAssertNil(result)
+        XCTAssertEqual(service.searchCallCount, 0)
+        XCTAssertEqual(service.detailCallCount, 0)
+    }
+
+    @MainActor
+    func testGooglePhotoPagesKeepAuthorAttributionAndSkipUserPhotos() {
+        GooglePlacePhotoSessionStore.resetForTests()
+        let googleURL = URL(string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=ref-1")!
+        let userURL = "https://example.com/own.jpg"
+        GooglePlacePhotoSessionStore.remember([
+            GooglePlacePhotoRecord(
+                url: googleURL,
+                authors: [
+                    GooglePlacePhotoAuthor(displayName: "Jane Doe", uri: URL(string: "https://maps.google.com/maps/contrib/123")),
+                    GooglePlacePhotoAuthor(displayName: "Alex Chen", uri: URL(string: "https://maps.google.com/maps/contrib/987")),
+                ],
+                googleMapsURI: URL(string: "https://maps.google.com/?cid=1")
+            )
+        ])
+
+        let pages = PlacePhotoPage.pages(
+            imageURLs: [googleURL.absoluteString, userURL],
+            googlePlaceId: "ChIJ123",
+            googleMapsURI: nil
+        )
+
+        XCTAssertEqual(pages.count, 2)
+        XCTAssertTrue(pages[0].isGooglePlacesPhoto)
+        XCTAssertEqual(pages[0].authors.map(\.displayName), ["Jane Doe", "Alex Chen"])
+        XCTAssertEqual(pages[0].mapsURI?.absoluteString, "https://maps.google.com/?cid=1")
+        XCTAssertFalse(pages[1].isGooglePlacesPhoto)
+        XCTAssertTrue(pages[1].authors.isEmpty)
+        XCTAssertNil(pages[1].mapsURI)
+    }
+
+    @MainActor
+    func testMapsPlatformIsBlockedOnlyForMainlandChinaRegion() {
+        XCTAssertFalse(GoogleMapsPlatformAvailability.isAllowed(regionCode: "CN"))
+        XCTAssertTrue(GoogleMapsPlatformAvailability.isAllowed(regionCode: "TW"))
+        XCTAssertTrue(GoogleMapsPlatformAvailability.isAllowed(regionCode: "US"))
+        XCTAssertTrue(GoogleMapsPlatformAvailability.isAllowed(regionCode: "HK"))
     }
 
     // MARK: - Server short-code links (`?c=`)
@@ -491,6 +1252,234 @@ final class SaveCollaborativeListTests: XCTestCase {
             createdAt: Date()
         )
     }
+
+    @MainActor
+    private func seedThumbFixture(_ url: URL) {
+        let fixture = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16)).image { context in
+            UIColor.systemOrange.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 16, height: 16))
+        }
+        CachedImageStore.shared.store(fixture, for: url)
+    }
+
+    @MainActor
+    private func photoPlace(name: String, photoURL: URL) -> Place {
+        Place(
+            id: UUID(),
+            name: name,
+            address: "Da'an District, Taipei",
+            latitude: 25.04,
+            longitude: 121.54,
+            category: .cafe,
+            status: .wantToGo,
+            note: "Neighborhood bakery",
+            sourcePlatform: .other,
+            businessPhotoUrls: [photoURL.absoluteString],
+            createdAt: Date()
+        )
+    }
+
+    @MainActor
+    private func drawerResponse(photoURL: URL, title: String) -> SaveSearchResponse {
+        let result = SaveSearchResult(
+            id: "test-drawer-\(title)",
+            objectType: .mapVisibleUnsavedPlace,
+            userState: .unsaved,
+            title: title,
+            subtitle: "Da'an, Taipei",
+            statusLabel: "Not saved yet",
+            sourceURL: nil,
+            sourcePlatform: .googleMaps,
+            category: .cafe,
+            cityOrArea: "Taipei",
+            latitude: 25.04,
+            longitude: 121.54,
+            rating: 4.6,
+            reviewCount: 128,
+            confidence: 0.82,
+            missingInfo: [],
+            evidence: [],
+            recoveryQueries: [],
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            canRunRecovery: false,
+            isRecommendationShell: false,
+            primaryAction: .savePlace,
+            photoURL: photoURL.absoluteString
+        )
+        return SaveSearchResponse(
+            query: title,
+            fromYourSave: SaveSearchSection(
+                id: "from-your-save",
+                title: "From your Savvy",
+                subtitle: "Memory first",
+                results: []
+            ),
+            newRecommendations: SaveSearchSection(
+                id: "public-discovery",
+                label: "PUBLIC DISCOVERY",
+                title: "Nearby",
+                subtitle: "Not saved yet",
+                results: [result]
+            )
+        )
+    }
+
+    @MainActor
+    private func hostedTexts<Content: View>(of view: Content, language: AppLanguage = .english) -> [String] {
+        let suite = "save.gate.\(language.rawValue).\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.set(language.rawValue, forKey: "save.appLanguage")
+        let settings = AppLanguageSettings(userDefaults: defaults)
+        let root = view
+            .environment(\.appLanguageSettings, settings)
+            .environment(\.dynamicTypeSize, .large)
+            .frame(width: 372, height: 420)
+        let host = UIHostingController(rootView: root)
+        let window: UIWindow
+        if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
+            window = UIWindow(windowScene: scene)
+            window.frame = CGRect(x: 0, y: 0, width: 372, height: 420)
+        } else {
+            window = UIWindow(frame: CGRect(x: 0, y: 0, width: 372, height: 420))
+        }
+        window.rootViewController = host
+        window.isHidden = false
+        window.makeKeyAndVisible()
+        host.view.frame = window.bounds
+        host.beginAppearanceTransition(true, animated: false)
+        host.endAppearanceTransition()
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+        let deadline = Date().addingTimeInterval(1)
+        var texts: [String] = []
+        while Date() < deadline {
+            texts = collectAccessibilityStrings(from: host.view, seen: NSHashTable<NSObject>.weakObjects())
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            host.view.setNeedsLayout()
+            host.view.layoutIfNeeded()
+        }
+        window.isHidden = true
+        defaults.removePersistentDomain(forName: suite)
+        return texts
+    }
+
+    @MainActor
+    private func hostedTexts(language: AppLanguage, google: URL, own: URL) -> [String] {
+        let suite = "save.home.thumb.\(language.rawValue).\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.set(language.rawValue, forKey: "save.appLanguage")
+        let settings = AppLanguageSettings(userDefaults: defaults)
+        let root = VStack(alignment: .leading, spacing: 12) {
+            SaveTileTownPeekCard(
+                title: "Harbor Oven",
+                subtitle: "Featured",
+                photoURL: google,
+                accessibilityNameID: "test.featured.google"
+            )
+            .frame(width: 280, height: 130)
+            SaveTileTownPeekCard(
+                title: "Own shot",
+                subtitle: "Featured",
+                photoURL: own,
+                accessibilityNameID: "test.featured.own"
+            )
+            .frame(width: 280, height: 130)
+            HStack(alignment: .top, spacing: 16) {
+                SaveKraftStamp(
+                    title: "Harbor Oven",
+                    face: .photo(google),
+                    size: .recent,
+                    accessibilityIdentifier: "test.recent.google"
+                )
+                SaveKraftStamp(
+                    title: "Own shot",
+                    face: .photo(own),
+                    size: .recent,
+                    accessibilityIdentifier: "test.recent.own"
+                )
+            }
+        }
+        .environment(\.appLanguageSettings, settings)
+        .frame(width: 320, height: 360)
+
+        let host = UIHostingController(rootView: root)
+        let window: UIWindow
+        if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
+            window = UIWindow(windowScene: scene)
+            window.frame = CGRect(x: 0, y: 0, width: 320, height: 360)
+        } else {
+            window = UIWindow(frame: CGRect(x: 0, y: 0, width: 320, height: 360))
+        }
+        window.rootViewController = host
+        window.isHidden = false
+        window.makeKeyAndVisible()
+        host.view.frame = window.bounds
+        host.beginAppearanceTransition(true, animated: false)
+        host.endAppearanceTransition()
+        host.view.setNeedsLayout()
+        host.view.layoutIfNeeded()
+
+        let deadline = Date().addingTimeInterval(1)
+        var texts: [String] = []
+        let expected = language.localized(english: "Photo: Google Maps", traditionalChinese: "照片來源：Google Maps")
+        while Date() < deadline {
+            texts = collectAccessibilityStrings(from: host.view, seen: NSHashTable<NSObject>.weakObjects())
+            if texts.contains(where: { $0.contains(expected) }) { break }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            host.view.setNeedsLayout()
+            host.view.layoutIfNeeded()
+        }
+        window.isHidden = true
+        defaults.removePersistentDomain(forName: suite)
+        return texts
+    }
+
+    @MainActor
+    private func collectAccessibilityStrings(from element: Any?, seen: NSHashTable<NSObject>) -> [String] {
+        guard let node = element as? NSObject else { return [] }
+        if seen.contains(node) { return [] }
+        seen.add(node)
+        var texts: [String] = []
+        if let text = node.accessibilityLabel, !text.isEmpty { texts.append(text) }
+        if let value = node.accessibilityValue as? String, !value.isEmpty { texts.append(value) }
+        if let identified = node as? UIAccessibilityIdentification,
+           let identifier = identified.accessibilityIdentifier, !identifier.isEmpty {
+            texts.append(identifier)
+        }
+        if let view = node as? UIView {
+            for subview in view.subviews {
+                texts.append(contentsOf: collectAccessibilityStrings(from: subview, seen: seen))
+            }
+        }
+        if let elements = node.accessibilityElements {
+            for child in elements {
+                texts.append(contentsOf: collectAccessibilityStrings(from: child, seen: seen))
+            }
+        }
+        if node.responds(to: #selector(NSObject.accessibilityElementCount)) {
+            let count = node.accessibilityElementCount()
+            if count != NSNotFound {
+                for index in 0..<count {
+                    texts.append(contentsOf: collectAccessibilityStrings(
+                        from: node.accessibilityElement(at: index),
+                        seen: seen
+                    ))
+                }
+            }
+        }
+        return texts
+    }
+
+    private func source(at relativePath: String) throws -> String {
+        try String(contentsOf: repositoryRoot.appendingPathComponent(relativePath), encoding: .utf8)
+    }
+
+    private var repositoryRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
 }
 
 @MainActor
@@ -539,6 +1528,7 @@ private final class StaleGooglePlaceIDService: GooglePlacesServiceProtocol {
 @MainActor
 private final class HomePhotoGooglePlacesService: GooglePlacesServiceProtocol {
     private(set) var searchCallCount = 0
+    private(set) var detailCallCount = 0
 
     func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] {
         searchCallCount += 1
@@ -556,7 +1546,8 @@ private final class HomePhotoGooglePlacesService: GooglePlacesServiceProtocol {
     }
 
     func getPlaceDetails(placeId: String) async throws -> GooglePlaceDetails {
-        GooglePlaceDetails(
+        detailCallCount += 1
+        return GooglePlaceDetails(
             placeId: placeId,
             name: "Memory Cafe",
             formattedAddress: "Irvine, CA",
