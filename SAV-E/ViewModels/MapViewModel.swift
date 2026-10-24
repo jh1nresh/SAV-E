@@ -1934,6 +1934,7 @@ final class MapViewModel: ObservableObject {
     func saveReviewCandidateAsSourceOnly(_ candidate: PlaceReviewCandidate) async throws {
         var updatedCandidate = candidate
         updatedCandidate.status = "source_only"
+        updatedCandidate.stripUnplacedInboxMarker()
         try await recordCorrectionEvent(
             for: candidate,
             eventType: .saveSourceOnly,
@@ -1944,7 +1945,7 @@ final class MapViewModel: ObservableObject {
         updateLocalCandidate(
             candidate.id,
             status: "source_only",
-            stripUnplacedInbox: candidate.isUnplacedInbox && Self.hasRemoteDecisionLink(candidate)
+            stripUnplacedInbox: candidate.isUnplacedInbox
         )
         clearExactSearchResolution(matching: candidate.id)
     }
@@ -4418,7 +4419,9 @@ final class MapViewModel: ObservableObject {
                 let remote = try await supabaseService.fetchPlaces(for: userID)
                 try ensureConfirmationSession(userID, generation)
                 let selectedID = place.id
-                let selectedGroup = Place.consolidated(remote).first { $0.savedIDs.contains(selectedID) }
+                let groups = Place.consolidated(remote)
+                let selectedGroup = groups.first { $0.savedIDs.contains(selectedID) }
+                    ?? groups.first { $0.matches(place) }
                 try await SAVEPendingImportSessionScope.$current.withValue((generation, userID)) {
                     try await supabaseService.deletePlaceGroup(selectedGroup?.id ?? selectedID)
                 }

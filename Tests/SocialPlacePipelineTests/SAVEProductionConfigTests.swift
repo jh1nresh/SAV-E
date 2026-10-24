@@ -513,7 +513,13 @@ final class SAVEProductionConfigTests: XCTestCase {
                     XCTAssertEqual(persisted.accessNotes, candidate.accessNotes)
                     XCTAssertEqual(persisted.sourceHandle, candidate.sourceHandle)
                     XCTAssertEqual(persisted.correctionScopeKey, candidate.correctionScopeKey)
-                    XCTAssertEqual(persisted.missingInfo, candidate.missingInfo)
+                    if status == "source_only" {
+                        XCTAssertFalse(persisted.isUnplacedInbox, "Keep Source Only must become a Source Clue")
+                        XCTAssertFalse(map.reviewCandidates.first?.isUnplacedInbox == true)
+                    } else {
+                        XCTAssertEqual(persisted.missingInfo, candidate.missingInfo)
+                        XCTAssertEqual(persisted.isUnplacedInbox, parked)
+                    }
                     XCTAssertNil(persisted.captureId)
                     XCTAssertNil(persisted.workflowRunId)
                     XCTAssertTrue(candidate.evidence.allSatisfy { persisted.evidence.contains($0) })
@@ -526,10 +532,55 @@ final class SAVEProductionConfigTests: XCTestCase {
                         correctionEventStore: events, usesRemotePersistence: owner != nil)
                     try await fresh.refreshReviewCandidates()
                     XCTAssertEqual(fresh.reviewCandidates.first?.status, status, "Refresh must not resurrect the old parked review status")
-                    XCTAssertEqual(fresh.reviewCandidates.first?.isUnplacedInbox, parked)
+                    if status == "source_only" {
+                        XCTAssertFalse(fresh.reviewCandidates.first?.isUnplacedInbox == true)
+                    } else {
+                        XCTAssertEqual(fresh.reviewCandidates.first?.isUnplacedInbox, parked)
+                    }
                 }
             }
         }
+    }
+
+    @MainActor
+    func testLocalUnplacedSourceOnlyBecomesSourceClueAfterVaultReload() async throws {
+        let auth = PrivyAuthService.shared
+        let oldAuth = auth.authState
+        defer { auth.authState = oldAuth }
+        auth.authState = .authenticated(userId: "local-source-only-owner")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: url)
+        let candidate = localReviewDecisionFixture(owner: "local-source-only-owner", parked: true)
+        XCTAssertTrue(candidate.isUnplacedInbox)
+        XCTAssertFalse(MapViewModel.hasRemoteDecisionLink(candidate))
+        try vault.saveReviewCandidate(candidate, preservingParkedContext: true)
+        let map = MapViewModel(
+            supabaseService: SupabaseService(apiBaseURL: nil),
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("events.json")),
+            usesRemotePersistence: false
+        )
+        map.reviewCandidates = [candidate]
+        map.selectedReviewCandidate = candidate
+        try await map.saveReviewCandidateAsSourceOnly(candidate)
+        XCTAssertEqual(map.reviewCandidates.first?.status, "source_only")
+        XCTAssertFalse(map.reviewCandidates.first?.isUnplacedInbox == true)
+        XCTAssertFalse(map.selectedReviewCandidate?.isUnplacedInbox == true)
+        let persisted = try XCTUnwrap(
+            SaveLocalVaultService(overrideVaultURL: url).reviewCandidates(belongingTo: "local-source-only-owner").first
+        )
+        XCTAssertEqual(persisted.status, "source_only")
+        XCTAssertFalse(persisted.isUnplacedInbox)
+        let fresh = MapViewModel(
+            supabaseService: SupabaseService(apiBaseURL: nil),
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: url),
+            usesRemotePersistence: false
+        )
+        try await fresh.refreshReviewCandidates()
+        XCTAssertEqual(fresh.reviewCandidates.first?.status, "source_only")
+        XCTAssertFalse(fresh.reviewCandidates.first?.isUnplacedInbox == true)
     }
 
     @MainActor
@@ -3863,12 +3914,31 @@ final class SAVEProductionConfigTests: XCTestCase {
             "P1 4365661196: delete the fresh group that contains the selected representative"
         )
         XCTAssertTrue(
-            map.contains("Place.consolidated(remote).first { $0.savedIDs.contains(selectedID) }"),
+            map.contains("let groups = Place.consolidated(remote)"),
             "P1 4365661196: resolve the current canonical group from the fresh fetch"
+        )
+        XCTAssertTrue(
+            map.contains("groups.first { $0.savedIDs.contains(selectedID) }"),
+            "P1 4365661196: prefer the fresh group that still contains the selected ID"
+        )
+        XCTAssertTrue(
+            map.contains("groups.first { $0.matches(place) }"),
+            "P2 PRRT_kwDOTYZUp86v3CLw: a stale local A must delete matching remote alias B"
         )
         XCTAssertTrue(
             map.contains("deletePlaceGroup(selectedGroup?.id ?? selectedID)"),
             "P1 4365661196: one group delete for the selected venue, not every historical alias"
+        )
+        XCTAssertTrue(
+            map.contains("updatedCandidate.stripUnplacedInboxMarker()"),
+            "P2 PRRT_kwDOTYZUp86v3CLv: local Keep Source Only must persist without Unplaced"
+        )
+        XCTAssertTrue(
+            map.contains("stripUnplacedInbox: candidate.isUnplacedInbox"),
+            "P2 PRRT_kwDOTYZUp86v3CLv: memory strips Unplaced for local and remote source-only"
+        )
+        XCTAssertFalse(
+            map.contains("stripUnplacedInbox: candidate.isUnplacedInbox && Self.hasRemoteDecisionLink(candidate)")
         )
         XCTAssertFalse(
             map.contains("for record in remote where place.savedIDs.contains(record.id)"),
@@ -5988,6 +6058,89 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertEqual(saved.name, "Freed After Alias Delete Cafe")
         XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    /// P2 PRRT_kwDOTYZUp86v3CLw: local representative A is gone on the
+    /// server; only matching alias B remains. Delete must remove B.
+    @MainActor
+    func testDeletePlaceRemovesFreshRemoteAliasWhenLocalRepresentativeIsStale() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:stale-rep-owner")
+        defer {
+            PrivyAuthService.shared.authState = previousAuth
+            AnalysisRequestURLProtocol.reset()
+        }
+
+        let others = makeCappedPlaces(49)
+        let staleLocal = makeCappedPlaces(1, indexOffset: 49)[0]
+        let remoteAlias = Place(
+            id: UUID(),
+            name: staleLocal.name,
+            address: staleLocal.address,
+            latitude: staleLocal.latitude,
+            longitude: staleLocal.longitude,
+            googlePlaceId: staleLocal.googlePlaceId,
+            category: staleLocal.category,
+            status: staleLocal.status,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: staleLocal.createdAt
+        )
+        XCTAssertTrue(staleLocal.matches(remoteAlias))
+        XCTAssertNotEqual(staleLocal.id, remoteAlias.id)
+        XCTAssertFalse(remoteAlias.savedIDs.contains(staleLocal.id))
+
+        let remotePlaces = others + [remoteAlias]
+        XCTAssertEqual(Place.consolidated(remotePlaces).count, 50)
+        XCTAssertNil(Place.consolidated(remotePlaces).first { $0.savedIDs.contains(staleLocal.id) })
+        XCTAssertEqual(
+            Place.consolidated(remotePlaces).first { $0.matches(staleLocal) }?.id,
+            remoteAlias.id
+        )
+
+        var liveRemote = liveRemotePlaces(remotePlaces)
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET", request.url?.path == "/places" {
+                return (200, "[\(self.livePlacesJSON(liveRemote))]")
+            }
+            if request.httpMethod == "DELETE", request.url?.path.hasPrefix("/places/") == true {
+                if let id = UUID(uuidString: request.url?.lastPathComponent ?? "") {
+                    self.removeDeletedGroup(from: &liveRemote, id: id)
+                }
+                return (200, "{}")
+            }
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                return (201, "{}")
+            }
+            if request.url?.path.contains("/memory/candidates") == true { return (200, "[]") }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(
+            suiteName: "save.delete-stale-rep.\(UUID().uuidString)"
+        )
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("delete-stale-rep-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        _ = try vault.saveConfirmedPlace(staleLocal, ownerSubject: "did:privy:stale-rep-owner")
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+        map.places = [staleLocal]
+
+        try await map.deletePlace(staleLocal)
+        XCTAssertEqual(liveRemote.count, 49, "must group-delete matching remote B, not no-op missing A")
+        XCTAssertFalse(liveRemote.contains { $0.id == remoteAlias.id })
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed)
     }
 
     /// P1 4365661196: a locally cached merge of A+B must not group-delete B

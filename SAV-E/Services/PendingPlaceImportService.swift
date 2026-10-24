@@ -487,6 +487,12 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         missingInfo.contains { $0.caseInsensitiveCompare(Self.unplacedInboxMarker) == .orderedSame }
     }
 
+    mutating func stripUnplacedInboxMarker() {
+        missingInfo.removeAll {
+            $0.caseInsensitiveCompare(Self.unplacedInboxMarker) == .orderedSame
+        }
+    }
+
     // Transient display state; excluded from Codable/evidence/share payloads.
     var sourceFailureReason: SourceSearchFailureReason? = nil
     var supersededByCandidateID: UUID? = nil
@@ -645,8 +651,8 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     /// Keep a capped save in the Review / Unplaced inbox instead of dropping it.
     static func unplacedInboxItem(from place: Place, ownerSubject: String? = nil) -> PlaceReviewCandidate {
         var venueEvidence = place.sourceEvidence
-        venueEvidence += providerVenueEvidence(from: place)
-        let canReconstructProvider = providerLocation(from: venueEvidence) != nil
+        venueEvidence += Self.providerVenueEvidence(from: place)
+        let canReconstructProvider = Self.providerLocation(from: venueEvidence) != nil
         // Never drop lat/lon unless provider evidence can rebuild the venue.
         // GCJ-02 / BD-09 must not be promoted as MapKit WGS84.
         let keepCoordinates = place.isMapKitMappable || !canReconstructProvider
@@ -696,7 +702,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         var lines: [String] = []
         if let provider = place.locationProvider {
             lines.append("Provider: \(provider.rawValue)")
-            if let providerID = nonEmptyTrimmed(place.providerPlaceId) {
+            if let providerID = Self.nonEmptyTrimmed(place.providerPlaceId) {
                 lines.append("Provider place id: \(providerID)")
                 switch provider {
                 case .amap:
@@ -733,7 +739,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     /// Persist a confirmable Amap marker URL on remote-backed parks that
     /// already have GCJ-02 + POI id but no optional map URL.
     mutating func ensureConfirmableAmapMapURL() {
-        guard storedProviderMapURL(from: evidence) == nil,
+        guard Self.storedProviderMapURL(from: evidence) == nil,
               let location = Self.providerLocation(from: evidence),
               location.provider == .amap,
               location.coordinateSystem == .gcj02,
@@ -811,11 +817,11 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
               let range = trimmed.range(of: prefix, options: .caseInsensitive) else {
             return nil
         }
-        return nonEmptyTrimmed(String(trimmed[range.upperBound...]))
+        return Self.nonEmptyTrimmed(String(trimmed[range.upperBound...]))
     }
 
     private static func recoveryHintValue(in line: String) -> String? {
-        guard let raw = value(after: "Recovery hint:", in: line),
+        guard let raw = Self.value(after: "Recovery hint:", in: line),
               let separator = raw.firstIndex(of: "=") else {
             return nil
         }
@@ -823,7 +829,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
         guard label == "region" || label == "address" || label == "location" || label == "area" else {
             return nil
         }
-        return nonEmptyTrimmed(String(raw[raw.index(after: separator)...]))
+        return Self.nonEmptyTrimmed(String(raw[raw.index(after: separator)...]))
     }
 
     private static func compactSearchQuery(_ values: [String]) -> String {
@@ -921,26 +927,26 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     }
 
     static func providerLocation(from evidence: [String]) -> ProviderPlaceLocation? {
-        guard let coordinate = providerCoordinate(from: evidence) else { return nil }
-        let provider = providerIdentity(from: evidence)
+        guard let coordinate = Self.providerCoordinate(from: evidence) else { return nil }
+        let provider = Self.providerIdentity(from: evidence)
             ?? (coordinate.system == .bd09 ? .baidu : nil)
             ?? (coordinate.system == .gcj02 ? .amap : nil)
         guard let provider else { return nil }
-        let providerID = evidence.compactMap({ value(after: "Provider place id:", in: $0) }).first
-            ?? evidence.compactMap({ value(after: "Amap POI id:", in: $0) }).first
-            ?? evidence.compactMap({ value(after: "Baidu Maps POI id:", in: $0) }).first
+        let providerID = evidence.compactMap({ Self.value(after: "Provider place id:", in: $0) }).first
+            ?? evidence.compactMap({ Self.value(after: "Amap POI id:", in: $0) }).first
+            ?? evidence.compactMap({ Self.value(after: "Baidu Maps POI id:", in: $0) }).first
         return ProviderPlaceLocation(
             provider: provider,
             providerPlaceID: providerID,
             coordinateSystem: coordinate.system,
             latitude: coordinate.latitude,
             longitude: coordinate.longitude,
-            mapURL: storedProviderMapURL(from: evidence)
+            mapURL: Self.storedProviderMapURL(from: evidence)
         )
     }
 
     private static func providerIdentity(from evidence: [String]) -> PlaceMatchProvider? {
-        if let raw = evidence.compactMap({ value(after: "Provider:", in: $0) }).first,
+        if let raw = evidence.compactMap({ Self.value(after: "Provider:", in: $0) }).first,
            let provider = PlaceMatchProvider(rawValue: raw) {
             return provider
         }
@@ -995,7 +1001,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
 
     private static func storedProviderMapURL(from evidence: [String]) -> URL? {
         for line in evidence {
-            guard let rawValue = value(after: "Provider map URL:", in: line),
+            guard let rawValue = Self.value(after: "Provider map URL:", in: line),
                   let url = Place.validAmapMapURL(from: rawValue) else {
                 continue
             }

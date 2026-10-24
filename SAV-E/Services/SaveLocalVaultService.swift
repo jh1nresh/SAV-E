@@ -506,6 +506,11 @@ final class SaveLocalVaultService: Sendable {
                 records[index].evidenceDiagnostic = preservingMissingInfo(
                     candidate.missingInfo, diagnostic: records[index].evidenceDiagnostic
                 )
+                if !candidate.isUnplacedInbox {
+                    records[index].evidenceDiagnostic = strippingUnplacedInbox(
+                        records[index].evidenceDiagnostic
+                    )
+                }
                 try save(records, to: url)
             }
         }
@@ -516,6 +521,16 @@ final class SaveLocalVaultService: Sendable {
         var result = diagnostic ?? SocialPlaceEvidenceDiagnostic(found: [], attempts: [], missingFields: [], nextBestClue: "")
         for field in fields where !result.missingFields.contains(field) { result.missingFields.append(field) }
         return result
+    }
+
+    private func strippingUnplacedInbox(
+        _ diagnostic: SocialPlaceEvidenceDiagnostic?
+    ) -> SocialPlaceEvidenceDiagnostic? {
+        guard var diagnostic else { return nil }
+        diagnostic.missingFields.removeAll {
+            $0.caseInsensitiveCompare(PlaceReviewCandidate.unplacedInboxMarker) == .orderedSame
+        }
+        return diagnostic
     }
 
     private func upsertReviewRecord(_ incoming: SaveMemoryRecord, matchSourceIdentity: Bool) throws -> SaveMemoryRecord {
