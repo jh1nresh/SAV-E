@@ -3209,13 +3209,21 @@ final class MapViewModel: ObservableObject {
                     if reconciled.providerPlaceId == nil {
                         reconciled.providerPlaceId = place.providerPlaceId
                     }
-                    mirrorToLocalVault(reconciled)
+                    try? mirrorToLocalVault(
+                        reconciled,
+                        startedBy: authService.currentUserId,
+                        generation: authService.sessionGeneration
+                    )
                     places = places.map { $0.id == existing.id ? reconciled : $0 }
                     replaced.append(reconciled)
                 }
                 continue
             }
-            mirrorToLocalVault(place)
+            try? mirrorToLocalVault(
+                place,
+                startedBy: authService.currentUserId,
+                generation: authService.sessionGeneration
+            )
             added.append(place)
         }
         if !added.isEmpty {
