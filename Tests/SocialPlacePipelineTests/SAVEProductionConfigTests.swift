@@ -197,6 +197,15 @@ final class SAVEProductionConfigTests: XCTestCase {
         let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(saves.contains("saves.unplaced"))
         XCTAssertTrue(saves.contains("saves.unplaced.row.\\(candidate.id.uuidString)"))
+        XCTAssertTrue(
+            saves.contains("localized(\"Unplaced\", \"暫未放入\")"),
+            "P2 4366181909: Unplaced section and row title must be visible, not a11y-only"
+        )
+        XCTAssertTrue(
+            saves.contains("if candidate.isUnplacedInbox {\n            return localized(\"Unplaced\", \"暫未放入\")"),
+            "P2 4366181909: candidateKindTitle must distinguish parked items from Review Candidate"
+        )
+        XCTAssertTrue(saves.contains("localized(\"Review Candidate\", \"待確認地點\")"))
         let candidate = try source(at: "SAV-E/Services/PendingPlaceImportService.swift")
         XCTAssertTrue(candidate.contains("unplacedInboxMarker"))
         XCTAssertTrue(candidate.contains("isUnplacedInbox"))
@@ -3527,16 +3536,20 @@ final class SAVEProductionConfigTests: XCTestCase {
             "P1 4346852374: failed delete must restore the initiating owner's row"
         )
         XCTAssertTrue(
-            map.contains("remainingAuthoritativeCount = Place.consolidated("),
-            "P2 4347594688: post-delete cap uses the owner-scoped remote remainder, not places.count"
+            map.contains("remainingAuthoritativeCount = Place.consolidated(fresh).count"),
+            "P2 4366119670: post-delete cap re-fetches instead of projecting the pre-delete snapshot"
+        )
+        XCTAssertTrue(
+            map.contains("let fresh = try await supabaseService.fetchPlaces(for: userID)"),
+            "P2 4366119670: deletePlaceGroup success must re-read the server collection"
+        )
+        XCTAssertTrue(
+            map.contains("SavePlaceLimitHandoff.clearSavedPlaceCount()"),
+            "P2 4366119670: a failed post-delete fetch must not keep a stale remainder"
         )
         XCTAssertFalse(
             map.contains("remote.filter { !place.savedIDs.contains($0.id) }"),
             "P2 4365127948: stale savedIDs miss other-device aliases already removed by deletePlaceGroup"
-        )
-        XCTAssertTrue(
-            map.contains("return !selectedGroup.savedIDs.contains(record.id)"),
-            "P2 4366041524: remaining count subtracts only the resolved group's IDs"
         )
         XCTAssertFalse(
             map.contains("deletedRemoteGroup.contains(where: { $0.matches(record) })"),
@@ -4180,6 +4193,21 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
     }
 
+    /// P2 4366181909: parked rows must show a visible Unplaced title, not only
+    /// an accessibility identifier wrapping the same Review Candidate ticket.
+    func testUnplacedSectionShowsVisibleKindTitle() throws {
+        let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        XCTAssertTrue(saves.contains("saves.unplaced"))
+        XCTAssertTrue(saves.contains("saves.unplaced.row.\\(candidate.id.uuidString)"))
+        XCTAssertTrue(saves.contains("localized(\"Unplaced\", \"暫未放入\")"))
+        XCTAssertTrue(
+            saves.contains("if candidate.isUnplacedInbox {\n            return localized(\"Unplaced\", \"暫未放入\")"),
+            "candidateKindTitle must name parked items Unplaced"
+        )
+        XCTAssertTrue(saves.contains("localized(\"Review Candidate\", \"待確認地點\")"))
+        XCTAssertTrue(saves.contains(".accessibilityAddTraits(.isHeader)"))
+    }
+
     func testEntitlementRefreshResyncsAppGroupCacheInSource() throws {
         let store = try source(at: "SAV-E/Services/SaveEntitlementStore.swift")
         let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
@@ -4395,20 +4423,16 @@ final class SAVEProductionConfigTests: XCTestCase {
 
         let remotePlaces = makeCappedPlaces(50)
         let stalePlace = makeCappedPlaces(1, indexOffset: 50)[0]
-        let rows = remotePlaces.enumerated().map { index, place in
-            cappedPlaceRowJSON(
-                id: place.id,
-                index: index,
-                name: place.name,
-                googlePlaceID: place.googlePlaceId
-            )
-        }.joined(separator: ",")
+        var liveRemote = remotePlaces
         AnalysisRequestURLProtocol.reset()
         AnalysisRequestURLProtocol.handler = { request in
             if request.httpMethod == "GET", request.url?.path == "/places" {
-                return (200, "[\(rows)]")
+                return (200, "[\(self.livePlacesJSON(liveRemote))]")
             }
             if request.httpMethod == "DELETE", request.url?.path.hasPrefix("/places/") == true {
+                if let id = UUID(uuidString: request.url?.lastPathComponent ?? "") {
+                    self.removeDeletedGroup(from: &liveRemote, id: id)
+                }
                 return (200, "{}")
             }
             if request.httpMethod == "POST", request.url?.path == "/places" {
@@ -4504,20 +4528,16 @@ final class SAVEProductionConfigTests: XCTestCase {
             "stale savedIDs would keep the other-device alias as a 50th venue"
         )
 
-        let rows = remotePlaces.enumerated().map { index, place in
-            cappedPlaceRowJSON(
-                id: place.id,
-                index: index,
-                name: place.name,
-                googlePlaceID: place.googlePlaceId
-            )
-        }.joined(separator: ",")
+        var liveRemote = remotePlaces
         AnalysisRequestURLProtocol.reset()
         AnalysisRequestURLProtocol.handler = { request in
             if request.httpMethod == "GET", request.url?.path == "/places" {
-                return (200, "[\(rows)]")
+                return (200, "[\(self.livePlacesJSON(liveRemote))]")
             }
             if request.httpMethod == "DELETE", request.url?.path.hasPrefix("/places/") == true {
+                if let id = UUID(uuidString: request.url?.lastPathComponent ?? "") {
+                    self.removeDeletedGroup(from: &liveRemote, id: id)
+                }
                 return (200, "{}")
             }
             if request.httpMethod == "POST", request.url?.path == "/places" {
@@ -4721,22 +4741,35 @@ final class SAVEProductionConfigTests: XCTestCase {
             {"id":"\(place.id.uuidString)","user_id":"owner","name":"\(place.name)","address":"\(place.address)","latitude":\(place.latitude),"longitude":\(place.longitude),"category":"cafe","status":"wantToGo","source_platform":"other"\(placeID),"created_at":"\(createdAt)"}
             """
         }
-        let otherRows = others.enumerated().map { index, place in
-            cappedPlaceRowJSON(id: place.id, index: index, name: "Cap Place", googlePlaceID: place.googlePlaceId)
+        var liveRemote = others + [placeA, placeB, placeC]
+        func encodeLive(_ places: [Place]) -> String {
+            places.enumerated().map { index, place in
+                if place.id == placeA.id {
+                    return rowJSON(place, createdAt: "2020-01-01T00:00:00Z", googlePlaceID: placeA.googlePlaceId)
+                }
+                if place.id == placeB.id {
+                    return rowJSON(place, createdAt: "2020-01-02T00:00:00Z", googlePlaceID: placeB.googlePlaceId)
+                }
+                if place.id == placeC.id {
+                    return rowJSON(place, createdAt: "2020-01-03T00:00:00Z", googlePlaceID: nil)
+                }
+                return self.cappedPlaceRowJSON(
+                    id: place.id,
+                    index: index,
+                    name: "Cap Place",
+                    googlePlaceID: place.googlePlaceId
+                )
+            }.joined(separator: ",")
         }
-        let rows = (
-            otherRows + [
-                rowJSON(placeA, createdAt: "2020-01-01T00:00:00Z", googlePlaceID: placeA.googlePlaceId),
-                rowJSON(placeB, createdAt: "2020-01-02T00:00:00Z", googlePlaceID: placeB.googlePlaceId),
-                rowJSON(placeC, createdAt: "2020-01-03T00:00:00Z", googlePlaceID: nil),
-            ]
-        ).joined(separator: ",")
         AnalysisRequestURLProtocol.reset()
         AnalysisRequestURLProtocol.handler = { request in
             if request.httpMethod == "GET", request.url?.path == "/places" {
-                return (200, "[\(rows)]")
+                return (200, "[\(encodeLive(liveRemote))]")
             }
             if request.httpMethod == "DELETE", request.url?.path.hasPrefix("/places/") == true {
+                if let id = UUID(uuidString: request.url?.lastPathComponent ?? "") {
+                    self.removeDeletedGroup(from: &liveRemote, id: id)
+                }
                 return (200, "{}")
             }
             if request.httpMethod == "POST", request.url?.path == "/places" {
@@ -4764,6 +4797,113 @@ final class SAVEProductionConfigTests: XCTestCase {
             SavePlaceLimitHandoff.testDefaults?.integer(forKey: "save.cachedSavedPlaceCount"),
             49,
             "authoritative count must keep independent C after deleting A's group"
+        )
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed)
+    }
+
+    /// P2 4366119670: another device can change the collection between the
+    /// pre-delete fetch and deletePlaceGroup; the cached count must come from
+    /// a post-delete refetch, not the stale snapshot remainder.
+    @MainActor
+    func testDeleteGroupRefetchesAuthoritativeCountAfterDelete() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:refetch-count-owner")
+        defer {
+            PrivyAuthService.shared.authState = previousAuth
+            AnalysisRequestURLProtocol.reset()
+        }
+
+        let initial = makeCappedPlaces(50)
+        let displayed = initial[0]
+        var liveRemote = initial
+        var didDelete = false
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET", request.url?.path == "/places" {
+                return (200, "[\(self.livePlacesJSON(liveRemote))]")
+            }
+            if request.httpMethod == "DELETE", request.url?.path.hasPrefix("/places/") == true {
+                if let id = UUID(uuidString: request.url?.lastPathComponent ?? "") {
+                    self.removeDeletedGroup(from: &liveRemote, id: id)
+                }
+                if !didDelete {
+                    didDelete = true
+                    liveRemote.removeFirst(min(10, liveRemote.count))
+                }
+                return (200, "{}")
+            }
+            if request.httpMethod == "POST", request.url?.path == "/places" {
+                return (201, "{}")
+            }
+            if request.url?.path.contains("/memory/candidates") == true { return (200, "[]") }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(
+            suiteName: "save.delete-refetch-count.\(UUID().uuidString)"
+        )
+        SavePlaceLimitHandoff.syncCache(tier: .free, savedPlaceCount: 50)
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("delete-refetch-count-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        _ = try vault.saveConfirmedPlace(displayed, ownerSubject: "did:privy:refetch-count-owner")
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+        map.places = [displayed]
+
+        try await map.deletePlace(displayed)
+        XCTAssertTrue(didDelete)
+        XCTAssertEqual(liveRemote.count, 39)
+        XCTAssertEqual(
+            SavePlaceLimitHandoff.testDefaults?.integer(forKey: "save.cachedSavedPlaceCount"),
+            39,
+            "post-delete refetch must see the other-device deletions (39), not the stale 49 remainder"
+        )
+        XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed)
+    }
+
+    /// P2 4366119670: if the post-delete fetch fails, clear the remainder so
+    /// Share fail-opens instead of parking on the pre-delete snapshot.
+    @MainActor
+    func testDeleteGroupClearsCachedCountWhenPostDeleteFetchFails() async throws {
+        let previousAuth = PrivyAuthService.shared.authState
+        PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:refetch-fail-owner")
+        defer {
+            PrivyAuthService.shared.authState = previousAuth
+            AnalysisRequestURLProtocol.reset()
+        }
+
+        let displayed = makeCappedPlaces(1)[0]
+        var liveRemote = makeCappedPlaces(50)
+        liveRemote[0] = displayed
+        var placeGets = 0
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "GET", request.url?.path == "/places" {
+                placeGets += 1
+                if placeGets >= 2 { return (500, #"{"error":"unavailable"}"#) }
+                return (200, "[\(self.livePlacesJSON(liveRemote))]")
+            }
+            if request.httpMethod == "DELETE", request.url?.path.hasPrefix("/places/") == true {
+                return (200, "{}")
+            }
+            if request.httpMethod == "GET" { return (200, "[]") }
+            return (200, "{}")
+        }
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(
+            suiteName: "save.delete-refetch-fail.\(UUID().uuidString)"
+        )
+        SavePlaceLimitHandoff.syncCache(tier: .free, savedPlaceCount: 50)
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("delete-refetch-fail-\(UUID().uuidString).json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = makeRemoteCappedMap(vaultURL: vaultURL, vault: vault)
+        map.places = [displayed]
+
+        try await map.deletePlace(displayed)
+        XCTAssertGreaterThanOrEqual(placeGets, 2)
+        XCTAssertNil(
+            SavePlaceLimitHandoff.testDefaults?.object(forKey: "save.cachedSavedPlaceCount"),
+            "failed post-delete fetch must not leave the pre-delete remainder cached"
         )
         XCTAssertEqual(SavePlaceLimitHandoff.cachedDecision(), .allowed)
     }
@@ -5332,6 +5472,23 @@ final class SAVEProductionConfigTests: XCTestCase {
         return """
         {"id":"\(id.uuidString)","user_id":"owner","name":"\(name) \(index)","address":"\(index) Server Road","latitude":\(25.0 + Double(index) * 0.01),"longitude":\(121.0 + Double(index) * 0.01),"category":"food","status":"wantToGo","source_platform":"other"\(placeID),"created_at":"2020-01-02T03:04:05Z"}
         """
+    }
+
+    private func livePlacesJSON(_ places: [Place]) -> String {
+        places.enumerated().map { index, place in
+            cappedPlaceRowJSON(
+                id: place.id,
+                index: index,
+                name: "Cap Place",
+                googlePlaceID: place.googlePlaceId
+            )
+        }.joined(separator: ",")
+    }
+
+    private func removeDeletedGroup(from places: inout [Place], id: UUID) {
+        let group = Place.consolidated(places).first { $0.savedIDs.contains(id) }
+        let drop = group?.savedIDs ?? [id]
+        places.removeAll { drop.contains($0.id) }
     }
 
     private func makeSocialPlace(name: String) -> Place {

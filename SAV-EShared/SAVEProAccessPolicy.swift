@@ -175,6 +175,14 @@ enum SavePlaceLimitHandoff {
         defaults.set(savedPlaceCount, forKey: cachedCountKey)
     }
 
+    /// Drop a stale remainder so Share fail-opens instead of parking on a
+    /// pre-delete snapshot when the post-delete refetch cannot run.
+    nonisolated static func clearSavedPlaceCount(
+        defaults: UserDefaults = makeDefaults()
+    ) {
+        defaults.removeObject(forKey: cachedCountKey)
+    }
+
     nonisolated static func syncActiveOwner(
         _ ownerSubject: String?,
         defaults: UserDefaults = makeDefaults()

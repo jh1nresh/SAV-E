@@ -4308,17 +4308,18 @@ final class MapViewModel: ObservableObject {
                     try await supabaseService.deletePlaceGroup(selectedGroup?.id ?? selectedID)
                 }
                 try ensureConfirmationSession(userID, generation)
-                // Count only the resolved group's IDs. Matching every deleted
-                // alias transitively can drop a separate group that matches an
-                // alias but not the representative (backend group delete keeps it).
-                remainingAuthoritativeCount = Place.consolidated(
-                    remote.filter { record in
-                        if let selectedGroup {
-                            return !selectedGroup.savedIDs.contains(record.id)
-                        }
-                        return record.id != selectedID
-                    }
-                ).count
+                // Another device may have added or deleted venues between the
+                // pre-delete fetch and this group delete. Re-read the server
+                // collection instead of projecting the stale snapshot.
+                do {
+                    let fresh = try await supabaseService.fetchPlaces(for: userID)
+                    try ensureConfirmationSession(userID, generation)
+                    remainingAuthoritativeCount = Place.consolidated(fresh).count
+                } catch {
+                    remainingAuthoritativeCount = nil
+                    clearAuthoritativeSavedPlaceCount()
+                    SavePlaceLimitHandoff.clearSavedPlaceCount()
+                }
             }
             if let userID = startedBy {
                 try ensureConfirmationSession(userID, generation)
@@ -4327,7 +4328,9 @@ final class MapViewModel: ObservableObject {
             if let remainingAuthoritativeCount, let userID = startedBy {
                 rememberAuthoritativeSavedPlaceCount(remainingAuthoritativeCount, owner: userID)
             }
-            syncSavedPlaceLimitCache()
+            if remainingAuthoritativeCount != nil || !usesRemotePersistence {
+                syncSavedPlaceLimitCache()
+            }
         } catch {
             _ = try? saveLocalVaultService.saveConfirmedPlace(place, ownerSubject: startedBy)
             if authService.currentUserId == startedBy,

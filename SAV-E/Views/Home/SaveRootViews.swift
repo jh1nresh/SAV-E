@@ -271,7 +271,15 @@ struct SaveLibraryView: View {
                 let others = candidates.filter { !$0.isUnplacedInbox }
                 LazyVStack(spacing: 0) {
                     if !unplaced.isEmpty {
-                        VStack(spacing: 0) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text(localized("Unplaced", "暫未放入"))
+                                .font(SaveAtlasType.strong(12))
+                                .foregroundStyle(SaveAtlasPalette.forest)
+                                .padding(.horizontal, 14)
+                                .padding(.top, 12)
+                                .padding(.bottom, 2)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityAddTraits(.isHeader)
                             ForEach(unplaced) { candidate in
                                 reviewTicket(candidate)
                                 if candidate.id != unplaced.last?.id || !others.isEmpty {
@@ -473,7 +481,10 @@ struct SaveLibraryView: View {
     }
 
     private func candidateKindTitle(_ candidate: PlaceReviewCandidate) -> String {
-        candidateKind(candidate) == .sourceClue
+        if candidate.isUnplacedInbox {
+            return localized("Unplaced", "暫未放入")
+        }
+        return candidateKind(candidate) == .sourceClue
             ? localized("Source Clue", "來源線索")
             : localized("Review Candidate", "待確認地點")
     }
@@ -665,7 +676,10 @@ private struct SaveAtlasReviewTicket: View {
     }
 
     private var kindTitle: String {
-        kind == .sourceClue
+        if candidate.isUnplacedInbox {
+            return localized("Unplaced", "暫未放入")
+        }
+        return kind == .sourceClue
             ? localized("Source Clue", "來源線索")
             : localized("Review Candidate", "待確認地點")
     }
