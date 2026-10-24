@@ -480,7 +480,13 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
 
         let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(root.contains("SavvyMapDirectionsLaunch.open"))
-        XCTAssertFalse(root.contains("UIApplication.shared.open(url)"))
+        let directionsFn = try XCTUnwrap(root.range(of: "private func openDirections"))
+        let directionsBody = String(root[directionsFn.lowerBound...].prefix(220))
+        XCTAssertTrue(directionsBody.contains("SavvyMapDirectionsLaunch.open(place)"))
+        XCTAssertFalse(
+            directionsBody.contains("UIApplication.shared.open"),
+            "openDirections must hand off to MKMapItem; settings still uses UIApplication.shared.open(url)"
+        )
     }
 
     func testP11ThirtyPinsStayIndividualAnnotations() throws {
