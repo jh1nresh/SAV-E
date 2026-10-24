@@ -2651,11 +2651,13 @@ final class SAVEProductionConfigTests: XCTestCase {
             )
         ])
         var patchCount = 0
+        // Helper appends `" \(index)"`. Passing stamp.name ("Cap Place 0")
+        // would emit "Cap Place 0 0" and fail the name assertions below.
         let rows = stamps.enumerated().map { index, place in
             cappedPlaceRowJSON(
                 id: place.id,
                 index: index,
-                name: place.name,
+                name: "Cap Place",
                 googlePlaceID: place.googlePlaceId
             )
         }.joined(separator: ",")

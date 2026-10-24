@@ -941,26 +941,21 @@ final class PendingPlaceImportService {
     /// Fingerprints ownerless Share-queue rows so deletion can purge the
     /// pre-deletion legacy set without claiming later ownerless rows or
     /// another owner's items.
+    ///
+    /// Best-effort uncoordinated read: taking the Share write lock here
+    /// deadlocks admitted late writers that already hold it. Skip missing or
+    /// unreadable files so prepare and remote DELETE can proceed. Purge stays
+    /// fail-closed and retains the deletion receipt until retry.
     func ownerlessItemKeysForAccountDeletion() throws -> Set<String> {
         var keys = Set<String>()
         for name in [SAVEProductionConfig.pendingPlacesFileName, SAVEProductionConfig.pendingReviewCandidatesFileName] {
             guard let url = pendingFileURL(named: name) else { throw SaveLocalVaultError.storageUnavailable }
-            var coordinationError: NSError?
-            var readError: Error?
-            var fileKeys = Set<String>()
-            NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
-                do {
-                    guard fileManager.fileExists(atPath: coordinatedURL.path) else { return }
-                    let data = try Data(contentsOf: coordinatedURL)
-                    guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-                        throw CocoaError(.fileReadCorruptFile)
-                    }
-                    fileKeys = Set(rows.compactMap(Self.ownerlessQueueItemKey))
-                } catch { readError = error }
+            guard fileManager.fileExists(atPath: url.path) else { continue }
+            guard let data = try? Data(contentsOf: url),
+                  let rows = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                continue
             }
-            if let coordinationError { throw coordinationError }
-            if let readError { throw readError }
-            keys.formUnion(fileKeys)
+            keys.formUnion(rows.compactMap(Self.ownerlessQueueItemKey))
         }
         return keys
     }

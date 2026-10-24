@@ -782,11 +782,14 @@ final class ProfileAvatarStoreTests: XCTestCase {
         let snapshot = ShareOwnerSnapshot(cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner())
         let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("pending-vault.json"))
         try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A private", ownerSubject: "account-a"))
+        // Pre-deletion ownerless rows are snapshotted and purged with A.
+        // B and later ownerless rows stay (see the dedicated ownerless test).
         let retained: [[String: String]] = [
-            ["ownerSubject": "account-b", "futureField": "B preserved"],
-            ["futureField": "Ownerless preserved"]
+            ["ownerSubject": "account-b", "futureField": "B preserved"]
         ]
-        let original = try JSONEncoder().encode(retained)
+        let original = try JSONEncoder().encode(retained + [
+            ["futureField": "Pre-deletion ownerless"]
+        ])
         let late = ["ownerSubject": "account-a", "futureField": "Late A admitted before invalidation"]
         let admittedData = try SaveMemoryVaultAppender.appending(late, to: original)
         let urls = [SAVEProductionConfig.pendingPlacesFileName, SAVEProductionConfig.pendingReviewCandidatesFileName]
