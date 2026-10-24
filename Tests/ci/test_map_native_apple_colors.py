@@ -55,5 +55,5 @@ class NativeAppleMapColorTests(unittest.TestCase):
         # Run 40014623058: lock expected 100 vs ios.yml job 160.
         ios_workflow = (ROOT / ".github/workflows/ios.yml").read_text()
         self.assertRegex(ios_workflow, r"(?m)^    timeout-minutes: 160\s*$")
-        self.assertIn("timeout-minutes: 60", ios_workflow)
+        self.assertIn("timeout-minutes: 100", ios_workflow)
         self.assertIn("name: Verify CI test selection", ios_workflow)

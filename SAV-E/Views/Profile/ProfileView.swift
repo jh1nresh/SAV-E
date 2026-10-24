@@ -205,9 +205,9 @@ struct ProfileView: View {
                         showLanguageSettings = true
                     }
 
-                    if SAVEProAccessPolicy.shouldOfferProFromPassport(
-                        hasConfirmedMapStamp: !passportPlaces.isEmpty
-                    ) {
+                    // B7: Settings opens the informational paywall after a Map
+                    // Stamp exists. Purchase buttons still honor purchasingIsAvailable.
+                    if !passportPlaces.isEmpty {
                         SettingsRow(
                             icon: "sparkles",
                             title: languageSettings.localized(
@@ -215,8 +215,8 @@ struct ProfileView: View {
                                 traditionalChinese: "Savvy Pro"
                             ),
                             detail: languageSettings.localized(
-                                english: "Core place memory stays free",
-                                traditionalChinese: "核心地點記憶維持免費"
+                                english: "Free: 50 places",
+                                traditionalChinese: "免費：50 個地點"
                             ),
                             color: SaveAtlasPalette.lavender,
                             accessibilityIdentifier: "profile.pro"
@@ -231,6 +231,12 @@ struct ProfileView: View {
                         .foregroundColor(.saveCocoa)
                 }
                 .padding(.horizontal, SaveTheme.Spacing.xs)
+                // Without `.contain`, XCTest copies this identifier onto every
+                // child row. CI 39703881022: Savvy Pro was on screen as
+                // `profile.controlsDisclosure` / "Savvy Pro, Free: 50 places"
+                // while `profile.pro` never existed (same flattening #290
+                // fixed on Home More).
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("profile.controlsDisclosure")
 
                 SettingsRow(

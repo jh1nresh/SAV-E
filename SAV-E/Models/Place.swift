@@ -472,13 +472,62 @@ struct Place: Identifiable, Codable, Hashable {
     }
 
     var providerMapDestinationURL: URL? {
-        guard let rawValue = providerMapUrl,
+        Self.validAmapMapURL(from: providerMapUrl)
+    }
+
+    /// Backend `providerCoordinateFieldError` requires GCJ-02 + amap + POI
+    /// id + `https://uri.amap.com/...`. Parking may omit the optional URL;
+    /// synthesize the same marker form China resolution already emits.
+    var confirmableProviderMapUrl: String? {
+        if let url = providerMapDestinationURL {
+            return url.absoluteString
+        }
+        guard locationProvider == .amap,
+              resolvedCoordinateSystem == .gcj02,
+              let providerID = providerPlaceId?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !providerID.isEmpty,
+              hasValidCoordinate else {
+            return nil
+        }
+        return Self.synthesizedAmapMarkerURL(
+            name: name,
+            latitude: latitude,
+            longitude: longitude
+        )?.absoluteString
+    }
+
+    static func validAmapMapURL(from rawValue: String?) -> URL? {
+        guard let rawValue = rawValue?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !rawValue.isEmpty,
               let url = URL(string: rawValue),
               url.scheme?.lowercased() == "https",
               url.host?.lowercased() == "uri.amap.com" else {
             return nil
         }
         return url
+    }
+
+    static func synthesizedAmapMarkerURL(
+        name: String,
+        latitude: Double,
+        longitude: Double
+    ) -> URL? {
+        guard latitude.isFinite, longitude.isFinite,
+              (-90...90).contains(latitude), (-180...180).contains(longitude),
+              latitude != 0 || longitude != 0 else {
+            return nil
+        }
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = "uri.amap.com"
+        components.path = "/marker"
+        components.queryItems = [
+            URLQueryItem(name: "position", value: "\(longitude),\(latitude)"),
+            URLQueryItem(name: "name", value: name),
+            URLQueryItem(name: "src", value: "save"),
+            URLQueryItem(name: "callnative", value: "1"),
+        ]
+        return components.url
     }
 
     var sourceEvidence: [String] {

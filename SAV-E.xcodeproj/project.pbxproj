@@ -186,6 +186,7 @@
 		E962B07677F83EC27DB285FB /* LocationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1974222FBD914DA6249A96E /* LocationService.swift */; };
 		EB237A031AC343356B5BDAEE /* SaveMemoryVaultAppender.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D964548192D231A0809D275 /* SaveMemoryVaultAppender.swift */; };
 		EB679DE7583581C363424CE1 /* MessagesVaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D639BD0B4FE174792F5CB1A /* MessagesVaultReader.swift */; };
+		C4E8A91B7D2F4E10A6B3C5D8 /* MessagesVaultReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D639BD0B4FE174792F5CB1A /* MessagesVaultReader.swift */; };
 		F0AEF36B6F76663F4DDC0FD5 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8165C7FCD4C17E50EFFC6532 /* ContentView.swift */; };
 		F4575AD325C5CEC013D2DFA8 /* StateServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D44203E2121A511CC30F877 /* StateServer.swift */; };
 		F4DC296DB9E306442582AC4C /* SavePlaceCorrectionEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D50D8F2711C9E3010A9DDA9 /* SavePlaceCorrectionEvent.swift */; };
@@ -1490,6 +1491,7 @@
 				8C5B4D4B69560B6FF869E33D /* RelatedPlaceSourcesClientTests.swift in Sources */,
 				36589FF0D1AC553DE90E6457 /* ReviewDemoTests.swift in Sources */,
 				2E13EB2E4D0C170AF6B107F5 /* SAVEProductionConfigTests.swift in Sources */,
+				C4E8A91B7D2F4E10A6B3C5D8 /* MessagesVaultReader.swift in Sources */,
 				60EF7529D992954D48573948 /* SaveCollaborativeListTests.swift in Sources */,
 				C0C01F4DA92E366AEBDD9004 /* SaveEntitlementWiringTests.swift in Sources */,
 				66F4520897870F795E6E3FD7 /* SaveGuideCustomizationControllerTests.swift in Sources */,
