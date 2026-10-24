@@ -31,6 +31,9 @@ BASELINE = [RAIL + name for name in (
     "testSocialPassportGridAndComposer",
     "testPassportListsEntryOpensListsDirectly",
     "testFriendsComingSoon",
+    "testSavedPlaceLimitPaywallStatesFreeCap",
+    "testSavedPlaceLimitPaywallRetryIsActionable",
+    "testUnplacedLabelFullScreenAtDeviceWidth",
 )] + [ONBOARDING, RAIL + "testPassportTutorialReplaysWithoutAddingPlaces"]
 
 # Exact-file allowlist: adding another view/service requires coverage review.
@@ -68,6 +71,7 @@ FULL = list(BASELINE) + [
     RAIL + "testHomeHintCountEvidence",
     RAIL + "testHomeTaipeiGrantedDistances",
     RAIL + "testHomeTPEAEvidence",
+    RAIL + "testHopU1SavedPlaceLimitPaywallShowsSavedFiftyWithoutManMan",
 ]
 
 # Temporary #279 iteration profiles. Empty SAVE_UI_TEST_FOCUS keeps default

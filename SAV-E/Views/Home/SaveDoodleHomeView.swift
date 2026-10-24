@@ -223,7 +223,7 @@ struct SaveDoodleHomeView: View {
                 Button(action: presentation.onReviewAll) {
                     Text(review)
                         .font(SaveAtlasType.body(13))
-                        .foregroundStyle(SaveAtlasPalette.coral)
+                        .foregroundStyle(SaveAtlasPalette.homeReviewAction)
                         .frame(minHeight: SaveLayout.minTap)
                         .contentShape(Rectangle())
                 }

@@ -585,6 +585,10 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(passport.contains("profile.stampLedger"))
         XCTAssertTrue(disclosure.contains("profile.language"))
         XCTAssertTrue(disclosure.contains("profile.pro"))
+        XCTAssertTrue(
+            disclosure.contains(".accessibilityElement(children: .contain)"),
+            "Disclosure must expose profile.pro as its own control, not flatten into profile.controlsDisclosure"
+        )
         XCTAssertTrue(passport.range(of: "profile.stampLedger")!.lowerBound
             < passport.range(of: "profile.controlsDisclosure")!.lowerBound)
     }

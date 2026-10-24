@@ -207,6 +207,11 @@ enum SaveAtlasPalette {
     /// Postage accent: primary CTA and source-clue fill. Matches landing `--coral`.
     nonisolated static let coralLightHex = brandCoralHex
     nonisolated static let coralDarkHex = "D97861"
+    /// Home hint `Review ›` only. Founder 2026-10-24: light #C8442A, dark #F26B4A.
+    /// Do not reuse this pair for other coral.
+    nonisolated static let homeReviewActionLightHex = "C8442A"
+    nonisolated static let homeReviewActionDarkHex = brandCoralHex
+    static let homeReviewAction = Color(light: homeReviewActionLightHex, dark: homeReviewActionDarkHex)
 
     static let canvas = Color(light: creamHex, dark: "1E1C19")
     static let paper = Color(light: creamHex, dark: "1E1C19")

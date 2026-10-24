@@ -549,4 +549,115 @@ enum ReviewDemoSeed {
     ) -> Bool {
         repairForUITests || !isolatedOfflineUITest
     }
+
+    /// Earlier builds wrote demo fixtures without an owner. Presence checks
+    /// that read the unscoped vault then skip seeding, while the demo
+    /// MapViewModel only shows `ReviewDemo.userId` rows.
+    static func adoptOwnerlessDemoFixtures(in vault: SaveLocalVaultService) {
+        let seedPlaces = places()
+        for record in (try? vault.confirmedPlaceRecords(limit: 500)) ?? [] {
+            guard record.ownerSubject == nil,
+                  let place = confirmedPlaceIdentity(from: record) else { continue }
+            let matchesSeed = seedPlaces.contains { $0.matches(place) }
+                || seedPlaces.contains {
+                    $0.name.localizedCaseInsensitiveCompare(place.name) == .orderedSame
+                }
+            guard matchesSeed else { continue }
+            _ = try? vault.saveConfirmedPlace(place, ownerSubject: ReviewDemo.userId)
+        }
+        let seedNames = reviewCandidates().map(\.candidateName)
+        for candidate in (try? vault.reviewCandidates(limit: 500)) ?? [] {
+            guard candidate.ownerSubject == nil else { continue }
+            let matchesSeed = seedNames.contains {
+                $0.localizedCaseInsensitiveCompare(candidate.name) == .orderedSame
+            }
+            guard matchesSeed else { continue }
+            _ = try? vault.removeReviewCandidate(candidate.id, ownerSubject: nil)
+            var owned = candidate
+            owned.ownerSubject = ReviewDemo.userId
+            _ = try? vault.saveReviewCandidate(owned)
+        }
+    }
+
+    static func seedIsolatedVaultIfNeeded(
+        vault: SaveLocalVaultService,
+        defaults: UserDefaults,
+        repairForUITests: Bool,
+        isolatedOfflineUITest: Bool
+    ) {
+        adoptOwnerlessDemoFixtures(in: vault)
+        let existingPlaces = (try? vault.confirmedPlaces(
+            limit: 500,
+            belongingTo: ReviewDemo.userId
+        )) ?? []
+        let existingReviewCandidates = (try? vault.reviewCandidates(
+            limit: 500,
+            belongingTo: ReviewDemo.userId
+        )) ?? []
+        let wasSeeded = defaults.bool(forKey: ReviewDemo.seededDefaultsKey)
+        if shouldSeedVault(
+            existingPlaces: existingPlaces,
+            wasSeeded: wasSeeded,
+            repairForUITests: repairForUITests
+        ) {
+            for place in missingPlaces(from: existingPlaces) {
+                _ = try? vault.saveConfirmedPlace(place, ownerSubject: ReviewDemo.userId)
+            }
+        }
+        if shouldSeedReviewFace(
+            repairForUITests: repairForUITests,
+            isolatedOfflineUITest: isolatedOfflineUITest
+        ) {
+            for var candidate in missingReviewCandidates(from: existingReviewCandidates) {
+                candidate.ownerSubject = ReviewDemo.userId
+                _ = try? vault.saveReviewCandidate(candidate)
+            }
+        }
+        defaults.set(true, forKey: ReviewDemo.seededDefaultsKey)
+    }
+
+    /// Public `SaveMemoryRecord` fields only. `confirmedPlace` is fileprivate.
+    private static func confirmedPlaceIdentity(from record: SaveMemoryRecord) -> Place? {
+        guard record.state == .confirmedPlace,
+              let latitude = record.latitude,
+              let longitude = record.longitude,
+              latitude != 0 || longitude != 0 else { return nil }
+        let name = record.displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+        let address = (record.address ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return Place(
+            id: record.id,
+            name: name,
+            address: address,
+            latitude: latitude,
+            longitude: longitude,
+            googlePlaceId: record.googlePlaceId,
+            category: record.category ?? PlaceCategory.inferred(from: "\(name) \(address)"),
+            status: record.status ?? .wantToGo,
+            rating: record.rating,
+            note: record.sourceText,
+            sourceUrl: record.sourceURL,
+            sourcePlatform: SourcePlatform.from(urlString: record.sourceURL),
+            coordinateSystem: record.coordinateSystem,
+            locationProvider: record.locationProvider,
+            providerPlaceId: record.providerPlaceId,
+            providerMapUrl: record.providerMapUrl,
+            sourceImageUrl: record.sourceImageUrl,
+            businessPhotoUrls: record.businessPhotoUrls,
+            extractedDishes: record.recommendedItems.map(\.name).isEmpty ? nil : record.recommendedItems.map(\.name),
+            priceRange: nil,
+            recommender: record.sourceHandle,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: record.createdAt,
+            visibility: .privateMemory,
+            placeHighlights: record.placeHighlights.isEmpty ? nil : record.placeHighlights,
+            recommendedItems: record.recommendedItems.isEmpty ? nil : record.recommendedItems,
+            vibeTags: record.vibeTags.isEmpty ? nil : record.vibeTags,
+            accessNotes: record.accessNotes.isEmpty ? nil : record.accessNotes,
+            sourceHandle: record.sourceHandle,
+            mergedPlaceIDs: record.mergedPlaceIDs
+        )
+    }
 }

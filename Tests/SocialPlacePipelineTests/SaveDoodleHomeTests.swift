@@ -1546,6 +1546,14 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(theme.contains("static let rowMinHeight: CGFloat = 68"))
         XCTAssertEqual(SaveAtlasPalette.coralLightHex, "F26B4A")
         XCTAssertEqual(SaveAtlasPalette.coralDarkHex, "D97861")
+        XCTAssertEqual(SaveAtlasPalette.homeReviewActionLightHex, "C8442A")
+        XCTAssertEqual(SaveAtlasPalette.homeReviewActionDarkHex, "F26B4A")
+        XCTAssertEqual(SaveAtlasPalette.brandCoralHex, "F26B4A")
+        XCTAssertTrue(home.contains("SaveAtlasPalette.homeReviewAction"))
+        XCTAssertFalse(
+            cluesLine(in: home).contains("SaveAtlasPalette.coral"),
+            "Review › is the only light coral that uses #C8442A"
+        )
         XCTAssertTrue(home.contains("SaveDoodleOfficialSticker"))
         XCTAssertTrue(home.contains("DoodleSticker"))
         XCTAssertFalse(home.contains("SaveDoodleStickerShape"))
@@ -2025,6 +2033,61 @@ final class SaveDoodleHomeTests: XCTestCase {
             | UInt32(bytes[1]) << 16
             | UInt32(bytes[2]) << 8
             | UInt32(bytes[3])
+    }
+
+    func testHomeReviewActionUsesFounderC8442AOnLightOnly() throws {
+        let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        XCTAssertEqual(SaveAtlasPalette.homeReviewActionLightHex, "C8442A")
+        XCTAssertEqual(SaveAtlasPalette.homeReviewActionDarkHex, "F26B4A")
+        XCTAssertEqual(SaveAtlasPalette.coralLightHex, "F26B4A")
+        XCTAssertEqual(SaveAtlasPalette.coralDarkHex, "D97861")
+        XCTAssertEqual(SaveAtlasPalette.brandCoralHex, "F26B4A")
+        XCTAssertTrue(theme.contains("homeReviewActionLightHex = \"C8442A\""))
+        XCTAssertTrue(theme.contains("static let coral = Color(light: coralLightHex, dark: coralDarkHex)"))
+        XCTAssertTrue(cluesLine(in: home).contains("SaveAtlasPalette.homeReviewAction"))
+        XCTAssertFalse(cluesLine(in: home).contains("SaveAtlasPalette.coral"))
+        // WCAG 2.1 contrast vs Home cream #FFF9EB / dark canvas #1E1C19.
+        // Recalculated for #C8442A (light Review ›) and #F26B4A (dark Review ›).
+        XCTAssertEqual(
+            wcagContrast("C8442A", on: SaveAtlasPalette.creamHex),
+            4.63,
+            accuracy: 0.02,
+            "light Review › #C8442A on cream must stay AA for 13pt body"
+        )
+        XCTAssertEqual(
+            wcagContrast("F26B4A", on: "1E1C19"),
+            5.63,
+            accuracy: 0.05,
+            "dark Review › #F26B4A on canvas"
+        )
+    }
+
+    private func cluesLine(in home: String) -> String {
+        guard let start = home.range(of: "private var cluesLine") else { return "" }
+        let rest = home[start.lowerBound...]
+        if let end = rest.range(of: "\n    private var ") {
+            return String(rest[..<end.lowerBound])
+        }
+        return String(rest)
+    }
+
+    private func wcagContrast(_ hex: String, on background: String) -> Double {
+        func luminance(_ hex: String) -> Double {
+            func channel(_ pair: Substring) -> Double {
+                let value = Double(Int(pair, radix: 16) ?? 0) / 255
+                return value <= 0.03928 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+            }
+            let r = channel(hex.prefix(2))
+            let g = channel(hex.dropFirst(2).prefix(2))
+            let b = channel(hex.dropFirst(4).prefix(2))
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b
+        }
+        let first = luminance(hex)
+        let second = luminance(background)
+        let lighter = max(first, second)
+        let darker = min(first, second)
+        return (lighter + 0.05) / (darker + 0.05)
     }
 
     private func source(at relativePath: String) throws -> String {
