@@ -372,39 +372,40 @@ struct SaveTileTownPeekCard: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    @State private var rowWidth: CGFloat = GooglePlacesPhotoSourceMarkMetrics.typicalContainerWidth
+
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: GooglePlacesPhotoSourceMarkMetrics.homeGapAbove) {
+        VStack(alignment: .leading, spacing: GooglePlacesPhotoSourceMarkMetrics.gapAbove) {
+            HStack(alignment: .top, spacing: 10) {
                 SaveKraftStampFaceView(face: resolvedFace, glyph: "photo")
                     .frame(width: 44, height: 44)
                     .accessibilityHidden(true)
-                if showsGooglePhoto {
-                    GooglePlacesPhotoSourceMark(style: .homeStacked)
-                }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(peekThumbAccessibilityLabel)
-            .accessibilityHidden(!showsGooglePhoto)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(SaveAtlasType.strong(16))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityLabel(peekTitleAccessibilityLabel)
-                    .accessibilityIdentifier(accessibilityNameID ?? "map.peek.name")
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(SaveAtlasType.regular(12))
-                        .foregroundStyle(SaveAtlasPalette.muted)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(SaveAtlasType.strong(16))
+                        .foregroundStyle(SaveAtlasPalette.forest)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityIdentifier("map.peek.subtitle")
+                        .accessibilityLabel(peekTitleAccessibilityLabel)
+                        .accessibilityIdentifier(accessibilityNameID ?? "map.peek.name")
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(SaveAtlasType.regular(12))
+                            .foregroundStyle(SaveAtlasPalette.muted)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .accessibilityIdentifier("map.peek.subtitle")
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+
+            if showsGooglePhoto {
+                GooglePlacesPhotoSourceMark(style: .footer)
+            }
         }
+        .readingGooglePhotoContainerWidth($rowWidth)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -416,9 +417,9 @@ struct SaveTileTownPeekCard: View {
     }
 
     private var showsGooglePhoto: Bool {
-        GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
+        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
             photoURL,
-            availableWidth: 44,
+            availableWidth: rowWidth,
             dynamicType: dynamicTypeSize
         )
     }
@@ -428,12 +429,6 @@ struct SaveTileTownPeekCard: View {
             return .scene(SaveKraftStampScene.from(name: title))
         }
         return .photo(photoURL)
-    }
-
-    private var peekThumbAccessibilityLabel: String {
-        showsGooglePhoto
-            ? GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: languageSettings.language)
-            : title
     }
 
     private var peekTitleAccessibilityLabel: String {

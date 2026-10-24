@@ -309,7 +309,7 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
         languageNote: String = "en VoiceOver"
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Home featured 44pt and recent 52pt. Two-line Google / Maps under the thumb. \(languageNote).")
+            Text("Home featured 44pt and recent 52pt. Single-line Google Maps footer on the row. \(languageNote).")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.saveInk)
                 .accessibilityIdentifier(identifier)
@@ -351,7 +351,7 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
 
     private var drawerThumbsContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Drawer search rows. Two-line Google / Maps under the 52pt thumb.")
+            Text("Drawer search rows. Single-line Google Maps footer under the row.")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.saveInk)
                 .accessibilityIdentifier("evidence.drawerThumbs")
@@ -370,7 +370,7 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
 
     private var tripStopContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Trip stop paper card. Two-line Google / Maps under the 70pt thumb.")
+            Text("Trip stop paper card. Single-line Google Maps footer under the row.")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.saveInk)
                 .accessibilityIdentifier("evidence.tripStop")
@@ -409,7 +409,7 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
 
     private var originFoodContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Origin food card. Two-line Google / Maps under the 326pt photo.")
+            Text("Origin food card. Single-line Google Maps footer under the photo.")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.saveInk)
                 .accessibilityIdentifier("evidence.originFood")
@@ -440,7 +440,7 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
 
     private var atlasThumbsContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Atlas selected-place card. List/detail 56pt thumb, not a pin. Two-line Google / Maps under the thumb.")
+            Text("Atlas map.place.card is a MapView callout (G6): own/friend photo or coral, never Google.")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.saveInk)
                 .accessibilityIdentifier("evidence.atlasThumbs")

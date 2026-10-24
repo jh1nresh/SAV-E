@@ -2894,14 +2894,51 @@ private struct SavedMapDetailDrawerContent: View {
     }
 }
 
-private struct SavedPostcardPhoto: View {
+/// Drawer saved-place postcard (104pt). G2: mark Google session photos
+/// only. Own / friend URLs stay unmarked. Sources are
+/// `Place.businessPhotoURLStrings` — live enricher Places URLs (Google),
+/// in-memory `businessPhotoUrls`, and `sourceImageUrl` (social / import /
+/// leftover Google until G9). Persist no longer writes photo URLs.
+struct SavedPostcardPhoto: View {
     let imageURLs: [String]
     let isSearching: Bool
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        VStack(alignment: .leading, spacing: GooglePlacesPhotoSourceMarkMetrics.gapAbove) {
+            photo
+            if showsGooglePhoto {
+                GooglePlacesPhotoSourceMark(style: .footer)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(postcardAccessibilityLabel)
+    }
+
+    private var photoURL: URL? {
+        imageURLs.first.flatMap(URL.init(string:))
+    }
+
+    private var showsGooglePhoto: Bool {
+        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
+            photoURL,
+            availableWidth: 104,
+            dynamicType: dynamicTypeSize
+        )
+    }
+
+    private var postcardAccessibilityLabel: String {
+        if showsGooglePhoto {
+            return "\(isSearching ? "Finding business photo" : "Saved place photo"), \(GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: languageSettings.language))"
+        }
+        return isSearching ? "Finding business photo" : "Saved place photo"
+    }
+
+    private var photo: some View {
         Group {
-            if let urlString = imageURLs.first,
-               let url = URL(string: urlString) {
+            if let url = photoURL,
+               !GooglePlacesPhotoURL.isGooglePlacesPhotoURL(url) || showsGooglePhoto {
                 CachedAsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -2932,7 +2969,6 @@ private struct SavedPostcardPhoto: View {
         }
         .rotationEffect(.degrees(-1.2))
         .shadow(color: SaveAtlasPalette.ink.opacity(0.06), radius: 3, y: 2)
-        .accessibilityLabel(isSearching ? "Finding business photo" : "Saved place photo")
     }
 
     private var fallback: some View {

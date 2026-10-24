@@ -76,8 +76,8 @@ struct SaveKraftStamp: View {
             .accessibilityHidden(true)
 
             if showsGooglePhoto {
-                GooglePlacesPhotoSourceMark(style: .homeStacked)
-                    .padding(.top, GooglePlacesPhotoSourceMarkMetrics.homeGapAbove)
+                GooglePlacesPhotoSourceMark(style: .footer)
+                    .padding(.top, GooglePlacesPhotoSourceMarkMetrics.gapAbove)
             }
 
             Text(visibleTitle)
@@ -86,7 +86,7 @@ struct SaveKraftStamp: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(0.75)
-                .padding(.top, showsGooglePhoto ? 6 : GooglePlacesPhotoSourceMarkMetrics.homeGapAbove)
+                .padding(.top, GooglePlacesPhotoSourceMarkMetrics.gapAbove)
                 .frame(maxWidth: tileWidth + 12)
         }
         .frame(width: tileWidth, alignment: .leading)
@@ -97,7 +97,7 @@ struct SaveKraftStamp: View {
 
     private var tileWidth: CGFloat {
         showsGooglePhoto
-            ? max(size.face, GooglePlacesPhotoSourceMarkMetrics.homeMarkWidth(for: dynamicTypeSize))
+            ? max(size.face, GooglePlacesPhotoSourceMarkMetrics.markWidth(for: dynamicTypeSize))
             : size.face
     }
 
@@ -107,9 +107,9 @@ struct SaveKraftStamp: View {
     }
 
     private var showsGooglePhoto: Bool {
-        GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
+        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
             photoURL,
-            availableWidth: size.face,
+            availableWidth: max(size.face, GooglePlacesPhotoSourceMarkMetrics.markWidth(for: dynamicTypeSize)),
             dynamicType: dynamicTypeSize
         )
     }

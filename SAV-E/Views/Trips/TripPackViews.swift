@@ -424,6 +424,7 @@ struct TripStopRow: View {
     let onMoveLater: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var rowWidth: CGFloat = GooglePlacesPhotoSourceMarkMetrics.typicalContainerWidth
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -444,9 +445,9 @@ struct TripStopRow: View {
     }
 
     private var showsGooglePhoto: Bool {
-        GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
+        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
             stopPhotoURL,
-            availableWidth: 70,
+            availableWidth: rowWidth,
             dynamicType: dynamicTypeSize
         )
     }
@@ -457,37 +458,34 @@ struct TripStopRow: View {
         return "\(base), \(GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: languageSettings.language))"
     }
 
-    private var stopThumbColumn: some View {
-        VStack(alignment: .leading, spacing: GooglePlacesPhotoSourceMarkMetrics.homeGapAbove) {
-            TripStopThumbnail(place: place, showsGooglePhoto: showsGooglePhoto)
-            if showsGooglePhoto {
-                GooglePlacesPhotoSourceMark(style: .homeStacked)
-            }
-        }
-    }
-
     private var editButton: some View {
         Button(action: onEdit) {
-            Group {
-                if dynamicTypeSize.isAccessibilitySize {
-                    VStack(alignment: .leading, spacing: 10) {
-                        stopThumbColumn
-                        stopDetails
-                        Image(systemName: "chevron.right")
-                            .foregroundStyle(SaveAtlasPalette.ink)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
-                } else {
-                    HStack(alignment: .top, spacing: 12) {
-                        stopThumbColumn
-                        stopDetails
-                        Spacer(minLength: 2)
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(SaveAtlasPalette.ink)
+            VStack(alignment: .leading, spacing: GooglePlacesPhotoSourceMarkMetrics.gapAbove) {
+                Group {
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: 10) {
+                            TripStopThumbnail(place: place, showsGooglePhoto: showsGooglePhoto)
+                            stopDetails
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(SaveAtlasPalette.ink)
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                    } else {
+                        HStack(alignment: .top, spacing: 12) {
+                            TripStopThumbnail(place: place, showsGooglePhoto: showsGooglePhoto)
+                            stopDetails
+                            Spacer(minLength: 2)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(SaveAtlasPalette.ink)
+                        }
                     }
                 }
+                if showsGooglePhoto {
+                    GooglePlacesPhotoSourceMark(style: .footer)
+                }
             }
+            .readingGooglePhotoContainerWidth($rowWidth)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

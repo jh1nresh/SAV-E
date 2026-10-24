@@ -21,13 +21,13 @@ Light and dark sets:
 | `*-map-pins.png` | G6 | Apple Map symbol pins, no Google photos |
 | `*-city-page.png` | G7 | City card uses coral art, no Google photo |
 | `*-report-entry.png` | G8 | Viewer “View on Google Maps” report entry |
-| `*-home-thumbs.png` | Home DESIGN | Featured 44pt + recent 52pt; two-line Google / Maps under the thumb |
+| `*-home-thumbs.png` | Home DESIGN | Featured 44pt + recent 52pt; single-line Google Maps footer on the row |
 | `*-home-thumbs-en.png` | Home DESIGN | Same Home thumbs, English VoiceOver environment |
 | `*-home-thumbs-zh-Hant.png` | Home DESIGN | Same Home thumbs, zh-Hant VoiceOver environment |
-| `*-drawer-thumbs.png` | G2 | Drawer search rows; two-line Google / Maps under the 52pt thumb |
-| `*-trip-stop.png` | G2 | Trip stop paper card; two-line Google / Maps under the 70pt thumb |
-| `*-origin-food.png` | G2 | Origin food card; two-line Google / Maps under the 326pt photo |
-| `*-atlas-thumbs.png` | G2 | Atlas selected-place list/detail card (`map.place.card`); 56pt thumb + stacked mark. Not a pin. |
+| `*-drawer-thumbs.png` | G2 | Drawer search rows; single-line Google Maps footer under the row |
+| `*-trip-stop.png` | G2 | Trip stop paper card; single-line Google Maps footer under the row |
+| `*-origin-food.png` | G2 | Origin food card; single-line Google Maps footer under the photo |
+| `*-atlas-thumbs.png` | G6 | Atlas `map.place.card` on Apple MapView: own/friend photo or coral. No Google photo, no mark. |
 | `375-all-surfaces.png` | G2 | 375pt width: Home, Drawer, Trip, Origin, Atlas (Google + own) |
 | `xxxl-all-surfaces.png` | G2 | XXXL Dynamic Type: same five surfaces |
 | `xsmall-all-surfaces.png` | G2 | Minimum Dynamic Type (xSmall): same five surfaces |
@@ -38,9 +38,9 @@ CI artifact (DESIGN judges these PNGs, not the Linux checkout):
 
 Launch argument: `--uitest-google-photo-attribution`.
 
-Home thumbs (DESIGN 2026-10-24): untranslated two-line `Google` / `Maps`, 10pt semibold, 2pt under the thumb, paper background, no bar. Light `#1F1F1F` on `#FFF9EB` and white on `#1E1C19` both ≥ 4.5:1. Google terms on wording/placement are still unverified; HoP / founder must confirm before treating overlay-on-photo as required.
+Home / Drawer / Trip / Origin / saved-postcard (DESIGN rejudge 2026-10-24): untranslated single-line `Google Maps`, 12–16sp regular, 6pt from the photo, paper/canvas background, no bar, no wrap. Light `#1F1F1F` on `#FFF9EB` and white on `#1E1C19` both ≥ 4.5:1. Measure the full single-line width against the container, not the thumb; if it cannot fit, show a non-Google image. Stacked 10pt has no written basis.
 
-Every G2 thumb uses the same two-line 10pt stacked mark under the photo. If that mark cannot fit the thumb width, that surface shows a non-Google image. Atlas 56pt is the selected-place list/detail card, not a map pin.
+`map.place.card` is a callout over a live Apple MapView (G6): own/friend photo or coral, never a Google photo and never a mark. Detail (off the map) still shows Google photos with G1/G2/G4/G8 attribution. Google terms on wording/placement are still unverified; do not overlay the photo.
 
 Contrast (P1-4): white author type over the cream fixture at gradient
 top 0.55 measures **5.62:1** in `testAttributionWhiteTextMeetsContrastOnLightPhoto`.

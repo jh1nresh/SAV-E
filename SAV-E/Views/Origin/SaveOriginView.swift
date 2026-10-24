@@ -282,7 +282,7 @@ struct SaveOriginFoodCard: View {
     var swipeOverlay: AnyView = AnyView(EmptyView())
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var cardWidth: CGFloat = 343
+    @State private var cardWidth: CGFloat = GooglePlacesPhotoSourceMarkMetrics.typicalContainerWidth
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -330,9 +330,9 @@ struct SaveOriginFoodCard: View {
             .clipped()
 
             if showsGooglePhoto {
-                GooglePlacesPhotoSourceMark(style: .homeStacked)
+                GooglePlacesPhotoSourceMark(style: .footer)
                     .padding(.horizontal, 16)
-                    .padding(.top, GooglePlacesPhotoSourceMarkMetrics.homeGapAbove)
+                    .padding(.top, GooglePlacesPhotoSourceMarkMetrics.gapAbove)
             }
 
             VStack(alignment: .leading, spacing: 7) {
@@ -434,9 +434,9 @@ struct SaveOriginFoodCard: View {
     }
 
     private var showsGooglePhoto: Bool {
-        GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
+        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
             photoURL,
-            availableWidth: cardWidth,
+            availableWidth: max(cardWidth - 32, 0),
             dynamicType: dynamicTypeSize
         )
     }

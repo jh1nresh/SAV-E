@@ -764,8 +764,6 @@ struct SaveAtlasLivePlaceCard: View {
     let onOpen: () -> Void
     let onOpenAssistant: () -> Void
     let onPlanAround: () -> Void
-    @Environment(\.appLanguageSettings) private var languageSettings
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -861,23 +859,8 @@ struct SaveAtlasLivePlaceCard: View {
         .accessibilityIdentifier("map.place.card")
     }
 
-    private var photoURL: URL? {
-        place.businessPhotoURLStrings.first.flatMap(URL.init(string:))
-    }
-
-    private var showsGooglePhoto: Bool {
-        GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
-            photoURL,
-            availableWidth: 56,
-            dynamicType: dynamicTypeSize
-        )
-    }
-
     private var nameAccessibilityLabel: String {
-        if showsGooglePhoto {
-            return "\(place.name), \(GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: languageSettings.language))"
-        }
-        return place.name
+        place.name
     }
 
     private func mapCardIcon(_ systemName: String) -> some View {
@@ -905,48 +888,28 @@ struct SaveAtlasLivePlaceCard: View {
 
 }
 
-/// 56pt thumb on the selected-place list/detail card (`map.place.card`
-/// at 15,606 372×180). Not a map pin, badge, or callout — those stay
-/// symbol-only on `PlaceMapPin`. Mark Google photos; if the stacked
-/// mark cannot fit the 56pt width, drop the Google photo.
+/// 56pt thumb on the selected-place card (`map.place.card` at 15,606
+/// 372×180). That card sits on a live Apple MapView, so it is a map
+/// callout (G6): Google photos are forbidden. Own / friend photos may
+/// show; otherwise coral. Detail (off the map) still marks Google photos.
 private struct SaveAtlasMapPlaceThumbnail: View {
     let place: Place
-    @Environment(\.appLanguageSettings) private var languageSettings
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: GooglePlacesPhotoSourceMarkMetrics.homeGapAbove) {
-            thumb
-            if showsGooglePhoto {
-                GooglePlacesPhotoSourceMark(style: .homeStacked)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(thumbAccessibilityLabel)
+        thumb
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(place.name)
     }
 
     private var photoURL: URL? {
-        place.businessPhotoURLStrings.first.flatMap(URL.init(string:))
-    }
-
-    private var showsGooglePhoto: Bool {
-        GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
-            photoURL,
-            availableWidth: 56,
-            dynamicType: dynamicTypeSize
+        GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL(
+            place.businessPhotoURLStrings.first.flatMap(URL.init(string:))
         )
-    }
-
-    private var thumbAccessibilityLabel: String {
-        showsGooglePhoto
-            ? GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: languageSettings.language)
-            : place.name
     }
 
     private var thumb: some View {
         Group {
-            if let url = photoURL,
-               !GooglePlacesPhotoURL.isGooglePlacesPhotoURL(url) || showsGooglePhoto {
+            if let url = photoURL {
                 CachedAsyncImage(url: url) { phase in
                     if case .success(let image) = phase {
                         image.resizable().scaledToFill()
@@ -959,7 +922,7 @@ private struct SaveAtlasMapPlaceThumbnail: View {
             }
         }
         .frame(width: 56, height: 56)
-        .background(AtlasPalette.mint.opacity(0.72))
+        .background(AtlasPalette.coral)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -971,7 +934,7 @@ private struct SaveAtlasMapPlaceThumbnail: View {
     private var fallback: some View {
         Image(systemName: place.category.iconName)
             .font(.system(size: 24, weight: .semibold))
-            .foregroundStyle(AtlasPalette.forest)
+            .foregroundStyle(AtlasPalette.paper)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

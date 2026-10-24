@@ -269,34 +269,37 @@ private struct SaveSearchResultNotebookRow: View {
     let result: SaveSearchResult
     var onSelectResult: (SaveSearchResult) -> Void
 
+    @State private var rowWidth: CGFloat = GooglePlacesPhotoSourceMarkMetrics.typicalContainerWidth
+
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             Button {
                 onSelectResult(result)
             } label: {
-                HStack(alignment: .top, spacing: 10) {
-                    VStack(alignment: .leading, spacing: GooglePlacesPhotoSourceMarkMetrics.homeGapAbove) {
+                VStack(alignment: .leading, spacing: GooglePlacesPhotoSourceMarkMetrics.gapAbove) {
+                    HStack(alignment: .top, spacing: 10) {
                         resultThumbnail
-                        if showsGooglePhoto {
-                            GooglePlacesPhotoSourceMark(style: .homeStacked)
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(result.title)
+                                .font(.subheadline.weight(.bold))
+                                .foregroundColor(.saveInk)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(result.subtitle)
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.saveMutedText)
+                                .lineLimit(2)
                         }
+
+                        Spacer(minLength: 0)
+                        Image(systemName: canOpenDetails ? "chevron.right" : "circle.dotted")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(.saveCocoa.opacity(0.8))
                     }
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(result.title)
-                            .font(.subheadline.weight(.bold))
-                            .foregroundColor(.saveInk)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(result.subtitle)
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.saveMutedText)
-                            .lineLimit(2)
+                    if showsGooglePhoto {
+                        GooglePlacesPhotoSourceMark(style: .footer)
                     }
-
-                    Spacer(minLength: 0)
-                    Image(systemName: canOpenDetails ? "chevron.right" : "circle.dotted")
-                        .font(.caption.weight(.bold))
-                        .foregroundColor(.saveCocoa.opacity(0.8))
                 }
             }
             .buttonStyle(.plain)
@@ -334,6 +337,7 @@ private struct SaveSearchResultNotebookRow: View {
                     .lineLimit(1)
             }
         }
+        .readingGooglePhotoContainerWidth($rowWidth)
         .padding(12)
         .background(SaveAtlasPalette.canvas.opacity(0.9))
         .overlay(
@@ -348,9 +352,9 @@ private struct SaveSearchResultNotebookRow: View {
     }
 
     private var showsGooglePhoto: Bool {
-        GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
+        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
             resultPhotoURL,
-            availableWidth: 52,
+            availableWidth: rowWidth,
             dynamicType: dynamicTypeSize
         )
     }
