@@ -287,11 +287,11 @@ final class ProfileViewModel: ObservableObject {
                     await authService.signOut()
                     resetForCurrentSession()
                 } else if activeOwner == nil {
-                    // Recovery after Privy already reports signed out: the
-                    // durable receipt is about to be removed, so the stale
-                    // binding must go too. Preserve it only when a different
-                    // active account has already replaced the deleted owner.
-                    try? accountReferenceStore.clear()
+                    // Recovery after Privy already reports signed out.
+                    // Propagate Keychain failure so the receipt stays
+                    // retryable; only a different active account keeps
+                    // its binding.
+                    try accountReferenceStore.clear()
                 }
             }
             // The owner may already be signed out or replaced by B. Only remove

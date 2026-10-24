@@ -965,6 +965,52 @@ final class ProfileAvatarStoreTests: XCTestCase {
         XCTAssertNil(try replacementVault.pendingAccountDeletionIntent())
     }
 
+    /// P2 PRRT_kwDOTYZUp86v3Mrb: signed-out recovery must keep the durable
+    /// receipt when Keychain clear throws, then finish on retry.
+    @MainActor
+    func testSignedOutDeletionKeepsReceiptWhenBindingClearFailsThenRetryCompletes() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        defer { auth.authState = previousAuth }
+        let deletedRef = "save_account_" + String(repeating: "A", count: 43)
+        let store = InMemoryAccountReferenceStore(value: deletedRef)
+        store.clearError = ProfileUpdateTestError.offline
+        let vault = SaveLocalVaultService(
+            overrideVaultURL: directory.appendingPathComponent("signed-out-clear-fail.json")
+        )
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a"))
+        let intent = try vault.prepareAccountDeletion(belongingTo: "account-a")
+        _ = try vault.recordRemoteAccountDeletionSuccess(intentID: intent.id)
+        auth.authState = .unauthenticated
+        XCTAssertNil(auth.currentUserId)
+
+        let model = deletionModel(
+            vault: vault,
+            currentOwner: { auth.currentUserId },
+            accountReferenceStore: store
+        ) { XCTFail("Signed-out recovery must not send DELETE") }
+
+        let first = await model.deleteAccount()
+        XCTAssertFalse(first)
+        XCTAssertTrue(
+            model.errorMessage?.localizedCaseInsensitiveContains("retry to finish") == true,
+            model.errorMessage ?? "missing error"
+        )
+        let kept = try XCTUnwrap(vault.pendingAccountDeletionIntent())
+        XCTAssertEqual(kept.id, intent.id)
+        XCTAssertEqual(kept.remoteOutcome, .succeeded)
+        XCTAssertEqual(store.value, deletedRef)
+        XCTAssertEqual(store.clearCount, 0)
+
+        store.clearError = nil
+        let retry = await model.deleteAccount()
+        XCTAssertTrue(retry)
+        XCTAssertNil(store.value)
+        XCTAssertEqual(store.clearCount, 1)
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+        XCTAssertNil(auth.currentUserId)
+    }
+
     @MainActor
     func testBothPendingQueuesPurgeAdmittedLateWritersBeforeClearingIntent() async throws {
         let auth = PrivyAuthService.shared

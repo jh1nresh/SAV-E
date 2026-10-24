@@ -4135,7 +4135,17 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertTrue(
             profile.contains("try? accountReferenceStore.clear()"),
-            "P2 4366334143: clear the device binding, not only the active-owner cache"
+            "P2 4366334143: the still-signed-in branch still swallows Keychain clear"
+        )
+        let nilOwnerStart = try XCTUnwrap(profile.range(of: "else if activeOwner == nil"))
+        let nilOwnerSlice = String(profile[nilOwnerStart.lowerBound...].prefix(500))
+        XCTAssertTrue(
+            nilOwnerSlice.contains("try accountReferenceStore.clear()"),
+            "P2 PRRT_kwDOTYZUp86v3Mrb: signed-out recovery must propagate binding-clear failure"
+        )
+        XCTAssertFalse(
+            nilOwnerSlice.contains("try? accountReferenceStore.clear()"),
+            "P2 PRRT_kwDOTYZUp86v3Mrb: do not swallow Keychain clear after Privy is signed out"
         )
         let liveDeleteStart = try XCTUnwrap(profile.range(of: "try await accountDeletionService.deleteAccount"))
         let liveFinishStart = try XCTUnwrap(
