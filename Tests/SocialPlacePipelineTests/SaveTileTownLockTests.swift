@@ -46,6 +46,8 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(leftoverTown.contains("enum SaveTileTownProductLock"))
         XCTAssertFalse(leftoverTown.contains("struct SaveTileTownCanvas"))
         XCTAssertFalse(leftoverTown.contains("struct SaveTileTownPin"))
+        XCTAssertFalse(leftoverTown.contains("map.tilePin.\\(pin.id.uuidString)"))
+        XCTAssertFalse(leftoverTown.contains("showsPins"))
         XCTAssertFalse(leftoverTown.contains("enum SaveTileTownRaster"))
         XCTAssertFalse(leftoverTown.contains("enum SaveTileTownMapLens"))
         XCTAssertFalse(leftoverTown.contains("struct SaveTileTownPeekCard"))
@@ -117,10 +119,13 @@ final class SaveTileTownLockTests: XCTestCase {
 
     func testTownPinsRemainTappableOnHomeAndMap() throws {
         let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
         XCTAssertTrue(town.contains("enum SaveTileTownProductLock"))
+        XCTAssertFalse(town.contains("map.tilePin.\\(pin.id.uuidString)"))
         XCTAssertFalse(town.contains("map.tilePin."))
         XCTAssertFalse(town.contains("showsPins"))
         XCTAssertFalse(town.contains("struct SaveTileTownCanvas"))
+        XCTAssertFalse(town.contains("struct SaveTileTownPin"))
         let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertFalse(home.contains("home.miniMap"))
         XCTAssertFalse(home.contains("Map("))
@@ -128,6 +133,9 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertFalse(home.contains("Map(initialPosition:"))
         XCTAssertFalse(home.contains("Annotation("))
         XCTAssertFalse(home.contains("onOpenMap"))
+        XCTAssertFalse(home.contains("map.tilePin."))
+        XCTAssertTrue(map.contains("map.tilePin.\\(item.place.id.uuidString)"))
+        XCTAssertTrue(map.contains("map.tilePin."))
     }
 
     func testDisplayFontIsOFLWithCJKFallbackAndSFBody() throws {
@@ -245,6 +253,9 @@ final class SaveTileTownLockTests: XCTestCase {
         let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
         XCTAssertTrue(town.contains("mapChromeHeight"))
         XCTAssertTrue(town.contains("enum SaveTileTownProductLock"))
+        XCTAssertFalse(town.contains("map.tilePin.\\(pin.id.uuidString)"))
+        XCTAssertFalse(town.contains("map.tilePin."))
+        XCTAssertFalse(town.contains("showsPins"))
         XCTAssertFalse(town.contains("interpolationQuality = .none"))
         XCTAssertFalse(town.contains("enum SaveTileTownRaster"))
         XCTAssertFalse(town.contains("struct SaveTileTownCanvas"))

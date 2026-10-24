@@ -46,6 +46,8 @@ final class AtlasOneFaceUITests: XCTestCase {
         XCTAssertTrue(pin.contains("enum SaveTileTownProductLock"))
         XCTAssertFalse(pin.contains("struct SaveTileTownCanvas"))
         XCTAssertFalse(pin.contains("struct SaveTileTownPinMark"))
+        XCTAssertFalse(pin.contains("map.tilePin.\\(pin.id.uuidString)"))
+        XCTAssertFalse(pin.contains("showsPins"))
         XCTAssertFalse(pin.contains("SaveAtlasPalette.brandCoral"))
         XCTAssertFalse(pin.contains("let coral = SaveAtlasPalette.coral\n"))
         XCTAssertFalse(pin.contains("0.949"))
