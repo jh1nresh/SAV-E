@@ -237,7 +237,11 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(root.contains("onTapGesture"))
         XCTAssertTrue(root.contains("collapseSelection(clearPlace: true)"))
-        XCTAssertTrue(root.contains("collapseDrag"))
+        let pins = try source(at: "SAV-E/Views/Map/SavvyMapPhotoPins.swift")
+        XCTAssertTrue(
+            pins.contains("SavvyMapPinMetrics.collapseDrag"),
+            "swipe-down collapse lives on the card, not the map root"
+        )
         let collapseRange = try XCTUnwrap(root.range(of: "private func collapseSelection"))
         let finishRange = try XCTUnwrap(root.range(of: "private func finishClearingPlace"))
         XCTAssertLessThan(collapseRange.lowerBound, finishRange.lowerBound)
