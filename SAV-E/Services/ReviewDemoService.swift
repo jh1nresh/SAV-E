@@ -387,8 +387,12 @@ enum ReviewDemoSeed {
     /// MapViewModel only shows `ReviewDemo.userId` rows.
     static func adoptOwnerlessDemoFixtures(in vault: SaveLocalVaultService) {
         let seedPlaces = places()
-        for record in (try? vault.confirmedPlaceRecords(limit: 500)) ?? [] {
-            guard record.ownerSubject == nil, let place = record.confirmedPlace else { continue }
+        let ownedIDs = Set(
+            ((try? vault.confirmedPlaces(limit: 500, belongingTo: ReviewDemo.userId)) ?? [])
+                .flatMap(\.savedIDs)
+        )
+        for place in (try? vault.confirmedPlaces(limit: 500)) ?? [] {
+            guard place.savedIDs.isDisjoint(with: ownedIDs) else { continue }
             let matchesSeed = seedPlaces.contains { $0.matches(place) }
                 || seedPlaces.contains {
                     $0.name.localizedCaseInsensitiveCompare(place.name) == .orderedSame
