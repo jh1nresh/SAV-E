@@ -59,6 +59,11 @@ struct ShareOwnerSnapshot: Sendable {
 }
 
 enum ShareAnalysisKeychain {
+#if DEBUG
+    static var usesTestStore = false
+    static var testStore: ShareAnalysisCredential?
+#endif
+
     private static var query: [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,
          kSecAttrService as String: "com.wanderly.share-analysis",
@@ -68,6 +73,9 @@ enum ShareAnalysisKeychain {
     }
 
     static func read() -> ShareAnalysisCredential? {
+#if DEBUG
+        if usesTestStore { return testStore }
+#endif
         var request = query
         request[kSecReturnData as String] = true
         request[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -78,6 +86,12 @@ enum ShareAnalysisKeychain {
     }
 
     static func write(_ credential: ShareAnalysisCredential) throws {
+#if DEBUG
+        if usesTestStore {
+            testStore = credential
+            return
+        }
+#endif
         let data = try JSONEncoder().encode(credential)
         let attributes: [String: Any] = [kSecValueData as String: data,
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly]
@@ -88,7 +102,15 @@ enum ShareAnalysisKeychain {
         guard status == errSecSuccess else { throw ShareAnalysisError.sessionUnavailable }
     }
 
-    static func clear() { SecItemDelete(query as CFDictionary) }
+    static func clear() {
+#if DEBUG
+        if usesTestStore {
+            testStore = nil
+            return
+        }
+#endif
+        SecItemDelete(query as CFDictionary)
+    }
 }
 
 enum ShareAnalysisError: LocalizedError {

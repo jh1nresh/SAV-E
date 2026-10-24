@@ -335,8 +335,10 @@ nonisolated struct SaveActiveOwnerSnapshot: Equatable, Sendable {
 
 nonisolated enum SaveActiveOwnerResolver {
     /// Live owner wins once auth is resolved. While auth is still restoring,
-    /// use the durable cached owner. Fail closed if both are missing so a
-    /// cold launch cannot read or stamp ownerless rows.
+    /// use the durable cached owner and do not bind `sessionGeneration`:
+    /// restore of the same owner increments generation because `currentUserId`
+    /// is still nil. Fail closed if both owners are missing so a cold launch
+    /// cannot read or stamp ownerless rows.
     static func resolve(
         liveOwner: String?,
         cachedOwner: String?,
@@ -347,7 +349,7 @@ nonisolated enum SaveActiveOwnerResolver {
             guard let cached = cachedOwner.flatMap({ $0.isEmpty ? nil : $0 }) else {
                 throw SaveActiveOwnerError.unresolved
             }
-            return SaveActiveOwnerSnapshot(ownerSubject: cached, generation: generation)
+            return SaveActiveOwnerSnapshot(ownerSubject: cached, generation: nil)
         }
         return SaveActiveOwnerSnapshot(ownerSubject: liveOwner, generation: generation)
     }

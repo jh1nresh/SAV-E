@@ -3558,7 +3558,11 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(intent.contains("let snapshot = try await auth.resolvedActiveOwner()"))
         XCTAssertTrue(intent.contains("let startedBy = snapshot.ownerSubject"))
         XCTAssertTrue(intent.contains("try auth.revalidateActiveOwner(snapshot)"))
-        XCTAssertTrue(intent.contains("try Self.ensureInitiatingSession(startedBy, generation)"))
+        XCTAssertTrue(intent.contains("try Self.ensureInitiatingSession(snapshot)"))
+        XCTAssertFalse(
+            intent.contains("snapshot.generation ?? auth.sessionGeneration"),
+            "P1 4366379854: do not re-bind a pre-restore generation after analysis"
+        )
         XCTAssertTrue(
             intent.contains("ownerSubject: startedBy"),
             "a late URL-intent write must keep the initiating owner"
@@ -3692,6 +3696,23 @@ final class SAVEProductionConfigTests: XCTestCase {
             "local-only confirm must stamp the active owner so a signed-in reload keeps the Map Stamp"
         )
         let privy = try source(at: "SAV-E/Services/PrivyAuthService.swift")
+        XCTAssertTrue(
+            privy.contains("generation: authState == .unknown ? nil : sessionGeneration"),
+            "P1 4366379854: unresolved resolve must not bind the pre-restore generation"
+        )
+        XCTAssertTrue(
+            privy.contains("guard canLogOutSDKUser(user?.id, startedBy: owner, generation: generation) else { return }"),
+            "P2 4366379855: abort logout before tearing down Share analysis"
+        )
+        let signOutStart = try XCTUnwrap(privy.range(of: "func signOut() async {"))
+        let signOutEnd = try XCTUnwrap(privy[signOutStart.lowerBound...].range(of: "private func canLogOutSDKUser("))
+        let signOut = String(privy[signOutStart.lowerBound..<signOutEnd.lowerBound])
+        let firstInvalidate = try XCTUnwrap(signOut.range(of: "invalidateShareAnalysisSession()"))
+        let firstConfirm = try XCTUnwrap(signOut.range(of: "guard canLogOutSDKUser"))
+        XCTAssertTrue(
+            firstConfirm.lowerBound < firstInvalidate.lowerBound,
+            "P2 4366379855: do not revoke Share analysis before logout is confirmed"
+        )
         XCTAssertTrue(
             privy.contains("ReviewDemoSeed.seedIsolatedVaultIfNeeded("),
             "reviewer-demo entry must run the isolated seed/upgrade path"
@@ -4217,6 +4238,10 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertTrue(intent.contains("try auth.revalidateActiveOwner(snapshot)"))
         XCTAssertFalse(
+            intent.contains("sessionGeneration"),
+            "P1 4366379854: Ask Savvy Memory must revalidate owner identity, not a pre-restore generation"
+        )
+        XCTAssertFalse(
             intent.contains("PrivyAuthService.shared.currentUserId"),
             "cold-launch Ask Savvy Memory must not read currentUserId before owner resolve"
         )
@@ -4342,7 +4367,10 @@ final class SAVEProductionConfigTests: XCTestCase {
             authIsUnresolved: true
         )
         XCTAssertEqual(cached.ownerSubject, "did:privy:a")
-        XCTAssertEqual(cached.generation, 3)
+        XCTAssertNil(
+            cached.generation,
+            "P1 4366379854: a cached-owner snapshot must not bind the pre-restore generation"
+        )
         XCTAssertThrowsError(
             try SaveActiveOwnerResolver.resolve(
                 liveOwner: nil,
@@ -4368,10 +4396,29 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertEqual(live.ownerSubject, "did:privy:b")
         XCTAssertNoThrow(try cached.revalidate(currentOwner: "did:privy:a", currentGeneration: 3))
+        XCTAssertNoThrow(
+            try cached.revalidate(currentOwner: "did:privy:a", currentGeneration: 4),
+            "same-owner restore may bump generation; owner identity still matches"
+        )
         XCTAssertThrowsError(try cached.revalidate(currentOwner: "did:privy:b", currentGeneration: 3))
-        XCTAssertThrowsError(try cached.revalidate(currentOwner: "did:privy:a", currentGeneration: 4))
+        XCTAssertThrowsError(try live.revalidate(currentOwner: "did:privy:b", currentGeneration: 3))
         XCTAssertNoThrow(try MessagesVaultReader.revalidate(expectedOwner: "did:privy:a", currentOwner: "did:privy:a"))
         XCTAssertThrowsError(try MessagesVaultReader.revalidate(expectedOwner: "did:privy:a", currentOwner: "did:privy:b"))
+        let policy = try source(at: "SAV-EShared/SAVEProAccessPolicy.swift")
+        XCTAssertTrue(
+            policy.contains("return SaveActiveOwnerSnapshot(ownerSubject: cached, generation: nil)"),
+            "P1 4366379854: unresolved cache resolve must omit sessionGeneration"
+        )
+        XCTAssertTrue(
+            try source(at: "SAV-E/Intents/AskSaveMemoryIntent.swift")
+                .contains("try auth.revalidateActiveOwner(snapshot)"),
+            "Ask Savvy Memory revalidates the resolved snapshot, not a rebound generation"
+        )
+        XCTAssertTrue(
+            try source(at: "SAV-EShareExtension/ShareViewController.swift")
+                .contains("try snapshot.validate("),
+            "Share extension stays owner-identity, no sessionGeneration bind"
+        )
     }
 
     @MainActor
@@ -4389,11 +4436,143 @@ final class SAVEProductionConfigTests: XCTestCase {
         PrivyAuthService.shared.authState = .unknown
         let snapshot = try await PrivyAuthService.shared.resolvedActiveOwner()
         XCTAssertEqual(snapshot.ownerSubject, "did:privy:cached-a")
+        XCTAssertNil(snapshot.generation)
         XCTAssertEqual(PrivyAuthService.shared.authState, .unknown)
         XCTAssertEqual(SavePlaceLimitHandoff.cachedActiveOwner(), "did:privy:cached-a")
         XCTAssertNoThrow(try PrivyAuthService.shared.revalidateActiveOwner(snapshot))
         PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:b")
         XCTAssertThrowsError(try PrivyAuthService.shared.revalidateActiveOwner(snapshot))
+    }
+
+    /// P1 4366379854: cold-launch cached A + restore A (generation bumps) still saves.
+    @MainActor
+    func testColdLaunchCachedOwnerSurvivesSameOwnerRestoreGenerationBump() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        let previousTestStore = ShareAnalysisKeychain.usesTestStore
+        let previousCredential = ShareAnalysisKeychain.testStore
+        let defaults = UserDefaults(suiteName: "save.owner.restore-same.\(UUID().uuidString)")!
+        defaults.removePersistentDomain(forName: defaults.suiteName ?? "")
+        SavePlaceLimitHandoff.testDefaults = defaults
+        ShareAnalysisKeychain.usesTestStore = true
+        ShareAnalysisKeychain.testStore = nil
+        defer {
+            auth.authState = previousAuth
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+            ShareAnalysisKeychain.testStore = previousCredential
+            ShareAnalysisKeychain.usesTestStore = previousTestStore
+        }
+        SavePlaceLimitHandoff.syncActiveOwner("did:privy:owner-a")
+        auth.authState = .unknown
+        let generationBefore = auth.sessionGeneration
+        let snapshot = try await auth.resolvedActiveOwner()
+        XCTAssertEqual(snapshot.ownerSubject, "did:privy:owner-a")
+        XCTAssertNil(snapshot.generation)
+        XCTAssertEqual(auth.authState, .unknown)
+        auth.applyRestoredAuthenticationForTests(userId: "did:privy:owner-a")
+        XCTAssertEqual(auth.currentUserId, "did:privy:owner-a")
+        XCTAssertGreaterThan(auth.sessionGeneration, generationBefore)
+        XCTAssertNoThrow(try auth.revalidateActiveOwner(snapshot))
+        XCTAssertNoThrow(try SavePlaceFromURLIntent.ensureInitiatingSession(snapshot))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let record = try vault.saveSourceOnly(
+            url: URL(string: "https://example.com/cold-launch-a")!,
+            note: "Keep after restore",
+            ownerSubject: snapshot.ownerSubject
+        )
+        XCTAssertEqual(record.ownerSubject, "did:privy:owner-a")
+        XCTAssertEqual(try vault.reviewCandidates(belongingTo: "did:privy:owner-a").count, 1)
+    }
+
+    /// P1 4366379854: restore to a different owner still rejects the cached snapshot.
+    @MainActor
+    func testColdLaunchCachedOwnerRejectsDifferentRestoredOwner() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        let previousTestStore = ShareAnalysisKeychain.usesTestStore
+        let previousCredential = ShareAnalysisKeychain.testStore
+        let defaults = UserDefaults(suiteName: "save.owner.restore-other.\(UUID().uuidString)")!
+        defaults.removePersistentDomain(forName: defaults.suiteName ?? "")
+        SavePlaceLimitHandoff.testDefaults = defaults
+        ShareAnalysisKeychain.usesTestStore = true
+        ShareAnalysisKeychain.testStore = nil
+        defer {
+            auth.authState = previousAuth
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+            ShareAnalysisKeychain.testStore = previousCredential
+            ShareAnalysisKeychain.usesTestStore = previousTestStore
+        }
+        SavePlaceLimitHandoff.syncActiveOwner("did:privy:owner-a")
+        auth.authState = .unknown
+        let snapshot = try await auth.resolvedActiveOwner()
+        auth.applyRestoredAuthenticationForTests(userId: "did:privy:owner-b")
+        XCTAssertEqual(auth.currentUserId, "did:privy:owner-b")
+        XCTAssertThrowsError(try auth.revalidateActiveOwner(snapshot)) { error in
+            XCTAssertEqual(error as? SaveActiveOwnerError, .ownerChanged)
+        }
+        XCTAssertThrowsError(try SavePlaceFromURLIntent.ensureInitiatingSession(snapshot)) { error in
+            guard case ReviewCandidateError.sessionChangedAfterCommit = error else {
+                return XCTFail("a restored different owner must abort the URL intent write")
+            }
+        }
+    }
+
+    /// P2 4366379855: aborted logout must leave A's Share Analysis credential usable.
+    @MainActor
+    func testAbortedSDKLogoutKeepsShareAnalysisCredential() async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        let previousSuspension = auth.signOutSuspension
+        let previousSDKProvider = auth.signOutSDKUserIDProvider
+        let previousTestStore = ShareAnalysisKeychain.usesTestStore
+        let previousCredential = ShareAnalysisKeychain.testStore
+        let suite = "abort-logout-share-cred-" + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        SavePlaceLimitHandoff.testDefaults = defaults
+        ShareAnalysisKeychain.usesTestStore = true
+        defer {
+            auth.authState = previousAuth
+            auth.signOutSuspension = previousSuspension
+            auth.signOutSDKUserIDProvider = previousSDKProvider
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+            ShareAnalysisKeychain.testStore = previousCredential
+            ShareAnalysisKeychain.usesTestStore = previousTestStore
+            defaults.removePersistentDomain(forName: suite)
+        }
+        auth.authState = .authenticated(userId: "account-a")
+        SavePlaceLimitHandoff.syncActiveOwner("account-a")
+        let credential = ShareAnalysisCredential(
+            token: "share-a-token",
+            ownerSubject: "account-a",
+            expiresAt: Date().addingTimeInterval(30 * 86400),
+            apiBaseURL: "https://api.example.com"
+        )
+        try ShareAnalysisKeychain.write(credential)
+        XCTAssertTrue(try XCTUnwrap(ShareAnalysisKeychain.read()).isUsable())
+        var logoutCalls = 0
+        auth.signOutSDKUserIDProvider = {
+            await Task.yield()
+            return "account-b"
+        }
+        auth.signOutSuspension = { logoutCalls += 1 }
+        await auth.signOut()
+        XCTAssertEqual(logoutCalls, 0)
+        XCTAssertEqual(auth.currentUserId, "account-a")
+        let kept = try XCTUnwrap(ShareAnalysisKeychain.read())
+        XCTAssertEqual(kept, credential)
+        XCTAssertTrue(kept.isUsable())
+        let shareSnapshot = ShareOwnerSnapshot(cachedActiveOwner: "account-a")
+        XCTAssertNoThrow(
+            try shareSnapshot.validatedAnalysisCredential(
+                cachedActiveOwner: SavePlaceLimitHandoff.cachedActiveOwner(),
+                credential: kept
+            )
+        )
     }
 
     @MainActor
@@ -4900,13 +5079,17 @@ final class SAVEProductionConfigTests: XCTestCase {
         defer { PrivyAuthService.shared.authState = previousAuth }
 
         let generation = PrivyAuthService.shared.sessionGeneration
+        let snapshot = SaveActiveOwnerSnapshot(
+            ownerSubject: "did:privy:owner-a",
+            generation: generation
+        )
         XCTAssertNoThrow(
-            try SavePlaceFromURLIntent.ensureInitiatingSession("did:privy:owner-a", generation)
+            try SavePlaceFromURLIntent.ensureInitiatingSession(snapshot)
         )
 
         PrivyAuthService.shared.authState = .authenticated(userId: "did:privy:owner-b")
         XCTAssertThrowsError(
-            try SavePlaceFromURLIntent.ensureInitiatingSession("did:privy:owner-a", generation)
+            try SavePlaceFromURLIntent.ensureInitiatingSession(snapshot)
         ) { error in
             guard case ReviewCandidateError.sessionChangedAfterCommit = error else {
                 return XCTFail("a late URL-intent write must not stamp the next account")

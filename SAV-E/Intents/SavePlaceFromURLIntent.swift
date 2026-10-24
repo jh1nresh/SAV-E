@@ -17,13 +17,12 @@ struct SavePlaceFromURLIntent: AppIntent {
         let auth = PrivyAuthService.shared
         let snapshot = try await auth.resolvedActiveOwner()
         let startedBy = snapshot.ownerSubject
-        let generation = snapshot.generation ?? auth.sessionGeneration
         let candidates: [PendingReviewCandidate]
         do {
             candidates = try await SocialLinkReviewCandidateService.shared.reviewCandidates(from: url)
         } catch {
             try auth.revalidateActiveOwner(snapshot)
-            try Self.ensureInitiatingSession(startedBy, generation)
+            try Self.ensureInitiatingSession(snapshot)
             let record = try SaveLocalVaultService.shared.saveSourceOnly(
                 url: url,
                 note: note.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -33,7 +32,7 @@ struct SavePlaceFromURLIntent: AppIntent {
         }
 
         try auth.revalidateActiveOwner(snapshot)
-        try Self.ensureInitiatingSession(startedBy, generation)
+        try Self.ensureInitiatingSession(snapshot)
 
         var savedCount = 0
         var failedCount = 0
@@ -62,12 +61,11 @@ struct SavePlaceFromURLIntent: AppIntent {
     }
 
     /// A late analysis result must not persist into a different signed-in account.
+    /// Reuse the resolved snapshot; do not re-bind a pre-restore generation.
     @MainActor
-    static func ensureInitiatingSession(_ userId: String?, _ generation: Int) throws {
+    static func ensureInitiatingSession(_ snapshot: SaveActiveOwnerSnapshot) throws {
         do {
-            try PrivyAuthService.shared.revalidateActiveOwner(
-                SaveActiveOwnerSnapshot(ownerSubject: userId, generation: generation)
-            )
+            try PrivyAuthService.shared.revalidateActiveOwner(snapshot)
         } catch {
             throw ReviewCandidateError.sessionChangedAfterCommit
         }

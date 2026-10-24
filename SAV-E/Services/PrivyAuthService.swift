@@ -59,6 +59,13 @@ final class PrivyAuthService: ObservableObject {
 #if DEBUG
     var signOutSuspension: (() async -> Void)?
     var signOutSDKUserIDProvider: (() async -> String?)?
+
+    /// Test-only: apply the same restore transition as `restoreSession()`.
+    /// From `.unknown`, `currentUserId` is nil so generation advances.
+    func applyRestoredAuthenticationForTests(userId: String) {
+        sessionOrigin = .restored
+        transitionToAuthenticated(userId: userId)
+    }
 #endif
 
     // MARK: App Review Demo
@@ -91,7 +98,7 @@ final class PrivyAuthService: ObservableObject {
         return try SaveActiveOwnerResolver.resolve(
             liveOwner: currentUserId,
             cachedOwner: SavePlaceLimitHandoff.cachedActiveOwner(),
-            generation: sessionGeneration,
+            generation: authState == .unknown ? nil : sessionGeneration,
             authIsUnresolved: authState == .unknown
         )
     }
@@ -300,7 +307,8 @@ final class PrivyAuthService: ObservableObject {
                 for waiter in waiters { waiter.resume() }
             }
         }
-        invalidateShareAnalysisSession()
+        // Keep A's Share Analysis credential until logout is confirmed.
+        // An SDK-owner mismatch aborts with A still signed in.
 #if DEBUG
         if signOutSDKUserIDProvider != nil || signOutSuspension != nil {
             let sdkUserID: String?
@@ -310,6 +318,7 @@ final class PrivyAuthService: ObservableObject {
             // Writers are on this MainActor. Clear only after logout is
             // confirmed, and before SDK suspension, so Share cannot append as
             // A during a real logout or see a signed-out snapshot if this aborts.
+            invalidateShareAnalysisSession()
             invalidateShareOwnerCacheIfCurrent(owner)
             if let signOutSuspension { await signOutSuspension() }
             guard currentUserId == owner, sessionGeneration == generation else { return }
@@ -332,6 +341,7 @@ final class PrivyAuthService: ObservableObject {
         }
         let user = await privy.getUser()
         guard canLogOutSDKUser(user?.id, startedBy: owner, generation: generation) else { return }
+        invalidateShareAnalysisSession()
         invalidateShareOwnerCacheIfCurrent(owner)
         await user?.logout()
         guard currentUserId == owner, sessionGeneration == generation else { return }
