@@ -1262,6 +1262,7 @@ final class SaveCollaborativeListTests: XCTestCase {
         CachedImageStore.shared.store(fixture, for: url)
     }
 
+    @MainActor
     private func photoPlace(name: String, photoURL: URL) -> Place {
         Place(
             id: UUID(),
@@ -1278,6 +1279,7 @@ final class SaveCollaborativeListTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func drawerResponse(photoURL: URL, title: String) -> SaveSearchResponse {
         let result = SaveSearchResult(
             id: "test-drawer-\(title)",
