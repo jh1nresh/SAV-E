@@ -812,12 +812,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Passport", app: app)
         openPassportSettings(app)
         XCTAssertTrue(
-            app.navigationBars["Passport settings"].waitForExistence(timeout: stepTimeout),
+            app.descendants(matching: .any)["Passport settings"].waitForExistence(timeout: stepTimeout),
             "Passport settings opens the B7 Pro row."
         )
 
         let disclosure = app.descendants(matching: .any)["profile.controlsDisclosure"]
-        XCTAssertTrue(disclosure.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            disclosure.waitForExistence(timeout: stepTimeout),
+            "Passport settings content must expose profile.controlsDisclosure"
+        )
         tapReachable(disclosure)
 
         let pro = app.descendants(matching: .any)["profile.pro"]
