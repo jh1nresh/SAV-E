@@ -540,10 +540,21 @@ jobs:
     if: github.event_name == 'push'
     needs: [ios]
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Require backend, contracts, and evidence-rubric
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/require-save-release-ci.py \
+            --commit "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY"
 
       - name: Write release-readiness receipt
         run: |
