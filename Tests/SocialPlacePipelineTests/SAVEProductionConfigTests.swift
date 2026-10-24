@@ -226,7 +226,19 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertTrue(
             rail.contains("Settings Pro row requires a confirmed Map Stamp on Home first."),
-            "E4 Settings waits for home.featuredName before opening the gated Pro row"
+            "E4 Settings still requires a confirmed Map Stamp before opening the gated Pro row"
+        )
+        XCTAssertTrue(
+            rail.contains("waitForConfirmedHomeStampBeforeSettings"),
+            "Home B waits for an Eat/Go stamp, not the retired mini-map featured name"
+        )
+        XCTAssertTrue(
+            rail.contains("home.city.tokyo"),
+            "E4 Settings uses the B-1/B-3 city switcher when Near you lists no rows"
+        )
+        XCTAssertFalse(
+            rail.contains("staticTexts[\"home.featuredName\"]"),
+            "Home B removed the mini-map featured-name wait"
         )
         let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(saves.contains("saves.unplaced"))

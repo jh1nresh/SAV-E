@@ -824,10 +824,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         // `home.savedPlaces` is the library container and exists while empty.
         // The Pro row is `if !passportPlaces.isEmpty`. CI 39697020308 opened
         // Settings before a stamp loaded, so profile.pro never entered the tree.
-        XCTAssertTrue(
-            app.staticTexts["home.featuredName"].waitForExistence(timeout: stepTimeout),
-            "Settings Pro row requires a confirmed Map Stamp on Home first."
-        )
+        // Home B has no mini-map `home.featuredName`. A confirmed stamp is an
+        // Eat/Go row (`home.place.*`). Near you without a fix lists none;
+        // B-1/B-3 city switcher shows the review-demo Tokyo/Taipei stamps.
+        waitForConfirmedHomeStampBeforeSettings(app)
         openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         let settings = app.buttons["profile.settings"]
@@ -859,6 +859,40 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
         attach(app, name: "e4-settings-paywall")
         terminate(app)
+    }
+
+    /// Home B has no mini-map featured stamp. A confirmed Map Stamp is an
+    /// Eat/Go row (`home.place.*`). Near you without a location fix lists
+    /// none; B-1/B-3 city switcher reveals the review-demo Tokyo/Taipei
+    /// stamps so Settings can show `profile.pro`.
+    @MainActor
+    private func waitForConfirmedHomeStampBeforeSettings(_ app: XCUIApplication) {
+        let stamp = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
+        ).firstMatch
+        if stamp.waitForExistence(timeout: 2) {
+            return
+        }
+
+        let switcher = app.buttons["home.citySwitcher"]
+        XCTAssertTrue(
+            switcher.waitForExistence(timeout: stepTimeout),
+            "Settings Pro row requires a confirmed Map Stamp on Home first."
+        )
+        tapReachable(switcher)
+
+        let tokyo = app.descendants(matching: .any)["home.city.tokyo"]
+        let taipei = app.descendants(matching: .any)["home.city.taipei"]
+        guard let city = firstHittable([tokyo, taipei], timeout: stepTimeout) else {
+            XCTFail("Settings Pro row requires a confirmed Map Stamp on Home first.")
+            return
+        }
+        tapReachable(city)
+
+        XCTAssertTrue(
+            stamp.waitForExistence(timeout: stepTimeout),
+            "Settings Pro row requires a confirmed Map Stamp on Home first."
+        )
     }
 
     @MainActor
