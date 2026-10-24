@@ -7,9 +7,10 @@
 ///
 /// Matching is host- or resource-name scoped after repeated
 /// percent-decode. The previous `place/photo` substring was too wide
-/// (`marketplace/photo`, `workplace/photo`). Generic `lh*.googleusercontent.com`
-/// user-content (`/p/`) is not treated as a Places photo. The Places
-/// redirect path `/places/` on googleusercontent is.
+/// (`marketplace/photo`, `workplace/photo`). On
+/// `lh*.googleusercontent.com`, Places photo path segments
+/// `/place-photos/`, `/places/`, `/p/`, `/gps-cs-s/`, `/gps-proxy/`
+/// are nulled. Avatar paths `/a/` and `/a-/` stay.
 
 export type PlaceWriteBody = Record<string, unknown>;
 
@@ -19,6 +20,14 @@ const patchImmutableKeys = new Set(["id", "user_id", "created_at", "updated_at"]
 const googlePhotoHosts = new Set([
   "maps.googleapis.com",
   "places.googleapis.com",
+]);
+
+const googleusercontentPlacesSegments = new Set([
+  "place-photos",
+  "places",
+  "p",
+  "gps-cs-s",
+  "gps-proxy",
 ]);
 
 export function decodePercentLayers(value: string, maxLayers = 8): string {
@@ -52,6 +61,11 @@ function omitKeys(body: PlaceWriteBody, blocked: Set<string>): PlaceWriteBody {
   );
 }
 
+export function googleusercontentPathIsPlacesPhoto(path: string): boolean {
+  const parts = path.toLowerCase().split("/").filter(Boolean);
+  return parts.some((part) => googleusercontentPlacesSegments.has(part));
+}
+
 export function isGooglePlacesPhotoURL(value: string): boolean {
   const decoded = decodePercentLayers(value).trim();
   if (!decoded) return false;
@@ -71,7 +85,7 @@ export function isGooglePlacesPhotoURL(value: string): boolean {
     if (host === "places.googleapis.com" && (path.includes("/photos/") || path.includes("/media"))) {
       return true;
     }
-    if (host.endsWith("googleusercontent.com") && path.includes("/places/")) {
+    if (host.endsWith("googleusercontent.com") && googleusercontentPathIsPlacesPhoto(path)) {
       return true;
     }
     if (hasPhotoReference && (googlePhotoHosts.has(host) || host.endsWith(".googleapis.com"))) {

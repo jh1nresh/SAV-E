@@ -195,16 +195,54 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertFalse(
             GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(google, availableWidth: 40, dynamicType: .large)
         )
+        XCTAssertTrue(
+            GooglePlacesPhotoSourceMarkMetrics.canShowStackedMark(in: 44, dynamicType: .large)
+        )
+        XCTAssertTrue(
+            GooglePlacesPhotoSourceMarkMetrics.canShowStackedMark(in: 52, dynamicType: .large)
+        )
+        XCTAssertTrue(
+            GooglePlacesPhotoSourceMarkMetrics.canShowStackedMark(in: 56, dynamicType: .large)
+        )
+        XCTAssertTrue(
+            GooglePlacesPhotoSourceMarkMetrics.canShowStackedMark(in: 70, dynamicType: .large)
+        )
+        XCTAssertFalse(
+            GooglePlacesPhotoSourceMarkMetrics.canShowStackedMark(in: 20, dynamicType: .large)
+        )
+        XCTAssertTrue(
+            GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
+                google,
+                availableWidth: 44,
+                dynamicType: .large
+            )
+        )
+        XCTAssertFalse(
+            GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
+                google,
+                availableWidth: 20,
+                dynamicType: .large
+            )
+        )
 
         let drawer = try source(at: "SAV-E/Views/Drawer/Components/SaveSearchResultsComponent.swift")
-        XCTAssertTrue(drawer.contains("GooglePlacesPhotoSourceMark()"))
+        XCTAssertTrue(drawer.contains("GooglePlacesPhotoSourceMark(style: .homeStacked)"))
+        XCTAssertTrue(drawer.contains("availableWidth: 52"))
 
         let trip = try source(at: "SAV-E/Views/Trips/TripPackViews.swift")
-        XCTAssertTrue(trip.contains("GooglePlacesPhotoSourceMark()"))
+        XCTAssertTrue(trip.contains("GooglePlacesPhotoSourceMark(style: .homeStacked)"))
+        XCTAssertTrue(trip.contains("availableWidth: 70"))
 
         let origin = try source(at: "SAV-E/Views/Origin/SaveOriginView.swift")
-        XCTAssertTrue(origin.contains("GooglePlacesPhotoSourceMark()"))
+        XCTAssertTrue(origin.contains("GooglePlacesPhotoSourceMark(style: .homeStacked)"))
         XCTAssertTrue(origin.contains("struct SaveOriginFoodCard"))
+
+        let atlas = try source(at: "SAV-E/Views/Atlas/SaveAtlasProductionBridge.swift")
+        XCTAssertTrue(atlas.contains("GooglePlacesPhotoSourceMark(style: .homeStacked)"))
+        XCTAssertTrue(atlas.contains("availableWidth: 56"))
+        XCTAssertTrue(atlas.contains("map.place.card"))
+        XCTAssertTrue(atlas.contains("list/detail"))
+        XCTAssertFalse(atlas.contains("PlaceMapPin("))
     }
 
     @MainActor
@@ -255,16 +293,31 @@ final class SaveCollaborativeListTests: XCTestCase {
             string: "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=home-stacked"
         ))
         XCTAssertTrue(GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(google))
+        XCTAssertTrue(
+            GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
+                google,
+                availableWidth: 44,
+                dynamicType: .large
+            )
+        )
+        XCTAssertTrue(
+            GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
+                google,
+                availableWidth: 52,
+                dynamicType: .large
+            )
+        )
         let peek = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
-        XCTAssertTrue(peek.contains("isGooglePhotoURL(photoURL)"))
+        XCTAssertTrue(peek.contains("displaysStackedGooglePhoto("))
+        XCTAssertTrue(peek.contains("availableWidth: 44"))
         XCTAssertTrue(peek.contains("style: .homeStacked"))
         let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
-        XCTAssertTrue(stamp.contains("isGooglePhotoURL(photoURL)"))
+        XCTAssertTrue(stamp.contains("displaysStackedGooglePhoto("))
         XCTAssertTrue(stamp.contains("style: .homeStacked"))
     }
 
     @MainActor
-    func testPersistableStringDropsPhotoNamesAndPlacesMediaURLs() {
+    func testPersistableStringDropsPhotoNamesAndPlacesMediaURLs() throws {
         XCTAssertNil(GooglePlacesPhotoURL.persistableString(
             "places/ChIJ123/photos/ABC"
         ))
@@ -274,9 +327,28 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertNil(GooglePlacesPhotoURL.persistableString(
             "https://lh3.googleusercontent.com/places/ANXAkqG-places-path"
         ))
-        XCTAssertEqual(
-            GooglePlacesPhotoURL.persistableString("https://lh3.googleusercontent.com/p/AF1Qip-generic"),
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "https://lh3.googleusercontent.com/place-photos/AF1Qip-place-photos"
+        ))
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
             "https://lh3.googleusercontent.com/p/AF1Qip-generic"
+        ))
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "https://lh3.googleusercontent.com/gps-cs-s/photo-token"
+        ))
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "https://lh5.googleusercontent.com/gps-proxy/proxy-token"
+        ))
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "https://lh3.googleusercontent.com/%70/AF1Qip-encoded"
+        ))
+        XCTAssertEqual(
+            GooglePlacesPhotoURL.persistableString("https://lh3.googleusercontent.com/a/ACg8oc-avatar"),
+            "https://lh3.googleusercontent.com/a/ACg8oc-avatar"
+        )
+        XCTAssertEqual(
+            GooglePlacesPhotoURL.persistableString("https://lh3.googleusercontent.com/a-/AOh14Gh-avatar"),
+            "https://lh3.googleusercontent.com/a-/AOh14Gh-avatar"
         )
         XCTAssertEqual(
             GooglePlacesPhotoURL.persistableString("https://example.com/own.jpg"),
@@ -284,13 +356,32 @@ final class SaveCollaborativeListTests: XCTestCase {
         )
         XCTAssertTrue(
             GooglePlacesPhotoURL.isGooglePlacesPhotoURL(
-                URL(string: "https://lh3.googleusercontent.com/places/ANXAkqG-places-path")!
+                URL(string: "https://lh3.googleusercontent.com/p/AF1Qip-generic")!
             )
         )
         XCTAssertFalse(
             GooglePlacesPhotoURL.isGooglePlacesPhotoURL(
-                URL(string: "https://lh3.googleusercontent.com/p/AF1Qip-generic")!
+                URL(string: "https://lh3.googleusercontent.com/a-/AOh14Gh-avatar")!
             )
+        )
+        XCTAssertTrue(
+            GooglePlacesPhotoURL.isGooglePlacesPhotoURL(
+                URL(string: "https://lh3.googleusercontent.com/%70/AF1Qip-encoded")!
+            )
+        )
+
+        let supabase = try source(at: "SAV-E/Services/SupabaseService.swift")
+        XCTAssertTrue(
+            supabase.contains("GooglePlacesPhotoURL.persistableString(place.sourceImageUrl)"),
+            "create row payload and PATCH assignChangedOptional share persistableString"
+        )
+        XCTAssertTrue(
+            supabase.contains("GooglePlacesPhotoURL.persistableString(previous?.sourceImageUrl)"),
+            "PATCH compares the persistable previous source_image_url"
+        )
+        XCTAssertTrue(
+            supabase.contains("GooglePlacesPhotoURL.persistableString(finalPlace.sourceImageUrl)"),
+            "workflow create also uses persistableString"
         )
     }
 
@@ -598,12 +689,19 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertTrue(evidence.contains("SaveTileTownPeekCard("))
         XCTAssertTrue(evidence.contains("size: .recent"))
         XCTAssertTrue(evidence.contains("evidence.homeThumbs"))
+        XCTAssertTrue(evidence.contains("case atlasThumbs"))
+        XCTAssertTrue(evidence.contains("case layoutXSmall"))
+        XCTAssertTrue(evidence.contains("SaveAtlasLivePlaceCard("))
+        XCTAssertTrue(evidence.contains("evidence.atlasThumbs"))
+        XCTAssertTrue(evidence.contains("dynamicTypeSize(.xSmall)"))
         XCTAssertTrue(uiTest.contains("evidence.openedPage.author"))
         XCTAssertTrue(uiTest.contains("appearance)-mixed-card"))
         XCTAssertTrue(uiTest.contains("appearance)-map-pins"))
         XCTAssertTrue(uiTest.contains("appearance)-city-page"))
         XCTAssertTrue(uiTest.contains("appearance)-report-entry"))
         XCTAssertTrue(uiTest.contains("appearance)-home-thumbs"))
+        XCTAssertTrue(uiTest.contains("appearance)-atlas-thumbs"))
+        XCTAssertTrue(uiTest.contains("xsmall-all-surfaces"))
     }
 
     @MainActor

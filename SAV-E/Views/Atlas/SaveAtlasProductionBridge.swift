@@ -764,6 +764,8 @@ struct SaveAtlasLivePlaceCard: View {
     let onOpen: () -> Void
     let onOpenAssistant: () -> Void
     let onPlanAround: () -> Void
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -773,7 +775,7 @@ struct SaveAtlasLivePlaceCard: View {
                 .frame(maxWidth: .infinity)
                 .accessibilityHidden(true)
 
-            HStack(alignment: .center, spacing: 11) {
+            HStack(alignment: .top, spacing: 11) {
                 SaveAtlasMapPlaceThumbnail(place: place)
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -781,6 +783,7 @@ struct SaveAtlasLivePlaceCard: View {
                         .font(AtlasType.strong(20))
                         .foregroundStyle(AtlasPalette.forest)
                         .lineLimit(1)
+                        .accessibilityLabel(nameAccessibilityLabel)
                         .accessibilityIdentifier("map.place.name")
 
                     Text(primaryLocation(for: place))
@@ -858,6 +861,25 @@ struct SaveAtlasLivePlaceCard: View {
         .accessibilityIdentifier("map.place.card")
     }
 
+    private var photoURL: URL? {
+        place.businessPhotoURLStrings.first.flatMap(URL.init(string:))
+    }
+
+    private var showsGooglePhoto: Bool {
+        GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
+            photoURL,
+            availableWidth: 56,
+            dynamicType: dynamicTypeSize
+        )
+    }
+
+    private var nameAccessibilityLabel: String {
+        if showsGooglePhoto {
+            return "\(place.name), \(GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: languageSettings.language))"
+        }
+        return place.name
+    }
+
     private func mapCardIcon(_ systemName: String) -> some View {
         Image(systemName: systemName)
             .font(.system(size: 13, weight: .bold))
@@ -883,13 +905,48 @@ struct SaveAtlasLivePlaceCard: View {
 
 }
 
+/// 56pt thumb on the selected-place list/detail card (`map.place.card`
+/// at 15,606 372×180). Not a map pin, badge, or callout — those stay
+/// symbol-only on `PlaceMapPin`. Mark Google photos; if the stacked
+/// mark cannot fit the 56pt width, drop the Google photo.
 private struct SaveAtlasMapPlaceThumbnail: View {
     let place: Place
+    @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
+        VStack(alignment: .leading, spacing: GooglePlacesPhotoSourceMarkMetrics.homeGapAbove) {
+            thumb
+            if showsGooglePhoto {
+                GooglePlacesPhotoSourceMark(style: .homeStacked)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(thumbAccessibilityLabel)
+    }
+
+    private var photoURL: URL? {
+        place.businessPhotoURLStrings.first.flatMap(URL.init(string:))
+    }
+
+    private var showsGooglePhoto: Bool {
+        GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
+            photoURL,
+            availableWidth: 56,
+            dynamicType: dynamicTypeSize
+        )
+    }
+
+    private var thumbAccessibilityLabel: String {
+        showsGooglePhoto
+            ? GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: languageSettings.language)
+            : place.name
+    }
+
+    private var thumb: some View {
         Group {
-            if let value = place.businessPhotoURLStrings.first,
-               let url = URL(string: value) {
+            if let url = photoURL,
+               !GooglePlacesPhotoURL.isGooglePlacesPhotoURL(url) || showsGooglePhoto {
                 CachedAsyncImage(url: url) { phase in
                     if case .success(let image) = phase {
                         image.resizable().scaledToFill()
@@ -908,6 +965,7 @@ private struct SaveAtlasMapPlaceThumbnail: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(AtlasPalette.line.opacity(0.28), lineWidth: 1)
         }
+        .accessibilityHidden(true)
     }
 
     private var fallback: some View {

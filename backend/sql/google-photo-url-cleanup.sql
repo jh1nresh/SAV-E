@@ -20,6 +20,10 @@ where source_image_url is not null
     or source_image_url ilike '%photo_reference=%'
     or source_image_url ~* '^places/.+/photos/'
     or source_image_url ilike '%googleusercontent.com%/places/%'
+    or source_image_url ilike '%googleusercontent.com%/place-photos/%'
+    or source_image_url ilike '%googleusercontent.com%/p/%'
+    or source_image_url ilike '%googleusercontent.com%/gps-cs-s/%'
+    or source_image_url ilike '%googleusercontent.com%/gps-proxy/%'
   );
 
 commit;

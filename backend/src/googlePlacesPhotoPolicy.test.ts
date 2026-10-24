@@ -23,7 +23,15 @@ test("founder Google photo cleanup SQL is transactional and non-destructive", ()
   assert.match(cleanup, /business_photo_urls = '\{\}'/);
   assert.match(cleanup, /source_image_url = null/);
   assert.match(cleanup, /googleusercontent\.com%\/places\/%/);
+  assert.match(cleanup, /googleusercontent\.com%\/place-photos\/%/);
+  assert.match(cleanup, /googleusercontent\.com%\/p\/%/);
+  assert.match(cleanup, /googleusercontent\.com%\/gps-cs-s\/%/);
+  assert.match(cleanup, /googleusercontent\.com%\/gps-proxy\/%/);
   assert.match(verify, /googleusercontent\.com%\/places\/%/);
+  assert.match(verify, /googleusercontent\.com%\/place-photos\/%/);
+  assert.match(verify, /googleusercontent\.com%\/p\/%/);
+  assert.match(verify, /googleusercontent\.com%\/gps-cs-s\/%/);
+  assert.match(verify, /googleusercontent\.com%\/gps-proxy\/%/);
   assert.match(verify, /leftover_business_photo_urls/);
   assert.match(verify, /leftover_google_source_image_urls/);
   assert.match(runbook, /railway run --service save-backend/);
@@ -33,6 +41,17 @@ test("founder Google photo cleanup SQL is transactional and non-destructive", ()
   assert.match(runbook, /## 2\. CLEANUP/);
   assert.match(runbook, /## 3\. VERIFY/);
   assert.match(runbook, /Agents and this PR must \*\*not\*\* run/);
+
+  const evidence = readFileSync(
+    new URL("../../docs/evidence/pr306/README.md", import.meta.url),
+    "utf8",
+  );
+  assert.match(evidence, /googleusercontent\.com%\/places\/%/);
+  assert.match(evidence, /googleusercontent\.com%\/place-photos\/%/);
+  assert.match(evidence, /googleusercontent\.com%\/p\/%/);
+  assert.match(evidence, /googleusercontent\.com%\/gps-cs-s\/%/);
+  assert.match(evidence, /googleusercontent\.com%\/gps-proxy\/%/);
+  assert.match(evidence, /Do not treat avatar paths `\/a\/` or `\/a-\/`/);
 });
 
 test("public city atlas pages do not embed Google Places photo hosts", () => {

@@ -50,8 +50,10 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
         case drawerThumbs
         case tripStop
         case originFood
+        case atlasThumbs
         case layout375
         case layoutXXXL
+        case layoutXSmall
 
         var id: String { rawValue }
 
@@ -73,8 +75,10 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
             case .drawerThumbs: return "Drawer"
             case .tripStop: return "Trip stop"
             case .originFood: return "Origin food"
+            case .atlasThumbs: return "Atlas card"
             case .layout375: return "375 width"
             case .layoutXXXL: return "XXXL"
+            case .layoutXSmall: return "xSmall type"
             }
         }
     }
@@ -283,10 +287,15 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
         case .originFood:
             ScrollView { originFoodContent }
                 .onAppear(perform: seedPhotoFixtures)
+        case .atlasThumbs:
+            ScrollView { atlasThumbsContent }
+                .onAppear(perform: seedPhotoFixtures)
         case .layout375:
             widthLockedScene(width: 375, identifier: "evidence.layout375")
         case .layoutXXXL:
             xxxlScene
+        case .layoutXSmall:
+            xSmallScene
         }
     }
 
@@ -337,7 +346,7 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
 
     private var drawerThumbsContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Drawer search rows. Google thumbs say Google Maps in the footer.")
+            Text("Drawer search rows. Two-line Google / Maps under the 52pt thumb.")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.saveInk)
                 .accessibilityIdentifier("evidence.drawerThumbs")
@@ -356,7 +365,7 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
 
     private var tripStopContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Trip stop paper card. Mark sits in the footer under the photo.")
+            Text("Trip stop paper card. Two-line Google / Maps under the 70pt thumb.")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.saveInk)
                 .accessibilityIdentifier("evidence.tripStop")
@@ -395,7 +404,7 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
 
     private var originFoodContent: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Origin food card. Mark sits in the footer under the photo, not over it.")
+            Text("Origin food card. Two-line Google / Maps under the 326pt photo.")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.saveInk)
                 .accessibilityIdentifier("evidence.originFood")
@@ -424,6 +433,47 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
         }
     }
 
+    private var atlasThumbsContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Atlas selected-place card. List/detail 56pt thumb, not a pin. Two-line Google / Maps under the thumb.")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.saveInk)
+                .accessibilityIdentifier("evidence.atlasThumbs")
+            Text("Atlas · Google")
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.saveCocoa)
+                .accessibilityIdentifier("evidence.atlas.google")
+            SaveAtlasLivePlaceCard(
+                place: Self.originPlace(
+                    id: Self.atlasGooglePlaceID,
+                    name: "Harbor Oven",
+                    photoURL: Self.googleThumbURL
+                ),
+                onClose: {},
+                onOpen: {},
+                onOpenAssistant: {},
+                onPlanAround: {}
+            )
+            .frame(width: 372, height: 180)
+            Text("Atlas · own")
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.saveCocoa)
+                .accessibilityIdentifier("evidence.atlas.own")
+            SaveAtlasLivePlaceCard(
+                place: Self.originPlace(
+                    id: Self.atlasOwnPlaceID,
+                    name: "Own shot",
+                    photoURL: Self.ownThumbURL
+                ),
+                onClose: {},
+                onOpen: {},
+                onOpenAssistant: {},
+                onPlanAround: {}
+            )
+            .frame(width: 372, height: 180)
+        }
+    }
+
     private func widthLockedScene(width: CGFloat, identifier: String) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -435,6 +485,7 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
                 drawerThumbsContent
                 tripStopContent
                 originFoodContent
+                atlasThumbsContent
             }
             .frame(width: width, alignment: .leading)
         }
@@ -444,6 +495,11 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
     private var xxxlScene: some View {
         widthLockedScene(width: 402, identifier: "evidence.layoutXXXL")
             .dynamicTypeSize(.xxxLarge)
+    }
+
+    private var xSmallScene: some View {
+        widthLockedScene(width: 402, identifier: "evidence.layoutXSmall")
+            .dynamicTypeSize(.xSmall)
     }
 
     private var googleCarouselPage: some View {
@@ -597,6 +653,8 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
     static let tripOwnPlaceID = UUID(uuidString: "21000000-0000-0000-0000-000000000307")!
     static let originGooglePlaceID = UUID(uuidString: "30000000-0000-0000-0000-000000000306")!
     static let originOwnPlaceID = UUID(uuidString: "30000000-0000-0000-0000-000000000307")!
+    static let atlasGooglePlaceID = UUID(uuidString: "40000000-0000-0000-0000-000000000306")!
+    static let atlasOwnPlaceID = UUID(uuidString: "40000000-0000-0000-0000-000000000307")!
 
     static func drawerResponse(photoURL: URL, title: String = "Harbor Oven") -> SaveSearchResponse {
         let result = SaveSearchResult(

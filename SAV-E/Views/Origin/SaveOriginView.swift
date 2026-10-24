@@ -330,9 +330,9 @@ struct SaveOriginFoodCard: View {
             .clipped()
 
             if showsGooglePhoto {
-                GooglePlacesPhotoSourceMark()
+                GooglePlacesPhotoSourceMark(style: .homeStacked)
                     .padding(.horizontal, 16)
-                    .padding(.top, GooglePlacesPhotoSourceMarkMetrics.gapAbove)
+                    .padding(.top, GooglePlacesPhotoSourceMarkMetrics.homeGapAbove)
             }
 
             VStack(alignment: .leading, spacing: 7) {
@@ -434,7 +434,7 @@ struct SaveOriginFoodCard: View {
     }
 
     private var showsGooglePhoto: Bool {
-        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
+        GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
             photoURL,
             availableWidth: cardWidth,
             dynamicType: dynamicTypeSize

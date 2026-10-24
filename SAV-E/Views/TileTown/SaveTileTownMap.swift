@@ -370,6 +370,7 @@ struct SaveTileTownPeekCard: View {
     var photoURL: URL? = nil
     var accessibilityNameID: String? = nil
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -415,11 +416,18 @@ struct SaveTileTownPeekCard: View {
     }
 
     private var showsGooglePhoto: Bool {
-        GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(photoURL)
+        GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
+            photoURL,
+            availableWidth: 44,
+            dynamicType: dynamicTypeSize
+        )
     }
 
     private var resolvedFace: SaveKraftStampFace {
-        .photo(photoURL)
+        if GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(photoURL), !showsGooglePhoto {
+            return .scene(SaveKraftStampScene.from(name: title))
+        }
+        return .photo(photoURL)
     }
 
     private var peekThumbAccessibilityLabel: String {

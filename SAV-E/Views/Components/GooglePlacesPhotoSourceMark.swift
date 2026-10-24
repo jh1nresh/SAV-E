@@ -3,10 +3,12 @@ import UIKit
 
 /// Shared Google photo source mark.
 ///
-/// Home thumbs use a two-line 10pt semibold stack under the thumbnail
-/// (DESIGN 2026-10-24). Drawer / Trip / Origin keep the single-line
-/// footer. Google's terms on wording and placement are still unverified;
-/// do not move this back onto the photo without HoP / founder.
+/// Home, Drawer, Trip, Origin, and the Atlas selected-place card
+/// (`map.place.card`) use a two-line 10pt semibold stack under the
+/// thumbnail (DESIGN). If that stack cannot fit at the thumb width,
+/// show a non-Google image instead. Google's terms on wording and
+/// placement are still unverified; do not overlay the photo without
+/// HoP / founder.
 enum GooglePlacesPhotoSourceMarkStyle {
     /// Two-line `Google` / `Maps` under a 44pt or 52pt Home thumb.
     case homeStacked
@@ -65,13 +67,25 @@ enum GooglePlacesPhotoSourceMarkMetrics {
         markWidth(for: dynamicType) <= availableWidth
     }
 
+    static func canShowStackedMark(in availableWidth: CGFloat, dynamicType: DynamicTypeSize) -> Bool {
+        homeMarkWidth(for: dynamicType) <= availableWidth
+    }
+
     static func displaysGooglePhoto(
         _ url: URL?,
         availableWidth: CGFloat,
         dynamicType: DynamicTypeSize
     ) -> Bool {
-        guard let url, GooglePlacesPhotoURL.isGooglePlacesPhotoURL(url) else { return false }
-        return canShowGooglePhoto(in: availableWidth, dynamicType: dynamicType)
+        displaysStackedGooglePhoto(url, availableWidth: availableWidth, dynamicType: dynamicType)
+    }
+
+    static func displaysStackedGooglePhoto(
+        _ url: URL?,
+        availableWidth: CGFloat,
+        dynamicType: DynamicTypeSize
+    ) -> Bool {
+        guard isGooglePhotoURL(url) else { return false }
+        return canShowStackedMark(in: availableWidth, dynamicType: dynamicType)
     }
 
     static func isGooglePhotoURL(_ url: URL?) -> Bool {

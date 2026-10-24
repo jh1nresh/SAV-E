@@ -234,6 +234,16 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         app.swipeUp()
         saveEvidence(app, name: "\(appearance)-origin-food")
 
+        openScene(app, "atlasThumbs")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["evidence.atlasThumbs"]
+                .waitForExistence(timeout: stepTimeout),
+            "Atlas selected-place card must render Google and own thumbs"
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["evidence.atlas.google"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["evidence.atlas.own"].exists)
+        saveEvidence(app, name: "\(appearance)-atlas-thumbs")
+
         if appearance == "light" {
             openScene(app, "layout375")
             XCTAssertTrue(
@@ -250,6 +260,14 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
                 "XXXL Dynamic Type scene must render every marked surface"
             )
             saveEvidence(app, name: "xxxl-all-surfaces")
+
+            openScene(app, "layoutXSmall")
+            XCTAssertTrue(
+                app.descendants(matching: .any)["evidence.layoutXSmall"]
+                    .waitForExistence(timeout: stepTimeout),
+                "Minimum Dynamic Type scene must render every marked surface"
+            )
+            saveEvidence(app, name: "xsmall-all-surfaces")
         }
     }
 

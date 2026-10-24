@@ -107,7 +107,11 @@ struct SaveKraftStamp: View {
     }
 
     private var showsGooglePhoto: Bool {
-        GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(photoURL)
+        GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
+            photoURL,
+            availableWidth: size.face,
+            dynamicType: dynamicTypeSize
+        )
     }
 
     private var stampAccessibilityLabel: String {
@@ -143,7 +147,10 @@ struct SaveKraftStamp: View {
     }
 
     private var resolvedFace: SaveKraftStampFace {
-        illustratedFace
+        if GooglePlacesPhotoSourceMarkMetrics.isGooglePhotoURL(photoURL), !showsGooglePhoto {
+            return .scene(SaveKraftStampScene.from(name: title))
+        }
+        return illustratedFace
     }
 }
 

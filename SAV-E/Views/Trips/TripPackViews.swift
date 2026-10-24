@@ -424,7 +424,6 @@ struct TripStopRow: View {
     let onMoveLater: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    @State private var cardWidth: CGFloat = 343
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -436,13 +435,6 @@ struct TripStopRow: View {
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
             .padding(10)
-            .background {
-                GeometryReader { proxy in
-                    Color.clear
-                        .onAppear { cardWidth = proxy.size.width }
-                        .onChange(of: proxy.size.width) { _, width in cardWidth = width }
-                }
-            }
             .saveAtlasPaper(radius: 18, shadow: true)
         }
     }
@@ -452,9 +444,9 @@ struct TripStopRow: View {
     }
 
     private var showsGooglePhoto: Bool {
-        GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(
+        GooglePlacesPhotoSourceMarkMetrics.displaysStackedGooglePhoto(
             stopPhotoURL,
-            availableWidth: cardWidth,
+            availableWidth: 70,
             dynamicType: dynamicTypeSize
         )
     }
@@ -465,31 +457,35 @@ struct TripStopRow: View {
         return "\(base), \(GooglePlacesPhotoSourceMarkMetrics.voiceOverLabel(language: languageSettings.language))"
     }
 
+    private var stopThumbColumn: some View {
+        VStack(alignment: .leading, spacing: GooglePlacesPhotoSourceMarkMetrics.homeGapAbove) {
+            TripStopThumbnail(place: place, showsGooglePhoto: showsGooglePhoto)
+            if showsGooglePhoto {
+                GooglePlacesPhotoSourceMark(style: .homeStacked)
+            }
+        }
+    }
+
     private var editButton: some View {
         Button(action: onEdit) {
-            VStack(alignment: .leading, spacing: GooglePlacesPhotoSourceMarkMetrics.gapAbove) {
-                Group {
-                    if dynamicTypeSize.isAccessibilitySize {
-                        VStack(alignment: .leading, spacing: 10) {
-                            TripStopThumbnail(place: place, showsGooglePhoto: showsGooglePhoto)
-                            stopDetails
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(SaveAtlasPalette.ink)
-                                .frame(maxWidth: .infinity, alignment: .trailing)
-                        }
-                    } else {
-                        HStack(spacing: 12) {
-                            TripStopThumbnail(place: place, showsGooglePhoto: showsGooglePhoto)
-                            stopDetails
-                            Spacer(minLength: 2)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(SaveAtlasPalette.ink)
-                        }
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 10) {
+                        stopThumbColumn
+                        stopDetails
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(SaveAtlasPalette.ink)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                     }
-                }
-                if showsGooglePhoto {
-                    GooglePlacesPhotoSourceMark()
+                } else {
+                    HStack(alignment: .top, spacing: 12) {
+                        stopThumbColumn
+                        stopDetails
+                        Spacer(minLength: 2)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(SaveAtlasPalette.ink)
+                    }
                 }
             }
             .contentShape(Rectangle())

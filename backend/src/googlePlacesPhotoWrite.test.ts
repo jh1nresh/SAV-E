@@ -111,15 +111,33 @@ test("place/photo match is host- or resource-name scoped so marketplace photos s
     null,
   );
   assert.equal(persistableSourceImageURL(friendImport), friendImport);
-  assert.equal(isGooglePlacesPhotoURL("https://lh3.googleusercontent.com/p/unruled"), false);
-  assert.equal(
-    persistableSourceImageURL("https://lh3.googleusercontent.com/places/ANXAkqG-places-path"),
-    null,
-  );
-  assert.equal(
-    persistableSourceImageURL("https://lh3.googleusercontent.com/p/AF1Qip-generic"),
-    "https://lh3.googleusercontent.com/p/AF1Qip-generic",
-  );
+});
+
+const googleusercontentPlacesPaths = {
+  "/places/": "https://lh3.googleusercontent.com/places/ANXAkqG-places-path",
+  "/place-photos/": "https://lh3.googleusercontent.com/place-photos/AF1Qip-place-photos",
+  "/p/": "https://lh3.googleusercontent.com/p/AF1Qip-generic",
+  "/gps-cs-s/": "https://lh3.googleusercontent.com/gps-cs-s/photo-token",
+  "/gps-proxy/": "https://lh5.googleusercontent.com/gps-proxy/proxy-token",
+} as const;
+
+const googleusercontentAvatarPaths = {
+  "/a/": "https://lh3.googleusercontent.com/a/ACg8oc-avatar",
+  "/a-/": "https://lh3.googleusercontent.com/a-/AOh14Gh-avatar",
+} as const;
+
+test("lh*.googleusercontent.com Places paths are Google photos; avatars are not", () => {
+  for (const [label, url] of Object.entries(googleusercontentPlacesPaths)) {
+    assert.equal(isGooglePlacesPhotoURL(url), true, `${label} must match`);
+    assert.equal(persistableSourceImageURL(url), null, `${label} must persist as null`);
+  }
+  const encodedP = "https://lh3.googleusercontent.com/%70/AF1Qip-encoded";
+  assert.equal(isGooglePlacesPhotoURL(encodedP), true);
+  assert.equal(persistableSourceImageURL(encodedP), null);
+  for (const [label, url] of Object.entries(googleusercontentAvatarPaths)) {
+    assert.equal(isGooglePlacesPhotoURL(url), false, `${label} must stay`);
+    assert.equal(persistableSourceImageURL(url), url, `${label} must persist`);
+  }
 });
 
 test("PATCH ignores business_photo_urls, nulls Google source_image_url, keeps non-Google", () => {
@@ -212,6 +230,27 @@ for (const site of writeSites) {
     assert.equal(stored.source_image_url, marketplacePhoto);
     assert.equal("business_photo_urls" in stored, false);
   });
+
+  for (const [label, url] of Object.entries(googleusercontentPlacesPaths)) {
+    test(`${site.name} nulls googleusercontent Places path ${label}`, () => {
+      const stored = site.persist({
+        ...identityFields,
+        source_image_url: url,
+      });
+      assert.equal(stored.source_image_url, null, `${site.name} ${label}`);
+      assert.equal(stored.google_place_id, identityFields.google_place_id);
+    });
+  }
+
+  for (const [label, url] of Object.entries(googleusercontentAvatarPaths)) {
+    test(`${site.name} keeps googleusercontent avatar path ${label}`, () => {
+      const stored = site.persist({
+        ...identityFields,
+        source_image_url: url,
+      });
+      assert.equal(stored.source_image_url, url, `${site.name} ${label}`);
+    });
+  }
 }
 
 test("PATCH handler treats retired-photo-only body as a silent no-op, not a cap update", () => {

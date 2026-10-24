@@ -760,7 +760,7 @@ enum GooglePlacesPhotoURL {
     /// photo references must not be stored; `place_id` is the exempt field.
     nonisolated static func persistableString(_ value: String?) -> String? {
         guard let value else { return nil }
-        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = decodePercentLayers(value.trimmingCharacters(in: .whitespacesAndNewlines))
         guard !normalized.isEmpty else { return nil }
         if looksLikeGooglePlacesPhotoReference(normalized) { return nil }
         guard let url = URL(string: normalized) else { return normalized }
@@ -775,15 +775,35 @@ enum GooglePlacesPhotoURL {
     }
 
     nonisolated static func isGooglePlacesPhotoURL(_ url: URL) -> Bool {
-        let scheme = url.scheme?.lowercased()
-        let hostname = url.host?.lowercased() ?? ""
+        let decoded = URL(string: decodePercentLayers(url.absoluteString)) ?? url
+        let scheme = decoded.scheme?.lowercased()
+        let hostname = decoded.host?.lowercased() ?? ""
         guard scheme == "https" else { return false }
-        if hostname == host && url.path == path { return true }
-        if hostname == "places.googleapis.com" && url.path.contains("/media") { return true }
-        if hostname.hasSuffix("googleusercontent.com") && url.path.lowercased().contains("/places/") {
+        if hostname == host && decoded.path == path { return true }
+        if hostname == "places.googleapis.com" && decoded.path.contains("/media") { return true }
+        if hostname.hasSuffix("googleusercontent.com")
+            && googleusercontentPathIsPlacesPhoto(decoded.path) {
             return true
         }
         return false
+    }
+
+    nonisolated static func decodePercentLayers(_ value: String, maxLayers: Int = 8) -> String {
+        var current = value
+        for _ in 0..<maxLayers {
+            let next = current.removingPercentEncoding ?? current
+            if next == current { break }
+            current = next
+        }
+        return current
+    }
+
+    nonisolated static func googleusercontentPathIsPlacesPhoto(_ path: String) -> Bool {
+        let blocked: Set<String> = ["place-photos", "places", "p", "gps-cs-s", "gps-proxy"]
+        return path
+            .lowercased()
+            .split(separator: "/")
+            .contains { blocked.contains(String($0)) }
     }
 
     nonisolated static func looksLikeGooglePlacesPhotoReference(_ value: String) -> Bool {
