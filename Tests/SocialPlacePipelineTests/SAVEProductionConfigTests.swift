@@ -3568,8 +3568,16 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         let pending = try source(at: "SAV-E/Services/PendingPlaceImportService.swift")
         XCTAssertTrue(
-            pending.contains("venueEvidence += providerVenueEvidence(from: place)"),
+            pending.contains("venueEvidence += Self.providerVenueEvidence(from: place)"),
             "P2 4366358729: Unplaced parking must persist every non-WGS provider venue"
+        )
+        XCTAssertTrue(
+            pending.contains("Self.storedProviderMapURL(from:"),
+            "instance Amap helpers must qualify static storedProviderMapURL"
+        )
+        XCTAssertTrue(
+            pending.contains("Self.providerLocation(from:"),
+            "instance Amap helpers must qualify static providerLocation"
         )
         XCTAssertTrue(
             pending.contains("let keepCoordinates = place.isMapKitMappable || !canReconstructProvider"),
@@ -3619,6 +3627,19 @@ final class SAVEProductionConfigTests: XCTestCase {
             )
         }
         XCTAssertTrue(map.contains("requestSavedPlaceLimitPaywall()"))
+        let tests = try source(at: "Tests/SocialPlacePipelineTests/SAVEProductionConfigTests.swift")
+        XCTAssertTrue(
+            tests.contains("@MainActor\n    private func backendProviderCoordinateFieldError(for place: Place)"),
+            "SAVETests is nonisolated; the Place-reading helper must be MainActor"
+        )
+        XCTAssertTrue(
+            tests.contains("@MainActor\n    func testParkedProviderConfirmPayloadsSatisfyBackendCoordinateContract()"),
+            "the helper caller must stay MainActor"
+        )
+        XCTAssertTrue(
+            tests.contains("@MainActor\n    func testUnplacedParkingPreservesEveryProviderLocationThroughVaultReload()"),
+            "the helper caller must stay MainActor"
+        )
     }
 
     @MainActor
