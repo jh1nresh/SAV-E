@@ -14,6 +14,30 @@ final class SharedPostsStore: ObservableObject {
     private var requestID = UUID()
     private var route: Route = .feed
     private let service = SupabaseService.shared
+    var saveSharedPost: (UUID) async throws -> Place = { id in
+        try await SupabaseService.shared.saveSharedPost(id: id)
+    }
+    var fetchSharedPostForParking: (UUID) async throws -> SharedPlacePost = { id in
+        try await SupabaseService.shared.fetchSharedPost(id: id)
+    }
+    var parkOverLimitPlace: (Place) throws -> PlaceReviewCandidate = { place in
+        let candidate = PlaceReviewCandidate.unplacedInboxItem(
+            from: place,
+            ownerSubject: PrivyAuthService.shared.currentUserId
+        )
+        _ = try SaveLocalVaultService.shared.saveReviewCandidate(
+            candidate,
+            preservingParkedContext: candidate.isUnplacedInbox
+        )
+        SavePlaceLimitHandoff.markPaywallPending(notify: false)
+        return candidate
+    }
+    var removeParkedOverLimitPlace: (Place) throws -> Void = { place in
+        try SaveLocalVaultService.shared.removeReviewCandidate(
+            place.id,
+            ownerSubject: PrivyAuthService.shared.currentUserId
+        )
+    }
 
     var isDemo: Bool { PrivyAuthService.shared.isReviewerDemo }
 
@@ -131,11 +155,36 @@ final class SharedPostsStore: ObservableObject {
         await refresh(route)
     }
 
-    func save(id: UUID) async throws {
+    func save(_ post: SharedPlacePost) async throws -> SharedPostSaveOutcome {
         guard !isDemo else { throw SupabaseError.notAuthenticated }
         let account = PrivyAuthService.shared.currentUserId
-        _ = try await service.saveSharedPost(id: id)
-        guard account == PrivyAuthService.shared.currentUserId, !Task.isCancelled else { throw CancellationError() }
+        let generation = PrivyAuthService.shared.sessionGeneration
+        do {
+            _ = try await saveSharedPost(post.id)
+            guard account == PrivyAuthService.shared.currentUserId,
+                  generation == PrivyAuthService.shared.sessionGeneration, !Task.isCancelled else { throw CancellationError() }
+            try removeParkedOverLimitPlace(post.asUnplacedPlace(ownerSubject: account))
+            return .saved
+        } catch {
+            guard account == PrivyAuthService.shared.currentUserId,
+                  generation == PrivyAuthService.shared.sessionGeneration, !Task.isCancelled else {
+                throw CancellationError()
+            }
+            if error is SavePlaceLimitError {
+                let livePost = try await fetchSharedPostForParking(post.id)
+                guard account == PrivyAuthService.shared.currentUserId,
+                  generation == PrivyAuthService.shared.sessionGeneration, !Task.isCancelled else {
+                    throw CancellationError()
+                }
+                _ = try parkOverLimitPlace(livePost.asUnplacedPlace(ownerSubject: account))
+                return .parkedAtFreeLimit
+            }
+            throw error
+        }
+    }
+
+    func acknowledgeSavedPlaceLimitPaywall() {
+        SavePlaceLimitHandoff.consumePaywallPending()
     }
 
     private static var fixturePosts: [SharedPlacePost] {
