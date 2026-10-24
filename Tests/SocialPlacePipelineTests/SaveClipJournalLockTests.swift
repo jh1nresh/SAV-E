@@ -393,7 +393,17 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertFalse(mapVM.contains("imported.contains {"))
         XCTAssertTrue(mapVM.contains("rows: remote.saved"))
         XCTAssertFalse(mapVM.contains("remote.saved + remote.already"))
-        XCTAssertTrue(mapVM.contains("loadPlaces(force: true)"))
+        let listHandoff = mapVM[
+            mapVM.range(of: "private func saveClipListHandoff")!.lowerBound
+            ..< mapVM.range(of: "private func parkHandoffOverflowIfNeeded")!.lowerBound
+        ]
+        // Stale already-saved stamps must refresh from /places. The broad
+        // loadPlaces(force: true) loader also imports clues and must not run
+        // in this scope (a1ce8874).
+        XCTAssertTrue(listHandoff.contains("needsPlaceRefresh"))
+        XCTAssertTrue(listHandoff.contains("supabaseService.fetchPlaces(for: owner)"))
+        XCTAssertTrue(listHandoff.contains("mergeRemotePlaces(remotePlaces, withLocalPlaces: localConfirmedPlaces())"))
+        XCTAssertFalse(listHandoff.contains("loadPlaces(force: true)"))
         XCTAssertTrue(mapVM.contains("needsPlaceRefresh"))
         XCTAssertTrue(mapVM.contains("rekeyed(to: place.id)"))
         let receiptSave = mapVM[
