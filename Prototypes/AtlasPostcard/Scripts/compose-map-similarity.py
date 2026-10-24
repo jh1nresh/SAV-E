@@ -51,7 +51,8 @@ def main() -> None:
     overlay = Image.new("RGBA", actual.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
     x, y, w, h = args.mask
-    if args.mask_image and args.mask_image.exists():
+    used_mask_image = bool(args.mask_image and args.mask_image.exists())
+    if used_mask_image:
         mask = fit(load(args.mask_image), (402, 874)).convert("L")
         shade = Image.new("RGBA", actual.size, (20, 20, 24, 90))
         overlay.paste(shade, (0, 0), mask.point(lambda v: 255 if v >= 240 else 0))
@@ -101,21 +102,16 @@ def main() -> None:
         "edgeF1": payload.get("edgeF1"),
         "appearanceSimilarity": payload.get("appearanceSimilarity"),
         "mask": (
-            {
-                "kind": "image",
-                "path": str(args.mask_image),
-                "fallbackRectangle": {"x": x, "y": y, "width": w, "height": h},
-            }
-            if args.mask_image and args.mask_image.exists()
-            else {"kind": "rectangle", "x": x, "y": y, "width": w, "height": h}
+            {"image": str(args.mask_image), "coverage": "mask-image"}
+            if used_mask_image
+            else {"x": x, "y": y, "width": w, "height": h}
         ),
         "maskReason": (
-            f"Image mask {args.mask_image.name}: white pixels are live Apple Maps "
-            "(ignored). Rectangle bounds are provenance only when no image mask is supplied."
-            if args.mask_image and args.mask_image.exists()
+            f"Mask image {args.mask_image.name} excludes the live MapKit pixels."
+            if used_mask_image
             else (
-                f"Rectangle mask {x},{y},{w},{h} covers live MapKit in both "
-                "capture and mock."
+                "Founder lock: default Apple MapKit surface is excluded. "
+                f"Fallback rectangle {x},{y},{w},{h}."
             )
         ),
         "sideBySide": str(args.output),

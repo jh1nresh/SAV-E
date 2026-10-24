@@ -183,7 +183,8 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(catalog.contains("SaveDoodleHomeProgressCatalog.visitedCount"))
         XCTAssertFalse(catalog.contains("enum SaveDoodleHomeProgressCatalog"))
         XCTAssertTrue(page.contains("columnCount(availableGridWidth:"))
-        XCTAssertTrue(page.contains("SaveDoodleElephant"))
+        XCTAssertTrue(page.contains("MemoMascotMark"))
+        XCTAssertFalse(page.contains("SaveDoodleElephant"))
         XCTAssertTrue(page.contains("passport.empty"))
         XCTAssertTrue(page.contains("showsEmptyPassport"))
         XCTAssertTrue(page.contains(".frame(width: 8, height: 8)"))
@@ -242,7 +243,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         let script = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
         XCTAssertTrue(script.contains("five-tab-passport*)"))
         XCTAssertTrue(script.contains("screen=\"passport\""))
-        XCTAssertTrue(script.contains("for screen in home saves plan map passport; do"))
+        XCTAssertTrue(script.contains("parity_screens=(home saves plan map friends capture paywall passport)"))
         let target = repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets/passport.png"
         )

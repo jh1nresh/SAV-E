@@ -20,9 +20,18 @@ class CoverageTests(unittest.TestCase):
         baseline = set(json.loads((ROOT / "Tests/ci/full-ui-baseline.json").read_text()))
         self.assertEqual(actual, baseline | {
             selection.RAIL + "testHomeListProgressiveSearch",
-            selection.RAIL + "testMiniMapOpensMapWithCarriedFilterAndCityChange",
             selection.RAIL + "testHomeCollectedOpensPassportWithCityCount",
             selection.RAIL + "testSavesTripsBackReturnsToSaves",
+            selection.RAIL + "testHomeDesignProductStates",
+            selection.RAIL + "testHomeShowOnMapFocusesPlace",
+            selection.RAIL + "testHomeHintCountEvidence",
+            selection.RAIL + "testHomeTaipeiGrantedDistances",
+            selection.RAIL + "testHomeTPEAEvidence",
+            selection.RAIL + "testHopU1SavedPlaceLimitPaywallShowsSavedFiftyWithoutManMan",
+            selection.RAIL + "testMapSavedUnsavedVisitedTaipeiFixture",
+            selection.RAIL + "testPassportWidth375",
+            selection.RAIL + "testPassportWidth390",
+            selection.RAIL + "testPassportWidth430",
         })
         self.assertIn(selection.RAIL + "testUnplacedLabelFullScreenAtDeviceWidth", full["tests"])
         self.assertIn(selection.RAIL + "testUnplacedLabelFullScreenAtDeviceWidth", selection.select([])["tests"])
@@ -172,6 +181,7 @@ class CoverageTests(unittest.TestCase):
             self.assertIn(selection.RAIL + name, spec["tests"])
         self.assertNotIn(selection.TRIP_SHEET, spec["tests"])
         self.assertNotIn(selection.RAIL + "testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch", spec["tests"])
+        self.assertNotIn(selection.RAIL + "testDoodlePaywallParity", spec["tests"])
 
     def test_cli_honors_save_ui_test_focus_off_main(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -219,6 +229,10 @@ class CoverageTests(unittest.TestCase):
         self.assertRegex(ci_workflow, r"(?m)^  ios-fast:\s*$")
         self.assertIn("run-visual-parity.sh", ios_workflow)
         self.assertIn("--threshold 0.90", ios_workflow)
+        self.assertIn("--skip-screens", ios_workflow)
+        self.assertIn("testDoodlePaywallParity", ios_workflow)
+        self.assertIn("grep -q 'testDoodleCaptureParity'", ios_workflow)
+        self.assertIn("pr295-capture-light.png", ios_workflow)
         self.assertIn("xcrun simctl io booted screenshot", ios_workflow)
         self.assertNotIn("run-visual-parity.sh", ci_workflow)
         self.assertIn("SAVE_UI_TEST_FOCUS", ios_workflow)

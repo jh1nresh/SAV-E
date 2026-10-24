@@ -51,6 +51,7 @@ struct ProfileView: View {
     var onUpdatePlace: (Place) async throws -> Void = { _ in }
     var onOpenPlace: (Place) -> Void = { _ in }
     var isRootTab = false
+    var collectionMode: SavePassportCollectionMode = .collection
     @Binding var requestsConnections: Bool
     @State private var opensConnections = false
     @State private var opensCollected = false
@@ -80,8 +81,7 @@ struct ProfileView: View {
     /// unresolved Near you.
     private var cityStampPlaces: [Place] {
         let source = passportPlaces
-        guard !isRootTab else { return source }
-        let scoped = SaveDoodleHomeProgressCatalog.cityPlaces(
+        let scoped = collectionMode.places(
             from: source,
             selection: session.city,
             location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
@@ -536,7 +536,7 @@ struct ProfileView: View {
         .sheet(isPresented: $showLanguageSettings) {
             LanguageSettingsSheet()
         }
-        .sheet(isPresented: $showProPaywall) {
+        .fullScreenCover(isPresented: $showProPaywall) {
             SaveProPaywallView(trigger: .passport)
         }
         .confirmationDialog(

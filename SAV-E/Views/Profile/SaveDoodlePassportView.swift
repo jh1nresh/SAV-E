@@ -153,7 +153,7 @@ struct SaveDoodlePassportPage: View {
 
     private var emptyPassport: some View {
         VStack(spacing: SaveSpace.md) {
-            SaveDoodleElephant(size: SaveLayout.passportSlot)
+            MemoMascotMark(size: SaveLayout.passportSlot, framed: false)
             Text(languageSettings.localized(
                 english: "No stickers yet",
                 traditionalChinese: "還沒有貼紙"

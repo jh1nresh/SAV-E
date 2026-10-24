@@ -14,6 +14,9 @@ TRIP_SHEET = RAIL + "testTripStopEditorSurfaceIsReachable"
 BASELINE = [RAIL + name for name in (
     "testCaptureAtlasProductionParity",
     "testCaptureFiveTabLanding",
+    "testDoodlePaywallParity",
+    "testDoodleCaptureParity",
+    "testDoodleCapturePaywallDarkParity",
     "testHomeAndPassportWarmDarkMode",
     "testAtlasHomeAndSavesRenderPersistedPlaceData",
     "testHomeSearchAndPendingCandidateOpenDirectly",
@@ -64,9 +67,18 @@ TESTS = {
 # failed 3/3 on run 34019378064 after compose never produced plan.draft.
 FULL = list(BASELINE) + [
     RAIL + "testHomeListProgressiveSearch",
-    RAIL + "testMiniMapOpensMapWithCarriedFilterAndCityChange",
     RAIL + "testHomeCollectedOpensPassportWithCityCount",
     RAIL + "testSavesTripsBackReturnsToSaves",
+    RAIL + "testHomeDesignProductStates",
+    RAIL + "testHomeShowOnMapFocusesPlace",
+    RAIL + "testHomeHintCountEvidence",
+    RAIL + "testHomeTaipeiGrantedDistances",
+    RAIL + "testHomeTPEAEvidence",
+    RAIL + "testHopU1SavedPlaceLimitPaywallShowsSavedFiftyWithoutManMan",
+    RAIL + "testMapSavedUnsavedVisitedTaipeiFixture",
+    RAIL + "testPassportWidth375",
+    RAIL + "testPassportWidth390",
+    RAIL + "testPassportWidth430",
 ]
 
 # Temporary #279 iteration profiles. Empty SAVE_UI_TEST_FOCUS keeps default
