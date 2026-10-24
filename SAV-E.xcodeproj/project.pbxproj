@@ -12,6 +12,7 @@
 		T7A100000000000000000003 /* SaveKraftStamp.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A100000000000000000004 /* SaveKraftStamp.swift */; };
 		D2E100000000000000000001 /* SaveDoodleHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E100000000000000000002 /* SaveDoodleHomeView.swift */; };
 		D2E100000000000000000003 /* SaveDoodleHomeCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E100000000000000000004 /* SaveDoodleHomeCatalog.swift */; };
+		D2E100000000000000000007 /* SaveAddressLocality.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E100000000000000000008 /* SaveAddressLocality.swift */; };
 		D2E100000000000000000005 /* SaveDoodleHomeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E100000000000000000006 /* SaveDoodleHomeTests.swift */; };
 		D3E100000000000000000001 /* SaveDoodleMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E100000000000000000002 /* SaveDoodleMapView.swift */; };
 		D3E100000000000000000003 /* SaveDoodleCheckInStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E100000000000000000004 /* SaveDoodleCheckInStore.swift */; };
@@ -315,6 +316,7 @@
 		T7A100000000000000000004 /* SaveKraftStamp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveKraftStamp.swift; sourceTree = "<group>"; };
 		D2E100000000000000000002 /* SaveDoodleHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleHomeView.swift; sourceTree = "<group>"; };
 		D2E100000000000000000004 /* SaveDoodleHomeCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleHomeCatalog.swift; sourceTree = "<group>"; };
+		D2E100000000000000000008 /* SaveAddressLocality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveAddressLocality.swift; sourceTree = "<group>"; };
 		D2E100000000000000000006 /* SaveDoodleHomeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleHomeTests.swift; sourceTree = "<group>"; };
 		D3E100000000000000000002 /* SaveDoodleMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleMapView.swift; sourceTree = "<group>"; };
 		D3E100000000000000000004 /* SaveDoodleCheckInStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleCheckInStore.swift; sourceTree = "<group>"; };
@@ -743,6 +745,7 @@
 				8C9D0E1F2A3B4C5D6E7F8091 /* SavePlanDraftBuilder.swift */,
 				5633EED48BFC9E8EE7B3B1F7 /* SaveSearchController.swift */,
 				5FE70B14C3D236AC32C87909 /* SaveHomeSearch.swift */,
+				D2E100000000000000000008 /* SaveAddressLocality.swift */,
 				D2E100000000000000000004 /* SaveDoodleHomeCatalog.swift */,
 				D3E100000000000000000004 /* SaveDoodleCheckInStore.swift */,
 				6F6D79BD1210FF4C7D94985C /* SaveSearchIntentParser.swift */,
@@ -1642,6 +1645,7 @@
 				T7A100000000000000000003 /* SaveKraftStamp.swift in Sources */,
 				D2E100000000000000000001 /* SaveDoodleHomeView.swift in Sources */,
 				D2E100000000000000000003 /* SaveDoodleHomeCatalog.swift in Sources */,
+				D2E100000000000000000007 /* SaveAddressLocality.swift in Sources */,
 				D3E100000000000000000001 /* SaveDoodleMapView.swift in Sources */,
 				D3E100000000000000000003 /* SaveDoodleCheckInStore.swift in Sources */,
 				A10100000000000000000013 /* SharedPostViews.swift in Sources */,

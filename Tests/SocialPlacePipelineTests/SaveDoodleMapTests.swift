@@ -87,52 +87,45 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(root.contains("accessibilityElement(children: .contain)"))
     }
 
-    func testProductMapAndMiniMapKeepNativeAppleColors() throws {
+    func testProductMapKeepsNativeAppleColors() throws {
         let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
-        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
-        let miniStart = try XCTUnwrap(home.range(of: "struct SaveDoodleMiniMap"))
-        let miniEnd = try XCTUnwrap(home.range(of: "enum SaveDoodleOfficialSticker"))
-        let mini = String(home[miniStart.lowerBound..<miniEnd.lowerBound])
-        for (name, source) in [("SaveDoodleMapView", map), ("SaveDoodleMiniMap", mini)] {
-            XCTAssertFalse(
-                source.contains(".saturation("),
-                "\(name) HoP 298-1: no saturation wash on Apple tiles"
-            )
-            XCTAssertFalse(
-                source.contains(".colorMultiply("),
-                "\(name) HoP 298-1: no colorMultiply wash on Apple tiles"
-            )
-            XCTAssertFalse(
-                source.contains("emphasis: .muted"),
-                "\(name) HoP 298-1: no muted MapKit emphasis"
-            )
-            XCTAssertFalse(
-                source.contains(".blendMode(.multiply)"),
-                "\(name) HoP 298-1: no paper multiply overlay"
-            )
-            XCTAssertFalse(
-                source.contains("PaperGrain"),
-                "\(name) HoP 298-1: no paper-texture overlay"
-            )
-            XCTAssertFalse(
-                source.contains("paper-grain"),
-                "\(name) HoP 298-1: no paper-texture overlay"
-            )
-            XCTAssertFalse(
-                source.contains("paper multiply"),
-                "\(name) HoP 298-1: no paper multiply overlay"
-            )
-            let withoutPaletteMuted = source.replacingOccurrences(
-                of: "SaveAtlasPalette.muted",
-                with: ""
-            )
-            XCTAssertFalse(
-                withoutPaletteMuted.contains(".muted"),
-                "\(name) HoP 298-1: no .muted map wash"
-            )
-        }
+        XCTAssertFalse(
+            map.contains(".saturation("),
+            "SaveDoodleMapView HoP 298-1: no saturation wash on Apple tiles"
+        )
+        XCTAssertFalse(
+            map.contains(".colorMultiply("),
+            "SaveDoodleMapView HoP 298-1: no colorMultiply wash on Apple tiles"
+        )
+        XCTAssertFalse(
+            map.contains("emphasis: .muted"),
+            "SaveDoodleMapView HoP 298-1: no muted MapKit emphasis"
+        )
+        XCTAssertFalse(
+            map.contains(".blendMode(.multiply)"),
+            "SaveDoodleMapView HoP 298-1: no paper multiply overlay"
+        )
+        XCTAssertFalse(
+            map.contains("PaperGrain"),
+            "SaveDoodleMapView HoP 298-1: no paper-texture overlay"
+        )
+        XCTAssertFalse(
+            map.contains("paper-grain"),
+            "SaveDoodleMapView HoP 298-1: no paper-texture overlay"
+        )
+        XCTAssertFalse(
+            map.contains("paper multiply"),
+            "SaveDoodleMapView HoP 298-1: no paper multiply overlay"
+        )
+        let withoutPaletteMuted = map.replacingOccurrences(
+            of: "SaveAtlasPalette.muted",
+            with: ""
+        )
+        XCTAssertFalse(
+            withoutPaletteMuted.contains(".muted"),
+            "SaveDoodleMapView HoP 298-1: no .muted map wash"
+        )
         XCTAssertTrue(map.contains(".mapStyle(.standard(emphasis: .automatic))"))
-        XCTAssertTrue(mini.contains(".mapStyle(.standard(emphasis: .automatic))"))
     }
 
     func testReplacementMapRendersCollaborativeListRoute() throws {

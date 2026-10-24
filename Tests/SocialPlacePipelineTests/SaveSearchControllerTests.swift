@@ -3601,6 +3601,566 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testExactSearchResolutionPersistsEveryRetiredLeftoverBeforeRefresh() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-persist-leftovers-\(UUID().uuidString).json")
+        let eventsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-persist-leftovers-events-\(UUID().uuidString).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        let resolvedID = UUID()
+        let leftoverID = UUID()
+        let resolved = PlaceReviewCandidate(
+            id: resolvedID,
+            captureId: nil,
+            workflowRunId: UUID(),
+            name: "Starbucks",
+            address: "123 Sunset Blvd",
+            city: "Los Angeles",
+            latitude: 34.0979,
+            longitude: -118.3287,
+            evidence: ["Seed"],
+            confidence: 0.6,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        let leftover = PlaceReviewCandidate(
+            id: leftoverID,
+            captureId: nil,
+            workflowRunId: UUID(),
+            name: "Starbucks",
+            address: "125 Sunset Boulevard",
+            city: "Los Angeles",
+            latitude: 34.0980,
+            longitude: -118.3288,
+            evidence: ["Nearby recapture"],
+            confidence: 0.6,
+            missingInfo: [],
+            status: "review",
+            createdAt: Date()
+        )
+        supabase.remoteReviewCandidates = [resolved, leftover]
+        let map = MapViewModel(
+            supabaseService: supabase,
+            mapCandidatePlaceSaver: { _, _ in },
+            mapCandidateUserIDProvider: { "owner" },
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.reviewCandidates = [resolved, leftover]
+        map.mapCandidates = [
+            SaveMapCandidate(
+                id: "nearby-starbucks",
+                title: "Starbucks Sunset",
+                subtitle: "Los Angeles, CA",
+                latitude: 34.0979,
+                longitude: -118.3287,
+                category: .cafe
+            )
+        ]
+        map.beginExactSearchResolution(for: resolved)
+
+        let candidate = try XCTUnwrap(map.mapCandidates.first)
+        _ = try await map.saveMapCandidateAsPlace(candidate)
+
+        let decidedIDs = Set(supabase.recoveryDecisions.compactMap(\.candidateId))
+        XCTAssertEqual(decidedIDs, [resolvedID, leftoverID])
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolvedID })
+        XCTAssertFalse(
+            map.reviewCandidates.contains { $0.id == leftoverID },
+            "A leftover within 250 m must stay retired after remote refresh"
+        )
+    }
+
+    @MainActor
+    func testExactSearchSettlesEachRunOnceAndPersistsSameRunAndLegacyLeftovers() async throws {
+        try await assertGroupedExactSearchPersistence(failOnce: false)
+    }
+
+    @MainActor
+    func testExactSearchRetriesPartialCommitWithTheSameDecisionIdentity() async throws {
+        try await assertGroupedExactSearchPersistence(failOnce: true)
+    }
+
+    @MainActor
+    func testClosingPartialCorrectionDoesNotClaimOrdinaryMapActionsAndCanResumeOriginalPlan() async throws {
+        try await assertGroupedExactSearchPersistence(failOnce: true, closesBeforeRetry: true)
+    }
+
+    @MainActor
+    private func assertGroupedExactSearchPersistence(failOnce: Bool, closesBeforeRetry: Bool = false) async throws {
+        let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("grouped-exact-\(UUID()).json")
+        let eventsURL = FileManager.default.temporaryDirectory.appendingPathComponent("grouped-events-\(UUID()).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let supabase = RecordingSupabaseService()
+        supabase.enforcesTerminalDecisionIdentity = true
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        clue.captureId = UUID()
+        var sameRun = clue
+        sameRun.id = UUID()
+        var otherRun = clue
+        otherRun.id = UUID(uuidString: "10000000-0000-0000-0000-000000000001")!
+        otherRun.workflowRunId = UUID()
+        var otherRunSibling = otherRun
+        otherRunSibling.id = UUID(uuidString: "10000000-0000-0000-0000-000000000002")!
+        otherRunSibling.address = "Different unresolved address from the same source"
+        var legacy = clue
+        legacy.id = UUID()
+        legacy.workflowRunId = nil
+        let all = [sameRun, otherRunSibling, legacy, clue, otherRun]
+        supabase.remoteReviewCandidates = all
+        if failOnce { supabase.failingDecisionRuns = [try XCTUnwrap(clue.workflowRunId)] }
+        let stamp = Self.correctionStamp()
+        let map = MapViewModel(
+            supabaseService: supabase,
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = all
+        map.beginExactSearchResolution(for: clue)
+
+        if failOnce {
+            do {
+                _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+                XCTFail("The originating run must surface its injected failure")
+            } catch ReviewCandidateError.exactSearchPartiallyCommitted {
+                // The distinct leftover run already accepted the stamp.
+            }
+            XCTAssertEqual(map.reviewCandidates.count, all.count)
+            XCTAssertEqual(supabase.updatedPlaces.count, 1, "Never roll back a stamp referenced by an accepted decision")
+            let previousDecisions = supabase.recoveryDecisions
+            if closesBeforeRetry {
+                map.clearMapSearchResults()
+                XCTAssertFalse(map.hasActiveExactSearchResolution)
+                let unclaimed = await map.chooseSavedStampFromExactSearch(stamp)
+                XCTAssertNil(unclaimed, "Closing must suspend retained recovery intent")
+                XCTAssertEqual(supabase.recoveryDecisions, previousDecisions)
+                let ordinary = SaveMapCandidate(id: "ordinary-after-close", title: "Ordinary new stamp", subtitle: "Paris", latitude: 48.8566, longitude: 2.3522, category: .cafe)
+                let ordinaryStamp = try await map.saveMapCandidateAsPlace(ordinary)
+                XCTAssertEqual(ordinaryStamp.name, "Ordinary new stamp")
+                XCTAssertEqual(supabase.recoveryDecisions, previousDecisions)
+                XCTAssertEqual(map.reviewCandidates.count, all.count)
+                map.beginExactSearchResolution(for: clue)
+                XCTAssertTrue(map.hasActiveExactSearchResolution)
+                do {
+                    _ = try await map.resolveExactSearchClue(toSavedPlace: ordinaryStamp)
+                    XCTFail("An explicitly resumed partial plan must retain its original stamp lock")
+                } catch ReviewCandidateError.correctionLockedToPreviousStamp {
+                    // The original decision snapshots remain available for retry.
+                }
+            }
+            supabase.failingDecisionRuns = []
+            try await map.refreshReviewCandidates()
+            XCTAssertFalse(map.reviewCandidates.contains { $0.id == otherRun.id })
+            XCTAssertTrue(map.reviewCandidates.contains { $0.id == otherRunSibling.id })
+            _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+            XCTAssertTrue(previousDecisions.allSatisfy { supabase.recoveryDecisions.contains($0) })
+        } else {
+            _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        }
+        XCTAssertEqual(Set(supabase.recoveryDecisionRuns), Set([clue.workflowRunId!, otherRun.workflowRunId!]))
+        XCTAssertEqual(supabase.recoveryDecisions.count, 2, "One terminal decision per run, including retries")
+        XCTAssertTrue(supabase.recoveryDecisions.contains { $0.candidateId == clue.id })
+        let decidedIDs = Set(supabase.recoveryDecisions.compactMap(\.candidateId))
+        let patchedIDs = Set(supabase.candidateStatusUpdates.map { $0.id })
+        XCTAssertEqual(decidedIDs.union(patchedIDs), Set(all.map(\.id)))
+        XCTAssertTrue(supabase.candidateStatusUpdates.allSatisfy { $0.status == "saved" && $0.placeID == stamp.id })
+        XCTAssertTrue(map.reviewCandidates.isEmpty, "Remote refresh must not restore a skipped same-run leftover")
+    }
+
+    @MainActor
+    func testExactSearchTransportRejectsChangedAccountBeforeSendingPayload() async throws {
+        for phase in ExactSearchTransportPhase.allCases {
+            try await assertExactSearchTransport(phase, switchesAccount: true)
+        }
+    }
+
+    @MainActor
+    func testExactSearchTransportKeepsSameAccountInsertAndMergeWorking() async throws {
+        try await assertExactSearchTransport(.insert, switchesAccount: false)
+        try await assertExactSearchTransport(.returnedMerge, switchesAccount: false)
+        try await assertExactSearchTransport(.chosenMerge, switchesAccount: false)
+    }
+
+    private enum ExactSearchTransportPhase: CaseIterable {
+        case insert, returnedMerge, chosenMerge, decision, rollback
+        var suspendedTokenCall: Int {
+            switch self {
+            case .insert, .returnedMerge, .chosenMerge: return 1
+            case .decision: return 2
+            case .rollback: return 3
+            }
+        }
+    }
+
+    @MainActor
+    private func assertExactSearchTransport(
+        _ phase: ExactSearchTransportPhase, switchesAccount: Bool
+    ) async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let owner = "did:privy:exact-owner"
+        auth.authState = .authenticated(userId: owner)
+        let generation = auth.sessionGeneration
+        defer { auth.authState = previousAuth }
+        let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("exact-token-\(UUID()).json")
+        let eventsURL = FileManager.default.temporaryDirectory.appendingPathComponent("exact-token-events-\(UUID()).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+            ExactSearchRequestURLProtocol.reset()
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        // Real workflow transport for the decision/rollback scenarios; simpler
+        // legacy status response for the successful insert/merge controls.
+        clue.workflowRunId = (phase == .decision || phase == .rollback) ? UUID() : nil
+        let candidate = SaveMapCandidate(
+            id: "token-result", title: phase == .insert ? "Distant cafe" : stamp.name,
+            subtitle: phase == .insert ? "Santa Monica" : stamp.address,
+            latitude: phase == .insert ? 34.0194 : stamp.latitude,
+            longitude: phase == .insert ? -118.4912 : stamp.longitude, category: .cafe
+        )
+        ExactSearchRequestURLProtocol.reset()
+        ExactSearchRequestURLProtocol.failsDecision = phase == .rollback
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [ExactSearchRequestURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        defer { session.invalidateAndCancel() }
+        let gate = ExactSearchTokenGate(suspendedCall: phase.suspendedTokenCall)
+        let service = SupabaseService(apiBaseURL: "https://exact-search.test", session: session,
+            accessTokenProvider: { await gate.token() })
+        let map = MapViewModel(
+            supabaseService: service,
+            mapCandidatePlaceSaver: { place, owner in try await service.savePlace(place, userId: owner) },
+            mapCandidateUserIDProvider: { auth.currentUserId },
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.mapCandidates = [candidate]
+        map.beginExactSearchResolution(for: clue)
+        let pending = Task {
+            if phase == .chosenMerge { return try await map.resolveExactSearchClue(toSavedPlace: stamp) }
+            return try await map.saveMapCandidateAsPlace(candidate)
+        }
+        // Real URLSession hops may outlive a fixed number of executor yields.
+        // Bound the wait without ever suspending an unscoped background call.
+        for _ in 0..<500 where !gate.isSuspended {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        guard gate.isSuspended else {
+            gate.resume()
+            pending.cancel()
+            XCTFail("Exact-search must propagate its TaskLocal before token lookup at \(phase)")
+            return
+        }
+        XCTAssertEqual(gate.scopes.count, phase.suspendedTokenCall)
+        XCTAssertTrue(gate.scopes.allSatisfy { $0.owner == owner && $0.generation == generation })
+        let writesBeforeResume = ExactSearchRequestURLProtocol.requests.filter { $0.httpMethod != "GET" }
+        XCTAssertEqual(writesBeforeResume.count, phase.suspendedTokenCall - 1)
+        var newPlace = Self.correctionStamp()
+        newPlace.name = "Other account memory"
+        if switchesAccount {
+            auth.authState = .authenticated(userId: "did:privy:other")
+            map.places = [newPlace]
+            map.reviewCandidates = []
+            try vault.removeConfirmedPlace(stamp)
+            _ = try vault.saveConfirmedPlace(newPlace)
+        }
+        let vaultBeforeResume = try Data(contentsOf: vaultURL)
+        gate.resume()
+        if switchesAccount {
+            do {
+                _ = try await pending.value
+                XCTFail("Changed session must cancel before sending the old payload")
+            } catch ReviewCandidateError.sessionChangedAfterCommit {}
+            let writesAfter = ExactSearchRequestURLProtocol.requests.filter { $0.httpMethod != "GET" }
+            XCTAssertEqual(writesAfter.count, writesBeforeResume.count, "No mutation may leave after the token resumes as B")
+            XCTAssertFalse(writesAfter.contains { $0.value(forHTTPHeaderField: "Authorization") == "Bearer other-token" })
+            if phase == .insert {
+                XCTAssertFalse(writesAfter.contains { $0.httpMethod == "POST" && $0.url?.path == "/places" })
+            }
+            XCTAssertEqual(map.places.map(\.id), [newPlace.id])
+            XCTAssertEqual(try Data(contentsOf: vaultURL), vaultBeforeResume)
+        } else {
+            let saved = try await pending.value
+            let writes = ExactSearchRequestURLProtocol.requests.filter { $0.httpMethod != "GET" }
+            XCTAssertEqual(writes.count, 2, "A valid session still saves and retires its legacy clue")
+            XCTAssertTrue(writes.allSatisfy { $0.value(forHTTPHeaderField: "Authorization") == "Bearer owner-token" })
+            let first = try XCTUnwrap(writes.first)
+            XCTAssertEqual(first.httpMethod, phase == .insert ? "POST" : "PATCH")
+            let body = try XCTUnwrap(first.httpBody)
+            let values = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            XCTAssertEqual(values["name"] as? String, phase == .insert ? candidate.title : stamp.name)
+            XCTAssertTrue(map.places.contains { $0.id == saved.id })
+            XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+            XCTAssertTrue(gate.scopes.allSatisfy { $0.owner == owner && $0.generation == generation },
+                          "Decisions and readbacks inherit the same session as the save")
+        }
+    }
+
+    @MainActor
+    func testReturnedStampPatchResponsesAfterAccountChangePreserveNewSession() async throws {
+        for fails in [false, true] {
+            try await assertExactSearchSuspension(.stampPatch, fails: fails)
+            try await assertExactSearchSuspension(.stampPatch, fails: fails, signsOut: true)
+        }
+    }
+
+    @MainActor
+    func testOldExactSearchCompletionCannotReleaseNewAccountOperation() async throws {
+        try await assertExactSearchSuspension(.stampPatch, startsNewOperation: true)
+    }
+
+    @MainActor
+    func testExactSearchReadbacksAfterAccountSwitchDoNotMirrorOrFocusOldStamp() async throws {
+        try await assertExactSearchSuspension(.existingReadback)
+        try await assertExactSearchSuspension(.newReadback)
+    }
+
+    @MainActor
+    func testExactSearchRollbackResponsesAfterAccountSwitchDoNotRestoreOrRetry() async throws {
+        try await assertExactSearchSuspension(.rollback, fails: false)
+        try await assertExactSearchSuspension(.rollback, fails: true)
+    }
+
+    @MainActor
+    func testExactSearchNewSaveFailureAfterAccountSwitchDoesNotRestoreResolution() async throws {
+        try await assertExactSearchSuspension(.newSave, fails: true)
+    }
+
+    @MainActor
+    func testChosenStampLateFailureDoesNotSetNewAccountDrawerError() async throws {
+        try await assertExactSearchSuspension(.chosenStamp, fails: true)
+    }
+
+    private enum ExactSearchSuspension {
+        case stampPatch, existingReadback, newReadback, rollback, newSave, chosenStamp
+    }
+
+    @MainActor
+    private func assertExactSearchSuspension(
+        _ phase: ExactSearchSuspension, fails: Bool = false, signsOut: Bool = false,
+        startsNewOperation: Bool = false
+    ) async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        auth.authState = .authenticated(userId: "owner")
+        defer { auth.authState = previousAuth }
+        let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("exact-boundary-\(UUID()).json")
+        let eventsURL = FileManager.default.temporaryDirectory.appendingPathComponent("exact-boundary-events-\(UUID()).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let service = RecordingSupabaseService()
+        let isNew = phase == .newReadback || phase == .newSave
+        let readsBack = phase == .existingReadback || phase == .newReadback
+        let heldUpdateCall = phase == .rollback ? 2 : 1
+        if readsBack {
+            service.holdNextFetchPlaces = true
+            service.returnsPersistedPlaces = true
+        } else if phase == .newSave {
+            service.holdNextSavePlace = true
+            service.savePlaceError = NSError(domain: "test.insert", code: 503)
+        } else {
+            service.heldUpdatePlaceCalls = [heldUpdateCall]
+            if fails { service.failingUpdatePlaceCalls = [heldUpdateCall] }
+        }
+        if phase == .rollback { service.recordDecisionError = NSError(domain: "test.decision", code: 503) }
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        let candidate = SaveMapCandidate(
+            id: "returned-result", title: isNew ? "New distant cafe" : stamp.name,
+            subtitle: isNew ? "Santa Monica" : stamp.address,
+            latitude: isNew ? 34.0194 : stamp.latitude,
+            longitude: isNew ? -118.4912 : stamp.longitude, category: .cafe
+        )
+        let map = MapViewModel(
+            supabaseService: service,
+            mapCandidatePlaceSaver: { place, owner in try await service.savePlace(place, userId: owner) },
+            mapCandidateUserIDProvider: { auth.currentUserId },
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.mapCandidates = [candidate]
+        map.beginExactSearchResolution(for: clue)
+        let pending = Task { () throws -> Place? in
+            if phase == .chosenStamp { return await map.chooseSavedStampFromExactSearch(stamp) }
+            return try await map.saveMapCandidateAsPlace(candidate)
+        }
+        func isSuspended() -> Bool {
+            if readsBack { return service.fetchPlacesCalls == 1 }
+            if phase == .newSave { return service.savePlaceStarted == 1 }
+            return service.updatePlaceStarted == heldUpdateCall
+        }
+        for _ in 0..<500 where !isSuspended() { await Task.yield() }
+        guard isSuspended() else {
+            service.resumeHeldUpdatePlace()
+            service.resumeHeldFetchPlaces()
+            service.resumeHeldSavePlace()
+            pending.cancel()
+            XCTFail("Expected the production exact-search path to suspend at \(phase)")
+            return
+        }
+        auth.authState = signsOut ? .unauthenticated : .authenticated(userId: "other")
+        var newPlace = Self.correctionStamp()
+        newPlace.name = "New account stamp"
+        var newClue = Self.correctionClue(overlappingStamp: false)
+        newClue.id = UUID()
+        newClue.workflowRunId = UUID()
+        let newCandidate = SaveMapCandidate(
+            id: "new-account-result", title: newPlace.name, subtitle: newPlace.address,
+            latitude: startsNewOperation ? 34.0194 : newPlace.latitude,
+            longitude: startsNewOperation ? -118.4912 : newPlace.longitude, category: .cafe
+        )
+        map.places = [newPlace]
+        map.reviewCandidates = [newClue]
+        map.mapCandidates = [newCandidate]
+        map.selectedMapCandidate = newCandidate
+        map.selectedPlace = newPlace
+        if phase != .newSave { map.beginExactSearchResolution(for: newClue) }
+        var newPending: Task<Place, Error>?
+        if startsNewOperation {
+            service.holdNextSavePlace = true
+            newPending = Task { try await map.saveMapCandidateAsPlace(newCandidate) }
+            for _ in 0..<500 where service.savePlaceStarted == 0 { await Task.yield() }
+            XCTAssertEqual(service.savePlaceStarted, 1, "The new account can claim its own operation")
+        }
+        try vault.removeConfirmedPlace(stamp)
+        _ = try vault.saveConfirmedPlace(newPlace)
+        let vaultBefore = try Data(contentsOf: vaultURL)
+        let requestsBefore = service.updatePlaceStarted
+        service.resumeHeldUpdatePlace()
+        service.resumeHeldFetchPlaces()
+        if !startsNewOperation { service.resumeHeldSavePlace() }
+        if phase == .chosenStamp {
+            let chosen = try await pending.value
+            XCTAssertNil(chosen)
+        } else {
+            do {
+                _ = try await pending.value
+                XCTFail("An old session must abort its continuation")
+            } catch ReviewCandidateError.sessionChangedAfterCommit {}
+        }
+        XCTAssertEqual(map.places.map(\.id), [newPlace.id])
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [newClue.id])
+        XCTAssertEqual(map.mapCandidates.map(\.id), [newCandidate.id])
+        XCTAssertEqual(map.selectedMapCandidate?.id, newCandidate.id)
+        XCTAssertEqual(map.selectedPlace?.id, newPlace.id)
+        if phase == .newSave || startsNewOperation {
+            XCTAssertFalse(map.hasActiveExactSearchResolution, "An old failure cannot replant its resolution")
+        } else {
+            XCTAssertTrue(map.mapCandidate(newCandidate, resolvesReviewCandidateID: newClue.id))
+        }
+        XCTAssertNil(map.correctionDrawerError, "A late failure must not populate B's drawer")
+        XCTAssertEqual(try Data(contentsOf: vaultURL), vaultBefore)
+        XCTAssertEqual(service.updatePlaceStarted, requestsBefore, "No compensating request may use B's credentials")
+        XCTAssertEqual(service.recoveryDecisions.count, readsBack ? 1 : 0)
+        if let newPending {
+            let blocked = await map.chooseSavedStampFromExactSearch(newPlace)
+            XCTAssertNil(blocked)
+            XCTAssertEqual(map.correctionDrawerError, ReviewCandidateError.correctionInFlight.errorDescription,
+                           "Finishing A must not release B's active operation")
+            service.resumeHeldSavePlace()
+            let savedForB = try await newPending.value
+            XCTAssertTrue(map.places.contains { $0.id == savedForB.id })
+        }
+    }
+
+    @MainActor
+    func testExactSearchSiblingPatchSuccessAfterAccountSwitchDoesNotTouchNewAccount() async throws {
+        try await assertSiblingPatchAccountSwitch(fails: false)
+    }
+
+    @MainActor
+    func testExactSearchSiblingPatchFailureAfterAccountSwitchDoesNotRestoreOldAccount() async throws {
+        try await assertSiblingPatchAccountSwitch(fails: true)
+    }
+
+    @MainActor
+    func testExactSearchSiblingPatchResponsesAfterSignOutDoNotRestoreOldAccount() async throws {
+        try await assertSiblingPatchAccountSwitch(fails: false, signsOut: true)
+        try await assertSiblingPatchAccountSwitch(fails: true, signsOut: true)
+    }
+
+    @MainActor
+    private func assertSiblingPatchAccountSwitch(fails: Bool, signsOut: Bool = false) async throws {
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        auth.authState = .authenticated(userId: "owner")
+        defer { auth.authState = previousAuth }
+        let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("patch-session-\(UUID()).json")
+        let eventsURL = FileManager.default.temporaryDirectory.appendingPathComponent("patch-events-\(UUID()).json")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+            try? FileManager.default.removeItem(at: eventsURL)
+        }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let supabase = RecordingSupabaseService()
+        supabase.holdNextCandidateStatusUpdate = true
+        if fails { supabase.candidateStatusError = NSError(domain: "test.patch", code: 503) }
+        var clue = Self.correctionClue(overlappingStamp: true)
+        clue.workflowRunId = UUID()
+        var sibling = clue
+        sibling.id = UUID()
+        let stamp = Self.correctionStamp()
+        let map = MapViewModel(
+            supabaseService: supabase, saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+            usesRemotePersistence: true
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue, sibling]
+        map.beginExactSearchResolution(for: clue)
+        let pending = Task { try await map.resolveExactSearchClue(toSavedPlace: stamp) }
+        for _ in 0..<200 where supabase.candidateStatusStarted == 0 { await Task.yield() }
+        XCTAssertEqual(supabase.candidateStatusStarted, 1)
+        auth.authState = signsOut ? .unauthenticated : .authenticated(userId: "other")
+        // Represent the new account's loaded state while the old PATCH is suspended.
+        var newPlace = Self.correctionStamp()
+        newPlace.name = "New account place"
+        map.places = [newPlace]
+        map.reviewCandidates = [sibling]
+        try vault.removeConfirmedPlace(stamp)
+        _ = try vault.saveConfirmedPlace(newPlace)
+        let vaultBeforeResponse = try Data(contentsOf: vaultURL)
+        supabase.resumeHeldCandidateStatusUpdate()
+        do {
+            _ = try await pending.value
+            XCTFail("A response for the old account must abort continuation")
+        } catch ReviewCandidateError.sessionChangedAfterCommit {}
+        XCTAssertEqual(map.places.map(\.id), [newPlace.id])
+        XCTAssertEqual(map.reviewCandidates.map(\.id), [sibling.id], "Do not retire new-session rows")
+        XCTAssertFalse(map.hasActiveExactSearchResolution, "Do not resurrect the old account's retry plan")
+        XCTAssertEqual(try Data(contentsOf: vaultURL), vaultBeforeResponse, "Neither success nor failure may mirror old data")
+        XCTAssertEqual(supabase.updatedPlaces.count, 1, "Never roll back under the new account")
+        XCTAssertEqual(supabase.fetchPlacesCalls, 0)
+    }
+
+    @MainActor
     func testNewRowConfirmStillSendsFinalPlace() async throws {
         let auth = PrivyAuthService.shared
         let previousAuth = auth.authState
@@ -6563,6 +7123,220 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual("臺北市信義區", "臺北市信義區")
     }
 
+    func testCloseDrawerContentEndsExactSearchWithoutVisibleResults() throws {
+        let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
+        let closer = try XCTUnwrap(
+            drawer.components(separatedBy: "private func closeDrawerContent()").last?
+                .components(separatedBy: "private func closeMapSearchResults()").first
+        )
+        XCTAssertTrue(closer.contains("onClearMapSearchResults(true)"))
+        XCTAssertFalse(
+            closer.contains("hasVisibleMapSearchResults"),
+            "Pending or failed exact search has empty candidates and must still end"
+        )
+    }
+
+    func testRetireResolvedReviewClueDoesNotUseNameAndCityAlone() throws {
+        let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
+        XCTAssertTrue(map.contains("sharesReviewSourceIdentity"))
+        XCTAssertFalse(map.contains("leftoverCity == resolvedCity"))
+        XCTAssertTrue(map.contains("not name and city alone"))
+        let distance = try XCTUnwrap(
+            map.components(separatedBy: "private func reviewClueDistanceMeters(").last?
+                .components(separatedBy: "private func clearExactSearchResolution").first
+        )
+        XCTAssertTrue(distance.contains("hasReliableCoordinates"))
+    }
+
+    @MainActor
+    func testRetireResolvedReviewClueKeepsSameNameCityLeftoverWithoutCoordinates() async throws {
+        let search = RecordingMapCandidateSearchService()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("retire-leftover-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            mapCandidateSearchService: search,
+            usesRemotePersistence: false
+        )
+        let resolved = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Starbucks",
+            address: "Los Angeles",
+            city: "Los Angeles",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Synthetic public fixture"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        let leftover = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Starbucks",
+            address: "Los Angeles",
+            city: "Los Angeles",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Another branch"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        map.reviewCandidates = [resolved, leftover]
+        map.updateVisibleMapRegion(region(around: taipei))
+        map.beginExactSearchResolution(for: resolved)
+        search.nextMatchingResults = [
+            SaveMapCandidate(
+                id: "resolved-starbucks",
+                title: "Starbucks Sunset",
+                subtitle: "Los Angeles, CA",
+                latitude: 34.0979,
+                longitude: -118.3287,
+                category: .cafe
+            )
+        ]
+        await map.searchMapPlaces("Starbucks Sunset", preservesExactSearchClue: true)
+        let candidate = try XCTUnwrap(map.mapCandidates.first)
+        _ = try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == leftover.id },
+            "A second coordinate-less Starbucks in the same city must stay"
+        )
+    }
+
+    @MainActor
+    func testRetireResolvedReviewClueIgnoresPlaceholderCoordinates() async throws {
+        let search = RecordingMapCandidateSearchService()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("retire-placeholder-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            mapCandidateSearchService: search,
+            usesRemotePersistence: false
+        )
+        let resolved = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Starbucks",
+            address: "Los Angeles",
+            city: "Los Angeles",
+            latitude: 0,
+            longitude: 0,
+            evidence: ["Placeholder coordinates"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        let leftover = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Starbucks",
+            address: "Chicago",
+            city: "Chicago",
+            latitude: 0,
+            longitude: 0,
+            evidence: ["Unrelated branch"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        XCTAssertFalse(resolved.hasReliableCoordinates)
+        XCTAssertFalse(leftover.hasReliableCoordinates)
+        map.reviewCandidates = [resolved, leftover]
+        map.updateVisibleMapRegion(region(around: taipei))
+        map.beginExactSearchResolution(for: resolved)
+        search.nextMatchingResults = [
+            SaveMapCandidate(
+                id: "placeholder-starbucks",
+                title: "Starbucks Sunset",
+                subtitle: "Los Angeles, CA",
+                latitude: 34.0979,
+                longitude: -118.3287,
+                category: .cafe
+            )
+        ]
+        await map.searchMapPlaces("Starbucks Sunset", preservesExactSearchClue: true)
+        let candidate = try XCTUnwrap(map.mapCandidates.first)
+        _ = try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == leftover.id },
+            "(0, 0) is not a 0 m match; an unrelated same-name clue must stay"
+        )
+    }
+
+    @MainActor
+    func testRetireResolvedReviewClueStillCollapsesSharedCaptureLeftover() async throws {
+        let search = RecordingMapCandidateSearchService()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("retire-shared-capture-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            mapCandidateSearchService: search,
+            usesRemotePersistence: false
+        )
+        let capture = UUID()
+        let resolved = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: capture,
+            name: "Starbucks",
+            address: "Los Angeles",
+            city: "Los Angeles",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Seed"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        let leftover = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: capture,
+            name: "Starbucks",
+            address: "Los Angeles",
+            city: "Los Angeles",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Recapture"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        map.reviewCandidates = [resolved, leftover]
+        map.updateVisibleMapRegion(region(around: taipei))
+        map.beginExactSearchResolution(for: resolved)
+        search.nextMatchingResults = [
+            SaveMapCandidate(
+                id: "shared-capture-starbucks",
+                title: "Starbucks Sunset",
+                subtitle: "Los Angeles, CA",
+                latitude: 34.0979,
+                longitude: -118.3287,
+                category: .cafe
+            )
+        ]
+        await map.searchMapPlaces("Starbucks Sunset", preservesExactSearchClue: true)
+        let candidate = try XCTUnwrap(map.mapCandidates.first)
+        _ = try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertFalse(
+            map.reviewCandidates.contains { $0.id == leftover.id },
+            "A recapture that shares captureId is the same source identity"
+        )
+    }
+
     func testSavedPlaceSearchMatchesTaipeiVariants() {
         let map = MapViewModel(usesRemotePersistence: false)
         map.places = [
@@ -6647,9 +7421,25 @@ final class MapReviewLocationRepairTests: XCTestCase {
 private final class RecordingSupabaseService: SupabaseServiceProtocol {
     private(set) var updatedPlaces: [Place] = []
     private(set) var recoveryDecisions: [PlaceRecoveryDecisionDraft] = []
+    private(set) var recoveryDecisionRuns: [UUID] = []
+    private(set) var candidateStatusUpdates: [(id: UUID, status: String, placeID: UUID?)] = []
+    var holdNextCandidateStatusUpdate = false
+    private(set) var candidateStatusStarted = 0
+    var candidateStatusError: Error?
+    private var resumeCandidateStatus: (() -> Void)?
+
+    func resumeHeldCandidateStatusUpdate() {
+        resumeCandidateStatus?()
+        resumeCandidateStatus = nil
+    }
+
+    var enforcesTerminalDecisionIdentity = false
+    var failingDecisionRuns: Set<UUID> = []
+    private var committedDecisionBodies: [UUID: Data] = [:]
     private(set) var updatePlaceStarted = 0
     var updatePlaceError: Error?
     var failingUpdatePlaceCalls: Set<Int> = []
+    var heldUpdatePlaceCalls: Set<Int> = []
     var recordDecisionError: Error?
     var onRecordDecision: (() -> Void)?
     var onSavePlace: (() -> Void)?
@@ -6665,18 +7455,52 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
         resumeUpdatePlace = nil
     }
 
+    var holdNextFetchPlaces = false
+    var returnsPersistedPlaces = false
+    private var resumeFetchPlaces: (() -> Void)?
+    func resumeHeldFetchPlaces() {
+        resumeFetchPlaces?()
+        resumeFetchPlaces = nil
+    }
+    var holdNextSavePlace = false
+    var savePlaceError: Error?
+    private(set) var savePlaceStarted = 0
+    private var resumeSavePlace: (() -> Void)?
+    func resumeHeldSavePlace() {
+        resumeSavePlace?()
+        resumeSavePlace = nil
+    }
     private(set) var fetchPlacesCalls = 0
     private(set) var savedPlaces: [Place] = []
+    var remoteReviewCandidates: [PlaceReviewCandidate] = []
 
     func startAnalysis(id: UUID) async throws -> UUID? { nil }
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {}
     var onFetchPlaces: (() -> Void)?
     func fetchPlaces(for userId: String) async throws -> [Place] {
-        fetchPlacesCalls += 1
+        if holdNextFetchPlaces {
+            holdNextFetchPlaces = false
+            await withCheckedContinuation { continuation in
+                resumeFetchPlaces = { continuation.resume() }
+                fetchPlacesCalls += 1
+            }
+        } else {
+            fetchPlacesCalls += 1
+        }
         onFetchPlaces?()
-        return []
+        return returnsPersistedPlaces ? savedPlaces + updatedPlaces : []
     }
     func savePlace(_ place: Place, userId: String) async throws {
+        if holdNextSavePlace {
+            holdNextSavePlace = false
+            await withCheckedContinuation { continuation in
+                resumeSavePlace = { continuation.resume() }
+                savePlaceStarted += 1
+            }
+        } else {
+            savePlaceStarted += 1
+        }
+        if let savePlaceError { throw savePlaceError }
         savedPlaces.append(place)
         onSavePlace?()
     }
@@ -6684,7 +7508,7 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
         throw SupabaseError.notConfigured
     }
     func updatePlace(_ place: Place, previous: Place?) async throws {
-        if holdUpdatePlace {
+        if holdUpdatePlace || heldUpdatePlaceCalls.contains(updatePlaceStarted + 1) {
             holdUpdatePlace = false
             await withCheckedContinuation { continuation in
                 resumeUpdatePlace = { continuation.resume() }
@@ -6709,8 +7533,23 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID?, explicitRetry: Bool) async throws -> SourceSearchRecoveryResult {
         SourceSearchRecoveryResult(createdCandidates: [], sourceResolution: nil)
     }
-    func fetchReviewCandidates() async throws -> [PlaceReviewCandidate] { [] }
-    func updatePlaceCandidateStatus(_ candidateId: UUID, status: String, placeId: UUID?) async throws {}
+    func fetchReviewCandidates() async throws -> [PlaceReviewCandidate] {
+        let decided = Set(recoveryDecisions.compactMap(\.candidateId) + candidateStatusUpdates.map(\.id))
+        return remoteReviewCandidates.filter { !decided.contains($0.id) }
+    }
+    func updatePlaceCandidateStatus(_ candidateId: UUID, status: String, placeId: UUID?) async throws {
+        if holdNextCandidateStatusUpdate {
+            holdNextCandidateStatusUpdate = false
+            await withCheckedContinuation { continuation in
+                resumeCandidateStatus = { continuation.resume() }
+                candidateStatusStarted += 1
+            }
+        } else {
+            candidateStatusStarted += 1
+        }
+        if let candidateStatusError { throw candidateStatusError }
+        candidateStatusUpdates.append((candidateId, status, placeId))
+    }
     func createPlaceRecoveryWorkOrder(sourceURL: String?, sourceType: String?) async throws -> PlaceRecoveryWorkOrder {
         throw SupabaseError.notConfigured
     }
@@ -6723,7 +7562,16 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     func recordPlaceRecoveryDecision(_ decision: PlaceRecoveryDecisionDraft, for runId: UUID) async throws -> PlaceRecoveryDecisionReceiptResponse {
         onRecordDecision?()
         if let recordDecisionError { throw recordDecisionError }
-        recoveryDecisions.append(decision)
+        if failingDecisionRuns.contains(runId) { throw NSError(domain: "test.decision", code: 503) }
+        let body = try JSONSerialization.data(withJSONObject: decision.body.compactMapValues { $0 }, options: [.sortedKeys])
+        if enforcesTerminalDecisionIdentity, let previous = committedDecisionBodies[runId], previous != body {
+            throw NSError(domain: "test.settled-workflow-different-decision", code: 409)
+        }
+        if !enforcesTerminalDecisionIdentity || committedDecisionBodies[runId] == nil {
+            recoveryDecisions.append(decision)
+            recoveryDecisionRuns.append(runId)
+        }
+        committedDecisionBodies[runId] = body
         return PlaceRecoveryDecisionReceiptResponse(
             run: PlaceRecoveryWorkflowRun(
                 id: runId,
@@ -6831,4 +7679,70 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     func fetchMyReferral() async throws -> (code: String, url: URL) {
         throw SupabaseError.notConfigured
     }
+}
+
+/// The gate suspends only scoped work. Missing propagation produces an explicit
+/// bounded fixture failure instead of trapping an unrelated background GET.
+@MainActor
+private final class ExactSearchTokenGate {
+    let suspendedCall: Int
+    private(set) var scopes: [(generation: Int, owner: String)] = []
+    private var continuation: CheckedContinuation<Void, Never>?
+    var isSuspended: Bool { continuation != nil }
+    init(suspendedCall: Int) { self.suspendedCall = suspendedCall }
+    func token() async -> String {
+        guard let scope = SAVEPendingImportSessionScope.current else { return "unscoped-token" }
+        scopes.append(scope)
+        if scopes.count == suspendedCall {
+            await withCheckedContinuation { continuation = $0 }
+        }
+        return PrivyAuthService.shared.currentUserId == scope.owner ? "owner-token" : "other-token"
+    }
+    func resume() {
+        let pending = continuation
+        continuation = nil
+        pending?.resume()
+    }
+}
+
+private final class ExactSearchRequestURLProtocol: URLProtocol {
+    private final class State: @unchecked Sendable {
+        let lock = NSLock()
+        var requests: [URLRequest] = []
+        var failsDecision = false
+    }
+    private static let state = State()
+    static var requests: [URLRequest] { state.lock.withLock { state.requests } }
+    static var failsDecision: Bool {
+        get { state.lock.withLock { state.failsDecision } }
+        set { state.lock.withLock { state.failsDecision = newValue } }
+    }
+    static func reset() { state.lock.withLock { state.requests = []; state.failsDecision = false } }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        var recorded = request
+        if recorded.httpBody == nil, let stream = request.httpBodyStream {
+            stream.open()
+            defer { stream.close() }
+            var data = Data()
+            var buffer = [UInt8](repeating: 0, count: 2048)
+            while stream.hasBytesAvailable {
+                let count = stream.read(&buffer, maxLength: buffer.count)
+                if count <= 0 { break }
+                data.append(buffer, count: count)
+            }
+            recorded.httpBody = data
+        }
+        let fails = Self.state.lock.withLock {
+            Self.state.requests.append(recorded)
+            return Self.state.failsDecision && request.url?.path.hasSuffix("/decision") == true
+        }
+        let body = request.httpMethod == "GET" ? "[]" : "{}"
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: fails ? 503 : 200,
+            httpVersion: nil, headerFields: ["Content-Type": "application/json"])!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
 }

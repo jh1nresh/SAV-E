@@ -407,6 +407,197 @@ struct SavePixelChromeIcon: View {
     }
 }
 
+/// Stable pen contours: asymmetry is drawn into the path, never randomized
+/// while rendering, so controls do not shimmer or move under a finger.
+nonisolated struct SaveDoodleInkOval: Shape {
+    func path(in rect: CGRect) -> Path {
+        let r = rect.insetBy(dx: 1, dy: 1)
+        var p = Path()
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: r.minX + r.width * x, y: r.minY + r.height * y)
+        }
+        p.move(to: point(0.49, 0.015))
+        p.addCurve(to: point(0.985, 0.50), control1: point(0.77, -0.01), control2: point(1.01, 0.23))
+        p.addCurve(to: point(0.51, 0.985), control1: point(0.99, 0.78), control2: point(0.78, 1.01))
+        p.addCurve(to: point(0.015, 0.51), control1: point(0.23, 1.00), control2: point(-0.01, 0.78))
+        p.addCurve(to: point(0.49, 0.015), control1: point(0.00, 0.24), control2: point(0.22, 0.01))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// A pill follows the same pen stroke as a seal, with full semicircular ends.
+nonisolated struct SaveDoodleInkCapsule: Shape {
+    func path(in rect: CGRect) -> Path {
+        let r = rect.insetBy(dx: 1, dy: 1)
+        let radius = min(r.width, r.height) / 2
+        let left = r.minX + radius
+        let right = r.maxX - radius
+        let y = r.midY
+        var p = Path()
+        p.move(to: CGPoint(x: left, y: r.minY + 0.3))
+        p.addQuadCurve(to: CGPoint(x: right, y: r.minY + 0.1), control: CGPoint(x: r.midX, y: r.minY - 0.4))
+        p.addCurve(to: CGPoint(x: r.maxX - 0.2, y: y),
+                   control1: CGPoint(x: right + radius * 0.56, y: r.minY),
+                   control2: CGPoint(x: r.maxX, y: y - radius * 0.55))
+        p.addCurve(to: CGPoint(x: right, y: r.maxY - 0.2),
+                   control1: CGPoint(x: r.maxX + 0.2, y: y + radius * 0.55),
+                   control2: CGPoint(x: right + radius * 0.55, y: r.maxY))
+        p.addQuadCurve(to: CGPoint(x: left, y: r.maxY), control: CGPoint(x: r.midX, y: r.maxY + 0.4))
+        p.addCurve(to: CGPoint(x: r.minX + 0.1, y: y),
+                   control1: CGPoint(x: left - radius * 0.56, y: r.maxY),
+                   control2: CGPoint(x: r.minX, y: y + radius * 0.54))
+        p.addCurve(to: CGPoint(x: left, y: r.minY + 0.3),
+                   control1: CGPoint(x: r.minX - 0.1, y: y - radius * 0.55),
+                   control2: CGPoint(x: left - radius * 0.54, y: r.minY))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Four gently cut edges rather than a regular rounded card or a wavy ribbon.
+/// All ink remains inside the original 44pt collection hit target.
+nonisolated struct SaveDoodlePaperStrip: Shape {
+    func path(in rect: CGRect) -> Path {
+        let r = rect.insetBy(dx: 1.5, dy: 1.5)
+        var p = Path()
+        let horizontal = max(1, Int(r.width / 6))
+        let vertical = max(1, Int(r.height / 6))
+        let dx = r.width / CGFloat(horizontal)
+        let dy = r.height / CGFloat(vertical)
+        p.move(to: CGPoint(x: r.minX + 1, y: r.minY + 1))
+        for i in 0..<horizontal {
+            let x = r.minX + CGFloat(i) * dx
+            let edge = i.isMultiple(of: 3) ? 0.2 : 0.8
+            p.addQuadCurve(to: CGPoint(x: x + dx, y: r.minY + edge),
+                           control: CGPoint(x: x + dx * 0.5, y: r.minY + 2.3))
+        }
+        for i in 0..<vertical {
+            let y = r.minY + CGFloat(i) * dy
+            p.addQuadCurve(to: CGPoint(x: r.maxX - 0.5, y: y + dy),
+                           control: CGPoint(x: r.maxX - 2.3, y: y + dy * 0.5))
+        }
+        for i in 0..<horizontal {
+            let x = r.maxX - CGFloat(i) * dx
+            let edge = i.isMultiple(of: 3) ? 0.3 : 0.8
+            p.addQuadCurve(to: CGPoint(x: x - dx, y: r.maxY - edge),
+                           control: CGPoint(x: x - dx * 0.5, y: r.maxY - 2.3))
+        }
+        for i in 0..<vertical {
+            let y = r.maxY - CGFloat(i) * dy
+            p.addQuadCurve(to: CGPoint(x: r.minX + 0.5, y: y - dy),
+                           control: CGPoint(x: r.minX + 2.3, y: y - dy * 0.5))
+        }
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Category ink inside a visit seal. These are marks, separate from place art.
+nonisolated struct SaveDoodleCategorySeal: Shape {
+    let category: PlaceCategory
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)
+        }
+        func line(_ x: CGFloat, _ y: CGFloat, _ endX: CGFloat, _ endY: CGFloat) {
+            p.move(to: point(x, y))
+            p.addQuadCurve(to: point(endX, endY), control: point((x + endX) / 2 + 0.015, (y + endY) / 2))
+        }
+        switch category {
+        case .food:
+            p.move(to: point(0.08, 0.48))
+            p.addQuadCurve(to: point(0.92, 0.47), control: point(0.50, 0.60))
+            p.addCurve(to: point(0.12, 0.49), control1: point(0.80, 1.12), control2: point(0.24, 1.03))
+            line(0.34, 0.91, 0.68, 0.91)
+            line(0.39, 0.08, 0.50, 0.42)
+            line(0.66, 0.05, 0.58, 0.42)
+        case .cafe:
+            p.move(to: point(0.12, 0.39))
+            p.addQuadCurve(to: point(0.71, 0.40), control: point(0.43, 0.46))
+            p.addCurve(to: point(0.18, 0.40), control1: point(0.74, 1.00), control2: point(0.17, 0.97))
+            p.move(to: point(0.74, 0.46))
+            p.addCurve(to: point(0.72, 0.72), control1: point(1.04, 0.33), control2: point(1.02, 0.84))
+            p.move(to: point(0.05, 0.91))
+            p.addQuadCurve(to: point(0.91, 0.91), control: point(0.48, 1.02))
+            p.move(to: point(0.42, 0.28))
+            p.addCurve(to: point(0.43, 0.02), control1: point(0.23, 0.18), control2: point(0.60, 0.13))
+        case .bar:
+            p.move(to: point(0.24, 0.06))
+            p.addLine(to: point(0.76, 0.07))
+            p.addCurve(to: point(0.24, 0.06), control1: point(0.86, 0.80), control2: point(0.16, 0.83))
+            line(0.26, 0.32, 0.74, 0.32)
+            line(0.50, 0.59, 0.51, 0.92)
+            line(0.30, 0.94, 0.72, 0.94)
+        case .attraction:
+            p.move(to: point(0.06, 0.35))
+            p.addQuadCurve(to: point(0.48, 0.07), control: point(0.37, 0.27))
+            p.addQuadCurve(to: point(0.94, 0.35), control: point(0.68, 0.29))
+            line(0.08, 0.38, 0.93, 0.39)
+            line(0.20, 0.43, 0.20, 0.87)
+            line(0.49, 0.44, 0.50, 0.87)
+            line(0.80, 0.43, 0.80, 0.87)
+            line(0.09, 0.92, 0.93, 0.92)
+        case .stay:
+            p.move(to: point(0.09, 0.40))
+            p.addLine(to: point(0.49, 0.08))
+            p.addLine(to: point(0.92, 0.41))
+            line(0.20, 0.34, 0.20, 0.92)
+            line(0.20, 0.92, 0.82, 0.91)
+            line(0.81, 0.35, 0.82, 0.91)
+            p.move(to: point(0.40, 0.90))
+            p.addLine(to: point(0.40, 0.58))
+            p.addLine(to: point(0.62, 0.58))
+            p.addLine(to: point(0.62, 0.91))
+        case .shopping:
+            p.move(to: point(0.18, 0.33))
+            p.addLine(to: point(0.82, 0.34))
+            p.addLine(to: point(0.88, 0.92))
+            p.addQuadCurve(to: point(0.12, 0.92), control: point(0.50, 1.00))
+            p.closeSubpath()
+            p.move(to: point(0.34, 0.42))
+            p.addCurve(to: point(0.68, 0.42), control1: point(0.27, -0.10), control2: point(0.73, -0.09))
+        }
+        return p
+    }
+}
+
+struct SaveDoodleNumberPin: View {
+    let number: Int
+    let visited: Bool
+
+    var body: some View {
+        let ink = visited ? SaveDoodle.stampRed : SaveAtlasPalette.coral
+        ZStack(alignment: .top) {
+            SaveDoodlePinOutline().fill(SaveAtlasPalette.paper)
+            SaveDoodlePinOutline().stroke(ink, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            Text("\(number)")
+                .font(SaveAtlasType.strong(13))
+                .foregroundStyle(ink)
+                .frame(width: 24, height: 23)
+        }
+        .frame(width: 24, height: 32)
+        .accessibilityHidden(true)
+    }
+}
+
+nonisolated struct SaveDoodlePinOutline: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)
+        }
+        p.move(to: point(0.51, 0.97))
+        p.addCurve(to: point(0.05, 0.36), control1: point(0.35, 0.77), control2: point(0.05, 0.60))
+        p.addCurve(to: point(0.49, 0.04), control1: point(0.03, 0.16), control2: point(0.23, 0.03))
+        p.addCurve(to: point(0.95, 0.35), control1: point(0.77, 0.02), control2: point(0.96, 0.15))
+        p.addCurve(to: point(0.51, 0.97), control1: point(0.98, 0.58), control2: point(0.65, 0.81))
+        p.closeSubpath()
+        return p
+    }
+}
 /// Hand-drawn 24pt template tab icons. Coral when selected, muted when idle.
 /// Stroke is 1.5pt; the tab bar supplies the template color.
 enum SaveDoodleTabIconKind: Equatable {
@@ -447,42 +638,52 @@ nonisolated struct SaveDoodleTabIconShape: Shape {
         var path = Path()
         let w = rect.width
         let h = rect.height
+        // Deliberate, sub-point pen bends keep each icon legible at 24pt.
+        func penLine(to end: CGPoint) {
+            let start = path.currentPoint ?? end
+            let dx = end.x - start.x
+            let dy = end.y - start.y
+            let length = max(1, hypot(dx, dy))
+            path.addQuadCurve(to: end, control: CGPoint(
+                x: (start.x + end.x) / 2 - dy / length * 0.45,
+                y: (start.y + end.y) / 2 + dx / length * 0.45
+            ))
+        }
         switch kind {
         case .home:
             path.move(to: CGPoint(x: w * 0.12, y: h * 0.48))
-            path.addLine(to: CGPoint(x: w * 0.50, y: h * 0.14))
-            path.addLine(to: CGPoint(x: w * 0.88, y: h * 0.48))
+            penLine(to: CGPoint(x: w * 0.50, y: h * 0.14))
+            penLine(to: CGPoint(x: w * 0.88, y: h * 0.48))
             path.move(to: CGPoint(x: w * 0.22, y: h * 0.42))
-            path.addLine(to: CGPoint(x: w * 0.22, y: h * 0.86))
-            path.addLine(to: CGPoint(x: w * 0.78, y: h * 0.86))
-            path.addLine(to: CGPoint(x: w * 0.78, y: h * 0.42))
+            penLine(to: CGPoint(x: w * 0.22, y: h * 0.86))
+            penLine(to: CGPoint(x: w * 0.78, y: h * 0.86))
+            penLine(to: CGPoint(x: w * 0.78, y: h * 0.42))
             path.move(to: CGPoint(x: w * 0.42, y: h * 0.86))
-            path.addLine(to: CGPoint(x: w * 0.42, y: h * 0.62))
-            path.addLine(to: CGPoint(x: w * 0.58, y: h * 0.62))
-            path.addLine(to: CGPoint(x: w * 0.58, y: h * 0.86))
+            penLine(to: CGPoint(x: w * 0.42, y: h * 0.62))
+            penLine(to: CGPoint(x: w * 0.58, y: h * 0.62))
+            penLine(to: CGPoint(x: w * 0.58, y: h * 0.86))
         case .map:
             path.move(to: CGPoint(x: w * 0.14, y: h * 0.28))
-            path.addLine(to: CGPoint(x: w * 0.38, y: h * 0.18))
-            path.addLine(to: CGPoint(x: w * 0.62, y: h * 0.30))
-            path.addLine(to: CGPoint(x: w * 0.86, y: h * 0.20))
-            path.addLine(to: CGPoint(x: w * 0.86, y: h * 0.72))
-            path.addLine(to: CGPoint(x: w * 0.62, y: h * 0.82))
-            path.addLine(to: CGPoint(x: w * 0.38, y: h * 0.70))
-            path.addLine(to: CGPoint(x: w * 0.14, y: h * 0.80))
+            penLine(to: CGPoint(x: w * 0.38, y: h * 0.18))
+            penLine(to: CGPoint(x: w * 0.62, y: h * 0.30))
+            penLine(to: CGPoint(x: w * 0.86, y: h * 0.20))
+            penLine(to: CGPoint(x: w * 0.86, y: h * 0.72))
+            penLine(to: CGPoint(x: w * 0.62, y: h * 0.82))
+            penLine(to: CGPoint(x: w * 0.38, y: h * 0.70))
+            penLine(to: CGPoint(x: w * 0.14, y: h * 0.80))
             path.closeSubpath()
             path.move(to: CGPoint(x: w * 0.38, y: h * 0.18))
-            path.addLine(to: CGPoint(x: w * 0.38, y: h * 0.70))
+            penLine(to: CGPoint(x: w * 0.38, y: h * 0.70))
             path.move(to: CGPoint(x: w * 0.62, y: h * 0.30))
-            path.addLine(to: CGPoint(x: w * 0.62, y: h * 0.82))
+            penLine(to: CGPoint(x: w * 0.62, y: h * 0.82))
         case .plus:
             path.move(to: CGPoint(x: w * 0.50, y: h * 0.16))
-            path.addLine(to: CGPoint(x: w * 0.50, y: h * 0.84))
+            penLine(to: CGPoint(x: w * 0.50, y: h * 0.84))
             path.move(to: CGPoint(x: w * 0.16, y: h * 0.50))
-            path.addLine(to: CGPoint(x: w * 0.84, y: h * 0.50))
+            penLine(to: CGPoint(x: w * 0.84, y: h * 0.50))
         case .friends:
-            path.addEllipse(in: CGRect(x: w * 0.16, y: h * 0.12, width: w * 0.28, height: h * 0.28))
-            path.addEllipse(in: CGRect(x: w * 0.52, y: h * 0.16, width: w * 0.26, height: h * 0.26))
-            path.move(to: CGPoint(x: w * 0.10, y: h * 0.82))
+            path.addPath(SaveDoodleInkOval().path(in: CGRect(x: w * 0.13, y: h * 0.09, width: w * 0.34, height: h * 0.34)))
+            path.addPath(SaveDoodleInkOval().path(in: CGRect(x: w * 0.49, y: h * 0.13, width: w * 0.32, height: h * 0.32)))            path.move(to: CGPoint(x: w * 0.10, y: h * 0.82))
             path.addQuadCurve(
                 to: CGPoint(x: w * 0.50, y: h * 0.82),
                 control: CGPoint(x: w * 0.30, y: h * 0.46)
@@ -498,8 +699,7 @@ nonisolated struct SaveDoodleTabIconShape: Shape {
                 cornerSize: CGSize(width: w * 0.08, height: h * 0.08)
             )
             path.move(to: CGPoint(x: w * 0.34, y: h * 0.10))
-            path.addLine(to: CGPoint(x: w * 0.34, y: h * 0.90))
-            path.addEllipse(in: CGRect(x: w * 0.46, y: h * 0.36, width: w * 0.22, height: h * 0.22))
+            penLine(to: CGPoint(x: w * 0.34, y: h * 0.90))            path.addEllipse(in: CGRect(x: w * 0.46, y: h * 0.36, width: w * 0.22, height: h * 0.22))
         }
         return path
     }

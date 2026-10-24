@@ -390,10 +390,13 @@ jobs:
           if ((${#iteration_args[@]} > 0)); then
             max_attempts=3
           fi
-          # Host `env:` does not reach the xctestrun UI runner. Inject the
-          # fallback path into the plist. Xcode 26.6 rejects the extra
-          # xcodebuild environment flag, so the plist is the only path.
-          python3 - "${{ steps.products.outputs.xctestrun }}" "$SAVE_SCREENSHOT_DIR" <<'PY'
+          # Host `env:` does not reach the xctestrun UI runner. Inject a
+          # simulator-writable fallback (`/tmp/...`); the host $RUNNER_TEMP
+          # path is not creatable inside the XCTest sandbox. Copy those
+          # files out with the device data root after the suite. Xcode 26.6
+          # rejects the extra xcodebuild environment flag, so the plist is
+          # the only inject path.
+          python3 - "${{ steps.products.outputs.xctestrun }}" /tmp/SAVE-First-Run <<'PY'
           import plistlib, sys
           from pathlib import Path
           path = Path(sys.argv[1])
@@ -457,6 +460,17 @@ jobs:
         if: always()
         run: |
           mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
+          # XCTest wrote `/tmp/SAVE-First-Run` inside the simulator. Copy
+          # that tree to the host artifact dir before xcresult export and
+          # before any later erase/shutdown.
+          SIM_UDID='${{ steps.simulator.outputs.udid }}'
+          SIM_SHOTS="$HOME/Library/Developer/CoreSimulator/Devices/${SIM_UDID}/data/tmp/SAVE-First-Run"
+          if [[ -n "$SIM_UDID" && -d "$SIM_SHOTS" ]]; then
+            cp -R "$SIM_SHOTS/." "$RUNNER_TEMP/SAVE-First-Run/"
+            echo "copied simulator SAVE_SCREENSHOT_DIR from $SIM_SHOTS"
+          else
+            echo "no simulator SAVE_SCREENSHOT_DIR at $SIM_SHOTS"
+          fi
           if [[ -f "$RUNNER_TEMP/SAVE-UI.xcresult/Info.plist" ]]; then
             xcrun xcresulttool export attachments \
               --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
@@ -474,7 +488,10 @@ jobs:
 
           root = Path(os.environ["SAVE_FIRST_RUN"])
           names = [
-              "five-tab-home", "light-home", "dark-home", "H1", "H2", "H3", "H4",
+              "five-tab-home", "light-home", "dark-home",
+              "H1", "H1-allowed-clues", "H2", "H2-denied-clues",
+              "H3", "H3-no-clues-saves", "H4", "H4-empty",
+              "H2-en-light", "H2-en-dark", "H2-zh-light", "H2-zh-dark",
               "five-tab-map", "doodle-map-light", "light-map", "dark-map",
               "doodle-map-dark", "298-3-home", "298-3-map",
               "298-2-mapkit", "298-4-coral-pins", "298-5-been-here",

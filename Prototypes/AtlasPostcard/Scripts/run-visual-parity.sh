@@ -431,8 +431,7 @@ for screen in home saves plan map; do
     if [[ ${#extra_args[@]} -gt 0 ]]; then
         parity_cmd+=("${extra_args[@]}")
     fi
-    if "${parity_cmd[@]}" \
-        >"$ARTIFACT_DIR/results/$screen.json"
+    if "${parity_cmd[@]}" \        >"$ARTIFACT_DIR/results/$screen.json"
     then
         status="PASS"
     else

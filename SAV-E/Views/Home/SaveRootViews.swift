@@ -3,6 +3,7 @@ import SwiftUI
 struct SaveHomeView: View {
     @ObservedObject var store: TripPackStore
     @ObservedObject var mapViewModel: MapViewModel
+    let headerTopPadding: CGFloat
     let onCapture: () -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
@@ -10,23 +11,32 @@ struct SaveHomeView: View {
     let onOpenTrips: () -> Void
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
-    let onOpenMap: () -> Void
-    @Environment(\.appLanguageSettings) private var languageSettings
+    let onOpenCollectedPassport: () -> Void    @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var locationService = LocationService.shared
 
     var body: some View {
         SaveDoodleHomeView(
             locationService: locationService,
-            onOpenMap: onOpenMap
-        )
+            onOpenCollectedPassport: onOpenCollectedPassport,
+            headerTopPadding: headerTopPadding        )
         .environment(\.atlasPresentation, atlasPresentation)
         .task(id: locationService.authorizationStatus) {
-            guard !ReviewDemo.isOfflineUITestMode,
-                  [.authorizedAlways, .authorizedWhenInUse].contains(locationService.authorizationStatus) else { return }
-            _ = await locationService.requestCurrentLocation()
+            await refreshHomeLocation(forceRefresh: false)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await refreshHomeLocation(forceRefresh: true) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.root")
+    }
+
+    private func refreshHomeLocation(forceRefresh: Bool) async {
+        guard !ReviewDemo.isOfflineUITestMode,
+              [.authorizedAlways, .authorizedWhenInUse].contains(locationService.authorizationStatus)
+        else { return }
+        _ = await locationService.requestCurrentLocation(forceRefresh: forceRefresh)
     }
 
     private var atlasPresentation: AtlasPresentation {
