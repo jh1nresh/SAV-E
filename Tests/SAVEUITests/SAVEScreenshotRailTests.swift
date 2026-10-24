@@ -82,8 +82,67 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    /// Real empty feed (no followed friends). Friends is shipped, so a
+    /// coming-soon state cannot occur and is not shown.
     func testFriendsComingSoon() throws {
         try assertFriendsComingSoonLanguages()
+    }
+
+    /// Real 375pt simulator (SE / mini). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testFriendsWidth375() throws {
+        try captureFriendsWidthEvidence(width: 375, columns: 1, name: "friends-375")
+    }
+
+    /// Real 390pt simulator (iPhone 14). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testFriendsWidth390() throws {
+        try captureFriendsWidthEvidence(width: 390, columns: 1, name: "friends-390")
+    }
+
+    /// Real 430pt simulator (Pro Max). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testFriendsWidth430() throws {
+        try captureFriendsWidthEvidence(width: 430, columns: 1, name: "friends-430")
+    }
+
+    /// HoP width shots: assert the booted device point width and the
+    /// people-first single column, then attach `friends-375|390|430`.
+    @MainActor
+    private func captureFriendsWidthEvidence(width: Int, columns: Int, name: String) throws {
+        let language = width == 390 ? "zh-Hant" : "en"
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-friends-town",
+                "-save.appLanguage", language,
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        openRootTab("Friends", app: app)
+        let root = app.descendants(matching: .any)["friends.root"]
+        XCTAssertTrue(root.waitForExistence(timeout: stepTimeout))
+        let list = app.descendants(matching: .any)["friends.list"]
+        XCTAssertTrue(list.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(
+            Int(app.frame.width.rounded()),
+            width,
+            "Friends width shot must boot a real \(width)pt simulator"
+        )
+        XCTAssertEqual(
+            Int(root.frame.width.rounded()),
+            width,
+            "Friends root must use the full \(width)pt device width, not a letterbox"
+        )
+        XCTAssertEqual(list.value as? String, "\(columns)", "Friends is a 1-column people list")
+        attach(app, name: name)
+        attach(app, name: "friends-town-\(width)")
+        terminate(app)
     }
 
     @MainActor
@@ -113,7 +172,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertFalse(app.textFields["friends.invite"].exists)
             XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'friends.save.' OR identifier BEGINSWITH 'friends.rate.'")).firstMatch.exists)
             XCTAssertLessThan(title.frame.maxY, rootTabButton("Friends", app: app).frame.minY)
-            attach(app, name: "friends-coming-soon-\(language)")
+            attach(app, name: "friends-empty-\(language)")
             let findFriends = app.buttons["friends.findFriends"]
             XCTAssertTrue(findFriends.isHittable)
             XCTAssertEqual(findFriends.label, language == "en" ? "Find friends" : "追蹤朋友")
@@ -137,6 +196,51 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             attach(app, name: "passport-shared-ratings-\(language)")
             app.buttons["profile.sharedRatings.done"].tap()
             XCTAssertTrue(emptyRatings.waitForNonExistence(timeout: stepTimeout))
+            terminate(app)
+        }
+
+        let dynamicType = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed",
+            "-save.appLanguage", "en",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(dynamicType)
+        try signInViaReviewDemoRequired(app: dynamicType)
+        XCTAssertTrue(dynamicType.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        openRootTab("Friends", app: dynamicType)
+        XCTAssertTrue(dynamicType.staticTexts["friends.empty"].waitForExistence(timeout: stepTimeout))
+        attach(dynamicType, name: "friends-dynamic-type-xxxl")
+        let widthNote = XCTAttachment(string: "friends.window.width=\(dynamicType.windows.firstMatch.frame.width)")
+        widthNote.name = "friends-window-width"
+        widthNote.lifetime = .keepAlways
+        add(widthNote)
+        terminate(dynamicType)
+
+        for (name, flag) in [
+            ("friends-loading", "--uitest-friends-loading"),
+            ("friends-error", "--uitest-friends-error"),
+        ] {
+            let app = makeApp(launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed", flag,
+                "-save.appLanguage", "en",
+            ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+            launch(app)
+            try signInViaReviewDemoRequired(app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+            openRootTab("Friends", app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
+            if name == "friends-loading" {
+                XCTAssertTrue(app.descendants(matching: .any)["friends.loading"].waitForExistence(timeout: stepTimeout))
+            }
+            if name == "friends-error" {
+                XCTAssertTrue(app.descendants(matching: .any)["posts.error"].waitForExistence(timeout: stepTimeout))
+                XCTAssertTrue(app.buttons["friends.retry"].waitForExistence(timeout: stepTimeout))
+            }
+            attach(app, name: name)
             terminate(app)
         }
     }
@@ -1125,8 +1229,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "atlas-map")
 
         openRootTab("Friends", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["friends.mapStrip"].waitForExistence(timeout: stepTimeout))
-        attach(app, name: "atlas-friends-town")
+        XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["friends.list"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["friends.author.mia"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["friends.mapStrip"].exists)
+        // Live Friends raster for the 0.90 gate. Codex packet §7.4.
+        attach(app, name: "five-tab-friends")
+        attach(app, name: "atlas-friends")
     }
 
     /// Root navigation includes Friends and keeps Plan as a child route.
@@ -1179,7 +1288,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.staticTexts["friends.empty"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(app.staticTexts["friends.empty"].label, "Their next place could be yours")
         XCTAssertFalse(app.textFields["friends.invite"].exists)
-        attach(app, name: "five-tab-friends-coming-soon")
+        XCTAssertFalse(app.descendants(matching: .any)["friends.mapStrip"].exists)
+        attach(app, name: "five-tab-friends-empty")
 
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
@@ -1289,6 +1399,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             forceArgument: "--uitest-force-dark",
             language: "en",
             homeName: "dark-home",
+            friendsName: "dark-friends",
             passportName: "dark-passport",
             referenceName: "H2-en-dark",
             expectedRed: 0x1E,
@@ -1301,6 +1412,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             forceArgument: "--uitest-force-light",
             language: "en",
             homeName: "light-home",
+            friendsName: "light-friends",
             passportName: "light-passport",
             referenceName: "H2-en-light",
             expectedRed: 0xFF,
@@ -1313,6 +1425,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             forceArgument: "--uitest-force-light",
             language: "zh-Hant",
             homeName: "light-home-zh",
+            friendsName: "light-friends-zh",
             passportName: "light-passport-zh",
             referenceName: "H2-zh-light",
             expectedRed: 0xFF,
@@ -1325,6 +1438,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             forceArgument: "--uitest-force-dark",
             language: "zh-Hant",
             homeName: "dark-home-zh",
+            friendsName: "dark-friends-zh",
             passportName: "dark-passport-zh",
             referenceName: "H2-zh-dark",
             expectedRed: 0x1E,
@@ -1412,6 +1526,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         forceArgument: String,
         language: String = "en",
         homeName: String,
+        friendsName: String? = nil,
         passportName: String,
         referenceName: String? = nil,
         expectedRed: Int,
@@ -1427,6 +1542,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
                 "--uitest-home-memory-fixture",
+                "--uitest-friends-town",
                 "-save.appLanguage", language,
                 "-AppleInterfaceStyle", appleInterfaceStyle,
                 forceArgument,
@@ -1453,6 +1569,21 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             blue: expectedBlue,
             name: homeName
         )
+
+        if let friendsName {
+            openRootTab("Friends", app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(app.descendants(matching: .any)["friends.author.mia"].waitForExistence(timeout: stepTimeout))
+            let friendsShot = app.screenshot()
+            attach(app, name: friendsName)
+            assertScreenshotBackground(
+                friendsShot,
+                nearRed: expectedRed,
+                green: expectedGreen,
+                blue: expectedBlue,
+                name: friendsName
+            )
+        }
 
         openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
@@ -4015,6 +4146,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// 0.90. Capture that raster from the Codex Tiantan
     /// fixture at the Tiantan fix; a denied-location Taipei Home is a
     /// different state and scores ~0.66. Do not retune the gate script here.
+    /// Friends `five-tab-friends` is a real 0.90 gate against
+    /// `ProductionTargets/friends.png`. Home deferral on #290 does not
+    /// apply to Friends. Codex packet §7.4 remains the people-first layout
+    /// reference.
     @MainActor
     private func captureFiveTabHomeParityRaster() throws {
         let app = makeApp(

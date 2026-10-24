@@ -24,10 +24,16 @@ Options:
   --artifacts DIR       Write reference/output/diff/results under DIR.
   --threshold NUMBER    Gate threshold. Must be at least 0.90 (default 0.90).
 
-The screenshots directory must contain home.png, saves.png, plan.png, and
-map.png. The result-bundle mode prefers the live five-tab-home attachment for
-Home and falls back to atlas-home for prototype-only runs. Saves, Plan, and Map
-use the stable atlas-saves, atlas-plan, and atlas-map XCTest attachments.
+The screenshots directory must contain home.png, saves.png, plan.png,
+and map.png. The result-bundle mode prefers the live five-tab-home
+attachment for Home and falls back to atlas-home for prototype-only
+runs. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
+and atlas-map XCTest attachments. Friends is a real 0.90 gate against
+`friends.png` (Home deferral on #290 does not apply to Friends).
+
+--destination runs the prototype XCTest testCaptureFourLockedScreens
+(Home, Saves, Plan, Map only). Friends is not in that prototype shell;
+CI result-bundle mode still gates live `five-tab-friends` at 0.90.
 EOF
 }
 
@@ -198,7 +204,13 @@ mkdir -p \
     "$ARTIFACT_DIR/diff" \
     "$ARTIFACT_DIR/results"
 
-for screen in home saves plan map; do
+# Prototype --destination still compares four screens (no Friends tab).
+# Production result-bundle also gates Friends at 0.90 against friends.png.
+destination_screens=(home saves plan map)
+parity_screens=(home saves plan map friends)
+captured_from_prototype=0
+
+for screen in home saves plan map friends; do
     source="$REFERENCE_SOURCE/$screen.png"
     if [[ ! -f "$source" ]]; then
         echo "error: missing reference image: $source" >&2
@@ -216,6 +228,7 @@ fi
 if [[ -n "$DESTINATION" ]]; then
     capture_booted_simulators
     trap cleanup_new_simulators EXIT
+    captured_from_prototype=1
 
     RESULT_BUNDLE="$ARTIFACT_DIR/AtlasPostcardVisualParity.xcresult"
     (
@@ -324,6 +337,17 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                     screen="map"
                     priority=0
                     ;;
+                five-tab-friends-coming-soon*)
+                    continue
+                    ;;
+                five-tab-friends*)
+                    screen="friends"
+                    priority=1
+                    ;;
+                atlas-friends*)
+                    screen="friends"
+                    priority=0
+                    ;;
                 *)
                     continue
                     ;;
@@ -344,7 +368,12 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
         ((test_index += 1))
     done
 
-    for screen in home saves plan map; do
+    extract_screens=("${parity_screens[@]}")
+    if ((captured_from_prototype)); then
+        extract_screens=("${destination_screens[@]}")
+    fi
+
+    for screen in "${extract_screens[@]}"; do
         newest="$(
             printf '%s' "$candidates" |
                 awk -F"$tab" -v want="$screen" '
@@ -396,12 +425,17 @@ else
     done
 fi
 
+compare_screens=("${parity_screens[@]}")
+if ((captured_from_prototype)); then
+    compare_screens=("${destination_screens[@]}")
+fi
+
 gate_failed=0
 mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
 # HoP P-4: Map goldens are live Taipei Apple Maps. Do not apply
 # map-mask.png to the 0.90 score. Home still uses home-mask.png.
 # Home and Map fail the job below 0.90 the same way as Saves and Plan.
-for screen in home saves plan map; do
+for screen in "${compare_screens[@]}"; do
     actual="$ARTIFACT_DIR/output/$screen.png"
     if [[ ! -f "$actual" ]]; then
         echo "error: missing exported attachment for $screen" >&2

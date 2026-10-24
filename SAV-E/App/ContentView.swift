@@ -624,6 +624,8 @@ struct ContentView: View {
                                     onSaved: { await mapVM.loadPlaces(force: true) },
                                     onParkedAtFreeLimit: { try mapVM.parkPlaceInUnplacedInbox($0, requestPaywall: false) },
                                     onRemoveParkedAtFreeLimit: { try mapVM.removeParkedUnplacedInboxItem($0) },
+                                    // Invite / 邀請: ProfileView.requestsConnections
+                                    // presents PassportConnectionsView (Friends section).
                                     onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
                                 )
                             case .profile:

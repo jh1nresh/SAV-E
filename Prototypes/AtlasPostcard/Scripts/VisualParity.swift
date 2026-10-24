@@ -50,7 +50,7 @@ private enum ParityError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            return "usage: VisualParity.swift --target target.png --actual actual.png --diff diff.png [--mask mask.png] [--threshold 0.90] [--ignore-rect x,y,w,h] [--ignore-mask mask.png]"        case let .unreadableImage(url):
+            return "usage: VisualParity.swift --target target.png --actual actual.png --diff diff.png [--mask mask.png] [--threshold 0.90] [--ignore-mask mask.png]"        case let .unreadableImage(url):
             return "could not read image: \(url.path)"
         case let .unexpectedDimensions(url, actualWidth, actualHeight, expectation):
             return "expected \(expectation), found \(actualWidth)x\(actualHeight): \(url.path)"

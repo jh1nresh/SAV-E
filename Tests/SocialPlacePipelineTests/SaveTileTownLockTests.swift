@@ -227,16 +227,19 @@ final class SaveTileTownLockTests: XCTestCase {
 
     func testFriendsIsPeopleFirstWithLastAt() throws {
         let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
-        XCTAssertTrue(friends.contains("SavePostageSealAvatar"))
-        XCTAssertTrue(friends.contains("Last at"))
-        XCTAssertTrue(friends.contains("friends.mapStrip"))
+        XCTAssertTrue(friends.contains("SaveDoodleFriendAvatar"))
+        XCTAssertTrue(friends.contains("last at"))
+        XCTAssertTrue(friends.contains("SaveDoodleFriendSticker"))
+        XCTAssertFalse(friends.contains("SavePostageSealAvatar"))
+        XCTAssertFalse(friends.contains("friends.mapStrip"))
+        XCTAssertFalse(friends.contains("SaveTileTownCanvas"))
         XCTAssertTrue(friends.contains("friends.empty"))
         XCTAssertTrue(friends.contains("friends.findFriends"))
         XCTAssertTrue(friends.contains("friends.author."))
         XCTAssertTrue(friends.contains("SharedAuthorPassport"))
         XCTAssertFalse(friends.contains(".disabled(store.isDemo)"))
         let store = try source(at: "SAV-E/ViewModels/SharedPostsStore.swift")
-        XCTAssertTrue(store.contains("applyDemoFixture()"))
+        XCTAssertTrue(store.contains("applyDemoFixture(items:"))
         XCTAssertTrue(store.contains("case .author(let id):"))
         XCTAssertFalse(friends.contains("friends.invite"))
         let posts = try JSONDecoder().decode([SharedPlacePost].self, from: Data(
