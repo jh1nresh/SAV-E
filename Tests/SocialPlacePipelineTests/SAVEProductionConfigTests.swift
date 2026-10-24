@@ -6843,26 +6843,30 @@ final class SAVEProductionConfigTests: XCTestCase {
         window.isHidden = true
     }
 
+    @MainActor
     private func visibleTexts(in view: UIView) -> [String] {
-        collectAccessibilityStrings(from: view, seen: NSHashTable<AnyObject>.weakObjects())
+        collectAccessibilityStrings(from: view, seen: NSHashTable<NSObject>.weakObjects())
     }
 
     /// SwiftUI `Text` on current iOS is not a `UILabel`. Walk the materialized
     /// accessibility tree (count/at) plus identifiers so B8-4 can still assert
     /// the visible en/zh-Hant Unplaced title and reason.
-    private func collectAccessibilityStrings(from element: Any?, seen: NSHashTable<AnyObject>) -> [String] {
-        guard let object = element as? AnyObject else { return [] }
-        if seen.contains(object) { return [] }
-        seen.add(object)
+    /// Swift 6 rejects `AnyObject as NSObject`; only `NSObject` nodes are
+    /// cycle-tracked because UIKit/SwiftUI a11y proxies are NSObject.
+    @MainActor
+    private func collectAccessibilityStrings(from element: Any?, seen: NSHashTable<NSObject>) -> [String] {
+        guard let node = element as? NSObject else { return [] }
+        if seen.contains(node) { return [] }
+        seen.add(node)
 
         var texts: [String] = []
-        if let label = object as? UILabel {
+        if let label = node as? UILabel {
             if let text = label.text, !text.isEmpty { texts.append(text) }
             if let attributed = label.attributedText?.string, !attributed.isEmpty {
                 texts.append(attributed)
             }
         }
-        if let view = object as? UIView {
+        if let view = node as? UIView {
             if let text = view.accessibilityLabel, !text.isEmpty { texts.append(text) }
             if let value = view.accessibilityValue, !value.isEmpty { texts.append(value) }
             if let identifier = view.accessibilityIdentifier, !identifier.isEmpty {
@@ -6888,7 +6892,6 @@ final class SAVEProductionConfigTests: XCTestCase {
             return texts
         }
 
-        let node = object as NSObject
         if let text = node.accessibilityLabel, !text.isEmpty { texts.append(text) }
         if let value = node.accessibilityValue as? String, !value.isEmpty { texts.append(value) }
         if let identified = node as? UIAccessibilityIdentification,
