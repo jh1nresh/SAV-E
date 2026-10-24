@@ -27,6 +27,51 @@ nonisolated struct SaveAccountDeletionIntent: Codable, Sendable, Equatable {
     let owner: String
     let initialOwnerlessRecordIDs: Set<UUID>
     var remoteOutcome: RemoteOutcome
+    /// Pre-deletion ownerless Share-queue fingerprints. Later ownerless rows
+    /// and other owners are not in this set and must stay.
+    let initialOwnerlessQueueItemKeys: Set<String>
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case owner
+        case initialOwnerlessRecordIDs
+        case remoteOutcome
+        case initialOwnerlessQueueItemKeys
+    }
+
+    init(
+        id: UUID,
+        owner: String,
+        initialOwnerlessRecordIDs: Set<UUID>,
+        remoteOutcome: RemoteOutcome,
+        initialOwnerlessQueueItemKeys: Set<String> = []
+    ) {
+        self.id = id
+        self.owner = owner
+        self.initialOwnerlessRecordIDs = initialOwnerlessRecordIDs
+        self.remoteOutcome = remoteOutcome
+        self.initialOwnerlessQueueItemKeys = initialOwnerlessQueueItemKeys
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        owner = try container.decode(String.self, forKey: .owner)
+        initialOwnerlessRecordIDs = try container.decode(Set<UUID>.self, forKey: .initialOwnerlessRecordIDs)
+        remoteOutcome = try container.decode(RemoteOutcome.self, forKey: .remoteOutcome)
+        initialOwnerlessQueueItemKeys = try container.decodeIfPresent(
+            Set<String>.self, forKey: .initialOwnerlessQueueItemKeys
+        ) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(owner, forKey: .owner)
+        try container.encode(initialOwnerlessRecordIDs, forKey: .initialOwnerlessRecordIDs)
+        try container.encode(remoteOutcome, forKey: .remoteOutcome)
+        try container.encode(initialOwnerlessQueueItemKeys, forKey: .initialOwnerlessQueueItemKeys)
+    }
 
     func includes(recordID: UUID, ownerSubject: String?) -> Bool {
         ownerSubject == owner || (ownerSubject == nil && initialOwnerlessRecordIDs.contains(recordID))
@@ -224,7 +269,10 @@ final class SaveLocalVaultService: Sendable {
 
     /// The receipt and snapshot are committed under the same cross-process lock
     /// used by vault writers/readers, before any remote DELETE may be sent.
-    func prepareAccountDeletion(belongingTo owner: String) throws -> SaveAccountDeletionIntent {
+    func prepareAccountDeletion(
+        belongingTo owner: String,
+        initialOwnerlessQueueItemKeys: Set<String> = []
+    ) throws -> SaveAccountDeletionIntent {
         try withLock {
             try withCoordinatedVaultWrite { url in
                 guard try loadAccountDeletionIntent(vaultURL: url) == nil else {
@@ -234,7 +282,8 @@ final class SaveLocalVaultService: Sendable {
                 let intent = SaveAccountDeletionIntent(
                     id: UUID(), owner: owner,
                     initialOwnerlessRecordIDs: Set(records.filter { $0.ownerSubject == nil }.map(\.id)),
-                    remoteOutcome: .awaitingRemoteResult
+                    remoteOutcome: .awaitingRemoteResult,
+                    initialOwnerlessQueueItemKeys: initialOwnerlessQueueItemKeys
                 )
                 try JSONEncoder().encode(intent).write(to: accountDeletionIntentURL(for: url), options: .atomic)
                 return intent

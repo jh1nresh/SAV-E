@@ -1581,11 +1581,14 @@ final class MapViewModel: ObservableObject {
             throw URLError(.badURL)
         }
         guard !analysisInput.isEmpty else { throw URLError(.badURL) }
+        var sourceBreadcrumbRecordIDs: [UUID] = []
         if usesRemotePersistence, let sourceURL {
-            _ = try saveLocalVaultService.saveSourceOnly(
-                url: sourceURL,
-                note: normalizedShare.captionEvidence,
-                ownerSubject: authService.currentUserId
+            sourceBreadcrumbRecordIDs.append(
+                try saveLocalVaultService.saveSourceOnly(
+                    url: sourceURL,
+                    note: normalizedShare.captionEvidence,
+                    ownerSubject: authService.currentUserId
+                ).id
             )
         }
 
@@ -1647,13 +1650,16 @@ final class MapViewModel: ObservableObject {
             throw SupabaseError.notAuthenticated
         }
         if sourceURL == nil {
-            _ = try saveLocalVaultService.saveReviewCandidate(PendingReviewCandidate(
-                ownerSubject: userId,
-                candidateName: "Source clue", address: "", category: "other", sourceURL: nil,
-                sourceText: analysisInput, evidence: [], confidence: 0, missingInfo: ["Exact place"],
-                savedAt: Date(), isSourceOnly: true
-            ))
+            sourceBreadcrumbRecordIDs.append(
+                try saveLocalVaultService.saveReviewCandidate(PendingReviewCandidate(
+                    ownerSubject: userId,
+                    candidateName: "Source clue", address: "", category: "other", sourceURL: nil,
+                    sourceText: analysisInput, evidence: [], confidence: 0, missingInfo: ["Exact place"],
+                    savedAt: Date(), isSourceOnly: true
+                )).id
+            )
         }
+        let breadcrumbIDs = sourceBreadcrumbRecordIDs
         return try await withImportAnalysis { checkSession in
             let candidates = await socialLinkReviewCandidateService
                 .reviewCandidates(fromSharedText: analysisInput)
@@ -1713,6 +1719,11 @@ final class MapViewModel: ObservableObject {
                         )
                     }
                     throw error
+                }
+            }
+            if !importedCandidateIDs.isEmpty {
+                for breadcrumbID in breadcrumbIDs {
+                    removeLocalReviewMirror(breadcrumbID, ownerSubject: userId)
                 }
             }
             try await refreshReviewCandidates()

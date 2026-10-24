@@ -1091,6 +1091,93 @@ final class ProfileAvatarStoreTests: XCTestCase {
         XCTAssertEqual(service.consumePendingReviewCandidates(ownerSubject: "account-a").map(\.candidateName), ["A"])
     }
 
+    /// P1 4365399819: restart with `.awaitingRemoteResult` must still purge
+    /// A-owned pending queues before the quarantine receipt is removed.
+    @MainActor
+    func testRestartAwaitingRemoteResultPurgesAOwnedPendingQueues() async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        defer { auth.authState = previousAuth }
+        auth.authState = .authenticated(userId: "account-a")
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a"))
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([
+            pendingDeletionPlace(owner: "account-a", name: "A pending"),
+            pendingDeletionPlace(owner: "account-b", name: "B pending")
+        ])
+        queue.restorePendingReviewCandidates([
+            pendingDeletionReview(owner: "account-a", name: "A review"),
+            pendingDeletionReview(owner: "account-b", name: "B review")
+        ])
+        let prepared = try vault.prepareAccountDeletion(
+            belongingTo: "account-a",
+            initialOwnerlessQueueItemKeys: try queue.ownerlessItemKeysForAccountDeletion()
+        )
+        XCTAssertEqual(prepared.remoteOutcome, .awaitingRemoteResult)
+        var remoteRequests = 0
+        let fresh = deletionModel(
+            vault: SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json")),
+            currentOwner: { "account-a" }
+        ) { remoteRequests += 1 }
+        await fresh.loadProfile()
+        XCTAssertEqual(remoteRequests, 0)
+        XCTAssertEqual(auth.currentUserId, "account-a", "unknown outcome keeps A signed in")
+        XCTAssertTrue(fresh.errorMessage?.contains("remote account deletion result could not be confirmed") == true)
+        XCTAssertNil(try vault.pendingAccountDeletionIntent())
+        let remainingPlaces = queue.consumePendingPlaces(ownerSubject: "account-a")
+            + queue.consumePendingPlaces(ownerSubject: "account-b")
+        XCTAssertEqual(Set(remainingPlaces.map(\.name)), ["B pending"])
+        XCTAssertFalse(
+            remainingPlaces.contains { $0.ownerSubject == "account-a" },
+            "A-owned pending places, including private source text, must not become consumable"
+        )
+        let remainingReviews = queue.consumePendingReviewCandidates(ownerSubject: "account-a")
+            + queue.consumePendingReviewCandidates(ownerSubject: "account-b")
+        XCTAssertEqual(Set(remainingReviews.map(\.candidateName)), ["B review"])
+        XCTAssertFalse(remainingReviews.contains { $0.ownerSubject == "account-a" })
+    }
+
+    /// P1 4365547382: pre-deletion ownerless Share rows are snapshotted like
+    /// vault IDs. Later ownerless rows and other owners stay.
+    @MainActor
+    func testAccountDeletionPurgesPreDeletionOwnerlessQueueItemsAndPreservesLaterAndOthers() async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        try vault.append(SaveMemoryRecord(state: .sourceOnly, title: "A clue", ownerSubject: "account-a"))
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        queue.restorePendingPlaces([
+            pendingDeletionPlace(owner: "account-a", name: "A"),
+            pendingDeletionPlace(owner: "account-b", name: "B"),
+            pendingDeletionPlace(owner: nil, name: "Legacy")
+        ])
+        queue.restorePendingReviewCandidates([
+            pendingDeletionReview(owner: "account-a", name: "A"),
+            pendingDeletionReview(owner: "account-b", name: "B"),
+            pendingDeletionReview(owner: nil, name: "Legacy")
+        ])
+        var currentOwner: String? = "account-a"
+        var requests = 0
+        let model = deletionModel(vault: vault, currentOwner: { currentOwner }) {
+            requests += 1
+            currentOwner = nil
+            queue.restorePendingPlaces([self.pendingDeletionPlace(owner: nil, name: "Later")])
+            queue.restorePendingReviewCandidates([self.pendingDeletionReview(owner: nil, name: "Later")])
+        }
+        let deleted = await model.deleteAccount()
+        XCTAssertTrue(deleted)
+        XCTAssertEqual(requests, 1)
+        let remainingPlaces = queue.consumePendingPlaces(ownerSubject: "account-a")
+            + queue.consumePendingPlaces(ownerSubject: "account-b")
+        XCTAssertEqual(Set(remainingPlaces.map(\.name)), ["B", "Later"])
+        XCTAssertFalse(remainingPlaces.contains { $0.name == "Legacy" || $0.ownerSubject == "account-a" })
+        let remainingReviews = queue.consumePendingReviewCandidates(ownerSubject: "account-a")
+            + queue.consumePendingReviewCandidates(ownerSubject: "account-b")
+        XCTAssertEqual(Set(remainingReviews.map(\.candidateName)), ["B", "Later"])
+        XCTAssertFalse(remainingReviews.contains { $0.candidateName == "Legacy" || $0.ownerSubject == "account-a" })
+    }
+
     @MainActor
     func testFailedKnownSuccessQueuePurgeStillInvalidatesPreviouslyConsumedBatch() throws {
         let service = PendingPlaceImportService(overrideContainerURL: directory)

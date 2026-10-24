@@ -220,7 +220,11 @@ final class ProfileViewModel: ObservableObject {
                 isRecovery = true
             } else {
                 guard let deletingUserID = currentOwner else { return false }
-                let prepared = try saveLocalVaultService.prepareAccountDeletion(belongingTo: deletingUserID)
+                let queueKeys = try pendingPlaceImportService.ownerlessItemKeysForAccountDeletion()
+                let prepared = try saveLocalVaultService.prepareAccountDeletion(
+                    belongingTo: deletingUserID,
+                    initialOwnerlessQueueItemKeys: queueKeys
+                )
                 activeIntentID = prepared.id
                 Self.inFlightAccountDeletionIDs.insert(prepared.id)
                 isRecovery = false
@@ -280,8 +284,14 @@ final class ProfileViewModel: ObservableObject {
             if SavePlaceLimitHandoff.cachedActiveOwner() == intent.owner {
                 SavePlaceLimitHandoff.syncActiveOwner(nil)
             }
-            try pendingPlaceImportService.purgeAccountDeletionItems(belongingTo: intent.owner)
         }
+        // Unknown remote outcomes still finish local cleanup while A stays
+        // signed in. A-owned and snapshotted ownerless Share rows must not
+        // become consumable again after the quarantine receipt is removed.
+        try pendingPlaceImportService.purgeAccountDeletionItems(
+            belongingTo: intent.owner,
+            initialOwnerlessItemKeys: intent.initialOwnerlessQueueItemKeys
+        )
         try saveLocalVaultService.completeAccountDeletionCleanup(intentID: intent.id)
     }
 

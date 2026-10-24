@@ -3456,6 +3456,32 @@ final class SAVEProductionConfigTests: XCTestCase {
             map.contains("removeLocalReviewMirror(candidate.id"),
             "PendingReviewCandidate has no id; do not pass candidate.id to removeLocalReviewMirror"
         )
+        XCTAssertTrue(
+            map.contains("sourceBreadcrumbRecordIDs"),
+            "P2 4365547385: track the generic saveSourceOnly breadcrumb written before persist"
+        )
+        XCTAssertTrue(
+            map.contains("for breadcrumbID in breadcrumbIDs"),
+            "P2 4365547385: remove the initial source record after a successful Share import"
+        )
+        XCTAssertTrue(
+            profile.contains("ownerlessItemKeysForAccountDeletion"),
+            "P1 4365547382: snapshot ownerless Share rows before remote deletion"
+        )
+        XCTAssertTrue(
+            profile.contains("initialOwnerlessItemKeys: intent.initialOwnerlessQueueItemKeys"),
+            "P1 4365399819: purge snapshotted ownerless and A-owned queues on every local cleanup"
+        )
+        let succeededStart = try XCTUnwrap(profile.range(of: "if intent.remoteOutcome == .succeeded"))
+        let purgeStart = try XCTUnwrap(profile.range(of: "try pendingPlaceImportService.purgeAccountDeletionItems"))
+        XCTAssertLessThan(
+            succeededStart.lowerBound, purgeStart.lowerBound,
+            "queue purge must not live only inside the succeeded-remote branch"
+        )
+        XCTAssertFalse(
+            String(profile[succeededStart.lowerBound..<purgeStart.lowerBound]).contains("purgeAccountDeletionItems"),
+            "P1 4365399819: awaitingRemoteResult must still purge pending queues"
+        )
         XCTAssertTrue(map.contains("try persistParkedReviewCandidate(candidate)"))
         XCTAssertTrue(
             map.contains("SAVEPendingImportSessionScope.$current.withValue((importGeneration, userId))"),
@@ -5656,10 +5682,22 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         let ids = try await map.importSharedTextAsReviewCandidates("https://www.instagram.com/p/share-mirror/")
         XCTAssertEqual(ids, [remoteID])
         XCTAssertEqual(map.reviewCandidates.map(\.id), [remoteID])
+        XCTAssertEqual(map.reviewCandidates.map(\.name), ["Source clue"])
         XCTAssertTrue(
             try vault.reviewCandidates(limit: 500, belongingTo: owner).isEmpty,
             "Share import must remove the localVaultRecordID mirror, not look up PendingReviewCandidate.id"
         )
+        XCTAssertFalse(
+            try vault.recentRecords(limit: 50, belongingTo: owner).contains { $0.title == "Instagram link" },
+            "P2 4365547385: the generic sourceOnly breadcrumb must not republish beside the remote candidate"
+        )
+    }
+
+    /// P2 4365547385: the generic `saveSourceOnly` breadcrumb written first
+    /// must not sit beside the remote Review candidate after persist.
+    @MainActor
+    func testSuccessfulShareReviewImportRemovesSourceBreadcrumbAndShowsOneEntry() async throws {
+        try await testSuccessfulShareReviewImportRemovesLocalMirrorAndShowsOneEntry()
     }
 
     func testImportRecoveryRejectsAccountSwitchBeforeApplyingResults() async throws {

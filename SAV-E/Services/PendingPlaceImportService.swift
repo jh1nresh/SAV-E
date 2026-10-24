@@ -938,15 +938,81 @@ final class PendingPlaceImportService {
             restorationToken: restorationToken, ownerSubject: { $0.ownerSubject })
     }
 
+    /// Fingerprints ownerless Share-queue rows so deletion can purge the
+    /// pre-deletion legacy set without claiming later ownerless rows or
+    /// another owner's items.
+    func ownerlessItemKeysForAccountDeletion() throws -> Set<String> {
+        var keys = Set<String>()
+        for name in [SAVEProductionConfig.pendingPlacesFileName, SAVEProductionConfig.pendingReviewCandidatesFileName] {
+            guard let url = pendingFileURL(named: name) else { throw SaveLocalVaultError.storageUnavailable }
+            var coordinationError: NSError?
+            var readError: Error?
+            var fileKeys = Set<String>()
+            NSFileCoordinator().coordinate(writingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
+                do {
+                    guard fileManager.fileExists(atPath: coordinatedURL.path) else { return }
+                    let data = try Data(contentsOf: coordinatedURL)
+                    guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+                        throw CocoaError(.fileReadCorruptFile)
+                    }
+                    fileKeys = Set(rows.compactMap(Self.ownerlessQueueItemKey))
+                } catch { readError = error }
+            }
+            if let coordinationError { throw coordinationError }
+            if let readError { throw readError }
+            keys.formUnion(fileKeys)
+        }
+        return keys
+    }
+
     /// Runs after the deleted owner's Share cache is invalidated. The same
     /// per-file lock as Share append orders already-admitted writers before this
-    /// purge. Keep legacy ownerless rows, other owners and unrecognized fields.
-    func purgeAccountDeletionItems(belongingTo owner: String) throws {
+    /// purge. Remove the deleted owner and snapshotted pre-deletion ownerless
+    /// rows. Keep later ownerless rows, other owners and unrecognized fields.
+    func purgeAccountDeletionItems(
+        belongingTo owner: String,
+        initialOwnerlessItemKeys: Set<String> = []
+    ) throws {
         guard let firstURL = pendingFileURL(named: SAVEProductionConfig.pendingPlacesFileName) else {
             throw SaveLocalVaultError.storageUnavailable
         }
         let container = Self.canonicalContainer(for: firstURL)
         Self.restorationGenerations[container, default: [:]][owner, default: 0] += 1
+        try withAccountDeletionQueueFiles(writeChanges: true) { rows in
+            rows.filter { row in
+                if let subject = row["ownerSubject"] as? String, !subject.isEmpty {
+                    return subject != owner
+                }
+                guard let key = Self.ownerlessQueueItemKey(row) else { return true }
+                return !initialOwnerlessItemKeys.contains(key)
+            }
+        }
+    }
+
+    /// Stable identity for an ownerless pending place or Review row. Uses the
+    /// on-disk JSON fields so snapshot and purge agree after a rewrite.
+    static func ownerlessQueueItemKey(_ row: [String: Any]) -> String? {
+        if let subject = row["ownerSubject"] as? String, !subject.isEmpty { return nil }
+        let name = (row["name"] as? String) ?? (row["candidateName"] as? String) ?? ""
+        let address = row["address"] as? String ?? ""
+        let sourceURL = row["sourceURL"] as? String ?? ""
+        let sourceText = row["sourceText"] as? String ?? ""
+        let savedAt: String
+        if let number = row["savedAt"] as? NSNumber {
+            savedAt = String(format: "%.5f", number.doubleValue)
+        } else if let raw = row["savedAt"] as? String {
+            savedAt = raw
+        } else {
+            savedAt = ""
+        }
+        let localID = row["localVaultRecordID"] as? String ?? ""
+        return [name, address, sourceURL, sourceText, savedAt, localID].joined(separator: "\u{1e}")
+    }
+
+    private func withAccountDeletionQueueFiles(
+        writeChanges: Bool,
+        _ body: ([[String: Any]]) throws -> [[String: Any]]
+    ) throws {
         for name in [SAVEProductionConfig.pendingPlacesFileName, SAVEProductionConfig.pendingReviewCandidatesFileName] {
             guard let url = pendingFileURL(named: name) else { throw SaveLocalVaultError.storageUnavailable }
             var coordinationError: NSError?
@@ -958,9 +1024,9 @@ final class PendingPlaceImportService {
                     guard let rows = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
                         throw CocoaError(.fileReadCorruptFile)
                     }
-                    let retained = rows.filter { ($0["ownerSubject"] as? String) != owner }
-                    guard retained.count != rows.count else { return }
-                    try JSONSerialization.data(withJSONObject: retained, options: [.sortedKeys])
+                    let next = try body(rows)
+                    guard writeChanges, next.count != rows.count else { return }
+                    try JSONSerialization.data(withJSONObject: next, options: [.sortedKeys])
                         .write(to: coordinatedURL, options: .atomic)
                 } catch { writeError = error }
             }
