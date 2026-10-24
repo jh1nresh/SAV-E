@@ -2091,7 +2091,7 @@ struct PlaceRecoveryDecisionDraft: Equatable {
         if let value = finalPlace.coordinateSystem { payload["coordinate_system"] = value.rawValue }
         if let value = finalPlace.locationProvider { payload["location_provider"] = value.rawValue }
         if let value = finalPlace.providerPlaceId { payload["provider_place_id"] = value }
-        if let value = finalPlace.providerMapUrl { payload["provider_map_url"] = value }
+        if let value = finalPlace.confirmableProviderMapUrl { payload["provider_map_url"] = value }
         if let value = GooglePlacesPhotoURL.persistableString(finalPlace.sourceImageUrl) {
             payload["source_image_url"] = value
         }
@@ -2298,7 +2298,7 @@ private struct PlaceRow: Codable {
             coordinate_system: place.coordinateSystem?.rawValue,
             location_provider: place.locationProvider?.rawValue,
             provider_place_id: place.providerPlaceId,
-            provider_map_url: place.providerMapUrl,
+            provider_map_url: place.confirmableProviderMapUrl,
             source_image_url: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
             business_photo_urls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
             extracted_dishes: place.extractedDishes,

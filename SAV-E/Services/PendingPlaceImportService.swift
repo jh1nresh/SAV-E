@@ -724,10 +724,28 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
                 "Provider reference coordinates (\(system.rawValue)): \(place.latitude), \(place.longitude)"
             )
         }
-        if let mapURL = nonEmptyTrimmed(place.providerMapUrl) {
+        if let mapURL = place.confirmableProviderMapUrl {
             lines.append("Provider map URL: \(mapURL)")
         }
         return lines
+    }
+
+    /// Persist a confirmable Amap marker URL on remote-backed parks that
+    /// already have GCJ-02 + POI id but no optional map URL.
+    mutating func ensureConfirmableAmapMapURL() {
+        guard storedProviderMapURL(from: evidence) == nil,
+              let location = Self.providerLocation(from: evidence),
+              location.provider == .amap,
+              location.coordinateSystem == .gcj02,
+              location.providerPlaceID != nil,
+              let url = Place.synthesizedAmapMarkerURL(
+                  name: name,
+                  latitude: location.latitude,
+                  longitude: location.longitude
+              ) else {
+            return
+        }
+        evidence.append("Provider map URL: \(url.absoluteString)")
     }
 
     /// A shared post can contain several venues. Reuse only an exact identity
@@ -978,9 +996,7 @@ struct PlaceReviewCandidate: Identifiable, Codable, Hashable {
     private static func storedProviderMapURL(from evidence: [String]) -> URL? {
         for line in evidence {
             guard let rawValue = value(after: "Provider map URL:", in: line),
-                  let url = URL(string: rawValue),
-                  let scheme = url.scheme?.lowercased(),
-                  scheme == "https" || scheme == "http" else {
+                  let url = Place.validAmapMapURL(from: rawValue) else {
                 continue
             }
             return url
@@ -1299,7 +1315,7 @@ extension Place {
         let coordinateSystem: PlaceCoordinateSystem = refinedMatch != nil || candidate.hasReliableCoordinates
             ? .wgs84
             : (providerLocation?.coordinateSystem ?? .wgs84)
-        return Place(
+        var place = Place(
             id: UUID(),
             name: displayName,
             address: refinedMatch?.address ?? candidate.address,
@@ -1334,6 +1350,8 @@ extension Place {
             sourceHandle: candidate.sourceHandle,
             additionalSourceEvidence: additional.nilIfEmpty
         )
+        place.providerMapUrl = place.confirmableProviderMapUrl
+        return place
     }
 
     var pendingDeduplicationKey: String {

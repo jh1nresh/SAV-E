@@ -1008,6 +1008,7 @@ final class MapViewModel: ObservableObject {
         var parked = candidate
         parked.ownerSubject = candidate.ownerSubject ?? owner
         if !parked.isUnplacedInbox { parked.missingInfo.append(PlaceReviewCandidate.unplacedInboxMarker) }
+        parked.ensureConfirmableAmapMapURL()
         _ = try saveLocalVaultService.saveReviewCandidate(parked, preservingParkedContext: true)
         reviewCandidates = [parked] + reviewCandidates.filter { $0.id != parked.id }
         if selectedReviewCandidate?.id == parked.id { selectedReviewCandidate = parked }

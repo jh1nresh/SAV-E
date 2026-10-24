@@ -3528,6 +3528,20 @@ final class SAVEProductionConfigTests: XCTestCase {
             pending.contains("let mapURL = place.providerMapDestinationURL"),
             "P2 4366358729: Amap without optional provider_map_url must still park a reconstructable venue"
         )
+        XCTAssertTrue(
+            pending.contains("place.confirmableProviderMapUrl"),
+            "P2 PRRT_kwDOTYZUp86v27gd: parking must persist a confirmable Amap marker URL"
+        )
+        XCTAssertTrue(
+            pending.contains("func ensureConfirmableAmapMapURL"),
+            "P2 PRRT_kwDOTYZUp86v27gd: remote-backed parks must backfill the same URL"
+        )
+        XCTAssertTrue(supabase.contains("provider_map_url: place.confirmableProviderMapUrl"))
+        XCTAssertTrue(supabase.contains("finalPlace.confirmableProviderMapUrl"))
+        XCTAssertTrue(
+            map.contains("parked.ensureConfirmableAmapMapURL()"),
+            "parkExistingReviewCandidate must persist a confirmable Amap URL"
+        )
         XCTAssertTrue(pending.contains("Baidu Maps POI id:"))
         XCTAssertTrue(
             map.contains("PlaceReviewCandidate.providerVenueEvidencePrefixes"),
@@ -5207,11 +5221,17 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(amapReloaded.providerLocation?.coordinateSystem, .gcj02)
         XCTAssertEqual(amapReloaded.providerLocation?.latitude, 31.230)
         XCTAssertEqual(amapReloaded.providerLocation?.longitude, 121.470)
-        XCTAssertNil(amapReloaded.providerLocation?.mapURL)
+        let parkedAmapURL = try XCTUnwrap(amapReloaded.providerLocation?.mapURL)
+        XCTAssertEqual(parkedAmapURL.scheme, "https")
+        XCTAssertEqual(parkedAmapURL.host, "uri.amap.com")
+        XCTAssertTrue(parkedAmapURL.absoluteString.contains("121.47"))
+        XCTAssertTrue(parkedAmapURL.absoluteString.contains("31.23"))
         let amapConfirmed = Place.from(amapReloaded)
         XCTAssertEqual(amapConfirmed.resolvedCoordinateSystem, .gcj02)
         XCTAssertEqual(amapConfirmed.providerPlaceId, "amap-no-url")
         XCTAssertEqual(amapConfirmed.latitude, 31.230)
+        XCTAssertEqual(amapConfirmed.providerMapUrl, parkedAmapURL.absoluteString)
+        XCTAssertNil(backendProviderCoordinateFieldError(for: amapConfirmed))
 
         let baiduReloaded = try XCTUnwrap(reloaded.first { $0.name == "Baidu West Lake" })
         XCTAssertNil(baiduReloaded.latitude, "BD-09 must not be promoted as WGS84")
@@ -5239,7 +5259,163 @@ final class SAVEProductionConfigTests: XCTestCase {
         let parkedAmap = try XCTUnwrap(parkedReload.first { $0.name == "Amap Harbor Cafe" })
         XCTAssertTrue(parkedAmap.hasSavableLocation)
         XCTAssertEqual(parkedAmap.providerLocation?.providerPlaceID, "amap-no-url")
+        XCTAssertEqual(parkedAmap.providerLocation?.mapURL?.host, "uri.amap.com")
         XCTAssertTrue(parkedAmap.isUnplacedInbox)
+        XCTAssertNil(backendProviderCoordinateFieldError(for: Place.from(parkedAmap)))
+    }
+
+    /// P2 PRRT_kwDOTYZUp86v27gd: every parking path × provider combination
+    /// must produce a confirm payload the backend will accept.
+    @MainActor
+    func testParkedProviderConfirmPayloadsSatisfyBackendCoordinateContract() throws {
+        let storedAmapURL = "https://uri.amap.com/marker?position=121.47,31.23&name=Stored&src=save"
+        let cases: [(name: String, mutate: (inout Place) -> Void, expectURL: Bool, expectBackendOK: Bool)] = [
+            ("amap-gcj-id-no-url", {
+                $0.coordinateSystem = .gcj02
+                $0.locationProvider = .amap
+                $0.providerPlaceId = "amap-no-url"
+                $0.providerMapUrl = nil
+            }, true, true),
+            ("amap-gcj-id-with-url", {
+                $0.coordinateSystem = .gcj02
+                $0.locationProvider = .amap
+                $0.providerPlaceId = "amap-with-url"
+                $0.providerMapUrl = storedAmapURL
+            }, true, true),
+            ("amap-gcj-no-id", {
+                $0.coordinateSystem = .gcj02
+                $0.locationProvider = .amap
+                $0.providerPlaceId = nil
+                $0.providerMapUrl = nil
+            }, false, false),
+            ("baidu-bd09-id-no-url", {
+                $0.coordinateSystem = .bd09
+                $0.locationProvider = .baidu
+                $0.providerPlaceId = "baidu-west-lake"
+                $0.providerMapUrl = nil
+            }, false, true),
+            ("google-wgs-id", {
+                $0.coordinateSystem = .wgs84
+                $0.locationProvider = .googlePlaces
+                $0.providerPlaceId = "ChIJwgs-harbor"
+                $0.googlePlaceId = "ChIJwgs-harbor"
+                $0.providerMapUrl = nil
+            }, false, true),
+            ("apple-wgs", {
+                $0.coordinateSystem = .wgs84
+                $0.locationProvider = .appleMaps
+                $0.providerPlaceId = "apple-harbor"
+                $0.providerMapUrl = nil
+            }, false, true),
+        ]
+        for item in cases {
+            var place = Place(
+                id: UUID(),
+                name: item.name,
+                address: "1 Harbor",
+                latitude: 31.230,
+                longitude: 121.470,
+                category: .cafe,
+                status: .wantToGo,
+                sourcePlatform: .other,
+                createdAt: Date()
+            )
+            item.mutate(&place)
+            let parked = PlaceReviewCandidate.unplacedInboxItem(from: place, ownerSubject: "did:privy:owner-a")
+            XCTAssertTrue(parked.isUnplacedInbox, item.name)
+            let confirmed = Place.from(parked)
+            if item.expectURL {
+                let url = try XCTUnwrap(confirmed.providerMapUrl, item.name)
+                XCTAssertEqual(Place.validAmapMapURL(from: url)?.host, "uri.amap.com", item.name)
+                if place.providerMapUrl == storedAmapURL {
+                    XCTAssertEqual(url, storedAmapURL, item.name)
+                }
+            } else {
+                XCTAssertNil(confirmed.providerMapUrl, item.name)
+            }
+            let error = backendProviderCoordinateFieldError(for: confirmed)
+            if item.expectBackendOK {
+                XCTAssertNil(error, "\(item.name) should confirm: \(error ?? "")")
+            } else {
+                XCTAssertEqual(error, "GCJ-02 places require an Amap provider reference", item.name)
+            }
+        }
+
+        var leftover = contextualReviewCandidate(owner: "did:privy:owner-a", workflow: false)
+        leftover.missingInfo.append(PlaceReviewCandidate.unplacedInboxMarker)
+        leftover.latitude = nil
+        leftover.longitude = nil
+        leftover.evidence = [
+            "Provider: amap",
+            "Provider place id: leftover-amap",
+            "Amap POI id: leftover-amap",
+            "Amap reference coordinates (GCJ-02): 31.23, 121.47",
+        ]
+        XCTAssertNil(
+            leftover.providerLocation?.mapURL,
+            "old Unplaced rows may have GCJ-02 + POI id and no stored map URL"
+        )
+        XCTAssertNil(backendProviderCoordinateFieldError(for: Place.from(leftover)))
+        leftover.ensureConfirmableAmapMapURL()
+        XCTAssertTrue(leftover.evidence.contains { $0.hasPrefix("Provider map URL: https://uri.amap.com/marker?") })
+        XCTAssertNil(backendProviderCoordinateFieldError(for: Place.from(leftover)))
+
+        var shared = SharedPlacePost(
+            id: UUID(uuidString: "cccccccc-cccc-4ccc-8ccc-cccccccccccc")!,
+            name: "Shared Amap Cafe",
+            address: "Shanghai",
+            latitude: 31.230,
+            longitude: 121.470,
+            coordinate_system: .gcj02,
+            location_provider: .amap,
+            provider_place_id: "shared-amap",
+            category: "cafe",
+            status: .wantToGo,
+            stars: nil,
+            caption: nil,
+            shared_at: "2026-10-24T00:00:00Z",
+            author_id: "author",
+            author_name: "Author",
+            author_handle: nil,
+            author_avatar_url: nil,
+            visible_to_followers: true
+        )
+        XCTAssertNil(shared.provider_map_url)
+        let sharedConfirmed = Place.from(
+            PlaceReviewCandidate.unplacedInboxItem(from: shared.asUnplacedPlace(ownerSubject: "did:privy:owner-a"))
+        )
+        XCTAssertEqual(sharedConfirmed.providerPlaceId, "shared-amap")
+        XCTAssertEqual(Place.validAmapMapURL(from: sharedConfirmed.providerMapUrl)?.host, "uri.amap.com")
+        XCTAssertNil(backendProviderCoordinateFieldError(for: sharedConfirmed))
+    }
+
+    /// Mirrors backend/src/server.ts providerCoordinateFieldError.
+    private func backendProviderCoordinateFieldError(for place: Place) -> String? {
+        let coordinateSystem = place.coordinateSystem?.rawValue
+        let provider = place.locationProvider?.rawValue
+        let providerPlaceId = place.providerPlaceId
+        let providerMapURL = place.providerMapUrl
+        if let coordinateSystem, !["WGS84", "GCJ-02", "BD-09"].contains(coordinateSystem) {
+            return "Unsupported coordinate_system"
+        }
+        if let provider, !["apple_maps", "google_places", "amap", "baidu"].contains(provider) {
+            return "Unsupported location_provider"
+        }
+        if let providerPlaceId, providerPlaceId.count > 255 {
+            return "Invalid provider_place_id"
+        }
+        if let providerMapURL {
+            guard let url = URL(string: providerMapURL),
+                  url.scheme == "https",
+                  url.host == "uri.amap.com",
+                  providerMapURL.count <= 1_000 else {
+                return "Invalid provider_map_url"
+            }
+        }
+        if coordinateSystem == "GCJ-02" && (provider != "amap" || providerPlaceId == nil || providerMapURL == nil) {
+            return "GCJ-02 places require an Amap provider reference"
+        }
+        return nil
     }
 
     @MainActor
