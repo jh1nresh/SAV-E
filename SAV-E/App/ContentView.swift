@@ -614,7 +614,7 @@ struct ContentView: View {
                                     // the canvas never draws its own copy.
                                     hidesCommandShelf: true,
                                     onOpenSearch: { openMapSearch() },
-                                    onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                    onOpenSavedPlace: { openSavedPlaceFromMapSearch($0) },
                                     onPlanAroundPlace: openPlanAround,
                                     onOpenPassport: openPassport
                                 )
@@ -1538,25 +1538,27 @@ struct ContentView: View {
     }
 
     private func openSavedPlaceFromMapSearch(_ place: Place) {
-        restoreExactSearchResolutionIfNeeded()
-        // The launch request can keep `preservesExactSearchClue` after an
-        // explicit close or a successful resolve. Only a live session may
-        // claim the next saved-pin tap; otherwise the peek never opens.
-        let shouldResolveClue = isExactSearchSessionActive
-            || mapVM.hasActiveExactSearchResolution
-            || exactSearchClueID != nil
-        guard shouldResolveClue else {
-            openMapDetail(.savedPlace(place))
-            return
-        }
         Task {
             // Stay on the Map search/correction surface. The embedded drawer
             // binds `mapVM.correctionDrawerError` so a failed decision does
             // not open the stamp as if it were already corrected.
-            restoreExactSearchResolutionIfNeeded()
-            if let resolved = await mapVM.chooseSavedStampFromExactSearch(place) {
+            let outcome = await SaveDoodleMapPeekOpen.perform(
+                place: place,
+                mapViewModel: mapVM,
+                isExactSearchSessionActive: isExactSearchSessionActive,
+                exactSearchClueID: exactSearchClueID,
+                restoreResolution: restoreExactSearchResolutionIfNeeded
+            )
+            switch outcome {
+            case .openStamp(let id):
+                let opened = mapVM.places.first(where: { $0.id == id }) ?? place
+                openMapDetail(.savedPlace(opened))
+            case .resolvedStamp(let id):
                 clearResolvedExactSearchSession()
-                openMapDetail(.savedPlace(resolved))
+                let opened = mapVM.places.first(where: { $0.id == id }) ?? place
+                openMapDetail(.savedPlace(opened))
+            case .stayOnSearch:
+                break
             }
         }
     }

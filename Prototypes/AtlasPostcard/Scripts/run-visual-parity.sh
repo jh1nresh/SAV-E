@@ -462,7 +462,7 @@ for screen in home saves plan map; do
             --result "$ARTIFACT_DIR/results/map.json"
             --output "$ARTIFACT_DIR/map-doodle-similarity/side-by-side.png"
             --report "$ARTIFACT_DIR/map-doodle-similarity/report.json"
-            --mask "0,0,0,0"
+            --no-mask
             --status "$status"
             --threshold "$THRESHOLD"
             --modes-output "$ARTIFACT_DIR/map-doodle-similarity/mock-light-dark.png"

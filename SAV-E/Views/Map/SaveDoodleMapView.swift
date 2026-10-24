@@ -16,6 +16,46 @@ enum SaveDoodleMapPinStyle {
     static var current: Kind = .coralNumbered
 }
 
+/// Peek-card / saved-pin open during Review exact-search.
+/// ContentView and the Map sheet share this so a tap retires the clue
+/// instead of skipping to a generic stamp open.
+enum SaveDoodleMapPeekOpen {
+    enum Outcome: Equatable {
+        case openStamp(UUID)
+        case resolvedStamp(UUID)
+        case stayOnSearch
+    }
+
+    @MainActor
+    static func perform(
+        place: Place,
+        mapViewModel: MapViewModel,
+        isExactSearchSessionActive: Bool,
+        exactSearchClueID: UUID?,
+        restoreResolution: () -> Void
+    ) async -> Outcome {
+        restoreResolution()
+        let shouldResolve = isExactSearchSessionActive
+            || mapViewModel.hasActiveExactSearchResolution
+            || exactSearchClueID != nil
+        guard shouldResolve else { return .openStamp(place.id) }
+        restoreResolution()
+        if let resolved = await mapViewModel.chooseSavedStampFromExactSearch(place) {
+            return .resolvedStamp(resolved.id)
+        }
+        return .stayOnSearch
+    }
+}
+
+/// Unsaved `showMapCandidatesOnMap` Marker tap. Selecting the candidate
+/// is what ContentView uses to reopen the receipt drawer.
+enum SaveDoodleMapUnsavedMarker {
+    @MainActor
+    static func select(_ candidate: SaveMapCandidate, on mapViewModel: MapViewModel) {
+        mapViewModel.selectMapCandidate(candidate)
+    }
+}
+
 /// Product Map tab: default Apple MapKit (`.standard`, emphasis `.automatic`)
 /// with native Apple tile colors. Saved places use Savvy pins;
 /// unsaved keep the native Marker. No tile-town, no paper wash.
@@ -186,6 +226,18 @@ struct SaveDoodleMapView: View {
 
             ForEach(nativeUnsavedCandidates) { candidate in
                 Marker(candidate.title, coordinate: candidate.coordinate)
+                Annotation("", coordinate: candidate.coordinate, anchor: .bottom) {
+                    Button {
+                        SaveDoodleMapUnsavedMarker.select(candidate, on: mapViewModel)
+                    } label: {
+                        Color.clear.frame(width: 44, height: 56)
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .accessibilityIdentifier("map.unsaved.\(candidate.id)")
+                    .accessibilityLabel(candidate.title)
+                    .accessibilityAddTraits(.isButton)
+                }
             }
 
             if let polyline = mapViewModel.routePolyline {
