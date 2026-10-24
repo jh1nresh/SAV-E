@@ -36,7 +36,7 @@ enum SaveDoodleCitySelection: Equatable, Hashable {
     }
 
     init(storageValue: String) {
-        self = storageValue == "nearYou" ? .nearYou : .city(storageValue)
+        self = storageValue == "nearYou" ? .nearYou : .city(SaveDoodleHomeCatalog.canonicalCityID(storageValue))
     }
 }
 
@@ -59,8 +59,10 @@ struct SaveDoodleListedPlace: Equatable, Identifiable {
     var id: UUID { place.id }
 }
 
-/// Shared Eat/Go + city selection so Home's mini-map can open Map with the
-/// same filter (IA Q5). Persisted per UI-test storage id so tests stay isolated.
+/// Shared Eat/Go + city selection for Home. Map does not follow this
+/// filter: Home has no mini-map (founder option B, 2026-10-24).
+/// Place-detail "View on map" may focus one stamp; two-way filter
+/// sharing stays with #298.
 @MainActor
 final class SaveDoodleSession: ObservableObject {
     @Published var lens: SaveDoodleLens {
@@ -71,25 +73,13 @@ final class SaveDoodleSession: ObservableObject {
         didSet { defaults.set(city.storageValue, forKey: Self.cityKey) }
     }
 
-    /// Q5: Map applies Home's Eat/Go + city only after a mini-map open.
-    /// Opening the Map tab directly leaves this false so Saved/Nearby stay
-    /// unfiltered. Persisted so a tab switch cannot drop a just-set handoff.
-    @Published var mapFollowsHomeFilter: Bool {
-        didSet { defaults.set(mapFollowsHomeFilter, forKey: Self.followKey) }
-    }
+    /// One-shot Home detail → Map focus. Not persisted; not MiniMapHandoff.
+    @Published var pendingShowOnMapPlaceID: UUID?
 
-    /// In-memory handoff. A later `selectRootTab(.map)` default-false write
-    /// cannot win while this is set; Map consumes it on appear.
-    @Published private(set) var pendingMiniMapHandoff = false
-
-    /// Bumped on mini-map open and on abandon so a reused Map tab identity
-    /// cannot keep the unfiltered wordmark-only header.
-    @Published private(set) var mapSurfaceID = UUID()
-
-    /// Prior Map-tab residue: selected pin, expanded search drawer, or a
-    /// header that only mounted on the first `onAppear`. Mini-map bumps this
-    /// so Map remounts Eat/Go instead of keeping the wordmark-only chrome.
-    @Published private(set) var mapVisitResidueID = UUID()
+    /// Map Eat/Go chips can follow Home's current lens + city. Opening the
+    /// Map tab leaves this false so the default Saved/Nearby/Friends set
+    /// stays unfiltered (#290). Not a mini-map handoff.
+    @Published var mapFollowsHomeFilter = false
 
     private let defaults: UserDefaults
 
@@ -106,46 +96,6 @@ final class SaveDoodleSession: ObservableObject {
         } else {
             city = .nearYou
         }
-        mapFollowsHomeFilter = defaults.bool(forKey: Self.followKey)
-    }
-
-    /// Mini-map tap. Sets follow, drops leftover Map-tab chrome, and gives
-    /// Map a new identity so Eat/Go remounts on a reused view.
-    func beginMiniMapHandoff() {
-        pendingMiniMapHandoff = true
-        mapFollowsHomeFilter = true
-        mapSurfaceID = UUID()
-        mapVisitResidueID = UUID()
-    }
-
-    /// Map appear. Re-applies follow if a tab-bar default-false write landed
-    /// after `beginMiniMapHandoff`.
-    func consumeMiniMapHandoff() {
-        guard pendingMiniMapHandoff else { return }
-        mapFollowsHomeFilter = true
-        pendingMiniMapHandoff = false
-    }
-
-    /// Search / show-on-map / list handoffs drop a leftover Home filter.
-    func abandonMiniMapHandoff() {
-        pendingMiniMapHandoff = false
-        if mapFollowsHomeFilter {
-            mapSurfaceID = UUID()
-        }
-        mapFollowsHomeFilter = false
-    }
-
-    /// Tab-bar Map keeps the pending mini-map handoff; any other Map tab
-    /// selection uses the requested follow flag.
-    func applyMapTabSelection(followsHomeFilter: Bool) {
-        if pendingMiniMapHandoff {
-            mapFollowsHomeFilter = true
-            return
-        }
-        if mapFollowsHomeFilter != followsHomeFilter {
-            mapSurfaceID = UUID()
-        }
-        mapFollowsHomeFilter = followsHomeFilter
     }
 
     private static var suiteSuffix: String {
@@ -154,12 +104,46 @@ final class SaveDoodleSession: ObservableObject {
 
     static var lensKey: String { "save.doodle.lens.\(suiteSuffix)" }
     static var cityKey: String { "save.doodle.city.\(suiteSuffix)" }
-    static var followKey: String { "save.doodle.mapFollows.\(suiteSuffix)" }
+}
+
+/// DEBUG-only injectable clock for UI tests. Production always uses `Date()`.
+/// Pass `--uitest-fixed-now=yyyy-MM-dd'T'HH:mm:ss` (device-local, not UTC).
+enum SaveUITestClock {
+    static var now: Date {
+#if DEBUG
+        if let injected = injectedNow { return injected }
+#endif
+        return Date()
+    }
+
+    /// Device-local `yyyy-MM-dd'T'HH:mm:ss`. Not UTC.
+    static func parseLocal(_ raw: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        return formatter.date(from: raw)
+    }
+
+#if DEBUG
+    static var injectedNow: Date? {
+        let prefix = "--uitest-fixed-now="
+        guard let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) })
+        else { return nil }
+        return parseLocal(String(argument.dropFirst(prefix.count)))
+    }
+#endif
 }
 
 enum SaveDoodleHomeCatalog {
     /// Walking-scale "near you" radius. Empty state uses the same bound.
     static let nearbyRadius: CLLocationDistance = 3_000
+
+    /// Preserve an existing city selection when its country spelling changes
+    /// to the shared canonical qualifier. Administrative-region IDs stay intact.
+    static func canonicalCityID(_ id: String) -> String {
+        SaveAddressLocality.canonicalCityID(id)
+    }
 
     static func lens(for category: PlaceCategory) -> SaveDoodleLens {
         switch category {
@@ -171,18 +155,7 @@ enum SaveDoodleHomeCatalog {
     }
 
     static func cityID(for place: Place) -> String? {
-        if let key = SaveHomeSearch.metroKey(in: place.address) {
-            return key
-        }
-        guard let area = localityLabel(in: place.address) else { return nil }
-        let locality = normalizedCityToken(area)
-        guard !locality.isEmpty else { return nil }
-        // Locality alone merges Springfield IL with Springfield MA.
-        // Keep the displayed name as the city; qualify the stable ID.
-        if let qualifier = regionQualifier(in: place.address) {
-            return "\(locality),\(qualifier)"
-        }
-        return locality
+        SaveAddressLocality.resolve(place.address)?.cityID
     }
 
     static func cityDisplayName(for place: Place, language: AppLanguage) -> String? {
@@ -200,146 +173,18 @@ enum SaveDoodleHomeCatalog {
     /// takes the second-to-last comma part and turns
     /// `Berkeley, CA 94704, USA` into `CA 94704`, splitting one city by ZIP.
     static func localityLabel(in address: String) -> String? {
-        let parts = address
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        guard !parts.isEmpty else { return nil }
-        if let cjk = cjkLocality(in: address) { return cjk }
-
-        var local = parts
-        if let last = local.last, Self.countryTokens.contains(last.lowercased()) {
-            local.removeLast()
-        }
-        while let last = local.last, isPostalOrAdminRegion(last) {
-            local.removeLast()
-        }
-        guard let city = local.last, !city.isEmpty else { return nil }
-        return stripLeadingPostalCode(from: city)
+        SaveAddressLocality.resolve(address)?.label
     }
 
-    private static let countryTokens: Set<String> = [
-        "usa", "us", "united states", "united states of america",
-        "uk", "u.k.", "united kingdom", "taiwan", "japan", "china",
-        "canada", "australia", "france", "germany", "italy", "spain",
-        "korea", "south korea", "thailand", "singapore",
-        "switzerland", "schweiz", "suisse", "svizzera",
-        "austria", "österreich", "osterreich",
-        "netherlands", "nederland", "holland",
-        "belgium", "belgie", "belgië", "belgique",
-        "portugal", "ireland", "sweden", "norway", "denmark", "finland",
-        "poland", "hungary", "greece", "romania", "mexico", "brazil",
-        "india", "new zealand", "czech republic", "czechia", "south africa",
-    ]
-
-    /// `8001 Zürich` / `69001 Lyon` — postcode is a prefix, not the city.
-    private static func stripLeadingPostalCode(from token: String) -> String {
-        let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let match = trimmed.range(
-            of: #"^\d{4,6}\s+"#,
-            options: .regularExpression
-        ) else { return trimmed }
-        let name = trimmed[match.upperBound...]
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return name.isEmpty ? trimmed : String(name)
-    }
-
-    private static func normalizedCityToken(_ value: String) -> String {
-        value
-            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-            .lowercased()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+    /// Postal prefixes and trailing numeric/UK/Canadian postcodes are not city names.
+    static func strippingPostalCode(from token: String) -> String {
+        SaveAddressLocality.strippingPostalCode(from: token)
     }
 
     /// Admin region or country after the locality. Display stays the city.
     static func regionQualifier(in address: String) -> String? {
-        let parts = address
-            .split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        var local = parts
-        var country: String?
-        if let last = local.last, countryTokens.contains(last.lowercased()) {
-            country = normalizedCityToken(last)
-            local.removeLast()
-        }
-        var admin: String?
-        while let last = local.last, isPostalOrAdminRegion(last) {
-            if admin == nil, let code = adminRegionCode(in: last) {
-                admin = code
-            }
-            local.removeLast()
-        }
-        return admin ?? country
-    }
-
-    private static func adminRegionCode(in value: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.range(of: #"^[A-Za-z]{2}$"#, options: .regularExpression) != nil {
-            return trimmed.lowercased()
-        }
-        if let match = trimmed.range(of: #"^[A-Za-z]{2}(?=\s)"#, options: .regularExpression) {
-            return String(trimmed[match]).lowercased()
-        }
-        return nil
-    }
-
-    private static func isPostalOrAdminRegion(_ value: String) -> Bool {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.range(of: #"^[A-Za-z]{2}$"#, options: .regularExpression) != nil {
-            return true
-        }
-        if trimmed.range(
-            of: #"^[A-Za-z]{2}\s+\d{5}(?:-\d{4})?$"#,
-            options: .regularExpression
-        ) != nil {
-            return true
-        }
-        if trimmed.range(of: #"^\d{5}(?:-\d{4})?$"#, options: .regularExpression) != nil {
-            return true
-        }
-        // Canada: "BC V8W 1P6" or "V8W 1P6" — not the city.
-        if trimmed.range(
-            of: #"^[A-Za-z]{2}\s+[A-Za-z]\d[A-Za-z]\s*\d[A-Za-z]\d$"#,
-            options: .regularExpression
-        ) != nil {
-            return true
-        }
-        if trimmed.range(
-            of: #"^[A-Za-z]\d[A-Za-z]\s*\d[A-Za-z]\d$"#,
-            options: .regularExpression
-        ) != nil {
-            return true
-        }
-        // UK outward+inward: "SW1A 1AA", "M1 1AE".
-        if trimmed.range(
-            of: #"^[A-Za-z]{1,2}\d[A-Za-z\d]?\s*\d[A-Za-z]{2}$"#,
-            options: .regularExpression
-        ) != nil {
-            return true
-        }
-        // Australia / generic 4-digit postcode.
-        if trimmed.range(of: #"^\d{4}$"#, options: .regularExpression) != nil {
-            return true
-        }
-        return false
-    }
-
-    private static func cjkLocality(in address: String) -> String? {
-        guard address.contains(where: {
-            $0.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
-        }) else { return nil }
-        for marker in ["市", "縣", "县"] {
-            guard let end = address.range(of: marker) else { continue }
-            let head = address[address.startIndex..<end.upperBound]
-            let city = String(head.drop { $0.isNumber })
-                .replacingOccurrences(of: "台灣", with: "")
-                .replacingOccurrences(of: "臺灣", with: "")
-                .replacingOccurrences(of: "中國", with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if city.count >= 2 { return city }
-        }
-        return nil
+        guard let resolved = SaveAddressLocality.resolve(address) else { return nil }
+        return resolved.region ?? resolved.country
     }
 
     static func cityGroups(from places: [Place]) -> [SaveDoodleCityGroup] {
@@ -364,20 +209,33 @@ enum SaveDoodleHomeCatalog {
     }
 
     /// Location denied hides "Near you" and falls back to the last city,
-    /// or the city of the most recent save.
+    /// or the city of the most recent save. A `.city` whose last save
+    /// disappeared (delete or address edit) falls back the same way.
     static func resolvedSelection(
         _ selection: SaveDoodleCitySelection,
         places: [Place],
         locationDenied: Bool
     ) -> SaveDoodleCitySelection {
+        if case .city(let id) = selection {
+            if places.contains(where: { cityID(for: $0) == id }) {
+                return selection
+            }
+            if !locationDenied {
+                return .nearYou
+            }
+            return newestResolvableCity(in: places) ?? .nearYou
+        }
         guard locationDenied, case .nearYou = selection else { return selection }
         // Coordinate-only imports have no locality. Walk recency until a
         // save actually resolves, so denied Near you does not stay empty.
-        if let match = places.sorted(by: moreRecent).first(where: { cityID(for: $0) != nil }),
-           let id = cityID(for: match) {
-            return .city(id)
-        }
-        return selection
+        return newestResolvableCity(in: places) ?? selection
+    }
+
+    private static func newestResolvableCity(in places: [Place]) -> SaveDoodleCitySelection? {
+        guard let match = places.sorted(by: moreRecent).first(where: { cityID(for: $0) != nil }),
+              let id = cityID(for: match)
+        else { return nil }
+        return .city(id)
     }
 
     static func visiblePlaces(
@@ -542,6 +400,80 @@ enum SaveDoodleHomeCatalog {
         return "\(Int(km.rounded()))km"
     }
 
+    /// Row subtitle: `<distance or neighborhood> · <visit status>`.
+    static func rowMetaText(
+        distance: CLLocationDistance?,
+        place: Place,
+        visitedAt: Date? = nil,
+        now: Date = Date(),
+        language: AppLanguage
+    ) -> String {
+        let location = distance.map(distanceText)
+            ?? neighborhoodText(for: place, language: language)
+        let status = visitStatusText(
+            status: place.status,
+            visitedAt: place.status == .visited ? (visitedAt ?? place.createdAt) : nil,
+            now: now,
+            language: language
+        )
+        if let location, !location.isEmpty {
+            return "\(location) · \(status)"
+        }
+        return status
+    }
+
+    static func visitStatusText(
+        status: PlaceStatus,
+        visitedAt: Date?,
+        now: Date = Date(),
+        language: AppLanguage
+    ) -> String {
+        switch status {
+        case .wantToGo:
+            return language.localized(english: "saved, not yet", traditionalChinese: "已存，還沒去")
+        case .visited:
+            let reference = visitedAt ?? now
+            let days = max(0, Calendar.current.dateComponents([.day], from: reference, to: now).day ?? 0)
+            if days == 0 {
+                return language.localized(english: "visited today", traditionalChinese: "今天去過")
+            }
+            return language.localized(
+                english: "visited \(days)d ago",
+                traditionalChinese: "\(days) 天前去過"
+            )
+        }
+    }
+
+    /// District when the address names one; otherwise the city label.
+    static func neighborhoodText(for place: Place, language: AppLanguage) -> String? {
+        if let district = cjkDistrict(in: place.address) ?? englishDistrict(in: place.address) {
+            return district
+        }
+        return cityDisplayName(for: place, language: language)
+    }
+
+    private static func cjkDistrict(in address: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: "[\\u4e00-\\u9fff]{1,2}[區区]") else {
+            return nil
+        }
+        let range = NSRange(address.startIndex..., in: address)
+        return regex.matches(in: address, range: range).last.flatMap { match in
+            Range(match.range, in: address).map { String(address[$0]) }
+        }
+    }
+
+    private static func englishDistrict(in address: String) -> String? {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"(?i)\b[\w'’.-]+(?:\s+[\w'’.-]+)?\s+District\b"#
+        ) else {
+            return nil
+        }
+        let range = NSRange(address.startIndex..., in: address)
+        return regex.matches(in: address, range: range).last.flatMap { match in
+            Range(match.range, in: address).map { String(address[$0]) }
+        }
+    }
+
     static func moreRecent(_ lhs: Place, _ rhs: Place) -> Bool {
         if lhs.createdAt != rhs.createdAt { return lhs.createdAt > rhs.createdAt }
         return lhs.id.uuidString < rhs.id.uuidString
@@ -552,6 +484,96 @@ enum SaveDoodleHomeCatalog {
         let right = distance(from: location, to: rhs) ?? .infinity
         if left != right { return left < right }
         return moreRecent(lhs, rhs)
+    }
+}
+
+/// Home hint-row greeting and clue copy. Cutoffs and strings live here.
+enum SaveDoodleHomeHint {
+    enum Period: Equatable {
+        case morning, afternoon, evening
+    }
+
+    struct Copy: Equatable {
+        let greeting: String
+        let leadingFull: String
+        let leadingShort: String
+        let review: String?
+        let spoken: String
+    }
+
+    static func period(at date: Date, calendar: Calendar = .current) -> Period {
+        let hour = calendar.component(.hour, from: date)
+        let minute = calendar.component(.minute, from: date)
+        let minutes = hour * 60 + minute
+        switch minutes {
+        case (5 * 60)..<(12 * 60):
+            return .morning
+        case (12 * 60)..<(18 * 60):
+            return .afternoon
+        default:
+            return .evening
+        }
+    }
+
+    static func greeting(_ period: Period, language: AppLanguage) -> String {
+        switch period {
+        case .morning:
+            return language.localized(english: "Good morning", traditionalChinese: "早安")
+        case .afternoon:
+            return language.localized(english: "Good afternoon", traditionalChinese: "午安")
+        case .evening:
+            return language.localized(english: "Good evening", traditionalChinese: "晚安")
+        }
+    }
+
+    static func displayCount(_ count: Int) -> String {
+        count > 99 ? "99+" : "\(count)"
+    }
+
+    static func copy(
+        clueCount: Int,
+        at date: Date,
+        language: AppLanguage,
+        calendar: Calendar = .current
+    ) -> Copy {
+        let greetingText = Self.greeting(period(at: date, calendar: calendar), language: language)
+        guard clueCount > 0 else {
+            return Copy(
+                greeting: greetingText,
+                leadingFull: greetingText,
+                leadingShort: greetingText,
+                review: nil,
+                spoken: greetingText
+            )
+        }
+        let n = displayCount(clueCount)
+        let fullPhrase: String
+        let shortPhrase: String
+        switch language {
+        case .english:
+            if clueCount == 1 {
+                fullPhrase = "1 clue waiting"
+                shortPhrase = "1 clue"
+            } else {
+                fullPhrase = "\(n) clues waiting"
+                shortPhrase = "\(n) clues"
+            }
+        case .traditionalChinese:
+            fullPhrase = "\(n) 條線索待看"
+            shortPhrase = fullPhrase
+        }
+        let review = language.localized(english: "Review ›", traditionalChinese: "去看看 ›")
+        // Trailing ` ·` stays in the muted leading text so ViewThatFits and
+        // the coral Review / 去看看 control both keep the DESIGN separator.
+        let leadingFull = "\(greetingText) · \(fullPhrase) ·"
+        let leadingShort = "\(greetingText) · \(shortPhrase) ·"
+        return Copy(
+            greeting: greetingText,
+            leadingFull: leadingFull,
+            leadingShort: leadingShort,
+            review: review,
+            spoken: "\(leadingFull) \(review)"
+        )
     }
 }
 
@@ -620,6 +642,35 @@ final class SaveDoodleVisitStore {
         return true
     }
 
+    struct Snapshot: Equatable {
+        let id: UUID
+        let dates: [Double]
+        let count: Int
+    }
+
+    func snapshot(for id: UUID) -> Snapshot {
+        Snapshot(id: id, dates: visitPayload[id.uuidString] ?? [], count: count(for: id))
+    }
+
+    func restore(_ snapshot: Snapshot) {
+        var payload = visitPayload
+        payload[snapshot.id.uuidString] = snapshot.dates.isEmpty ? nil : snapshot.dates
+        defaults.set(payload, forKey: Self.datesKey)
+        defaults.set(snapshot.count, forKey: Self.countKey(snapshot.id))
+    }
+
+    func previousStatus(for id: UUID) -> PlaceStatus? {
+        defaults.string(forKey: Self.priorStatusKey(id)).flatMap(PlaceStatus.init(rawValue:))
+    }
+
+    func rememberPriorStatus(_ status: PlaceStatus, for id: UUID) {
+        defaults.set(status.rawValue, forKey: Self.priorStatusKey(id))
+    }
+
+    func clearPriorStatus(for id: UUID) {
+        defaults.removeObject(forKey: Self.priorStatusKey(id))
+    }
+
     private func dates(for id: UUID) -> [Date] {
         (visitPayload[id.uuidString] ?? []).map(Date.init(timeIntervalSince1970:))
     }
@@ -636,6 +687,40 @@ final class SaveDoodleVisitStore {
 
     static func countKey(_ id: UUID) -> String {
         "save.doodle.passport.visits.\(suiteSuffix).\(id.uuidString)"
+    }
+
+    static func priorStatusKey(_ id: UUID) -> String {
+        "save.doodle.checkin.priorStatus.\(suiteSuffix).\(id.uuidString)"
+    }
+}
+
+/// Only Home's Collected entry carries a city scope. Other owner Passport
+/// presentations retain the full collection and saved/goal progress.
+enum SavePassportCollectionMode {
+    case collection
+    case homeCollected
+
+    func places(
+        from places: [Place],
+        selection: SaveDoodleCitySelection,
+        location: CLLocation?,
+        locationDenied: Bool
+    ) -> [Place] {
+        guard self == .homeCollected else { return places }
+        return SaveDoodleHomeProgressCatalog.cityPlaces(
+            from: places, selection: selection, location: location,
+            locationDenied: locationDenied
+        )
+    }
+
+    func progress(in places: [Place]) -> (completed: Int, total: Int) {
+        switch self {
+        case .collection:
+            return (places.count, SaveTileTownProductLock.passportGoal(for: places.count))
+        case .homeCollected:
+            let count = SaveDoodleHomeProgressCatalog.progress(in: places)
+            return (count.visited, count.saved)
+        }
     }
 }
 

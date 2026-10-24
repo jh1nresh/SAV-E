@@ -44,6 +44,8 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertFalse(paywall.contains("收藏地點不設限"))
         XCTAssertTrue(paywall.contains("You've saved 50 places. Keep going."))
         XCTAssertTrue(paywall.contains("已存 50 個地點，繼續存下去"))
+        XCTAssertFalse(paywall.contains("已滿"))
+        XCTAssertFalse(paywall.contains("已满"))
         XCTAssertTrue(paywall.contains("paywall.savedNote"))
         XCTAssertTrue(paywall.contains("paywall.benefit.unlimited"))
         XCTAssertTrue(paywall.contains("paywall.loading"))
@@ -172,6 +174,14 @@ final class SAVEProductionConfigTests: XCTestCase {
             "E4 fixture stays on DEBUG launch args so Doodle Home can show a Map Stamp row"
         )
         XCTAssertTrue(
+            rail.contains("openSavesFromHome"),
+            "Home B opens Saves from Review › or home.saves; TileTown More → Manage is gone"
+        )
+        XCTAssertTrue(
+            rail.contains("home.review.action"),
+            "Home B Review › is the Saves entry while clues wait"
+        )
+        XCTAssertTrue(
             rail.contains("firstHittable"),
             "Do not coordinate-tap a covered header; wait for a hittable Saves control"
         )
@@ -233,6 +243,18 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(
             rail.contains("identifier BEGINSWITH 'home.place.'"),
             "E4 Settings Map Stamp signal is a Doodle Home place row, not home.featuredName"
+        )
+        XCTAssertTrue(
+            rail.contains("waitForConfirmedHomeStampBeforeSettings"),
+            "Home B waits for an Eat/Go stamp, not the retired mini-map featured name"
+        )
+        XCTAssertTrue(
+            rail.contains("home.city.tokyo"),
+            "E4 Settings uses the B-1/B-3 city switcher when Near you lists no rows"
+        )
+        XCTAssertFalse(
+            rail.contains("staticTexts[\"home.featuredName\"]"),
+            "Home B removed the mini-map featured-name wait"
         )
         let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(saves.contains("saves.unplaced"))
@@ -3484,7 +3506,8 @@ final class SAVEProductionConfigTests: XCTestCase {
         let selectedPhotoEnd = try XCTUnwrap(map[selectedPhotoStart.lowerBound...].range(of: "func selectReviewCandidate("))
         let selectedPhoto = String(map[selectedPhotoStart.lowerBound..<selectedPhotoEnd.lowerBound])
         XCTAssertTrue(
-            selectedPhoto.contains("try await supabaseService.updatePlace(updatedPlace, previous: place)"),
+            selectedPhoto.contains("merged.businessPhotoUrls = updatedPlace.businessPhotoUrls")
+                && selectedPhoto.contains("try await supabaseService.updatePlace(merged, previous: latest)"),
             "P2 4366403967: selected-place enrichment PATCHes the enriched identity"
         )
         XCTAssertTrue(
@@ -3506,8 +3529,27 @@ final class SAVEProductionConfigTests: XCTestCase {
             "confirming a matching Review candidate must park the original item on PATCH cap"
         )
         XCTAssertTrue(
-            map.contains("try await mergeSavedSources(incoming, into: match) {\n                try parkExistingReviewCandidate("),
+            map.contains("try await mergeSavedSources(incoming, into: match, exactResolution: resolution) {\n                try parkExistingReviewCandidate("),
             "exact-search merge onto an existing stamp must park the original clue on PATCH cap"
+        )
+        let recordStart = try XCTUnwrap(map.range(of: "private func recordCorrectionEvent("))
+        let recordEnd = try XCTUnwrap(map.range(of: "static func legacyCandidateStatus("))
+        let record = String(map[recordStart.lowerBound..<recordEnd.lowerBound])
+        XCTAssertTrue(
+            record.contains("Self.hasRemoteDecisionLink(candidate)"),
+            "remote-backed Unplaced still PATCHes / decides"
+        )
+        XCTAssertTrue(
+            record.contains("eventType == .confirmCandidate && !candidate.isUnplacedInbox"),
+            "exact-search retire without captureId still sends the legacy candidate PATCH"
+        )
+        XCTAssertFalse(
+            record.contains("} else if candidate.captureId != nil {"),
+            "captureId alone is not the skip — that also dropped exact-search retire writes"
+        )
+        XCTAssertFalse(
+            record.contains("} else if !candidate.isUnplacedInbox {"),
+            "isUnplacedInbox alone is not the skip — that dropped remote-backed Unplaced PATCH"
         )
         let chooseStampStart = try XCTUnwrap(map.range(of: "func resolveExactSearchClue(toSavedPlace place: Place)"))
         let chooseStampEnd = try XCTUnwrap(map.range(of: "func completeExactSearchMergeOntoExistingStamp"))
@@ -4464,6 +4506,103 @@ final class SAVEProductionConfigTests: XCTestCase {
                     route == "remote-cap" ? (failWriteFirst ? 2 : 1) : 0)
             }
         }
+    }
+
+    @MainActor
+    func testHopU1ExactSearchAtFreeCapParksToUnplacedWithoutManManCopy() async throws {
+        let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
+        let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
+        XCTAssertTrue(paywall.contains("accessibilityIdentifier(\"paywall.root\")"))
+        XCTAssertTrue(paywall.contains("已存 50 個地點，繼續存下去"))
+        XCTAssertTrue(saves.contains("saves.unplaced"))
+        XCTAssertFalse(paywall.contains("已滿"))
+        XCTAssertFalse(saves.contains("已滿"))
+
+        let auth = PrivyAuthService.shared
+        let previousAuth = auth.authState
+        let previousDefaults = SavePlaceLimitHandoff.testDefaults
+        defer {
+            auth.authState = previousAuth
+            SavePlaceLimitHandoff.testDefaults = previousDefaults
+        }
+        auth.authState = .authenticated(userId: "u1-owner")
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.hop-u1.\(UUID())")
+        let map = makeCappedMap(tier: .free)
+        map.places = makeCappedPlaces(50)
+        var clue = contextualReviewCandidate(owner: "u1-owner", workflow: true)
+        clue.latitude = nil
+        clue.longitude = nil
+        map.reviewCandidates = [clue]
+        map.selectedReviewCandidate = clue
+        let candidate = SaveMapCandidate(
+            id: "u1-exact",
+            title: "U1 Search Cafe",
+            subtitle: "Da'an",
+            latitude: 25.03,
+            longitude: 121.54,
+            category: .cafe
+        )
+        map.mapCandidates = [candidate]
+        map.beginExactSearchResolution(for: clue)
+
+        do {
+            _ = try await map.saveMapCandidateAsPlace(candidate)
+            XCTFail("U-1: the 51st exact-search save must park, not stamp")
+        } catch is SavePlaceLimitError {}
+
+        XCTAssertEqual(map.places.count, 50, "server/local stamp count stays at 50")
+        XCTAssertEqual(map.reviewCandidates.count, 1)
+        XCTAssertEqual(map.reviewCandidates.first?.id, clue.id)
+        XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+        XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.name.contains("已滿") })
+    }
+
+    @MainActor
+    func testHopU1ExactSearchBelowCapStillSavesAndProIsUnlimited() async throws {
+        let free = makeCappedMap(tier: .free)
+        free.places = makeCappedPlaces(49)
+        var clue = contextualReviewCandidate(owner: "below-owner", workflow: false)
+        clue.latitude = nil
+        clue.longitude = nil
+        free.reviewCandidates = [clue]
+        let candidate = SaveMapCandidate(
+            id: "u1-below",
+            title: "Below Cap Cafe",
+            subtitle: "Da'an",
+            latitude: 25.04,
+            longitude: 121.55,
+            category: .cafe
+        )
+        free.mapCandidates = [candidate]
+        free.beginExactSearchResolution(for: clue)
+        let saved = try await free.saveMapCandidateAsPlace(candidate)
+        XCTAssertEqual(saved.name, "Below Cap Cafe")
+        XCTAssertEqual(free.places.count, 50)
+        XCTAssertFalse(free.reviewCandidates.contains { $0.isUnplacedInbox })
+        XCTAssertFalse(free.shouldPresentSavedPlaceLimitPaywall)
+
+        let pro = makeCappedMap(tier: .pro)
+        pro.places = makeCappedPlaces(50)
+        var proClue = contextualReviewCandidate(owner: "pro-owner", workflow: false)
+        proClue.latitude = nil
+        proClue.longitude = nil
+        pro.reviewCandidates = [proClue]
+        let proCandidate = SaveMapCandidate(
+            id: "u1-pro",
+            title: "Pro Exact Cafe",
+            subtitle: "Da'an",
+            latitude: 25.05,
+            longitude: 121.56,
+            category: .cafe
+        )
+        pro.mapCandidates = [proCandidate]
+        pro.beginExactSearchResolution(for: proClue)
+        let proSaved = try await pro.saveMapCandidateAsPlace(proCandidate)
+        XCTAssertEqual(proSaved.name, "Pro Exact Cafe")
+        XCTAssertEqual(pro.places.count, 51)
+        XCTAssertFalse(pro.reviewCandidates.contains { $0.isUnplacedInbox })
+        XCTAssertFalse(pro.shouldPresentSavedPlaceLimitPaywall)
     }
 
     @MainActor

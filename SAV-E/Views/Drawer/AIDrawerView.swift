@@ -141,6 +141,8 @@ struct AIDrawerView: View {
     var onFindReviewPlace: ((PlaceReviewCandidate) -> Void)? = nil
     /// Reliable Review map tap focuses that candidate without a new search.
     var onFocusReviewCandidateOnMap: (PlaceReviewCandidate) -> Void = { _ in }
+    /// Saved-place detail "View on map" focuses that stamp on the Map tab.
+    var onShowPlaceOnMap: (Place) -> Void = { _ in }
     @FocusState private var searchFocused: Bool
     @ScaledMetric(relativeTo: .body) private var commandIconDimension: CGFloat = 28
     @ScaledMetric(relativeTo: .body) private var commandBarMinHeight: CGFloat = 52
@@ -256,6 +258,7 @@ struct AIDrawerView: View {
             onFocusReviewCandidateOnMap: { candidate in
                 focusKnownReviewCandidateOnMap(candidate)
             },
+            onShowPlaceOnMap: onShowPlaceOnMap,
             onSaveCandidate: { candidate, nameOverride in
                 performCandidateAction(candidate, successMessage: saveFeedback(for: candidate)) {
                     try await onSaveCandidate(candidate, nameOverride)
@@ -1362,11 +1365,10 @@ struct AIDrawerView: View {
     private func closeDrawerContent() {
         cancelMapSearch()
         voiceQuery.stop()
-        let shouldClearMapSearch = hasVisibleMapSearchResults
         viewModel.reset()
-        if shouldClearMapSearch {
-            onClearMapSearchResults(true)
-        }
+        // Loading and error states have empty `mapCandidates`. Closing the
+        // drawer is cancellation and must still end an exact-search session.
+        onClearMapSearchResults(true)
         searchFocused = false
         withAnimation { drawerDetent = collapsedDrawerDetent }
     }
@@ -1589,6 +1591,7 @@ struct MapDetailDrawerView: View {
     let onFindExactPlaceCandidate: (PlaceReviewCandidate) -> Void
     var onAddReviewClue: ((PlaceReviewCandidate) -> Void)? = nil
     var onFocusReviewCandidateOnMap: (PlaceReviewCandidate) -> Void = { _ in }
+    var onShowPlaceOnMap: (Place) -> Void = { _ in }
     let onSaveCandidate: (PlaceReviewCandidate, String?) -> Void
     let onRejectCandidate: (PlaceReviewCandidate) -> Void
     let onSaveCandidateAsSourceOnly: (PlaceReviewCandidate) -> Void
@@ -1910,6 +1913,7 @@ struct MapDetailDrawerView: View {
                         place: place,
                         onRecommendOrder: { onRecommendOrder(place) },
                         onPlanAroundPlace: { onPlanAroundPlace(place) },
+                        onShowOnMap: { onShowPlaceOnMap(place) },
                         onAddToTrip: { onAddPlaceToTrip(place) },
                         onDeletePlace: {
                             try await onDeletePlace(place)
@@ -2409,6 +2413,7 @@ private struct SavedMapDetailDrawerContent: View {
     let place: Place
     let onRecommendOrder: () -> Void
     let onPlanAroundPlace: () -> Void
+    var onShowOnMap: () -> Void = {}
     let onAddToTrip: () -> Void
     let onDeletePlace: () async throws -> Void
     let onUpdatePlace: (Place) async throws -> Void
@@ -2442,6 +2447,16 @@ private struct SavedMapDetailDrawerContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             postcardIdentity
+
+            Button(action: onShowOnMap) {
+                Text(languageSettings.localized(english: "View on map", traditionalChinese: "在地圖上查看"))
+                    .font(SaveAtlasType.strong(15))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("home.row.showOnMap")
 
             // Business photo gallery: the postcard corner shows one shot, but
             // enrichment fetches several — surface them all as a swipeable

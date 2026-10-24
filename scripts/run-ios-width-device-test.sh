@@ -80,7 +80,8 @@ case "$width" in
         prefs='com.apple.CoreSimulator.SimDeviceType.iPhone-14,com.apple.CoreSimulator.SimDeviceType.iPhone-13,com.apple.CoreSimulator.SimDeviceType.iPhone-12'
         ;;
     430)
-        prefs='com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro-Max,com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro-Max'
+        # iPhone 16 Pro Max is 440pt. Do not pick it for 430 evidence.
+        prefs='com.apple.CoreSimulator.SimDeviceType.iPhone-15-Pro-Max,com.apple.CoreSimulator.SimDeviceType.iPhone-16-Plus,com.apple.CoreSimulator.SimDeviceType.iPhone-15-Plus,com.apple.CoreSimulator.SimDeviceType.iPhone-14-Pro-Max'
         ;;
     *)
         echo "width must be 375, 390, or 430 (got $width)" >&2

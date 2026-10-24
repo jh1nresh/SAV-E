@@ -1,12 +1,12 @@
 #!/usr/bin/env swift
 
 import AppKit
+import CoreGraphics
 import Foundation
 
 private let width = 402
 private let height = 874
 private let ignoredTopRows = 48
-/// Mask luminance at or above this value (white = ignore) skips grading.
 private let maskIgnoreLuminance = 240.0
 private let inkLuminance = 200.0
 
@@ -16,6 +16,18 @@ private struct Options {
     let diff: URL
     let mask: URL?
     let threshold: Double
+    let ignoreRects: [CGRect]
+    let ignoreMask: URL?
+}
+
+private struct Scores {
+    let composite: Double
+    let position: Double
+    let size: Double
+    let color: Double
+    let fontStyle: Double
+    let edgeF1: Double
+    let appearanceSimilarity: Double
 }
 
 private struct Scores {
@@ -38,8 +50,7 @@ private enum ParityError: Error, CustomStringConvertible {
     var description: String {
         switch self {
         case .usage:
-            return "usage: VisualParity.swift --target target.png --actual actual.png --diff diff.png [--mask mask.png] [--threshold 0.90]"
-        case let .unreadableImage(url):
+            return "usage: VisualParity.swift --target target.png --actual actual.png --diff diff.png [--mask mask.png] [--threshold 0.90] [--ignore-mask mask.png]"        case let .unreadableImage(url):
             return "could not read image: \(url.path)"
         case let .unexpectedDimensions(url, actualWidth, actualHeight, expectation):
             return "expected \(expectation), found \(actualWidth)x\(actualHeight): \(url.path)"
@@ -53,9 +64,21 @@ private enum ParityError: Error, CustomStringConvertible {
 
 private func parseOptions() throws -> Options {
     var values: [String: String] = [:]
+    var ignoreRects: [CGRect] = []
+    var ignoreMask: URL?
     var index = 1
     while index + 1 < CommandLine.arguments.count {
-        values[CommandLine.arguments[index]] = CommandLine.arguments[index + 1]
+        let key = CommandLine.arguments[index]
+        let value = CommandLine.arguments[index + 1]
+        if key == "--ignore-rect" {
+            let parts = value.split(separator: ",").compactMap { Double($0) }
+            guard parts.count == 4 else { throw ParityError.usage }
+            ignoreRects.append(CGRect(x: parts[0], y: parts[1], width: parts[2], height: parts[3]))
+        } else if key == "--ignore-mask" {
+            ignoreMask = URL(fileURLWithPath: value)
+        } else {
+            values[key] = value
+        }
         index += 2
     }
 
@@ -72,8 +95,9 @@ private func parseOptions() throws -> Options {
         actual: URL(fileURLWithPath: actual),
         diff: URL(fileURLWithPath: diff),
         mask: values["--mask"].map(URL.init(fileURLWithPath:)),
-        threshold: Double(values["--threshold"] ?? "0.90") ?? 0.90
-    )
+        threshold: Double(values["--threshold"] ?? "0.90") ?? 0.90,
+        ignoreRects: ignoreRects,
+        ignoreMask: ignoreMask    )
 }
 
 private func strictRGBA(
@@ -157,9 +181,19 @@ private func gradient(_ pixels: [UInt8], x: Int, y: Int) -> Double {
     return hypot(horizontal, vertical)
 }
 
-private func isIgnored(_ mask: [UInt8]?, x: Int, y: Int) -> Bool {
-    if y < ignoredTopRows {
+/// Home `--mask` keeps the default status-bar ignore. Map `--ignore-mask`
+/// scores the status bar (DESIGN: white = ignore only the live Maps area).
+private func isIgnored(
+    _ mask: [UInt8]?,
+    x: Int,
+    y: Int,
+    rects: [CGRect],
+    skipDefaultTopRows: Bool
+) -> Bool {
+    if !skipDefaultTopRows, y < ignoredTopRows {
         return true
+    }
+    if rects.contains(where: { $0.contains(CGPoint(x: x, y: y)) }) {        return true
     }
     guard let mask else {
         return false
@@ -172,9 +206,10 @@ private func hasEdge(
     _ edgeMap: [Bool],
     nearX x: Int,
     y: Int,
-    radius: Int = 2
+    radius: Int = 2,
+    minY: Int = ignoredTopRows
 ) -> Bool {
-    for candidateY in max(ignoredTopRows, y - radius)...min(height - 1, y + radius) {
+    for candidateY in max(minY, y - radius)...min(height - 1, y + radius) {
         for candidateX in max(0, x - radius)...min(width - 1, x + radius) {
             if edgeMap[candidateY * width + candidateX] {
                 return true
@@ -196,7 +231,8 @@ private func writeDiff(
     target: [UInt8],
     actual: [UInt8],
     mask: [UInt8]?,
-    to url: URL
+    ignoreRects: [CGRect],
+    skipDefaultTopRows: Bool,    to url: URL
 ) throws {
     guard let bitmap = NSBitmapImageRep(
         bitmapDataPlanes: nil,
@@ -220,8 +256,7 @@ private func writeDiff(
         for x in 0..<width {
             let pixel = y * width + x
             let offset = pixel * 4
-            if isIgnored(mask, x: x, y: y) {
-                destination[offset] = 210
+            if isIgnored(mask, x: x, y: y, rects: ignoreRects, skipDefaultTopRows: skipDefaultTopRows) {                destination[offset] = 210
                 destination[offset + 1] = 210
                 destination[offset + 2] = 210
                 destination[offset + 3] = 255
@@ -248,8 +283,14 @@ private func writeDiff(
     }
 }
 
-private func score(target: [UInt8], actual: [UInt8], mask: [UInt8]?) -> Scores {
-    let edgeThreshold = 18.0
+private func score(
+    target: [UInt8],
+    actual: [UInt8],
+    mask: [UInt8]?,
+    ignoreRects: [CGRect],
+    skipDefaultTopRows: Bool,
+    useGraded: Bool
+) -> Scores {    let edgeThreshold = 18.0
     var targetEdges = [Bool](repeating: false, count: width * height)
     var actualEdges = [Bool](repeating: false, count: width * height)
     var targetRows = [Double](repeating: 0, count: height)
@@ -258,11 +299,11 @@ private func score(target: [UInt8], actual: [UInt8], mask: [UInt8]?) -> Scores {
     var actualCols = [Double](repeating: 0, count: width)
     var targetBins = [Double](repeating: 0, count: 8)
     var actualBins = [Double](repeating: 0, count: 8)
+    let edgeMinY = skipDefaultTopRows ? 0 : ignoredTopRows
 
     for y in 0..<height {
         for x in 0..<width {
-            if isIgnored(mask, x: x, y: y) {
-                continue
+            if isIgnored(mask, x: x, y: y, rects: ignoreRects, skipDefaultTopRows: skipDefaultTopRows) {                continue
             }
             let index = y * width + x
             targetEdges[index] = gradient(target, x: x, y: y) >= edgeThreshold
@@ -281,21 +322,20 @@ private func score(target: [UInt8], actual: [UInt8], mask: [UInt8]?) -> Scores {
 
     for y in 0..<height {
         for x in 0..<width {
-            if isIgnored(mask, x: x, y: y) {
-                continue
+            if isIgnored(mask, x: x, y: y, rects: ignoreRects, skipDefaultTopRows: skipDefaultTopRows) {                continue
             }
             let pixel = y * width + x
             let offset = pixel * 4
 
             if targetEdges[pixel] {
                 targetEdgeCount += 1
-                if hasEdge(actualEdges, nearX: x, y: y) {
+                if hasEdge(actualEdges, nearX: x, y: y, minY: edgeMinY) {
                     matchedTargetEdges += 1
                 }
             }
             if actualEdges[pixel] {
                 actualEdgeCount += 1
-                if hasEdge(targetEdges, nearX: x, y: y) {
+                if hasEdge(targetEdges, nearX: x, y: y, minY: edgeMinY) {
                     matchedActualEdges += 1
                 }
             }
@@ -353,8 +393,7 @@ private func score(target: [UInt8], actual: [UInt8], mask: [UInt8]?) -> Scores {
     let fontStyle = 1 - profileDistance(targetBins, actualBins)
     let gradedComposite = (position + size + color + fontStyle) / 4
     let legacyComposite = 0.35 * edgeF1 + 0.65 * appearanceSimilarity
-    let composite = mask == nil ? legacyComposite : gradedComposite
-
+    let composite = useGraded ? gradedComposite : legacyComposite
     return Scores(
         composite: composite,
         position: position,
@@ -368,12 +407,30 @@ private func score(target: [UInt8], actual: [UInt8], mask: [UInt8]?) -> Scores {
 
 do {
     let options = try parseOptions()
-    let target = try strictRGBA(from: options.target, allowedPixelScales: 1...1)
+    // Home stays 1× 402×874. Map goldens are the 3× CI Taipei capture.
+    let target = try strictRGBA(from: options.target, allowedPixelScales: 1...4)
     let actual = try strictRGBA(from: options.actual, allowedPixelScales: 1...4)
-    let mask = try options.mask.map { try strictRGBA(from: $0, allowedPixelScales: 1...1) }
-    let result = score(target: target, actual: actual, mask: mask)
-    try writeDiff(target: target, actual: actual, mask: mask, to: options.diff)
-
+    let maskURL = options.mask ?? options.ignoreMask
+    let mask = try maskURL.map { try strictRGBA(from: $0, allowedPixelScales: 1...1) }
+    // Map `--ignore-mask` scores status-bar chrome. Home `--mask` keeps y<48 ignored.
+    let skipDefaultTopRows = options.ignoreMask != nil && options.mask == nil
+    let useGraded = options.mask != nil
+    let result = score(
+        target: target,
+        actual: actual,
+        mask: mask,
+        ignoreRects: options.ignoreRects,
+        skipDefaultTopRows: skipDefaultTopRows,
+        useGraded: useGraded
+    )
+    try writeDiff(
+        target: target,
+        actual: actual,
+        mask: mask,
+        ignoreRects: options.ignoreRects,
+        skipDefaultTopRows: skipDefaultTopRows,
+        to: options.diff
+    )
     let payload: [String: Any] = [
         "target": options.target.path,
         "actual": options.actual.path,
@@ -387,8 +444,12 @@ do {
         "edgeF1": result.edgeF1,
         "appearanceSimilarity": result.appearanceSimilarity,
         "threshold": options.threshold,
-        "passed": result.composite >= options.threshold
-    ]
+        "passed": result.composite >= options.threshold,
+        "ignoredTopRows": skipDefaultTopRows ? 0 : ignoredTopRows,
+        "ignoreRects": options.ignoreRects.map {
+            ["x": $0.origin.x, "y": $0.origin.y, "width": $0.size.width, "height": $0.size.height]
+        },
+        "ignoreMask": options.ignoreMask?.path ?? NSNull()    ]
     let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
     print(String(decoding: data, as: UTF8.self))
     exit(result.composite >= options.threshold ? 0 : 1)

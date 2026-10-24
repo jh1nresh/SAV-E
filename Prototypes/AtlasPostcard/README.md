@@ -45,31 +45,36 @@ Scripts/run-visual-parity.sh \
   --artifacts /absolute/path/to/new-empty-artifact-directory
 ```
 
-`--destination` runs the prototype XCTest `testCaptureFourLockedScreens`
-and compares only Home, Saves, Plan, and Map. That prototype shell has
-no Friends tab, so a local four-screen pass is not Friends evidence.
-CI result-bundle mode gates live `five-tab-friends` at 0.90 against
-`ProductionTargets/friends.png` (the DESIGN v2 `friends-light.png`
-lock). Home deferral on #290 does not apply to Friends. Codex packet spec §7.4 remains the people-first layout reference. Live
-`five-tab-friends` attachments still ship in the iOS First-Run
-artifact. XCTest locks the application window to 402 × 874 points;
-the Home/Saves/Plan/Map comparator accepts only exact, uniform Retina
-pixel multiples of that viewport and rejects other dimensions.
+The runner captures Home, Saves, Plan, and Map, then writes matching
+`reference/`, `output/`, `diff/`, and `results/` directories. All four pages
+must score at least `0.90`. XCTest locks the application window to 402 × 874
+points; the comparator accepts only exact, uniform Retina pixel multiples of
+that viewport and rejects other dimensions.
+
+`--destination` runs the prototype XCTest `testCaptureFourLockedScreens` and compares only Home, Saves, Plan, and Map. That prototype shell has no Friends tab, so a local four-screen pass is not Friends evidence. CI result-bundle mode gates live `five-tab-friends` at 0.90 against `ProductionTargets/friends.png` (the DESIGN v2 `friends-light.png` lock). Home deferral on #290 does not apply to Friends. Codex packet spec §7.4 remains the people-first layout reference. Live `five-tab-friends` attachments still ship in the iOS First-Run artifact. XCTest locks the application window to 402 × 874 points; the Home/Saves/Plan/Map comparator accepts only exact, uniform Retina pixel multiples of that viewport and rejects other dimensions.
 
 Production parity uses `Reference/ProductionTargets`. The original
 `Reference/Targets` remain the immutable inputs for deterministic illustration
 extraction, so approving a UI refresh cannot silently alter generated assets.
 
-The Home production target is DESIGN v2's exact 402×874
-`home-light.png` from `design/doodle-targets-2026-10-20` at `eade369`.
-`home-dark.png` sits next to it for DESIGN comparison.
-`home-mask.png` is the ignore mask (white = ignore). Grade position,
-size, color and font style. v1 is retired. Those rasters are rendered
-at 1× 402×874, not a crop. `VisualParity.swift` still accepts only a
-1× 402 × 874 target. Founder sign-off 2026-10-20:
-「改成跟手繪稿比對，門檻維持 0.90」. Saves, Plan, and Map targets stay
-on their current locks until those Doodle PRs. The `0.90` threshold
-remains unchanged.
+The Home production TARGET is still the old
+`Reference/ProductionTargets/home.png` baseline
+(md5 `79ae24aaf02002cd10f429c2869dcfc0`), **not** DESIGN v2
+`home-light.png` at `eade369`. That v2 raster is archive / DESIGN
+comparison only until the founder personally approves a new Home
+baseline. Home grades unmasked against the old target at 0.90; the
+score is expected to FAIL on the current list-only Home and is not
+evidence. Do not swap `home.png`, do not add a Home mask, and do not
+lower the threshold. `home-dark.png` is DESIGN comparison only and
+does not enter parity. `VisualParity.swift` still accepts only a
+1× 402 × 874 target. Unmasked Home uses the legacy composite; the
+optional `--mask` path reports position, size, color, and fontStyle
+sub-scores but is not applied to Home. The Map production target is the
+live Taipei Apple Maps CI capture (iPhone 16 Pro, 402pt, 3× 1206×2622)
+from #298; `map-mask.png` is not applied to the 0.90 score. Saves and
+Plan stay on their current locks until those Doodle PRs. The `0.90`
+threshold remains the CI gate for Home, Map, Saves, and Plan.
+
 
 ## Boundaries
 

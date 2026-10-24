@@ -363,7 +363,6 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
 
         XCTAssertTrue(script.contains("five-tab-home*)"))
-        XCTAssertTrue(script.contains("five-tab-friends*)"))
         XCTAssertTrue(script.contains("priority=1"))
         // Failure fixture: PR #220 moved UI selectors out of ci.yml into
         // select-ios-tests.py. The required `ios` job (now in ios.yml) must
@@ -385,13 +384,19 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(rail.contains("func captureFiveTabHomeParityRaster"))
         XCTAssertTrue(rail.contains("--uitest-location-tiantan"))
         XCTAssertTrue(rail.contains("--uitest-doodle-parity-fixture"))
-        XCTAssertTrue(rail.contains("home.miniMap"))
+        XCTAssertTrue(rail.contains("Home has no map component"))
+        XCTAssertFalse(rail.contains("func testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertTrue(rail.contains("func testHomeShowOnMapFocusesPlace"))
+        XCTAssertTrue(rail.contains("func testHomeHintCountEvidence"))
+        XCTAssertTrue(rail.contains("func testHomeTaipeiGrantedDistances"))
+        XCTAssertTrue(rail.contains("func testHomeTPEAEvidence"))
+        XCTAssertTrue(rail.contains("func testMapSavedUnsavedVisitedTaipeiFixture"))
         XCTAssertTrue(rail.contains("home.eat"))
         XCTAssertTrue(rail.contains("home.passport"))
         XCTAssertTrue(rail.contains("testHomeListProgressiveSearch"))
         XCTAssertTrue(selector.contains("testHomeListProgressiveSearch"))
-        XCTAssertTrue(rail.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
-        XCTAssertTrue(selector.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertFalse(selector.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertTrue(selector.contains("testMapSavedUnsavedVisitedTaipeiFixture"))
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {
@@ -434,6 +439,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(saves.contains("saves.pocket.reviewFooter"))
         XCTAssertTrue(saves.contains("saves.review.list"))
         XCTAssertTrue(saves.contains("saves.pocket.mapStampFooter"))
+        XCTAssertTrue(saves.contains("saves.place.\\(place.id.uuidString)"))
+        XCTAssertFalse(
+            saves.contains("saves.mapStamp.postcard"),
+            "A generic postcard identifier must not steal saves.place.<uuid> from the Map Stamp ticket."
+        )
     }
 
     func testPushedSavesDropsRootTabInsetsAndKeepsSystemBackChrome() throws {

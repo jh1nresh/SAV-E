@@ -51,6 +51,7 @@ struct ProfileView: View {
     var onUpdatePlace: (Place) async throws -> Void = { _ in }
     var onOpenPlace: (Place) -> Void = { _ in }
     var isRootTab = false
+    var collectionMode: SavePassportCollectionMode = .collection
     @Binding var requestsConnections: Bool
     @State private var opensConnections = false
     @State private var opensListsDirectly = false
@@ -71,23 +72,15 @@ struct ProfileView: View {
         localSavedPlaces
     }
 
-    /// Home Collected sheet uses city X/Y. The root Passport tab stays the
-    /// full collection — city scope must not hide other cities or an
-    /// unresolved Near you.
     private var cityStampPlaces: [Place] {
-        // The sheet mounts with `localSavedPlaces == []` until `.task` runs.
-        // Home already showed Collected from `savedPlaces`; do not wait.
+        // Use the supplied collection before the local snapshot finishes loading.
         let source = localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces
-        guard !isRootTab else { return source }
-        let scoped = SaveDoodleHomeProgressCatalog.cityPlaces(
+        return collectionMode.places(
             from: source,
             selection: session.city,
             location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
             locationDenied: locationService.isAuthorizationDenied
         )
-        // Collected must not open a blank Passport when Near you cannot
-        // resolve (denied + no fix, or a newest save with no locality).
-        return scoped.isEmpty ? source : scoped
     }
 
     private var todayMissions: [SavePassportTodayMission] {
@@ -120,7 +113,7 @@ struct ProfileView: View {
                             : SaveTheme.Spacing.lg
                     )
 
-                    PassportTileTownCollection(places: cityStampPlaces, onOpenPlace: onOpenPlace)
+                    PassportTileTownCollection(places: cityStampPlaces, collectionMode: collectionMode, onOpenPlace: onOpenPlace)
                         .padding(.horizontal, 16)
 
                     passportIdentity
@@ -2321,14 +2314,15 @@ private struct PassportBadge: View {
 private struct PassportTileTownCollection: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let places: [Place]
+    let collectionMode: SavePassportCollectionMode
     var onOpenPlace: (Place) -> Void = { _ in }
 
     private var goal: Int {
         SaveTileTownProductLock.passportGoal(for: places.count)
     }
 
-    private var cityProgress: (visited: Int, saved: Int) {
-        SaveDoodleHomeProgressCatalog.progress(in: places)
+    private var collectionProgress: (completed: Int, total: Int) {
+        collectionMode.progress(in: places)
     }
 
     private var lockedCount: Int {
@@ -2343,12 +2337,12 @@ private struct PassportTileTownCollection: View {
             )
             .accessibilityLabel(languageSettings.localized(english: "Passport", traditionalChinese: "護照"))
             HStack {
-                Text("\(cityProgress.visited)/\(cityProgress.saved)")
+                Text("\(collectionProgress.completed)/\(collectionProgress.total)")
                     .font(SaveAtlasType.strong(13))
                     .foregroundStyle(SaveAtlasPalette.forest)
                     .accessibilityIdentifier("profile.stampProgress")
-                    .accessibilityLabel("\(cityProgress.visited)/\(cityProgress.saved)")
-                    .accessibilityValue("\(cityProgress.visited) of \(cityProgress.saved)")
+                    .accessibilityLabel("\(collectionProgress.completed)/\(collectionProgress.total)")
+                    .accessibilityValue("\(collectionProgress.completed) of \(collectionProgress.total)")
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(SaveAtlasPalette.kraft.opacity(0.45))
@@ -2392,8 +2386,8 @@ private struct PassportTileTownCollection: View {
     }
 
     private var progress: CGFloat {
-        guard cityProgress.saved > 0 else { return 0 }
-        return min(1, CGFloat(cityProgress.visited) / CGFloat(cityProgress.saved))
+        guard collectionProgress.total > 0 else { return 0 }
+        return min(1, CGFloat(collectionProgress.completed) / CGFloat(collectionProgress.total))
     }
 }
 
