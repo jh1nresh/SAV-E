@@ -681,6 +681,30 @@ for (const route of ["reuseCapture", "prepareCandidate", "reconcileSavedCandidat
   });
 }
 
+test("candidate confirm PATCH uses the same growth refusal as place writes", () => {
+  const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+  const candidates = server.slice(
+    server.indexOf("async function handleMemoryCandidates"),
+    server.indexOf("async function handleMemoryDecisions"),
+  );
+  const post = candidates.slice(
+    candidates.indexOf('if (request.method === "POST" && !candidateId)'),
+    candidates.indexOf('if (request.method === "PATCH" && candidateId)'),
+  );
+  const patch = candidates.slice(candidates.indexOf('if (request.method === "PATCH" && candidateId)'));
+  assert.match(post, /assertSavedPlaceGrowthAllowed/);
+  assert.match(patch, /reconcileSavedCandidates/);
+  assert.match(patch, /assertSavedPlaceGrowthAllowed/);
+  assert.ok(
+    patch.indexOf("reconcileSavedCandidates") < patch.indexOf("assertSavedPlaceGrowthAllowed"),
+    "chronology reconcile must run before the shared growth guard so a 51st group rolls back",
+  );
+  assert.match(server, /error instanceof SavedPlaceLimitError/);
+  const error = new SavedPlaceLimitError();
+  assert.deepEqual(error.body, { error: "saved_place_limit", code: "over_free_limit", limit: 50 });
+  assert.equal(error.status, 403);
+});
+
 test("every chronology caller guards the enclosing transaction with owner lock before row locks", () => {
   const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
   for (const [start, end] of [

@@ -4117,11 +4117,18 @@ final class MapViewModel: ObservableObject {
             self.places[index].openingHours = self.places[index].openingHours ?? enriched.openingHours
             let updated = self.places[index]
             if self.selectedPlace?.id == id { self.selectedPlace = updated }
-            try? self.mirrorToLocalVault(updated, startedBy: userID, generation: generation)
-            guard self.usesRemotePersistence else { return }
+            guard self.usesRemotePersistence else {
+                try? self.mirrorToLocalVault(updated, startedBy: userID, generation: generation)
+                return
+            }
             do {
                 try await self.supabaseService.updatePlace(updated, previous: place)
+                try? self.mirrorToLocalVault(updated, startedBy: userID, generation: generation)
             } catch {
+                if let current = self.places.firstIndex(where: { $0.id == id }) {
+                    self.places[current] = place
+                    if self.selectedPlace?.id == id { self.selectedPlace = place }
+                }
                 print("MapViewModel: failed to sync Home photo: \(error)")
             }
         }
@@ -4144,14 +4151,20 @@ final class MapViewModel: ObservableObject {
         if let index = places.firstIndex(where: { $0.id == place.id }) {
             places[index] = updatedPlace
         }
-        try? mirrorToLocalVault(updatedPlace, startedBy: owner, generation: generation)
 
         do {
             // updatePlace PATCHes the existing row; the create endpoint is a
             // plain insert and 500s on the duplicate id, which silently kept
             // enriched photos from ever persisting.
-            try await supabaseService.updatePlace(updatedPlace, previous: place)
+            if usesRemotePersistence {
+                try await supabaseService.updatePlace(updatedPlace, previous: place)
+            }
+            try? mirrorToLocalVault(updatedPlace, startedBy: owner, generation: generation)
         } catch {
+            selectedPlace = place
+            if let index = places.firstIndex(where: { $0.id == place.id }) {
+                places[index] = place
+            }
             print("MapViewModel: failed to sync business photo for \(place.name): \(error)")
         }
     }

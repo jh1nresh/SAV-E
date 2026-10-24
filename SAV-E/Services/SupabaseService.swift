@@ -746,9 +746,13 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             "status": candidate.isSourceOnly ? "source_only" : "review",
             "created_at": ISO8601DateFormatter().string(from: candidate.savedAt),
         ])
-        let data = try await request(path: "/memory/candidates", method: "POST", body: body)
-        let row = try JSONDecoder.supabase.decode(PlaceCandidateRow.self, from: data)
-        return row.id
+        do {
+            let data = try await request(path: "/memory/candidates", method: "POST", body: body)
+            let row = try JSONDecoder.supabase.decode(PlaceCandidateRow.self, from: data)
+            return row.id
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     func recoverSourceOnlyReviewCandidates(captureId: UUID, workflowRunId: UUID? = nil, explicitRetry: Bool = false) async throws -> SourceSearchRecoveryResult {
@@ -817,7 +821,11 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
             values["place_id"] = placeId.uuidString
         }
         let body = try Self.jsonBody(values)
-        try await request(path: "/memory/candidates/\(candidateId)", method: "PATCH", body: body)
+        do {
+            try await request(path: "/memory/candidates/\(candidateId)", method: "PATCH", body: body)
+        } catch {
+            throw mappedSavedPlaceLimit(error)
+        }
     }
 
     // MARK: - Place Recovery Workflow

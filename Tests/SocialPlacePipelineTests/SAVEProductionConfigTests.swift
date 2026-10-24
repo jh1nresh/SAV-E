@@ -797,6 +797,162 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
+    func testLegacyCandidateConfirmPatchCapParksUnplaced() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        defer {
+            auth.authState = originalAuth
+            SavePlaceLimitHandoff.testDefaults = originalDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        let owner = "legacy-confirm-patch-cap"
+        auth.authState = .authenticated(userId: owner)
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.legacy-confirm-patch.\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let candidate = contextualReviewCandidate(owner: owner, workflow: false)
+        XCTAssertNotNil(candidate.captureId)
+        XCTAssertNil(candidate.workflowRunId)
+        try vault.saveReviewCandidate(candidate)
+        var patchedCandidate = false
+        var deletedInsertedStamp = false
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            let path = request.url?.path ?? ""
+            if request.httpMethod == "POST", path == "/places" {
+                return (201, "{}")
+            }
+            if request.httpMethod == "PATCH", path == "/memory/candidates/\(candidate.id.uuidString)" {
+                patchedCandidate = true
+                return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#)
+            }
+            if request.httpMethod == "DELETE", path.hasPrefix("/places/") {
+                deletedInsertedStamp = true
+                return (200, "{}")
+            }
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(
+            apiBaseURL: "https://legacy-confirm-patch.test",
+            session: URLSession(configuration: configuration),
+            accessTokenProvider: { "fixture-token" }
+        )
+        let map = MapViewModel(
+            supabaseService: service,
+            saveLocalVaultService: vault,
+            correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: directory.appendingPathComponent("events.json")),
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        map.reviewCandidates = [candidate]
+        map.selectedReviewCandidate = candidate
+        do {
+            _ = try await map.saveReviewCandidateAsPlace(candidate)
+            XCTFail("candidate-confirm PATCH cap must keep this item unconfirmed")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+        } catch {
+            XCTFail("expected SavePlaceLimitError, got \(error)")
+        }
+        XCTAssertTrue(patchedCandidate, "legacy confirm must PATCH /memory/candidates after POST /places")
+        XCTAssertTrue(deletedInsertedStamp, "compensation must delete the stamp inserted before the capped PATCH")
+        XCTAssertTrue(map.reviewCandidates.first?.isUnplacedInbox == true)
+        XCTAssertEqual(map.reviewCandidates.first?.id, candidate.id)
+        XCTAssertEqual(map.selectedReviewCandidate?.id, candidate.id)
+        XCTAssertTrue(map.selectedReviewCandidate?.isUnplacedInbox == true)
+        XCTAssertTrue(map.places.isEmpty, "the rolled-back POST must not remain a Map Stamp")
+        XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        XCTAssertTrue(try vault.confirmedPlaces(belongingTo: owner).isEmpty)
+        XCTAssertEqual(try vault.reviewCandidates(belongingTo: owner).first?.captureId, candidate.captureId)
+        XCTAssertTrue(try vault.reviewCandidates(belongingTo: owner).first?.isUnplacedInbox == true)
+    }
+
+    @MainActor
+    func testHomePhotoEnrichmentRestoresOriginalAfterCappedPatch() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let originalDefaults = SavePlaceLimitHandoff.testDefaults
+        defer {
+            auth.authState = originalAuth
+            SavePlaceLimitHandoff.testDefaults = originalDefaults
+            AnalysisRequestURLProtocol.reset()
+        }
+        let owner = "home-photo-patch-cap"
+        auth.authState = .authenticated(userId: owner)
+        SavePlaceLimitHandoff.testDefaults = UserDefaults(suiteName: "save.home-photo-patch.\(UUID())")
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let vault = SaveLocalVaultService(overrideVaultURL: directory.appendingPathComponent("vault.json"))
+        let place = Place(
+            id: UUID(),
+            name: "Memory Cafe",
+            address: "Irvine, CA",
+            latitude: 33.6849,
+            longitude: -117.8262,
+            googlePlaceId: nil,
+            category: .cafe,
+            status: .wantToGo,
+            rating: nil,
+            note: nil,
+            sourceUrl: nil,
+            sourcePlatform: .other,
+            sourceImageUrl: nil,
+            extractedDishes: nil,
+            priceRange: nil,
+            recommender: nil,
+            googleRating: nil,
+            googlePriceLevel: nil,
+            openingHours: nil,
+            createdAt: Date()
+        )
+        _ = try vault.saveConfirmedPlace(place, ownerSubject: owner)
+        var patchedPlace = false
+        AnalysisRequestURLProtocol.reset()
+        AnalysisRequestURLProtocol.handler = { request in
+            if request.httpMethod == "PATCH", request.url?.path == "/places/\(place.id.uuidString)" {
+                patchedPlace = true
+                return (403, #"{"error":"saved_place_limit","code":"over_free_limit","limit":50}"#)
+            }
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+        let service = SupabaseService(
+            apiBaseURL: "https://home-photo-patch.test",
+            session: URLSession(configuration: configuration),
+            accessTokenProvider: { "fixture-token" }
+        )
+        let map = MapViewModel(
+            supabaseService: service,
+            googlePlacesService: CappedHomePhotoGooglePlacesService(),
+            saveLocalVaultService: vault,
+            entitlementTierProvider: { .free },
+            entitlementResolvedProvider: { true },
+            usesRemotePersistence: true
+        )
+        map.places = [place]
+        map.selectedPlace = place
+        await map.refreshHomePlacePhoto(id: place.id)
+        XCTAssertTrue(patchedPlace, "enrichment must attempt the identity PATCH so restore is observable")
+        let restored = try XCTUnwrap(map.places.first)
+        XCTAssertEqual(restored.id, place.id)
+        XCTAssertNil(restored.googlePlaceId)
+        XCTAssertTrue(restored.businessPhotoURLStrings.isEmpty)
+        XCTAssertNil(restored.googleRating)
+        XCTAssertEqual(map.selectedPlace?.id, place.id)
+        XCTAssertNil(map.selectedPlace?.googlePlaceId)
+        XCTAssertTrue(map.selectedPlace?.businessPhotoURLStrings.isEmpty == true)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+        let persisted = try XCTUnwrap(vault.confirmedPlaces(belongingTo: owner).first { $0.id == place.id })
+        XCTAssertNil(persisted.googlePlaceId)
+        XCTAssertTrue(persisted.businessPhotoURLStrings.isEmpty)
+    }
+
+    @MainActor
     func testExistingReviewCapResponseAfterAccountSwitchDoesNotParkForNewOwner() async throws {
         let auth = PrivyAuthService.shared
         let originalAuth = auth.authState
@@ -3230,6 +3386,55 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(
             update.contains("throw mappedSavedPlaceLimit(error)"),
             "P2 4353381364: PATCH growth refusals must use the same structured-cap mapper as POST"
+        )
+        let candidateStatusStart = try XCTUnwrap(supabase.range(of: "func updatePlaceCandidateStatus(_ candidateId: UUID, status: String, placeId: UUID? = nil)"))
+        let candidateStatusEnd = try XCTUnwrap(supabase[candidateStatusStart.lowerBound...].range(of: "func createPlaceRecoveryWorkOrder("))
+        let candidateStatus = String(supabase[candidateStatusStart.lowerBound..<candidateStatusEnd.lowerBound])
+        XCTAssertTrue(
+            candidateStatus.contains("throw mappedSavedPlaceLimit(error)"),
+            "P2 4366403964: candidate-confirm PATCH must map over_free_limit like place writes"
+        )
+        let createCandidateStart = try XCTUnwrap(supabase.range(of: "func createPlaceCandidate(_ candidate: PendingReviewCandidate, captureId: UUID, userId: String, workflowRunId: UUID? = nil)"))
+        let createCandidateEnd = try XCTUnwrap(supabase[createCandidateStart.lowerBound...].range(of: "func recoverSourceOnlyReviewCandidates("))
+        let createCandidate = String(supabase[createCandidateStart.lowerBound..<createCandidateEnd.lowerBound])
+        XCTAssertTrue(
+            createCandidate.contains("throw mappedSavedPlaceLimit(error)"),
+            "P2 4366403964: candidate POST uses the same structured-cap mapper"
+        )
+
+        let homePhotoStart = try XCTUnwrap(map.range(of: "func refreshHomePlacePhoto(id: UUID) async"))
+        let homePhotoEnd = try XCTUnwrap(map[homePhotoStart.lowerBound...].range(of: "private func enrichSelectedPlacePhoto("))
+        let homePhoto = String(map[homePhotoStart.lowerBound..<homePhotoEnd.lowerBound])
+        XCTAssertTrue(
+            homePhoto.contains("try await self.supabaseService.updatePlace(updated, previous: place)"),
+            "P2 4366403967: Home photo enrichment PATCHes the enriched identity"
+        )
+        XCTAssertTrue(
+            homePhoto.contains("try? self.mirrorToLocalVault(updated, startedBy: userID, generation: generation)"),
+            "P2 4366403967: vault mirror waits until the photo PATCH succeeds"
+        )
+        XCTAssertTrue(
+            homePhoto.contains("self.places[current] = place"),
+            "P2 4366403967: a capped Home photo PATCH must restore the original stamp"
+        )
+        let selectedPhotoStart = homePhotoEnd
+        let selectedPhotoEnd = try XCTUnwrap(map[selectedPhotoStart.lowerBound...].range(of: "func selectReviewCandidate("))
+        let selectedPhoto = String(map[selectedPhotoStart.lowerBound..<selectedPhotoEnd.lowerBound])
+        XCTAssertTrue(
+            selectedPhoto.contains("try await supabaseService.updatePlace(updatedPlace, previous: place)"),
+            "P2 4366403967: selected-place enrichment PATCHes the enriched identity"
+        )
+        XCTAssertTrue(
+            selectedPhoto.contains("places[index] = place"),
+            "P2 4366403967: a capped selected-place photo PATCH must restore the original stamp"
+        )
+        XCTAssertFalse(
+            selectedPhoto.contains("parkIfServerSavedPlaceLimit"),
+            "photo enrichment of an existing stamp restores; it does not park Unplaced"
+        )
+        XCTAssertFalse(
+            selectedPhoto.contains("parkPlaceAfterPatchCap"),
+            "photo enrichment of an existing stamp restores; it does not park Unplaced"
         )
 
         XCTAssertTrue(map.contains("parkIfLimited: () throws -> Void"))
@@ -6651,6 +6856,43 @@ final class SAVEProductionConfigTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+    }
+}
+
+@MainActor
+private final class CappedHomePhotoGooglePlacesService: GooglePlacesServiceProtocol {
+    func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] {
+        [
+            GooglePlaceMatch(
+                id: "memory-cafe",
+                name: "Memory Cafe",
+                address: "Irvine, CA",
+                latitude: 33.6849,
+                longitude: -117.8262,
+                rating: 4.6,
+                photoReference: "memory-cafe-photo"
+            )
+        ]
+    }
+
+    func getPlaceDetails(placeId: String) async throws -> GooglePlaceDetails {
+        GooglePlaceDetails(
+            placeId: placeId,
+            name: "Memory Cafe",
+            formattedAddress: "Irvine, CA",
+            latitude: 33.6849,
+            longitude: -117.8262,
+            rating: 4.6,
+            priceLevel: nil,
+            openingHours: nil,
+            phoneNumber: nil,
+            websiteUrl: nil,
+            photoReferences: ["memory-cafe-photo"]
+        )
+    }
+
+    func photoURL(reference: String, maxWidth: Int) -> URL? {
+        URL(string: "https://example.com/memory-cafe.jpg")
     }
 }
 
