@@ -23,6 +23,11 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(capture.contains("capture.paste"))
         XCTAssertTrue(capture.contains("capture.analyze"))
         XCTAssertTrue(capture.contains("capture.importGoogleTakeout"))
+        XCTAssertTrue(capture.contains("captureSaveBar"))
+        XCTAssertFalse(
+            capture.contains(".safeAreaInset(edge: .bottom)"),
+            "Pinned Save must be a VStack sibling. A bottom inset covers Import file."
+        )
         XCTAssertTrue(capture.contains("capture.keyboardDone"))
         XCTAssertTrue(capture.contains("capture.flow"))
         XCTAssertTrue(capture.contains("Close capture"))
@@ -115,6 +120,10 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(paywall.contains("ScrollView"))
         XCTAssertTrue(paywall.contains("scrollBounceBehavior(.basedOnSize)"))
         XCTAssertTrue(paywall.contains("paywall.scroll"))
+        XCTAssertTrue(
+            paywall.contains(".accessibilityElement(children: .contain)\n            .accessibilityIdentifier(\"paywall.scroll\")"),
+            "paywall.scroll must stay on a contain wrapper so SE / large type can see it"
+        )
         XCTAssertFalse(paywall.contains("aiAssistExhausted"))
         XCTAssertFalse(paywall.contains("$6.99"))
         XCTAssertFalse(paywall.contains("$39.99"))

@@ -111,54 +111,16 @@ struct SaveCaptureFlowView: View {
                     .padding(.bottom, SaveSpace.lg)
                 }
                 .scrollDismissesKeyboard(.interactively)
+
+                // Keep Save as a real sibling. A bottom `safeAreaInset`
+                // painted over Import file so the in-sheet Postal swap
+                // never ran (run 40041793245 hierarchy: both frames
+                // at y≈746 on the half-screen detent).
+                captureSaveBar
             }
             .padding(.horizontal, SaveLayout.screenMargin)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(SaveAtlasPalette.paper.ignoresSafeArea())
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: SaveSpace.sm) {
-                    if isAIQuotaExhausted {
-                        Text(localized(
-                            "AI assist is unavailable right now. You can still save a link or import a file.",
-                            "目前無法使用 AI 協助。仍可從連結或檔案存地點。"
-                        ))
-                        .font(SaveAtlasType.body(13))
-                        .foregroundStyle(SaveAtlasPalette.muted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("ai.quotaExhausted")
-                    }
-
-                    Button(action: analyze) {
-                        HStack(spacing: SaveSpace.xs) {
-                            if isAnalyzing { ProgressView().tint(.white) }
-                            Text(isAnalyzing
-                                 ? localized("Analyzing…", "分析中…")
-                                 : localized("Save", "儲存"))
-                        }
-                        .font(SaveAtlasType.strong(17))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: SaveLayout.buttonHeight)
-                        .background(
-                            SaveAtlasPalette.coral,
-                            in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
-                        )
-                    }
-                    .disabled(!canSubmitDraft)
-                    .accessibilityIdentifier("capture.analyze")
-
-                    Text(savedCountText)
-                        .font(SaveAtlasType.body(13))
-                        .foregroundStyle(SaveAtlasPalette.muted)
-                        .frame(maxWidth: .infinity)
-                        .accessibilityIdentifier("capture.savedCount")
-                }
-                .padding(.horizontal, SaveLayout.screenMargin)
-                .padding(.top, SaveSpace.xs)
-                .padding(.bottom, SaveSpace.sm)
-                .background(SaveAtlasPalette.paper)
-            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(action: onCancel) {
@@ -173,6 +135,49 @@ struct SaveCaptureFlowView: View {
             }
             .toolbarBackground(.hidden, for: .navigationBar)
         }
+    }
+
+    private var captureSaveBar: some View {
+        VStack(spacing: SaveSpace.sm) {
+            if isAIQuotaExhausted {
+                Text(localized(
+                    "AI assist is unavailable right now. You can still save a link or import a file.",
+                    "目前無法使用 AI 協助。仍可從連結或檔案存地點。"
+                ))
+                .font(SaveAtlasType.body(13))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("ai.quotaExhausted")
+            }
+
+            Button(action: analyze) {
+                HStack(spacing: SaveSpace.xs) {
+                    if isAnalyzing { ProgressView().tint(.white) }
+                    Text(isAnalyzing
+                         ? localized("Analyzing…", "分析中…")
+                         : localized("Save", "儲存"))
+                }
+                .font(SaveAtlasType.strong(17))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: SaveLayout.buttonHeight)
+                .background(
+                    SaveAtlasPalette.coral,
+                    in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                )
+            }
+            .disabled(!canSubmitDraft)
+            .accessibilityIdentifier("capture.analyze")
+
+            Text(savedCountText)
+                .font(SaveAtlasType.body(13))
+                .foregroundStyle(SaveAtlasPalette.muted)
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("capture.savedCount")
+        }
+        .padding(.top, SaveSpace.xs)
+        .padding(.bottom, SaveSpace.sm)
     }
 
     private var header: some View {

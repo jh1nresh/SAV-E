@@ -37,6 +37,10 @@ struct SaveProPaywallView: View {
             SaveAtlasPalette.canvas
                 .ignoresSafeArea()
 
+            // Identifier lives on this contain wrapper, not the
+            // ScrollView. A bare ScrollView drops `paywall.scroll`
+            // from the XCTest tree on SE and AccessibilityXXXL
+            // (run 40041793245) even though paywall.root is present.
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     topBar
@@ -65,6 +69,7 @@ struct SaveProPaywallView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .scrollBounceBehavior(.basedOnSize)
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("paywall.scroll")
         }
         .presentationBackground(SaveAtlasPalette.canvas)
