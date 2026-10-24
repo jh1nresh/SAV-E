@@ -145,11 +145,11 @@ jobs:
           retention-days: 1
           overwrite: true
 
-  # Required check name `ios` (ruleset 19331432). Never skipped. This job
-  # is the full UI + snapshot + 0.90 parity suite and can succeed only when
-  # that suite actually ran.
+  # Required check name `ios` (ruleset 19331432). Never skipped: still runs
+  # when ios-build fails. !cancelled() (not always()) lets the existing
+  # concurrency group cancel a superseded run.
   ios:
-    if: always()
+    if: ${{ !cancelled() }}
     needs: [ios-build]
     runs-on: macos-26
     # Products come from ios-build (no second compile). Setup + units +
