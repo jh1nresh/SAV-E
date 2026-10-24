@@ -20,6 +20,7 @@ class CoverageTests(unittest.TestCase):
         baseline = set(json.loads((ROOT / "Tests/ci/full-ui-baseline.json").read_text()))
         self.assertEqual(actual, baseline | {
             selection.RAIL + "testHomeListProgressiveSearch",
+            selection.RAIL + "testMiniMapOpensMapWithCarriedFilterAndCityChange",
             selection.RAIL + "testHomeCollectedOpensPassportWithCityCount",
             selection.RAIL + "testSavesTripsBackReturnsToSaves",
             selection.RAIL + "testMapSavedUnsavedVisitedTaipeiFixture",

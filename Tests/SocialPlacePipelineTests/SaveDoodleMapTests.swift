@@ -135,6 +135,33 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(mini.contains(".mapStyle(.standard(emphasis: .automatic))"))
     }
 
+    func testMiniMapHandoffStillRemountsEatGo() throws {
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        XCTAssertTrue(map.contains("@EnvironmentObject private var session: SaveDoodleSession"))
+        XCTAssertTrue(map.contains("onChange(of: session.mapVisitResidueID)"))
+        XCTAssertTrue(map.contains("applyMiniMapHandoff()"))
+        XCTAssertTrue(map.contains("if session.mapFollowsHomeFilter"))
+        XCTAssertFalse(map.contains("session.mapFollowsHomeFilter = true\n            applyMiniMapHandoff()"))
+        XCTAssertTrue(map.contains("SaveDoodleHomeCatalog.listedPlaces("))
+        XCTAssertTrue(map.contains("session.lens"))
+        XCTAssertTrue(map.contains("session.city"))
+        XCTAssertTrue(map.contains("showsCityPicker = true"))
+        XCTAssertTrue(map.contains("session.mapFollowsHomeFilter = true"))
+        XCTAssertTrue(map.contains("onMapCameraChange(frequency: .onEnd)"))
+        XCTAssertTrue(map.contains("updateVisibleMapRegion(context.region)"))
+        XCTAssertTrue(map.contains("let selected = session.lens == item"))
+        XCTAssertTrue(map.contains("session.mapFollowsHomeFilter = true"))
+        XCTAssertFalse(map.contains("return mapViewModel.filteredPlaces"))
+        XCTAssertTrue(map.contains("map.card.visitError"))
+        XCTAssertTrue(map.contains("if !denied, let coordinate = locationService.currentLocation?.coordinate"))
+        XCTAssertTrue(map.contains("disabled(checkIns.isPersisting(placeID: place.id))"))
+        XCTAssertTrue(map.contains("map.city.\\(group.id)"))
+        XCTAssertTrue(map.contains("[.isButton, .isSelected] : .isButton"))
+        XCTAssertTrue(map.contains("consumeMiniMapHandoff()"))
+        XCTAssertTrue(map.contains(".id(visitResidue)"))
+        XCTAssertTrue(map.contains("showsCityPicker = false"))
+    }
+
     func testReplacementMapRendersCollaborativeListRoute() throws {
         let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
         let pinSource = try source(at: "SAV-E/Views/Map/MapView.swift")
@@ -386,10 +413,7 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(workflow.contains("iPhone-14"))
         XCTAssertTrue(workflow.contains("iPhone-16-Pro-Max"))
         XCTAssertFalse(workflow.contains("--uitest-map-width="))
-        XCTAssertTrue(rail.contains("298-7: Map tab uses Map's own state"))
-        XCTAssertFalse(map.contains("applyMiniMapHandoff()"))
-        XCTAssertFalse(map.contains("consumeMiniMapHandoff()"))
-        XCTAssertFalse(map.contains("if session.mapFollowsHomeFilter"))
+        XCTAssertTrue(rail.contains("298-7: tapping the Map tab directly must open Map"))
         XCTAssertTrue(rail.contains("298-2: product Map must be a live Apple MapKit surface"))
         XCTAssertTrue(rail.contains("298-5: place sheet must offer"))
         XCTAssertTrue(rail.contains("298-6: city chrome"))
@@ -408,7 +432,6 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(design.contains("Home and Map still fail CI below 0.90"))
         XCTAssertFalse(design.contains("0.90 visual-parity score is not evidence"))
         XCTAssertTrue(design.contains("Do not apply `map-mask.png` to the 0.90 score"))
-        XCTAssertTrue(design.contains("Map always uses its own state"))
         XCTAssertTrue(design.contains("coral outline lollipops"))
         XCTAssertFalse(design.contains("SaveTileTownRootMap"))
         XCTAssertFalse(FileManager.default.fileExists(
