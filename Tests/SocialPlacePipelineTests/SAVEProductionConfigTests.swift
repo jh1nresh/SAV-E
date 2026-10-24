@@ -3507,12 +3507,20 @@ final class SAVEProductionConfigTests: XCTestCase {
         let recordEnd = try XCTUnwrap(map.range(of: "static func legacyCandidateStatus("))
         let record = String(map[recordStart.lowerBound..<recordEnd.lowerBound])
         XCTAssertTrue(
-            record.contains("} else if !candidate.isUnplacedInbox {"),
-            "Unplaced skips place_candidates PATCH; ordinary exact-search clues without captureId still retire remotely"
+            record.contains("Self.hasRemoteDecisionLink(candidate)"),
+            "remote-backed Unplaced still PATCHes / decides"
+        )
+        XCTAssertTrue(
+            record.contains("eventType == .confirmCandidate && !candidate.isUnplacedInbox"),
+            "exact-search retire without captureId still sends the legacy candidate PATCH"
         )
         XCTAssertFalse(
             record.contains("} else if candidate.captureId != nil {"),
-            "captureId is not the Unplaced skip — that also dropped exact-search retire writes"
+            "captureId alone is not the skip — that also dropped exact-search retire writes"
+        )
+        XCTAssertFalse(
+            record.contains("} else if !candidate.isUnplacedInbox {"),
+            "isUnplacedInbox alone is not the skip — that dropped remote-backed Unplaced PATCH"
         )
         let chooseStampStart = try XCTUnwrap(map.range(of: "func resolveExactSearchClue(toSavedPlace place: Place)"))
         let chooseStampEnd = try XCTUnwrap(map.range(of: "func completeExactSearchMergeOntoExistingStamp"))

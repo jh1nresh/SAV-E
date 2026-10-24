@@ -3511,9 +3511,12 @@ final class MapViewModel: ObservableObject {
                 ),
                 for: runId
             )
-        } else if !candidate.isUnplacedInbox {
-            // Ordinary Review / exact-search clues still have a
+        } else if Self.hasRemoteDecisionLink(candidate)
+            || (eventType == .confirmCandidate && !candidate.isUnplacedInbox) {
+            // Remote-backed rows (captureId / workflow) always PATCH.
+            // Exact-search retire is confirmCandidate and still has a
             // place_candidates row even when captureId is nil.
+            // Local-only Unplaced and local mergeExisting have no row.
             try await supabaseService.updatePlaceCandidateStatus(
                 candidate.id,
                 status: Self.legacyCandidateStatus(for: eventType, finalPlaceId: userFinalPlaceId),
