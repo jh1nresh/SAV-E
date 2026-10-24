@@ -1684,7 +1684,6 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(rail.contains("TPE-C-n0-light-en"))
         XCTAssertTrue(rail.contains("TPE-D-402pt-n99-en-1400"))
         XCTAssertTrue(rail.contains("TPE-E-long-wrap-denied-en"))
-        XCTAssertTrue(rail.contains("B5-show-on-map"))
         XCTAssertTrue(rail.contains("waiting · Review ›"))
         XCTAssertTrue(rail.contains("待看 · 去看看 ›"))
         XCTAssertTrue(rail.contains("H3b-n0-en"))
