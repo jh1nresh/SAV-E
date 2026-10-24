@@ -64,7 +64,7 @@ enum GooglePlacesPhotoSourceMarkMetrics {
     }
 
     static func canShowGooglePhoto(in availableWidth: CGFloat, dynamicType: DynamicTypeSize) -> Bool {
-        markWidth(for: dynamicType) <= availableWidth
+        canShowStackedMark(in: availableWidth, dynamicType: dynamicType)
     }
 
     static func canShowStackedMark(in availableWidth: CGFloat, dynamicType: DynamicTypeSize) -> Bool {

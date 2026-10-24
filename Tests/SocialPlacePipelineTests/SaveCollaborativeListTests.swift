@@ -188,12 +188,28 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.maxPointSize, 16)
         XCTAssertEqual(GooglePlacesPhotoSourceMarkMetrics.pointSize(for: .large), 12)
         XCTAssertLessThanOrEqual(GooglePlacesPhotoSourceMarkMetrics.pointSize(for: .xxxLarge), 16)
-        XCTAssertFalse(
+
+        let stackedWidth = GooglePlacesPhotoSourceMarkMetrics.homeMarkWidth(for: .large)
+        XCTAssertGreaterThan(stackedWidth, 0)
+        XCTAssertLessThanOrEqual(
+            stackedWidth,
+            40,
+            "DESIGN 10pt stacked Google / Maps must fit a 44pt Home featured thumb"
+        )
+        XCTAssertTrue(
             GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: 40, dynamicType: .large),
-            "Footer cards that cannot fit a single line must not squeeze the mark"
+            "40pt is enough for the stacked mark; the old 40pt footer single-line gate no longer applies"
+        )
+        XCTAssertTrue(
+            GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(google, availableWidth: 40, dynamicType: .large)
+        )
+        let tooNarrow = max(stackedWidth - 1, 1)
+        XCTAssertFalse(
+            GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: tooNarrow, dynamicType: .large),
+            "A stacked mark that cannot fit must drop the Google photo"
         )
         XCTAssertFalse(
-            GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(google, availableWidth: 40, dynamicType: .large)
+            GooglePlacesPhotoSourceMarkMetrics.displaysGooglePhoto(google, availableWidth: tooNarrow, dynamicType: .large)
         )
         XCTAssertTrue(
             GooglePlacesPhotoSourceMarkMetrics.canShowStackedMark(in: 44, dynamicType: .large)
