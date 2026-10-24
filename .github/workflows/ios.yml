@@ -153,10 +153,11 @@ jobs:
     needs: [ios-build]
     runs-on: macos-26
     # Products come from ios-build (no second compile). Setup + units +
-    # simulator is ~15-20m; UI step 60; Trip 15; slack for parity/teardown
-    # and the main-only Release compile. Run 39497842970: 75m job wall cut
-    # the 55m UI step at 52m50s after ~20m of rebuild and setup.
-    timeout-minutes: 100
+    # simulator is ~15-20m; UI step 80; three real-device width shots 15
+    # each; Trip 15; slack for parity/teardown and the main-only Release
+    # compile. Run 39736743354: the 60m UI step cut a passing Passport/Home
+    # suite mid-test after ~18 greens.
+    timeout-minutes: 180
     env:
       # Re-enabled for the 2026-10-15 pixel-art pass. Disable again after the
       # focused set is green, then run one full suite as the merge gate.
@@ -364,13 +365,15 @@ jobs:
       # and stops before a third run. Retries are named by the next step.
       - name: Run selected UI regression tests
         id: ui_tests
-        # Job budget is 100. The step gets a real 60m of test time instead of
-        # whatever is left after a second compile (run 39497842970).
-        timeout-minutes: 60
+        # Job budget is 180. The step gets a real 80m of test time so a
+        # passing selected suite can finish (run 39736743354 hit 60m).
+        timeout-minutes: 80
         if: steps.scope.outputs.ui == 'true'
         env:
           SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-UI-tests.log
+          SAVE_SCREENSHOT_DIR: ${{ runner.temp }}/SAVE-First-Run
         run: |
+          mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
           if [[ ! -s "$RUNNER_TEMP/ios-ui-args.txt" ]]; then
             echo 'UI coverage was selected but no test arguments were produced.' >&2
             exit 1
@@ -387,6 +390,48 @@ jobs:
           if ((${#iteration_args[@]} > 0)); then
             max_attempts=3
           fi
+          # Host `env:` does not reach the xctestrun UI runner. Inject a
+          # simulator-writable fallback (`/tmp/...`); the host $RUNNER_TEMP
+          # path is not creatable inside the XCTest sandbox. Copy those
+          # files out with the device data root after the suite. Xcode 26.6
+          # rejects the extra xcodebuild environment flag, so the plist is
+          # the only inject path.
+          python3 - "${{ steps.products.outputs.xctestrun }}" /tmp/SAVE-First-Run <<'PY'
+          import plistlib, sys
+          from pathlib import Path
+          path = Path(sys.argv[1])
+          screenshot_dir = sys.argv[2]
+          data = plistlib.loads(path.read_bytes())
+
+          def inject(obj):
+              if isinstance(obj, dict):
+                  for key in ("EnvironmentVariables", "TestingEnvironmentVariables"):
+                      existing = obj.get(key)
+                      if isinstance(existing, dict):
+                          existing["SAVE_SCREENSHOT_DIR"] = screenshot_dir
+                      elif key in obj:
+                          obj[key] = {"SAVE_SCREENSHOT_DIR": screenshot_dir}
+                  if any(k in obj for k in (
+                      "BlueprintName",
+                      "TestHostBundleIdentifier",
+                      "ProductModuleName",
+                  )):
+                      env = obj.setdefault("EnvironmentVariables", {})
+                      if isinstance(env, dict):
+                          env["SAVE_SCREENSHOT_DIR"] = screenshot_dir
+                      testing = obj.setdefault("TestingEnvironmentVariables", {})
+                      if isinstance(testing, dict):
+                          testing["SAVE_SCREENSHOT_DIR"] = screenshot_dir
+                  for value in obj.values():
+                      inject(value)
+              elif isinstance(obj, list):
+                  for value in obj:
+                      inject(value)
+
+          inject(data)
+          path.write_bytes(plistlib.dumps(data, fmt=plistlib.FMT_XML))
+          print(f"injected SAVE_SCREENSHOT_DIR into {path}")
+          PY
           scripts/run-ios-xcodebuild-retry.sh \
             --max-attempts "$max_attempts" \
             --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
@@ -399,7 +444,7 @@ jobs:
             test-without-building
 
       - name: Enforce Atlas production visual parity
-        if: steps.scope.outputs.ui == 'true'
+        if: always() && (steps.scope.outputs.ui == 'true')
         run: |
           # macOS runners ship a PEP 668 Homebrew Python. Install Pillow in a
           # throwaway venv so pip never touches the system interpreter.
@@ -412,11 +457,97 @@ jobs:
               --threshold 0.90
 
       - name: Export first-run visual evidence
-        if: always() && (steps.ui_tests.outcome == 'success' || steps.ui_tests.outcome == 'failure')
+        if: always()
         run: |
-          xcrun xcresulttool export attachments \
-            --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
-            --output-path "$RUNNER_TEMP/SAVE-First-Run"
+          mkdir -p "$RUNNER_TEMP/SAVE-First-Run"
+          # XCTest wrote `/tmp/SAVE-First-Run` inside the simulator. Copy
+          # that tree to the host artifact dir before xcresult export and
+          # before any later erase/shutdown.
+          SIM_UDID='${{ steps.simulator.outputs.udid }}'
+          SIM_SHOTS="$HOME/Library/Developer/CoreSimulator/Devices/${SIM_UDID}/data/tmp/SAVE-First-Run"
+          if [[ -n "$SIM_UDID" && -d "$SIM_SHOTS" ]]; then
+            cp -R "$SIM_SHOTS/." "$RUNNER_TEMP/SAVE-First-Run/"
+            echo "copied simulator SAVE_SCREENSHOT_DIR from $SIM_SHOTS"
+          else
+            echo "no simulator SAVE_SCREENSHOT_DIR at $SIM_SHOTS"
+          fi
+          if [[ -f "$RUNNER_TEMP/SAVE-UI.xcresult/Info.plist" ]]; then
+            xcrun xcresulttool export attachments \
+              --path "$RUNNER_TEMP/SAVE-UI.xcresult" \
+              --output-path "$RUNNER_TEMP/SAVE-First-Run" \
+              || echo "xcresulttool export failed; keep SAVE_SCREENSHOT_DIR rasters."
+          else
+            echo "No readable UI result bundle; keep SAVE_SCREENSHOT_DIR rasters."
+          fi
+          echo "DESIGN Home/Passport/Map rasters in SAVE-First-Run:"
+          for name in five-tab-home light-home dark-home H1 H2 H3 H4 five-tab-passport doodle-passport-light doodle-passport-dark light-passport dark-passport five-tab-map doodle-map-light light-map dark-map passport-375 passport-390 passport-430; do
+            path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
+            if [[ -f "$path" ]]; then
+              wc -c "$path"
+            else
+              echo "missing $name.png"
+            fi
+          done
+
+      # Real 375 / 390 / 430 simulators. iPhone-SE-3rd-generation (375),
+      # iPhone-14 (390; not iPhone-16 at 393), iPhone-16-Pro-Max (430).
+      # Letterboxing the 402pt CI device does not count.
+      - name: Capture Passport 375pt width evidence
+        timeout-minutes: 15
+        if: always() && (steps.scope.outputs.ui == 'true')
+        env:
+          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Passport-375-tests.log
+        run: |
+          scripts/run-ios-width-device-test.sh \
+            --width 375 \
+            --test SAVEUITests/SAVEScreenshotRailTests/testPassportWidth375 \
+            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
+            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
+            --result-bundle "$RUNNER_TEMP/SAVE-Passport-375.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Passport-375-tests.log"
+
+      - name: Capture Passport 390pt width evidence
+        timeout-minutes: 15
+        if: always() && (steps.scope.outputs.ui == 'true')
+        env:
+          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Passport-390-tests.log
+        run: |
+          scripts/run-ios-width-device-test.sh \
+            --width 390 \
+            --test SAVEUITests/SAVEScreenshotRailTests/testPassportWidth390 \
+            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
+            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
+            --result-bundle "$RUNNER_TEMP/SAVE-Passport-390.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Passport-390-tests.log"
+
+      - name: Capture Passport 430pt width evidence
+        timeout-minutes: 15
+        if: always() && (steps.scope.outputs.ui == 'true')
+        env:
+          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Passport-430-tests.log
+        run: |
+          scripts/run-ios-width-device-test.sh \
+            --width 430 \
+            --test SAVEUITests/SAVEScreenshotRailTests/testPassportWidth430 \
+            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
+            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
+            --result-bundle "$RUNNER_TEMP/SAVE-Passport-430.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Passport-430-tests.log"
+
+      - name: Require Passport width evidence
+        if: always() && (steps.scope.outputs.ui == 'true')
+        run: |
+          missing=0
+          for name in passport-375 passport-390 passport-430; do
+            path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
+            if [[ -f "$path" ]]; then
+              wc -c "$path"
+            else
+              echo "missing $name.png" >&2
+              missing=1
+            fi
+          done
+          exit "$missing"
 
       - name: Reset focused simulator before Trip sheet UI test
         if: steps.scope.outputs.trip == 'true'
