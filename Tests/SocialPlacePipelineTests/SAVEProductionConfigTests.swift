@@ -4425,8 +4425,9 @@ final class SAVEProductionConfigTests: XCTestCase {
     func testResolvedActiveOwnerUsesCacheWithoutWipingUnknownAuth() async throws {
         let previousAuth = PrivyAuthService.shared.authState
         let previousDefaults = SavePlaceLimitHandoff.testDefaults
-        let defaults = UserDefaults(suiteName: "save.owner.resolve.\(UUID().uuidString)")!
-        defaults.removePersistentDomain(forName: defaults.suiteName ?? "")
+        let suite = "save.owner.resolve.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
         SavePlaceLimitHandoff.testDefaults = defaults
         defer {
             PrivyAuthService.shared.authState = previousAuth
@@ -4452,8 +4453,9 @@ final class SAVEProductionConfigTests: XCTestCase {
         let previousDefaults = SavePlaceLimitHandoff.testDefaults
         let previousTestStore = ShareAnalysisKeychain.usesTestStore
         let previousCredential = ShareAnalysisKeychain.testStore
-        let defaults = UserDefaults(suiteName: "save.owner.restore-same.\(UUID().uuidString)")!
-        defaults.removePersistentDomain(forName: defaults.suiteName ?? "")
+        let suite = "save.owner.restore-same.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
         SavePlaceLimitHandoff.testDefaults = defaults
         ShareAnalysisKeychain.usesTestStore = true
         ShareAnalysisKeychain.testStore = nil
@@ -4495,8 +4497,9 @@ final class SAVEProductionConfigTests: XCTestCase {
         let previousDefaults = SavePlaceLimitHandoff.testDefaults
         let previousTestStore = ShareAnalysisKeychain.usesTestStore
         let previousCredential = ShareAnalysisKeychain.testStore
-        let defaults = UserDefaults(suiteName: "save.owner.restore-other.\(UUID().uuidString)")!
-        defaults.removePersistentDomain(forName: defaults.suiteName ?? "")
+        let suite = "save.owner.restore-other.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
         SavePlaceLimitHandoff.testDefaults = defaults
         ShareAnalysisKeychain.usesTestStore = true
         ShareAnalysisKeychain.testStore = nil
@@ -4869,6 +4872,7 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(removed?.googlePlaceId, "ChIJcap-harbor")
     }
 
+    @MainActor
     func testConfirmedStampCoversParkedUnplacedVenueIdentity() throws {
         let post = SharedPlacePost(
             id: UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")!,
