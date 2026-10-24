@@ -177,6 +177,7 @@ struct ContentView: View {
     @StateObject private var tripStore: TripPackStore
     @StateObject private var drawerVM = AIDrawerViewModel()
     @StateObject private var planConversation = SavePlanConversation()
+    @StateObject private var doodleSession = SaveDoodleSession()
     @Binding private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
     @Binding private var pendingOnboardingClue: String
     private let storageScope: ContentStorageScope
@@ -202,6 +203,9 @@ struct ContentView: View {
     @State private var suppressPendingOnboardingCaptureResume = false
     @State private var exactSearchRequestID: UUID?
     @State private var isExactSearchSessionActive = false
+    /// Survives a search-panel reopen that would otherwise drop
+    /// `exactSearchResolution` before the saved-stamp tap.
+    @State private var exactSearchClueID: UUID?
     @State private var pendingOriginPlanCandidateID: UUID?
     /// True while chrome is swapping one exclusive presentation for another.
     /// Dismiss handlers must not resume capture or re-present a sheet mid-swap.
@@ -254,6 +258,9 @@ struct ContentView: View {
                 collapseMapPanel()
             }
         }
+        .onChange(of: doodleSession.mapVisitResidueID) { _, _ in
+            resetMapVisitResidue()
+        }
         .onChange(of: fullScreenRoute?.id) { _, routeID in
             if routeID != nil {
                 invalidateExactSearchRequest()
@@ -305,9 +312,9 @@ struct ContentView: View {
         }
         .sheet(item: capturePresentation, onDismiss: handleFullScreenDismiss) { route in
             fullScreenContent(for: route)
-                .presentationDetents([.height(430), .large])
+                .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(SaveAtlasPalette.canvas)
+                .presentationBackground(SaveAtlasPalette.paper)
         }
         .fullScreenCover(item: detailPresentation, onDismiss: handleFullScreenDismiss) { route in
             fullScreenContent(for: route)
@@ -386,6 +393,21 @@ struct ContentView: View {
             await loadInitialContent()
             presentSavedPlaceLimitPaywallIfNeeded()
         }
+#if DEBUG
+        // Same outermost fullScreenCover as production Passport. A cover on
+        // `rootScaffold` leaves AtlasTabBar in the tree (`root.tab.home`).
+        .fullScreenCover(isPresented: .constant(
+            ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall")
+                || ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall-cap")
+        )) {
+            SaveProPaywallView(
+                trigger: ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall-cap")
+                    ? .savedPlacesCap
+                    : .settings
+            )
+                .environment(\.appLanguageSettings, languageSettings)
+        }
+#endif
     }
 
     @MainActor
@@ -509,15 +531,19 @@ struct ContentView: View {
             requestsConnections: $requestsSocialConnections
         )
         .environment(\.appLanguageSettings, languageSettings)
+        .environmentObject(doodleSession)
     }
 
     /// Tab bar selection. `.capture` is a control, not a destination: it opens
     /// the capture cover and leaves the current tab selected, so tapping it and
     /// cancelling returns the user exactly where they were.
-    private func selectRootTab(_ tab: SaveRootTab) {
+    private func selectRootTab(_ tab: SaveRootTab, mapFollowsHomeFilter: Bool = false) {
         guard !tab.isCaptureControl else {
             openDrawer(.addLink, tripID: nil)
             return
+        }
+        if tab == .map {
+            doodleSession.applyMapTabSelection(followsHomeFilter: mapFollowsHomeFilter)
         }
         // Root destinations must leave any pushed Saves, Trips, or Trip route.
         // The tab bar can remain in the accessibility tree behind those
@@ -529,6 +555,36 @@ struct ContentView: View {
         )
     }
 
+    /// Mini-map does not go through `selectRootTab` so a default-false Map
+    /// write cannot clear the handoff before Map appears.
+    private func openMapFromMiniMap() {
+        doodleSession.beginMiniMapHandoff()
+        rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
+        selectedRootTab = SaveChromeNavigation.destination(
+            afterSelecting: .map,
+            current: selectedRootTab
+        )
+    }
+
+    /// Drop leftover Map-tab chrome so a reused Map remounts Eat/Go.
+    private func resetMapVisitResidue() {
+        mapVM.clearSelectedMapObject()
+        mapDetailDrawerItem = nil
+        isMapPanelExpanded = false
+        drawerVM.returnToCommands()
+    }
+
+    /// Search, show-on-map, and list handoffs must drop a leftover Home
+    /// Eat/Go+city filter so the place the caller asked to show is visible.
+    /// Review correction keeps the session: abandoning remounts Map and
+    /// drops `preservesExactSearchClue`.
+    private func showMapTab() {
+        if !isExactSearchSessionActive {
+            doodleSession.abandonMiniMapHandoff()
+        }
+        selectedRootTab = .map
+    }
+
     private var capturePresentation: Binding<SaveFullScreenRoute?> {
         Binding(
             get: { if case .capture = fullScreenRoute { return fullScreenRoute }; return nil },
@@ -537,6 +593,24 @@ struct ContentView: View {
             }
         )
     }
+
+    private var showsRootTabBar: Bool {
+#if DEBUG
+        // AtlasTabBar is a sibling of the tab pages. A fullScreenCover still
+        // leaves `root.tab.home` in the XCTest tree unless the bar is omitted.
+        !hidesRootTabBarForPaywallUITest
+#else
+        true
+#endif
+    }
+
+#if DEBUG
+    private var hidesRootTabBarForPaywallUITest: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("--uitest-show-paywall")
+            || arguments.contains("--uitest-show-paywall-cap")
+    }
+#endif
 
     private var detailPresentation: Binding<SaveFullScreenRoute?> {
         Binding(
@@ -548,7 +622,10 @@ struct ContentView: View {
     }
 
     private var rootTabs: some View {
-        NavigationStack(path: $rootPath) {
+        // Read identity outside the switch so a Home-tab mini-map bump is
+        // observed before Map remounts with the leftover wordmark header.
+        let mapIdentity = doodleSession.mapSurfaceID
+        return NavigationStack(path: $rootPath) {
             ReferenceViewport {
                 ZStack(alignment: .topLeading) {
                     Group {
@@ -570,7 +647,6 @@ struct ContentView: View {
                                     )
                                 },
                                 onOpenTrips: {
-                                    // Existing trips remain available through Home's More menu.
                                     rootPath = SaveChromeNavigation.pathByOpening(
                                         .trips,
                                         currently: rootPath
@@ -582,7 +658,8 @@ struct ContentView: View {
                                         currently: rootPath
                                     )
                                 },
-                                onOpenPassport: openPassport
+                                onOpenPassport: openPassport,
+                                onOpenMap: { openMapFromMiniMap() }
                             )
                         case .map:
                             SaveMapRootView(
@@ -592,10 +669,11 @@ struct ContentView: View {
                                 // the canvas never draws its own copy.
                                 hidesCommandShelf: true,
                                 onOpenSearch: { openMapSearch() },
-                                onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                onOpenSavedPlace: { openSavedPlaceFromMapSearch($0) },
                                 onPlanAroundPlace: openPlanAround,
                                 onOpenPassport: openPassport
                             )
+                            .id(mapIdentity)
                         case .friends:
                             SaveFriendsView(
                                 currentUserID: PrivyAuthService.shared.currentUserId,
@@ -614,36 +692,39 @@ struct ContentView: View {
                         }
                     }
 
-                    AtlasTabBar(
-                        items: SaveRootTab.allCases,
-                        selection: selectedRootTab,
-                        title: \.atlasTitle,
-                        icon: \.atlasIcon,
-                        accessibilityPrefix: "root.tab",
-                        displayTitle: { $0.title(language: languageSettings.language) },
-                        isRaisedControl: { $0.isCaptureControl },
-                        hidesTitle: { $0.isCaptureControl },
-                        iconView: { item in
-                            AnyView(
-                                SavePixelChromeIcon(
-                                    kind: .tab(iconName: item.atlasIcon),
-                                    pointSize: 24
+                    if showsRootTabBar {
+                        AtlasTabBar(
+                            items: SaveRootTab.allCases,
+                            selection: selectedRootTab,
+                            title: \.atlasTitle,
+                            icon: \.atlasIcon,
+                            accessibilityPrefix: "root.tab",
+                            displayTitle: { $0.title(language: languageSettings.language) },
+                            isRaisedControl: { $0.isCaptureControl },
+                            hidesTitle: { $0.isCaptureControl },
+                            iconView: { item in
+                                AnyView(
+                                    SaveDoodleTabIcon(
+                                        kind: .tab(iconName: item.atlasIcon),
+                                        pointSize: 24
+                                    )
                                 )
-                            )
-                        },
-                        onSelect: selectRootTab
-                    )
-                    .placed(
-                        x: AtlasTabBarMetrics.leadingInset,
-                        y: selectedRootTab == .map
-                            ? AtlasTabBarMetrics.mapY
-                            : AtlasTabBarMetrics.standardY,
-                        width: AtlasTabBarMetrics.width,
-                        height: AtlasTabBarMetrics.height
-                    )
+                            },
+                            onSelect: { selectRootTab($0) }
+                        )
+                        .placed(
+                            x: AtlasTabBarMetrics.leadingInset,
+                            y: selectedRootTab == .map
+                                ? AtlasTabBarMetrics.mapY
+                                : AtlasTabBarMetrics.standardY,
+                            width: AtlasTabBarMetrics.width,
+                            height: AtlasTabBarMetrics.height
+                        )
+                    }
                 }
             }
             .tint(SaveAtlasPalette.forest)
+            .environmentObject(doodleSession)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: SaveRootRoute.self) { route in
                 switch route {
@@ -764,7 +845,8 @@ struct ContentView: View {
                         mapViewModel: mapVM,
                         initialQuery: drawerLaunchRequest.initialQuery ?? "",
                         focusesSearch: drawerLaunchRequest.focusesSearch,
-                        preservesExactSearchClue: drawerLaunchRequest.preservesExactSearchClue,
+                        preservesExactSearchClue: isExactSearchSessionActive
+                            || exactSearchClueID != nil,
                         onClose: collapseMapPanel,
                         onOpenPlace: { openSavedPlaceFromMapSearch($0) },
                         onOpenCandidate: { openMapDetail(.unsavedCandidate($0)) }
@@ -848,6 +930,10 @@ struct ContentView: View {
                     // the user in an immediately re-presented cover.
                     suppressPendingOnboardingCaptureResume = true
                     fullScreenRoute = nil
+                },
+                onSearchNearby: {
+                    suppressPendingOnboardingCaptureResume = true
+                    openMapSearch()
                 }
             )
             .environment(\.appLanguageSettings, languageSettings)
@@ -1001,16 +1087,27 @@ struct ContentView: View {
                 await mapVM.prepareMapCandidatesForDrawerQuery(
                     query,
                     preservesExactSearchClue: isExactSearchSessionActive
+                        || exactSearchClueID != nil
+                        || mapVM.hasActiveExactSearchResolution
                 )
             },
             onBeginExactSearchResolution: { candidate in
-                isExactSearchSessionActive = true
-                mapVM.beginExactSearchResolution(for: candidate)
+                activateExactSearchSession(for: candidate)
             },
-            onClearMapSearchResults: {
-                isExactSearchSessionActive = false
+            onClearMapSearchResults: { endsExactSearch in
+                if endsExactSearch {
+                    isExactSearchSessionActive = false
+                    exactSearchClueID = nil
+                }
                 guard exactSearchRequestID == nil else { return }
-                mapVM.clearMapSearchResults()
+                // Launch/refine remounts wipe pins. Keep the live Review
+                // correction so a saved-stamp tap still retires the clue.
+                mapVM.clearMapSearchResults(
+                    preservesExactSearchClue: !endsExactSearch
+                        && (isExactSearchSessionActive
+                            || exactSearchClueID != nil
+                            || mapVM.hasActiveExactSearchResolution)
+                )
             },
             collaborativeLists: mapVM.collaborativeLists,
             onCreateList: { title, note in
@@ -1088,14 +1185,27 @@ struct ContentView: View {
 
     private func openMapSearch(initialQuery: String? = nil, focusesSearch: Bool = true) {
         guard incomingPlaceReceipt == nil else { return }
-        invalidateExactSearchRequest()
+        // Expanding or focusing the Map drawer must not drop an in-flight
+        // Review correction. The previous invalidate made saved-stamp taps
+        // open the stamp without retiring the clue.
+        let preserveExactSearchClue = isExactSearchSessionActive
+            || mapVM.hasActiveExactSearchResolution
+            || exactSearchClueID != nil
+        if !preserveExactSearchClue {
+            invalidateExactSearchRequest()
+        }
         mapDetailDrawerItem = nil
         mapVM.clearSelectedMapObject()
         drawerVM.returnToCommands()
         rootPath = SaveChromeNavigation.pathAfterSelectingRootTab()
-        selectedRootTab = .map
+        showMapTab()
         presentAfterClearingExclusiveChrome(.mapDrawer(
-            DrawerLaunchRequest(target: .ask, initialQuery: initialQuery, focusesSearch: focusesSearch)
+            DrawerLaunchRequest(
+                target: .ask,
+                initialQuery: initialQuery,
+                focusesSearch: focusesSearch,
+                preservesExactSearchClue: preserveExactSearchClue
+            )
         ))
     }
 
@@ -1221,7 +1331,7 @@ struct ContentView: View {
 
     private func openCollaborativeListOnMap(_ list: SaveCollaborativeList) {
         isPassportPresented = false
-        selectedRootTab = .map
+        showMapTab()
         rootPath.removeAll()
         Task {
             await mapVM.planCollaborativeList(list)
@@ -1238,6 +1348,12 @@ struct ContentView: View {
             onOpenReviewCandidate: { openReviewCandidate($0, tripID: captureResultIDs == nil ? nil : pendingCaptureTripID) },
             onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
             onOpenPassport: openPassport,
+            onOpenTrips: {
+                rootPath = SaveChromeNavigation.pathByOpening(
+                    .trips,
+                    currently: rootPath
+                )
+            },
             captureResultCount: captureResultIDs?.count,
             onLoadDuplicateAudit: { try await mapVM.reviewDuplicateAudit() }
         )
@@ -1366,7 +1482,7 @@ struct ContentView: View {
         isRootSheetPresented = false
         isMapPanelExpanded = false
         rootPath.removeAll()
-        selectedRootTab = .map
+        showMapTab()
         drawerVM.returnToCommands()
     }
 
@@ -1375,7 +1491,6 @@ struct ContentView: View {
         if mapVM.focusReviewCandidateOnMap(candidate) {
             fullScreenRoute = nil
             rootPath.removeAll()
-            selectedRootTab = .map
             showMapCandidatesOnMap()
             return
         }
@@ -1388,9 +1503,8 @@ struct ContentView: View {
         guard incomingPlaceReceipt == nil else { return }
         exactSearchRequestID = nil
         rootPath.removeAll()
-        selectedRootTab = .map
-        isExactSearchSessionActive = true
-        mapVM.beginExactSearchResolution(for: candidate)
+        activateExactSearchSession(for: candidate)
+        showMapTab()
         openExactSearchRefine(query: candidate.refinementQuery)
     }
 
@@ -1405,9 +1519,8 @@ struct ContentView: View {
         }
         fullScreenRoute = nil
         rootPath.removeAll()
-        selectedRootTab = .map
-        isExactSearchSessionActive = true
-        mapVM.beginExactSearchResolution(for: candidate)
+        activateExactSearchSession(for: candidate)
+        showMapTab()
         // The tile-town canvas shows saved stamps, not unconfirmed search pins.
         // Let the existing search panel perform one query and keep its results
         // actionable while retaining the original clue-resolution session.
@@ -1425,8 +1538,31 @@ struct ContentView: View {
 
     /// Saved-row taps in ordinary map search just open the stamp. During
     /// Review correction they must also resolve the active clue onto it.
+    /// Peek-card taps use this same path so a selected 64pt sticker cannot
+    /// open the stamp while leaving the correction session unresolved.
+    private func activateExactSearchSession(for candidate: PlaceReviewCandidate) {
+        exactSearchClueID = candidate.id
+        isExactSearchSessionActive = true
+        mapVM.beginExactSearchResolution(for: candidate)
+    }
+
+    private func restoreExactSearchResolutionIfNeeded() {
+        guard !mapVM.hasActiveExactSearchResolution,
+              let id = exactSearchClueID,
+              let clue = mapVM.reviewCandidates.first(where: { $0.id == id })
+        else { return }
+        mapVM.beginExactSearchResolution(for: clue)
+    }
+
     private func openSavedPlaceFromMapSearch(_ place: Place) {
-        guard drawerLaunchRequest.preservesExactSearchClue else {
+        restoreExactSearchResolutionIfNeeded()
+        // The launch request can keep `preservesExactSearchClue` after an
+        // explicit close or a successful resolve. Only a live session may
+        // claim the next saved-pin tap; otherwise the peek never opens.
+        let shouldResolveClue = isExactSearchSessionActive
+            || mapVM.hasActiveExactSearchResolution
+            || exactSearchClueID != nil
+        guard shouldResolveClue else {
             openMapDetail(.savedPlace(place))
             return
         }
@@ -1434,16 +1570,20 @@ struct ContentView: View {
             // Stay on the Map search/correction surface. The embedded drawer
             // binds `mapVM.correctionDrawerError` so a failed decision does
             // not open the stamp as if it were already corrected.
+            restoreExactSearchResolutionIfNeeded()
             if let resolved = await mapVM.chooseSavedStampFromExactSearch(place) {
+                exactSearchClueID = nil
+                isExactSearchSessionActive = false
                 openMapDetail(.savedPlace(resolved))
             }
         }
     }
 
     private func invalidateExactSearchRequest() {
-        guard exactSearchRequestID != nil || isExactSearchSessionActive else { return }
+        guard exactSearchRequestID != nil || isExactSearchSessionActive || exactSearchClueID != nil else { return }
         exactSearchRequestID = nil
         isExactSearchSessionActive = false
+        exactSearchClueID = nil
         mapVM.clearMapSearchResults()
     }
 
@@ -1742,170 +1882,6 @@ struct ContentView: View {
            updatedFullScreenPlace != fullScreenPlace {
             fullScreenRoute = .placeDetail(.savedPlace(updatedFullScreenPlace))
         }
-    }
-}
-
-private struct SaveCaptureFlowView: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    let tripName: String?
-    let initialText: String
-    let existingPlaces: [Place]
-    let onDraftChange: (String) -> Void
-    let onImport: (String) async throws -> [UUID]
-    let onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary
-    let onComplete: ([UUID]) -> Void
-    let onCancel: () -> Void
-    @State private var sharedText = ""
-    @State private var isAnalyzing = false
-    @State private var errorMessage: String?
-    @State private var isGoogleTakeoutPresented = false
-    @FocusState private var isInputFocused: Bool
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(localized("Save a place clue", "收下一個地點線索"))
-                        .font(SaveAtlasType.strong(23, relativeTo: .title2))
-                        .foregroundStyle(SaveAtlasPalette.forest)
-                    Text(localized("Paste a link or note. Review the place before saving.", "貼上連結或筆記，確認地點後再儲存。"))
-                        .font(SaveAtlasType.body(14))
-                        .foregroundStyle(SaveAtlasPalette.muted)
-                    if let tripName {
-                        Text(localized("For \(tripName)", "準備加入「\(tripName)」"))
-                            .font(SaveAtlasType.body(13))
-                            .foregroundStyle(SaveAtlasPalette.forest)
-                    }
-                    TextEditor(text: $sharedText)
-                        .font(SaveAtlasType.body(16))
-                        .foregroundStyle(SaveAtlasPalette.ink)
-                        .scrollContentBackground(.hidden)
-                        .frame(height: 88)
-                        .padding(8)
-                        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 14))
-                        .overlay { RoundedRectangle(cornerRadius: 14).stroke(SaveAtlasPalette.line.opacity(0.4)) }
-                        .focused($isInputFocused)
-                        .accessibilityLabel(localized("Link or note", "連結或筆記"))
-                        .accessibilityIdentifier("capture.input")
-                        .toolbar {
-                            ToolbarItemGroup(placement: .keyboard) {
-                                Spacer()
-                                Button(localized("Done", "完成")) { isInputFocused = false }
-                                    .accessibilityIdentifier("capture.keyboardDone")
-                            }
-                        }
-                    HStack {
-                        PasteButton(payloadType: String.self) { values in
-                            if let value = values.first { sharedText = value }
-                        }
-                        .tint(SaveAtlasPalette.forest)
-                        .accessibilityIdentifier("capture.paste")
-                        Spacer()
-                        Button {
-                            isInputFocused = false
-                            isGoogleTakeoutPresented = true
-                        } label: {
-                            Label(localized("Import file", "匯入檔案"), systemImage: "square.and.arrow.down")
-                                .font(SaveAtlasType.strong(14))
-                                .frame(minHeight: 44)
-                        }
-                        .foregroundStyle(SaveAtlasPalette.forest)
-                        .disabled(isAnalyzing)
-                        .accessibilityLabel(localized("Import Google Takeout", "匯入 Google Takeout"))
-                        .accessibilityIdentifier("capture.importGoogleTakeout")
-                    }
-                    if let errorMessage {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle")
-                            .font(SaveAtlasType.body(13))
-                            .foregroundStyle(SaveAtlasPalette.coral)
-                            .accessibilityIdentifier("capture.error")
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .background(SaveAtlasPalette.canvas)
-            .safeAreaInset(edge: .bottom) {
-                Button(action: analyze) {
-                    HStack(spacing: 8) {
-                        if isAnalyzing { ProgressView().tint(.white) }
-                        Text(isAnalyzing ? localized("Analyzing…", "分析中…") : localized("Find the place", "找出地點"))
-                    }
-                    .font(SaveAtlasType.strong(17))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 14))
-                }
-                .disabled(trimmedText.isEmpty || isAnalyzing)
-                .opacity(trimmedText.isEmpty || isAnalyzing ? 0.48 : 1)
-                .accessibilityIdentifier("capture.analyze")
-                .padding(.horizontal, 20)
-                .padding(.bottom, 12)
-                .background(SaveAtlasPalette.canvas)
-            }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(action: onCancel) {
-                        Image(systemName: "xmark").frame(width: 44, height: 44)
-                    }
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .disabled(isAnalyzing)
-                    .accessibilityLabel(localized("Close capture", "關閉新增線索"))
-                }
-            }
-        }
-        .interactiveDismissDisabled(isAnalyzing)
-        .accessibilityIdentifier("capture.flow")
-        .onAppear {
-            if sharedText.isEmpty {
-                sharedText = initialText
-            }
-        }
-        .onChange(of: sharedText) { _, draft in
-            onDraftChange(draft)
-        }
-        .sheet(isPresented: $isGoogleTakeoutPresented) {
-            GoogleTakeoutImportView(
-                existingPlaces: existingPlaces,
-                onSave: onSaveGoogleTakeoutImport
-            )
-        }
-    }
-
-    private var trimmedText: String {
-        sharedText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func analyze() {
-        guard !trimmedText.isEmpty, !isAnalyzing else { return }
-        isAnalyzing = true
-        errorMessage = nil
-        Task {
-            defer { isAnalyzing = false }
-            do {
-                let candidateIDs = try await onImport(trimmedText)
-                guard !candidateIDs.isEmpty else {
-                    errorMessage = localized(
-                        "No place clue was found. Add the post caption, city, or a map link and try again.",
-                        "沒有找到地點線索。請補上貼文文字、城市或地圖連結後再試。"
-                    )
-                    return
-                }
-                onComplete(candidateIDs)
-            } catch ReviewCandidateError.sourceAlreadyReviewed {
-                errorMessage = localized(
-                    "This source was already saved or reviewed. No new review was added.",
-                    "這個來源已收藏或處理過，沒有新增待確認項目。"
-                )
-            } catch {
-                errorMessage = localized("Analysis could not finish. Please try again later.", "分析暫時無法完成，請稍後再試。")
-            }
-        }
-    }
-
-    private func localized(_ english: String, _ traditionalChinese: String) -> String {
-        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
     }
 }
 

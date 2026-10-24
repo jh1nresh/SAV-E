@@ -62,9 +62,18 @@ struct SaveFriendsView: View {
                         .disabled(store.isLoading).frame(maxWidth: .infinity, minHeight: 44)
                 }
                 if !store.posts.isEmpty {
-                    SaveTileTownCanvas(pins: friendPins, showsPins: true, clipsToPaper: true)
+                    RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                        .fill(SaveAtlasPalette.paper)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                                .stroke(SaveAtlasPalette.line, lineWidth: SaveAtlasPalette.strokeWidth)
+                        }
                         .frame(height: 88)
                         .accessibilityIdentifier("friends.mapStrip")
+                        .accessibilityLabel(language.localized(
+                            english: "Friends places",
+                            traditionalChinese: "朋友的地點"
+                        ))
                 }
             }
             .padding(.horizontal, 16)
@@ -139,12 +148,6 @@ struct SaveFriendsView: View {
                         .stroke(SaveAtlasPalette.line.opacity(0.28), lineWidth: 1)
                 }
             }
-        }
-    }
-
-    private var friendPins: [SaveTileTownPin] {
-        store.posts.prefix(6).map { post in
-            SaveTileTownPin(id: post.id, name: post.name, isSelected: false)
         }
     }
 

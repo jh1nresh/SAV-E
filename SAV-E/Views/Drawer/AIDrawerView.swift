@@ -115,7 +115,9 @@ struct AIDrawerView: View {
     /// Links exact-place map results to the Review clue they resolve, so
     /// saving one retires the clue from the queue.
     var onBeginExactSearchResolution: (PlaceReviewCandidate) -> Void = { _ in }
-    var onClearMapSearchResults: () -> Void = {}
+    /// `endsExactSearch` is true only for an explicit close. Launch/refine
+    /// remounts must keep the Review correction session.
+    var onClearMapSearchResults: (_ endsExactSearch: Bool) -> Void = { _ in }
     var collaborativeLists: [SaveCollaborativeList] = []
     var onCreateList: (String, String?) -> SaveCollaborativeList = { title, note in
         SaveCollaborativeList(title: title, note: note)
@@ -403,7 +405,7 @@ struct AIDrawerView: View {
 
     private func applyLaunchRequest(_ request: DrawerLaunchRequest) {
         cancelMapSearch()
-        onClearMapSearchResults()
+        onClearMapSearchResults(false)
         mapDetailDrawerItem = nil
         onDismissMapDetail()
         viewModel.returnToCommands()
@@ -1213,7 +1215,7 @@ struct AIDrawerView: View {
 
     private func submitSearchField() {
         cancelMapSearch()
-        onClearMapSearchResults()
+        onClearMapSearchResults(false)
         SaveHaptics.tap()
         voiceQuery.stop()
         searchFocused = false
@@ -1363,7 +1365,7 @@ struct AIDrawerView: View {
         let shouldClearMapSearch = hasVisibleMapSearchResults
         viewModel.reset()
         if shouldClearMapSearch {
-            onClearMapSearchResults()
+            onClearMapSearchResults(true)
         }
         searchFocused = false
         withAnimation { drawerDetent = collapsedDrawerDetent }
@@ -1373,15 +1375,25 @@ struct AIDrawerView: View {
         cancelMapSearch()
         voiceQuery.stop()
         viewModel.reset()
-        onClearMapSearchResults()
+        onClearMapSearchResults(true)
         searchFocused = false
         addSpotStatus = nil
         withAnimation { drawerDetent = collapsedDrawerDetent }
     }
 
     private func closeMapDetail() {
+        // Empty Find exact opens this Review detail with no pins. Closing
+        // it must end the session so a later saved-stamp tap cannot retire
+        // that clue onto an unrelated Map Stamp.
+        let shouldEndExactSearch: Bool = {
+            guard case .reviewCandidate = mapDetailDrawerItem else { return false }
+            return !hasVisibleMapSearchResults
+        }()
         mapDetailDrawerItem = nil
         onDismissMapDetail()
+        if shouldEndExactSearch {
+            onClearMapSearchResults(true)
+        }
         withAnimation(SaveTheme.Motion.standardSpring) {
             drawerDetent = collapsedDrawerDetent
         }

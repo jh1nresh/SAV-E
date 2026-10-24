@@ -41,6 +41,16 @@ enum ReviewDemo {
 #endif
     }
 
+    /// Isolated screenshot face for DESIGN v2 Home / Map / Capture mocks.
+    /// Production never sets this argument.
+    static var usesDoodleParityFace: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.arguments.contains("--uitest-doodle-parity-face")
+#else
+        false
+#endif
+    }
+
     /// A per-test suffix prevents UI tests from reading or overwriting the
     /// normal reviewer-demo vault. Only a conservative filename-safe subset is
     /// accepted so an environment value cannot escape the demo directory.
@@ -190,12 +200,19 @@ enum ReviewDemoSeed {
 #if DEBUG
         if ReviewDemo.isOfflineUITestMode,
            ReviewDemo.uiTestStorageIdentifier != nil,
+           (ReviewDemo.usesDoodleParityFace
+            || ProcessInfo.processInfo.arguments.contains("--uitest-doodle-parity-fixture")) {
+            return doodleParityPlaces(now: now)
+        }
+        if ReviewDemo.isOfflineUITestMode,
+           ReviewDemo.uiTestStorageIdentifier != nil,
            ProcessInfo.processInfo.arguments.contains("--uitest-home-memory-fixture") {
             return [
                 ("Taipei Window Cafe", "台北市大安區", PlaceCategory.cafe),
                 ("Tainan Garden Cafe", "台南市中西區", PlaceCategory.cafe),
                 ("New Taipei Corner Cafe", "新北市板橋區", PlaceCategory.cafe),
                 ("Taipei Lunch", "台北市信義區", PlaceCategory.food),
+                ("Taipei Riverside Park", "台北市中山區", PlaceCategory.attraction),
             ].enumerated().map { index, value in
                 Place(id: UUID(uuidString: String(format: "10000000-0000-0000-0000-%012d", index + 1))!,
                       name: value.0, address: value.1, latitude: 25.04, longitude: 121.54,
@@ -313,8 +330,108 @@ enum ReviewDemoSeed {
     /// App Review fixture for the unresolved Postcard. Never Quarter Sheets.
     static let harborOvenPizzaName = "Harbor Oven Pizza"
 
-    static func reviewCandidates(now: Date = Date()) -> [PendingReviewCandidate] {
+    /// Temple of Heaven (天壇) Eat rows plus the Map sheet park. Distances
+    /// match the Codex packet / spec §8 Tiantan face: 450m / 800m / 1.1km.
+    /// Twelve Tiantan saves, four visited (2 Eat + 2 Go). Only the three
+    /// nearby Eat rows are mappable on Home; extra city saves stay outside
+    /// the 3 km Near you radius so the packet pins stay aligned.
+    /// Coordinates must be real: `SaveMemoryRecord.confirmedPlace` drops
+    /// `0,0`, which made UI Collected read 3/4 instead of 4/12.
+    /// The 0.90 score is not evidence.
+    static func doodleParityPlaces(now: Date = Date()) -> [Place] {
+        let seeds: [(Int, String, PlaceCategory, PlaceStatus, Double, Double)] = [
+            (0, "Siji Minfu Roast Duck", .food, .visited, 39.886242, 116.4066),
+            (1, "Fangzhuangchang Noodles", .food, .visited, 39.889387, 116.4066),
+            (2, "Grey Cafe", .cafe, .wantToGo, 39.892082, 116.4066),
+            (3, "Temple of Heaven Park", .attraction, .visited, 39.884895, 116.4066),
+            (4, "Lantern Alley", .attraction, .visited, 39.9410, 116.4030),
+            (5, "Jingshan", .attraction, .wantToGo, 39.9265, 116.3898),
+            (6, "Houhai Bridge", .attraction, .wantToGo, 39.9408, 116.3835),
+            (7, "Page One", .shopping, .wantToGo, 39.9540, 116.4670),
+            (8, "Houhai Bicycle", .attraction, .wantToGo, 39.9422, 116.3860),
+            (9, "Chaoyang Park Wheel", .attraction, .wantToGo, 39.9435, 116.4780),
+            (10, "Summer Palace", .attraction, .wantToGo, 39.9997, 116.2755),
+            (11, "Beihai Park", .attraction, .wantToGo, 39.9280, 116.3890),
+        ]
+        return seeds.map { index, name, category, status, latitude, longitude in
+            Place(
+                id: UUID(uuidString: String(format: "30000000-0000-0000-0000-%012d", index + 1))!,
+                name: name,
+                address: "Tiantan",
+                latitude: latitude,
+                longitude: longitude,
+                category: category,
+                status: status,
+                sourcePlatform: .other,
+                createdAt: now.addingTimeInterval(Double(-index))
+            )
+        }
+    }
+
+    /// Prefer the DESIGN Map sheet place when the parity face is on; otherwise
+    /// keep the Taipei review-demo pin used by existing Map rails.
+    static func paritySelectedPlace(from places: [Place]) -> Place? {
+#if DEBUG
+        if ReviewDemo.usesDoodleParityFace {
+            return places.first { $0.name.localizedCaseInsensitiveContains("Temple of Heaven") }
+                ?? places.first { abs($0.latitude - 39.88) < 0.35 && abs($0.longitude - 116.41) < 0.35 }
+                ?? places.first
+        }
+#endif
+        return places.first { abs($0.latitude - 25.04) < 0.35 && abs($0.longitude - 121.56) < 0.35 }
+            ?? places.first
+    }
+
+    static func doodleParityReviewCandidates(now: Date = Date()) -> [PendingReviewCandidate] {
         [
+            PendingReviewCandidate(
+                candidateName: "Lantern Alley",
+                address: "Tiantan, Dongcheng, Beijing",
+                category: "attraction",
+                latitude: 39.8830,
+                longitude: 116.4100,
+                sourceURL: "https://www.instagram.com/p/lanternalley/",
+                sourceText: "Lantern Alley — evening walk after Temple of Heaven.",
+                evidence: [
+                    "Source URL: https://www.instagram.com/p/lanternalley/",
+                    "Caption: Lantern Alley after Tiantan.",
+                    "Creator handle: @beijing.walks",
+                    "Source handle: @beijing.walks"
+                ],
+                confidence: 0.81,
+                missingInfo: ["User confirmation required"],
+                savedAt: now.addingTimeInterval(-3 * 3600),
+                sourceHandle: "beijing.walks"
+            ),
+            PendingReviewCandidate(
+                candidateName: "Baozi Shop",
+                address: "Tiantan, Dongcheng, Beijing",
+                category: "food",
+                latitude: 39.8800,
+                longitude: 116.4080,
+                sourceURL: "https://www.xiaohongshu.com/explore/baozishop",
+                sourceText: "Baozi Shop — breakfast near Tiantan.",
+                evidence: [
+                    "Source URL: https://www.xiaohongshu.com/explore/baozishop",
+                    "Caption: Baozi Shop near Temple of Heaven.",
+                    "Creator handle: @beijing.eats",
+                    "Source handle: @beijing.eats"
+                ],
+                confidence: 0.79,
+                missingInfo: ["User confirmation required"],
+                savedAt: now.addingTimeInterval(-2 * 3600),
+                sourceHandle: "beijing.eats"
+            ),
+        ]
+    }
+
+    static func reviewCandidates(now: Date = Date()) -> [PendingReviewCandidate] {
+#if DEBUG
+        if ReviewDemo.usesDoodleParityFace {
+            return doodleParityReviewCandidates(now: now)
+        }
+#endif
+        return [
             PendingReviewCandidate(
                 candidateName: harborOvenPizzaName,
                 address: "Berth 73, San Pedro, Los Angeles, CA 90731",

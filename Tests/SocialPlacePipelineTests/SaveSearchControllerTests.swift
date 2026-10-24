@@ -2638,6 +2638,38 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testExactSearchResolutionRetiresSameNameSeedAndCapturedClues() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("exact-search-same-name-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var seed = Self.correctionClue(overlappingStamp: true)
+        seed.name = "Harbor Oven Pizza"
+        var captured = seed
+        captured.id = UUID()
+        captured.evidence = ["Source URL: https://www.google.com/maps/place/Harbor+Oven+Pizza"]
+        _ = try vault.saveReviewCandidate(seed)
+        _ = try vault.saveReviewCandidate(captured)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        map.reviewCandidates = [seed, captured]
+        map.beginExactSearchResolution(for: captured)
+
+        let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+        XCTAssertEqual(resolved.id, stamp.id)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == captured.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == seed.id },
+            "A same-name same-city leftover must stay until it is resolved by id"
+        )
+        let leftover = try vault.reviewCandidates()
+        XCTAssertFalse(leftover.contains { $0.id == captured.id })
+        XCTAssertTrue(leftover.contains { $0.id == seed.id })
+    }
+
+    @MainActor
     func testExactSearchResolutionPersistsHandleAndDedupesEvidenceRemotely() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("exact-search-saved-remote-\(UUID().uuidString).json")
@@ -3630,6 +3662,41 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(resolved.sourceEvidence.contains("Original source note"))
         XCTAssertTrue(resolved.sourceEvidence.contains("Source URL: https://www.instagram.com/p/harborovenpizza/"))
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
+    @MainActor
+    func testResolvingOneClueKeepsSameNameSiblingByID() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("same-name-sibling-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var resolved = Self.correctionClue(overlappingStamp: true)
+        resolved.name = "Harbor Oven Pizza"
+        var sibling = Self.correctionClue(overlappingStamp: false)
+        sibling.name = "harbor oven pizza"
+        sibling.city = "Osaka"
+        sibling.address = "Osaka"
+        _ = try vault.saveReviewCandidate(resolved)
+        _ = try vault.saveReviewCandidate(sibling)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        map.reviewCandidates = [resolved, sibling]
+        map.selectedReviewCandidate = sibling
+        map.beginExactSearchResolution(for: resolved)
+
+        _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == sibling.id },
+            "A same-name sibling must stay until it is resolved by id"
+        )
+        XCTAssertEqual(map.selectedReviewCandidate?.id, sibling.id)
+        let leftover = try vault.reviewCandidates()
+        XCTAssertFalse(leftover.contains { $0.id == resolved.id })
+        XCTAssertTrue(leftover.contains { $0.id == sibling.id })
     }
 
     @MainActor
@@ -6453,6 +6520,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
     func testReviewHeroAndExactSearchWiringStaySplit() throws {
         let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
+        let mapModel = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
         XCTAssertTrue(drawer.contains("if candidate.hasReliableCoordinates"))
         XCTAssertTrue(drawer.contains("onFocusOnMap ?? onFindExactPlace"))
         XCTAssertTrue(drawer.contains("Investigate"))
@@ -6462,6 +6530,19 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(content.contains("preservesExactSearchClue: true"))
         XCTAssertFalse(content.contains("openMapSearch(initialQuery: query)"))
         XCTAssertTrue(content.contains("chooseSavedStampFromExactSearch"))
+        XCTAssertTrue(content.contains("openSavedPlaceFromMapSearch($0)"))
+        XCTAssertTrue(content.contains("hasActiveExactSearchResolution"))
+        XCTAssertTrue(content.contains("activateExactSearchSession"))
+        XCTAssertTrue(content.contains("restoreExactSearchResolutionIfNeeded"))
+        XCTAssertTrue(content.contains("preserveExactSearchClue"))
+        XCTAssertTrue(content.contains("exactSearchClueID"))
+        XCTAssertTrue(mapModel.contains("removeReviewCandidateAfterRemoteConfirm"))
+        XCTAssertTrue(mapModel.contains("Unplaced cleanup must succeed"))
+        XCTAssertTrue(mapModel.contains("$0.id == clue.id"))
+        XCTAssertFalse(mapModel.contains("isDuplicateReviewClue"))
+        XCTAssertFalse(mapModel.contains("isIndependentSameNameBranch"))
+        XCTAssertFalse(mapModel.contains("shouldRetire"))
+        XCTAssertFalse(mapModel.contains("retireSameNameReviewClues"))
         XCTAssertTrue(content.contains("mapDrawerPresentedActionError"))
         XCTAssertTrue(content.contains("MapDrawerActionErrorAlert"))
         XCTAssertTrue(content.contains("map.drawer.actionError"))

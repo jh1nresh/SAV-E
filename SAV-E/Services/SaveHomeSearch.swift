@@ -31,6 +31,27 @@ struct SaveHomeSearch {
         draft = ""
     }
 
+    /// Metro-level city for D2 switching. Prefers recognized aliases so
+    /// "Shibuya City, Tokyo" and "Dusit, Bangkok" resolve to Tokyo / Bangkok.
+    static func metroKey(in address: String) -> String? {
+        for city in City.ordered where city.matches(address: address) {
+            return city.rawValue
+        }
+        return nil
+    }
+
+    static func metroName(in address: String, traditionalChinese: Bool) -> String? {
+        guard let key = metroKey(in: address) else { return nil }
+        return cityLabel(for: key, traditionalChinese: traditionalChinese)
+    }
+
+    /// Metro from a fix when the address is only a park or neighborhood
+    /// (parity "Tiantan"). Passport's city line is the metro, not the area.
+    static func metroName(at latitude: Double, longitude: Double, traditionalChinese: Bool) -> String? {
+        guard let city = City.containing(latitude: latitude, longitude: longitude) else { return nil }
+        return cityLabel(for: city.rawValue, traditionalChinese: traditionalChinese)
+    }
+
     static func cityLabel(for value: String, traditionalChinese: Bool) -> String? {
         guard let city = City(rawValue: value) else { return nil }
         let labels: (String, String)
@@ -261,6 +282,25 @@ private extension SaveHomeSearch {
             case .guangzhou: return ["guangzhou", "廣州", "广州"]
             case .shenzhen: return ["shenzhen", "深圳"]
             case .chengdu: return ["chengdu", "成都"]
+            }
+        }
+
+        static func containing(latitude: Double, longitude: Double) -> City? {
+            ordered.first { $0.contains(latitude: latitude, longitude: longitude) }
+        }
+
+        func contains(latitude: Double, longitude: Double) -> Bool {
+            switch self {
+            case .beijing:
+                return (39.4...40.6).contains(latitude) && (115.7...117.4).contains(longitude)
+            case .taipei:
+                return (24.9...25.22).contains(latitude) && (121.45...121.67).contains(longitude)
+            case .tokyo:
+                return (35.5...35.9).contains(latitude) && (139.5...139.95).contains(longitude)
+            case .shanghai:
+                return (31.0...31.5).contains(latitude) && (121.2...121.8).contains(longitude)
+            default:
+                return false
             }
         }
 

@@ -30,7 +30,13 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(paywall.contains("Save every place you love"))
         XCTAssertTrue(paywall.contains("想去的地方，全部存下"))
         XCTAssertFalse(paywall.contains("收藏每一個你愛的地方"))
-        XCTAssertTrue(paywall.contains("SaveDisplayTitle(text: headline, pointSize: 34)"))
+        XCTAssertNotNil(
+            paywall.range(
+                of: #"SaveDisplayTitle\(\s*text:\s*(?:headline|languageSettings\.localized\([\s\S]*?Save every place you love[\s\S]*?\))\s*,[\s\S]*?pointSize:\s*34"#,
+                options: .regularExpression
+            ),
+            "Headline must call SaveDisplayTitle at pointSize 34; text is headline or the localized source"
+        )
         XCTAssertFalse(paywall.contains("SaveAtlasType.display(28)"))
         XCTAssertTrue(paywall.contains("Free: 50 places"))
         XCTAssertTrue(paywall.contains("免費：50 個地點"))
@@ -157,11 +163,19 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(rail.contains("func testFreeCapE4Screenshots()"))
         XCTAssertTrue(
             rail.contains("home.saves"),
-            "E4 taps the live Home header Saves control (SaveTileTownHomeView)"
+            "E4 taps the live Doodle Home Saves control (home.saves)"
         )
         XCTAssertTrue(
+            rail.contains("home.review"),
+            "E4 opens Saves from the Doodle Home clues line when review candidates exist"
+        )
+        XCTAssertFalse(
             rail.contains("home.more.saves"),
-            "More → Manage remains a fallback after the in-flow sheet opens"
+            "Doodle Home has no More sheet; do not keep a TileTown Manage fallback"
+        )
+        XCTAssertTrue(
+            rail.contains("E4 Settings Map Stamp signal: home.place.* needs a resolved city."),
+            "E4 fixture stays on DEBUG launch args so Doodle Home can show a Map Stamp row"
         )
         XCTAssertTrue(
             rail.contains("firstHittable"),
@@ -220,7 +234,11 @@ final class SAVEProductionConfigTests: XCTestCase {
         )
         XCTAssertTrue(
             rail.contains("Settings Pro row requires a confirmed Map Stamp on Home first."),
-            "E4 Settings waits for home.featuredName before opening the gated Pro row"
+            "E4 Settings waits for a Doodle Home home.place.* row before opening the gated Pro row"
+        )
+        XCTAssertTrue(
+            rail.contains("identifier BEGINSWITH 'home.place.'"),
+            "E4 Settings Map Stamp signal is a Doodle Home place row, not home.featuredName"
         )
         let saves = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
         XCTAssertTrue(saves.contains("saves.unplaced"))
@@ -2839,7 +2857,9 @@ final class SAVEProductionConfigTests: XCTestCase {
         let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
         XCTAssertTrue(paywall.contains("if trigger == .savedPlaceLimit"))
         XCTAssertTrue(paywall.contains("You've saved 50 places. Keep going."))
+        XCTAssertTrue(paywall.contains("已存 50 個地點，繼續存下去"))
         XCTAssertTrue(paywall.contains("Free: 50 places"))
+        XCTAssertTrue(paywall.contains("免費：50 個地點"))
         XCTAssertTrue(paywall.contains("paywall.savedNote"))
 
         AnalysisRequestURLProtocol.handler = { request in

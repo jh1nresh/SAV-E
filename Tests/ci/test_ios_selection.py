@@ -18,7 +18,12 @@ class CoverageTests(unittest.TestCase):
         full = selection.select([], full=True)
         actual = set(full["tests"] + [selection.TRIP_SHEET])
         baseline = set(json.loads((ROOT / "Tests/ci/full-ui-baseline.json").read_text()))
-        self.assertEqual(actual, baseline | {selection.RAIL + "testHomeListProgressiveSearch"})
+        self.assertEqual(actual, baseline | {
+            selection.RAIL + "testHomeListProgressiveSearch",
+            selection.RAIL + "testMiniMapOpensMapWithCarriedFilterAndCityChange",
+            selection.RAIL + "testHomeCollectedOpensPassportWithCityCount",
+            selection.RAIL + "testSavesTripsBackReturnsToSaves",
+        })
         self.assertIn(selection.RAIL + "testUnplacedLabelFullScreenAtDeviceWidth", full["tests"])
         self.assertIn(selection.RAIL + "testUnplacedLabelFullScreenAtDeviceWidth", selection.select([])["tests"])
         self.assertTrue(full["trip"])
@@ -167,6 +172,7 @@ class CoverageTests(unittest.TestCase):
             self.assertIn(selection.RAIL + name, spec["tests"])
         self.assertNotIn(selection.TRIP_SHEET, spec["tests"])
         self.assertNotIn(selection.RAIL + "testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch", spec["tests"])
+        self.assertNotIn(selection.RAIL + "testDoodlePaywallParity", spec["tests"])
 
     def test_cli_honors_save_ui_test_focus_off_main(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -214,6 +220,10 @@ class CoverageTests(unittest.TestCase):
         self.assertRegex(ci_workflow, r"(?m)^  ios-fast:\s*$")
         self.assertIn("run-visual-parity.sh", ios_workflow)
         self.assertIn("--threshold 0.90", ios_workflow)
+        self.assertIn("--skip-screens", ios_workflow)
+        self.assertIn("testDoodlePaywallParity", ios_workflow)
+        self.assertIn("grep -q 'testDoodleCaptureParity'", ios_workflow)
+        self.assertIn("pr295-capture-light.png", ios_workflow)
         self.assertIn("xcrun simctl io booted screenshot", ios_workflow)
         self.assertNotIn("run-visual-parity.sh", ci_workflow)
         self.assertIn("SAVE_UI_TEST_FOCUS", ios_workflow)
