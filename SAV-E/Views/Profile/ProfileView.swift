@@ -6,6 +6,8 @@ struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.appLanguageSettings) private var languageSettings
+    @EnvironmentObject private var session: SaveDoodleSession
+    @ObservedObject private var locationService = LocationService.shared
     @StateObject private var viewModel = ProfileViewModel()
     @StateObject private var posts = SharedPostsStore()
     @State private var showSettings = false
@@ -69,6 +71,25 @@ struct ProfileView: View {
         localSavedPlaces
     }
 
+    /// Home Collected sheet uses city X/Y. The root Passport tab stays the
+    /// full collection — city scope must not hide other cities or an
+    /// unresolved Near you.
+    private var cityStampPlaces: [Place] {
+        // The sheet mounts with `localSavedPlaces == []` until `.task` runs.
+        // Home already showed Collected from `savedPlaces`; do not wait.
+        let source = localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces
+        guard !isRootTab else { return source }
+        let scoped = SaveDoodleHomeProgressCatalog.cityPlaces(
+            from: source,
+            selection: session.city,
+            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
+            locationDenied: locationService.isAuthorizationDenied
+        )
+        // Collected must not open a blank Passport when Near you cannot
+        // resolve (denied + no fix, or a newest save with no locality).
+        return scoped.isEmpty ? source : scoped
+    }
+
     private var todayMissions: [SavePassportTodayMission] {
         guard isRootTab else { return [] }
         return SavePassportTodayCatalog.missions(
@@ -99,10 +120,8 @@ struct ProfileView: View {
                             : SaveTheme.Spacing.lg
                     )
 
-                    if isRootTab {
-                        PassportTileTownCollection(places: passportPlaces, onOpenPlace: onOpenPlace)
-                            .padding(.horizontal, 16)
-                    }
+                    PassportTileTownCollection(places: cityStampPlaces, onOpenPlace: onOpenPlace)
+                        .padding(.horizontal, 16)
 
                     passportIdentity
                         .padding(.horizontal, 16)
@@ -392,6 +411,10 @@ struct ProfileView: View {
         }
         .onAppear {
             if requestsConnections { opensConnections = true; requestsConnections = false }
+            if localSavedPlaces.isEmpty { localSavedPlaces = savedPlaces }
+        }
+        .onChange(of: savedPlaces.count) { _, _ in
+            localSavedPlaces = savedPlaces
         }
         .task(id: posts.filter) { await posts.refresh(.mine) }
         .task(id: currentUserID) {
@@ -596,10 +619,11 @@ struct ProfileView: View {
                 visitError = nil
                 Task {
                     defer { isUpdatingVisit = false }
-                    var updated = place
-                    updated.status = .visited
                     do {
+                        var updated = place
+                        updated.status = .visited
                         try await onUpdatePlace(updated)
+                        SaveDoodleVisitStore().recordVisit(for: place.id)
                         SavePassportFieldStreakStore.shared.recordFieldAction()
                         refreshFieldStreak()
                         if let index = localSavedPlaces.firstIndex(where: { $0.id == place.id }) {
@@ -2303,6 +2327,10 @@ private struct PassportTileTownCollection: View {
         SaveTileTownProductLock.passportGoal(for: places.count)
     }
 
+    private var cityProgress: (visited: Int, saved: Int) {
+        SaveDoodleHomeProgressCatalog.progress(in: places)
+    }
+
     private var lockedCount: Int {
         max(places.count < goal ? 1 : 0, min(6, goal - places.count))
     }
@@ -2315,9 +2343,12 @@ private struct PassportTileTownCollection: View {
             )
             .accessibilityLabel(languageSettings.localized(english: "Passport", traditionalChinese: "護照"))
             HStack {
-                Text("\(places.count)/\(goal)")
+                Text("\(cityProgress.visited)/\(cityProgress.saved)")
                     .font(SaveAtlasType.strong(13))
                     .foregroundStyle(SaveAtlasPalette.forest)
+                    .accessibilityIdentifier("profile.stampProgress")
+                    .accessibilityLabel("\(cityProgress.visited)/\(cityProgress.saved)")
+                    .accessibilityValue("\(cityProgress.visited) of \(cityProgress.saved)")
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
                         Capsule().fill(SaveAtlasPalette.kraft.opacity(0.45))
@@ -2327,10 +2358,8 @@ private struct PassportTileTownCollection: View {
                     }
                 }
                 .frame(height: 8)
+                .accessibilityHidden(true)
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("profile.stampProgress")
-            .accessibilityValue("\(places.count) of \(goal)")
 
             LazyVGrid(
                 columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
@@ -2358,12 +2387,13 @@ private struct PassportTileTownCollection: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.stampGrid")
     }
 
     private var progress: CGFloat {
-        guard goal > 0 else { return 0 }
-        return min(1, CGFloat(places.count) / CGFloat(goal))
+        guard cityProgress.saved > 0 else { return 0 }
+        return min(1, CGFloat(cityProgress.visited) / CGFloat(cityProgress.saved))
     }
 }
 
@@ -2954,4 +2984,5 @@ private struct LanguageSettingsSheet: View {
 #Preview {
     ProfileView(requestsConnections: .constant(false))
         .environment(\.appLanguageSettings, AppLanguageSettings())
+        .environmentObject(SaveDoodleSession())
 }

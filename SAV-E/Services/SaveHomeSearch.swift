@@ -31,6 +31,20 @@ struct SaveHomeSearch {
         draft = ""
     }
 
+    /// Metro-level city for D2 switching. Prefers recognized aliases so
+    /// "Shibuya City, Tokyo" and "Dusit, Bangkok" resolve to Tokyo / Bangkok.
+    static func metroKey(in address: String) -> String? {
+        for city in City.ordered where city.matches(address: address) {
+            return city.rawValue
+        }
+        return nil
+    }
+
+    static func metroName(in address: String, traditionalChinese: Bool) -> String? {
+        guard let key = metroKey(in: address) else { return nil }
+        return cityLabel(for: key, traditionalChinese: traditionalChinese)
+    }
+
     static func cityLabel(for value: String, traditionalChinese: Bool) -> String? {
         guard let city = City(rawValue: value) else { return nil }
         let labels: (String, String)

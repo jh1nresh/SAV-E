@@ -55,15 +55,19 @@ Production parity uses `Reference/ProductionTargets`. The original
 `Reference/Targets` remain the immutable inputs for deterministic illustration
 extraction, so approving a UI refresh cannot silently alter generated assets.
 
-The Home production target was refreshed for the 2026-10-14 v5 tile-town lock
-from CI run `38694512939`, head
-`b98b3ef63d275ecce199c8516dbe29a9149f1287` (`five-tab-home` attachment).
-The capture is uniformly downsampled from 3× to the 402 × 874 target size,
-with no content edits. The locked face is SAVVY, quiet header controls, the
-nearest-neighbor tile-town peek, clues, recent kraft stamps, and the five-tab
-rail. Predecessor run `38672287517` / `bc89b9a` remains the earlier tile-town
-Home before the v5 mock pass. The comparator, other targets, and `0.90`
-threshold remain unchanged.
+The Home production target is DESIGN v2's exact 402×874
+`home-light.png` from `design/doodle-targets-2026-10-20` at `eade369`.
+`home-dark.png` sits next to it for DESIGN comparison.
+`home-mask.png` is the ignore mask (white = ignore). Grade position,
+size, color and font style. v1 is retired. Those rasters are rendered
+at 1× 402×874, not a crop. Home's target stays 1× 402 × 874.
+Founder sign-off 2026-10-20:
+「改成跟手繪稿比對，門檻維持 0.90」. The Map production target is the
+live Taipei Apple Maps CI capture (iPhone 16 Pro, 402pt, 3× 1206×2622)
+from #298; `map-mask.png` is not applied to the 0.90 score. Saves and
+Plan stay on their current locks until those Doodle PRs. The `0.90`
+threshold remains the CI gate for Home, Map, Saves, and Plan. Home's
+mask does not waive the score.
 
 ## Boundaries
 

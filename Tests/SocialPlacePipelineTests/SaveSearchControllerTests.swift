@@ -2638,6 +2638,41 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testResolvingOneClueKeepsSameNameSiblingByID() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("same-name-sibling-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var resolved = Self.correctionClue(overlappingStamp: true)
+        resolved.name = "Harbor Oven Pizza"
+        var sibling = Self.correctionClue(overlappingStamp: false)
+        sibling.name = "harbor oven pizza"
+        sibling.city = "Osaka"
+        sibling.address = "Osaka"
+        _ = try vault.saveReviewCandidate(resolved)
+        _ = try vault.saveReviewCandidate(sibling)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        map.reviewCandidates = [resolved, sibling]
+        map.selectedReviewCandidate = sibling
+        map.beginExactSearchResolution(for: resolved)
+
+        _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == sibling.id },
+            "A same-name sibling must stay until it is resolved by id"
+        )
+        XCTAssertEqual(map.selectedReviewCandidate?.id, sibling.id)
+        let leftover = try vault.reviewCandidates()
+        XCTAssertFalse(leftover.contains { $0.id == resolved.id })
+        XCTAssertTrue(leftover.contains { $0.id == sibling.id })
+    }
+
+    @MainActor
     func testExactSearchResolutionPersistsHandleAndDedupesEvidenceRemotely() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("exact-search-saved-remote-\(UUID().uuidString).json")
@@ -6453,6 +6488,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
     func testReviewHeroAndExactSearchWiringStaySplit() throws {
         let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
+        let mapModel = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
         XCTAssertTrue(drawer.contains("if candidate.hasReliableCoordinates"))
         XCTAssertTrue(drawer.contains("onFocusOnMap ?? onFindExactPlace"))
         XCTAssertTrue(drawer.contains("Investigate"))
@@ -6462,6 +6498,26 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(content.contains("preservesExactSearchClue: true"))
         XCTAssertFalse(content.contains("openMapSearch(initialQuery: query)"))
         XCTAssertTrue(content.contains("chooseSavedStampFromExactSearch"))
+        XCTAssertTrue(content.contains("preservesExactSearchClue: false"))
+        XCTAssertTrue(content.contains("openSavedPlaceFromMapSearch($0)"))
+        XCTAssertTrue(content.contains("endCanceledExactSearchCorrection()"))
+        XCTAssertTrue(content.contains("saveMapCandidateAndEndExactSearchIfNeeded"))
+        XCTAssertTrue(content.contains("clearResolvedExactSearchSession()"))
+        XCTAssertTrue(content.contains("preservesExactSearchClue: isExactSearchSessionActive"))
+        XCTAssertFalse(content.contains(".id(isExactSearchSessionActive)"))
+        XCTAssertTrue(content.contains("let shouldResolveClue = isExactSearchSessionActive"))
+        XCTAssertTrue(content.contains("|| exactSearchClueID != nil"))
+        XCTAssertTrue(content.contains("hasActiveExactSearchResolution"))
+        XCTAssertTrue(content.contains("activateExactSearchSession"))
+        XCTAssertTrue(content.contains("restoreExactSearchResolutionIfNeeded"))
+        XCTAssertTrue(content.contains("preserveExactSearchClue"))
+        XCTAssertTrue(content.contains("exactSearchClueID"))
+        XCTAssertTrue(content.contains("if endsExactSearch"))
+        XCTAssertFalse(content.contains("onClose: collapseMapPanel"))
+        XCTAssertTrue(drawer.contains("onClearMapSearchResults(true)"))
+        XCTAssertTrue(drawer.contains("onClearMapSearchResults(false)"))
+        XCTAssertTrue(mapModel.contains("retireResolvedReviewClue"))
+        XCTAssertFalse(mapModel.contains("retireSameNameReviewClues"))
         XCTAssertTrue(content.contains("mapDrawerPresentedActionError"))
         XCTAssertTrue(content.contains("MapDrawerActionErrorAlert"))
         XCTAssertTrue(content.contains("map.drawer.actionError"))

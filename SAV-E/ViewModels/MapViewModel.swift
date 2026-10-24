@@ -665,6 +665,7 @@ final class MapViewModel: ObservableObject {
     /// returned map candidate or choosing a saved Map Stamp retires that
     /// clue. A later unrelated map tap must never retire it.
     private var exactSearchResolution: ExactSearchResolution?
+    var hasActiveExactSearchResolution: Bool { exactSearchResolution != nil }
     /// After a failed rollback the correction stays claimed on this stamp so
     /// the same clue cannot attach to a second place.
     private var exactSearchRollbackLockPlaceID: UUID?
@@ -851,6 +852,27 @@ final class MapViewModel: ObservableObject {
             result = result.filter { selectedCategories.contains($0.category) }
         }
         return result
+    }
+
+    /// HoP 298-10 screenshot fixture: one unsaved Taipei candidate next to
+    /// the shared H1/M1 saved+visited set. Production never sets this flag.
+    func seedUITestUnsavedCandidateIfNeeded() {
+#if DEBUG
+        guard ProcessInfo.processInfo.arguments.contains("--uitest-map-unsaved-candidate") else { return }
+        guard !mapCandidates.contains(where: { $0.id == "uitest-unsaved-taipei" }) else { return }
+        mapCandidates.append(
+            SaveMapCandidate(
+                id: "uitest-unsaved-taipei",
+                title: "Unsaved Night Market",
+                subtitle: "Taipei",
+                latitude: 25.0378,
+                longitude: 121.5672,
+                category: .attraction,
+                sourcePlatform: .other,
+                evidence: ["UITest unsaved"]
+            )
+        )
+#endif
     }
 
     // MARK: - Free saved-place cap
@@ -2601,21 +2623,78 @@ final class MapViewModel: ObservableObject {
         // After the decision commits, ordinary review rows stay best-effort
         // so a vault write cannot roll back a stamp the server already
         // accepted. Unplaced cleanup must succeed or the parked row can
-        // reappear and be confirmed again.
-        if committed {
-            try removeReviewCandidateAfterRemoteConfirm(clue)
-        } else {
-            try saveLocalVaultService.removeReviewCandidate(clue.id, ownerSubject: clue.ownerSubject)
-        }
-        reviewCandidates.removeAll { $0.id == clue.id }
-        if selectedReviewCandidate?.id == clue.id {
-            selectedReviewCandidate = nil
-        }
-        if exactSearchResolution?.clue.id == clue.id {
-            exactSearchResolution = nil
-        }
+        // reappear and be confirmed again. Same-place leftovers (seed +
+        // recapture) retire with the originating clue.
+        try retireResolvedReviewClue(clue, committed: committed)
         if usesRemotePersistence { await refreshReviewCandidatesLoggingFailures() }
         return (true, committed)
+    }
+
+    /// Retire the originating clue and same-place leftovers (seed + recapture).
+    /// Same-name clues in another city, or same-city branches far enough to
+    /// have their own coordinates, stay.
+    private func retireResolvedReviewClue(
+        _ clue: PlaceReviewCandidate,
+        committed: Bool = true
+    ) throws {
+        let retiring = reviewCandidates.filter { isDuplicateReviewClue($0, of: clue) }
+        let ids = Set(retiring.map(\.id) + [clue.id])
+        if committed {
+            try removeReviewCandidateAfterRemoteConfirm(clue)
+            for leftover in retiring where leftover.id != clue.id {
+                try? saveLocalVaultService.removeReviewCandidate(
+                    leftover.id,
+                    ownerSubject: leftover.ownerSubject
+                )
+            }
+        } else {
+            try saveLocalVaultService.removeReviewCandidate(
+                clue.id,
+                ownerSubject: clue.ownerSubject
+            )
+            for leftover in retiring where leftover.id != clue.id {
+                try? saveLocalVaultService.removeReviewCandidate(
+                    leftover.id,
+                    ownerSubject: leftover.ownerSubject
+                )
+            }
+        }
+        reviewCandidates.removeAll { ids.contains($0.id) }
+        if selectedReviewCandidate.map({ ids.contains($0.id) }) == true {
+            selectedReviewCandidate = nil
+        }
+        if exactSearchResolution.map({ ids.contains($0.clue.id) }) == true {
+            exactSearchResolution = nil
+        }
+    }
+
+    private func isDuplicateReviewClue(
+        _ leftover: PlaceReviewCandidate,
+        of resolved: PlaceReviewCandidate
+    ) -> Bool {
+        if leftover.id == resolved.id { return true }
+        guard leftover.name.localizedCaseInsensitiveCompare(resolved.name) == .orderedSame else {
+            return false
+        }
+        if let meters = reviewClueDistanceMeters(leftover, resolved) {
+            return meters < 250
+        }
+        let leftoverCity = leftover.city?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        let resolvedCity = resolved.city?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
+        // No coordinates to prove they are different places. Only collapse a
+        // nameless-city leftover when both name the same city (seed + recapture).
+        return !leftoverCity.isEmpty && leftoverCity == resolvedCity
+    }
+
+    private func reviewClueDistanceMeters(
+        _ leftover: PlaceReviewCandidate,
+        _ resolved: PlaceReviewCandidate
+    ) -> CLLocationDistance? {
+        guard let lat1 = leftover.latitude, let lon1 = leftover.longitude,
+              let lat2 = resolved.latitude, let lon2 = resolved.longitude
+        else { return nil }
+        return CLLocation(latitude: lat1, longitude: lon1)
+            .distance(from: CLLocation(latitude: lat2, longitude: lon2))
     }
 
     /// Terminal actions for this clue (reject / archive / source-only / confirm)
@@ -4203,20 +4282,34 @@ final class MapViewModel: ObservableObject {
         guard selectedPlace?.id == place.id,
               authService.currentUserId == owner,
               authService.sessionGeneration == generation else { return }
-
-        selectedPlace = updatedPlace
-        if let index = places.firstIndex(where: { $0.id == place.id }) {
-            places[index] = updatedPlace
+        let latest = places.first(where: { $0.id == place.id }) ?? selectedPlace ?? place
+        // Preserve check-in and other edits made while provider details were in flight.
+        guard latest.name == place.name,
+              latest.address == place.address,
+              latest.coordinate.latitude == place.latitude,
+              latest.coordinate.longitude == place.longitude else { return }
+        var merged = latest
+        merged.businessPhotoUrls = updatedPlace.businessPhotoUrls
+        if merged.googlePlaceId == place.googlePlaceId {
+            merged.googlePlaceId = updatedPlace.googlePlaceId
         }
+        merged.googleRating = merged.googleRating ?? updatedPlace.googleRating
+        merged.priceRange = merged.priceRange ?? updatedPlace.priceRange
+        merged.openingHours = merged.openingHours ?? updatedPlace.openingHours
 
+        selectedPlace = merged
+        if let index = places.firstIndex(where: { $0.id == place.id }) {
+            places[index] = merged
+        }
+        try? mirrorToLocalVault(merged, startedBy: owner, generation: generation)
+
+        guard usesRemotePersistence else { return }
         do {
             // updatePlace PATCHes the existing row; the create endpoint is a
             // plain insert and 500s on the duplicate id, which silently kept
             // enriched photos from ever persisting.
-            if usesRemotePersistence {
-                try await supabaseService.updatePlace(updatedPlace, previous: place)
-            }
-            try? mirrorToLocalVault(updatedPlace, startedBy: owner, generation: generation)
+            try await supabaseService.updatePlace(merged, previous: latest)
+            try? mirrorToLocalVault(merged, startedBy: owner, generation: generation)
         } catch {
             selectedPlace = place
             if let index = places.firstIndex(where: { $0.id == place.id }) {
@@ -4275,7 +4368,7 @@ final class MapViewModel: ObservableObject {
         selectedMapFeature = nil
     }
 
-    func clearMapSearchResults() {
+    func clearMapSearchResults(preservesExactSearchClue: Bool = false) {
         _ = beginMapCandidateSearch()
         mapCandidates = []
         selectedMapCandidate = nil
@@ -4284,7 +4377,9 @@ final class MapViewModel: ObservableObject {
         selectedIntentFilters = []
         nearbyFilterAnchor = nil
         activeFilter = nil
-        dropExactSearchResolutionUnlessLocked()
+        if !preservesExactSearchClue {
+            dropExactSearchResolutionUnlessLocked()
+        }
         mapSearchNeedsLocationHint = false
         lastSearchAnchor = nil
         clearRoute()
@@ -4304,7 +4399,7 @@ final class MapViewModel: ObservableObject {
             exactSearchRollbackLockPlaceID = lockPlaceID
             return
         }
-        guard let currentClue = reviewCandidates.first(where: { $0.id == candidate.id }) else { return }
+        let currentClue = reviewCandidates.first(where: { $0.id == candidate.id }) ?? candidate
         exactSearchResolution = ExactSearchResolution(
             clue: currentClue,
             candidateIDs: Set(mapCandidates.map(\.id))
