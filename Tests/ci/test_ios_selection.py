@@ -28,6 +28,7 @@ class CoverageTests(unittest.TestCase):
             selection.RAIL + "testHomeTaipeiGrantedDistances",
             selection.RAIL + "testHomeTPEAEvidence",
             selection.RAIL + "testHopU1SavedPlaceLimitPaywallShowsSavedFiftyWithoutManMan",
+            selection.RAIL + "testMapSavedUnsavedVisitedTaipeiFixture",
         })
         self.assertIn(selection.RAIL + "testUnplacedLabelFullScreenAtDeviceWidth", full["tests"])
         self.assertIn(selection.RAIL + "testUnplacedLabelFullScreenAtDeviceWidth", selection.select([])["tests"])

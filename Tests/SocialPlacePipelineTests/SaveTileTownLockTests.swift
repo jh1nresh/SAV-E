@@ -170,14 +170,16 @@ final class SaveTileTownLockTests: XCTestCase {
     }
 
     func testMapOwnsNearbySavedFriendsChipsOnTileTown() throws {
-        let map = try source(at: "SAV-E/Views/TileTown/SaveTileTownRootMap.swift")
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
         let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
-        XCTAssertTrue(map.contains("SaveTileTownCanvas"))
+        XCTAssertTrue(map.contains(".mapStyle(.standard(emphasis: .automatic))"))
         XCTAssertTrue(map.contains("AtlasMetrics.statusBarHeight"))
-        XCTAssertFalse(map.contains(".padding(.top, 8)"))
-        XCTAssertTrue(map.contains("SaveTileTownPeekCard"))
-        XCTAssertTrue(map.contains("allowsPan: true"))
-        XCTAssertTrue(map.contains(".frame(minHeight: 44)"))
+        XCTAssertFalse(map.contains("emphasis: .muted"))
+        XCTAssertFalse(map.contains(".saturation("))
+        XCTAssertFalse(map.contains(".colorMultiply("))
+        XCTAssertFalse(map.contains("SaveTileTownCanvas"))
+        XCTAssertTrue(map.contains("map.placeSheet"))
+        XCTAssertTrue(map.contains(".frame(minHeight: 44)") || map.contains("SaveLayout.minTap"))
         let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
         XCTAssertTrue(town.contains("interpolationQuality = .none"))
         XCTAssertTrue(town.contains("interpolation(.none)"))
@@ -187,27 +189,18 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(town.contains("mapChromeHeight"))
         XCTAssertFalse(town.contains("addQuadCurve"))
         XCTAssertFalse(town.contains("struct Triangle"))
-        XCTAssertTrue(map.contains("map.lens.nearby") || map.contains("map.lensRail"))
-        XCTAssertTrue(map.contains("SaveTileTownMapLens"))
         XCTAssertTrue(map.contains("map.liveSurface"))
-        XCTAssertTrue(
-            map.contains("SaveDoodleSession"),
-            "B-5 one-shot View on map reads Home session for Eat/Go + city"
-        )
-        XCTAssertFalse(map.contains("SaveDoodleHomeCatalog.visiblePlaces("))
-        XCTAssertFalse(map.contains("mapAccessibilityIdentifier"))
-        XCTAssertTrue(
-            map.contains("\"map.city\""),
-            "B-5 shows Home city on Map after View on map; two-way sharing stays #298"
-        )
+        XCTAssertTrue(map.contains("SaveDoodleSession"))
+        XCTAssertTrue(map.contains("SaveDoodleHomeCatalog.listedPlaces("))
+        XCTAssertTrue(map.contains("mapAccessibilityIdentifier"))
+        XCTAssertTrue(map.contains("map.city"))
         XCTAssertTrue(map.contains("map.eatGo"))
-        XCTAssertTrue(map.contains("pendingShowOnMapPlaceID"))
-        XCTAssertFalse(map.contains("mapFollowsHomeFilter"))
         let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
         XCTAssertTrue(panel.contains("Spacer(minLength: 0)"))
         XCTAssertTrue(panel.contains("alignment: .bottom"))
         XCTAssertTrue(panel.contains("SaveTileTownProductLock.mapChromeHeight"))
-        XCTAssertTrue(root.contains("SaveTileTownRootMap("))
+        XCTAssertTrue(root.contains("SaveDoodleMapView("))
+        XCTAssertFalse(root.contains("SaveTileTownRootMap("))
         XCTAssertFalse(root.contains("SaveAtlasInteractiveRootMap("))
     }
 

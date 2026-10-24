@@ -253,6 +253,7 @@ Reject the prototype if three or more are true:
   `Scripts/VisualParity.swift` ignores the system-owned top 48 rows. Home
   grades unmasked against `ProductionTargets/home.png` (position, size,
   color, and font style). Other pages keep tolerant edge overlap (35%) with
+
   per-pixel appearance similarity (65%). The four raster-approved pages
   must score at least 0.90. Trips uses
   the same production component and structural UI gate until its own approved

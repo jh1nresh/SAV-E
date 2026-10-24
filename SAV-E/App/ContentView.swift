@@ -826,8 +826,24 @@ struct ContentView: View {
     }
 
     private func closeMapSearch() {
+        endCanceledExactSearchCorrection()
         invalidateExactSearchRequest()
         collapseMapPanel()
+    }
+
+    /// `map.search.close` cancels Review correction. Collapse/reopen still
+    /// keeps the session so a refine remount can finish; this explicit close
+    /// drops it so a later pin or peek cannot silently confirm the canceled
+    /// clue.
+    private func endCanceledExactSearchCorrection() {
+        invalidateExactSearchRequest()
+        guard drawerLaunchRequest.preservesExactSearchClue else { return }
+        drawerLaunchRequest = DrawerLaunchRequest(
+            target: drawerLaunchRequest.target,
+            initialQuery: drawerLaunchRequest.initialQuery,
+            focusesSearch: drawerLaunchRequest.focusesSearch,
+            preservesExactSearchClue: false
+        )
     }
 
     @ViewBuilder
@@ -1006,8 +1022,7 @@ struct ContentView: View {
                 let resolvesOriginPlan = pendingOriginPlanCandidateID.map {
                     mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
                 } ?? false
-                let place = try await mapVM.saveMapCandidateAsPlace(candidate)
-                endExactSearchSessionAfterCandidateSave()
+                let place = try await saveMapCandidateAndEndExactSearchIfNeeded(candidate)
                 if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
                     requestTripAssignment(for: place)
@@ -1406,8 +1421,7 @@ struct ContentView: View {
                 let resolvesOriginPlan = pendingOriginPlanCandidateID.map {
                     mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
                 } ?? false
-                let place = try await mapVM.saveMapCandidateAsPlace(candidate)
-                endExactSearchSessionAfterCandidateSave()
+                let place = try await saveMapCandidateAndEndExactSearchIfNeeded(candidate)
                 if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
                     requestTripAssignment(for: place)
@@ -1541,11 +1555,39 @@ struct ContentView: View {
             // not open the stamp as if it were already corrected.
             restoreExactSearchResolutionIfNeeded()
             if let resolved = await mapVM.chooseSavedStampFromExactSearch(place) {
-                exactSearchClueID = nil
-                isExactSearchSessionActive = false
+                clearResolvedExactSearchSession()
                 openMapDetail(.savedPlace(resolved))
             }
         }
+    }
+
+    /// Saving an unsaved exact-search result retires the clue in MapViewModel
+    /// but used to leave this session live, so a later pin tap hit
+    /// `noActiveCorrectionSession` instead of opening the new stamp.
+    private func saveMapCandidateAndEndExactSearchIfNeeded(
+        _ candidate: SaveMapCandidate
+    ) async throws -> Place {
+        restoreExactSearchResolutionIfNeeded()
+        let endsExactSearch = isExactSearchSessionActive
+            && exactSearchClueID.map { mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0) } == true
+        let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+        if endsExactSearch {
+            clearResolvedExactSearchSession()
+        }
+        endExactSearchSessionAfterCandidateSave()
+        return place
+    }
+
+    private func clearResolvedExactSearchSession() {
+        exactSearchClueID = nil
+        isExactSearchSessionActive = false
+        guard drawerLaunchRequest.preservesExactSearchClue else { return }
+        drawerLaunchRequest = DrawerLaunchRequest(
+            target: drawerLaunchRequest.target,
+            initialQuery: drawerLaunchRequest.initialQuery,
+            focusesSearch: drawerLaunchRequest.focusesSearch,
+            preservesExactSearchClue: false
+        )
     }
 
     /// Saving a new map candidate resolves the clue in MapViewModel but

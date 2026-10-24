@@ -430,8 +430,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         app.buttons["profile.close"].tap()
         rootTabButton("Passport", app: app).tap()
         XCTAssertTrue(progress.waitForExistence(timeout: stepTimeout))
-        XCTAssertEqual(progress.label, "12/12", "Root progress counts saves, not visits")
-    }
+        XCTAssertEqual(progress.label, "12/12", "Root progress counts saves, not visits")    }
 
     /// A field can remain accessible and accept typing while a parent mask
     /// hides all its pixels. Inspect the light-mode fixture's actual editor.
@@ -822,7 +821,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout))
         // `home.savedPlaces` is the library container and exists while empty.
-        // The Pro row is `if !passportPlaces.isEmpty`. CI 39697020308 opened
+        // A Doodle Home `home.place.*` row is a confirmed Map Stamp. The Pro
+        // row is `if !passportPlaces.isEmpty`. CI 39697020308 opened
         // Settings before a stamp loaded, so profile.pro never entered the tree.
         // Home B has no mini-map `home.featuredName`. A confirmed stamp is an
         // Eat/Go row (`home.place.*`). Near you without a fix lists none;
@@ -922,6 +922,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-complete-onboarding",
                 "--skip-map-tour",
                 "--uitest-repair-review-demo-seed",
+                // E4 Settings Map Stamp signal: home.place.* needs a resolved city.
+                "--uitest-location-denied",
             ] + extraArguments + [
                 "-save.appLanguage", "en",
             ]
@@ -1079,8 +1081,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         } else if numbers.count >= 2 {
             XCTAssertEqual(numbers[0], latitude, accuracy: 0.0005)
             XCTAssertEqual(numbers[1], longitude, accuracy: 0.0005)
-        }
-    }
+        }    }
 
     @MainActor
     func testCaptureAtlasProductionParity() throws {
@@ -1092,6 +1093,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-repair-review-demo-seed",
                 "--uitest-atlas-parity-fixture",
                 "--uitest-friends-town",
+                "--uitest-map-place-selected",
                 "-save.appLanguage", "en",
             ]
         )
@@ -1141,6 +1143,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-location-denied",
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-map-place-selected",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
@@ -1184,7 +1187,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
             locationNoticeDismiss.tap()
         }
-        attach(app, name: "five-tab-map")
+        XCTAssertTrue(app.buttons["map.eat"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["map.go"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["map.placeSheet"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "landing-map")
+        attach(app, name: "doodle-map-light-demo")
+        assertDoodleMapChrome(app)
+        attachHoP298ChromeEvidence(app)
 
         openTripsFromHome(app: app)
         let existingTrip = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'trips.card.'")).firstMatch
@@ -1266,8 +1275,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// treat them as H1/H3/H4. Product states are
     /// `testHomeDesignProductStates`. DESIGN judges these rasters
     /// manually; the 0.90 score is not evidence. Warm dark tokens from
-    /// spec §1 must paint Home and Passport once Light is unlocked.
-    /// Appearance is forced before launch (`-AppleInterfaceStyle`, `--uitest-force-*`,
+    /// spec §1 must paint Home and Passport once Light is unlocked.    /// Appearance is forced before launch (`-AppleInterfaceStyle`, `--uitest-force-*`,
     /// and `XCUIDevice.appearance`). Background pixels must be near #1E1C19 / #FFF9EB.
     /// Attachment names stay off the production-parity set (`five-tab-*`, `atlas-*`).
     @MainActor
@@ -1325,6 +1333,78 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
     }
 
+    /// Real 375pt simulator (SE / mini). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testMapWidth375() throws {
+        try captureMapWidthEvidence(width: 375, columns: 3, name: "map-375")
+    }
+
+    /// Real 390pt simulator (iPhone 14). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testMapWidth390() throws {
+        try captureMapWidthEvidence(width: 390, columns: 3, name: "map-390")
+    }
+
+    /// Real 430pt simulator (Pro Max). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testMapWidth430() throws {
+        try captureMapWidthEvidence(width: 430, columns: 4, name: "map-430")
+    }
+
+    /// HoP width shots: assert the booted device point width and the DESIGN
+    /// column count at that canvas, then attach `map-375|390|430`.
+    /// Names stay off `five-tab-*` so they cannot steal the 0.90 target.
+    @MainActor
+    private func captureMapWidthEvidence(width: Int, columns: Int, name: String) throws {
+        let language = width == 390 ? "zh-Hant" : "en"
+        let extra = width == 430
+            ? ["--uitest-force-dark", "-AppleInterfaceStyle", "Dark"]
+            : ["--uitest-force-light", "-AppleInterfaceStyle", "Light"]
+        if width == 430 {
+            XCUIDevice.shared.appearance = .dark
+            addTeardownBlock { XCUIDevice.shared.appearance = .light }
+        }
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-map-place-selected",
+                "-save.appLanguage", language,
+            ] + extra,
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        openRootTab("Map", app: app)
+        let mapRoot = app.descendants(matching: .any)["map.root"]
+        XCTAssertTrue(mapRoot.waitForExistence(timeout: stepTimeout))
+        let locationNoticeDismiss = app.buttons["map.locationNotice.dismiss"]
+        if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
+            locationNoticeDismiss.tap()
+        }
+        XCTAssertTrue(app.buttons["map.city"].waitForExistence(timeout: stepTimeout))
+        let live = app.descendants(matching: .any)["map.liveSurface"]
+        XCTAssertTrue(live.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(
+            Int(app.frame.width.rounded()),
+            width,
+            "Map width shot must boot a real \(width)pt simulator"
+        )
+        XCTAssertEqual(
+            Int(mapRoot.frame.width.rounded()),
+            width,
+            "Map root must use the full \(width)pt device width, not a letterbox"
+        )
+        XCTAssertEqual(
+            columns,
+            width <= 390 ? 3 : 4,
+            "DESIGN canvas at \(width)pt is \(columns) columns"
+        )
+        attach(app, name: name)
+        terminate(app)    }
+
     @MainActor
     private func captureHomeAndPassportCanvas(
         appearance: XCUIDevice.Appearance,
@@ -1346,9 +1426,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-location-denied",
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-home-memory-fixture",
                 "-save.appLanguage", language,
                 "-AppleInterfaceStyle", appleInterfaceStyle,
                 forceArgument,
+                "--uitest-map-place-selected",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
         )
@@ -1384,6 +1466,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             blue: expectedBlue,
             name: passportName
         )
+
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        let locationNoticeDismiss = app.buttons["map.locationNotice.dismiss"]
+        if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
+            locationNoticeDismiss.tap()
+        }
+        XCTAssertTrue(app.descendants(matching: .any)["map.placeSheet"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: homeName.replacingOccurrences(of: "home", with: "map"))
+        if appearance == .dark {
+            attach(app, name: "doodle-map-dark")
+        }
+        assertDoodleMapChrome(app)
         terminate(app)
     }
 
@@ -2639,33 +2734,32 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: launchTimeout))
         dismissLocationAlertIfPresent()
 
-        // One place, one card (spec P2b): the Atlas card is canonical and now
-        // carries the retired legacy strip's actions.
-        let card = app.descendants(matching: .any)["map.place.card"]
+        // Doodle place sheet: Directions + 我來過了. One selected place, one sheet.
+        let card = app.descendants(matching: .any)["map.placeSheet"]
         XCTAssertTrue(card.waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(
-            app.descendants(matching: .any).matching(identifier: "map.place.card").count,
+            app.descendants(matching: .any).matching(identifier: "map.placeSheet").count,
             1,
             "Exactly one surface should represent the selected place."
         )
-        XCTAssertTrue(app.descendants(matching: .any)["map.place.share"].exists)
-        XCTAssertTrue(app.buttons["map.place.planAround"].exists)
+        XCTAssertTrue(app.buttons["map.directions"].exists)
+        XCTAssertTrue(app.buttons["map.card.beenHere"].exists)
+        XCTAssertTrue(app.buttons["map.peek.card"].exists)
         XCTAssertFalse(
             app.descendants(matching: .any)["place.detail.root"].exists,
-            "The legacy place strip must not co-present with the Atlas card."
+            "The place sheet must not co-present with place detail."
         )
         XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
         attach(app, name: "map-place-card-actions")
 
-        // Plan-around swaps the card for the single drawer surface.
-        app.buttons["map.place.planAround"].tap()
+        app.buttons["map.peek.card"].tap()
         XCTAssertTrue(
             app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout)
         )
         XCTAssertEqual(
             app.descendants(matching: .any).matching(identifier: "drawer.root").count,
             1,
-            "Plan-around should open exactly one drawer surface."
+            "Opening the place sheet should present exactly one drawer surface."
         )
         XCTAssertTrue(card.waitForNonExistence(timeout: stepTimeout))
     }
@@ -2754,10 +2848,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(selectedName.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         XCTAssertTrue(app.staticTexts["map.peek.subtitle"].exists,
             "The selected Map Stamp should show its saved-date context.")
-        let selectedPin = app.buttons.matching(
+        // MapKit annotations surface as Other, not Button. Query the same
+        // tree the Taipei pin-count tests already use.
+        let selectedPin = app.descendants(matching: .any).matching(
             NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.' AND label BEGINSWITH 'Selected Map Stamp, '")
         ).firstMatch
-        XCTAssertTrue(selectedPin.exists)
+        XCTAssertTrue(selectedPin.waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(selectedPin.label, "Selected Map Stamp, \(selectedName.label)")
 
         let openMapDetails = app.buttons["map.peek.card"]
@@ -3548,6 +3644,41 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         }
     }
 
+    /// MapKit pixels vary, but product chrome is never exempt from layout checks.
+    @MainActor
+    private func assertDoodleMapChrome(_ app: XCUIApplication) {
+        let city = app.buttons["map.city"]
+        let eat = app.buttons["map.eat"]
+        let go = app.buttons["map.go"]
+        let sheet = app.descendants(matching: .any)["map.placeSheet"]
+        let directions = app.buttons["map.directions"]
+        let visit = app.buttons["map.card.beenHere"].exists
+            ? app.buttons["map.card.beenHere"] : app.buttons["map.card.beenHere.undo"]
+        for control in [city, eat, go, directions, visit] {
+            XCTAssertTrue(control.waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(control.isHittable, "Map control must be accessible: \(control.identifier)")
+            XCTAssertGreaterThanOrEqual(control.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(control.frame.width, 44)
+            XCTAssertGreaterThanOrEqual(control.frame.minX, app.frame.minX)
+            XCTAssertLessThanOrEqual(control.frame.maxX, app.frame.maxX)
+        }
+        XCTAssertTrue(sheet.exists)
+        XCTAssertLessThanOrEqual(city.frame.maxY, eat.frame.minY)
+        XCTAssertLessThanOrEqual(eat.frame.maxY, sheet.frame.minY)
+        XCTAssertLessThanOrEqual(directions.frame.maxX, visit.frame.minX)
+        XCTAssertEqual(directions.frame.height, 48, accuracy: 2, "298-4: Directions is 48pt tall")
+        XCTAssertEqual(visit.frame.height, 48, accuracy: 2, "298-4: I've been here is 48pt tall")
+        XCTAssertEqual(visit.frame.minX - directions.frame.maxX, 12, accuracy: 3, "298-4: 12pt button gap")
+        XCTAssertLessThanOrEqual(sheet.frame.maxY, rootTabButton("Map", app: app).frame.minY)
+        XCTAssertTrue(
+            eat.isSelected || go.isSelected,
+            "298-11: Eat/Go must expose isSelected on the active lens"
+        )
+        let cityLabel = city.label
+        XCTAssertFalse(cityLabel.contains("…") || cityLabel.contains("..."),
+                       "298-12: city title must not truncate")
+    }
+
     @MainActor
     private func openSavesFromHome(app: XCUIApplication) {
         openRootTab("Home", app: app)
@@ -3792,6 +3923,93 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
     }
 
+    /// HoP 298-2 / 298-5 / 298-6 / 298-8: MapKit canvas, 我來過了, city+Eat/Go,
+    /// and provider-backed Directions. Names stay off `five-tab-*`.
+    @MainActor
+    private func attachHoP298ChromeEvidence(_ app: XCUIApplication) {
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.liveSurface"].waitForExistence(timeout: stepTimeout),
+            "298-2: product Map must be a live Apple MapKit surface"
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["tileTown.root"].exists,
+            "298-2: product Map is not tile-town"
+        )
+        attach(app, name: "298-2-mapkit")
+
+        XCTAssertTrue(app.buttons["map.card.beenHere"].exists || app.buttons["map.card.beenHere.undo"].exists,
+                      "298-5: place sheet must offer 我來過了 / I've been here")
+        attach(app, name: "298-5-been-here")
+
+        XCTAssertTrue(app.buttons["map.city"].exists, "298-6: city chrome")
+        XCTAssertTrue(app.buttons["map.eat"].exists, "298-6: Eat chrome")
+        XCTAssertTrue(app.buttons["map.go"].exists, "298-6: Go chrome")
+        attach(app, name: "298-6-city-eat-go")
+
+        XCTAssertTrue(app.buttons["map.directions"].exists,
+                      "298-8: selected place keeps provider-backed Directions")
+        attach(app, name: "298-8-provider")
+    }
+
+    /// HoP 298-10 / 298-12 / 298-13: Taipei H1/M1 fixture with saved,
+    /// unsaved, and visited pins together. City title in en and zh.
+    @MainActor
+    func testMapSavedUnsavedVisitedTaipeiFixture() throws {
+        try captureTaipeiMapStates(language: "en", attachM1: true)
+        try captureTaipeiMapStates(language: "zh-Hant", attachM1: false)
+    }
+
+    @MainActor
+    private func captureTaipeiMapStates(language: String, attachM1: Bool) throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-home-memory-fixture",
+                "--uitest-map-unsaved-candidate",
+                "--uitest-map-place-selected",
+                "-save.appLanguage", language,
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        let locationNoticeDismiss = app.buttons["map.locationNotice.dismiss"]
+        if locationNoticeDismiss.waitForExistence(timeout: timeout(2)) {
+            locationNoticeDismiss.tap()
+        }
+        XCTAssertTrue(app.buttons["map.city"].waitForExistence(timeout: stepTimeout))
+        let cityLabel = app.buttons["map.city"].label
+        XCTAssertFalse(
+            cityLabel.contains("…") || cityLabel.contains("..."),
+            "298-12: city title must not truncate"
+        )
+        if language == "zh-Hant" {
+            XCTAssertTrue(cityLabel.contains("台北") || cityLabel.contains("臺北") || cityLabel.contains("附近"),
+                          "298-12/298-13: zh city stays Taipei")
+        } else {
+            XCTAssertTrue(cityLabel.contains("Taipei") || cityLabel.contains("Near you"),
+                          "298-12/298-13: en city stays Taipei")
+        }
+        XCTAssertTrue(app.buttons["map.eat"].isSelected || app.buttons["map.go"].isSelected,
+                      "298-11: Eat/Go must expose isSelected")
+        if language == "zh-Hant" {
+            attach(app, name: "298-12-zh")
+        } else {
+            attach(app, name: "298-10-saved-unsaved-visited")
+            attach(app, name: "five-tab-map")
+            attach(app, name: "doodle-map-light")
+        }
+        if attachM1 {
+            attach(app, name: "M1")
+        }
+        terminate(app)
+    }
+
     /// Live Home is the Doodle Eat/Go list with no map component. The Atlas gate still
     /// compares `five-tab-home` to `ProductionTargets/home.png` unmasked at
     /// 0.90. Capture that raster from the Codex Tiantan
@@ -3824,11 +4042,48 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         )
         XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-000000000002"].exists)
         XCTAssertTrue(app.buttons["home.place.30000000-0000-0000-0000-000000000003"].exists)
+        let homeEatCount = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
+        ).count
         let geometry = XCTAttachment(string: app.debugDescription)
         geometry.name = "home-reference-geometry"
         geometry.lifetime = .keepAlways
         add(geometry)
         attach(app, name: "five-tab-home")
+        // 298-3: Home and Map from the same Tiantan data, same launch.
+        attach(app, name: "298-3-home")
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "298-7-map-tab")
+        XCTAssertTrue(app.buttons["map.city"].waitForExistence(timeout: stepTimeout))
+        let eatPin = "30000000-0000-0000-0000-000000000001"
+        let noodlePin = "30000000-0000-0000-0000-000000000002"
+        let cafePin = "30000000-0000-0000-0000-000000000003"
+        let parkPin = "30000000-0000-0000-0000-000000000004"
+        let lanternPin = "30000000-0000-0000-0000-000000000005"
+        let jingshanPin = "30000000-0000-0000-0000-000000000006"
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.tilePin.\(eatPin)"].waitForExistence(timeout: stepTimeout)
+        )
+        for pin in [noodlePin, cafePin] {
+            XCTAssertTrue(
+                app.descendants(matching: .any)["map.tilePin.\(pin)"].exists,
+                "298-3: Map draws saved Eat places under the shared city filter"
+            )
+        }
+        XCTAssertFalse(
+            app.descendants(matching: .any)["map.tilePin.\(parkPin)"].exists
+                || app.descendants(matching: .any)["map.tilePin.\(lanternPin)"].exists
+                || app.descendants(matching: .any)["map.tilePin.\(jingshanPin)"].exists,
+            "298-3: Map draws only saved places matching Eat/Go + city"
+        )
+        let mapPinCount = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.'")
+        ).count
+        XCTAssertEqual(mapPinCount, homeEatCount, "298-3: pin count equals Home list rows")
+        attach(app, name: "298-3-map")
+        attach(app, name: "298-4-coral-pins")
+        XCTAssertEqual(app.buttons["map.eat"].isSelected, true, "298-11: Eat stays selected with Home")
         terminate(app)
     }
 

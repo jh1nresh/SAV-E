@@ -390,11 +390,13 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(rail.contains("func testHomeHintCountEvidence"))
         XCTAssertTrue(rail.contains("func testHomeTaipeiGrantedDistances"))
         XCTAssertTrue(rail.contains("func testHomeTPEAEvidence"))
+        XCTAssertTrue(rail.contains("func testMapSavedUnsavedVisitedTaipeiFixture"))
         XCTAssertTrue(rail.contains("home.eat"))
         XCTAssertTrue(rail.contains("home.passport"))
         XCTAssertTrue(rail.contains("testHomeListProgressiveSearch"))
         XCTAssertTrue(selector.contains("testHomeListProgressiveSearch"))
         XCTAssertFalse(selector.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertTrue(selector.contains("testMapSavedUnsavedVisitedTaipeiFixture"))
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {
@@ -437,6 +439,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(saves.contains("saves.pocket.reviewFooter"))
         XCTAssertTrue(saves.contains("saves.review.list"))
         XCTAssertTrue(saves.contains("saves.pocket.mapStampFooter"))
+        XCTAssertTrue(saves.contains("saves.place.\\(place.id.uuidString)"))
+        XCTAssertFalse(
+            saves.contains("saves.mapStamp.postcard"),
+            "A generic postcard identifier must not steal saves.place.<uuid> from the Map Stamp ticket."
+        )
     }
 
     func testPushedSavesDropsRootTabInsetsAndKeepsSystemBackChrome() throws {

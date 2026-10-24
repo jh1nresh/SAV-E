@@ -67,8 +67,12 @@ lower the threshold. `home-dark.png` is DESIGN comparison only and
 does not enter parity. `VisualParity.swift` still accepts only a
 1× 402 × 874 target. Unmasked Home uses the legacy composite; the
 optional `--mask` path reports position, size, color, and fontStyle
-sub-scores but is not applied to Home. Saves, Plan, and Map targets
-stay on their current locks until those Doodle PRs.
+sub-scores but is not applied to Home. The Map production target is the
+live Taipei Apple Maps CI capture (iPhone 16 Pro, 402pt, 3× 1206×2622)
+from #298; `map-mask.png` is not applied to the 0.90 score. Saves and
+Plan stay on their current locks until those Doodle PRs. The `0.90`
+threshold remains the CI gate for Home, Map, Saves, and Plan.
+
 
 ## Boundaries
 
