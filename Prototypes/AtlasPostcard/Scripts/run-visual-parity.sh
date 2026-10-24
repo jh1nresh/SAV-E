@@ -350,11 +350,13 @@ for screen in home saves plan map; do
         exit 2
     fi
 
-    if xcrun swift "$PARITY_SCRIPT" \
-        --target "$ARTIFACT_DIR/reference/$screen.png" \
-        --actual "$actual" \
-        --diff "$ARTIFACT_DIR/diff/$screen.png" \
-        --threshold "$THRESHOLD" \
+    compare_args=(
+        --target "$ARTIFACT_DIR/reference/$screen.png"
+        --actual "$actual"
+        --diff "$ARTIFACT_DIR/diff/$screen.png"
+        --threshold "$THRESHOLD"
+    )
+    if xcrun swift "$PARITY_SCRIPT" "${compare_args[@]}" \
         >"$ARTIFACT_DIR/results/$screen.json"
     then
         status="PASS"

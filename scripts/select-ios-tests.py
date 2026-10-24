@@ -62,7 +62,17 @@ TESTS = {
 # Plan route only. Folding them into FULL made this CI-scoping PR require
 # testPlanTabDraftsFromSavedMapStamps, which is not on current main and
 # failed 3/3 on run 34019378064 after compose never produced plan.draft.
-FULL = list(BASELINE) + [RAIL + "testHomeListProgressiveSearch"]
+FULL = list(BASELINE) + [
+    RAIL + "testHomeListProgressiveSearch",
+    RAIL + "testHomeCollectedOpensPassportWithCityCount",
+    RAIL + "testSavesTripsBackReturnsToSaves",
+    RAIL + "testHomeDesignProductStates",
+    RAIL + "testHomeShowOnMapFocusesPlace",
+    RAIL + "testHomeHintCountEvidence",
+    RAIL + "testHomeTaipeiGrantedDistances",
+    RAIL + "testHomeTPEAEvidence",
+    RAIL + "testHopU1SavedPlaceLimitPaywallShowsSavedFiftyWithoutManMan",
+]
 
 # Temporary #279 iteration profiles. Empty SAVE_UI_TEST_FOCUS keeps default
 # selection. Never applied on main. Delete FOCUS_PROFILES + requested_focus()
