@@ -695,7 +695,7 @@ struct SavvyMapPhotoPinView: View {
         if usesArc {
             SavvyMapArcText(
                 text: text,
-                radius: 38,
+                radius: SavvyMapArcText.radius,
                 font: .system(size: 15, weight: .heavy, design: .rounded)
             )
             .foregroundStyle(SaveAtlasPalette.ink)
@@ -810,17 +810,26 @@ struct SavvyMapArcText: View {
     var radius: CGFloat
     var font: Font = .system(size: 15, weight: .heavy, design: .rounded)
 
+    /// Letters sit on one arc. End glyphs used to hit ~±110° because each
+    /// character was rotated before *and* after the radius offset.
+    static let radius: CGFloat = 38
+    static let maxSpreadDegrees: Double = 150
+    static let degreesPerCharacter: Double = 20
+
+    static func spreadDegrees(characterCount: Int) -> Double {
+        min(maxSpreadDegrees, Double(max(characterCount, 1)) * degreesPerCharacter)
+    }
+
     var body: some View {
         let characters = Array(text)
         let count = max(characters.count, 1)
-        let spread = min(110, Double(count) * 16)
+        let spread = Self.spreadDegrees(characterCount: count)
         ZStack {
             ForEach(Array(characters.enumerated()), id: \.offset) { index, character in
                 let t = count == 1 ? 0.5 : Double(index) / Double(count - 1)
                 let angle = -spread / 2 + spread * t
                 Text(String(character))
                     .font(font)
-                    .rotationEffect(.degrees(angle))
                     .offset(y: -radius)
                     .rotationEffect(.degrees(angle))
             }
@@ -931,7 +940,7 @@ struct SavvyMapPlaceCard: View {
             ZStack(alignment: .top) {
                 photoWell
                 categorySticker
-                    .offset(y: -14)
+                    .offset(y: SavvyMapPinMetrics.cardPhotoInset - 6)
             }
 
             Text(metaLine)
@@ -988,7 +997,9 @@ struct SavvyMapPlaceCard: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: SavvyMapPinMetrics.cardPhotoHeight)
+                    .clipped()
                     .clipShape(
                         RoundedRectangle(cornerRadius: SavvyMapPinMetrics.cardPhotoCorner, style: .continuous)
                     )
@@ -1000,7 +1011,7 @@ struct SavvyMapPlaceCard: View {
                     .accessibilityHidden(true)
             }
             LinearGradient(
-                colors: [.clear, SaveAtlasPalette.ink.opacity(0.55)],
+                colors: [.clear, Color.black.opacity(0.55)],
                 startPoint: .center,
                 endPoint: .bottom
             )
@@ -1019,7 +1030,10 @@ struct SavvyMapPlaceCard: View {
             .accessibilityIdentifier("map.peek.card")
             .padding(16)
         }
+        .frame(maxWidth: .infinity)
         .frame(height: SavvyMapPinMetrics.cardPhotoHeight)
+        .clipped()
+        .clipShape(RoundedRectangle(cornerRadius: SavvyMapPinMetrics.cardPhotoCorner, style: .continuous))
         .padding(SavvyMapPinMetrics.cardPhotoInset)
         .accessibilityElement(children: .contain)
     }
@@ -1261,6 +1275,7 @@ enum SavvyMapPhotoPinPreviewFixtures {
 struct SavvyMapPhotoPinPreviewCell: View {
     let state: SavvyMapPhotoPinPreviewState
     var language: AppLanguage = .english
+    var isFlipped: Bool = false
     private let visits = SavvyMapVisitStore(
         defaults: UserDefaults(suiteName: "savvy.map.preview.visits") ?? .standard,
         key: "gate5"
@@ -1279,7 +1294,7 @@ struct SavvyMapPhotoPinPreviewCell: View {
                     place: place,
                     userLocation: CLLocation(latitude: 39.883, longitude: 116.407),
                     isOpen: true,
-                    isFlipped: false,
+                    isFlipped: isFlipped,
                     reduceMotion: true,
                     screenWidth: 390,
                     onFlip: {},
@@ -1504,6 +1519,14 @@ enum SavvyMapPhotoPinSnapshotExport {
             to: p14
         )
         written.append(p14)
+        let cardBack = directory.appendingPathComponent("light-coralCardBack.png")
+        try write(
+            previewPage(.coralCardHero, scheme: .light, isFlipped: true),
+            size: pinSize,
+            scheme: .light,
+            to: cardBack
+        )
+        written.append(cardBack)
         return written
     }
 
@@ -1682,7 +1705,8 @@ struct SavvyMapPhotoPinMotionFixtureRoot: View {
 func previewPage(
     _ state: SavvyMapPhotoPinPreviewState,
     scheme: ColorScheme,
-    language: AppLanguage = .english
+    language: AppLanguage = .english,
+    isFlipped: Bool = false
 ) -> some View {
     ZStack {
         SaveAtlasPalette.paper.ignoresSafeArea()
@@ -1690,7 +1714,7 @@ func previewPage(
             Text(state.qaTitle)
                 .font(SaveAtlasType.strong(15))
                 .foregroundStyle(SaveAtlasPalette.ink)
-            SavvyMapPhotoPinPreviewCell(state: state, language: language)
+            SavvyMapPhotoPinPreviewCell(state: state, language: language, isFlipped: isFlipped)
         }
         .padding(24)
     }

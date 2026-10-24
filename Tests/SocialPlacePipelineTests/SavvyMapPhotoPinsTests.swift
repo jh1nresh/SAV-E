@@ -463,6 +463,20 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(pins.contains("languageSettings.language != .traditionalChinese"))
         XCTAssertTrue(pins.contains("snapshotLayout"))
         XCTAssertTrue(pins.contains("overrideUserInterfaceStyle"))
+        XCTAssertTrue(pins.contains("SavvyMapPinMetrics.cardPhotoInset - 6"))
+        XCTAssertFalse(pins.contains(".offset(y: -14)"))
+        XCTAssertTrue(pins.contains("Color.black.opacity(0.55)"))
+        XCTAssertFalse(pins.contains("SaveAtlasPalette.ink.opacity(0.55)"))
+        XCTAssertTrue(pins.contains(".frame(height: SavvyMapPinMetrics.cardPhotoHeight)"))
+        XCTAssertTrue(pins.contains(".clipped()"))
+        XCTAssertFalse(
+            pins.contains(".rotationEffect(.degrees(angle))\n                    .offset(y: -radius)"),
+            "Arc letters must not rotate before the radius offset"
+        )
+        XCTAssertTrue(pins.contains(".offset(y: -radius)\n                    .rotationEffect(.degrees(angle))"))
+        XCTAssertEqual(SavvyMapArcText.spreadDegrees(characterCount: 10), 150)
+        XCTAssertGreaterThan(SavvyMapArcText.maxSpreadDegrees, 110)
+        XCTAssertGreaterThan(SavvyMapArcText.degreesPerCharacter, 16)
     }
 
     func testGate5ImageRendererExportWritesLightDarkAndChinese() throws {
@@ -477,6 +491,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(names.contains("catalog-dark.png"))
         XCTAssertTrue(names.contains("zh-Hant-photoBadge.png"))
         XCTAssertTrue(names.contains("p14-saved-unsaved-visited.png"))
+        XCTAssertTrue(names.contains("light-coralCardBack.png"))
         let lightCard = try Data(contentsOf: directory.appendingPathComponent("light-coralCardHero.png"))
         let darkCard = try Data(contentsOf: directory.appendingPathComponent("dark-coralCardHero.png"))
         XCTAssertNotEqual(
