@@ -788,10 +788,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
         XCTAssertTrue(app.descendants(matching: .any)["home.savedPlaces"].waitForExistence(timeout: stepTimeout))
         // `home.savedPlaces` is the library container and exists while empty.
-        // The Pro row is `if !passportPlaces.isEmpty`. CI 39697020308 opened
+        // A Doodle Home `home.place.*` row is a confirmed Map Stamp. The Pro
+        // row is `if !passportPlaces.isEmpty`. CI 39697020308 opened
         // Settings before a stamp loaded, so profile.pro never entered the tree.
+        let firstStamp = app.buttons.matching(
+            NSPredicate(format: "identifier BEGINSWITH 'home.place.'")
+        ).firstMatch
         XCTAssertTrue(
-            app.staticTexts["home.featuredName"].waitForExistence(timeout: stepTimeout),
+            firstStamp.waitForExistence(timeout: stepTimeout),
             "Settings Pro row requires a confirmed Map Stamp on Home first."
         )
         openRootTab("Passport", app: app)
@@ -854,6 +858,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-complete-onboarding",
                 "--skip-map-tour",
                 "--uitest-repair-review-demo-seed",
+                // E4 Settings Map Stamp signal: home.place.* needs a resolved city.
+                "--uitest-location-denied",
             ] + extraArguments + [
                 "-save.appLanguage", "en",
             ]
