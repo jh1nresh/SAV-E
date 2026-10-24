@@ -3511,7 +3511,9 @@ final class MapViewModel: ObservableObject {
                 ),
                 for: runId
             )
-        } else if candidate.captureId != nil {
+        } else if !candidate.isUnplacedInbox {
+            // Ordinary Review / exact-search clues still have a
+            // place_candidates row even when captureId is nil.
             try await supabaseService.updatePlaceCandidateStatus(
                 candidate.id,
                 status: Self.legacyCandidateStatus(for: eventType, finalPlaceId: userFinalPlaceId),

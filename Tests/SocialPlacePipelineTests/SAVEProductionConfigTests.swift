@@ -159,11 +159,15 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertTrue(rail.contains("func testFreeCapE4Screenshots()"))
         XCTAssertTrue(
             rail.contains("home.saves"),
-            "E4 taps the live Home header Saves control (SaveTileTownHomeView)"
+            "E4 taps the live Home header Saves control"
         )
         XCTAssertTrue(
-            rail.contains("home.more.saves"),
-            "More → Manage remains a fallback after the in-flow sheet opens"
+            rail.contains("openSavesFromHome"),
+            "Home B opens Saves from Review › or home.saves; TileTown More → Manage is gone"
+        )
+        XCTAssertTrue(
+            rail.contains("home.review.action"),
+            "Home B Review › is the Saves entry while clues wait"
         )
         XCTAssertTrue(
             rail.contains("firstHittable"),
@@ -3496,8 +3500,19 @@ final class SAVEProductionConfigTests: XCTestCase {
             "confirming a matching Review candidate must park the original item on PATCH cap"
         )
         XCTAssertTrue(
-            map.contains("try await mergeSavedSources(incoming, into: match) {\n                try parkExistingReviewCandidate("),
+            map.contains("try await mergeSavedSources(incoming, into: match, exactResolution: resolution) {\n                try parkExistingReviewCandidate("),
             "exact-search merge onto an existing stamp must park the original clue on PATCH cap"
+        )
+        let recordStart = try XCTUnwrap(map.range(of: "private func recordCorrectionEvent("))
+        let recordEnd = try XCTUnwrap(map.range(of: "static func legacyCandidateStatus("))
+        let record = String(map[recordStart.lowerBound..<recordEnd.lowerBound])
+        XCTAssertTrue(
+            record.contains("} else if !candidate.isUnplacedInbox {"),
+            "Unplaced skips place_candidates PATCH; ordinary exact-search clues without captureId still retire remotely"
+        )
+        XCTAssertFalse(
+            record.contains("} else if candidate.captureId != nil {"),
+            "captureId is not the Unplaced skip — that also dropped exact-search retire writes"
         )
         let chooseStampStart = try XCTUnwrap(map.range(of: "func resolveExactSearchClue(toSavedPlace place: Place)"))
         let chooseStampEnd = try XCTUnwrap(map.range(of: "func completeExactSearchMergeOntoExistingStamp"))
