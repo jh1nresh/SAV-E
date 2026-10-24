@@ -51,6 +51,33 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(SavvyMapPinMetrics.badgeBaseIsCircle)
         XCTAssertEqual(SavvyMapPinMetrics.badgeStickerWidth, SavvyMapPinMetrics.badgeStickerHeight)
         XCTAssertEqual(SavvyMapPinMetrics.cardCoralIcon, 64)
+        XCTAssertEqual(SavvyMapPinMetrics.badgeArcLabelOffsetY, 18)
+        XCTAssertEqual(SavvyMapPinMetrics.badgeWordLabelExtraLift, 8)
+    }
+
+    func testP1HostedPinHitFrameIsAtLeastFortyFourPoints() {
+        let place = samplePlace()
+        for showsBadge in [false, true] {
+            let pin = SavvyMapPhotoPinView(
+                place: place,
+                showsBadge: showsBadge,
+                isVisited: false,
+                isSelected: false,
+                reduceMotion: true,
+                onTap: {}
+            )
+            let size = hostedFittingSize(pin)
+            XCTAssertGreaterThanOrEqual(
+                size.width,
+                44,
+                "hosted pin width must be ≥44pt (badge=\(showsBadge), got \(size.width))"
+            )
+            XCTAssertGreaterThanOrEqual(
+                size.height,
+                44,
+                "hosted pin height must be ≥44pt (badge=\(showsBadge), got \(size.height))"
+            )
+        }
     }
 
     func testP2ZoomHysteresisDoesNotFlickerBetweenThresholds() {
@@ -143,14 +170,45 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
     }
 
     func testP4CameraFollowsCardByFiftyMilliseconds() throws {
-        let delay = SavvyMapPinMetrics.cameraDelay
-        XCTAssertEqual(delay, 0.05, accuracy: 0.0001)
-        XCTAssertEqual(delay, 0.05, accuracy: 0.03)
+        var scheduledDelay: TimeInterval?
+        var moved = false
+        let scheduler = SavvyMapScheduler { delay, work in
+            scheduledDelay = delay
+            work()
+        }
+        SavvyMapCameraFollow.scheduleOpenMove(
+            reduceMotion: false,
+            scheduler: scheduler
+        ) {
+            moved = true
+        }
+        XCTAssertEqual(scheduledDelay ?? -1, 0.05, accuracy: 0.03)
+        XCTAssertTrue(moved)
+
+        var immediate = false
+        var delayedWhileReduced = false
+        SavvyMapCameraFollow.scheduleOpenMove(
+            reduceMotion: true,
+            scheduler: SavvyMapScheduler { _, _ in delayedWhileReduced = true }
+        ) {
+            immediate = true
+        }
+        XCTAssertTrue(immediate)
+        XCTAssertFalse(delayedWhileReduced)
+
         XCTAssertEqual(SavvyMapCameraFocus.cameraPitch, 0, accuracy: 0.0001)
+        let pin = CLLocationCoordinate2D(latitude: 39.8822, longitude: 116.4066)
+        let next = SavvyMapCameraFocus.camera(
+            pin: pin,
+            latitudeDelta: 0.02,
+            current: MapCamera(centerCoordinate: pin, distance: 2_500, heading: 12, pitch: 18)
+        )
+        XCTAssertEqual(next.pitch, 0, accuracy: 0.001)
+
         let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(root.contains("SavvyMapMotion.cardOpen"))
         XCTAssertTrue(root.contains("moveCamera(to:"))
-        XCTAssertTrue(root.contains("asyncAfter(deadline: .now() + SavvyMapPinMetrics.cameraDelay)"))
+        XCTAssertTrue(root.contains("SavvyMapCameraFollow.scheduleOpenMove"))
         XCTAssertTrue(
             root.range(of: "session.select(id)")!.lowerBound
                 < root.range(of: "moveCamera(to:")!.lowerBound
@@ -242,6 +300,20 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
             pins.contains("SavvyMapPinMetrics.collapseDrag"),
             "swipe-down collapse lives on the card, not the map root"
         )
+        XCTAssertFalse(SavvyMapCardDrag.shouldCollapse(translationHeight: 12))
+        XCTAssertFalse(SavvyMapCardDrag.shouldCollapse(translationHeight: 60))
+        XCTAssertTrue(SavvyMapCardDrag.shouldCollapse(translationHeight: 61))
+        XCTAssertEqual(SavvyMapCardDrag.minimumDistance, 12)
+        let dragRange = try XCTUnwrap(pins.range(of: "DragGesture(minimumDistance: SavvyMapCardDrag.minimumDistance)"))
+        let gestureWindow = String(pins[dragRange.lowerBound...].prefix(420))
+        XCTAssertTrue(
+            gestureWindow.contains("SavvyMapCardDrag.shouldCollapse(translationHeight:"),
+            "60pt collapse must live on the DragGesture itself"
+        )
+        XCTAssertTrue(
+            gestureWindow.contains("onCollapse()"),
+            "deleting the DragGesture must fail this lock"
+        )
         let collapseRange = try XCTUnwrap(root.range(of: "private func collapseSelection"))
         let finishRange = try XCTUnwrap(root.range(of: "private func finishClearingPlace"))
         XCTAssertLessThan(collapseRange.lowerBound, finishRange.lowerBound)
@@ -289,6 +361,8 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
     }
 
     func testP9ReduceMotionIsOnlyAQuarterSecondFade() throws {
+        XCTAssertTrue(SavvyMapMotion.usesQuarterSecondFade(true))
+        XCTAssertFalse(SavvyMapMotion.usesQuarterSecondFade(false))
         let reduced = SavvyMapMotion.cardOpen(reduceMotion: true)
         let full = SavvyMapMotion.cardOpen(reduceMotion: false)
         XCTAssertEqual(String(describing: reduced), String(describing: SavvyMapMotion.reduceMotion))
@@ -304,8 +378,10 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(pins.contains("reduceMotion ? 1 : (isOpen ? 1 : SavvyMapPinMetrics.cardScaleFromBadge)"))
         XCTAssertTrue(pins.contains("reduceMotion ? (isOpen ? 1 : 0)"))
         XCTAssertTrue(pins.contains("if reduceMotion {\n                    if isFlipped"))
+        XCTAssertTrue(pins.contains("usesQuarterSecondFade(reduceMotion)"))
         let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
-        XCTAssertTrue(root.contains("if reduceMotion {\n            apply()\n            return"))
+        XCTAssertTrue(root.contains("SavvyMapCameraFollow.scheduleOpenMove"))
+        XCTAssertTrue(root.contains("if reduceMotion"))
     }
 
     func testP10VoiceOverCopyNamesVisitState() throws {
@@ -329,6 +405,33 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(pin.contains("accessibilityFocused($nameFocused)"))
         XCTAssertTrue(pin.contains("nameFocused = true"))
         XCTAssertTrue(pin.contains("english: \"See details\""))
+        XCTAssertEqual(
+            SavvyMapCardCopy.pinAccessibilityLabel(
+                name: "Temple of Heaven",
+                category: "Attraction",
+                visit: "not visited",
+                language: .english
+            ),
+            "Temple of Heaven, Attraction, not visited"
+        )
+        XCTAssertEqual(
+            SavvyMapCardCopy.pinAccessibilityLabel(
+                name: "天壇",
+                category: "景點",
+                visit: "沒去過",
+                language: .traditionalChinese
+            ),
+            "天壇、景點、沒去過"
+        )
+        XCTAssertEqual(
+            SavvyMapCardCopy.pinAccessibilityLabel(
+                name: "天壇",
+                category: "景點",
+                visit: "去過",
+                language: .traditionalChinese
+            ),
+            "天壇、景點、去過"
+        )
     }
 
     func testZhHantCardCopyUsesDesignWordsAndKeepsEnglish() throws {
@@ -376,8 +479,8 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertEqual(pins.components(separatedBy: "SavvyMapCardCopy.directionsTitle").count - 1, 2)
 
         let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
-        XCTAssertTrue(root.contains("place.appleMapsURL"))
-        XCTAssertTrue(root.contains("UIApplication.shared.open(url)"))
+        XCTAssertTrue(root.contains("SavvyMapDirectionsLaunch.open"))
+        XCTAssertFalse(root.contains("UIApplication.shared.open(url)"))
     }
 
     func testP11ThirtyPinsStayIndividualAnnotations() throws {
@@ -388,30 +491,92 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertFalse(root.contains("clusteringIdentifier"))
     }
 
-    func testP11HitchOrFrameMetricsUnavailableOnThisToolchain() {
-        let hitchNames = [
-            "XCTHitchTimeRateMetric",
-            "XCTHitchRateMetric",
-            "XCTFrameRateMetric",
-        ]
-        let available = hitchNames.compactMap { NSClassFromString($0) }
-        if !available.isEmpty {
-            XCTFail(
-                "XCTest hitch/frame metrics exist (\(available)). Add a 30-pin scroll measure and attach the numbers. Do not use gate5-motion-60fps.mp4."
+    func testP11HitchOrScrollDecelerationMetricProbe() throws {
+        var notes: [String] = []
+        if #available(iOS 26.0, *) {
+            let hitchType = NSClassFromString("XCTHitchMetric")
+            notes.append(
+                hitchType == nil
+                    ? "iOS 26+ but XCTHitchMetric class was not found"
+                    : "XCTHitchMetric is present; init(application:) needs XCUIApplication (UI test)"
             )
-            return
+        } else {
+            notes.append("XCTHitchMetric requires iOS 26+; this process is below that.")
         }
-        let note = """
-        P11: XCTest hitch/frame metrics (XCTHitchTimeRateMetric, \
-        XCTHitchRateMetric, XCTFrameRateMetric) are not in this toolchain. \
-        30-pin scroll hitch numbers were not recorded. \
-        HoP 2026-10-24: the ~32fps gate5-motion-60fps.mp4 is not P11 evidence.
+
+        let scrollMetricExists: Bool
+        if #available(iOS 12.2, *) {
+            _ = XCTOSSignpostMetric.scrollDecelerationMetric
+            scrollMetricExists = true
+            notes.append("XCTOSSignpostMetric.scrollDecelerationMetric is present")
+        } else {
+            scrollMetricExists = false
+            notes.append("XCTOSSignpostMetric.scrollDecelerationMetric requires iOS 12.2+")
+        }
+
+        let reason = """
+        模擬器無法判定：SAVETests cannot scroll 30 live Map annotations. \
+        \(notes.joined(separator: ". ")). \
+        XCTHitchMetric(application:) is a UI-test API. \
+        No hitch / 60fps number is recorded. This is not a P11 pass. \
+        HoP 2026-10-24: gate5-motion-60fps.mp4 is not P11 evidence. \
+        scrollDecelerationMetricPresent=\(scrollMetricExists)
         """
-        let attachment = XCTAttachment(string: note)
-        attachment.name = "p11-hitch-unavailable"
+        let attachment = XCTAttachment(string: reason)
+        attachment.name = "p11-hitch-unmeasurable"
         attachment.lifetime = .keepAlways
         add(attachment)
-        XCTAssertTrue(available.isEmpty)
+        throw XCTSkip(reason)
+    }
+
+    func testDirectionsLaunchUsesDefaultModeAndFallsBackWithoutCoordinates() throws {
+        let mapped = SavvyMapDirectionsLaunch.plan(for: samplePlace())
+        XCTAssertEqual(mapped.kind, .directions)
+        XCTAssertEqual(
+            mapped.launchOptions[MKLaunchOptionsDirectionsModeKey],
+            MKLaunchOptionsDirectionsModeDefault
+        )
+
+        var openedName: String?
+        var openedOptions: [String: Any] = [:]
+        var openedURL: URL?
+        SavvyMapDirectionsLaunch.open(
+            samplePlace(),
+            openMapItem: { item, options in
+                openedName = item.name
+                openedOptions = options
+            },
+            openURL: { openedURL = $0 }
+        )
+        XCTAssertEqual(openedName, "Temple of Heaven")
+        XCTAssertEqual(
+            openedOptions[MKLaunchOptionsDirectionsModeKey] as? String,
+            MKLaunchOptionsDirectionsModeDefault
+        )
+        XCTAssertNil(openedURL)
+
+        let nowhere = samplePlace(latitude: 0, longitude: 0)
+        XCTAssertFalse(nowhere.hasValidCoordinate)
+        XCTAssertNil(nowhere.appleMapsURL)
+        let fallback = SavvyMapDirectionsLaunch.plan(for: nowhere)
+        XCTAssertEqual(fallback.kind, .placePage)
+        XCTAssertTrue(fallback.launchOptions.isEmpty)
+
+        openedName = nil
+        openedURL = nil
+        SavvyMapDirectionsLaunch.open(
+            nowhere,
+            openMapItem: { _, _ in openedName = "item" },
+            openURL: { openedURL = $0 }
+        )
+        XCTAssertNil(openedName)
+        let url = try XCTUnwrap(openedURL)
+        XCTAssertTrue(url.absoluteString.contains("maps.apple.com"))
+        XCTAssertTrue(url.absoluteString.contains("q=Temple"))
+        XCTAssertFalse(url.absoluteString.contains("ll="))
+
+        XCTAssertEqual(SavvyMapCardCopy.directionsTitle(language: .traditionalChinese), "怎麼去")
+        XCTAssertEqual(SavvyMapCardCopy.directionsTitle(language: .english), "Directions")
     }
 
     func testP12SpringValuesMatchSpecSection6() throws {
@@ -697,6 +862,8 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
             "Arc letters must not rotate before the radius offset"
         )
         XCTAssertTrue(pins.contains(".offset(y: -radius)\n                    .rotationEffect(.degrees(angle))"))
+        XCTAssertTrue(pins.contains("badgeWordLabelExtraLift"))
+        XCTAssertTrue(pins.contains("badgeArcLabelOffsetY"))
         XCTAssertEqual(SavvyMapArcText.spreadDegrees(characterCount: 10), 150)
         XCTAssertGreaterThan(SavvyMapArcText.maxSpreadDegrees, 110)
         XCTAssertGreaterThan(SavvyMapArcText.degreesPerCharacter, 16)
@@ -715,6 +882,9 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(names.contains("zh-Hant-photoBadge.png"))
         XCTAssertTrue(names.contains("zh-Hant-coralCardHero.png"))
         XCTAssertTrue(names.contains("zh-Hant-coralCardBack.png"))
+        XCTAssertTrue(names.contains("zh-Hant-coralCardVisitedBack.png"))
+        XCTAssertTrue(names.contains("dark-coralCardBack.png"))
+        XCTAssertTrue(names.contains("zh-Hant-foodCardHero.png"))
         XCTAssertTrue(names.contains("p14-saved-unsaved-visited.png"))
         XCTAssertTrue(names.contains("light-coralCardBack.png"))
         let lightCard = try Data(contentsOf: directory.appendingPathComponent("light-coralCardHero.png"))
@@ -777,7 +947,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(map.contains("pointsOfInterest: .all"))
         XCTAssertFalse(map.contains("SaveTileTownCanvas"))
         XCTAssertTrue(map.contains("SavvyMapMotion.camera"))
-        XCTAssertTrue(map.contains("0.05") || map.contains("cameraDelay"))
+        XCTAssertTrue(map.contains("SavvyMapCameraFollow.scheduleOpenMove"))
     }
 
     private func sampleSharedPost(
@@ -837,6 +1007,25 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
             openingHours: openingHours,
             createdAt: Date(timeIntervalSince1970: 1_700_000_000)
         )
+    }
+
+    private func hostedFittingSize<V: View>(_ view: V) -> CGSize {
+        let host = UIHostingController(rootView: view.fixedSize())
+        let size = CGSize(width: 390, height: 400)
+        let window: UIWindow
+        if let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first {
+            window = UIWindow(windowScene: scene)
+            window.frame = CGRect(origin: .zero, size: size)
+        } else {
+            window = UIWindow(frame: CGRect(origin: .zero, size: size))
+        }
+        window.rootViewController = host
+        window.isHidden = false
+        host.view.bounds = CGRect(origin: .zero, size: size)
+        host.view.layoutIfNeeded()
+        let fitted = host.sizeThatFits(in: size)
+        window.isHidden = true
+        return fitted
     }
 
     private func source(at relativePath: String) throws -> String {

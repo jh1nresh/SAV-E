@@ -60,6 +60,11 @@ launch_app --uitest-map-photo-pin-catalog --uitest-map-photo-pin-zh "${FIXTURE_A
 sleep 6
 screenshot "$OUT/simulator-catalog-zh-Hant.png"
 
+xcrun simctl ui "$UDID" appearance dark
+launch_app --uitest-map-photo-pin-coral-card --uitest-dark --uitest-force-dark "${FIXTURE_ARGS[@]}"
+sleep 4
+screenshot "$OUT/simulator-dark-coralCard.png"
+
 xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1 || true
 grant_location
 # Record from launch: fixture holds small pins for 5s, then zooms to badges.

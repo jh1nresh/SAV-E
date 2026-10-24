@@ -354,13 +354,13 @@ struct SaveMapPhotoPinsRoot: View {
         let apply = {
             mapViewModel.cameraPosition = .camera(next)
         }
-        if reduceMotion {
-            apply()
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + SavvyMapPinMetrics.cameraDelay) {
-            withAnimation(SavvyMapMotion.camera) {
+        SavvyMapCameraFollow.scheduleOpenMove(reduceMotion: reduceMotion) {
+            if reduceMotion {
                 apply()
+            } else {
+                withAnimation(SavvyMapMotion.camera) {
+                    apply()
+                }
             }
         }
     }
@@ -431,8 +431,7 @@ struct SaveMapPhotoPinsRoot: View {
     }
 
     private func openDirections(_ place: Place) {
-        guard let url = place.appleMapsURL else { return }
-        UIApplication.shared.open(url)
+        SavvyMapDirectionsLaunch.open(place)
     }
 
     private func fitCameraToVisiblePlacesIfNeeded() {

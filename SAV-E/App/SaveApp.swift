@@ -96,6 +96,8 @@ struct SaveApp: App {
     private let stampFeedFixtureActive = ProcessInfo.processInfo.arguments.contains("--uitest-stamp-feed-fixture")
     private let mapPhotoPinCatalogActive = ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-catalog")
     private let mapPhotoPinMotionActive = ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-motion")
+    private let mapPhotoPinCoralCardActive = ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-coral-card")
+    private let mapPhotoPinCardActive = ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-card")
 #endif
 
     private let supabaseService = SupabaseService.shared
@@ -224,6 +226,14 @@ struct SaveApp: App {
             )
         } else if mapPhotoPinMotionActive {
             SavvyMapPhotoPinMotionFixtureRoot()
+        } else if mapPhotoPinCoralCardActive {
+            previewPage(
+                .coralCardHero,
+                scheme: ProcessInfo.processInfo.arguments.contains("--uitest-dark") ? .dark : .light
+            )
+            .accessibilityIdentifier("map.fixture.coralCard")
+        } else if mapPhotoPinCardActive {
+            SavvyMapPhotoPinCardFlowFixtureRoot()
         } else if relatedSourcesHarnessActive {
             SaveRelatedSourcesHarnessView()
         } else if smokeHarnessActive {

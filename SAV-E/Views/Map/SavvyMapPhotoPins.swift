@@ -14,12 +14,14 @@ enum SavvyMapMotion {
     static let camera = Animation.spring(response: 1.05, dampingFraction: 0.76)
     static let reduceMotion = Animation.easeInOut(duration: 0.25)
 
-    static func badge(reduceMotion: Bool) -> Animation { reduceMotion ? Self.reduceMotion : badge }
-    static func cardOpen(reduceMotion: Bool) -> Animation { reduceMotion ? Self.reduceMotion : cardOpen }
-    static func cardClose(reduceMotion: Bool) -> Animation { reduceMotion ? Self.reduceMotion : cardClose }
-    static func flipBack(reduceMotion: Bool) -> Animation { reduceMotion ? Self.reduceMotion : flipBack }
-    static func flipFront(reduceMotion: Bool) -> Animation { reduceMotion ? Self.reduceMotion : flipFront }
-    static func camera(reduceMotion: Bool) -> Animation { reduceMotion ? Self.reduceMotion : camera }
+    static func usesQuarterSecondFade(_ reduceMotion: Bool) -> Bool { reduceMotion }
+
+    static func badge(reduceMotion: Bool) -> Animation { usesQuarterSecondFade(reduceMotion) ? Self.reduceMotion : badge }
+    static func cardOpen(reduceMotion: Bool) -> Animation { usesQuarterSecondFade(reduceMotion) ? Self.reduceMotion : cardOpen }
+    static func cardClose(reduceMotion: Bool) -> Animation { usesQuarterSecondFade(reduceMotion) ? Self.reduceMotion : cardClose }
+    static func flipBack(reduceMotion: Bool) -> Animation { usesQuarterSecondFade(reduceMotion) ? Self.reduceMotion : flipBack }
+    static func flipFront(reduceMotion: Bool) -> Animation { usesQuarterSecondFade(reduceMotion) ? Self.reduceMotion : flipFront }
+    static func camera(reduceMotion: Bool) -> Animation { usesQuarterSecondFade(reduceMotion) ? Self.reduceMotion : camera }
 }
 
 // MARK: - Metrics (spec §2–§5)
@@ -39,6 +41,10 @@ enum SavvyMapPinMetrics {
     static let badgeStickerHeight: CGFloat = 89
     static let badgePhoto: CGFloat = 59
     static let badgeLabelReserve: CGFloat = 14
+    /// Shared lift for the arc and the word. English arc stays on this value.
+    static let badgeArcLabelOffsetY: CGFloat = 18
+    /// Extra lift for the CJK word path so 「景點」clears the photo circle.
+    static let badgeWordLabelExtraLift: CGFloat = 8
     static let badgeTail: CGFloat = 17
     static let badgeScaleFromPin = smallPinOuter / badgeWidth
     /// Gate 5: paper badge base is a circle (capsule-equivalent when square).
@@ -330,6 +336,98 @@ enum SavvyMapCameraFocus {
             heading: current.heading,
             pitch: cameraPitch
         )
+    }
+}
+
+/// P4: card opens first; camera follows after `cameraDelay` unless Reduce Motion.
+struct SavvyMapScheduler {
+    var asyncAfter: (TimeInterval, @escaping () -> Void) -> Void
+
+    static let main = SavvyMapScheduler { delay, work in
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
+    }
+}
+
+enum SavvyMapCameraFollow {
+    static func scheduleOpenMove(
+        reduceMotion: Bool,
+        delay: TimeInterval = SavvyMapPinMetrics.cameraDelay,
+        scheduler: SavvyMapScheduler = .main,
+        move: @escaping () -> Void
+    ) {
+        if reduceMotion {
+            move()
+            return
+        }
+        scheduler.asyncAfter(delay, move)
+    }
+}
+
+enum SavvyMapCardDrag {
+    static let minimumDistance: CGFloat = 12
+
+    static func shouldCollapse(translationHeight: CGFloat) -> Bool {
+        translationHeight > SavvyMapPinMetrics.collapseDrag
+    }
+}
+
+/// 「怎麼去」opens Apple Maps directions. Transport stays Apple's default.
+/// No in-app navigation. No coordinates → place page (`q=`), not a route.
+enum SavvyMapDirectionsLaunch {
+    enum Kind: Equatable {
+        case directions
+        case placePage
+        case none
+    }
+
+    struct Plan: Equatable {
+        var kind: Kind
+        var launchOptions: [String: String]
+        var destinationName: String?
+    }
+
+    static func plan(for place: Place) -> Plan {
+        if place.hasValidCoordinate, place.isMapKitMappable {
+            return Plan(
+                kind: .directions,
+                launchOptions: [
+                    MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDefault
+                ],
+                destinationName: place.name
+            )
+        }
+        if placePageURL(for: place) != nil {
+            return Plan(kind: .placePage, launchOptions: [:], destinationName: place.name)
+        }
+        return Plan(kind: .none, launchOptions: [:], destinationName: nil)
+    }
+
+    static func placePageURL(for place: Place) -> URL? {
+        if let url = place.appleMapsURL { return url }
+        let name = place.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+        var components = URLComponents(string: "https://maps.apple.com/")
+        components?.queryItems = [URLQueryItem(name: "q", value: name)]
+        return components?.url
+    }
+
+    static func open(
+        _ place: Place,
+        openMapItem: (MKMapItem, [String: Any]) -> Void = { $0.openInMaps(launchOptions: $1) },
+        openURL: (URL) -> Void = { UIApplication.shared.open($0) }
+    ) {
+        let planned = plan(for: place)
+        switch planned.kind {
+        case .directions:
+            let item = MKMapItem(placemark: MKPlacemark(coordinate: place.coordinate))
+            item.name = place.name
+            let options = planned.launchOptions.reduce(into: [String: Any]()) { $0[$1.key] = $1.value }
+            openMapItem(item, options)
+        case .placePage:
+            if let url = placePageURL(for: place) { openURL(url) }
+        case .none:
+            break
+        }
     }
 }
 
@@ -695,7 +793,7 @@ struct SavvyMapPhotoPinView: View {
                     .offset(y: 8)
 
                 badgeLabel
-                    .offset(y: -SavvyMapPinMetrics.badgeStickerWidth / 2 + 18)
+                    .offset(y: -SavvyMapPinMetrics.badgeStickerWidth / 2 + SavvyMapPinMetrics.badgeArcLabelOffsetY)
             }
             .frame(
                 width: SavvyMapPinMetrics.badgeStickerWidth,
@@ -731,6 +829,7 @@ struct SavvyMapPhotoPinView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .padding(.horizontal, 8)
+                .offset(y: -SavvyMapPinMetrics.badgeWordLabelExtraLift)
         }
     }
 
@@ -955,9 +1054,9 @@ struct SavvyMapPlaceCard: View {
             await sharedPhotos.loadIfNeeded(for: place)
         }
         .gesture(
-            DragGesture(minimumDistance: 12)
+            DragGesture(minimumDistance: SavvyMapCardDrag.minimumDistance)
                 .onEnded { value in
-                    if value.translation.height > SavvyMapPinMetrics.collapseDrag {
+                    if SavvyMapCardDrag.shouldCollapse(translationHeight: value.translation.height) {
                         onCollapse()
                     }
                 }
@@ -1228,15 +1327,19 @@ extension EnvironmentValues {
 enum SavvyMapPhotoPinPreviewFixtures {
     static let placeID = UUID(uuidString: "00000000-0000-4000-8000-000000000021")!
 
-    static func place(visited: Bool) -> Place {
+    static func place(
+        visited: Bool,
+        category: PlaceCategory = .attraction,
+        name: String = "Temple of Heaven"
+    ) -> Place {
         Place(
             id: placeID,
-            name: "Temple of Heaven",
+            name: name,
             address: "Tiantan Rd",
             latitude: 39.8822,
             longitude: 116.4066,
             googlePlaceId: nil,
-            category: .attraction,
+            category: category,
             status: visited ? .visited : .wantToGo,
             rating: nil,
             note: "DEBUG fixture — not shipping data",
@@ -1305,13 +1408,50 @@ struct SavvyMapPhotoPinPreviewCell: View {
     let state: SavvyMapPhotoPinPreviewState
     var language: AppLanguage = .english
     var isFlipped: Bool = false
-    private let visits = SavvyMapVisitStore(
-        defaults: UserDefaults(suiteName: "savvy.map.preview.visits") ?? .standard,
-        key: "gate5"
-    )
+    var category: PlaceCategory = .attraction
+    var placeName: String? = nil
+    var visitCount: Int = 0
+    var lastVisit: Date? = nil
+    private let visits: SavvyMapVisitStore
+
+    init(
+        state: SavvyMapPhotoPinPreviewState,
+        language: AppLanguage = .english,
+        isFlipped: Bool = false,
+        category: PlaceCategory = .attraction,
+        placeName: String? = nil,
+        visitCount: Int = 0,
+        lastVisit: Date? = nil
+    ) {
+        self.state = state
+        self.language = language
+        self.isFlipped = isFlipped
+        self.category = category
+        self.placeName = placeName
+        self.visitCount = visitCount
+        self.lastVisit = lastVisit
+        let suite = "savvy.map.preview.\(language.rawValue).\(state.rawValue).\(category.rawValue).flip\(isFlipped).v\(visitCount)"
+        let defaults = UserDefaults(suiteName: suite) ?? .standard
+        defaults.removePersistentDomain(forName: suite)
+        let store = SavvyMapVisitStore(defaults: defaults, key: "gate5")
+        if visitCount > 0 {
+            let last = lastVisit ?? Date(timeIntervalSince1970: 1_700_000_000)
+            for index in 0..<visitCount {
+                _ = store.recordVisit(
+                    placeID: SavvyMapPhotoPinPreviewFixtures.placeID,
+                    at: last.addingTimeInterval(TimeInterval(index - visitCount + 1))
+                )
+            }
+        }
+        self.visits = store
+    }
 
     var body: some View {
-        let place = SavvyMapPhotoPinPreviewFixtures.place(visited: state.isVisited)
+        let place = SavvyMapPhotoPinPreviewFixtures.place(
+            visited: state.isVisited || visitCount > 0,
+            category: category,
+            name: placeName ?? "Temple of Heaven"
+        )
         let settings = AppLanguageSettings(
             userDefaults: UserDefaults(suiteName: "savvy.map.preview.\(language.rawValue)") ?? .standard
         )
@@ -1564,6 +1704,43 @@ enum SavvyMapPhotoPinSnapshotExport {
             to: zhCardBack
         )
         written.append(zhCardBack)
+        let zhVisitedBack = directory.appendingPathComponent("zh-Hant-coralCardVisitedBack.png")
+        try write(
+            previewPage(
+                .coralCardHero,
+                scheme: .light,
+                language: .traditionalChinese,
+                isFlipped: true,
+                visitCount: 2,
+                lastVisit: Date(timeIntervalSince1970: 1_700_000_000)
+            ),
+            size: pinSize,
+            scheme: .light,
+            to: zhVisitedBack
+        )
+        written.append(zhVisitedBack)
+        let darkCardBack = directory.appendingPathComponent("dark-coralCardBack.png")
+        try write(
+            previewPage(.coralCardHero, scheme: .dark, isFlipped: true),
+            size: pinSize,
+            scheme: .dark,
+            to: darkCardBack
+        )
+        written.append(darkCardBack)
+        let zhFoodFront = directory.appendingPathComponent("zh-Hant-foodCardHero.png")
+        try write(
+            previewPage(
+                .coralCardHero,
+                scheme: .light,
+                language: .traditionalChinese,
+                category: .food,
+                placeName: "Din Tai Fung"
+            ),
+            size: pinSize,
+            scheme: .light,
+            to: zhFoodFront
+        )
+        written.append(zhFoodFront)
         return written
     }
 
@@ -1743,7 +1920,11 @@ func previewPage(
     _ state: SavvyMapPhotoPinPreviewState,
     scheme: ColorScheme,
     language: AppLanguage = .english,
-    isFlipped: Bool = false
+    isFlipped: Bool = false,
+    category: PlaceCategory = .attraction,
+    placeName: String? = nil,
+    visitCount: Int = 0,
+    lastVisit: Date? = nil
 ) -> some View {
     ZStack {
         SaveAtlasPalette.paper.ignoresSafeArea()
@@ -1751,11 +1932,56 @@ func previewPage(
             Text(state.qaTitle)
                 .font(SaveAtlasType.strong(15))
                 .foregroundStyle(SaveAtlasPalette.ink)
-            SavvyMapPhotoPinPreviewCell(state: state, language: language, isFlipped: isFlipped)
+            SavvyMapPhotoPinPreviewCell(
+                state: state,
+                language: language,
+                isFlipped: isFlipped,
+                category: category,
+                placeName: placeName,
+                visitCount: visitCount,
+                lastVisit: lastVisit
+            )
         }
         .padding(24)
     }
     .environment(\.colorScheme, scheme)
     .preferredColorScheme(scheme)
+}
+
+/// Interactive paper card for XCUITest flip / swipe-down. DEBUG only.
+struct SavvyMapPhotoPinCardFlowFixtureRoot: View {
+    @State private var session = SavvyMapCardSession()
+    private let place = SavvyMapPhotoPinPreviewFixtures.place(visited: false)
+    private let visits = SavvyMapVisitStore(
+        defaults: UserDefaults(suiteName: "savvy.map.cardflow.visits") ?? .standard,
+        key: "cardflow"
+    )
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack {
+                SaveAtlasPalette.paper.ignoresSafeArea()
+                if session.isOpen {
+                    SavvyMapPlaceCard(
+                        visits: visits,
+                        place: place,
+                        userLocation: CLLocation(latitude: 39.883, longitude: 116.407),
+                        isOpen: session.isOpen,
+                        isFlipped: session.isFlipped,
+                        reduceMotion: true,
+                        screenWidth: geo.size.width,
+                        onFlip: { session.toggleFlip() },
+                        onBeenHere: {},
+                        onDirections: {},
+                        onOpenDetail: {},
+                        onEditNote: {},
+                        onCollapse: { session.finishCollapseAfterFlip() }
+                    )
+                }
+            }
+        }
+        .onAppear { session.select(place.id) }
+        .accessibilityIdentifier("map.fixture.card")
+    }
 }
 #endif
