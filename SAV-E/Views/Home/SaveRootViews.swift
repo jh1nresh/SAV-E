@@ -10,17 +10,15 @@ struct SaveHomeView: View {
     let onOpenTrips: () -> Void
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
+    let onOpenMap: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
     @ObservedObject private var locationService = LocationService.shared
 
     var body: some View {
-        Group {
-            if SaveAtlasRuntime.usesParityFixture {
-                HomeAtlasScreen()
-            } else {
-                SaveTileTownHomeView()
-            }
-        }
+        SaveDoodleHomeView(
+            locationService: locationService,
+            onOpenMap: onOpenMap
+        )
         .environment(\.atlasPresentation, atlasPresentation)
         .task(id: locationService.authorizationStatus) {
             guard !ReviewDemo.isOfflineUITestMode,
@@ -68,6 +66,7 @@ struct SaveLibraryView: View {
     let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onOpenPassport: () -> Void
+    var onOpenTrips: () -> Void = {}
     var captureResultCount: Int? = nil
     var onLoadDuplicateAudit: () async throws -> [SaveReviewDuplicateGroup] = { [] }
     @State private var showsDuplicateAudit = false
@@ -93,6 +92,20 @@ struct SaveLibraryView: View {
         // back control when the child's toolbar modifier won.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("saves.root")
+        .toolbar {
+            if captureResultCount == nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: onOpenTrips) {
+                        Text(localized("Trips ›", "行程 ›"))
+                            .font(SaveAtlasType.strong(15))
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(localized("Trips", "行程"))
+                    .accessibilityIdentifier("saves.trips")
+                }
+            }
+        }
         .sheet(isPresented: $showsDuplicateAudit, onDismiss: {
             if let candidate = auditSelection {
                 auditSelection = nil
@@ -481,6 +494,12 @@ struct SaveLibraryView: View {
             SaveAtlasMapStampTicket(place: place)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(SaveAtlasMapStampTicket.label(for: place, language: languageSettings))
+        .accessibilityHint(localized(
+            "Open the lifted saved postcard",
+            "打開收藏明信片詳情"
+        ))
+        .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("saves.place.\(place.id.uuidString)")
     }
 
@@ -529,30 +548,27 @@ struct SaveMapRootView: View {
     let onPlanAroundPlace: (Place) -> Void
     let onOpenPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
+    @EnvironmentObject private var session: SaveDoodleSession
 
     var body: some View {
         Group {
-            if SaveAtlasRuntime.usesParityFixture {
-                // Fixture-only illustrated atlas. Production Map is tile-town
-                // (2026-10-14 founder lock; H1/M1 MapKit-only base superseded).
-                RootAtlasMapScreen()
-                    .environment(\.atlasPresentation, atlasPresentation)
-            } else {
-                SaveTileTownRootMap(
-                    mapViewModel: mapViewModel,
-                    presentation: atlasPresentation,
-                    onClearSelection: mapViewModel.clearSelectedMapObject,
-                    onPlanAroundPlace: onPlanAroundPlace
-                )
-            }
+            SaveDoodleMapView(
+                mapViewModel: mapViewModel,
+                presentation: atlasPresentation,
+                onClearSelection: mapViewModel.clearSelectedMapObject,
+                onPlanAroundPlace: onPlanAroundPlace
+            )
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
+            session.consumeMiniMapHandoff()
 #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--uitest-map-place-selected"),
-               mapViewModel.selectedPlace == nil,
-               let firstPlace = mapViewModel.places.first {
-                mapViewModel.selectedPlace = firstPlace
+               mapViewModel.selectedPlace == nil {
+                let taipei = mapViewModel.places.first { place in
+                    abs(place.latitude - 25.04) < 0.35 && abs(place.longitude - 121.56) < 0.35
+                }
+                mapViewModel.selectedPlace = taipei ?? mapViewModel.places.first
             }
 #endif
         }
@@ -711,39 +727,35 @@ private struct SaveAtlasMapStampTicket: View {
 
     var body: some View {
         SavePostcardTicket(
-            eyebrow: localized("Confirmed Map Stamp", "已確認地圖章"),
+            eyebrow: languageSettings.localized(
+                english: "Confirmed Map Stamp",
+                traditionalChinese: "已確認地圖章"
+            ),
             title: place.name,
-            detail: detail,
-            actionTitle: localized("Open", "打開"),
+            detail: Self.detail(for: place, language: languageSettings),
+            actionTitle: languageSettings.localized(english: "Open", traditionalChinese: "打開"),
             style: .confirmed
         )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(place.name), \(detail)")
-        .accessibilityHint(localized(
-            "Open the lifted saved postcard",
-            "打開收藏明信片詳情"
-        ))
-        .accessibilityIdentifier("saves.mapStamp.postcard")
     }
 
-    private var detail: String {
+    static func label(for place: Place, language: AppLanguageSettings) -> String {
+        "\(place.name), \(detail(for: place, language: language))"
+    }
+
+    static func detail(for place: Place, language: AppLanguageSettings) -> String {
         let area = place.shareAreaLabel.trimmingCharacters(in: .whitespacesAndNewlines)
         let location = area.isEmpty
             ? place.address.trimmingCharacters(in: .whitespacesAndNewlines)
             : area
         let source = place.sourcePlatform == .other
-            ? localized("Saved memory", "已保存記憶")
-            : localized(
-                "From \(place.sourcePlatform.displayName)",
-                "來自 \(place.sourcePlatform.displayName)"
+            ? language.localized(english: "Saved memory", traditionalChinese: "已保存記憶")
+            : language.localized(
+                english: "From \(place.sourcePlatform.displayName)",
+                traditionalChinese: "來自 \(place.sourcePlatform.displayName)"
             )
         let date = place.createdAt.formatted(date: .abbreviated, time: .omitted)
-        let saved = localized("Saved \(date)", "收藏於 \(date)")
+        let saved = language.localized(english: "Saved \(date)", traditionalChinese: "收藏於 \(date)")
         return [saved, location, source].filter { !$0.isEmpty }.joined(separator: " · ")
-    }
-
-    private func localized(_ english: String, _ traditionalChinese: String) -> String {
-        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
     }
 }
 

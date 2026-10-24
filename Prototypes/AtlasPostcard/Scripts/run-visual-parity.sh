@@ -24,10 +24,13 @@ Options:
   --artifacts DIR       Write reference/output/diff/results under DIR.
   --threshold NUMBER    Gate threshold. Must be at least 0.90 (default 0.90).
 
-The screenshots directory must contain home.png, saves.png, plan.png, and
-map.png. The result-bundle mode prefers the live five-tab-home attachment for
-Home and falls back to atlas-home for prototype-only runs. Saves, Plan, and Map
-use the stable atlas-saves, atlas-plan, and atlas-map XCTest attachments.
+The screenshots directory must contain home.png, saves.png, plan.png,
+map.png, and passport.png. The result-bundle mode prefers the live
+five-tab-home attachment for Home and falls back to atlas-home for
+prototype-only runs. Passport prefers five-tab-passport and falls back to
+atlas-passport. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
+and atlas-map XCTest attachments. Home, Map, Saves, Plan, and Passport
+all fail the job below 0.90. Passport has no ignore mask.
 EOF
 }
 
@@ -198,7 +201,7 @@ mkdir -p \
     "$ARTIFACT_DIR/diff" \
     "$ARTIFACT_DIR/results"
 
-for screen in home saves plan map; do
+for screen in home saves plan map passport; do
     source="$REFERENCE_SOURCE/$screen.png"
     if [[ ! -f "$source" ]]; then
         echo "error: missing reference image: $source" >&2
@@ -206,6 +209,12 @@ for screen in home saves plan map; do
     fi
     cp "$source" "$ARTIFACT_DIR/reference/$screen.png"
 done
+if [[ -f "$REFERENCE_SOURCE/home-mask.png" ]]; then
+    cp "$REFERENCE_SOURCE/home-mask.png" "$ARTIFACT_DIR/reference/home-mask.png"
+fi
+if [[ -f "$REFERENCE_SOURCE/map-mask.png" ]]; then
+    cp "$REFERENCE_SOURCE/map-mask.png" "$ARTIFACT_DIR/reference/map-mask.png"
+fi
 
 if [[ -n "$DESTINATION" ]]; then
     capture_booted_simulators
@@ -252,6 +261,10 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
     # this gate only runs once the test step has succeeded, so the final attempt
     # is the one that passed and its screenshots are the ones worth comparing.
     candidates=""
+    map_dark_file=""
+    map_dark_ts=-1
+    map_light_file=""
+    map_light_ts=-1
     tab="$(printf '\t')"
     while attachment_count="$(
         plutil -extract "$test_index.attachments" raw -o - "$manifest" 2>/dev/null
@@ -284,12 +297,45 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                     screen="plan"
                     priority=0
                     ;;
+                five-tab-map*)
+                    screen="map"
+                    priority=1
+                    ;;
+                doodle-map-light*|light-map*)
+                    screen="map"
+                    priority=1
+                    ;;
+                dark-map*|doodle-map-dark*)
+                    if awk -v ts="$timestamp" -v best="$map_dark_ts" 'BEGIN { exit !(ts+0 >= best+0) }'
+                    then
+                        map_dark_file="$exported_name"
+                        map_dark_ts="$timestamp"
+                    fi
+                    continue
+                    ;;
                 atlas-map*)
                     screen="map"
                     priority=0
                     ;;
+                five-tab-passport*)
+                    screen="passport"
+                    priority=1
+                    ;;
+                atlas-passport*)
+                    screen="passport"
+                    priority=0
+                    ;;
                 *)
                     continue
+                    ;;
+            esac
+            case "$human_name" in
+                five-tab-map*|doodle-map-light*|light-map*)
+                    if awk -v ts="$timestamp" -v best="$map_light_ts" 'BEGIN { exit !(ts+0 >= best+0) }'
+                    then
+                        map_light_file="$exported_name"
+                        map_light_ts="$timestamp"
+                    fi
                     ;;
             esac
 
@@ -299,7 +345,7 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
         ((test_index += 1))
     done
 
-    for screen in home saves plan map; do
+    for screen in home saves plan map passport; do
         newest="$(
             printf '%s' "$candidates" |
                 awk -F"$tab" -v want="$screen" '
@@ -327,13 +373,22 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
 
         cp "$export_dir/$newest" "$ARTIFACT_DIR/output/$screen.png"
     done
+    mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
+    if [[ -n "$map_light_file" && -f "$export_dir/$map_light_file" ]]; then
+        cp "$export_dir/$map_light_file" "$ARTIFACT_DIR/map-doodle-similarity/light.png"
+    else
+        cp "$ARTIFACT_DIR/output/map.png" "$ARTIFACT_DIR/map-doodle-similarity/light.png"
+    fi
+    if [[ -n "$map_dark_file" && -f "$export_dir/$map_dark_file" ]]; then
+        cp "$export_dir/$map_dark_file" "$ARTIFACT_DIR/map-doodle-similarity/dark.png"
+    fi
     rm -rf "$export_dir"
 else
     if [[ ! -d "$SCREENSHOTS_DIR" ]]; then
         echo "error: screenshots directory not found: $SCREENSHOTS_DIR" >&2
         exit 2
     fi
-    for screen in home saves plan map; do
+    for screen in home saves plan map passport; do
         if [[ ! -f "$SCREENSHOTS_DIR/$screen.png" ]]; then
             echo "error: missing screenshot: $SCREENSHOTS_DIR/$screen.png" >&2
             exit 2
@@ -343,18 +398,42 @@ else
 fi
 
 gate_failed=0
-for screen in home saves plan map; do
+mkdir -p "$ARTIFACT_DIR/map-doodle-similarity"
+# DESIGN v2 map-mask.png: white = live Apple Maps (ignored). Home uses
+# home-mask.png. Passport has no mask. Home, Map, Saves, Plan, and
+# Passport all fail the job below 0.90.
+MAP_MASK="$REFERENCE_SOURCE/map-mask.png"
+for screen in home saves plan map passport; do
     actual="$ARTIFACT_DIR/output/$screen.png"
     if [[ ! -f "$actual" ]]; then
         echo "error: missing exported attachment for $screen" >&2
         exit 2
     fi
 
-    if xcrun swift "$PARITY_SCRIPT" \
-        --target "$ARTIFACT_DIR/reference/$screen.png" \
-        --actual "$actual" \
-        --diff "$ARTIFACT_DIR/diff/$screen.png" \
-        --threshold "$THRESHOLD" \
+    compare_args=(
+        --target "$ARTIFACT_DIR/reference/$screen.png"
+        --actual "$actual"
+        --diff "$ARTIFACT_DIR/diff/$screen.png"
+        --threshold "$THRESHOLD"
+    )
+    extra_args=()
+    if [[ "$screen" == home && -f "$ARTIFACT_DIR/reference/home-mask.png" ]]; then
+        compare_args+=(--mask "$ARTIFACT_DIR/reference/home-mask.png")
+    fi
+    if [[ "$screen" == "map" ]]; then
+        if [[ ! -f "$MAP_MASK" ]]; then
+            echo "error: missing DESIGN map mask: $MAP_MASK" >&2
+            exit 2
+        fi
+        echo "Map pixel coverage: DESIGN map-mask.png (white = Apple Maps)." >&2
+        extra_args=(--ignore-mask "$MAP_MASK")
+    fi
+    # macOS CI bash + set -u treats "${empty[@]}" as unbound. compare_args
+    # always has the required flags; only expand extra_args when set.
+    if [[ ${#extra_args[@]} -gt 0 ]]; then
+        compare_args+=("${extra_args[@]}")
+    fi
+    if xcrun swift "$PARITY_SCRIPT" "${compare_args[@]}" \
         >"$ARTIFACT_DIR/results/$screen.json"
     then
         status="PASS"
@@ -362,6 +441,7 @@ for screen in home saves plan map; do
         comparison_status=$?
         if ((comparison_status == 1)); then
             status="FAIL"
+            # Home, Map, Saves, Plan, and Passport all fail the job below 0.90.
             gate_failed=1
         else
             echo "error: parity comparison failed for $screen" >&2
@@ -374,6 +454,37 @@ for screen in home saves plan map; do
         plutil -extract composite raw -o - "$ARTIFACT_DIR/results/$screen.json"
     )"
     printf '%-5s %-5s score=%s threshold=%s\n' "$status" "$screen" "$score" "$THRESHOLD"
+    if [[ "$screen" == "map" ]]; then
+        cp "$ARTIFACT_DIR/reference/map.png" "$ARTIFACT_DIR/map-doodle-similarity/mock.png"
+        cp "$actual" "$ARTIFACT_DIR/map-doodle-similarity/live.png"
+        cp "$ARTIFACT_DIR/diff/map.png" "$ARTIFACT_DIR/map-doodle-similarity/diff.png"
+        compose_args=(
+            --target "$ARTIFACT_DIR/reference/map.png"
+            --actual "$actual"
+            --diff "$ARTIFACT_DIR/diff/map.png"
+            --result "$ARTIFACT_DIR/results/map.json"
+            --output "$ARTIFACT_DIR/map-doodle-similarity/side-by-side.png"
+            --report "$ARTIFACT_DIR/map-doodle-similarity/report.json"
+            --mask "0,160,402,618"
+            --mask-image "$MAP_MASK"
+            --status "$status"
+            --threshold "$THRESHOLD"
+            --modes-output "$ARTIFACT_DIR/map-doodle-similarity/mock-light-dark.png"
+        )
+        if [[ -f "$ARTIFACT_DIR/map-doodle-similarity/light.png" ]]; then
+            compose_args+=(--light "$ARTIFACT_DIR/map-doodle-similarity/light.png")
+        else
+            compose_args+=(--light "$actual")
+        fi
+        if [[ -f "$ARTIFACT_DIR/map-doodle-similarity/dark.png" ]]; then
+            compose_args+=(--dark "$ARTIFACT_DIR/map-doodle-similarity/dark.png")
+        fi
+        if ! python3 "$SCRIPT_DIR/compose-map-similarity.py" "${compose_args[@]}"
+        then
+            echo "note: map side-by-side compose skipped; score JSON is in results/map.json"
+            cp "$ARTIFACT_DIR/results/map.json" "$ARTIFACT_DIR/map-doodle-similarity/report.json"
+        fi
+    fi
 done
 
 echo "reference: $ARTIFACT_DIR/reference"

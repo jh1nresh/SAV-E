@@ -2638,6 +2638,151 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testResolvingOneClueKeepsSameNameSiblingByID() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("same-name-sibling-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var resolved = Self.correctionClue(overlappingStamp: true)
+        resolved.name = "Harbor Oven Pizza"
+        var sibling = Self.correctionClue(overlappingStamp: false)
+        sibling.name = "harbor oven pizza"
+        sibling.city = "Osaka"
+        sibling.address = "Osaka"
+        _ = try vault.saveReviewCandidate(resolved)
+        _ = try vault.saveReviewCandidate(sibling)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        map.reviewCandidates = [resolved, sibling]
+        map.selectedReviewCandidate = sibling
+        map.beginExactSearchResolution(for: resolved)
+
+        _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == sibling.id },
+            "A same-name sibling must stay until it is resolved by id"
+        )
+        XCTAssertEqual(map.selectedReviewCandidate?.id, sibling.id)
+        let leftover = try vault.reviewCandidates()
+        XCTAssertFalse(leftover.contains { $0.id == resolved.id })
+        XCTAssertTrue(leftover.contains { $0.id == sibling.id })
+    }
+
+    @MainActor
+    func testResolvingOneClueKeepsSameCityNameDuplicate() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("same-city-duplicate-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var resolved = Self.correctionClue(overlappingStamp: true)
+        resolved.name = "Harbor Oven Pizza"
+        var leftover = Self.correctionClue(overlappingStamp: false)
+        leftover.name = "Harbor Oven Pizza"
+        leftover.city = resolved.city
+        leftover.address = resolved.address
+        leftover.latitude = 33.7405
+        leftover.longitude = -118.2807
+        resolved.latitude = 33.7405
+        resolved.longitude = -118.2807
+        _ = try vault.saveReviewCandidate(resolved)
+        _ = try vault.saveReviewCandidate(leftover)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        map.reviewCandidates = [resolved, leftover]
+        map.beginExactSearchResolution(for: resolved)
+
+        _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == leftover.id },
+            "A same-city Harbor Oven leftover stays until it is resolved by id"
+        )
+        let remaining = try vault.reviewCandidates()
+        XCTAssertTrue(remaining.contains { $0.id == leftover.id })
+    }
+
+    @MainActor
+    func testResolvingOneClueKeepsSameCityFarSibling() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("same-city-far-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var resolved = Self.correctionClue(overlappingStamp: true)
+        resolved.name = "Harbor Oven Pizza"
+        resolved.city = "Taipei"
+        resolved.latitude = 25.033
+        resolved.longitude = 121.565
+        var sibling = Self.correctionClue(overlappingStamp: false)
+        sibling.name = "Harbor Oven Pizza"
+        sibling.city = "Taipei"
+        sibling.address = "Taipei Neihu"
+        sibling.latitude = 25.079
+        sibling.longitude = 121.575
+        _ = try vault.saveReviewCandidate(resolved)
+        _ = try vault.saveReviewCandidate(sibling)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        map.reviewCandidates = [resolved, sibling]
+        map.beginExactSearchResolution(for: resolved)
+
+        _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == sibling.id },
+            "A same-city Harbor Oven with its own coordinates must stay"
+        )
+        let leftover = try vault.reviewCandidates()
+        XCTAssertTrue(leftover.contains { $0.id == sibling.id })
+    }
+
+    @MainActor
+    func testResolvingOneClueKeepsEmptyCityNamelessSibling() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("empty-city-sibling-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Self.correctionStamp()
+        _ = try vault.saveConfirmedPlace(stamp)
+        var resolved = Self.correctionClue(overlappingStamp: true)
+        resolved.name = "Harbor Oven Pizza"
+        resolved.city = nil
+        resolved.latitude = nil
+        resolved.longitude = nil
+        var sibling = Self.correctionClue(overlappingStamp: false)
+        sibling.name = "Harbor Oven Pizza"
+        sibling.city = nil
+        sibling.address = ""
+        sibling.latitude = nil
+        sibling.longitude = nil
+        _ = try vault.saveReviewCandidate(resolved)
+        _ = try vault.saveReviewCandidate(sibling)
+        let map = MapViewModel(saveLocalVaultService: vault, usesRemotePersistence: false)
+        map.places = [stamp]
+        map.reviewCandidates = [resolved, sibling]
+        map.beginExactSearchResolution(for: resolved)
+
+        _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
+
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == sibling.id },
+            "An empty-city same-name clue is not a verified leftover"
+        )
+        let leftover = try vault.reviewCandidates()
+        XCTAssertTrue(leftover.contains { $0.id == sibling.id })
+    }
+
+    @MainActor
     func testExactSearchResolutionPersistsHandleAndDedupesEvidenceRemotely() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("exact-search-saved-remote-\(UUID().uuidString).json")
@@ -6291,6 +6436,43 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
     }
 
+    func testLaunchRemountClearKeepsExactSearchResolutionForUnsavedSave() async throws {
+        let search = RecordingMapCandidateSearchService()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("launch-remount-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            mapCandidateSearchService: search,
+            usesRemotePersistence: false
+        )
+        let clue = reviewClue(name: "Harbor Oven", address: "Taipei", latitude: nil, longitude: nil, status: "pending")
+        let refined = SaveMapCandidate(
+            id: "harbor-oven-public",
+            title: "Harbor Oven Xinyi",
+            subtitle: "Taipei",
+            latitude: taipei.latitude,
+            longitude: taipei.longitude,
+            category: .food
+        )
+        search.nextMatchingResults = [refined]
+        map.reviewCandidates = [clue]
+        map.updateVisibleMapRegion(region(around: taipei))
+        map.beginExactSearchResolution(for: clue)
+
+        map.clearMapSearchResults(preservesExactSearchClue: true)
+        XCTAssertTrue(map.hasActiveExactSearchResolution)
+        XCTAssertTrue(map.mapCandidates.isEmpty)
+
+        await map.searchMapPlaces("Harbor Oven Xinyi", preservesExactSearchClue: true)
+        let candidate = try XCTUnwrap(map.mapCandidates.first)
+        XCTAssertTrue(map.mapCandidate(candidate, resolvesReviewCandidateID: clue.id))
+
+        let place = try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertEqual(place.name, "Harbor Oven Xinyi")
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+    }
+
     func testPlainMapSearchCannotResolveAnExistingReviewClue() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("plain-search-does-not-resolve-\(UUID().uuidString).json")
@@ -6453,6 +6635,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
     func testReviewHeroAndExactSearchWiringStaySplit() throws {
         let drawer = try source(at: "SAV-E/Views/Drawer/AIDrawerView.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
+        let mapModel = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
         XCTAssertTrue(drawer.contains("if candidate.hasReliableCoordinates"))
         XCTAssertTrue(drawer.contains("onFocusOnMap ?? onFindExactPlace"))
         XCTAssertTrue(drawer.contains("Investigate"))
@@ -6462,6 +6645,36 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(content.contains("preservesExactSearchClue: true"))
         XCTAssertFalse(content.contains("openMapSearch(initialQuery: query)"))
         XCTAssertTrue(content.contains("chooseSavedStampFromExactSearch"))
+        XCTAssertTrue(content.contains("openSavedPlaceFromMapSearch($0)"))
+        XCTAssertTrue(content.contains("let shouldResolveClue = isExactSearchSessionActive"))
+        XCTAssertFalse(content.contains("let shouldResolveClue = drawerLaunchRequest.preservesExactSearchClue"))
+        XCTAssertTrue(content.contains("hasActiveExactSearchResolution"))
+        XCTAssertTrue(content.contains("activateExactSearchSession"))
+        XCTAssertTrue(content.contains("restoreExactSearchResolutionIfNeeded"))
+        XCTAssertTrue(content.contains("preserveExactSearchClue"))
+        XCTAssertTrue(content.contains("exactSearchClueID"))
+        XCTAssertTrue(content.contains("if endsExactSearch"))
+        XCTAssertTrue(content.contains("isExactSearchSessionActive = false"))
+        XCTAssertFalse(content.contains("isExactSearchSessionActive = false\n                if endsExactSearch"))
+        XCTAssertTrue(content.contains("preservesExactSearchClue: !endsExactSearch"))
+        XCTAssertTrue(content.contains("restoreExactSearchResolutionIfNeeded()\n                let resolvesOriginPlan"))
+        XCTAssertTrue(drawer.contains("onClearMapSearchResults(true)"))
+        XCTAssertTrue(drawer.contains("onClearMapSearchResults(false)"))
+        XCTAssertTrue(drawer.contains("hasVisibleMapSearchResults || addSpotStatus != nil"))
+        XCTAssertTrue(drawer.contains("guard case .reviewCandidate = mapDetailDrawerItem else { return false }"))
+        XCTAssertTrue(drawer.contains("if shouldEndExactSearch"))
+        XCTAssertTrue(mapModel.contains("func clearMapSearchResults(preservesExactSearchClue: Bool = false)"))
+        XCTAssertTrue(mapModel.contains("removeReviewCandidateAfterRemoteConfirm"))
+        XCTAssertTrue(mapModel.contains("Unplaced cleanup must succeed"))
+        XCTAssertTrue(mapModel.contains("reviewCandidates.first(where: { $0.id == candidate.id }) ?? candidate"))
+        XCTAssertTrue(mapModel.contains("$0.id == clue.id"))
+        XCTAssertFalse(mapModel.contains("retireSameNameReviewClues"))
+        XCTAssertFalse(mapModel.contains("isDuplicateReviewClue"))
+        XCTAssertFalse(mapModel.contains("leftoverCity == resolvedCity"))
+        XCTAssertEqual(
+            mapModel.components(separatedBy: "var hasActiveExactSearchResolution: Bool { exactSearchResolution != nil }").count - 1,
+            1
+        )
         XCTAssertTrue(content.contains("mapDrawerPresentedActionError"))
         XCTAssertTrue(content.contains("MapDrawerActionErrorAlert"))
         XCTAssertTrue(content.contains("map.drawer.actionError"))
@@ -6505,6 +6718,139 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertTrue(simplifiedMatch)
         XCTAssertEqual(folded, "台北市")
         XCTAssertEqual("臺北市信義區", "臺北市信義區")
+    }
+
+    func testRetireResolvedReviewClueIsIdOnly() throws {
+        let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
+        XCTAssertTrue(map.contains("reviewCandidates.removeAll { $0.id == clue.id }"))
+        XCTAssertFalse(map.contains("isDuplicateReviewClue"))
+        XCTAssertFalse(map.contains("leftoverCity == resolvedCity"))
+        XCTAssertFalse(map.contains("retireSameNameReviewClues"))
+    }
+
+    @MainActor
+    func testRetireResolvedReviewClueKeepsSameNameCityLeftoverWithoutCoordinates() async throws {
+        let search = RecordingMapCandidateSearchService()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("retire-leftover-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            mapCandidateSearchService: search,
+            usesRemotePersistence: false
+        )
+        let resolved = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Starbucks",
+            address: "Los Angeles",
+            city: "Los Angeles",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Synthetic public fixture"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        let leftover = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Starbucks",
+            address: "Los Angeles",
+            city: "Los Angeles",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Another branch"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        map.reviewCandidates = [resolved, leftover]
+        map.updateVisibleMapRegion(region(around: taipei))
+        map.beginExactSearchResolution(for: resolved)
+        search.nextMatchingResults = [
+            SaveMapCandidate(
+                id: "resolved-starbucks",
+                title: "Starbucks Sunset",
+                subtitle: "Los Angeles, CA",
+                latitude: 34.0979,
+                longitude: -118.3287,
+                category: .cafe
+            )
+        ]
+        await map.searchMapPlaces("Starbucks Sunset", preservesExactSearchClue: true)
+        let candidate = try XCTUnwrap(map.mapCandidates.first)
+        _ = try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == leftover.id },
+            "A second coordinate-less Starbucks in the same city must stay"
+        )
+    }
+
+    @MainActor
+    func testRetireResolvedReviewClueStillCollapsesSharedCaptureLeftover() async throws {
+        let search = RecordingMapCandidateSearchService()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("retire-shared-capture-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            mapCandidateSearchService: search,
+            usesRemotePersistence: false
+        )
+        let capture = UUID()
+        let resolved = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: capture,
+            name: "Starbucks",
+            address: "Los Angeles",
+            city: "Los Angeles",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Seed"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        let leftover = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: capture,
+            name: "Starbucks",
+            address: "Los Angeles",
+            city: "Los Angeles",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Recapture"],
+            confidence: 0.6,
+            missingInfo: ["Exact coordinates"],
+            status: "pending",
+            createdAt: Date()
+        )
+        map.reviewCandidates = [resolved, leftover]
+        map.updateVisibleMapRegion(region(around: taipei))
+        map.beginExactSearchResolution(for: resolved)
+        search.nextMatchingResults = [
+            SaveMapCandidate(
+                id: "shared-capture-starbucks",
+                title: "Starbucks Sunset",
+                subtitle: "Los Angeles, CA",
+                latitude: 34.0979,
+                longitude: -118.3287,
+                category: .cafe
+            )
+        ]
+        await map.searchMapPlaces("Starbucks Sunset", preservesExactSearchClue: true)
+        let candidate = try XCTUnwrap(map.mapCandidates.first)
+        _ = try await map.saveMapCandidateAsPlace(candidate)
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == resolved.id })
+        XCTAssertTrue(
+            map.reviewCandidates.contains { $0.id == leftover.id },
+            "A recapture that shares captureId still stays until it is resolved by id"
+        )
     }
 
     func testSavedPlaceSearchMatchesTaipeiVariants() {

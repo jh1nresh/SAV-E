@@ -34,7 +34,7 @@ final class TapCrashP0Tests: XCTestCase {
         )
         XCTAssertEqual(
             SaveChromeNavigation.pathByOpening(.trips, currently: [.saves]),
-            [.trips]
+            [.saves, .trips]
         )
         let tripID = UUID()
         XCTAssertEqual(
@@ -68,6 +68,10 @@ final class TapCrashP0Tests: XCTestCase {
         XCTAssertEqual(
             SaveChromeNavigation.pathByOpening(.trip(tripID), currently: [.plan]),
             [.plan, .trip(tripID)]
+        )
+        XCTAssertEqual(
+            SaveChromeNavigation.pathByOpening(.trips, currently: []),
+            [.trips]
         )
         XCTAssertEqual(
             SaveChromeNavigation.pathByOpening(.trips, currently: [.plan, .trip(tripID)]),
