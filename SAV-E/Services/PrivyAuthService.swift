@@ -54,6 +54,10 @@ final class PrivyAuthService: ObservableObject {
     private var shareSessionOwner: String?
     private var shareSessionAttempt: UUID?
     private var interactiveAuthAttempts: Set<UUID> = []
+    private var clipCarryOverInFlight = false
+    private var clipAppleSessionActive = false
+    private var clipAppleIdentityToken: String?
+    private var isPerformingInitialRestore = true
     private var signingOutOwners = Set<String>()
     private var signOutWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
 #if DEBUG
@@ -147,12 +151,45 @@ final class PrivyAuthService: ObservableObject {
 
     func restoreSession() async {
         sessionOrigin = .restored
-        guard let privy else {
-            transitionToUnauthenticated()
+        defer { isPerformingInitialRestore = false }
+        if let privy {
+            let state = await privy.getAuthState()
+            if case .unauthenticated = state {
+                await restoreClipSignInIfNeeded()
+                return
+            }
+            applyPrivyState(state)
             return
         }
-        let state = await privy.getAuthState()
-        applyPrivyState(state)
+        await restoreClipSignInIfNeeded()
+    }
+
+    /// App Clip SIWA wrote `clipAppleUserID`. If Apple still authorizes that
+    /// user, skip `SignInView` and mint a Privy session. No JWT is stored in
+    /// the App Group.
+    private func restoreClipSignInIfNeeded() async {
+        clipCarryOverInFlight = true
+        defer { clipCarryOverInFlight = false }
+        let outcome = await ClipSignInCarryOverController(
+            loadAppleUserID: { ClipAppleAccountStore.read() },
+            credentialState: { await ClipAppleCredentialClient.state(forUserID: $0) },
+            restoreSession: { try await self.restorePrivySessionFromClip() }
+        ).run()
+        if outcome == .showSignIn || !isAuthenticated {
+            transitionToUnauthenticated()
+        }
+    }
+
+    private func restorePrivySessionFromClip() async throws {
+        guard let session = await ClipAppleSessionExchange.exchange(
+            appleUserID: ClipAppleAccountStore.read() ?? ""
+        ) else {
+            throw AuthError.signInFailed("Clip Apple session exchange failed")
+        }
+        clipAppleIdentityToken = session.identityToken
+        clipAppleSessionActive = true
+        sessionOrigin = .interactive
+        transitionToAuthenticated(userId: session.privyUserId)
     }
 
     private func observeAuthState() {
@@ -293,6 +330,8 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Sign Out
 
     func signOut() async {
+        ClipAppleAccountStore.clear()
+        clearClipAppleSession()
         let owner = currentUserId
         let generation = sessionGeneration
         if let owner, signingOutOwners.contains(owner) {
@@ -365,6 +404,14 @@ final class PrivyAuthService: ObservableObject {
         // handled error so callers degrade to local/cached behavior. The demo
         // path that needs the backend (drawer search) uses `demoGuestToken`.
         if isReviewerDemo { throw AuthError.reviewerDemoNoToken }
+        if clipAppleSessionActive {
+            if let cached = clipAppleIdentityToken, !ClipAppleIdentityToken.isExpired(cached) {
+                return cached
+            }
+            let refreshed = try await ClipAppleSilentAuth.requestIdentityToken()
+            clipAppleIdentityToken = refreshed
+            return refreshed
+        }
         let privy = try validatedPrivy()
         guard let user = await privy.getUser() else { throw AuthError.signInFailed("No authenticated user") }
         return try await user.getAccessToken()
@@ -378,6 +425,7 @@ final class PrivyAuthService: ObservableObject {
         clearReviewerDemoState()
         switch state {
         case .authenticated(let user):
+            clearClipAppleSession()
             if hasInteractiveAuthenticationInFlight {
                 sessionOrigin = .interactive
             } else if currentUserId != user.id {
@@ -385,6 +433,7 @@ final class PrivyAuthService: ObservableObject {
             }
             transitionToAuthenticated(userId: user.id)
         case .unauthenticated:
+            if clipCarryOverInFlight || isPerformingInitialRestore || clipAppleSessionActive { return }
             if !hasInteractiveAuthenticationInFlight {
                 sessionOrigin = .restored
             }
@@ -415,6 +464,11 @@ final class PrivyAuthService: ObservableObject {
         isReviewerDemo = false
         demoGuestToken = nil
         ReviewDemoGuestTokenHolder.shared.set(nil)
+    }
+
+    private func clearClipAppleSession() {
+        clipAppleSessionActive = false
+        clipAppleIdentityToken = nil
     }
 
     private func transitionToAuthenticated(userId: String) {

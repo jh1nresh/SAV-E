@@ -74,6 +74,9 @@ struct SaveApp: App {
         store: UserDefaults(suiteName: "group.com.wanderly.app")
     ) private var pendingFriendShareURL = ""
     @State private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @State private var autoSaveIncomingShare = false
+    @State private var autoSaveIncomingList = false
+    @State private var pendingClipListSave: SaveCollaborativeList?
     @State private var openedTrip: SharedTripData?
     @State private var openedList: SaveCollaborativeList?
     @State private var openedReferral: SaveReferralProfile?
@@ -81,6 +84,7 @@ struct SaveApp: App {
     @State private var verifiedAccountGeneration: Int?
     @State private var deferredAccountScopedLink: DeferredAccountScopedLink?
     @State private var accountScopedURLProcessingID: UUID?
+    @State private var lastAccountUserId: String?
     @State private var minimumOpeningAnimationCompleted = false
     /// A real clue typed during onboarding is handed to the explicit capture
     /// screen after sign-in. It is not queued or saved until the user taps
@@ -129,6 +133,7 @@ struct SaveApp: App {
             UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
             UserDefaults.standard.removeObject(forKey: "pendingOnboardingClue")
             UserDefaults.standard.removeObject(forKey: "pendingOnboardingClueOwnerID")
+            ClipAppleAccountStore.clear()
         }
         // Keep the first-run map coachmark tour out of UI tests / smoke runs so
         // it never traps focus over the map under test.
@@ -141,6 +146,7 @@ struct SaveApp: App {
             UserDefaults.standard.set(true, forKey: "hasCompletedOnboarding")
             UserDefaults.standard.removeObject(forKey: "pendingOnboardingClue")
             UserDefaults.standard.removeObject(forKey: "pendingOnboardingClueOwnerID")
+            ClipAppleAccountStore.clear()
         }
         // After an intentional backend identity rebuild (new account-ref
         // secret), stored refs can never match and the recovery screen has no
@@ -148,6 +154,7 @@ struct SaveApp: App {
         // the local vault is untouched.
         if ProcessInfo.processInfo.arguments.contains("--uitest-reset-account-gate") {
             try? KeychainAccountReferenceStore.shared.clear()
+            ClipAppleAccountStore.clear()
         }
 #endif
     }
@@ -161,10 +168,13 @@ struct SaveApp: App {
 #if DEBUG
             .modifier(UITestAppearanceOverride())
 #endif
-            .onAppear(perform: restorePendingFriendShare)
+            .onAppear(perform: restorePendingShare)
             .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
                 if receiptID == nil {
                     pendingFriendShareURL = ""
+                    if !autoSaveIncomingShare && !autoSaveIncomingList {
+                        PendingShareStore.clear()
+                    }
                 }
             }
             .onOpenURL(perform: handleIncomingURL)
@@ -257,6 +267,9 @@ struct SaveApp: App {
                     sessionGeneration: authService.sessionGeneration,
                     sessionOrigin: authService.sessionOrigin,
                     incomingPlaceReceipt: $incomingPlaceReceipt,
+                    autoSaveIncomingShare: $autoSaveIncomingShare,
+                    autoSaveIncomingList: $autoSaveIncomingList,
+                    pendingClipListSave: $pendingClipListSave,
                     pendingOnboardingClue: $pendingOnboardingClue,
                     pendingOnboardingClueOwnerID: $pendingOnboardingClueOwnerID,
                     onVerificationChanged: updateVerifiedAccount
@@ -292,8 +305,25 @@ struct SaveApp: App {
             return
         }
 #endif
-        if SaveReferralLink.target(from: url) != nil || SaveSharedListPayload.isListLink(url) {
+        if SaveSharedListPayload.isListLink(url) {
+            guard let accepted = ClipListHandoff.acceptedListURL(
+                pending: PendingShareStore.load(),
+                incomingURL: url
+            ) else { return }
+            autoSaveIncomingShare = false
+            deferredAccountScopedLink = DeferredAccountScopedLink(
+                id: UUID(),
+                url: accepted,
+                ownerGeneration: isCurrentAccountVerified ? authService.sessionGeneration : nil
+            )
+            accountScopedURLProcessingID = nil
+            processDeferredAccountURLIfVerified()
+            return
+        }
+
+        if SaveReferralLink.target(from: url) != nil {
             guard url.absoluteString.utf8.count <= accountScopedURLMaxBytes else { return }
+            autoSaveIncomingShare = false
             deferredAccountScopedLink = DeferredAccountScopedLink(
                 id: UUID(),
                 url: url,
@@ -307,10 +337,16 @@ struct SaveApp: App {
         if isPlaceLink(url) {
             guard url.absoluteString.utf8.count <= ShareRoutePayloadLimits.pendingPlaceURLMaxBytes else {
                 pendingFriendShareURL = ""
+                PendingShareStore.clear()
                 incomingPlaceReceipt = .malformed(url)
                 return
             }
             pendingFriendShareURL = url.absoluteString
+            autoSaveIncomingList = false
+            autoSaveIncomingShare = ClipPlaceHandoff.shouldAutoSavePlace(
+                pending: PendingShareStore.load(),
+                incomingURL: url
+            )
             if let place = SharedPlaceData.from(url: url) {
                 incomingPlaceReceipt = .embedded(place)
             } else if SharedPlaceData.shortCode(from: url) != nil {
@@ -344,6 +380,9 @@ struct SaveApp: App {
 
     @MainActor
     private func handleAccountGenerationChange(_ generation: Int) {
+        let previousUserId = lastAccountUserId
+        let currentUserId = authService.currentUserId
+        lastAccountUserId = currentUserId
         verifiedAccountGeneration = nil
         accountScopedURLProcessingID = nil
         if let ownerGeneration = deferredAccountScopedLink?.ownerGeneration,
@@ -353,6 +392,17 @@ struct SaveApp: App {
         openedList = nil
         openedReferral = nil
         linkErrorMessage = nil
+        guard ClipPlaceHandoff.shouldResetHandoffOnAccountChange(
+            previousUserId: previousUserId,
+            currentUserId: currentUserId
+        ) else { return }
+        pendingClipListSave = nil
+        autoSaveIncomingList = false
+        incomingPlaceReceipt = nil
+        autoSaveIncomingShare = false
+        pendingFriendShareURL = ""
+        deferredAccountScopedLink = nil
+        ClipPlaceHandoff.resetPlaceHandoffOnAccountChange()
     }
 
     private func storeUnclaimedOnboardingClue(_ clue: String) {
@@ -413,13 +463,10 @@ struct SaveApp: App {
             return
         }
         do {
-            openedList = try activeCollaborativeListStore.join(from: link.url)
+            let joined = try activeCollaborativeListStore.join(from: link.url)
+            presentOpenedList(joined, incomingURL: link.url)
         } catch {
-            openedList = SaveCollaborativeList(
-                title: languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單"),
-                note: error.localizedDescription,
-                viewerRole: .viewer
-            )
+            presentListJoinFailure(error, incomingURL: link.url)
         }
         if deferredAccountScopedLink?.id == link.id {
             deferredAccountScopedLink = nil
@@ -461,15 +508,40 @@ struct SaveApp: App {
 
         if let joined {
             storeJoinedList(joined)
-            openedList = joined
+            presentOpenedList(joined, incomingURL: link.url)
         } else {
-            openedList = SaveCollaborativeList(
-                title: languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單"),
-                note: (joinError ?? SaveCollaborativeListError.invalidLink).localizedDescription,
-                viewerRole: .viewer
+            presentListJoinFailure(
+                joinError ?? SaveCollaborativeListError.invalidLink,
+                incomingURL: link.url
             )
         }
         deferredAccountScopedLink = nil
+    }
+
+    /// Clip “save all” already confirmed a snapshot. Join may show the live
+    /// list; stamping uses only those confirmed placeIds — including when
+    /// the optional live join fails.
+    private func presentOpenedList(_ list: SaveCollaborativeList?, incomingURL: URL) {
+        if let list {
+            openedList = list
+        }
+        if let stamp = ClipListHandoff.stampList(
+            pending: PendingShareStore.load(),
+            incomingURL: incomingURL,
+            joined: list
+        ) {
+            autoSaveIncomingList = true
+            pendingClipListSave = stamp
+        }
+    }
+
+    private func presentListJoinFailure(_ error: Error, incomingURL: URL) {
+        openedList = SaveCollaborativeList(
+            title: languageSettings.localized(english: "Could not open list", traditionalChinese: "無法打開清單"),
+            note: error.localizedDescription,
+            viewerRole: .viewer
+        )
+        presentOpenedList(nil, incomingURL: incomingURL)
     }
 
     /// Persists a server-joined list into the active local store (cache) and
@@ -535,12 +607,20 @@ struct SaveApp: App {
         authService.isReviewerDemo ? ReviewDemoStorage.referralHandoffStore : .shared
     }
 
-    private func restorePendingFriendShare() {
-        guard incomingPlaceReceipt == nil,
-              !pendingFriendShareURL.isEmpty,
+    private func restorePendingShare() {
+        if lastAccountUserId == nil {
+            lastAccountUserId = authService.currentUserId
+        }
+        guard incomingPlaceReceipt == nil else { return }
+        if let payload = PendingShareStore.load(), let url = URL(string: payload.url) {
+            handleIncomingURL(url)
+            return
+        }
+        guard !pendingFriendShareURL.isEmpty,
               let url = URL(string: pendingFriendShareURL),
               isPlaceLink(url)
         else { return }
+        // Preview-only AppStorage URL is not a Clip save intent.
         handleIncomingURL(url)
     }
 
@@ -612,6 +692,9 @@ private struct AuthenticatedRootView: View {
     let sessionGeneration: Int
     let sessionOrigin: AccountSessionOrigin
     @Binding var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @Binding var autoSaveIncomingShare: Bool
+    @Binding var autoSaveIncomingList: Bool
+    @Binding var pendingClipListSave: SaveCollaborativeList?
     @Binding var pendingOnboardingClue: String
     @Binding var pendingOnboardingClueOwnerID: String
     let onVerificationChanged: (_ sourceGeneration: Int, _ verifiedGeneration: Int?) -> Void
@@ -665,6 +748,9 @@ private struct AuthenticatedRootView: View {
     private var verifiedAccountContent: some View {
         ContentView(
             incomingPlaceReceipt: $incomingPlaceReceipt,
+            autoSaveIncomingShare: $autoSaveIncomingShare,
+            autoSaveIncomingList: $autoSaveIncomingList,
+            pendingClipListSave: $pendingClipListSave,
             pendingOnboardingClue: pendingClueForVerifiedAccount,
             storageScope: authService.isReviewerDemo ? .reviewerDemo : .production
         )

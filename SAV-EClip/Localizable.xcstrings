@@ -1,0 +1,264 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "clip.from" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ shared with you" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@ 分享給你" } }
+      }
+    },
+    "clip.save" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "+ Save to my Savvy" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "＋ 存到我的 Savvy" } }
+      }
+    },
+    "clip.saveAll" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save all %d places" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "整份清單都存（%d家）" } }
+      }
+    },
+    "clip.listSaved.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Whole list saved!" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "整份清單存好了！" } }
+      }
+    },
+    "clip.listPartial.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Part of the list was saved" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "清單存了一部分" } }
+      }
+    },
+    "clip.listSaved.row.new" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Newly saved" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "新存了" } }
+      }
+    },
+    "clip.listSaved.row.already" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Already saved (counted once)" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "之前就存過（只算一次）" } }
+      }
+    },
+    "clip.listSaved.row.over" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Over the 50-place limit, not saved" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "超過50個上限，沒存" } }
+      }
+    },
+    "clip.listSaved.footer" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "All %d are in your Savvy." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%d家都在你的Savvy裡了。" } }
+      }
+    },
+    "clip.listPartial.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The free plan saves up to 50 unique places, in list order. %d could not be added. Manage your saved places in Savvy, then try again." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "免費版最多收藏 50 個不重複地點，依清單順序儲存。還有 %d 家未加入；到 Savvy 整理收藏後，再試一次。" } }
+      }
+    },
+    "clip.openMaps" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open in Apple Maps" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "在 Apple 地圖開啟" } }
+      }
+    },
+    "clip.noteBy" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@'s note" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@的手寫便條" } }
+      }
+    },
+    "clip.list.count" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%d of %d" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "第%d/%d家" } }
+      }
+    },
+    "clip.list.swipe" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Swipe up for the next place" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "往上滑看下一家" } }
+      }
+    },
+    "clip.signin.reason" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Sign in to save %@ to your Savvy." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "登入後，%@ 會存到你的 Savvy。" } }
+      }
+    },
+    "clip.signin.saveOne" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save this place" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "存這一家" } }
+      }
+    },
+    "clip.signin.saveCount" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save %d places" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "存 %d 家" } }
+      }
+    },
+    "clip.signin.hint" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Not signed in · nothing saved" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "沒有登入成功・沒有存任何東西" } }
+      }
+    },
+    "clip.saved.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved!" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "存好了！" } }
+      }
+    },
+    "clip.saved.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ is in your Savvy. Get the full app to see it on your map." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@ 已經在你的 Savvy 裡。下載完整版，就能在地圖上看到它。" } }
+      }
+    },
+    "clip.cap50.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Free limit\nreached" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "免費額度已滿" } }
+      }
+    },
+    "clip.cap50.saved" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved 50" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "已存 50 個" } }
+      }
+    },
+    "clip.cap50.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The free plan saves up to 50 places. This one was not added. Open the full app to manage your Savvy." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "免費版最多存 50 個地點，這次沒有存進去。到完整版 Savvy 管理你的地點。" } }
+      }
+    },
+    "clip.cap50.back" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Back to place" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "回到地點" } }
+      }
+    },
+    "clip.duplicate.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Already in your Savvy" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "已經在你的 Savvy" } }
+      }
+    },
+    "clip.duplicate.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Saved before, not counted twice." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "之前就存過了，不會重複計算" } }
+      }
+    },
+    "clip.saveFailed.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn’t save" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "沒有存進去" } }
+      }
+    },
+    "clip.saveFailed.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Check your connection and try again. Nothing was saved." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "檢查網路後再試一次。沒有存任何東西。" } }
+      }
+    },
+    "clip.meta.areaCategory" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ · %@" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "%@ · %@" } }
+      }
+    },
+    "clip.loading.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Opening shared link" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "正在打開分享內容" } }
+      }
+    },
+    "clip.error.expired.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This link has expired" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "這個連結已失效" } }
+      }
+    },
+    "clip.error.expired.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The sender may have removed it, or it has expired." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "分享的人可能已經收回，或連結過期了。" } }
+      }
+    },
+    "clip.error.offline.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "You’re offline" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "連不上網路" } }
+      }
+    },
+    "clip.error.offline.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Check your connection and try again." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "檢查網路連線後，再試一次。" } }
+      }
+    },
+    "clip.error.server.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Savvy is busy right now" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "Savvy 暫時忙不過來" } }
+      }
+    },
+    "clip.error.server.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Wait a moment and try again." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "稍等一下，再試一次。" } }
+      }
+    },
+    "clip.error.malformed.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Can’t read this link" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "讀不懂這個連結" } }
+      }
+    },
+    "clip.error.malformed.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The link may be incomplete. Ask the sender to share it again." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "連結可能不完整，請分享的人重新傳一次。" } }
+      }
+    },
+    "clip.empty.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open with a shared link" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "用分享連結打開" } }
+      }
+    },
+    "clip.empty.body" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "When a friend sends you a Savvy place or list link, it opens here." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "朋友傳來的 Savvy 地點或清單連結，點開就會顯示在這裡。" } }
+      }
+    },
+    "clip.retry" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Try again" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "再試一次" } }
+      }
+    },
+    "clip.trip.open" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open in Savvy" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "在 Savvy 打開" } }
+      }
+    },
+    "clip.referral.invite" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "@%@ invited you to Savvy" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "@%@ 邀請你加入 Savvy" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

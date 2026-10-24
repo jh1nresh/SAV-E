@@ -1,0 +1,520 @@
+import CoreGraphics
+import UIKit
+import XCTest
+
+final class SAVEClipScreenshotTests: XCTestCase {
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+    }
+
+    func test01PlaceZhHantShortCodeWithSender() {
+        let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "place-sender")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.friendNote"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.friendNote.by"].exists)
+        attachScreenshot(app.screenshot(), name: "01-place-zh-Hant-sender")
+        app.terminate()
+    }
+
+    func testSharerChipEnglishLightIsReadable() {
+        let app = launchClip(appearance: .light, language: "en", locale: "en_US", screen: "place-sender")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.friendNote"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.friendNote.by"].exists)
+        let shot = app.screenshot()
+        attachScreenshot(shot, name: "sharer-en-light")
+        assertSharerChipContrast(shot, app: app, name: "sharer-en-light")
+        app.terminate()
+    }
+
+    func testSharerChipEnglishDarkIsReadable() {
+        let app = launchClip(appearance: .dark, language: "en", locale: "en_US", screen: "place-sender")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.friendNote"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.friendNote.by"].exists)
+        let shot = app.screenshot()
+        attachScreenshot(shot, name: "sharer-en-dark", appearance: .dark)
+        assertSharerChipContrast(shot, app: app, name: "sharer-en-dark")
+        app.terminate()
+    }
+
+    func testFriendShareNoteEnglish() {
+        let app = launchClip(appearance: .light, language: "en", locale: "en_US", screen: "place-sender")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.friendNote"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Save this for a slow dinner night"].exists)
+        let by = app.descendants(matching: .any)["clip.friendNote.by"]
+        XCTAssertTrue(by.exists)
+        XCTAssertTrue(by.label.contains("Mina"), "publicNote must be labelled with who wrote it")
+        attachScreenshot(app.screenshot(), name: "friend-note-en")
+        app.terminate()
+    }
+
+    func test02PlaceEnglishInline() {
+        capture(screen: "place-inline", appearance: .light, language: "en", locale: "en_US", name: "02-place-en-inline", identifier: "clip.place.preview")
+    }
+
+    func testPlaceZhHantDark() {
+        capture(screen: "place-sender", appearance: .dark, language: "zh-Hant", locale: "zh_TW", name: "place-zh-Hant-dark", identifier: "clip.place.preview")
+    }
+
+    func testPlaceEnglishDark() {
+        capture(screen: "place-inline", appearance: .dark, language: "en", locale: "en_US", name: "place-en-dark", identifier: "clip.place.preview")
+    }
+
+    func test03ListZhHantFivePlaces() {
+        let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "list")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.list.preview"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.list.item.0"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.list.swipe"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.list.saveAll"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["clip.place.photo"].exists)
+        attachScreenshot(app.screenshot(), name: "03-list-zh-Hant-five-places")
+        app.terminate()
+
+        let swiped = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "list-swiped")
+        XCTAssertTrue(swiped.descendants(matching: .any)["clip.list.preview"].waitForExistence(timeout: 20))
+        XCTAssertFalse(swiped.descendants(matching: .any)["clip.list.swipe"].exists)
+        swiped.terminate()
+    }
+
+    func test04ListEnglishLight() {
+        capture(screen: "list", appearance: .light, language: "en", locale: "en_US", name: "04-list-en-light", identifier: "clip.list.preview")
+    }
+
+    func test19ListSavedCountsZhHant() {
+        capture(screen: "list-saved", appearance: .light, language: "zh-Hant", locale: "zh_TW", name: "19-list-saved-zh-Hant", identifier: "clip.list.saved")
+    }
+
+    func test19bListPartialZhHant() {
+        let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "list-partial")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.list.partial"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.list.counts"].exists)
+        attachScreenshot(app.screenshot(), name: "19b-list-partial-zh-Hant")
+        app.terminate()
+    }
+
+    func test19bListPartialEnglishDark() {
+        let app = launchClip(appearance: .dark, language: "en", locale: "en_US", screen: "list-partial")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.list.partial"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.list.counts"].exists)
+        attachScreenshot(app.screenshot(), name: "19b-list-partial-en-dark", appearance: .dark)
+        app.terminate()
+    }
+
+    func test19ListSavedEnglishDark() {
+        let app = launchClip(appearance: .dark, language: "en", locale: "en_US", screen: "list-saved")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.list.saved"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.list.counts"].exists)
+        attachScreenshot(app.screenshot(), name: "19-list-saved-en-dark", appearance: .dark)
+        app.terminate()
+    }
+
+    func testListEnglishDark() {
+        capture(screen: "list", appearance: .dark, language: "en", locale: "en_US", name: "list-en-dark", identifier: "clip.list.preview")
+    }
+
+    func testEmptyListShowsExplanationAndPlaceholderOwnerIsHidden() {
+        let empty = launchClip(appearance: .light, language: "en", locale: "en_US", screen: "list-empty")
+        XCTAssertTrue(empty.descendants(matching: .any)["clip.error.empty"].waitForExistence(timeout: 20))
+        XCTAssertFalse(empty.descendants(matching: .any)["clip.list.preview"].exists)
+        attachScreenshot(empty.screenshot(), name: "list-empty-en")
+        empty.terminate()
+        let placeholder = launchClip(appearance: .light, language: "en", locale: "en_US", screen: "list-placeholder-owner")
+        XCTAssertTrue(placeholder.descendants(matching: .any)["clip.list.preview"].waitForExistence(timeout: 20))
+        XCTAssertFalse(placeholder.staticTexts["Shared list shared with you"].exists)
+        attachScreenshot(placeholder.screenshot(), name: "list-placeholder-owner-en")
+        placeholder.terminate()
+    }
+
+    func test05LinkStatesZhHant() {
+        for screen in ["loading", "expired", "offline", "server", "malformed"] {
+            let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: screen)
+            let identifier = screen == "loading" ? "clip.loading" : "clip.error.\(screen)"
+            XCTAssertTrue(app.descendants(matching: .any)[identifier].waitForExistence(timeout: 20), identifier)
+            if screen == "offline" || screen == "server" {
+                XCTAssertTrue(app.descendants(matching: .any)["clip.error.retry"].exists)
+            } else {
+                XCTAssertFalse(app.descendants(matching: .any)["clip.error.retry"].exists)
+            }
+            attachScreenshot(app.screenshot(), name: "05-state-\(screen)")
+            app.terminate()
+        }
+    }
+
+    func test05LinkStatesEnglishDark() {
+        for screen in ["loading", "expired", "offline", "server", "malformed"] {
+            let app = launchClip(appearance: .dark, language: "en", locale: "en_US", screen: screen)
+            let identifier = screen == "loading" ? "clip.loading" : "clip.error.\(screen)"
+            XCTAssertTrue(app.descendants(matching: .any)[identifier].waitForExistence(timeout: 20), identifier)
+            attachScreenshot(app.screenshot(), name: "05-state-\(screen)-dark", appearance: .dark)
+            app.terminate()
+        }
+    }
+
+    func test06PlaceMaxDynamicType() {
+        let app = launchClip(
+            appearance: .light,
+            language: "en",
+            locale: "en_US",
+            screen: "place-inline",
+            extraArguments: ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
+        attachScreenshot(app.screenshot(), name: "06-place-max-dynamic-type")
+        app.terminate()
+    }
+
+    func testSavedZhHantLight() {
+        capture(screen: "saved", appearance: .light, language: "zh-Hant", locale: "zh_TW", name: "saved-zh-Hant-light", identifier: "clip.saved")
+    }
+
+    func testSavedEnglishDark() {
+        capture(screen: "saved", appearance: .dark, language: "en", locale: "en_US", name: "saved-en-dark", identifier: "clip.saved")
+    }
+
+    func testCap50ZhHantLight() {
+        let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "cap50")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.cap50"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.cap50.saved"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.cap50.back"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["clip.skoverlay"].exists)
+        attachScreenshot(app.screenshot(), name: "cap50-zh-Hant-light")
+        app.terminate()
+    }
+
+    func testCap50EnglishDark() {
+        let app = launchClip(appearance: .dark, language: "en", locale: "en_US", screen: "cap50")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.cap50"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.cap50.saved"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
+        let title = app.descendants(matching: .any)["clip.cap50.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        let normalized = title.label
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "  ", with: " ")
+        XCTAssertTrue(
+            normalized.contains("Free limit") && normalized.contains("reached"),
+            "cap50 title must keep Free limit reached, not a clipped 'reachea': \(title.label)"
+        )
+        XCTAssertFalse(
+            normalized.contains("reachea") && !normalized.contains("reached"),
+            "cap50 title must not truncate the last d of reached"
+        )
+        XCTAssertGreaterThan(
+            title.frame.height,
+            40,
+            "cap50 title must wrap onto a second line so Caveat ink is not clipped"
+        )
+        XCTAssertGreaterThanOrEqual(title.frame.minX, app.frame.minX + 8)
+        XCTAssertLessThanOrEqual(
+            title.frame.maxX,
+            app.frame.maxX - 8,
+            "cap50 title must stay inside the screen so the last glyph is not clipped"
+        )
+        attachScreenshot(app.screenshot(), name: "cap50-en-dark")
+        app.terminate()
+    }
+
+    func testDuplicateZhHantLight() {
+        let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "duplicate")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.duplicate"].waitForExistence(timeout: 20))
+        XCTAssertFalse(app.descendants(matching: .any)["clip.skoverlay"].exists)
+        attachScreenshot(app.screenshot(), name: "duplicate-zh-Hant-light")
+        app.terminate()
+    }
+
+    func testDuplicateEnglishDark() {
+        capture(screen: "duplicate", appearance: .dark, language: "en", locale: "en_US", name: "duplicate-en-dark", identifier: "clip.duplicate")
+    }
+
+    func testSignInOnePlaceZhHant() {
+        let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "signin")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.signin"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.signin.continue"].exists)
+        attachScreenshot(app.screenshot(), name: "signin-one-zh-Hant")
+        app.terminate()
+    }
+
+    func testSignInWholeListEnglish() {
+        let app = launchClip(appearance: .light, language: "en", locale: "en_US", screen: "signin-list")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.signin"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.signin.continue"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
+        attachScreenshot(app.screenshot(), name: "signin-list-en")
+        app.terminate()
+    }
+
+    func testSignInOnePlaceEnglishDark() {
+        let app = launchClip(appearance: .dark, language: "en", locale: "en_US", screen: "signin")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.signin"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
+        attachScreenshot(app.screenshot(), name: "signin-one-en-dark", appearance: .dark)
+        app.terminate()
+    }
+
+    func testSignInFailZhHantLight() {
+        let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "signin-fail")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.signin.hint"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.place.open"].exists)
+        attachScreenshot(app.screenshot(), name: "signin-fail-zh-Hant-light")
+        app.terminate()
+    }
+
+    func testSignInFailEnglishDark() {
+        capture(screen: "signin-fail", appearance: .dark, language: "en", locale: "en_US", name: "signin-fail-en-dark", identifier: "clip.signin.hint")
+    }
+
+    func testSaveFailZhHantLight() {
+        let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "save-fail")
+        XCTAssertTrue(app.descendants(matching: .any)["clip.saveFailed"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.error.retry"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["clip.skoverlay"].exists)
+        attachScreenshot(app.screenshot(), name: "save-fail-zh-Hant-light")
+        app.terminate()
+    }
+
+    func testSaveFailEnglishDark() {
+        capture(screen: "save-fail", appearance: .dark, language: "en", locale: "en_US", name: "save-fail-en-dark", identifier: "clip.saveFailed")
+    }
+
+    func testOfflineDark() {
+        capture(screen: "offline", appearance: .dark, language: "en", locale: "en_US", name: "offline-dark", identifier: "clip.error.offline")
+    }
+
+    func testSKOverlayLightZhHant() {
+        capture(screen: "skoverlay", appearance: .light, language: "zh-Hant", locale: "zh_TW", name: "skoverlay-zh-Hant-light", identifier: "clip.skoverlay")
+    }
+
+    func testSKOverlayDarkEnglish() {
+        capture(screen: "skoverlay", appearance: .dark, language: "en", locale: "en_US", name: "skoverlay-en-dark", identifier: "clip.skoverlay")
+    }
+
+    func testShareLinksStillOpenWithoutFixture() {
+        let app = launchClip(appearance: .light, language: "en", locale: "en_US", url: Self.placeInvokeURL)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.place.open"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["clip.place.photo"].exists)
+        app.terminate()
+
+        let list = launchClip(appearance: .light, language: "en", locale: "en_US", url: Self.listInvokeURL)
+        XCTAssertTrue(list.descendants(matching: .any)["clip.list.preview"].waitForExistence(timeout: 20))
+        XCTAssertTrue(list.descendants(matching: .any)["clip.list.open"].exists)
+        XCTAssertTrue(list.descendants(matching: .any)["clip.list.saveAll"].exists)
+        list.terminate()
+    }
+
+    private func capture(
+        screen: String,
+        appearance: XCUIDevice.Appearance,
+        language: String,
+        locale: String,
+        name: String,
+        identifier: String
+    ) {
+        let app = launchClip(appearance: appearance, language: language, locale: locale, screen: screen)
+        XCTAssertTrue(app.descendants(matching: .any)[identifier].waitForExistence(timeout: 20), identifier)
+        attachScreenshot(app.screenshot(), name: name, appearance: appearance)
+        app.terminate()
+    }
+
+    private func launchClip(
+        appearance: XCUIDevice.Appearance,
+        language: String,
+        locale: String,
+        screen: String? = nil,
+        url: String? = nil,
+        extraArguments: [String] = []
+    ) -> XCUIApplication {
+        XCUIDevice.shared.appearance = appearance
+        let app = XCUIApplication()
+        let style = appearance == .dark ? "Dark" : "Light"
+        let force = appearance == .dark ? "--uitest-force-dark" : "--uitest-force-light"
+        app.launchArguments += [
+            "-AppleLanguages", "(\(language))",
+            "-AppleLocale", locale,
+            "-AppleInterfaceStyle", style,
+            force,
+        ]
+        if let screen {
+            app.launchArguments += ["--uitest-clip-screen", screen]
+        }
+        app.launchArguments += extraArguments
+        if let url {
+            app.launchEnvironment["_XCAppClipURL"] = url
+        }
+        app.launch()
+        return app
+    }
+
+    private func attachScreenshot(
+        _ screenshot: XCUIScreenshot,
+        name: String,
+        appearance: XCUIDevice.Appearance? = nil
+    ) {
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        if (appearance == .dark || name.contains("dark")), !name.contains("skoverlay") {
+            assertDarkCanvas(screenshot, name: name)
+        }
+    }
+
+    /// Named-dark captures must actually resolve `ClipCanvas` dark `#1E1C17`.
+    /// `XCUIDevice.appearance` alone left CI shots on light paper.
+    private func assertDarkCanvas(_ screenshot: XCUIScreenshot, name: String) {
+        guard let image = screenshot.image.cgImage else {
+            XCTFail("\(name): missing CGImage")
+            return
+        }
+        let points = [(0.03, 0.72), (0.97, 0.72), (0.03, 0.88), (0.97, 0.88)]
+        var luminances: [Double] = []
+        var samples: [(Int, Int, Int)] = []
+        for (nx, ny) in points {
+            let x = min(max(Int((Double(image.width) * nx).rounded()), 0), image.width - 1)
+            let y = min(max(Int((Double(image.height) * ny).rounded()), 0), image.height - 1)
+            guard let rgb = samplePixel(image, x: x, y: y) else { continue }
+            samples.append(rgb)
+            luminances.append(0.2126 * Double(rgb.0) + 0.7152 * Double(rgb.1) + 0.0722 * Double(rgb.2))
+        }
+        XCTAssertFalse(luminances.isEmpty, "\(name): no canvas samples")
+        let median = luminances.sorted()[luminances.count / 2]
+        let note = XCTAttachment(string: "\(name) canvas luminance=\(Int(median.rounded())) samples=\(samples)")
+        note.name = "\(name)-canvas-luminance"
+        note.lifetime = .keepAlways
+        add(note)
+        let looksLikeLightPaper = samples.contains { $0.0 > 220 && $0.1 > 210 && $0.2 > 200 }
+        XCTAssertFalse(looksLikeLightPaper, "\(name) is labeled dark but sampled light paper #FFF9EB")
+        XCTAssertLessThan(
+            median,
+            90,
+            "\(name) is labeled dark but canvas luminance \(Int(median.rounded())) is not near #1E1C17"
+        )
+    }
+
+    /// Cream pill `#FFF9EB` plus `ClipStickerInk` `#2F2E23` must both be present
+    /// so "Mina shared with you" is not white-on-white in dark mode.
+    ///
+    /// The chip lives in a GeometryReader hero overlay. XCUI does not expose
+    /// that overlay as `clip.sharer` even when the view is an accessibility
+    /// element, so contrast is sampled from the layout band instead.
+    private func assertSharerChipContrast(
+        _ screenshot: XCUIScreenshot,
+        app: XCUIApplication,
+        name: String
+    ) {
+        guard let image = screenshot.image.cgImage else {
+            XCTFail("\(name): missing CGImage")
+            return
+        }
+        let scaleX = CGFloat(image.width) / app.frame.width
+        let scaleY = CGFloat(image.height) / app.frame.height
+        let frame = heroSharerChipBand(in: app)
+        let minX = max(Int((frame.minX * scaleX).rounded()), 0)
+        let maxX = min(Int((frame.maxX * scaleX).rounded()), image.width - 1)
+        let minY = max(Int((frame.minY * scaleY).rounded()), 0)
+        let maxY = min(Int((frame.maxY * scaleY).rounded()), image.height - 1)
+        XCTAssertGreaterThan(maxX, minX, "\(name): empty chip frame")
+        XCTAssertGreaterThan(maxY, minY, "\(name): empty chip frame")
+
+        var light = 0
+        var dark = 0
+        var darkest = (255, 255, 255)
+        var lightest = (0, 0, 0)
+        var darkestY = 1.0
+        var lightestY = 0.0
+        let stepX = max((maxX - minX) / 12, 1)
+        let stepY = max((maxY - minY) / 6, 1)
+        var y = minY
+        while y <= maxY {
+            var x = minX
+            while x <= maxX {
+                if let rgb = samplePixel(image, x: x, y: y) {
+                    let lum = 0.2126 * Double(rgb.0) + 0.7152 * Double(rgb.1) + 0.0722 * Double(rgb.2)
+                    if lum > 200 { light += 1 }
+                    if lum < 80 { dark += 1 }
+                    if lum < darkestY {
+                        darkestY = lum
+                        darkest = rgb
+                    }
+                    if lum > lightestY {
+                        lightestY = lum
+                        lightest = rgb
+                    }
+                }
+                x += stepX
+            }
+            y += stepY
+        }
+        let note = XCTAttachment(string: "\(name) chip light=\(light) dark=\(dark) darkest=\(darkest) lightest=\(lightest)")
+        note.name = "\(name)-chip-contrast"
+        note.lifetime = .keepAlways
+        add(note)
+        XCTAssertGreaterThan(light, 0, "\(name): cream pill background missing")
+        XCTAssertGreaterThan(dark, 0, "\(name): ClipStickerInk text missing — white-on-white")
+        let ratio = ClipScreenshotContrast.ratio(lightest: lightest, darkest: darkest)
+        XCTAssertGreaterThan(ratio, 4.5, "\(name): chip contrast \(ratio) is below AA")
+    }
+
+    /// Hero overlay: 16pt leading, 54pt from the top of the coral hero, 32pt chip.
+    /// Band is wider than the chip so Dynamic Island / safe-area shift still hits it.
+    private func heroSharerChipBand(in app: XCUIApplication) -> CGRect {
+        let frame = app.frame
+        return CGRect(
+            x: frame.minX + 12,
+            y: frame.minY + 44,
+            width: frame.width * 0.68,
+            height: 56
+        )
+    }
+
+    private func samplePixel(_ image: CGImage, x: Int, y: Int) -> (Int, Int, Int)? {
+        guard let crop = image.cropping(to: CGRect(x: x, y: y, width: 1, height: 1)) else { return nil }
+        var pixel = [UInt8](repeating: 0, count: 4)
+        let ok = pixel.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(
+                data: bytes.baseAddress,
+                width: 1,
+                height: 1,
+                bitsPerComponent: 8,
+                bytesPerRow: 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(crop, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+            return true
+        }
+        guard ok else { return nil }
+        return (Int(pixel[0]), Int(pixel[1]), Int(pixel[2]))
+    }
+
+    private static let placeInvokeURL =
+        "https://sav-e-app.vercel.app/p/eyJpZCI6InF1YXJ0ZXItc2hlZXRzLXBpenphLWNsdWIiLCJuYW1lIjoiUXVhcnRlciBTaGVldHMgUGl6emEgQ2x1YiIsImFkZHJlc3MiOiIxMzA1IFBvcnRpYSBTdCwgTG9zIEFuZ2VsZXMsIENBIDkwMDI2IiwibGF0IjozNC4wNzc5LCJsbmciOi0xMTguMjU0MywiY2F0ZWdvcnkiOiJGb29kIiwicmF0aW5nIjo0LjYsInJldmlld0NvdW50Ijo0MTIsInByaWNlUmFuZ2UiOiIkJCIsImhvdXJzIjoiV2VkLVN1biBkaW5uZXIiLCJzb3VyY2VMYWJlbCI6Ikdvb2dsZSIsInNvdXJjZVVSTCI6Imh0dHBzOi8vd3d3Lmdvb2dsZS5jb20vbWFwcy9wbGFjZS9RdWFydGVyK1NoZWVldHMrUGl6emErQ2x1YiIsInBob3RvVVJMcyI6W10sIm5vdGUiOiJTYXZlIHRoaXMgZm9yIGEgc2xvdyBkaW5uZXIgbmlnaHQifQ"
+
+    private static let listInvokeURL =
+        "https://sav-e-app.vercel.app/list?d=eyJsaXN0Ijp7ImlkIjoiMjIyMjIyMjItMjIyMi0yMjIyLTIyMjItMjIyMjIyMjIyMjIyIiwidGl0bGUiOiJUb2t5byBjYWZlcyIsIm5vdGUiOiJTYXR1cmRheSB3YWxrIiwib3duZXJEaXNwbGF5TmFtZSI6Ik1pbmEiLCJ2aWV3ZXJSb2xlIjoidmlld2VyIiwiaXRlbXMiOlt7ImlkIjoiMTExMTExMTEtMTExMS0xMTExLTExMTEtMTExMTExMTExMTExIiwic291cmNlIjoic2F2ZWRQbGFjZSIsInNvdXJjZUlEIjoicGxhY2UxIiwidGl0bGUiOiJPbmlidXMgQ29mZmVlIiwic3VidGl0bGUiOiJOYWthbWVndXJvIiwibGF0aXR1ZGUiOjM1LjY0NCwibG9uZ2l0dWRlIjoxMzkuNjk5LCJjYXRlZ29yeSI6IkNhZmUiLCJyYXRpbmciOjQuNSwicmV2aWV3Q291bnQiOjEwMCwic291cmNlVVJMIjpudWxsLCJwaG90b1VSTHMiOlsiaHR0cHM6Ly9leGFtcGxlLmNvbS9jb2ZmZWUuanBnIl0sIm5vdGUiOm51bGwsImFkZGVkQnlEaXNwbGF5TmFtZSI6Ik1pbmEiLCJhZGRlZEF0Ijo4MTI1MDU2MDAuMH1dLCJjcmVhdGVkQXQiOjgxMjUwNTYwMC4wLCJ1cGRhdGVkQXQiOjgxMjUwNTYwMC4wfSwicm9sZSI6InZpZXdlciJ9&r=viewer"
+}
+
+private enum ClipScreenshotContrast {
+    static func ratio(lightest: (Int, Int, Int), darkest: (Int, Int, Int)) -> Double {
+        func luminance(_ rgb: (Int, Int, Int)) -> Double {
+            func linear(_ channel: Int) -> Double {
+                let c = Double(channel) / 255.0
+                return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4)
+            }
+            return 0.2126 * linear(rgb.0) + 0.7152 * linear(rgb.1) + 0.0722 * linear(rgb.2)
+        }
+        let a = luminance(lightest)
+        let b = luminance(darkest)
+        return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+    }
+}

@@ -13,6 +13,7 @@ protocol SupabaseServiceProtocol {
 
     func fetchPlaces(for userId: String) async throws -> [Place]
     func savePlace(_ place: Place, userId: String) async throws
+    func saveClipListPlaces(_ items: [[String: Any]]) async throws -> (Int, Data)
     func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult
     func updatePlace(_ place: Place, previous: Place?) async throws
     func deletePlace(_ placeId: UUID) async throws
@@ -137,6 +138,9 @@ extension SupabaseServiceProtocol {
     }
     func startAnalysis(id: UUID) async throws -> UUID? { nil }
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {}
+    func saveClipListPlaces(_ items: [[String: Any]]) async throws -> (Int, Data) {
+        throw SupabaseError.notConfigured
+    }
 }
 
 // MARK: - Implementation
@@ -283,6 +287,13 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         } catch {
             throw mappedSavedPlaceLimit(error)
         }
+    }
+
+    func saveClipListPlaces(_ items: [[String: Any]]) async throws -> (Int, Data) {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        let body = try JSONSerialization.data(withJSONObject: ["places": items])
+        let (data, response) = try await requestWithResponse(path: "/places", method: "POST", body: body)
+        return (response.statusCode, data)
     }
 
     func saveFriendSharedPlace(

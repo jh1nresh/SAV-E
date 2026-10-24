@@ -178,6 +178,9 @@ struct ContentView: View {
     @StateObject private var drawerVM = AIDrawerViewModel()
     @StateObject private var planConversation = SavePlanConversation()
     @Binding private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
+    @Binding private var autoSaveIncomingShare: Bool
+    @Binding private var autoSaveIncomingList: Bool
+    @Binding private var pendingClipListSave: SaveCollaborativeList?
     @Binding private var pendingOnboardingClue: String
     private let storageScope: ContentStorageScope
     @Environment(\.appLanguageSettings) private var languageSettings
@@ -207,6 +210,8 @@ struct ContentView: View {
     /// Dismiss handlers must not resume capture or re-present a sheet mid-swap.
     @State private var suppressChromeDismissSideEffects = false
     @State private var pendingChromePresentation: PendingChromePresentation? = nil
+    @State private var handoffToastText: String?
+    @State private var listHandoffAttempt = ClipListHandoffAttempt()
     @State private var showSavedPlaceLimitPaywall = false
 #if DEBUG
     @State private var showAIQuotaNotice = false
@@ -215,12 +220,18 @@ struct ContentView: View {
 
     init(
         incomingPlaceReceipt: Binding<SharedPlaceReceiptDestination?> = .constant(nil),
+        autoSaveIncomingShare: Binding<Bool> = .constant(false),
+        autoSaveIncomingList: Binding<Bool> = .constant(false),
+        pendingClipListSave: Binding<SaveCollaborativeList?> = .constant(nil),
         pendingOnboardingClue: Binding<String> = .constant(""),
         storageScope: ContentStorageScope = .production
     ) {
         _mapVM = StateObject(wrappedValue: storageScope.makeMapViewModel())
         _tripStore = StateObject(wrappedValue: storageScope.makeTripPackStore())
         _incomingPlaceReceipt = incomingPlaceReceipt
+        _autoSaveIncomingShare = autoSaveIncomingShare
+        _autoSaveIncomingList = autoSaveIncomingList
+        _pendingClipListSave = pendingClipListSave
         _pendingOnboardingClue = pendingOnboardingClue
         self.storageScope = storageScope
         let hasInitialReceipt = incomingPlaceReceipt.wrappedValue != nil
@@ -244,6 +255,32 @@ struct ContentView: View {
                 // Keep the editor above the native navigation/map layer when
                 // returning from a full-screen Review candidate with a keyboard.
                 mapDrawerPanel.zIndex(1)
+            }
+            if let handoffToastText {
+                VStack(spacing: 4) {
+                    Text(handoffToastText)
+                    if listHandoffAttempt.canRetry, autoSaveIncomingList, pendingClipListSave != nil {
+                        Button(languageSettings.localized(english: "Retry", traditionalChinese: "重試")) {
+                            Task { await performPendingListStampImport() }
+                        }
+                        .frame(minWidth: 44, minHeight: 44)
+                        .accessibilityIdentifier("app.handoff.retry")
+                    }
+                }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: 320)
+                    .background(SaveAtlasPalette.paper, in: Capsule())
+                    .overlay {
+                        Capsule().stroke(SaveAtlasPalette.line, lineWidth: 1)
+                    }
+                    .padding(.bottom, 88)
+                    .accessibilityIdentifier("app.handoff.saved")
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(2)
             }
         }
         .onChange(of: selectedRootTab) { _, tab in
@@ -324,8 +361,24 @@ struct ContentView: View {
         .onChange(of: drawerVM.mapAction) { _, action in
             if let action { mapVM.apply(action) }
         }
+        .onAppear {
+            if autoSaveIncomingShare, incomingPlaceReceipt != nil {
+                Task { await performPendingShareAutoSave() }
+            }
+            if autoSaveIncomingList, pendingClipListSave != nil {
+                Task { await performPendingListStampImport() }
+            }
+        }
+        .onChange(of: pendingClipListSave?.id) { _, listID in
+            guard listID != nil, autoSaveIncomingList else { return }
+            Task { await performPendingListStampImport() }
+        }
         .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
             guard receiptID != nil else { return }
+            if autoSaveIncomingShare {
+                Task { await performPendingShareAutoSave() }
+                return
+            }
             invalidateExactSearchRequest()
             fullScreenRoute = nil
             pendingReceiptMapDetail = nil
@@ -1558,6 +1611,83 @@ struct ContentView: View {
         presentAfterClearingExclusiveChrome(.plan)
     }
 
+    private func performPendingListStampImport() async {
+        await listHandoffAttempt.runLatest(
+            pending: { autoSaveIncomingList ? pendingClipListSave : nil },
+            save: { try await mapVM.saveClipListHandoff($0) },
+            succeeded: { list, counts in
+                PendingShareStore.clear()
+                pendingClipListSave = nil
+                autoSaveIncomingList = false
+                handoffToastText = languageSettings.localized(
+                    english: ClipListHandoff.toastEnglish(counts: counts, confirmedCount: list.items.count),
+                    traditionalChinese: ClipListHandoff.toastTraditionalChinese(counts: counts, confirmedCount: list.items.count)
+                )
+            },
+            failed: { error in
+                guard !(error is CancellationError) else { return }
+                if error is SavePlaceLimitError { return }
+                handoffToastText = languageSettings.localized(
+                    english: "Couldn't save the list. Try again.",
+                    traditionalChinese: "清單沒存好，請再試一次。"
+                )
+            }
+        )
+        try? await Task.sleep(for: .seconds(3))
+        if !listHandoffAttempt.isSaving, !listHandoffAttempt.canRetry, handoffToastText != nil {
+            handoffToastText = nil
+        }
+    }
+
+    private func performPendingShareAutoSave() async {
+        guard autoSaveIncomingShare, let destination = incomingPlaceReceipt else { return }
+        let generation = mapVM.sessionGeneration
+        let receipt: SharedPlaceReceipt
+        switch destination {
+        case .embedded(let payload):
+            receipt = .embedded(payload)
+        case .shortLink(let url):
+            do {
+                receipt = try await SharedPlaceReceipt.resolve(from: url)
+            } catch {
+                autoSaveIncomingShare = false
+                presentExclusiveRootSheet()
+                return
+            }
+        case .malformed:
+            autoSaveIncomingShare = false
+            presentExclusiveRootSheet()
+            return
+        }
+
+        do {
+            guard autoSaveIncomingShare,
+                  mapVM.sessionGeneration == generation else { return }
+            let outcome = try await mapVM.saveSharedPlaceReceipt(receipt)
+            guard mapVM.sessionGeneration == generation else { return }
+            PendingShareStore.clear()
+            incomingPlaceReceipt = nil
+            autoSaveIncomingShare = false
+            let name = outcome.place.name
+            // app.handoff.saved
+            handoffToastText = languageSettings.localized(
+                english: String(format: "Saved %@ for you.", name),
+                traditionalChinese: String(format: "已幫你存好「%@」。", name)
+            )
+            try? await Task.sleep(for: .seconds(3))
+            if handoffToastText != nil {
+                handoffToastText = nil
+            }
+        } catch is SavePlaceLimitError {
+            autoSaveIncomingShare = false
+            incomingPlaceReceipt = nil
+            PendingShareStore.clear()
+        } catch {
+            autoSaveIncomingShare = false
+            presentExclusiveRootSheet()
+        }
+    }
+
     private func stagePlaceInPlan(_ place: Place, addingToTrip: Bool) {
         planConversation.stage(place: place, addingToTrip: addingToTrip, language: languageSettings.language)
         pendingReceiptMapDetail = nil
@@ -2033,12 +2163,11 @@ private struct FriendShareReceiptView: View {
 
                 if let note = receipt.payload.note, !note.isEmpty {
                     receiptSection(
-                        title: receipt.verifiedSenderLabel == nil
-                            ? localized("Shared note", "分享備註")
-                            : localized("Why they shared it", "為什麼推薦這裡"),
+                        title: friendShareNoteTitle(receipt),
                         value: note,
                         icon: "quote.bubble"
                     )
+                    .accessibilityIdentifier("friendShareReceipt.note")
                 }
 
                 receiptSection(
@@ -2230,6 +2359,11 @@ private struct FriendShareReceiptView: View {
                 "無法儲存這張已驗證的分享。連結可能已過期；請重新載入收據後再試。"
             )
         }
+    }
+
+    private func friendShareNoteTitle(_ receipt: SharedPlaceReceipt) -> String {
+        let copy = FriendShareNoteCopy.title(sender: receipt.verifiedSenderLabel)
+        return localized(copy.english, copy.traditionalChinese)
     }
 
     private func localized(_ english: String, _ traditionalChinese: String) -> String {
