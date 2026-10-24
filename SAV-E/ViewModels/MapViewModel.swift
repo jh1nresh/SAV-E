@@ -1411,7 +1411,7 @@ final class MapViewModel: ObservableObject {
                             let captureId = try await supabaseService.createMemoryCapture(from: refinedCandidate, userId: userId)
                             await SAVEAnalysisScope.current?.addCapture(captureId)
                             if try await reuseImportedCandidate(refinedCandidate, captureId: captureId, userId: userId, queuedForAnalysis: true) != nil {
-                                removeLocalReviewMirror(localRecordID, ownerSubject: candidate.ownerSubject)
+                                try removeLocalReviewMirror(localRecordID, ownerSubject: candidate.ownerSubject)
                                 return
                             }
                             let workOrder = try await supabaseService.createPlaceRecoveryWorkOrder(
@@ -1431,9 +1431,11 @@ final class MapViewModel: ObservableObject {
                                 userId: userId,
                                 workflowRunId: createdRun.id
                             )
-                            removeLocalReviewMirror(localRecordID, ownerSubject: candidate.ownerSubject)
-                            if !refinedCandidate.isSourceOnly { await SAVEAnalysisScope.current?.foundReviewCandidate() }
+                            // Remote persist succeeded. Local cleanup must not
+                            // be recorded as a persist_candidate failure.
                             failedStep = "write_receipt"
+                            try removeLocalReviewMirror(localRecordID, ownerSubject: candidate.ownerSubject)
+                            if !refinedCandidate.isSourceOnly { await SAVEAnalysisScope.current?.foundReviewCandidate() }
                             _ = try await supabaseService.recordPlaceRecoveryResult(
                                 placeRecoveryResult(for: refinedCandidate, candidateId: candidateId),
                                 for: createdRun.id
@@ -1682,7 +1684,7 @@ final class MapViewModel: ObservableObject {
                     if let existingIDs = try await reuseImportedCandidate(candidate, captureId: captureId, userId: userId) {
                         importedCandidateIDs.append(contentsOf: existingIDs)
                         if let localMirrorID {
-                            removeLocalReviewMirror(localMirrorID, ownerSubject: candidate.ownerSubject ?? userId)
+                            try removeLocalReviewMirror(localMirrorID, ownerSubject: candidate.ownerSubject ?? userId)
                         }
                         continue
                     }
@@ -1697,11 +1699,13 @@ final class MapViewModel: ObservableObject {
                         workflowRunId: createdRun.id
                     )
                     importedCandidateIDs.append(candidateId)
+                    // Remote persist succeeded. Local cleanup must not be
+                    // recorded as a persist_candidate failure.
+                    failedStep = "write_receipt"
                     if let localMirrorID {
-                        removeLocalReviewMirror(localMirrorID, ownerSubject: candidate.ownerSubject ?? userId)
+                        try removeLocalReviewMirror(localMirrorID, ownerSubject: candidate.ownerSubject ?? userId)
                     }
                     if !candidate.isSourceOnly { await SAVEAnalysisScope.current?.foundReviewCandidate() }
-                    failedStep = "write_receipt"
                     _ = try await supabaseService.recordPlaceRecoveryResult(
                         placeRecoveryResult(for: candidate, candidateId: candidateId),
                         for: createdRun.id
@@ -1724,7 +1728,7 @@ final class MapViewModel: ObservableObject {
             }
             if !importedCandidateIDs.isEmpty {
                 for breadcrumbID in breadcrumbIDs {
-                    removeLocalReviewMirror(breadcrumbID, ownerSubject: userId)
+                    try removeLocalReviewMirror(breadcrumbID, ownerSubject: userId)
                 }
             }
             try await refreshReviewCandidates()
@@ -3300,8 +3304,8 @@ final class MapViewModel: ObservableObject {
         !(error is DecodingError)
     }
 
-    private func removeLocalReviewMirror(_ recordID: UUID, ownerSubject: String?) {
-        try? saveLocalVaultService.removeReviewCandidate(recordID, ownerSubject: ownerSubject)
+    private func removeLocalReviewMirror(_ recordID: UUID, ownerSubject: String?) throws {
+        try saveLocalVaultService.removeReviewCandidate(recordID, ownerSubject: ownerSubject)
     }
 
     @discardableResult

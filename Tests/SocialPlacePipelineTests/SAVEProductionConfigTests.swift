@@ -3638,6 +3638,18 @@ final class SAVEProductionConfigTests: XCTestCase {
             "P1 4365254805: a successful Review import must delete the local vault mirror"
         )
         XCTAssertTrue(
+            map.contains("private func removeLocalReviewMirror(_ recordID: UUID, ownerSubject: String?) throws"),
+            "P2 4366239483: local mirror removal must propagate vault failures"
+        )
+        XCTAssertFalse(
+            map.contains("try? saveLocalVaultService.removeReviewCandidate(recordID, ownerSubject: ownerSubject)"),
+            "P2 4366239483: do not swallow import-consume vault deletes"
+        )
+        XCTAssertTrue(
+            map.contains("try removeLocalReviewMirror(localRecordID, ownerSubject: candidate.ownerSubject)"),
+            "P2 4366239483: pending import must fail closed when the local mirror cannot be removed"
+        )
+        XCTAssertTrue(
             map.contains("let localMirrorID = mirrorToLocalVault(candidate)"),
             "P1 4365254805: Share import removes the vault record mirrorToLocalVault actually wrote"
         )
@@ -6243,6 +6255,110 @@ final class SAVEAnalysisTransportTests: XCTestCase {
         XCTAssertTrue(
             try vault.reviewCandidates(limit: 500, belongingTo: owner).isEmpty,
             "the local vault mirror must be removed after the remote Review candidate exists"
+        )
+    }
+
+    /// P2 4366239483: a remote persist plus a failed vault delete must restore
+    /// the queue item so the local mirror is not treated as consumed.
+    @MainActor
+    func testPendingImportKeepsQueueWhenLocalMirrorRemovalFails() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        let owner = "review-import-mirror-fail-fixture"
+        auth.authState = .authenticated(userId: owner)
+        defer {
+            auth.authState = original
+            AnalysisRequestURLProtocol.reset()
+        }
+
+        AnalysisRequestURLProtocol.reset()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let remoteID = UUID()
+        let workOrder = "{\"id\":\"\(UUID())\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"intent\":\"recover\",\"input_type\":\"social_url\",\"evaluator_policy_id\":\"fixture\",\"settlement_mode\":\"fixture\",\"status\":\"pending\"}"
+        func workflowJSON(id: UUID) -> String {
+            "{\"id\":\"\(id)\",\"workflow_id\":\"fixture\",\"listing_id\":\"fixture\",\"source_type\":\"social_url\",\"status\":\"pending\",\"evidence_tier\":\"weak\",\"result_evidence_refs\":[],\"result_candidate_refs\":[],\"credit_reserved\":1,\"credit_settlement\":\"pending\"}"
+        }
+        var remoteRow = ""
+        var candidatePosts = 0
+        AnalysisRequestURLProtocol.handler = { request in
+            let path = request.url?.path ?? ""
+            if path == "/v0/analysis" {
+                let id = try XCTUnwrap(AnalysisRequestURLProtocol.body(request)["id"] as? String)
+                return (200, "{\"analysis_id\":\"\(id)\"}")
+            }
+            if path.hasSuffix("/captures") && request.httpMethod == "POST" {
+                return (200, "{\"id\":\"\(UUID())\"}")
+            }
+            if path.hasSuffix("/work-orders") { return (200, workOrder) }
+            if path.hasSuffix("/runs") {
+                return (200, workflowJSON(id: UUID()))
+            }
+            if path.hasSuffix("/result") {
+                let run = UUID()
+                let receipt = "{\"id\":\"\(UUID())\",\"run_id\":\"\(run)\",\"workflow_id\":\"fixture\",\"verdict\":\"review\",\"settlement\":\"pending\",\"evaluator_summary\":\"fixture\",\"evidence_refs\":[],\"candidate_refs\":[],\"receipt_hash\":\"fixture\",\"anchor_status\":\"none\"}"
+                return (200, "{\"run\":\(workflowJSON(id: run)),\"receipt\":\(receipt)}")
+            }
+            if path.hasSuffix("/candidates") {
+                if request.httpMethod == "POST" {
+                    candidatePosts += 1
+                    let body = try AnalysisRequestURLProtocol.body(request)
+                    let name = body["name"] as? String ?? "Place"
+                    let address = body["address"] as? String ?? ""
+                    let lat = body["latitude"] as? Double ?? 25.03
+                    let lon = body["longitude"] as? Double ?? 121.56
+                    remoteRow = "{\"id\":\"\(remoteID)\",\"name\":\"\(name)\",\"address\":\"\(address)\",\"latitude\":\(lat),\"longitude\":\(lon),\"status\":\"review\",\"created_at\":\"2020-01-02T03:04:05Z\"}"
+                    return (200, remoteRow)
+                }
+                if request.url?.query?.contains("capture_id") == true { return (200, "[]") }
+                return (200, remoteRow.isEmpty ? "[]" : "[\(remoteRow)]")
+            }
+            return (200, request.httpMethod == "GET" ? "[]" : "{}")
+        }
+
+        let service = SupabaseService(apiBaseURL: "https://analysis.test", session: session(), accessTokenProvider: { "test-token" })
+        let vaultURL = directory.appendingPathComponent("vault.json")
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        vault.removeReviewCandidateError = NSError(domain: "test.vault", code: 7)
+        let queue = PendingPlaceImportService(overrideContainerURL: directory)
+        let map = MapViewModel(
+            supabaseService: service,
+            pendingImportService: queue,
+            saveLocalVaultService: vault
+        )
+        await map.loadPlaces(force: true)
+
+        queue.restorePendingReviewCandidates([
+            PendingReviewCandidate(
+                ownerSubject: owner,
+                candidateName: "Mirror Fail Cafe",
+                address: "2 Import Road, Taipei",
+                category: "cafe",
+                latitude: 25.034,
+                longitude: 121.566,
+                sourceURL: "https://maps.app.goo.gl/mirror-fail-cafe",
+                sourceText: "Google Maps saved place: Mirror Fail Cafe",
+                evidence: ["Extracted from Google Maps list share"],
+                confidence: 0.9,
+                missingInfo: [],
+                savedAt: Date(),
+                reviewState: "map_match_ready"
+            )
+        ])
+        await map.handleSceneDidBecomeActive()
+
+        XCTAssertEqual(candidatePosts, 1, "remote persist must succeed before the local cleanup failure")
+        let remaining = queue.consumePendingReviewCandidates(ownerSubject: owner)
+        XCTAssertEqual(
+            remaining.map(\.candidateName),
+            ["Mirror Fail Cafe"],
+            "failed local-mirror delete must restore the queue item for retry"
+        )
+        XCTAssertFalse(
+            try vault.reviewCandidates(limit: 500, belongingTo: owner).isEmpty,
+            "the local vault mirror must remain until cleanup succeeds"
         )
     }
 
