@@ -76,9 +76,6 @@ FULL = list(BASELINE) + [
     RAIL + "testHomeTPEAEvidence",
     RAIL + "testHopU1SavedPlaceLimitPaywallShowsSavedFiftyWithoutManMan",
     RAIL + "testMapSavedUnsavedVisitedTaipeiFixture",
-    RAIL + "testPassportWidth375",
-    RAIL + "testPassportWidth390",
-    RAIL + "testPassportWidth430",
 ]
 
 # Temporary #279 iteration profiles. Empty SAVE_UI_TEST_FOCUS keeps default

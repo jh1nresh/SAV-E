@@ -318,6 +318,10 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(workflow.contains("passport-390"))
         XCTAssertTrue(workflow.contains("passport-430"))
         XCTAssertFalse(workflow.contains("--uitest-passport-width="))
+        let selector = try source(at: "scripts/select-ios-tests.py")
+        XCTAssertFalse(selector.contains("testPassportWidth375"))
+        XCTAssertFalse(selector.contains("testPassportWidth390"))
+        XCTAssertFalse(selector.contains("testPassportWidth430"))
     }
 
     func testPassportColumnsAtDesignDeviceWidths() {

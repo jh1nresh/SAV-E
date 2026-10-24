@@ -1946,6 +1946,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         terminate(app)    }
 
     /// Real 375pt simulator (SE / mini). Not a maxWidth letterbox on 402pt.
+    /// Kept off FULL/BASELINE; ios.yml boots the matching width device.
     @MainActor
     func testPassportWidth375() throws {
         try capturePassportWidthEvidence(width: 375, columns: 3, name: "passport-375")
