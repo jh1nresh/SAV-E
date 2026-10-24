@@ -969,17 +969,22 @@ final class SaveDoodleHomeTests: XCTestCase {
             "Lunch Noodle",
             "Roast Duck Kitchen",
             "Window Cafe",
-            "Night Market Bar",
         ])
-        let expected: [CLLocationDistance] = [280, 650, 1_200, 2_100, 2_990]
+        let expected: [CLLocationDistance] = [280, 650, 1_200, 2_100]
         for (item, meters) in zip(eat, expected) {
             let distance = try XCTUnwrap(item.distance)
-            XCTAssertEqual(distance, meters, accuracy: 25, item.place.name)
+            XCTAssertEqual(distance, meters, accuracy: 1, item.place.name)
             XCTAssertEqual(
                 SaveDoodleHomeCatalog.distanceText(distance),
                 SaveDoodleHomeCatalog.distanceText(meters)
             )
         }
+        let e5 = try XCTUnwrap(places.first { $0.name == "Night Market Bar" })
+        XCTAssertEqual(
+            daan.distance(from: CLLocation(latitude: e5.latitude, longitude: e5.longitude)),
+            3_400,
+            accuracy: 1
+        )
         XCTAssertEqual(
             SaveDoodleHomeCatalog.visitStatusText(
                 status: .visited,
@@ -1008,8 +1013,13 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertEqual(go.map(\.place.name), [
             "Temple Courtyard",
             "Lantern Alley Park",
-            "Forest Walk",
         ])
+        let g3 = try XCTUnwrap(places.first { $0.name == "Forest Walk" })
+        XCTAssertEqual(
+            daan.distance(from: CLLocation(latitude: g3.latitude, longitude: g3.longitude)),
+            4_000,
+            accuracy: 1
+        )
         XCTAssertEqual(SaveDoodleOfficialSticker.named(for: .cafe, placeName: "Fujin Tree 353 Cafe"), .coffee)
         XCTAssertEqual(SaveDoodleOfficialSticker.named(for: .food, placeName: "Lunch Noodle"), .noodle)
         XCTAssertEqual(SaveDoodleOfficialSticker.named(for: .food, placeName: "Roast Duck Kitchen"), .duck)
@@ -1686,6 +1696,9 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(rail.contains("TPE-C-n0-light-en"))
         XCTAssertTrue(rail.contains("TPE-D-402pt-n99-en-1400"))
         XCTAssertTrue(rail.contains("TPE-E-long-wrap-denied-en"))
+        XCTAssertTrue(rail.contains("TPE-F"))
+        XCTAssertTrue(rail.contains("Lunch Noodle"))
+        XCTAssertTrue(rail.contains("map.camera"))
         XCTAssertTrue(rail.contains("waiting · Review ›"))
         XCTAssertTrue(rail.contains("待看 · 去看看 ›"))
         XCTAssertTrue(rail.contains("H3b-n0-en"))
@@ -1742,6 +1755,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         )
         XCTAssertTrue(map.contains("pendingShowOnMapPlaceID"))
         XCTAssertTrue(map.contains("map.eatGo"))
+        XCTAssertTrue(map.contains("map.camera"))
         XCTAssertFalse(map.contains("mapFollowsHomeFilter"))
         let contentView = try source(at: "SAV-E/App/ContentView.swift")
         XCTAssertTrue(contentView.contains(".environmentObject(doodleSession)"))

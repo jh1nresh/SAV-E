@@ -415,8 +415,9 @@ enum ReviewDemoSeed {
 
     /// Home-only TPE-A capture fixture. Distances are computed from the
     /// simulated Da'an Forest Park fix (25.0296, 121.5347), not hard-coded
-    /// strings. Nearby radius is 3000 m, so E5/G3 sit at 2990 m (spec asked
-    /// 3.4 km / 4.0 km) so default Eat + Near you still lists 5 / 3 rows.
+    /// strings. E1–E5 are exactly 280 m / 650 m / 1.2 km / 2.1 km / 3.4 km;
+    /// G1–G3 are exactly 900 m / 1.6 km / 4.0 km. Nearby radius is 3000 m,
+    /// so default Eat + Near you lists E1–E4 (4) and Go lists G1–G2 (2).
     /// IDs 60000000-… do not collide with memory / Tiantan / Taipei-granted.
     /// No Google photos.
     static func homeTPEAPlaces(now: Date = SaveUITestClock.now) -> [Place] {
@@ -426,10 +427,10 @@ enum ReviewDemoSeed {
             (1, "Lunch Noodle", "台北市大安區", .food, .wantToGo, 25.0295999, 121.5411515, now.addingTimeInterval(-86_400)),
             (2, "Roast Duck Kitchen", "台北市信義區", .food, .visited, 25.0372308, 121.5431224, earlier),
             (3, "Window Cafe", "台北市中山區", .cafe, .wantToGo, 25.0107142, 121.5347000, now.addingTimeInterval(-4 * 86_400)),
-            (4, "Night Market Bar", "台北市松山區", .bar, .wantToGo, 25.0295971, 121.5050233, now.addingTimeInterval(-5 * 86_400)),
+            (4, "Night Market Bar", "台北市松山區", .bar, .wantToGo, 25.0295962, 121.5009540, now.addingTimeInterval(-5 * 86_400)),
             (5, "Temple Courtyard", "台北市大安區", .attraction, .wantToGo, 25.0238766, 121.5410161, now.addingTimeInterval(-2 * 86_400)),
             (6, "Lantern Alley Park", "台北市中山區", .attraction, .visited, 25.0194249, 121.5234717, now.addingTimeInterval(-6 * 86_400)),
-            (7, "Forest Walk", "台北市信義區", .attraction, .wantToGo, 25.0486124, 121.5137122, now.addingTimeInterval(-7 * 86_400)),
+            (7, "Forest Walk", "台北市信義區", .attraction, .wantToGo, 25.0550340, 121.5066212, now.addingTimeInterval(-7 * 86_400)),
         ]
         return seeds.map { index, name, address, category, status, latitude, longitude, createdAt in
             Place(

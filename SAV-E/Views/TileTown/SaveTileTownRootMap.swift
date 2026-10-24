@@ -1,4 +1,5 @@
 import CoreLocation
+import MapKit
 import SwiftUI
 
 /// Product Map tab: full-pixel tile-town base with Nearby / Saved / Friends
@@ -82,6 +83,9 @@ struct SaveTileTownRootMap: View {
                 .padding(.horizontal, 12)
                 .padding(.bottom, 96)
             }
+#if DEBUG
+            cameraProbe
+#endif
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear { consumeShowOnMap() }
@@ -250,7 +254,40 @@ struct SaveTileTownRootMap: View {
         lens = .saved
         if let place = mapViewModel.places.first(where: { $0.id == id }) {
             mapViewModel.selectPlace(place)
+            mapViewModel.cameraPosition = .region(
+                MKCoordinateRegion(
+                    center: place.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.02, longitudeDelta: 0.02)
+                )
+            )
         }
     }
+
+#if DEBUG
+    /// UI-test camera/selection state. Not pixel evidence. Production omits it.
+    private var cameraProbe: some View {
+        Color.clear
+            .frame(width: 1, height: 1)
+            .accessibilityIdentifier("map.camera")
+            .accessibilityLabel("Map camera")
+            .accessibilityValue(cameraAccessibilityValue)
+    }
+
+    private var cameraAccessibilityValue: String {
+        if let region = mapViewModel.cameraPosition.region {
+            return String(
+                format: "%.6f,%.6f,%.5f,%.5f",
+                region.center.latitude,
+                region.center.longitude,
+                region.span.latitudeDelta,
+                region.span.longitudeDelta
+            )
+        }
+        if let place = mapViewModel.selectedPlace {
+            return String(format: "%.6f,%.6f", place.latitude, place.longitude)
+        }
+        return ""
+    }
+#endif
 
 }

@@ -634,13 +634,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     @MainActor
     func testHomeShowOnMapFocusesPlace() throws {
         let app = makeApp(
-            launchArguments: [
-                "--uitest-complete-onboarding", "--skip-map-tour",
-                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
-                "--uitest-repair-review-demo-seed", "--uitest-home-memory-fixture",
-                "--uitest-location-allowed",
-                "-save.appLanguage", "en",
-            ],
+            launchArguments: tpeaLaunchArguments(
+                language: "en",
+                location: "daan",
+                hintCount: 1,
+                clock: "2026-10-24T20:00:00",
+                dark: false
+            ),
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString.lowercased()]
         )
         launch(app)
@@ -655,13 +655,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(homeEat.waitForExistence(timeout: stepTimeout))
         let homeEatSelected = homeEat.isSelected
         let homeCity = app.descendants(matching: .any)["home.citySwitcher"].label
-        let cafe = app.buttons["home.place.10000000-0000-0000-0000-000000000001"]
-        XCTAssertTrue(cafe.waitForExistence(timeout: stepTimeout))
+        let e2 = app.buttons["home.place.60000000-0000-0000-0000-000000000002"]
+        XCTAssertTrue(e2.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(e2.label.contains("Lunch Noodle"), e2.label)
         XCTAssertFalse(
-            cafe.label.range(of: #"[0-9]+(\.[0-9]+)?(m|km)"#, options: .regularExpression) == nil,
-            "Taipei fixture first row must show a non-empty distance string"
+            e2.label.range(of: #"[0-9]+(\.[0-9]+)?(m|km)"#, options: .regularExpression) == nil,
+            "TPE-A E2 must show a computed distance: \(e2.label)"
         )
-        cafe.tap()
+        e2.tap()
         XCTAssertTrue(app.descendants(matching: .any)["place.detail.root"].waitForExistence(timeout: stepTimeout))
         let showOnMap = app.descendants(matching: .any)["home.row.showOnMap"]
         XCTAssertTrue(showOnMap.waitForExistence(timeout: stepTimeout))
@@ -670,7 +671,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         let peek = app.descendants(matching: .any)["map.peek.card"]
         XCTAssertTrue(peek.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(peek.label.contains("Taipei Window Cafe"))
+        XCTAssertTrue(peek.label.contains("Lunch Noodle"), peek.label)
         let mapEat = app.descendants(matching: .any)["map.eat"]
         let mapCity = app.descendants(matching: .any)["map.city"]
         XCTAssertTrue(mapEat.waitForExistence(timeout: stepTimeout))
@@ -685,6 +686,40 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 homeCity.contains(mapCity.label),
                 "map.city \(mapCity.label) must equal Home city \(homeCity)"
             )
+        }
+        assertMapVisibleRangeContains(
+            latitude: 25.0295999,
+            longitude: 121.5411515,
+            app: app
+        )
+        attach(app, name: "TPE-F")
+    }
+
+    /// Camera/selection state only. Missing camera chrome in CI (no tiles)
+    /// is not a failure; peek card already proved the selected place.
+    @MainActor
+    private func assertMapVisibleRangeContains(
+        latitude: Double,
+        longitude: Double,
+        app: XCUIApplication
+    ) {
+        let camera = app.descendants(matching: .any)["map.camera"]
+        guard camera.waitForExistence(timeout: timeout(2)) else { return }
+        let parts = camera.value as? String ?? camera.label
+        let numbers = parts.split(separator: ",").compactMap { Double($0) }
+        if numbers.count >= 4 {
+            let centerLat = numbers[0]
+            let centerLon = numbers[1]
+            let latDelta = numbers[2]
+            let lonDelta = numbers[3]
+            XCTAssertTrue(
+                abs(latitude - centerLat) <= latDelta / 2
+                    && abs(longitude - centerLon) <= lonDelta / 2,
+                "Map camera \(parts) must contain \(latitude), \(longitude)"
+            )
+        } else if numbers.count >= 2 {
+            XCTAssertEqual(numbers[0], latitude, accuracy: 0.0005)
+            XCTAssertEqual(numbers[1], longitude, accuracy: 0.0005)
         }
     }
 
@@ -3258,11 +3293,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(hint.label.contains("Good evening · 1 clue waiting · Review ›"), hint.label)
         XCTAssertTrue(app.buttons["home.eat"].isSelected)
         XCTAssertFalse(app.buttons["home.go"].isSelected)
-        for suffix in 1...5 {
+        for suffix in 1...4 {
             let id = String(format: "home.place.60000000-0000-0000-0000-%012d", suffix)
             XCTAssertTrue(app.buttons[id].waitForExistence(timeout: stepTimeout), id)
         }
         XCTAssertTrue(app.buttons["home.place.60000000-0000-0000-0000-000000000001"].label.contains("Fujin Tree 353 Cafe"))
+        XCTAssertFalse(app.buttons["home.place.60000000-0000-0000-0000-000000000005"].exists)
         XCTAssertFalse(app.buttons["home.place.60000000-0000-0000-0000-000000000006"].exists)
         attach(app, name: "atlas-home")
     }
@@ -3665,7 +3701,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         waitForHomeCoverImagery(app)
         XCTAssertFalse(app.descendants(matching: .any)["home.locationPrompt"].exists)
         XCTAssertTrue(app.buttons["home.eat"].isSelected)
-        for suffix in 1...5 {
+        for suffix in 1...4 {
             let id = String(format: "home.place.60000000-0000-0000-0000-%012d", suffix)
             XCTAssertTrue(app.buttons[id].waitForExistence(timeout: stepTimeout), id)
         }
@@ -3702,10 +3738,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         waitForHomeCoverImagery(app)
         tapReachable(app.buttons["home.go"])
         XCTAssertTrue(app.buttons["home.go"].isSelected)
-        for suffix in 6...8 {
+        for suffix in 6...7 {
             let id = String(format: "home.place.60000000-0000-0000-0000-%012d", suffix)
             XCTAssertTrue(app.buttons[id].waitForExistence(timeout: stepTimeout), id)
         }
+        XCTAssertFalse(app.buttons["home.place.60000000-0000-0000-0000-000000000008"].exists)
         XCTAssertFalse(app.buttons["home.place.60000000-0000-0000-0000-000000000001"].exists)
         attach(app, name: "TPE-A-go-light-en")
     }
