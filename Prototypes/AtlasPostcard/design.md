@@ -8,6 +8,11 @@ tile-town (`DESIGN.md`, `SaveTileTownCanvas`). This file remains the
 `--uitest-atlas-parity-fixture` and illustrated-atlas reference. It does not
 win over `DESIGN.md` for the shipped product Map base.
 
+**Home parity TARGET (2026-10-24):** `Reference/ProductionTargets/home.png`
+is still the old baseline (md5 `79ae24aaf02002cd10f429c2869dcfc0`), not
+DESIGN v2. Do not treat v2 `home-light.png` as the 0.90 target until the
+founder approves a replacement. Dark Home does not enter parity.
+
 This file is the canonical Atlas fixture specification for Home, Saves, Trips,
 Trip Plan, and the illustrated Root Map. Where an older production spec
 conflicts with the fixed fixture composition, assets, type scale, or
@@ -245,9 +250,12 @@ Reject the prototype if three or more are true:
   scalloped ticket silhouette, overlap, contextual Memo, and postal detail
   disappear, the implementation has left Postcard Pocket.
 - Every review run exports `reference/`, `output/`, `diff/`, and `results/`.
-  `Scripts/VisualParity.swift` ignores only the system-owned top 48 rows and
-  combines tolerant edge overlap (35%) with per-pixel appearance similarity
-  (65%). The four raster-approved pages must score at least 0.90. Trips uses
+  `Scripts/VisualParity.swift` ignores the system-owned top 48 rows. Home
+  grades unmasked against `ProductionTargets/home.png` (position, size,
+  color, and font style). Other pages keep tolerant edge overlap (35%) with
+
+  per-pixel appearance similarity (65%). The four raster-approved pages
+  must score at least 0.90. Trips uses
   the same production component and structural UI gate until its own approved
   raster is locked.
 

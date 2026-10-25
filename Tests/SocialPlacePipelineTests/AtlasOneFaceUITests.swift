@@ -43,7 +43,12 @@ final class AtlasOneFaceUITests: XCTestCase {
         XCTAssertTrue(share.contains("static let coral = Color(hex: \"F26B4A\")"))
         XCTAssertTrue(share.contains("static let yellow = coral"))
         XCTAssertEqual(share.components(separatedBy: "F26B4A").count - 1, 1)
-        XCTAssertTrue(pin.contains("let coral = SaveAtlasPalette.brandCoral"))
+        XCTAssertTrue(pin.contains("enum SaveTileTownProductLock"))
+        XCTAssertFalse(pin.contains("struct SaveTileTownCanvas"))
+        XCTAssertFalse(pin.contains("struct SaveTileTownPinMark"))
+        XCTAssertFalse(pin.contains("map.tilePin.\\(pin.id.uuidString)"))
+        XCTAssertFalse(pin.contains("showsPins"))
+        XCTAssertFalse(pin.contains("SaveAtlasPalette.brandCoral"))
         XCTAssertFalse(pin.contains("let coral = SaveAtlasPalette.coral\n"))
         XCTAssertFalse(pin.contains("0.949"))
         XCTAssertTrue(design.contains("#\(SaveAtlasPalette.coralLightHex)"))
@@ -73,6 +78,15 @@ final class AtlasOneFaceUITests: XCTestCase {
     func testOnboardingKeepsMemoMascotMark() throws {
         let firstRun = try source(at: "SAV-E/Views/Onboarding/OnboardingView.swift")
         XCTAssertTrue(firstRun.contains("MemoMascotMark"))
+        XCTAssertTrue(firstRun.contains("Text(step == .candidate ? text(\"Review Candidate\""))
+        XCTAssertFalse(firstRun.contains("Label(step == .candidate"))
+        XCTAssertTrue(
+            firstRun.contains("""
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("onboarding.postcard.\\(step)")
+            """),
+            "postcard identifier without contain hides Review Candidate from staticTexts queries"
+        )
     }
 
     func testHomeTripCardAndTripsTabShowBeta() throws {
@@ -97,8 +111,8 @@ final class AtlasOneFaceUITests: XCTestCase {
         XCTAssertFalse(home.contains("assetName: \"SoftPixel"))
         XCTAssertFalse(home.contains("assetName: \"16-bit"))
         XCTAssertFalse(home.contains("assetName: \"pixel-art"))
-        XCTAssertTrue(mapRoot.contains("SaveTileTownHomeView()"))
-        XCTAssertTrue(mapRoot.contains("SaveTileTownRootMap("))
+        XCTAssertTrue(mapRoot.contains("SaveDoodleHomeView("))
+        XCTAssertTrue(mapRoot.contains("SaveDoodleMapView("))
         XCTAssertFalse(mapRoot.contains("Image(\"SoftPixel"))
     }
 

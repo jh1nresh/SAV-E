@@ -118,8 +118,8 @@ final class SaveEntitlementStore {
         )
     }
 
-    /// Model-allowance refusal is not a Pro sales trigger. Pro's only benefit
-    /// is unlimited saved places; exhausted allowance shows a neutral notice.
+    /// Model-allowance refusal is not a Pro sales trigger. AI quota never opens the places paywall.
+    /// Pro's only benefit is unlimited saved places; exhausted allowance shows a neutral notice.
     func shouldPresentPaywall(
         for decision: SaveAIAssistDecision,
         hasConfirmedMapStamp: Bool
