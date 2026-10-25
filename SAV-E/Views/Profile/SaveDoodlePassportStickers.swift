@@ -58,9 +58,10 @@ enum SaveDoodlePassportUnvisitedArt {
         assetNames[kind]
     }
 
-    /// 75pt slot that matches the DRAFT v0 plates. Line-art fallback stays
-    /// on `unvisitedArtSize` so the dashed disc still reads if an asset is missing.
-    static var plateSize: CGFloat { SaveDoodlePassportCatalog.unvisitedDiscSize }
+    /// DRAFT v0 rasters are 75pt. Display them at the width-based slot
+    /// (`SaveLayout.passportSlot` = 64). Same-name asset swap later; do not
+    /// edit the PNGs. Line-art fallback stays on `unvisitedArtSize`.
+    static var plateSize: CGFloat { SaveDoodlePassportCatalog.slotSize }
 
     /// Nil when the imageset is not in the catalog yet.
     @MainActor
@@ -82,15 +83,15 @@ struct SaveDoodlePassportSticker: View {
         if visited, kind.usesOfficialAsset {
             Image(kind.officialSticker.imageName(
                 visited: true,
-                pointSize: SaveDoodlePassportCatalog.visitedStickerSize.width
+                pointSize: SaveDoodlePassportCatalog.slotSize
             ))
             .resizable()
             .interpolation(.high)
             .renderingMode(.original)
             .scaledToFit()
             .frame(
-                width: SaveDoodlePassportCatalog.visitedStickerSize.width,
-                height: SaveDoodlePassportCatalog.visitedStickerSize.height
+                width: SaveDoodlePassportCatalog.slotSize,
+                height: SaveDoodlePassportCatalog.slotSize
             )
             .accessibilityHidden(true)
         } else if let colorArt = SaveDoodlePassportUnvisitedArt.resolvedImageName(for: kind) {
@@ -164,38 +165,37 @@ struct SaveDoodlePassportSlotView: View {
     var isStamping: Bool = false
 
     var body: some View {
-        ZStack {
-            if showsCard {
-                Circle()
-                    .stroke(
-                        SaveDoodle.pencil,
-                        style: StrokeStyle(lineWidth: 1, dash: [4, 4])
-                    )
-                    .background(
-                        SaveDoodlePassportChrome.discFill
-                            .clipShape(Circle())
-                    )
-                    .frame(
-                        width: SaveDoodlePassportCatalog.unvisitedDiscSize,
-                        height: SaveDoodlePassportCatalog.unvisitedDiscSize
-                    )
+        ZStack(alignment: .bottomTrailing) {
+            ZStack {
+                if showsCard {
+                    Circle()
+                        .stroke(
+                            SaveDoodle.pencil,
+                            style: StrokeStyle(lineWidth: 1, dash: [4, 4])
+                        )
+                        .background(
+                            SaveDoodlePassportChrome.discFill
+                                .clipShape(Circle())
+                        )
+                }
+                switch slot.content {
+                case let .place(_, kind, rank):
+                    SaveDoodlePassportSticker(kind: kind, visited: rank != .none)
+                case .empty:
+                    EmptyView()
+                }
             }
-            switch slot.content {
-            case let .place(_, kind, rank):
-                SaveDoodlePassportSticker(kind: kind, visited: rank != .none)
-            case .empty:
-                EmptyView()
-            }
+            .frame(
+                width: SaveDoodlePassportCatalog.slotSize,
+                height: SaveDoodlePassportCatalog.cardHeight
+            )
             if let number = slot.stampNumber {
                 SaveDoodlePassportNumberStamp(number: number, rank: stampRank)
-                    .offset(
-                        x: SaveDoodlePassportCatalog.stampOffset.width,
-                        y: SaveDoodlePassportCatalog.stampOffset.height
-                    )
+                    .offset(x: 4, y: 4)
             }
         }
         .frame(
-            width: SaveDoodlePassportCatalog.cardHeight,
+            width: SaveDoodlePassportCatalog.slotSize,
             height: SaveDoodlePassportCatalog.cardHeight
         )
         .scaleEffect(isStamping ? 1.08 : 1)
