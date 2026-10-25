@@ -186,7 +186,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertTrue(title.waitForExistence(timeout: stepTimeout))
             XCTAssertEqual(title.label, expectedTitle)
             openRootTab("Passport", app: app)
-            app.buttons["profile.settings"].tap()
+            openPassportSettings(app)
             let sharedRatings = app.buttons["profile.sharedRatings"]
             XCTAssertTrue(scrollUntilHittable(sharedRatings, in: app.scrollViews.firstMatch, maxSwipes: 10))
             sharedRatings.tap()
@@ -283,11 +283,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         launch(app)
         try signInViaReviewDemoRequired(app: app)
         openRootTab("Passport", app: app)
-        let quests = app.descendants(matching: .any)["profile.today"].firstMatch
-        XCTAssertTrue(quests.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["profile.today"].exists)
+        app.buttons["profile.stampProgress"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["profile.collected.root"].waitForExistence(timeout: stepTimeout))
         let filter = app.segmentedControls["posts.filter"]
         XCTAssertTrue(scrollUntilHittable(filter, in: app.scrollViews.firstMatch, maxSwipes: 4))
-        XCTAssertLessThan(quests.frame.minY, filter.frame.minY, "Quests precede posts.")
         attach(app, name: "social-passport-post-grid")
         filter.buttons["去過"].tap()
         let visited = app.buttons["posts.item.22222222-2222-4222-8222-222222222222"]
@@ -308,6 +309,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "social-friend-post-detail")
         app.buttons["完成"].firstMatch.tap()
         openRootTab("Passport", app: app)
+        let collected = app.buttons["profile.stampProgress"]
+        XCTAssertTrue(collected.waitForExistence(timeout: stepTimeout))
+        collected.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["profile.collected.root"].waitForExistence(timeout: stepTimeout))
         let newPost = app.buttons["posts.new"]
         let passportScroll = app.scrollViews.firstMatch
         XCTAssertTrue(scrollUntilHittable(newPost, in: passportScroll, maxSwipes: 4))
@@ -530,11 +535,37 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(wordmark.waitForExistence(timeout: stepTimeout))
         wordmark.tap()
         XCTAssertTrue(progress.waitForExistence(timeout: stepTimeout))
-        XCTAssertEqual(progress.label, "12/12", "The wordmark opens the full saved/goal Passport")
+        XCTAssertEqual(progress.label, "4 of 12 visited", "The wordmark opens the Doodle city stamp collection")
         app.buttons["profile.close"].tap()
         rootTabButton("Passport", app: app).tap()
         XCTAssertTrue(progress.waitForExistence(timeout: stepTimeout))
-        XCTAssertEqual(progress.label, "12/12", "Root progress counts saves, not visits")    }
+        XCTAssertEqual(progress.label, "4 of 12 visited", "Root progress counts visited stamps in the selected city")
+    }
+
+    @MainActor
+    func testHomeCollectedKeepsOtherCitiesAndActualCounts() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed", "--uitest-home-memory-fixture",
+            "--uitest-location-denied", "-save.appLanguage", "en"
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        let collected = app.buttons["home.collected"]
+        XCTAssertTrue(collected.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(collected.label, "Collected 1/3")
+        tapReachable(collected)
+        let progress = app.buttons["profile.stampProgress"]
+        XCTAssertTrue(progress.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(progress.label, "1 of 3 visited")
+        app.buttons["passport.citySwitcher"].tap()
+        let tainan = app.buttons["passport.city.tainan"]
+        XCTAssertTrue(tainan.waitForExistence(timeout: stepTimeout), "Home's city scope must not remove other cities from Passport's picker")
+        tainan.tap()
+        XCTAssertEqual(progress.label, "0 of 1 visited")
+        XCTAssertEqual(app.buttons["passport.citySwitcher"].label, "Tainan")
+    }
 
     /// A field can remain accessible and accept typing while a parent mask
     /// hides all its pixels. Inspect the light-mode fixture's actual editor.
@@ -575,7 +606,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let initialCount = savedCount.label
         openRootTab("Passport", app: app)
 
-        app.buttons["profile.settings"].tap()
+        openPassportSettings(app)
         let tutorial = app.buttons["profile.tutorial"]
         for _ in 0..<6 where !tutorial.isHittable { app.swipeUp() }
         XCTAssertTrue(waitUntilHittable(tutorial))
@@ -933,11 +964,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         // B-1/B-3 city switcher shows the review-demo Tokyo/Taipei stamps.
         waitForConfirmedHomeStampBeforeSettings(app)
         openRootTab("Passport", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
-        let settings = app.buttons["profile.settings"]
-        XCTAssertTrue(settings.waitForExistence(timeout: stepTimeout), "Passport settings opens the B7 Pro row.")
-        tapReachable(settings)
-        XCTAssertTrue(app.navigationBars["Passport settings"].waitForExistence(timeout: stepTimeout))
+        openPassportSettings(app)
+        XCTAssertTrue(
+            app.navigationBars["Passport settings"].waitForExistence(timeout: stepTimeout),
+            "Passport settings opens the B7 Pro row."
+        )
 
         let disclosure = app.descendants(matching: .any)["profile.controlsDisclosure"]
         XCTAssertTrue(disclosure.waitForExistence(timeout: stepTimeout))
@@ -997,6 +1028,21 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             stamp.waitForExistence(timeout: stepTimeout),
             "Settings Pro row requires a confirmed Map Stamp on Home first."
         )
+    }
+
+    /// Settings live on Collected. Root Passport is the sticker grid.
+    @MainActor
+    private func openPassportSettings(_ app: XCUIApplication) {
+        XCTAssertTrue(
+            app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout)
+        )
+        app.buttons["profile.stampProgress"].tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)["profile.collected.root"].waitForExistence(timeout: stepTimeout)
+        )
+        let settings = app.buttons["profile.settings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: stepTimeout))
+        tapReachable(settings)
     }
 
     @MainActor
@@ -1253,6 +1299,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
                 "--uitest-map-place-selected",
+                "--uitest-doodle-passport-face",
                 "-save.appLanguage", "en",
             ],
             launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
@@ -1366,6 +1413,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "five-tab-passport")
+        attach(app, name: "doodle-passport-light")
         attach(app, name: "five-tab-profile")
 
         let capture = rootTabButton("Save", app: app)
@@ -1925,6 +1975,73 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: name)
         terminate(app)    }
 
+    /// Real 375pt simulator (SE / mini). Not a maxWidth letterbox on 402pt.
+    /// Kept off FULL/BASELINE; ios.yml boots the matching width device.
+    @MainActor
+    func testPassportWidth375() throws {
+        try capturePassportWidthEvidence(width: 375, columns: 3, name: "passport-375")
+    }
+
+    /// Real 390pt simulator (iPhone 14). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testPassportWidth390() throws {
+        try capturePassportWidthEvidence(width: 390, columns: 3, name: "passport-390")
+    }
+
+    /// Real 430pt simulator (Pro Max). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testPassportWidth430() throws {
+        try capturePassportWidthEvidence(width: 430, columns: 4, name: "passport-430")
+    }
+
+    /// HoP width shots: assert the booted device point width and the
+    /// stamp-grid column count, then attach `passport-375|390|430`.
+    /// Names stay off `five-tab-*` so they cannot steal the 0.90 target.
+    @MainActor
+    private func capturePassportWidthEvidence(width: Int, columns: Int, name: String) throws {
+        let language = width == 390 ? "zh-Hant" : "en"
+        let extra = width == 430
+            ? ["--uitest-force-dark", "-AppleInterfaceStyle", "Dark"]
+            : ["--uitest-force-light", "-AppleInterfaceStyle", "Light"]
+        if width == 430 {
+            XCUIDevice.shared.appearance = .dark
+            addTeardownBlock { XCUIDevice.shared.appearance = .light }
+        }
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-passport-face",
+                "-save.appLanguage", language,
+            ] + extra,
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        openRootTab("Passport", app: app)
+        let grid = app.descendants(matching: .any)["profile.stampGrid"]
+        XCTAssertTrue(grid.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(
+            Int(app.frame.width.rounded()),
+            width,
+            "Passport width shot must boot a real \(width)pt simulator"
+        )
+        let expectedColumns = "\(columns)"
+        let deadline = Date().addingTimeInterval(timeout(5))
+        while Date() < deadline, (grid.value as? String) != expectedColumns {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        XCTAssertEqual(
+            grid.value as? String,
+            expectedColumns,
+            "Passport stamp grid must be \(columns) columns at \(width)pt"
+        )
+        attach(app, name: name)
+        terminate(app)
+    }
+
     @MainActor
     private func captureHomeAndPassportCanvas(
         appearance: XCUIDevice.Appearance,
@@ -1949,6 +2066,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
                 "--uitest-home-memory-fixture",
                 "--uitest-friends-town",
+                "--uitest-doodle-passport-face",
                 "-save.appLanguage", language,
                 "-AppleInterfaceStyle", appleInterfaceStyle,
                 forceArgument,
@@ -1994,8 +2112,16 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected)
+        let grid = app.descendants(matching: .any)["profile.stampGrid"]
+        let expectedColumns = min(4, max(1, Int(floor((app.frame.width - 96 + 16) / 80))))
+        XCTAssertEqual(grid.value as? String, "\(expectedColumns)", "Passport columns must follow the actual available width")
         let passportShot = app.screenshot()
         attach(app, name: passportName)
+        if appearance == .dark {
+            attach(app, name: "doodle-passport-dark")
+        } else {
+            attach(app, name: "doodle-passport-light")
+        }
         assertScreenshotBackground(
             passportShot,
             nearRed: expectedRed,
@@ -3580,9 +3706,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         launch(app)
         try signInViaReviewDemoRequired(app: app)
         openRootTab("Passport", app: app)
-        XCTAssertTrue(app.buttons["profile.editAvatar"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "passport-current-avatar")
-        app.buttons["profile.settings"].tap()
+        openPassportSettings(app)
         let lists = app.buttons["profile.lists"]
         XCTAssertTrue(scrollUntilHittable(lists, in: app.scrollViews.firstMatch, maxSwipes: 6))
         for _ in 0..<3 {
@@ -3609,37 +3735,24 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         launch(app)
         try signInViaReviewDemoRequired(app: app)
         openRootTab("Passport", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["profile.stampProgress"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["profile.today"].exists,
+                       "HoP: Today missions stay off the Passport root.")
+        XCTAssertFalse(app.descendants(matching: .any)["profile.fieldStreak"].exists,
+                       "HoP: field streak stays off the Passport root.")
+        attach(app, name: "passport-compact-ledger")
+        app.buttons["profile.stampProgress"].tap()
         let cover = app.descendants(matching: .any)["profile.cover"].firstMatch
         XCTAssertTrue(cover.waitForExistence(timeout: stepTimeout))
-        XCTAssertLessThan(cover.frame.height, app.frame.height * 0.35)
-        XCTAssertTrue(app.buttons["profile.followers"].isHittable)
-        let quests = app.descendants(matching: .any)["profile.today"].firstMatch
-        XCTAssertTrue(quests.isHittable, "Quests must be visible without opening a disclosure.")
-        if app.buttons["profile.today.expand"].exists { app.buttons["profile.today.expand"].tap() }
-        let visit = app.buttons["profile.today.markVisitedStamp"]
-        XCTAssertTrue(scrollUntilHittable(visit, in: app.scrollViews.firstMatch, maxSwipes: 2))
-        attach(app, name: "passport-compact-ledger")
-        visit.tap()
-        let confirm = app.buttons["profile.today.markVisitedConfirm"]
-        XCTAssertTrue(confirm.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["profile.followers"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "passport-quest-visit")
-        confirm.tap()
-        XCTAssertTrue(confirm.waitForNonExistence(timeout: stepTimeout))
         app.buttons["profile.settings"].tap()
-        let activity = app.descendants(matching: .any)["profile.fieldStreak"].firstMatch
-        XCTAssertTrue(scrollUntilHittable(activity, in: app.scrollViews.firstMatch, maxSwipes: 4))
-        XCTAssertTrue(activity.label.contains("-day streak"))
-        XCTAssertTrue(activity.label.contains("Today is complete."))
+        XCTAssertTrue(app.navigationBars["Passport settings"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["profile.fieldStreak"].exists)
         attach(app, name: "passport-daily-streak")
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        let review = app.buttons["profile.today.confirmWaitingClue"]
-        for _ in 0..<4 {
-            if review.isHittable { break }
-            app.scrollViews.firstMatch.swipeDown()
-        }
-        XCTAssertTrue(review.isHittable)
-        review.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["saves.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["profile.collected.root"].waitForExistence(timeout: stepTimeout))
 
         terminate(app)
         app.launchArguments.removeAll { $0 == "--uitest-reset-review-demo-storage" }
@@ -3649,8 +3762,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         launch(app)
         try signInViaReviewDemoRequired(app: app)
         openRootTab("Passport", app: app)
-        if app.buttons["profile.today.expand"].exists { app.buttons["profile.today.expand"].tap() }
-        XCTAssertTrue(app.buttons["profile.today.markVisitedStamp"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "passport-quests-zh")
     }
 
@@ -3716,14 +3828,17 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Passport", app: app)
 
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "atlas-passport")
+        XCTAssertTrue(app.buttons["profile.stampProgress"].waitForExistence(timeout: stepTimeout))
+        app.buttons["profile.stampProgress"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.cover"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(app.buttons["profile.followers"].waitForExistence(timeout: stepTimeout))
-        attach(app, name: "atlas-passport")
 
         let connections = app.buttons["profile.following"]
         XCTAssertTrue(
             scrollUntilHittable(connections, in: app.scrollViews.firstMatch, maxSwipes: 12),
-            "Passport controls should expose Friends & Lists."
+            "Passport Collected should expose Friends & Lists."
         )
         connections.tap()
         XCTAssertTrue(
@@ -3733,7 +3848,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["profile.connections.friends"].exists)
         XCTAssertTrue(app.buttons["profile.connections.lists"].exists)
         app.buttons["profile.connections.back"].tap()
-        XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["profile.collected.root"].waitForExistence(timeout: stepTimeout),
+            "Connections back from Collected returns to Collected, not the sticker grid."
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["passport.root"].waitForExistence(timeout: stepTimeout))
 
         XCTAssertFalse(app.buttons["profile.importGoogleTakeout"].exists)
 
@@ -3769,6 +3888,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["home.passport"].waitForExistence(timeout: launchTimeout))
         app.buttons["home.passport"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.buttons["profile.stampProgress"].waitForExistence(timeout: stepTimeout))
+        app.buttons["profile.stampProgress"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["profile.collected.root"].waitForExistence(timeout: stepTimeout))
 
         let connections = app.buttons["profile.following"]
         XCTAssertTrue(scrollUntilHittable(connections, in: app.scrollViews.firstMatch, maxSwipes: 12))
@@ -4009,7 +4131,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 .waitForExistence(timeout: stepTimeout)
         )
         XCTAssertTrue(
-            seededApp.descendants(matching: .any)["profile.cover"]
+            seededApp.descendants(matching: .any)["profile.stampGrid"]
                 .waitForExistence(timeout: stepTimeout)
         )
         XCTAssertFalse(seededApp.staticTexts["User not authenticated"].exists)
@@ -4556,6 +4678,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// `ProductionTargets/friends.png`. Home deferral on #290 does not
     /// apply to Friends. Codex packet §7.4 remains the people-first layout
     /// reference.
+    /// Passport still writes `five-tab-passport` vs `ProductionTargets/passport.png`
+    /// at exactly 0.90 for the artifact; DESIGN judges that raster manually.
     @MainActor
     private func captureFiveTabHomeParityRaster() throws {
         let app = makeApp(

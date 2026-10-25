@@ -18,10 +18,6 @@ struct ProfileView: View {
     @State private var showLanguageSettings = false
     @State private var showTutorial = false
     @State private var showProPaywall = false
-    @ViewBuilder
-    private var settingsProPaywall: some View {
-        SaveProPaywallView(trigger: .settings)
-    }
     @State private var showDeleteAccountConfirmation = false
     @State private var draftDisplayName = ""
     @State private var draftAvatarData: Data?
@@ -58,6 +54,7 @@ struct ProfileView: View {
     var collectionMode: SavePassportCollectionMode = .collection
     @Binding var requestsConnections: Bool
     @State private var opensConnections = false
+    @State private var opensCollected = false
     @State private var opensListsDirectly = false
     @State private var shareFocusPlace: Place?
     @State private var hasSharedInvite = SavePassportInviteShareStore.shared.hasSharedInvite
@@ -72,19 +69,11 @@ struct ProfileView: View {
         PassportStats(profile: viewModel.profile, savedPlaces: passportPlaces, waitingClues: waitingClues)
     }
 
+    /// Same city X/Y Home Collected uses. The sheet mounts with
+    /// `localSavedPlaces == []` until `.task` runs; Home already showed
+    /// Collected from `savedPlaces`, so do not wait on the local copy.
     private var passportPlaces: [Place] {
-        localSavedPlaces
-    }
-
-    private var cityStampPlaces: [Place] {
-        // Use the supplied collection before the local snapshot finishes loading.
-        let source = localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces
-        return collectionMode.places(
-            from: source,
-            selection: session.city,
-            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
-            locationDenied: locationService.isAuthorizationDenied
-        )
+        localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces
     }
 
     private var todayMissions: [SavePassportTodayMission] {
@@ -98,93 +87,146 @@ struct ProfileView: View {
         )
     }
 
+    /// Sticker grid or Collected. Collected stays an if-else, never an
+    /// isPresented destination — that modifier attaches to ContentView's
+    /// outer stack and replaces the Atlas tab bar.
+    private var passportRoot: some View {
+        Group {
+            if opensCollected {
+                collectedPage
+            } else {
+                passportContent
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("passport.root")
+        .navigationDestination(isPresented: $showSettings) {
+            settingsPage
+        }
+        .navigationDestination(isPresented: $opensConnections) {
+            connectionsDestination
+        }
+    }
+
     private var passportContent: some View {
-            ScrollView {
-                ScrollViewReader { proxy in
-                VStack(spacing: SaveTheme.Spacing.lg) {
-                    PassportTopBar(
-                        waitingClues: waitingClues,
-                        allowsEditing: true,
-                        showsCloseButton: !isRootTab,
-                        onClose: { dismiss() },
-                        onEdit: { showSettings = true }
-                    )
-                    .padding(.horizontal)
-                    .padding(
-                        .top,
-                        isRootTab
-                            ? AtlasMetrics.statusBarHeight + SaveTheme.Spacing.sm
-                            : SaveTheme.Spacing.lg
-                    )
-
-                    PassportTileTownCollection(places: cityStampPlaces, collectionMode: collectionMode, onOpenPlace: onOpenPlace)
-                        .padding(.horizontal, 16)
-
-                    passportIdentity
-                        .padding(.horizontal, 16)
-                        .accessibilityElement(children: .contain)
-                        .accessibilityIdentifier("profile.cover")
-
-                    if let errorMessage = viewModel.errorMessage {
-                        HStack(spacing: SaveTheme.Spacing.sm) {
-                            Image(systemName: "exclamationmark.triangle")
-                            Text(errorMessage)
-                                .lineLimit(2)
-                            Spacer()
-                        }
-                        .font(SaveTheme.Typography.supporting)
-                        .foregroundColor(.saveError)
-                        .padding(SaveTheme.Spacing.md)
-                        .background(Color.saveError.opacity(0.08))
-                        .cornerRadius(SaveTheme.Spacing.md)
-                        .padding(.horizontal)
-                    }
-
-                    if !todayMissions.isEmpty {
-                        PassportTodayOnSavvyStrip(missions: todayMissions) { missionID in
-                            handleTodayMission(missionID, scrollProxy: proxy)
-                        }
-                    }
-
-                    HStack {
-                        Text(languageSettings.localized(english: "Shared places", traditionalChinese: "我的分享"))
-                            .font(SaveAtlasType.strong(18))
-                        Spacer()
-                        Label(languageSettings.localized(english: "Followers only", traditionalChinese: "追蹤你的人可見"), systemImage: "eye")
-                            .font(SaveAtlasType.body(11)).foregroundStyle(SaveAtlasPalette.muted)
-                    }.foregroundStyle(SaveAtlasPalette.forest).padding(.horizontal, 16)
-                    SharedPostsGrid(store: posts) { selectedPost = $0 }
-                        .padding(.horizontal, 16)
-                }
-                .padding(
-                    .bottom,
-                    isRootTab
-                        ? SaveTileTownProductLock.rootTabScrollClearance
-                        : SaveTheme.Spacing.xl
-                )
-                .padding(.top, 2)
+            SaveDoodlePassportPage(
+                places: passportPlaces,
+                collectionMode: collectionMode,
+                onOpenPlace: onOpenPlace,
+                onMarkVisited: { place in
+                    await markPlaceVisited(place)
+                },
+                onOpenCollected: { opensCollected = true },
+                showsCloseButton: !isRootTab,
+                onClose: { dismiss() }
+            )
+            .overlay(alignment: .top) {
+                if SaveDoodlePassportFlags.showTodayMissions {
+                    missionsOverlay
                 }
             }
-            .background(SaveAtlasPalette.canvas.ignoresSafeArea())
             .toolbar(.hidden, for: .navigationBar)
             .accessibilityIdentifier("profile.root")
             .refreshable { await posts.refresh(.mine) }
-            .navigationDestination(isPresented: $showSettings) {
-                ScrollView {
-                    VStack(spacing: 20) {
-                        PassportStampSection(stats: passportStats).accessibilityIdentifier("profile.stampLedger")
-                        PassportFieldStreakStrip(streak: fieldStreak, hasActionToday: hasFieldActionToday, recentActivity: recentFieldActivity)
-                            .accessibilityIdentifier("profile.fieldStreak")
-                        settingsContent
-                    }.padding(.vertical, 20)
+    }
+
+    private var settingsPage: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                if SaveDoodlePassportFlags.showStampLedger {
+                    PassportStampSection(stats: passportStats).accessibilityIdentifier("profile.stampLedger")
                 }
-                .background(SaveAtlasPalette.canvas)
-                .navigationTitle(languageSettings.localized(english: "Passport settings", traditionalChinese: "護照設定"))
-                .toolbar(.visible, for: .navigationBar)
+                if SaveDoodlePassportFlags.showFieldStreak {
+                    PassportFieldStreakStrip(streak: fieldStreak, hasActionToday: hasFieldActionToday, recentActivity: recentFieldActivity)
+                        .accessibilityIdentifier("profile.fieldStreak")
+                }
+                settingsContent
+            }.padding(.vertical, 20)
+        }
+        .background(SaveAtlasPalette.canvas)
+        .navigationTitle(languageSettings.localized(english: "Passport settings", traditionalChinese: "護照設定"))
+        .toolbar(.visible, for: .navigationBar)
+    }
+
+    @ViewBuilder
+    private var missionsOverlay: some View {
+        if !todayMissions.isEmpty {
+            PassportTodayOnSavvyStrip(missions: todayMissions) { missionID in
+                handleTodayMission(missionID)
             }
-            .navigationDestination(isPresented: $opensConnections) {
-                connectionsDestination
+            .padding(.horizontal, SaveLayout.screenMargin)
+            .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.xs)
+        }
+    }
+
+    private var collectedPage: some View {
+        ScrollView {
+            VStack(spacing: SaveTheme.Spacing.lg) {
+                PassportTopBar(
+                    waitingClues: waitingClues,
+                    allowsEditing: true,
+                    showsCloseButton: true,
+                    onClose: { opensCollected = false },
+                    onEdit: { showSettings = true }
+                )
+                .padding(.horizontal)
+
+                passportIdentity
+                    .padding(.horizontal, 16)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("profile.cover")
+
+                if let errorMessage = viewModel.errorMessage {
+                    HStack(spacing: SaveTheme.Spacing.sm) {
+                        Image(systemName: "exclamationmark.triangle")
+                        Text(errorMessage)
+                            .lineLimit(2)
+                        Spacer()
+                    }
+                    .font(SaveTheme.Typography.supporting)
+                    .foregroundColor(.saveError)
+                    .padding(SaveTheme.Spacing.md)
+                    .background(Color.saveError.opacity(0.08))
+                    .cornerRadius(SaveTheme.Spacing.md)
+                    .padding(.horizontal)
+                }
+
+                HStack {
+                    Text(languageSettings.localized(english: "Shared places", traditionalChinese: "我的分享"))
+                        .font(SaveAtlasType.strong(18))
+                    Spacer()
+                    Label(languageSettings.localized(english: "Followers only", traditionalChinese: "追蹤你的人可見"), systemImage: "eye")
+                        .font(SaveAtlasType.body(11)).foregroundStyle(SaveAtlasPalette.muted)
+                }.foregroundStyle(SaveAtlasPalette.forest).padding(.horizontal, 16)
+                SharedPostsGrid(store: posts) { selectedPost = $0 }
+                    .padding(.horizontal, 16)
+
+                Button {
+                    SaveHaptics.tap()
+                    opensListsDirectly = false
+                    opensConnections = true
+                } label: {
+                    SettingsRow(
+                        icon: "person.2.fill",
+                        title: languageSettings.localized(english: "Friends & Lists", traditionalChinese: "朋友與清單"),
+                        detail: languageSettings.localized(
+                            english: "\(followedFriends.count) friends · \(collaborativeLists.count) lists",
+                            traditionalChinese: "\(followedFriends.count) 位朋友 · \(collaborativeLists.count) 個清單"
+                        ),
+                        color: SaveAtlasPalette.mint
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 16)
+                .accessibilityIdentifier("profile.connections")
             }
+            .padding(.bottom, SaveSpace.lg)
+            .padding(.top, SaveSpace.sm)
+        }
+        .background(SaveDottedBackground().ignoresSafeArea())
+        .toolbar(.hidden, for: .navigationBar)
+        .accessibilityIdentifier("profile.collected.root")
+        .refreshable { await posts.refresh(.mine) }
     }
 
     private var settingsContent: some View {
@@ -396,11 +438,17 @@ struct ProfileView: View {
     }
 
     var body: some View {
+        // Root tab already lives in ContentView's NavigationStack. Nesting
+        // another stack here steals later Home → Saves pushes after a
+        // Passport visit (FiveTabLanding). Sheet Passport still owns a
+        // stack so settings and connections do not use Home's path.
         Group {
             if isRootTab {
-                passportContent
+                passportRoot
             } else {
-                NavigationStack { passportContent }
+                NavigationStack {
+                    passportRoot
+                }
             }
         }
         .onChange(of: requestsConnections) { _, requested in
@@ -547,7 +595,7 @@ struct ProfileView: View {
 
     private func handleTodayMission(
         _ missionID: SavePassportTodayMissionID,
-        scrollProxy: ScrollViewProxy
+        scrollProxy: ScrollViewProxy? = nil
     ) {
         switch missionID {
         case .confirmWaitingClue:
@@ -556,12 +604,12 @@ struct ProfileView: View {
             visitError = nil
             visitFocusPlace = SavePassportTodayCatalog.firstVisitEligiblePlace(in: passportPlaces)
             withAnimation(SaveTheme.Motion.standardSpring) {
-                scrollProxy.scrollTo("profile.today", anchor: .center)
+                scrollProxy?.scrollTo("profile.today", anchor: .center)
             }
         case .shareRecommendation:
             shareFocusPlace = SavePassportTodayCatalog.firstShareEligiblePlace(in: passportPlaces)
             withAnimation(SaveTheme.Motion.standardSpring) {
-                scrollProxy.scrollTo("profile.posts", anchor: .top)
+                scrollProxy?.scrollTo("profile.posts", anchor: .top)
             }
         case .inviteOrFollowFriend:
             opensConnections = true
@@ -577,6 +625,28 @@ struct ProfileView: View {
         recentFieldActivity = SavePassportFieldStreakStore.shared.recentActivity
         fieldStreak = SavePassportFieldStreakStore.shared.currentStreak
         hasFieldActionToday = SavePassportFieldStreakStore.shared.hasFieldActionToday
+    }
+
+    @discardableResult
+    private func markPlaceVisited(_ place: Place) async -> Bool {
+        let history = SaveDoodleVisitStore()
+        let updated = history.markIveBeenHere(place)
+        do {
+            try await onUpdatePlace(updated)
+            SavePassportFieldStreakStore.shared.recordFieldAction()
+            refreshFieldStreak()
+            if let index = localSavedPlaces.firstIndex(where: { $0.id == place.id }) {
+                localSavedPlaces[index].status = .visited
+            }
+            return true
+        } catch {
+            _ = history.undoToday(for: place.id)
+            visitError = languageSettings.localized(
+                english: "Couldn’t update this place. Please try again.",
+                traditionalChinese: "暫時無法更新這個地點，請再試一次。"
+            )
+            return false
+        }
     }
 
     private func visitMissionSheet(_ place: Place) -> some View {
@@ -616,22 +686,9 @@ struct ProfileView: View {
                 visitError = nil
                 Task {
                     defer { isUpdatingVisit = false }
-                    do {
-                        var updated = place
-                        updated.status = .visited
-                        try await onUpdatePlace(updated)
-                        SaveDoodleVisitStore().recordVisit(for: place.id)
-                        SavePassportFieldStreakStore.shared.recordFieldAction()
-                        refreshFieldStreak()
-                        if let index = localSavedPlaces.firstIndex(where: { $0.id == place.id }) {
-                            localSavedPlaces[index].status = .visited
-                        }
+                    let didVisit = await markPlaceVisited(place)
+                    if didVisit {
                         visitFocusPlace = nil
-                    } catch {
-                        visitError = languageSettings.localized(
-                            english: "Couldn’t update this place. Please try again.",
-                            traditionalChinese: "暫時無法更新這個地點，請再試一次。"
-                        )
                     }
                 }
             } label: {
@@ -2312,86 +2369,6 @@ private struct PassportBadge: View {
             .padding(.vertical, SaveTheme.Spacing.xs)
             .background(color.opacity(0.38))
             .clipShape(Capsule())
-    }
-}
-
-private struct PassportTileTownCollection: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    let places: [Place]
-    let collectionMode: SavePassportCollectionMode
-    var onOpenPlace: (Place) -> Void = { _ in }
-
-    private var goal: Int {
-        SaveTileTownProductLock.passportGoal(for: places.count)
-    }
-
-    private var collectionProgress: (completed: Int, total: Int) {
-        collectionMode.progress(in: places)
-    }
-
-    private var lockedCount: Int {
-        max(places.count < goal ? 1 : 0, min(6, goal - places.count))
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SaveDisplayTitle(
-                text: languageSettings.localized(english: "Passport", traditionalChinese: "護照"),
-                pointSize: 24
-            )
-            .accessibilityLabel(languageSettings.localized(english: "Passport", traditionalChinese: "護照"))
-            HStack {
-                Text("\(collectionProgress.completed)/\(collectionProgress.total)")
-                    .font(SaveAtlasType.strong(13))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .accessibilityIdentifier("profile.stampProgress")
-                    .accessibilityLabel("\(collectionProgress.completed)/\(collectionProgress.total)")
-                    .accessibilityValue("\(collectionProgress.completed) of \(collectionProgress.total)")
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(SaveAtlasPalette.kraft.opacity(0.45))
-                        Capsule()
-                            .fill(SaveAtlasPalette.coral)
-                            .frame(width: geo.size.width * progress)
-                    }
-                }
-                .frame(height: 8)
-                .accessibilityHidden(true)
-            }
-
-            LazyVGrid(
-                columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())],
-                spacing: 16
-            ) {
-                ForEach(places.prefix(12)) { place in
-                    Button { onOpenPlace(place) } label: {
-                        SaveKraftStamp(
-                            title: place.name,
-                            face: .photo(HomePlaceCardArt.photoURL(for: place)),
-                            size: .grid,
-                            accessibilityIdentifier: "profile.stamp.\(place.id.uuidString)"
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(.isButton)
-                }
-                ForEach(0..<lockedCount, id: \.self) { index in
-                    SaveKraftStamp(
-                        title: "???",
-                        face: .locked,
-                        size: .grid,
-                        accessibilityIdentifier: "profile.stamp.locked.\(index)"
-                    )
-                }
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("profile.stampGrid")
-    }
-
-    private var progress: CGFloat {
-        guard collectionProgress.total > 0 else { return 0 }
-        return min(1, CGFloat(collectionProgress.completed) / CGFloat(collectionProgress.total))
     }
 }
 

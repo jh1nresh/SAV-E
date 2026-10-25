@@ -68,6 +68,7 @@ TESTS = {
 FULL = list(BASELINE) + [
     RAIL + "testHomeListProgressiveSearch",
     RAIL + "testHomeCollectedOpensPassportWithCityCount",
+    RAIL + "testHomeCollectedKeepsOtherCitiesAndActualCounts",
     RAIL + "testSavesTripsBackReturnsToSaves",
     RAIL + "testHomeDesignProductStates",
     RAIL + "testHomeShowOnMapFocusesPlace",

@@ -213,7 +213,7 @@ final class SaveDoodleFriendsTests: XCTestCase {
         XCTAssertTrue(script.contains("five-tab-friends*)"))
         XCTAssertTrue(script.contains("screen=\"friends\""))
         XCTAssertTrue(script.contains("destination_screens=(home saves plan map)"))
-        XCTAssertTrue(script.contains("parity_screens=(home saves plan map friends capture paywall)"))
+        XCTAssertTrue(script.contains("parity_screens=(home saves plan map friends capture paywall passport)"))
         XCTAssertFalse(
             script
                 .split(separator: "\n")
