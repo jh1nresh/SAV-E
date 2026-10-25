@@ -76,22 +76,6 @@ struct ProfileView: View {
         localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces
     }
 
-    /// Home Collected sheet uses city X/Y. The root Passport tab stays the
-    /// full collection — city scope must not hide other cities or an
-    /// unresolved Near you.
-    private var cityStampPlaces: [Place] {
-        let source = passportPlaces
-        let scoped = collectionMode.places(
-            from: source,
-            selection: session.city,
-            location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
-            locationDenied: locationService.isAuthorizationDenied
-        )
-        // Collected must not open a blank Passport when Near you cannot
-        // resolve (denied + no fix, or a newest save with no locality).
-        return scoped.isEmpty ? source : scoped
-    }
-
     private var todayMissions: [SavePassportTodayMission] {
         guard isRootTab else { return [] }
         return SavePassportTodayCatalog.missions(
@@ -126,7 +110,8 @@ struct ProfileView: View {
 
     private var passportContent: some View {
             SaveDoodlePassportPage(
-                places: cityStampPlaces,
+                places: passportPlaces,
+                collectionMode: collectionMode,
                 onOpenPlace: onOpenPlace,
                 onMarkVisited: { place in
                     await markPlaceVisited(place)

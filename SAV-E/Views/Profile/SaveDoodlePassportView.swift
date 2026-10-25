@@ -7,6 +7,7 @@ struct SaveDoodlePassportPage: View {
     @ObservedObject private var locationService = LocationService.shared
 
     let places: [Place]
+    var collectionMode: SavePassportCollectionMode = .collection
     var onOpenPlace: (Place) -> Void = { _ in }
     var onMarkVisited: (Place) async -> Bool = { _ in true }
     var onOpenCollected: () -> Void = {}
@@ -32,8 +33,6 @@ struct SaveDoodlePassportPage: View {
 
                 kraftPanel
                     .padding(.bottom, SaveLayout.sectionGap)
-
-                citiesRow
             }
             .padding(.horizontal, SaveLayout.screenMargin)
             .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
@@ -139,6 +138,7 @@ struct SaveDoodlePassportPage: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("profile.stamp.visitError")
             }
+            citiesRow
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
@@ -152,6 +152,10 @@ struct SaveDoodlePassportPage: View {
         .onPreferenceChange(SaveDoodlePassportGridWidthKey.self) { gridWidth = $0 }
         .padding(SaveDoodlePassportCatalog.panelPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                .fill(SaveAtlasPalette.kraft)
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.stampGrid")
         .accessibilityValue("\(columns)")
@@ -304,7 +308,7 @@ struct SaveDoodlePassportPage: View {
                     }
                     .accessibilityIdentifier("passport.city.nearYou")
                 }
-                ForEach(cityGroups) { group in
+                ForEach(SaveDoodlePassportCatalog.pickerCityGroups(from: places, selection: session.city)) { group in
                     Button {
                         session.city = .city(group.id)
                         showsCityPicker = false
@@ -337,7 +341,7 @@ struct SaveDoodlePassportPage: View {
     }
 
     private var resolvedSelection: SaveDoodleCitySelection {
-        SaveDoodleHomeCatalog.resolvedSelection(
+        SaveDoodlePassportCatalog.resolvedSelection(
             session.city,
             places: places,
             locationDenied: locationService.isAuthorizationDenied
@@ -401,11 +405,10 @@ struct SaveDoodlePassportPage: View {
         if SaveDoodlePassportCatalog.usesDoodleFace {
             return SaveDoodlePassportCatalog.doodleFaceVisitedLine
         }
-        let visited = SaveDoodlePassportCatalog.visitedCount(in: cityPlaces)
-        let goal = SaveDoodlePassportCatalog.goal(for: max(cityPlaces.count, 1))
+        let progress = SaveDoodlePassportCatalog.progress(in: cityPlaces, collectionMode: collectionMode)
         return languageSettings.localized(
-            english: "\(visited) of \(goal) visited",
-            traditionalChinese: "已拜訪 \(visited) / \(goal)"
+            english: "\(progress.visited) of \(progress.total) visited",
+            traditionalChinese: "已拜訪 \(progress.visited) / \(progress.total)"
         )
     }
 

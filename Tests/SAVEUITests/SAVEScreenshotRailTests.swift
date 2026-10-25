@@ -309,6 +309,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "social-friend-post-detail")
         app.buttons["完成"].firstMatch.tap()
         openRootTab("Passport", app: app)
+        let collected = app.buttons["profile.stampProgress"]
+        XCTAssertTrue(collected.waitForExistence(timeout: stepTimeout))
+        collected.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["profile.collected.root"].waitForExistence(timeout: stepTimeout))
         let newPost = app.buttons["posts.new"]
         let passportScroll = app.scrollViews.firstMatch
         XCTAssertTrue(scrollUntilHittable(newPost, in: passportScroll, maxSwipes: 4))
@@ -531,11 +535,37 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(wordmark.waitForExistence(timeout: stepTimeout))
         wordmark.tap()
         XCTAssertTrue(progress.waitForExistence(timeout: stepTimeout))
-        XCTAssertEqual(progress.label, "12/12", "The wordmark opens the full saved/goal Passport")
+        XCTAssertEqual(progress.label, "4 of 12 visited", "The wordmark opens the Doodle city stamp collection")
         app.buttons["profile.close"].tap()
         rootTabButton("Passport", app: app).tap()
         XCTAssertTrue(progress.waitForExistence(timeout: stepTimeout))
-        XCTAssertEqual(progress.label, "12/12", "Root progress counts saves, not visits")    }
+        XCTAssertEqual(progress.label, "4 of 12 visited", "Root progress counts visited stamps in the selected city")
+    }
+
+    @MainActor
+    func testHomeCollectedKeepsOtherCitiesAndActualCounts() throws {
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed", "--uitest-home-memory-fixture",
+            "--uitest-location-denied", "-save.appLanguage", "en"
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        let collected = app.buttons["home.collected"]
+        XCTAssertTrue(collected.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(collected.label, "Collected 1/3")
+        tapReachable(collected)
+        let progress = app.buttons["profile.stampProgress"]
+        XCTAssertTrue(progress.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(progress.label, "1 of 3 visited")
+        app.buttons["passport.citySwitcher"].tap()
+        let tainan = app.buttons["passport.city.tainan"]
+        XCTAssertTrue(tainan.waitForExistence(timeout: stepTimeout), "Home's city scope must not remove other cities from Passport's picker")
+        tainan.tap()
+        XCTAssertEqual(progress.label, "0 of 1 visited")
+        XCTAssertEqual(app.buttons["passport.citySwitcher"].label, "Tainan")
+    }
 
     /// A field can remain accessible and accept typing while a parent mask
     /// hides all its pixels. Inspect the light-mode fixture's actual editor.

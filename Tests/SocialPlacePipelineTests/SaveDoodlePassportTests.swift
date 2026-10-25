@@ -104,6 +104,59 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(slots.isEmpty)
     }
 
+    func testEmptyExplicitCityKeepsItsLabelAndPickerSelection() {
+        let tokyo = place("Ichiran", "Tokyo, Japan", .food)
+        for locationDenied in [false, true] {
+            for places in [[], [tokyo]] {
+                let selection = SaveDoodlePassportCatalog.resolvedSelection(
+                    .city("beijing"), places: places, locationDenied: locationDenied
+                )
+                XCTAssertEqual(selection, .city("beijing"))
+                XCTAssertTrue(SaveDoodlePassportCatalog.cityPlaces(
+                    from: places, selection: selection, locationDenied: locationDenied
+                ).isEmpty)
+                let selected = SaveDoodlePassportCatalog.pickerCityGroups(
+                    from: places, selection: selection
+                ).filter { $0.id == "beijing" }
+                XCTAssertEqual(selected.count, 1)
+                XCTAssertEqual(selected.first?.count, 0)
+                XCTAssertEqual(selected.first?.englishName, "Beijing")
+                XCTAssertEqual(selected.first?.chineseName, "北京")
+            }
+        }
+    }
+
+    func testPassportCityPickerKeepsExistingCountsAndNearYouFallback() {
+        let beijing = place("Duck", "Beijing, China", .food)
+        let groups = SaveDoodlePassportCatalog.pickerCityGroups(
+            from: [beijing], selection: .city("beijing")
+        )
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(groups.first?.count, 1)
+        XCTAssertEqual(SaveDoodlePassportCatalog.resolvedSelection(
+            .nearYou, places: [beijing], locationDenied: false
+        ), .nearYou)
+        XCTAssertEqual(SaveDoodlePassportCatalog.resolvedSelection(
+            .nearYou, places: [beijing], locationDenied: true
+        ), .city("beijing"))
+    }
+
+    func testHomeCollectedProgressUsesActualCityCount() {
+        let places = [
+            place("Duck", "Beijing, China", .food, status: .visited),
+            place("Cafe", "Beijing, China", .cafe)
+        ]
+        let progress = SaveDoodlePassportCatalog.progress(in: places, collectionMode: .homeCollected)
+        XCTAssertEqual(progress.visited, 1)
+        XCTAssertEqual(progress.total, 2)
+        let empty = SaveDoodlePassportCatalog.progress(in: [], collectionMode: .homeCollected)
+        XCTAssertEqual(empty.visited, 0)
+        XCTAssertEqual(empty.total, 0)
+        let root = SaveDoodlePassportCatalog.progress(in: places, collectionMode: .collection)
+        XCTAssertEqual(root.visited, 1)
+        XCTAssertEqual(root.total, 12)
+    }
+
     func testRecordingAVisitClimbsTheStampRank() {
         let suite = "save.doodle.passport.visit.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -204,7 +257,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertFalse(page.contains("--uitest-passport-width="))
         XCTAssertTrue(page.contains(".accessibilityValue(\"\\(columns)\")"))
         XCTAssertTrue(page.contains("SaveSpace.lg"))
-        XCTAssertFalse(page.contains("SaveAtlasPalette.kraft"))
+        XCTAssertTrue(page.contains(".fill(SaveAtlasPalette.kraft)"))
         XCTAssertTrue(stickers.contains("SaveDoodlePassportNumberStamp"))
         XCTAssertTrue(stickers.contains("usesOfficialAsset"))
         XCTAssertTrue(stickers.contains("SaveDoodlePassportUniqueGlyph"))

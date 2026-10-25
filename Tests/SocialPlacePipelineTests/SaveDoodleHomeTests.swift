@@ -1410,7 +1410,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(catalog.contains("collectedScopePlaces"))
         XCTAssertTrue(catalog.contains("PR #295 already owns"))
         let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
-        XCTAssertTrue(profile.contains("collectionMode.places("))
+        XCTAssertTrue(profile.contains("places: passportPlaces,"))
+        XCTAssertTrue(profile.contains("collectionMode: collectionMode,"))
         let content = try source(at: "SAV-E/App/ContentView.swift")
         XCTAssertTrue(content.contains("onOpenCollectedPassport: { openPassport(collectionMode: .homeCollected) }"))
         XCTAssertTrue(content.contains("openPassport(collectionMode: .collection)"))
@@ -1419,7 +1420,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(profile.contains("localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces"))
         let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
         XCTAssertTrue(page.contains("accessibilityIdentifier(\"profile.stampProgress\")"))
-        XCTAssertTrue(page.contains("\\(visited) of \\(goal) visited"))
+        XCTAssertTrue(page.contains("\\(progress.visited) of \\(progress.total) visited"))
         XCTAssertTrue(page.contains("profile.stampProgress"))
         XCTAssertTrue(
             page.contains(
@@ -1806,7 +1807,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(seed.contains("SaveMemoryRecord.confirmedPlace"))
         XCTAssertFalse(seed.contains("latitude: 0"))
         let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
-        XCTAssertTrue(profile.contains("collectionMode.places("))
+        XCTAssertTrue(profile.contains("places: passportPlaces,"))
+        XCTAssertTrue(profile.contains("collectionMode: collectionMode,"))
         XCTAssertTrue(profile.contains("var collectionMode: SavePassportCollectionMode = .collection"))
         XCTAssertTrue(profile.contains("SaveDoodleVisitStore()"))
         XCTAssertTrue(profile.contains("try await onUpdatePlace(updated)"))

@@ -161,6 +161,46 @@ enum SaveDoodlePassportCatalog {
         SaveTileTownProductLock.passportGoal(for: savedCount)
     }
 
+    static func progress(
+        in places: [Place], collectionMode: SavePassportCollectionMode
+    ) -> (visited: Int, total: Int) {
+        switch collectionMode {
+        case .homeCollected:
+            let progress = SaveDoodleHomeProgressCatalog.progress(in: places)
+            return (progress.visited, progress.saved)
+        case .collection:
+            return (visitedCount(in: places), goal(for: max(places.count, 1)))
+        }
+    }
+
+    /// An explicitly selected city remains selected after its final save is removed.
+    /// Keep the label and picker aligned with the empty grid's scope.
+    static func resolvedSelection(
+        _ selection: SaveDoodleCitySelection,
+        places: [Place],
+        locationDenied: Bool
+    ) -> SaveDoodleCitySelection {
+        if case .city = selection { return selection }
+        return SaveDoodleHomeCatalog.resolvedSelection(
+            selection, places: places, locationDenied: locationDenied
+        )
+    }
+
+    static func pickerCityGroups(
+        from places: [Place],
+        selection: SaveDoodleCitySelection
+    ) -> [SaveDoodleCityGroup] {
+        let groups = SaveDoodleHomeCatalog.cityGroups(from: places)
+        guard case .city(let id) = selection,
+              !groups.contains(where: { $0.id == id }) else { return groups }
+        return groups + [SaveDoodleCityGroup(
+            id: id,
+            englishName: SaveHomeSearch.cityLabel(for: id, traditionalChinese: false) ?? id,
+            chineseName: SaveHomeSearch.cityLabel(for: id, traditionalChinese: true) ?? id,
+            count: 0
+        )]
+    }
+
     static func cityPlaces(
         from places: [Place],
         selection: SaveDoodleCitySelection,
