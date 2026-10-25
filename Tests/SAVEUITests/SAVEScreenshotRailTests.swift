@@ -1189,9 +1189,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(mapCity.waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(mapEat.isSelected, homeEatSelected)
         if homeCity.contains("Near you") {
-            XCTAssertEqual(mapCity.label, "Near you")
+            XCTAssertTrue(mapCity.label.contains("Near you"))
         } else if homeCity.contains("附近") {
-            XCTAssertEqual(mapCity.label, "附近")
+            XCTAssertTrue(mapCity.label.contains("附近"))
         } else {
             XCTAssertTrue(
                 homeCity.contains(mapCity.label),

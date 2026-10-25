@@ -76,6 +76,7 @@ struct SaveFriendsView: View {
                 .overlay { SaveFriendsDotGrid() }
         }
         .foregroundStyle(SaveAtlasPalette.ink)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("friends.root")
         .refreshable { await store.refresh(.feed) }
         .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await store.refresh(.feed) } } }
