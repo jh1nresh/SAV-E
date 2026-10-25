@@ -169,7 +169,10 @@ jobs:
     env:
       # Re-enabled for the 2026-10-15 pixel-art pass. Disable again after the
       # focused set is green, then run one full suite as the merge gate.
-      SAVE_UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus || (github.head_ref == 'cursor/tile-town-product-lock-4894' && 'tile-town-home') || '' }}
+      # SPIKE-MEASUREMENT(se-width-container): NEVER MERGE.
+      # PR events ignore workflow_dispatch inputs, so #326 ran FULL and
+      # timed out. Pin this head the same way tile-town-home is pinned.
+      SAVE_UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus || (github.head_ref == 'cursor/tile-town-product-lock-4894' && 'tile-town-home') || (github.head_ref == 'spike/se-width-container' && 'se-width-container') || '' }}
 
     steps:
       - name: Require ios-build
@@ -832,8 +835,11 @@ jobs:
           fi
           exit "$cleanup_status"
 
+      # SPIKE-MEASUREMENT(se-width-container): NEVER MERGE.
+      # Keep this on always() so First-Run / width PNGs upload even when
+      # the 0.90 parity step fails. Do not gate on parity success.
       - name: Upload Atlas parity evidence
-        if: always() && (steps.scope.outputs.ui == 'true')
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: save-atlas-parity-${{ github.sha }}

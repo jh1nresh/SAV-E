@@ -234,6 +234,11 @@ class CoverageTests(unittest.TestCase):
         self.assertIn("xcrun simctl io booted screenshot", ios_workflow)
         self.assertNotIn("run-visual-parity.sh", ci_workflow)
         self.assertIn("SAVE_UI_TEST_FOCUS", ios_workflow)
+        self.assertIn("github.head_ref == 'spike/se-width-container'", ios_workflow)
+        self.assertIn("se-width-container", ios_workflow)
+        upload_idx = ios_workflow.find("Upload Atlas parity evidence")
+        self.assertGreater(upload_idx, 0)
+        self.assertIn("if: always()", ios_workflow[upload_idx:upload_idx + 80])
         self.assertIn("Must specify -test-iterations with more than 1 iteration", ios_workflow)
         self.assertIn("iteration_args=(-test-iterations 3 -retry-tests-on-failure)", ios_workflow)
         self.assertIn("iteration_args=()", ios_workflow)
@@ -273,6 +278,30 @@ class CoverageTests(unittest.TestCase):
             selection.RAIL + "testCaptureAtlasProductionParity",
             selection.RAIL + "testCaptureFiveTabLanding",
         ])
+        self.assertNotIn(
+            selection.RAIL + "testHomeShowOnMapFocusesPlace", spec["tests"]
+        )
+
+    def test_cli_pins_se_width_container_on_this_spike_pr_without_env(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            env = dict(os.environ, GITHUB_EVENT_NAME="pull_request", PR_BASE_SHA="bad",
+                       GITHUB_REF="refs/pull/326/merge",
+                       GITHUB_HEAD_REF="spike/se-width-container",
+                       GITHUB_OUTPUT=str(root / "outputs"), GITHUB_STEP_SUMMARY=str(root / "summary"))
+            env.pop("SAVE_UI_TEST_FOCUS", None)
+            subprocess.run(["python3", str(ROOT / "scripts/select-ios-tests.py"),
+                            "--output-dir", str(root)], cwd=ROOT, env=env,
+                           check=True, capture_output=True)
+            plan = json.loads((root / "ios-test-selection.json").read_text())
+            self.assertEqual(plan["profile"], "focus:se-width-container")
+            self.assertEqual(plan["tests"], selection.FOCUS_PROFILES["se-width-container"]["tests"])
+            self.assertFalse(plan["trip"])
+            self.assertFalse(plan["units"])
+            args = (root / "ios-ui-args.txt").read_text()
+            self.assertIn("testCaptureAtlasProductionParity", args)
+            self.assertIn("testCaptureFiveTabLanding", args)
+            self.assertNotIn("testHomeShowOnMapFocusesPlace", args)
 
     def test_unknown_focus_fails_loudly(self):
         with tempfile.TemporaryDirectory() as temp:
