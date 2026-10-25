@@ -119,7 +119,20 @@ def requested_focus():
     """
     if os.environ.get("GITHUB_REF") == "refs/heads/main":
         return ""
-    return os.environ.get("SAVE_UI_TEST_FOCUS", "").strip()
+    focus = os.environ.get("SAVE_UI_TEST_FOCUS", "").strip()
+    if focus:
+        return focus
+    # SPIKE-MEASUREMENT(se-width-container): NEVER MERGE.
+    # pull_request does not pass workflow_dispatch ui_test_focus. Pin this
+    # spike head so PR synchronize still uses the two-test measurement set.
+    head = (
+        os.environ.get("GITHUB_HEAD_REF")
+        or os.environ.get("GITHUB_REF_NAME")
+        or ""
+    ).strip()
+    if head == "spike/se-width-container":
+        return "se-width-container"
+    return ""
 
 
 def select(paths, *, full=False):
