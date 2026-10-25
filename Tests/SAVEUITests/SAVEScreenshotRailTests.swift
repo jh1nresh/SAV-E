@@ -1379,6 +1379,412 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected, "Capture cancellation returns to Passport")
     }
 
+    /// Founder lock: paywall parity target is the Doodle v1 mock at 0.90.
+    /// Purchasing is off, so the wall is forced with `--uitest-show-paywall`.
+    @MainActor
+    func testDoodlePaywallParity() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout),
+            "Doodle paywall must present as a full-screen modal for the 0.90 gate."
+        )
+        XCTAssertFalse(rootTabButton("Home", app: app).exists, "Paywall is a full-screen modal with no tab bar")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["paywall.benefit.unlimited"].waitForExistence(timeout: stepTimeout),
+            "The one benefit row must stay queryable after official noodle/coffee plan stickers."
+        )
+        XCTAssertEqual(app.descendants(matching: .any)["paywall.root"].value as? String, "settings")
+        XCTAssertFalse(app.staticTexts["Upgrade to Savvy Pro"].exists)
+        XCTAssertFalse(app.staticTexts["Pro isn't on sale yet"].exists)
+        XCTAssertFalse(app.staticTexts["You've saved 50 places. Keep going."].exists)
+        XCTAssertFalse(app.staticTexts["Plan trips from your saves"].exists)
+        XCTAssertFalse(app.staticTexts["Bonus sticker packs"].exists)
+
+        let capApp = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(capApp)
+        try signInViaReviewDemoRequired(app: capApp)
+        XCTAssertTrue(
+            capApp.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout),
+            "The 51st-save entry must open the same places-only wall."
+        )
+        XCTAssertEqual(capApp.descendants(matching: .any)["paywall.root"].value as? String, "savedPlacesCap")
+        let savedNote = capApp.descendants(matching: .any)["paywall.savedNote"]
+        XCTAssertTrue(savedNote.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(savedNote.label, "You've saved 50 places. Keep going.")
+        XCTAssertTrue(capApp.staticTexts["You've saved 50 places. Keep going."].exists)
+        XCTAssertFalse(capApp.staticTexts["Upgrade to Savvy Pro"].exists)
+        XCTAssertFalse(capApp.staticTexts["Pro isn't on sale yet"].exists)
+        XCTAssertFalse(rootTabButton("Home", app: capApp).exists)
+        attach(capApp, name: "five-tab-paywall")
+        attach(capApp, name: "doodle-paywall-light")
+        attach(capApp, name: "pr295-paywall-light")
+        attach(capApp, name: "pr295-paywall-cap-light")
+
+        let zh = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "-save.appLanguage", "zh-Hant",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(zh)
+        try signInViaReviewDemoRequired(app: zh)
+        XCTAssertTrue(zh.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(zh.staticTexts["已存 50 個地點，繼續存下去"].waitForExistence(timeout: stepTimeout))
+        attach(zh, name: "pr295-paywall-zh-hant-light")
+    }
+
+    @MainActor
+    func testAIQuotaExhaustedStaysOffThePaywall() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-ai-quota-exhausted",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.root"].exists)
+
+        let capture = rootTabButton("Save", app: app)
+        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
+        capture.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["ai.quotaExhausted"].waitForExistence(timeout: stepTimeout),
+            "Exhausted AI assist must show a neutral message on the assist surface."
+        )
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.root"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.savedNote"].exists)
+        XCTAssertFalse(app.buttons["paywall.retry"].exists)
+    }
+
+    /// Capture sheet over the Doodle Home map, matching the DESIGN mock.
+
+    /// Capture sheet over the Doodle Home map, matching the DESIGN mock.
+    @MainActor
+    func testDoodleCaptureParity() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        XCTAssertFalse(app.descendants(matching: .any)["home.locationPrompt"].exists)
+        let capture = rootTabButton("Save", app: app)
+        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
+        capture.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "five-tab-capture")
+        attach(app, name: "doodle-capture-light")
+        attach(app, name: "pr295-capture-light")
+        XCTAssertFalse(app.descendants(matching: .any)["capture.suggestion"].exists)
+        let draft = app.textViews["capture.input"]
+        XCTAssertTrue(draft.waitForExistence(timeout: stepTimeout))
+        draft.tap()
+        draft.typeText("Fangzhuangchang Noodles")
+        attach(app, name: "pr295-capture-filled-light")
+        let nearby = app.buttons["capture.searchNearby"]
+        XCTAssertTrue(nearby.isHittable)
+        XCTAssertGreaterThanOrEqual(nearby.frame.height, 44)
+        nearby.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForNonExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.textFields["map.search.input"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
+        attach(app, name: "doodle-capture-nearby-search")
+
+        let zh = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
+                "-save.appLanguage", "zh-Hant",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(zh)
+        try signInViaReviewDemoRequired(app: zh)
+        XCTAssertTrue(zh.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let zhSave = rootTabButton("Save", app: zh)
+        XCTAssertTrue(zhSave.waitForExistence(timeout: stepTimeout))
+        zhSave.tap()
+        XCTAssertTrue(zh.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(zh, name: "pr295-capture-zh-hant-light")
+    }
+
+    /// Warm-dark Capture sheet and Pro paywall for the founder compare rail.
+
+    /// Warm-dark Capture sheet and Pro paywall for the founder compare rail.
+    @MainActor
+    func testDoodleCapturePaywallDarkParity() throws {
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        XCUIDevice.shared.appearance = .dark
+        let captureApp = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(captureApp)
+        try signInViaReviewDemoRequired(app: captureApp)
+        XCTAssertTrue(captureApp.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let capture = rootTabButton("Save", app: captureApp)
+        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
+        capture.tap()
+        XCTAssertTrue(captureApp.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(captureApp, name: "doodle-capture-dark")
+        attach(captureApp, name: "pr295-capture-dark")
+        captureApp.buttons["Close capture"].tap()
+
+        let paywallApp = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(paywallApp)
+        try signInViaReviewDemoRequired(app: paywallApp)
+        XCTAssertTrue(
+            paywallApp.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout)
+        )
+        attach(paywallApp, name: "doodle-paywall-dark")
+        attach(paywallApp, name: "pr295-paywall-dark")
+    }
+
+    /// QA evidence for #295: paywall with large Dynamic Type on the CI
+    /// iPhone. Compact-height SE shots are captured by `testPR295SEEvidence`.
+
+    /// QA evidence for #295: paywall with large Dynamic Type on the CI
+    /// iPhone. Compact-height SE shots are captured by `testPR295SEEvidence`.
+    @MainActor
+    func testPR295PaywallLargeTypeEvidence() throws {
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        let light = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(light)
+        try signInViaReviewDemoRequired(app: light)
+        XCTAssertTrue(light.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(light.descendants(matching: .any)["paywall.scroll"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(light.staticTexts["You've saved 50 places. Keep going."].waitForExistence(timeout: stepTimeout))
+        attach(light, name: "pr295-paywall-large-type-light")
+
+        XCUIDevice.shared.appearance = .dark
+        let dark = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(dark)
+        try signInViaReviewDemoRequired(app: dark)
+        XCTAssertTrue(dark.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        attach(dark, name: "pr295-paywall-large-type-dark")
+    }
+
+    /// QA evidence for #295: capture sheet and paywall on iPhone SE.
+    /// The dedicated iOS workflow step boots the SE simulator for this test.
+
+    /// QA evidence for #295: capture sheet and paywall on iPhone SE.
+    /// The dedicated iOS workflow step boots the SE simulator for this test.
+    @MainActor
+    func testPR295SEEvidence() throws {
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        let capture = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(capture)
+        try signInViaReviewDemoRequired(app: capture)
+        XCTAssertTrue(capture.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let saveTab = rootTabButton("Save", app: capture)
+        XCTAssertTrue(saveTab.waitForExistence(timeout: stepTimeout))
+        saveTab.tap()
+        XCTAssertTrue(capture.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(capture, name: "pr295-capture-se-light")
+        capture.buttons["Close capture"].tap()
+
+        let paywall = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(paywall)
+        try signInViaReviewDemoRequired(app: paywall)
+        XCTAssertTrue(paywall.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(paywall.descendants(matching: .any)["paywall.scroll"].waitForExistence(timeout: stepTimeout))
+        attach(paywall, name: "pr295-paywall-se-light")
+
+        XCUIDevice.shared.appearance = .dark
+        let captureDark = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(captureDark)
+        try signInViaReviewDemoRequired(app: captureDark)
+        XCTAssertTrue(captureDark.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let saveDark = rootTabButton("Save", app: captureDark)
+        XCTAssertTrue(saveDark.waitForExistence(timeout: stepTimeout))
+        saveDark.tap()
+        XCTAssertTrue(captureDark.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(captureDark, name: "pr295-capture-se-dark")
+
+        let paywallDark = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(paywallDark)
+        try signInViaReviewDemoRequired(app: paywallDark)
+        XCTAssertTrue(paywallDark.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        attach(paywallDark, name: "pr295-paywall-se-dark")
+    }
+
+    /// H1–H4: Codex packet / spec §8 faces (light EN, dark EN, light
+    /// zh-Hant, dark zh-Hant). DESIGN judges these rasters manually; the
+    /// 0.90 score is not evidence. Warm dark tokens from spec §1 must
+    /// paint Home and Passport once Light is unlocked.
+    /// Appearance is forced before launch (`-AppleInterfaceStyle`, `--uitest-force-*`,
+    /// and `XCUIDevice.appearance`). Background pixels must be near #1E1C19 / #FFF9EB.
+    /// Attachment names stay off the production-parity set (`five-tab-*`, `atlas-*`).
+
     /// Warm-dark appearance aliases. These four rasters are all H2
     /// (location denied + waiting clues) in en/zh × light/dark — not
     /// spec §8.1 product states. Names stay `H2-*` so DESIGN does not

@@ -8,6 +8,7 @@ alone would pass while the import still omitted Friends.
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -38,7 +39,14 @@ def extract_screen_arrays(source: str) -> str:
             lines.append(stripped)
     if len(lines) < 2:
         raise AssertionError("run-visual-parity.sh is missing screen arrays")
+    skip_at = source.index("should_skip_screen() {")
+    skip_end = source.index("\n}", skip_at) + 2
+    lines.extend(['SKIP_SCREENS=""', source[skip_at:skip_end]])
     return "\n".join(lines)
+
+
+def parity_screen_names(source: str) -> list[str]:
+    return re.search(r"^parity_screens=\(([^)]+)\)", source, re.MULTILINE).group(1).split()
 
 
 def extract_screenshots_dir_loop(source: str) -> str:
@@ -129,7 +137,7 @@ class FriendsVisualParityImportTests(unittest.TestCase):
             artifacts = Path(tmp) / "art"
             shots.mkdir()
             (artifacts / "output").mkdir(parents=True)
-            for screen in ("home", "saves", "plan", "map", "friends"):
+            for screen in parity_screen_names(source):
                 (shots / f"{screen}.png").write_bytes(b"fake-png-" + screen.encode())
 
             runner = f"""
@@ -144,8 +152,32 @@ ARTIFACT_DIR="{artifacts}"
             copied = artifacts / "output" / "friends.png"
             self.assertTrue(copied.is_file(), "friends.png was not imported")
             self.assertEqual(copied.read_bytes(), b"fake-png-friends")
-            for screen in ("home", "saves", "plan", "map"):
+            for screen in parity_screen_names(source):
                 self.assertTrue((artifacts / "output" / f"{screen}.png").is_file())
+
+    def test_screenshots_dir_import_respects_explicit_skipped_screens(self):
+        source = script_text()
+        with tempfile.TemporaryDirectory() as tmp:
+            shots = Path(tmp) / "shots"
+            artifacts = Path(tmp) / "art"
+            shots.mkdir()
+            (artifacts / "output").mkdir(parents=True)
+            for screen in parity_screen_names(source):
+                if screen not in ("capture", "paywall"):
+                    (shots / f"{screen}.png").write_bytes(b"fixture")
+            runner = f'''
+set -euo pipefail
+{extract_screen_arrays(source)}
+SKIP_SCREENS="capture,paywall"
+SCREENSHOTS_DIR="{shots}"
+ARTIFACT_DIR="{artifacts}"
+{extract_screenshots_dir_loop(source)}
+'''
+            result = run_bash(runner)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((artifacts / "output" / "friends.png").is_file())
+            self.assertFalse((artifacts / "output" / "capture.png").exists())
+            self.assertFalse((artifacts / "output" / "paywall.png").exists())
 
     def test_screenshots_dir_without_friends_fails_the_import(self):
         source = script_text()

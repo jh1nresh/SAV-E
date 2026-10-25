@@ -7076,6 +7076,8 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertFalse(content.contains("onClose: collapseMapPanel"))
         XCTAssertTrue(drawer.contains("onClearMapSearchResults(true)"))
         XCTAssertTrue(drawer.contains("onClearMapSearchResults(false)"))
+        XCTAssertTrue(mapModel.contains("removeReviewCandidateAfterRemoteConfirm"))
+        XCTAssertTrue(mapModel.contains("Unplaced cleanup must succeed"))
         XCTAssertTrue(mapModel.contains("retireResolvedReviewClue"))
         XCTAssertFalse(mapModel.contains("retireSameNameReviewClues"))
         XCTAssertTrue(content.contains("mapDrawerPresentedActionError"))

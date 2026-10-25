@@ -432,6 +432,9 @@ jobs:
           path.write_bytes(plistlib.dumps(data, fmt=plistlib.FMT_XML))
           print(f"injected SAVE_SCREENSHOT_DIR into {path}")
           PY
+          # StoreKit catalog path flags are invalid with -xctestrun /
+          # test-without-building. SAVE-E.xcscheme already points at
+          # SAVEPro.storekit, so the xctestrun inherits that catalog.
           scripts/run-ios-xcodebuild-retry.sh \
             --max-attempts "$max_attempts" \
             --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
@@ -450,11 +453,33 @@ jobs:
           # throwaway venv so pip never touches the system interpreter.
           python3 -m venv "$RUNNER_TEMP/save-parity-venv"
           "$RUNNER_TEMP/save-parity-venv/bin/python" -m pip install Pillow
-          PATH="$RUNNER_TEMP/save-parity-venv/bin:$PATH" \
-            Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh \
-              --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
-              --artifacts "$RUNNER_TEMP/SAVE-Atlas-Parity" \
-              --threshold 0.90
+          skip_args=()
+          skip_screens=()
+          if [[ -f "$RUNNER_TEMP/ios-ui-args.txt" ]]; then
+            if ! grep -q 'testDoodlePaywallParity' "$RUNNER_TEMP/ios-ui-args.txt"; then
+              # tile-town-home and other focused sets omit the paywall rail.
+              # Requiring five-tab-paywall there fails the required ios job.
+              skip_screens+=(paywall)
+            fi
+            if ! grep -q 'testDoodleCaptureParity' "$RUNNER_TEMP/ios-ui-args.txt"; then
+              skip_screens+=(capture)
+            fi
+          fi
+          if ((${#skip_screens[@]} > 0)); then
+            IFS=,
+            skip_args+=(--skip-screens "${skip_screens[*]}")
+            unset IFS
+          fi
+          parity_cmd=(
+            Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh
+            --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult"
+            --artifacts "$RUNNER_TEMP/SAVE-Atlas-Parity"
+            --threshold 0.90
+          )
+          if [[ ${#skip_args[@]} -gt 0 ]]; then
+            parity_cmd+=("${skip_args[@]}")
+          fi
+          PATH="$RUNNER_TEMP/save-parity-venv/bin:$PATH" "${parity_cmd[@]}"
 
       - name: Export first-run visual evidence
         if: always()
@@ -499,6 +524,9 @@ jobs:
               "298-6-city-eat-go", "298-7-map-tab", "298-8-provider",
               "298-10-saved-unsaved-visited", "M1",
               "map-375", "map-390", "map-430",
+              "five-tab-capture", "five-tab-paywall",
+              # Copied as pr295-capture-light.png / pr295-paywall-light.png.
+              "pr295-capture-light", "pr295-paywall-light",
           ]
           newest = {}
           manifest = root / "manifest.json"
