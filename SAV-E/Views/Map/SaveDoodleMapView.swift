@@ -968,7 +968,7 @@ struct SaveDoodleCoralPin: View {
 }
 
 /// HoP 298-2: numbered coral lollipop. Fill stays solid when selected.
-struct SaveDoodleLollipopShape: Shape {
+nonisolated struct SaveDoodleLollipopShape: Shape {
     func path(in rect: CGRect) -> Path {
         let stemWidth = max(2.5, rect.width * 0.14)
         let stemHeight = max(8, rect.height * 0.28)

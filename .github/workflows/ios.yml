@@ -464,6 +464,9 @@ jobs:
             if ! grep -q 'testDoodleCaptureParity' "$RUNNER_TEMP/ios-ui-args.txt"; then
               skip_screens+=(capture)
             fi
+            if ! grep -q 'testCaptureFiveTabLanding' "$RUNNER_TEMP/ios-ui-args.txt"; then
+              skip_screens+=(passport)
+            fi
           fi
           if ((${#skip_screens[@]} > 0)); then
             IFS=,
@@ -527,6 +530,9 @@ jobs:
               "five-tab-capture", "five-tab-paywall",
               # Copied as pr295-capture-light.png / pr295-paywall-light.png.
               "pr295-capture-light", "pr295-paywall-light",
+              "five-tab-passport", "doodle-passport-light", "doodle-passport-dark",
+              "light-passport", "dark-passport",
+              "passport-375", "passport-390", "passport-430",
           ]
           newest = {}
           manifest = root / "manifest.json"
@@ -677,6 +683,62 @@ jobs:
           done
           exit "$missing"
 
+      - name: Capture Passport 375pt width evidence
+        timeout-minutes: 15
+        if: always() && (steps.scope.outputs.ui == 'true')
+        env:
+          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Passport-375-tests.log
+        run: |
+          scripts/run-ios-width-device-test.sh \
+            --width 375 \
+            --test SAVEUITests/SAVEScreenshotRailTests/testPassportWidth375 \
+            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
+            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
+            --result-bundle "$RUNNER_TEMP/SAVE-Passport-375.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Passport-375-tests.log"
+
+      - name: Capture Passport 390pt width evidence
+        timeout-minutes: 15
+        if: always() && (steps.scope.outputs.ui == 'true')
+        env:
+          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Passport-390-tests.log
+        run: |
+          scripts/run-ios-width-device-test.sh \
+            --width 390 \
+            --test SAVEUITests/SAVEScreenshotRailTests/testPassportWidth390 \
+            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
+            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
+            --result-bundle "$RUNNER_TEMP/SAVE-Passport-390.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Passport-390-tests.log"
+
+      - name: Capture Passport 430pt width evidence
+        timeout-minutes: 15
+        if: always() && (steps.scope.outputs.ui == 'true')
+        env:
+          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Passport-430-tests.log
+        run: |
+          scripts/run-ios-width-device-test.sh \
+            --width 430 \
+            --test SAVEUITests/SAVEScreenshotRailTests/testPassportWidth430 \
+            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
+            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
+            --result-bundle "$RUNNER_TEMP/SAVE-Passport-430.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Passport-430-tests.log"
+
+      - name: Require Passport width evidence
+        if: always() && (steps.scope.outputs.ui == 'true')
+        run: |
+          missing=0
+          for name in passport-375 passport-390 passport-430; do
+            path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
+            if [[ -f "$path" ]]; then
+              wc -c "$path"
+            else
+              echo "missing $name.png" >&2
+              missing=1
+            fi
+          done
+          exit "$missing"
 
       - name: Reset focused simulator before Trip sheet UI test
         if: steps.scope.outputs.trip == 'true'

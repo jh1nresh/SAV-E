@@ -34,7 +34,8 @@ runs. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
 and atlas-map XCTest attachments. Friends is a real 0.90 gate against
 `friends.png` (Home deferral on #290 does not apply to Friends).
 Capture and paywall use five-tab-capture and five-tab-paywall when
-those rails ran. Paywall comparison passes `--ignore-rects` over the
+those rails ran. Passport prefers five-tab-passport and falls back to
+atlas-passport. Paywall comparison passes `--ignore-rects` over the
 hero, sale-state line, and legal sentence.
 
 --destination runs the prototype XCTest testCaptureFourLockedScreens
@@ -221,10 +222,10 @@ mkdir -p \
 # Prototype --destination still compares four screens (no Friends tab).
 # Production result-bundle also gates Friends at 0.90 against friends.png.
 destination_screens=(home saves plan map)
-parity_screens=(home saves plan map friends capture paywall)
+parity_screens=(home saves plan map friends capture paywall passport)
 captured_from_prototype=0
 
-for screen in home saves plan map friends capture paywall; do
+for screen in home saves plan map friends capture paywall passport; do
     if should_skip_screen "$screen"; then
         echo "note: skipping $screen reference (not in this coverage set)"
         continue
@@ -370,6 +371,14 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                     screen="paywall"
                     priority=1
                     ;;
+                five-tab-passport*)
+                    screen="passport"
+                    priority=1
+                    ;;
+                atlas-passport*)
+                    screen="passport"
+                    priority=0
+                    ;;
                 atlas-friends*)
                     screen="friends"
                     priority=0
@@ -508,7 +517,7 @@ for screen in "${compare_screens[@]}"; do
         comparison_status=$?
         if ((comparison_status == 1)); then
             status="FAIL"
-            # Home, Map, Saves, and Plan all fail the job below 0.90.
+            # Home, Map, Saves, Plan, and Passport all fail the job below 0.90.
             gate_failed=1
         else
             echo "error: parity comparison failed for $screen" >&2

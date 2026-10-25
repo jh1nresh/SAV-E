@@ -75,6 +75,16 @@ from #298; `map-mask.png` is not applied to the 0.90 score. Saves and
 Plan stay on their current locks until those Doodle PRs. The `0.90`
 threshold remains the CI gate for Home, Map, Saves, and Plan.
 
+The Passport production target is DESIGN v2's exact 402×874
+`passport-light.png` from `design/doodle-targets-2026-10-20` at `eade369`.
+`passport-dark.png` sits next to it for DESIGN comparison.
+Those rasters are rendered at 1× 402×874, not a crop. The locked
+face is stickers and cities: Passport + Beijing · 4 of 12, the kraft
+sticker grid, the city list, and the five-tab rail with Passport
+selected. `VisualParity.swift` still accepts only a 1× 402 × 874
+target. The `0.90` threshold is a hard CI gate for Passport; there is
+no passport ignore mask.
+
 
 ## Boundaries
 
