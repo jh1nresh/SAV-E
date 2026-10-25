@@ -25,12 +25,22 @@ class CoverageTests(unittest.TestCase):
             selection.RAIL + "testSavesTripsBackReturnsToSaves",
             selection.RAIL + "testHomeDesignProductStates",
             selection.RAIL + "testHomeShowOnMapFocusesPlace",
-            selection.RAIL + "testHomeHintCountEvidence",
             selection.RAIL + "testHomeTaipeiGrantedDistances",
-            selection.RAIL + "testHomeTPEAEvidence",
             selection.RAIL + "testHopU1SavedPlaceLimitPaywallShowsSavedFiftyWithoutManMan",
             selection.RAIL + "testMapSavedUnsavedVisitedTaipeiFixture",
         })
+        # Evidence rails moved off PR/main-push full: they stay in EVIDENCE
+        # and only join full_tests() on schedule / workflow_dispatch.
+        for evidence in selection.EVIDENCE:
+            self.assertNotIn(evidence, full["tests"])
+            self.assertNotIn(evidence, selection.FULL)
+        self.assertEqual(
+            set(selection.EVIDENCE),
+            {
+                selection.RAIL + "testHomeHintCountEvidence",
+                selection.RAIL + "testHomeTPEAEvidence",
+            },
+        )
         self.assertIn(selection.RAIL + "testUnplacedLabelFullScreenAtDeviceWidth", full["tests"])
         self.assertIn(selection.RAIL + "testUnplacedLabelFullScreenAtDeviceWidth", selection.select([])["tests"])
         self.assertTrue(full["trip"])
@@ -47,7 +57,8 @@ class CoverageTests(unittest.TestCase):
 
     def test_selected_tests_exist_in_real_xctest_sources(self):
         catalog = list(dict.fromkeys(
-            selection.FULL + sum(selection.TESTS.values(), []) + [selection.TRIP_SHEET]
+            selection.FULL + selection.EVIDENCE + sum(selection.TESTS.values(), [])
+            + [selection.TRIP_SHEET]
         ))
         for test in catalog:
             _, test_class, *method = test.split("/")
@@ -263,6 +274,84 @@ class CoverageTests(unittest.TestCase):
         self.assertRegex(ios_workflow, r"(?m)^    timeout-minutes: 160\s*$")
         self.assertIn("timeout-minutes: 100", ios_workflow)
         self.assertNotIn("timeout-minutes: 60", ios_workflow)
+
+    def test_nightly_evidence_tests_run_on_schedule_or_dispatch_only(self):
+        evidence = set(selection.EVIDENCE)
+        self.assertTrue(evidence)
+        for event, expect in (
+            ("schedule", True),
+            ("workflow_dispatch", True),
+            ("push", False),
+            ("pull_request", False),
+        ):
+            with tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                env = dict(
+                    os.environ,
+                    GITHUB_EVENT_NAME=event,
+                    PR_BASE_SHA="bad",
+                    GITHUB_OUTPUT=str(root / "outputs"),
+                    GITHUB_STEP_SUMMARY=str(root / "summary"),
+                )
+                env.pop("SAVE_UI_TEST_FOCUS", None)
+                if event != "push":
+                    env["GITHUB_REF"] = "refs/heads/main"
+                subprocess.run(
+                    ["python3", str(ROOT / "scripts/select-ios-tests.py"),
+                     "--output-dir", str(root)],
+                    cwd=ROOT, env=env, check=True, capture_output=True,
+                )
+                plan = json.loads((root / "ios-test-selection.json").read_text())
+                selected = set(plan["tests"])
+                self.assertEqual(plan["profile"], "full")
+                if expect:
+                    self.assertTrue(evidence <= selected, event)
+                else:
+                    self.assertTrue(evidence.isdisjoint(selected), event)
+
+    def test_width_evidence_is_a_separate_non_gating_job(self):
+        # Workflow structure changed: 9 width steps left the required ios
+        # job so they no longer spend its 160-minute wall. The new job is
+        # not a required check and must not appear in ios needs.
+        workflow = (ROOT / ".github/workflows/ios.yml").read_text()
+        self.assertRegex(workflow, r"(?m)^  ios-width-evidence:\s*$")
+        self.assertIn("name: ios-width-evidence", workflow)
+        self.assertIn("cron: \"30 8 * * *\"", workflow)
+        ios_start = workflow.index("\n  ios:\n")
+        width_start = workflow.index("\n  ios-width-evidence:\n")
+        ready_start = workflow.index("\n  release-readiness:")
+        self.assertLess(ios_start, width_start)
+        self.assertLess(width_start, ready_start)
+        ios_job = workflow[ios_start:width_start]
+        width_job = workflow[width_start:ready_start]
+        ready_job = workflow[ready_start:]
+        self.assertIn("needs: [ios-build]", ios_job)
+        self.assertNotIn("needs: [ios-width-evidence]", ios_job)
+        self.assertNotIn("run-ios-width-device-test.sh", ios_job)
+        self.assertNotIn("Capture Map 375pt width evidence", ios_job)
+        self.assertIn("needs: [ios-build]", width_job)
+        self.assertNotIn("needs: [ios]", width_job)
+        self.assertIn("Capture Map 375pt width evidence", width_job)
+        self.assertIn("Capture Friends 375pt width evidence", width_job)
+        self.assertIn("Capture Passport 375pt width evidence", width_job)
+        self.assertIn("run-ios-width-device-test.sh", width_job)
+        # Setup steps keep implied success() (no Xcode / products after a
+        # failed select). Capture / require / upload use !cancelled() so a
+        # sibling width failure does not skip the rest, and never always().
+        width_run_ifs = [
+            line.strip() for line in width_job.splitlines()
+            if line.strip().startswith("if:")
+            and "!cancelled()" in line
+            and "steps.scope.outputs.ui" in line
+        ]
+        self.assertGreaterEqual(len(width_run_ifs), 13)
+        for line in width_run_ifs:
+            self.assertNotIn("always()", line)
+        self.assertNotIn("if: always()", width_job)
+        self.assertIn("needs: [ios]", ready_job)
+        self.assertNotIn("ios-width-evidence", ready_job)
+        self.assertRegex(ios_job, r"(?m)^    timeout-minutes: 160\s*$")
+        self.assertRegex(width_job, r"(?m)^    timeout-minutes: 160\s*$")
 
     def test_unknown_focus_fails_loudly(self):
         with tempfile.TemporaryDirectory() as temp:
