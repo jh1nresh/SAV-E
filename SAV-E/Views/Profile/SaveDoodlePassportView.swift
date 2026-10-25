@@ -143,13 +143,11 @@ struct SaveDoodlePassportPage: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             GeometryReader { proxy in
-                Color.clear.preference(
-                    key: SaveDoodlePassportGridWidthKey.self,
-                    value: proxy.size.width
-                )
+                Color.clear
+                    .onAppear { gridWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, width in gridWidth = width }
             }
         )
-        .onPreferenceChange(SaveDoodlePassportGridWidthKey.self) { gridWidth = $0 }
         .padding(SaveDoodlePassportCatalog.panelPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
@@ -481,13 +479,6 @@ struct SaveDoodlePassportPage: View {
         case .empty:
             return languageSettings.localized(english: "Empty sticker", traditionalChinese: "空貼紙格")
         }
-    }
-}
-
-private struct SaveDoodlePassportGridWidthKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
 

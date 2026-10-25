@@ -210,6 +210,7 @@ struct SocialLoadError: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
         .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("posts.error")
     }
 }

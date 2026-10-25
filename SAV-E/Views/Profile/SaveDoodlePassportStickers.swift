@@ -103,10 +103,38 @@ struct SaveDoodlePassportUniqueGlyph: View {
             SaveDoodleBridgeGlyph()
         } else if kind == .baozi {
             SaveDoodleBaoziGlyph()
+        } else if kind == .ferris {
+            SaveDoodleFerrisGlyph()
         } else {
             Image(systemName: kind.systemImageName)
                 .font(.system(size: 28, weight: .light))
                 .foregroundStyle(SaveAtlasPalette.ink)
+        }
+    }
+}
+
+/// The system has no ferriswheel symbol; draw the wheel so this slot is never blank.
+struct SaveDoodleFerrisGlyph: View {
+    var body: some View {
+        Canvas { context, size in
+            let center = CGPoint(x: size.width * 0.5, y: size.height * 0.42)
+            let radius = min(size.width, size.height) * 0.28
+            var path = Path(ellipseIn: CGRect(
+                x: center.x - radius, y: center.y - radius,
+                width: radius * 2, height: radius * 2
+            ))
+            for spoke in 0..<8 {
+                let angle = Double(spoke) * .pi / 4
+                let end = CGPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius)
+                path.move(to: center)
+                path.addLine(to: end)
+                path.addEllipse(in: CGRect(x: end.x - 2, y: end.y - 2, width: 4, height: 4))
+            }
+            path.move(to: CGPoint(x: size.width * 0.3, y: size.height * 0.84))
+            path.addLine(to: center)
+            path.addLine(to: CGPoint(x: size.width * 0.7, y: size.height * 0.84))
+            path.closeSubpath()
+            context.stroke(path, with: .color(SaveAtlasPalette.ink), lineWidth: 1.2)
         }
     }
 }

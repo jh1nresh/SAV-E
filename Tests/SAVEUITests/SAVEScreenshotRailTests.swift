@@ -2112,6 +2112,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected)
+        let grid = app.descendants(matching: .any)["profile.stampGrid"]
+        let expectedColumns = min(4, max(1, Int(floor((app.frame.width - 96 + 16) / 80))))
+        XCTAssertEqual(grid.value as? String, "\(expectedColumns)", "Passport columns must follow the actual available width")
         let passportShot = app.screenshot()
         attach(app, name: passportName)
         if appearance == .dark {
