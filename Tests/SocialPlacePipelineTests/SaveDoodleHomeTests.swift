@@ -1414,25 +1414,27 @@ final class SaveDoodleHomeTests: XCTestCase {
         let content = try source(at: "SAV-E/App/ContentView.swift")
         XCTAssertTrue(content.contains("onOpenCollectedPassport: { openPassport(collectionMode: .homeCollected) }"))
         XCTAssertTrue(content.contains("openPassport(collectionMode: .collection)"))
-        XCTAssertTrue(profile.contains("PassportTileTownCollection(places: cityStampPlaces"))
-        XCTAssertTrue(profile.contains("accessibilityIdentifier(\"profile.stampProgress\")"))
+        XCTAssertTrue(profile.contains("SaveDoodlePassportPage("))
+        XCTAssertFalse(profile.contains("PassportTileTownCollection"))
         XCTAssertTrue(profile.contains("localSavedPlaces.isEmpty ? savedPlaces : localSavedPlaces"))
-        XCTAssertTrue(profile.contains("collectionProgress.completed)/\\(collectionProgress.total)"))
-        XCTAssertTrue(profile.contains("profile.stampProgress"))
+        let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
+        XCTAssertTrue(page.contains("accessibilityIdentifier(\"profile.stampProgress\")"))
+        XCTAssertTrue(page.contains("\\(visited) of \\(goal) visited"))
+        XCTAssertTrue(page.contains("profile.stampProgress"))
         XCTAssertTrue(
-            profile.contains("""
-                    .accessibilityElement(children: .contain)
-                    .accessibilityIdentifier("profile.stampGrid")
-            """),
+            page.contains(
+                ".accessibilityElement(children: .contain)\n        .accessibilityIdentifier(\"profile.stampGrid\")"
+            ),
             "stampGrid without contain overwrites child stampProgress (AX: 4/12 becomes profile.stampGrid)"
         )
         XCTAssertFalse(
-            profile.contains("accessibilityAddTraits(.isStaticText)"),
+            page.contains("accessibilityAddTraits(.isStaticText)"),
             "combine+traits on the progress HStack still lose to a flattening stampGrid parent"
         )
         XCTAssertTrue(profile.contains("try await onUpdatePlace(updated)"))
-        XCTAssertTrue(profile.contains("SaveDoodleVisitStore().recordVisit"))
-        XCTAssertFalse(profile.contains("markIveBeenHere(place)"))
+        XCTAssertTrue(profile.contains("SaveDoodleVisitStore()"))
+        XCTAssertTrue(page.contains("visitStore.recordVisit"))
+        XCTAssertFalse(page.contains("markIveBeenHere(place)"))
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
         XCTAssertTrue(rail.contains("func testHomeCollectedOpensPassportWithCityCount"))
         XCTAssertTrue(rail.contains("func testSavesTripsBackReturnsToSaves"))
@@ -1806,8 +1808,10 @@ final class SaveDoodleHomeTests: XCTestCase {
         let profile = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         XCTAssertTrue(profile.contains("collectionMode.places("))
         XCTAssertTrue(profile.contains("var collectionMode: SavePassportCollectionMode = .collection"))
-        XCTAssertTrue(profile.contains("SaveDoodleVisitStore().recordVisit"))
+        XCTAssertTrue(profile.contains("SaveDoodleVisitStore()"))
         XCTAssertTrue(profile.contains("try await onUpdatePlace(updated)"))
+        let passportPage = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
+        XCTAssertTrue(passportPage.contains("visitStore.recordVisit"))
         let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
         XCTAssertTrue(map.contains("map.eatGo"))
         XCTAssertTrue(map.contains("\"map.city\""))

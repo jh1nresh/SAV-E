@@ -167,12 +167,18 @@ enum SaveDoodlePassportCatalog {
         location: CLLocation? = nil,
         locationDenied: Bool
     ) -> [Place] {
-        SaveDoodleHomeProgressCatalog.cityPlaces(
+        let scoped = SaveDoodleHomeProgressCatalog.cityPlaces(
             from: places,
             selection: selection,
             location: location,
             locationDenied: locationDenied
         )
+        // Home remaps a vanished city to the newest save. Passport must
+        // keep an explicit empty city empty — never expand worldwide.
+        if case .city(let id) = selection {
+            return scoped.filter { SaveDoodleHomeCatalog.cityID(for: $0) == id }
+        }
+        return scoped
     }
 
     static func visitedCount(in places: [Place]) -> Int {

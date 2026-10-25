@@ -123,7 +123,7 @@ struct SaveDoodlePassportPage: View {
 
     private var kraftPanel: some View {
         let columns = SaveDoodlePassportCatalog.columnCount(
-            availableGridWidth: gridWidth > 0 ? gridWidth : 306
+            availableGridWidth: measuredGridWidth
         )
         return VStack(alignment: .leading, spacing: SaveSpace.md) {
             if showsEmptyPassport {
@@ -140,11 +140,27 @@ struct SaveDoodlePassportPage: View {
                     .accessibilityIdentifier("profile.stamp.visitError")
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: SaveDoodlePassportGridWidthKey.self,
+                    value: proxy.size.width
+                )
+            }
+        )
+        .onPreferenceChange(SaveDoodlePassportGridWidthKey.self) { gridWidth = $0 }
         .padding(SaveDoodlePassportCatalog.panelPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.stampGrid")
         .accessibilityValue("\(columns)")
+    }
+
+    /// Compact 375pt after 24pt screen + panel insets. Measuring the
+    /// LazyVGrid itself feeds the column count back into its own width.
+    private var measuredGridWidth: CGFloat {
+        gridWidth > 0 ? gridWidth : 279
     }
 
     private var showsEmptyPassport: Bool {
@@ -170,7 +186,7 @@ struct SaveDoodlePassportPage: View {
     }
 
     private var stickerGrid: some View {
-        let columns = SaveDoodlePassportCatalog.columnCount(availableGridWidth: gridWidth > 0 ? gridWidth : 306)
+        let columns = SaveDoodlePassportCatalog.columnCount(availableGridWidth: measuredGridWidth)
         let items = Array(
             repeating: GridItem(
                 .fixed(SaveDoodlePassportCatalog.slotSize),
@@ -183,15 +199,6 @@ struct SaveDoodlePassportPage: View {
                 slotButton(slot)
             }
         }
-        .background(
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: SaveDoodlePassportGridWidthKey.self,
-                    value: proxy.size.width
-                )
-            }
-        )
-        .onPreferenceChange(SaveDoodlePassportGridWidthKey.self) { gridWidth = $0 }
     }
 
     private func slotButton(_ slot: SaveDoodlePassportSlot) -> some View {
