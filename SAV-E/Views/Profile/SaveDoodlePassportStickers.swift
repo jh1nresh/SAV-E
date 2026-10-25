@@ -34,25 +34,33 @@ enum SaveDoodlePassportChrome {
     )
 }
 
-/// DESIGN color rasters for the 8 unvisited discs. One asset-name-keyed
-/// lookup. Until DESIGN drops the imagesets, `resolvedImageName` is nil
-/// and the slot keeps today's line art (official coffee outline or
-/// `SaveDoodlePassportUniqueGlyph`). Do not draw those illustrations here.
+/// DESIGN DRAFT v0 color plates for the 8 unvisited 75pt discs.
+/// Not final: DESIGN will redo ink lines and the mountain hill. The swap
+/// must be a pure asset replacement that keeps these exact imageset names
+/// (`DoodlePlate{Baozi,Bicycle,Book,Bridge,Coffee,Ferris,Mountain,Tea}Color`).
+/// One asset-name-keyed lookup. `resolvedImageName` is nil when the
+/// imageset is missing, and the slot keeps today's line art (official
+/// coffee outline or `SaveDoodlePassportUniqueGlyph`). Do not draw those
+/// illustrations here.
 enum SaveDoodlePassportUnvisitedArt {
     static let assetNames: [SaveDoodleStickerKind: String] = [
-        .coffee: "DoodlePassportArtCoffee",
-        .hill: "DoodlePassportArtHill",
-        .bridge: "DoodlePassportArtBridge",
-        .baozi: "DoodlePassportArtBaozi",
-        .tea: "DoodlePassportArtTea",
-        .bookstore: "DoodlePassportArtBookstore",
-        .bicycle: "DoodlePassportArtBicycle",
-        .ferris: "DoodlePassportArtFerris",
+        .coffee: "DoodlePlateCoffeeColor",
+        .hill: "DoodlePlateMountainColor",
+        .bridge: "DoodlePlateBridgeColor",
+        .baozi: "DoodlePlateBaoziColor",
+        .tea: "DoodlePlateTeaColor",
+        .bookstore: "DoodlePlateBookColor",
+        .bicycle: "DoodlePlateBicycleColor",
+        .ferris: "DoodlePlateFerrisColor",
     ]
 
     static func assetName(for kind: SaveDoodleStickerKind) -> String? {
         assetNames[kind]
     }
+
+    /// 75pt slot that matches the DRAFT v0 plates. Line-art fallback stays
+    /// on `unvisitedArtSize` so the dashed disc still reads if an asset is missing.
+    static var plateSize: CGFloat { SaveDoodlePassportCatalog.unvisitedDiscSize }
 
     /// Nil when the imageset is not in the catalog yet.
     @MainActor
@@ -92,8 +100,8 @@ struct SaveDoodlePassportSticker: View {
                 .renderingMode(.original)
                 .scaledToFit()
                 .frame(
-                    width: SaveDoodlePassportCatalog.unvisitedArtSize,
-                    height: SaveDoodlePassportCatalog.unvisitedArtSize
+                    width: SaveDoodlePassportUnvisitedArt.plateSize,
+                    height: SaveDoodlePassportUnvisitedArt.plateSize
                 )
                 .accessibilityHidden(true)
         } else if kind.usesOfficialAsset {

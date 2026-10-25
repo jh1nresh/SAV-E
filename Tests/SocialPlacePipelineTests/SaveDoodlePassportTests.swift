@@ -276,25 +276,47 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertFalse(stickers.contains("struct SaveDoodlePassportStamp"))
     }
 
-    func testUnvisitedColorArtLookupLeavesLineArtUntilAssetsLand() {
-        let kinds: [SaveDoodleStickerKind] = [
-            .coffee, .hill, .bridge, .baozi, .tea, .bookstore, .bicycle, .ferris,
+    func testUnvisitedColorArtLookupUsesDraftPlateNamesAt75() throws {
+        let expected: [(SaveDoodleStickerKind, String)] = [
+            (.coffee, "DoodlePlateCoffeeColor"),
+            (.hill, "DoodlePlateMountainColor"),
+            (.bridge, "DoodlePlateBridgeColor"),
+            (.baozi, "DoodlePlateBaoziColor"),
+            (.tea, "DoodlePlateTeaColor"),
+            (.bookstore, "DoodlePlateBookColor"),
+            (.bicycle, "DoodlePlateBicycleColor"),
+            (.ferris, "DoodlePlateFerrisColor"),
         ]
         XCTAssertEqual(SaveDoodlePassportUnvisitedArt.assetNames.count, 8)
         XCTAssertEqual(
             Set(SaveDoodlePassportUnvisitedArt.assetNames.keys),
-            Set(kinds)
+            Set(expected.map(\.0))
         )
-        for kind in kinds {
-            let name = SaveDoodlePassportUnvisitedArt.assetName(for: kind)
-            XCTAssertEqual(name, "DoodlePassportArt\(kind.rawValue.prefix(1).uppercased())\(kind.rawValue.dropFirst())")
-            XCTAssertNil(
-                SaveDoodlePassportUnvisitedArt.resolvedImageName(for: kind),
-                "\(kind.rawValue) must fall back to today's line art until DESIGN adds \(name ?? "")"
+        XCTAssertEqual(SaveDoodlePassportUnvisitedArt.plateSize, 75)
+        XCTAssertEqual(SaveDoodlePassportUnvisitedArt.plateSize, SaveDoodlePassportCatalog.unvisitedDiscSize)
+        for (kind, name) in expected {
+            XCTAssertEqual(SaveDoodlePassportUnvisitedArt.assetName(for: kind), name)
+            let imageset = repositoryRoot.appendingPathComponent(
+                "SAV-E/Resources/Assets.xcassets/\(name).imageset"
             )
+            let contents = imageset.appendingPathComponent("Contents.json")
+            XCTAssertTrue(
+                FileManager.default.fileExists(atPath: contents.path),
+                "Missing DRAFT v0 imageset \(name)"
+            )
+            let json = try String(contentsOf: contents, encoding: .utf8)
+            XCTAssertTrue(json.contains("\"template-rendering-intent\" : \"original\"") || json.contains("\"template-rendering-intent\": \"original\""))
+            XCTAssertTrue(json.contains("\"scale\": \"1x\"") || json.contains("\"scale\" : \"1x\""))
+            XCTAssertTrue(json.contains("\"scale\": \"2x\"") || json.contains("\"scale\" : \"2x\""))
+            XCTAssertTrue(json.contains("\"scale\": \"3x\"") || json.contains("\"scale\" : \"3x\""))
         }
         XCTAssertNil(SaveDoodlePassportUnvisitedArt.assetName(for: .duck))
         XCTAssertNil(SaveDoodlePassportUnvisitedArt.resolvedImageName(for: .duck))
+        let stickers = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportStickers.swift")
+        XCTAssertTrue(stickers.contains("DRAFT v0"))
+        XCTAssertTrue(stickers.contains("SaveDoodlePassportUniqueGlyph"))
+        XCTAssertTrue(stickers.contains("resolvedImageName(for: kind)"))
+        XCTAssertTrue(stickers.contains("else if kind.usesOfficialAsset"))
     }
 
     func testUnhintedStickerKindIsStableForTheSamePlace() {
