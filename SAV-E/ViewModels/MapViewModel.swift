@@ -747,6 +747,16 @@ final class MapViewModel: ObservableObject {
     private var didRequestInitialLocation = false
     private var isLoadingPlaces = false
     private var hasLoadedPlaces = false
+    @Published private var savedCollectionLoaded = false
+    private var savedCollectionOwner: String?
+    private var savedCollectionGeneration = 0
+    /// A finished fetch attempt is not evidence that the collection is empty.
+    var isSavedCollectionReady: Bool {
+        savedCollectionLoaded && (!usesRemotePersistence || (
+            savedCollectionOwner != nil && savedCollectionOwner == authService.currentUserId
+                && savedCollectionGeneration == authService.sessionGeneration
+        ))
+    }
     /// Last successful `/places` count for the active account. `mergeRemotePlaces`
     /// can keep a confirmed vault row another device already deleted, so the
     /// local cap must not use that inflated `places.count`.
@@ -1092,7 +1102,7 @@ final class MapViewModel: ObservableObject {
 
         if !usesRemotePersistence {
             clearAuthoritativeSavedPlaceCount()
-            places = localConfirmedPlaces()
+            places = localConfirmedPlaces(markCollectionReady: true)
             reviewCandidates = localReviewCandidates()
             socialPlaces = []
             return
@@ -1107,6 +1117,7 @@ final class MapViewModel: ObservableObject {
             return
         }
 
+        let loadGeneration = authService.sessionGeneration
         do {
             let remotePlaces = try await supabaseService.fetchPlaces(for: userId)
             rememberAuthoritativeSavedPlaceCount(
@@ -1114,6 +1125,11 @@ final class MapViewModel: ObservableObject {
                 owner: userId
             )
             places = mergeRemotePlaces(remotePlaces, withLocalPlaces: localConfirmedPlaces())
+            if authService.currentUserId == userId, authService.sessionGeneration == loadGeneration {
+                savedCollectionOwner = userId
+                savedCollectionGeneration = loadGeneration
+                savedCollectionLoaded = true
+            }
             await completeReferralHandoffIfNeeded()
             // Each sync step is isolated: a failed pending import must not
             // blank the review queue, and a failed place import must not
@@ -1254,12 +1270,14 @@ final class MapViewModel: ObservableObject {
         pendingImportService.restorePendingPlaces(keepQueued, restorationToken: restorationToken)
     }
 
-    private func localConfirmedPlaces() -> [Place] {
+    private func localConfirmedPlaces(markCollectionReady: Bool = false) -> [Place] {
         do {
-            return try saveLocalVaultService.confirmedPlaces(
+            let confirmed = try saveLocalVaultService.confirmedPlaces(
                 limit: 500,
                 belongingTo: authService.currentUserId
             )
+            if markCollectionReady { savedCollectionLoaded = true }
+            return confirmed
         } catch {
             print("MapViewModel: failed to load local confirmed places: \(error)")
             return []

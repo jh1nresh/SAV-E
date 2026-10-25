@@ -7,6 +7,42 @@ import UIKit
 
 final class SaveSearchControllerTests: XCTestCase {
     @MainActor
+    func testHomeCityReadinessWaitsForSuccessfulOwnerCollection() async throws {
+        let auth = PrivyAuthService.shared
+        let previous = auth.authState
+        auth.authState = .authenticated(userId: "did:privy:city-loading-owner")
+        defer { auth.authState = previous }
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("home-city-load-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let service = RecordingSupabaseService()
+        service.fetchPlacesError = NSError(domain: "test-offline", code: 1)
+        let map = MapViewModel(
+            supabaseService: service,
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: true
+        )
+        XCTAssertFalse(map.isSavedCollectionReady)
+        await map.loadPlaces()
+        XCTAssertFalse(map.isSavedCollectionReady, "A failed fetch cannot prove the selected city was deleted")
+        let selected = SaveDoodleCitySelection.city("tokyo")
+        XCTAssertEqual(SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+            current: selected, places: map.places, locationDenied: false,
+            collectionReady: map.isSavedCollectionReady
+        ), selected)
+        service.fetchPlacesError = nil
+        await map.loadPlaces(force: true)
+        XCTAssertTrue(map.isSavedCollectionReady)
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertEqual(SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+            current: selected, places: map.places, locationDenied: false,
+            collectionReady: map.isSavedCollectionReady
+        ), .nearYou)
+        auth.authState = .authenticated(userId: "did:privy:other-city-owner")
+        XCTAssertFalse(map.isSavedCollectionReady, "Readiness belongs only to the loaded account session")
+    }
+
+    @MainActor
     func testReviewNextStepUsesEvidenceWithoutPromotingClues() {
         XCTAssertEqual(SaveReviewNextStep(pending: true, savable: false, address: "", city: nil, missingInfo: []), .pendingAnalysis)
         XCTAssertEqual(SaveReviewNextStep(pending: false, savable: false, address: " ", city: " ", missingInfo: []), .addCity)
@@ -7510,7 +7546,9 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     func startAnalysis(id: UUID) async throws -> UUID? { nil }
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {}
     var onFetchPlaces: (() -> Void)?
+    var fetchPlacesError: Error?
     func fetchPlaces(for userId: String) async throws -> [Place] {
+        if let fetchPlacesError { throw fetchPlacesError }
         if holdNextFetchPlaces {
             holdNextFetchPlaces = false
             await withCheckedContinuation { continuation in

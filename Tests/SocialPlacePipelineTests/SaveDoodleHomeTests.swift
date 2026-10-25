@@ -1733,7 +1733,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(root.contains("forceRefresh: true"))
         XCTAssertTrue(home.contains("syncPersistedCitySelection"))
         XCTAssertTrue(home.contains("persistedCityAfterCollectionChange"))
-        XCTAssertTrue(home.contains("collectionReady: !allPlaces.isEmpty"))
+        XCTAssertTrue(home.contains("collectionReady: collectionReady"))
         XCTAssertTrue(home.contains("visitedAt: SaveDoodleVisitStore().latestVisit"))
         let locationService = try source(at: "SAV-E/Services/LocationService.swift")
         XCTAssertTrue(locationService.contains("SaveLocationFreshness"))
@@ -2082,6 +2082,42 @@ final class SaveDoodleHomeTests: XCTestCase {
             ),
             .city("taipei")
         )
+    }
+
+    func testLoadedEmptyCollectionClearsDeletedCityWithoutResurrectingIt() async {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("home-empty-loaded-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: false
+        )
+        var selected = SaveDoodleCitySelection.city("tokyo")
+        XCTAssertFalse(map.isSavedCollectionReady)
+        selected = SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+            current: selected, places: map.places, locationDenied: false,
+            collectionReady: map.isSavedCollectionReady
+        )
+        XCTAssertEqual(selected, .city("tokyo"))
+        await map.loadPlaces()
+        XCTAssertTrue(map.isSavedCollectionReady, "A loaded empty collection is distinct from startup")
+        XCTAssertTrue(map.places.isEmpty)
+        selected = SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+            current: selected, places: map.places, locationDenied: false,
+            collectionReady: map.isSavedCollectionReady
+        )
+        XCTAssertEqual(selected, .nearYou)
+        let tokyo = place("Ichiran", "1-22-7 Jinnan, Shibuya City, Tokyo, Japan", .food)
+        selected = SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+            current: selected, places: [tokyo], locationDenied: false,
+            collectionReady: map.isSavedCollectionReady
+        )
+        XCTAssertEqual(selected, .nearYou, "Adding a place must not resurrect the deleted-city filter")
+        let afterLastDeletion = SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+            current: .city("tokyo"), places: [], locationDenied: false,
+            collectionReady: map.isSavedCollectionReady
+        )
+        XCTAssertEqual(afterLastDeletion, .nearYou)
     }
 
     func testHomeRowMetaUsesRecordedVisitNotCreatedAt() throws {

@@ -11,6 +11,7 @@ struct SaveDoodleHomeView: View {
     @ObservedObject var locationService: LocationService
     var onOpenCollectedPassport: () -> Void = {}
     var headerTopPadding: CGFloat = AtlasMetrics.statusBarHeight + SaveSpace.xs
+    var collectionReady = false
 
     @State private var showsCityPicker = false
 
@@ -80,6 +81,9 @@ struct SaveDoodleHomeView: View {
         .onChange(of: allPlaces.count) { _, _ in
             syncPersistedCitySelection()
         }
+        .onChange(of: collectionReady) { _, _ in
+            syncPersistedCitySelection()
+        }
     }
 
     /// Persist a replacement when the selected city's last save disappeared
@@ -90,7 +94,7 @@ struct SaveDoodleHomeView: View {
             current: session.city,
             places: allPlaces,
             locationDenied: locationService.isAuthorizationDenied,
-            collectionReady: !allPlaces.isEmpty
+            collectionReady: collectionReady
         )
         guard session.city != next else { return }
         session.city = next
