@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Passport-only chrome. Do not replace `SaveAtlasPalette.kraft` globally —
 /// other screens still use the locked kraft pair.
@@ -33,6 +34,34 @@ enum SaveDoodlePassportChrome {
     )
 }
 
+/// DESIGN color rasters for the 8 unvisited discs. One asset-name-keyed
+/// lookup. Until DESIGN drops the imagesets, `resolvedImageName` is nil
+/// and the slot keeps today's line art (official coffee outline or
+/// `SaveDoodlePassportUniqueGlyph`). Do not draw those illustrations here.
+enum SaveDoodlePassportUnvisitedArt {
+    static let assetNames: [SaveDoodleStickerKind: String] = [
+        .coffee: "DoodlePassportArtCoffee",
+        .hill: "DoodlePassportArtHill",
+        .bridge: "DoodlePassportArtBridge",
+        .baozi: "DoodlePassportArtBaozi",
+        .tea: "DoodlePassportArtTea",
+        .bookstore: "DoodlePassportArtBookstore",
+        .bicycle: "DoodlePassportArtBicycle",
+        .ferris: "DoodlePassportArtFerris",
+    ]
+
+    static func assetName(for kind: SaveDoodleStickerKind) -> String? {
+        assetNames[kind]
+    }
+
+    /// Nil when the imageset is not in the catalog yet.
+    @MainActor
+    static func resolvedImageName(for kind: SaveDoodleStickerKind) -> String? {
+        guard let name = assetName(for: kind), UIImage(named: name) != nil else { return nil }
+        return name
+    }
+}
+
 /// Official DESIGN stickers when the kind has a unique asset. Extra kinds
 /// keep their own glyph so unvisited cells do not collapse to five repeats.
 /// Number stamps overlay the visited sticker. Do not wrap a shrunken icon in
@@ -56,6 +85,17 @@ struct SaveDoodlePassportSticker: View {
                 height: SaveDoodlePassportCatalog.visitedStickerSize.height
             )
             .accessibilityHidden(true)
+        } else if let colorArt = SaveDoodlePassportUnvisitedArt.resolvedImageName(for: kind) {
+            Image(colorArt)
+                .resizable()
+                .interpolation(.high)
+                .renderingMode(.original)
+                .scaledToFit()
+                .frame(
+                    width: SaveDoodlePassportCatalog.unvisitedArtSize,
+                    height: SaveDoodlePassportCatalog.unvisitedArtSize
+                )
+                .accessibilityHidden(true)
         } else if kind.usesOfficialAsset {
             Image(kind.officialSticker.imageName(
                 visited: false,

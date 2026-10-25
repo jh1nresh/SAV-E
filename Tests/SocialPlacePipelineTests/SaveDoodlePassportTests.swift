@@ -271,7 +271,30 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(stickers.contains("usesOfficialAsset"))
         XCTAssertTrue(stickers.contains("SaveDoodlePassportUniqueGlyph"))
         XCTAssertTrue(stickers.contains("stampOffset"))
+        XCTAssertTrue(stickers.contains("enum SaveDoodlePassportUnvisitedArt"))
+        XCTAssertTrue(stickers.contains("resolvedImageName(for:"))
         XCTAssertFalse(stickers.contains("struct SaveDoodlePassportStamp"))
+    }
+
+    func testUnvisitedColorArtLookupLeavesLineArtUntilAssetsLand() {
+        let kinds: [SaveDoodleStickerKind] = [
+            .coffee, .hill, .bridge, .baozi, .tea, .bookstore, .bicycle, .ferris,
+        ]
+        XCTAssertEqual(SaveDoodlePassportUnvisitedArt.assetNames.count, 8)
+        XCTAssertEqual(
+            Set(SaveDoodlePassportUnvisitedArt.assetNames.keys),
+            Set(kinds)
+        )
+        for kind in kinds {
+            let name = SaveDoodlePassportUnvisitedArt.assetName(for: kind)
+            XCTAssertEqual(name, "DoodlePassportArt\(kind.rawValue.prefix(1).uppercased())\(kind.rawValue.dropFirst())")
+            XCTAssertNil(
+                SaveDoodlePassportUnvisitedArt.resolvedImageName(for: kind),
+                "\(kind.rawValue) must fall back to today's line art until DESIGN adds \(name ?? "")"
+            )
+        }
+        XCTAssertNil(SaveDoodlePassportUnvisitedArt.assetName(for: .duck))
+        XCTAssertNil(SaveDoodlePassportUnvisitedArt.resolvedImageName(for: .duck))
     }
 
     func testUnhintedStickerKindIsStableForTheSamePlace() {
