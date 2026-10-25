@@ -597,22 +597,33 @@ struct ContentView: View {
     private var rootTabs: some View {
         NavigationStack(path: $rootPath) {
             GeometryReader { safeArea in
-                // ReferenceViewport draws from the full-screen origin and scales its canvas.
-                // Read real insets before that view ignores them; convert Home's physical
-                // safe-area + 8pt header origin into the reference canvas coordinates.
-                let viewportScale = max(0.01, min(
-                    (safeArea.size.width + safeArea.safeAreaInsets.leading + safeArea.safeAreaInsets.trailing) / AtlasMetrics.width,
-                    (safeArea.size.height + safeArea.safeAreaInsets.top + safeArea.safeAreaInsets.bottom) / AtlasMetrics.height
-                ))
-                ReferenceViewport {
-                    ZStack(alignment: .topLeading) {
+                // SPIKE(se-width-container): NEVER MERGE.
+                // Replaces ReferenceViewport's fixed 402×874 canvas (scale
+                // min(W/402, H/874), pinned top-left) with a width-based fill
+                // of the real device. Child screens, evidence EXPECTATIONS,
+                // thresholds, baselines, and masks are unchanged — this
+                // records what breaks at 375/390/402/430.
+                //
+                // Same full-screen origin as ReferenceViewport: read insets
+                // here, then ignore the layout guide so the fill is physical
+                // W×H. Home gets the real top inset (not / viewportScale).
+                // Tab bar is placed on the physical bottom and given the
+                // physical width; AtlasTabBar's inner 402pt frame is a
+                // recorded leftover, not fixed here.
+                let fullWidth = safeArea.size.width
+                    + safeArea.safeAreaInsets.leading
+                    + safeArea.safeAreaInsets.trailing
+                let fullHeight = safeArea.size.height
+                    + safeArea.safeAreaInsets.top
+                    + safeArea.safeAreaInsets.bottom
+                ZStack(alignment: .topLeading) {
                         Group {
                             switch selectedRootTab {
                             case .home:
                                 SaveHomeView(
                                     store: tripStore,
                                     mapViewModel: mapVM,
-                                    headerTopPadding: (safeArea.safeAreaInsets.top + SaveSpace.xs) / viewportScale,
+                                    headerTopPadding: safeArea.safeAreaInsets.top + SaveSpace.xs,
                                     onCapture: { openDrawer(.addLink, tripID: nil) },
                                     onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
                                     onOpenReviewCandidate: { openReviewCandidate($0, tripID: nil) },
@@ -695,17 +706,18 @@ struct ContentView: View {
                             },
                             onSelect: { selectRootTab($0) }
                         )
+                            // SPIKE: real-device width × 62pt, physical bottom.
                             .placed(
-                                x: AtlasTabBarMetrics.leadingInset,
-                                y: selectedRootTab == .map
-                                    ? AtlasTabBarMetrics.mapY
-                                    : AtlasTabBarMetrics.standardY,
-                                width: AtlasTabBarMetrics.width,
+                                x: 0,
+                                y: fullHeight - AtlasTabBarMetrics.height,
+                                width: fullWidth,
                                 height: AtlasTabBarMetrics.height
                             )
                         }
                     }
-                }
+                    .frame(width: fullWidth, height: fullHeight, alignment: .topLeading)
+                    .background(AtlasPalette.canvas)
+                    .ignoresSafeArea()
             }
             .tint(SaveAtlasPalette.forest)
             .environmentObject(doodleSession)

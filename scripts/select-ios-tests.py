@@ -96,6 +96,18 @@ FOCUS_PROFILES = {
         "trip": False,
         "units": False,
     },
+    # SPIKE-MEASUREMENT(se-width-container): NEVER MERGE.
+    # Smallest existing FULL subset that still sets ui=true so ios.yml's
+    # Map/Friends/Passport 375/390/430 width-evidence steps + 0.90 parity
+    # run. Does not add Home width tests or change EXPECTATIONS.
+    "se-width-container": {
+        "tests": [RAIL + name for name in (
+            "testCaptureAtlasProductionParity",
+            "testCaptureFiveTabLanding",
+        )],
+        "trip": False,
+        "units": False,
+    },
 }
 
 

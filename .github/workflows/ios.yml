@@ -58,8 +58,16 @@ jobs:
           UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus }}
         run: |
           if [[ "$EVENT_NAME" == 'workflow_dispatch' && -n "${UI_TEST_FOCUS:-}" ]]; then
-            echo '::error::workflow_dispatch ui_test_focus cannot satisfy the required ios check. Leave the input empty to run the full suite.'
-            exit 1
+            # SPIKE-MEASUREMENT(se-width-container): NEVER MERGE.
+            # Main rejects every focused dispatch so it cannot satisfy the
+            # required `ios` check. This spike is branch-push only and needs
+            # a small subset (parity + existing width-evidence steps). Allow
+            # only this profile; empty input still runs the full suite.
+            if [[ "$UI_TEST_FOCUS" != 'se-width-container' ]]; then
+              echo '::error::workflow_dispatch ui_test_focus cannot satisfy the required ios check. Leave the input empty to run the full suite.'
+              exit 1
+            fi
+            echo 'SPIKE-MEASUREMENT: allowing ui_test_focus=se-width-container on workflow_dispatch. Never merge.'
           fi
           if [[ "$EVENT_NAME" != 'pull_request' ]]; then
             exit 0

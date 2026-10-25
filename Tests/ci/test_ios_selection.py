@@ -264,6 +264,16 @@ class CoverageTests(unittest.TestCase):
         self.assertIn("timeout-minutes: 100", ios_workflow)
         self.assertNotIn("timeout-minutes: 60", ios_workflow)
 
+    def test_se_width_container_focus_is_a_subset_of_full_without_trip_or_units(self):
+        spec = selection.FOCUS_PROFILES["se-width-container"]
+        self.assertTrue(set(spec["tests"]) <= set(selection.FULL))
+        self.assertFalse(spec["trip"])
+        self.assertFalse(spec["units"])
+        self.assertEqual(spec["tests"], [
+            selection.RAIL + "testCaptureAtlasProductionParity",
+            selection.RAIL + "testCaptureFiveTabLanding",
+        ])
+
     def test_unknown_focus_fails_loudly(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
