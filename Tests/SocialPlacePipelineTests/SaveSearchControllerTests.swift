@@ -4480,6 +4480,37 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testSavedPlaceHandoffClearsRouteAndRefocusesAlreadySelectedStamp() throws {
+        let map = MapViewModel()
+        let stamp = place(
+            name: "Saved Stop", address: "Taipei", category: .food,
+            latitude: 25.04, longitude: 121.54
+        )
+        var route = [
+            CLLocationCoordinate2D(latitude: 34.0522, longitude: -118.2437),
+            CLLocationCoordinate2D(latitude: 34.1184, longitude: -118.3004)
+        ]
+        map.places = [stamp]
+        map.selectedPlace = stamp
+        map.activeFilter = [UUID()]
+        map.routeCoordinates = route
+        map.calculatedRoute = MKPolyline(coordinates: &route, count: route.count)
+        map.cameraPosition = .region(MKCoordinateRegion(
+            center: route[0], span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
+        ))
+
+        map.showSavedPlaceOnMap(stamp)
+
+        XCTAssertTrue(map.routeCoordinates.isEmpty)
+        XCTAssertNil(map.calculatedRoute)
+        XCTAssertNil(map.activeFilter)
+        XCTAssertEqual(map.selectedPlace?.id, stamp.id)
+        let region = try XCTUnwrap(map.cameraPosition.region)
+        XCTAssertEqual(region.center.latitude, stamp.latitude, accuracy: 0.000001)
+        XCTAssertEqual(region.center.longitude, stamp.longitude, accuracy: 0.000001)
+    }
+
+    @MainActor
     func testMapNonRouteActionsClearStaleTripRoute() {
         let map = MapViewModel()
         var route = [

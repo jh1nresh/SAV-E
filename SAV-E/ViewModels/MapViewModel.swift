@@ -4398,6 +4398,19 @@ final class MapViewModel: ObservableObject {
         return selectionIsCameraOnly
     }
 
+    /// Explicit saved-place handoff leaves a previous itinerary and focuses
+    /// the requested stamp, including when that stamp was already selected.
+    func showSavedPlaceOnMap(_ place: Place) {
+        clearRoute()
+        activeFilter = nil
+        selectPlace(place)
+        guard place.isMapKitMappable else { return }
+        cameraPosition = .region(MKCoordinateRegion(
+            center: place.coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04)
+        ))
+    }
+
     func selectPlace(_ place: Place) {
         selectionIsCameraOnly = false
         selectedPlace = place
