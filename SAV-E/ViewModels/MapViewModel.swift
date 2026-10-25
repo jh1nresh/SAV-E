@@ -2424,10 +2424,13 @@ final class MapViewModel: ObservableObject {
     func chooseSavedStampFromExactSearch(_ place: Place) async -> Place? {
         let owner = authService.currentUserId
         let generation = authService.sessionGeneration
+        let clueID = liveExactSearchResolution?.clue.id
         do {
             return try await resolveExactSearchClue(toSavedPlace: place)
         } catch {
             guard !usesRemotePersistence || (authService.currentUserId == owner && authService.sessionGeneration == generation) else { return nil }
+            guard exactSearchIntentActive else { return nil }
+            if let clueID, let activeID = liveExactSearchResolution?.clue.id, activeID != clueID { return nil }
             if correctionDrawerError == nil, let message = (error as? LocalizedError)?.errorDescription,
                !message.isEmpty {
                 correctionDrawerError = message
@@ -2637,13 +2640,23 @@ final class MapViewModel: ObservableObject {
                 correctionDrawerError = rollbackError.localizedDescription
                 throw rollbackError
             }
-            exactSearchResolution = resolution
-            exactSearchRollbackLockPlaceID = nil
-        } else {
+            if mayRestoreExactSearch(resolution) {
+                exactSearchResolution = resolution
+                exactSearchRollbackLockPlaceID = nil
+            }
+        } else if mayRestoreExactSearch(resolution) {
             exactSearchResolution = resolution
         }
-        correctionDrawerError = error.localizedDescription
+        if mayRestoreExactSearch(resolution) { correctionDrawerError = error.localizedDescription }
         throw error
+    }
+
+    /// Compensation still runs for an old write. Only its normal retry UI is
+    /// suppressed after close/replacement; failed compensation above retains
+    /// the original recovery plan and lock unconditionally.
+    private func mayRestoreExactSearch(_ resolution: ExactSearchResolution) -> Bool {
+        exactSearchIntentActive && (liveExactSearchResolution == nil
+            || liveExactSearchResolution?.clue.id == resolution.clue.id)
     }
 
     private func rollBackRemoteStampMerge(original: Place, merged: Place, resolution: ExactSearchResolution) async throws {
@@ -4596,6 +4609,7 @@ final class MapViewModel: ObservableObject {
     }
 
     var hasActiveExactSearchResolution: Bool { liveExactSearchResolution != nil }
+    var activeExactSearchClueID: UUID? { liveExactSearchResolution?.clue.id }
 
     private func dropExactSearchResolutionUnlessLocked() {
         exactSearchIntentActive = false

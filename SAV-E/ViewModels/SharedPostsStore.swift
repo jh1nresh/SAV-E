@@ -56,15 +56,42 @@ final class SharedPostsStore: ObservableObject {
     private func load(append: Bool) async {
         let ticket = requestID
         let account = PrivyAuthService.shared.currentUserId
+        if isDemo && ProcessInfo.processInfo.arguments.contains("--uitest-friends-loading") {
+            posts = []
+            error = nil
+            isLoading = true
+            counts = SocialProfileCounts(postCount: 0, followingCount: 0, followerCount: 0)
+            return
+        }
         isLoading = true; error = nil
         defer { if ticket == requestID { isLoading = false } }
         if isDemo {
-            // Offline demo stays empty unless the dedicated screenshot fixture
+            // Offline demo stays empty unless a dedicated screenshot fixture
             // is requested. It never reads or publishes real social records.
-            if ProcessInfo.processInfo.arguments.contains("--uitest-social-posts")
-                || ProcessInfo.processInfo.arguments.contains("--uitest-friends-town")
-            {
-                applyDemoFixture()
+            // Friends-town is the Doodle mock people list (Mia / Leo / Kai / Ana).
+            // Social-posts keeps the Harbor Town UUID lock for passport tests.
+            if ProcessInfo.processInfo.arguments.contains("--uitest-friends-error") {
+                posts = []
+                error = "Couldn't load friends"
+                isLoading = false
+                counts = SocialProfileCounts(postCount: 0, followingCount: 0, followerCount: 0)
+                return
+            }
+            if ProcessInfo.processInfo.arguments.contains("--uitest-friends-town") {
+                // `.mine` stays empty so H1–H4 Passport captures do not
+                // paint Mia / Leo / Kai / Ana as the signed-in user's
+                // own posts (P2 4336028740). `.feed` and `.author`
+                // keep the fixture so Friends → author passport is
+                // populated (P2 4344156753).
+                switch route {
+                case .feed, .author:
+                    applyDemoFixture(items: Self.friendsTownPosts)
+                case .mine:
+                    posts = []
+                    counts = SocialProfileCounts(postCount: 0, followingCount: 0, followerCount: 0)
+                }
+            } else if ProcessInfo.processInfo.arguments.contains("--uitest-social-posts") {
+                applyDemoFixture(items: Self.fixturePosts)
             } else {
                 posts = []
                 counts = SocialProfileCounts(postCount: 0, followingCount: 0, followerCount: 0)
@@ -101,8 +128,7 @@ final class SharedPostsStore: ObservableObject {
         }
     }
 
-    private func applyDemoFixture() {
-        let items = Self.fixturePosts
+    private func applyDemoFixture(items: [SharedPlacePost]) {
         let currentFilter = filter
         switch route {
         case .mine, .feed:
@@ -194,21 +220,68 @@ final class SharedPostsStore: ObservableObject {
             ("33333333-3333-4333-8333-333333333333", "Old Maple Cafe", "Town", "cafe", .wantToGo, "taylor", "Taylor Last", true),
             ("55555555-5555-4555-8555-555555555555", "Pine View", "Forest", "attraction", .wantToGo, "jordan", "Jordan Last", true),
         ].map { id, name, address, category, status, authorID, authorName, visible in
-            SharedPlacePost(
-                id: UUID(uuidString: id)!,
+            post(
+                id: id,
                 name: name,
                 address: address,
                 category: category,
                 status: status,
-                stars: nil,
-                caption: nil,
-                shared_at: "2026-10-12T10:00:00Z",
-                author_id: authorID,
-                author_name: authorName,
-                author_handle: authorID,
-                author_avatar_url: nil,
-                visible_to_followers: visible
+                authorID: authorID,
+                authorName: authorName,
+                visible: visible,
+                sharedAt: "2026-10-12T10:00:00Z"
             )
         }
+    }
+
+    /// Packet §7.4 Friends fixture (Mia / Leo / Kai / Ana). Clock is frozen
+    /// to 2026-10-20T10:00:00Z so ages stay 2d / 5d / 1w / 2w.
+    private static var friendsTownPosts: [SharedPlacePost] {
+        [
+            ("a1111111-1111-4111-8111-111111111111", "Grey Cafe", "Beijing", "cafe", PlaceStatus.wantToGo, "mia", "Mia", true, "2026-10-18T10:00:00Z"),
+            ("a2222222-2222-4222-8222-222222222222", "Fangzhuanchang Noodles", "Beijing", "food", .wantToGo, "leo", "Leo", true, "2026-10-15T10:00:00Z"),
+            ("a3333333-3333-4333-8333-333333333333", "Temple of Heaven Park", "Beijing", "attraction", .visited, "kai", "Kai", true, "2026-10-13T10:00:00Z"),
+            ("a4444444-4444-4444-8444-444444444444", "Jingshan Hill", "Beijing", "attraction", .visited, "ana", "Ana", true, "2026-10-06T10:00:00Z"),
+        ].map { id, name, address, category, status, authorID, authorName, visible, sharedAt in
+            post(
+                id: id,
+                name: name,
+                address: address,
+                category: category,
+                status: status,
+                authorID: authorID,
+                authorName: authorName,
+                visible: visible,
+                sharedAt: sharedAt
+            )
+        }
+    }
+
+    private static func post(
+        id: String,
+        name: String,
+        address: String,
+        category: String,
+        status: PlaceStatus,
+        authorID: String,
+        authorName: String,
+        visible: Bool,
+        sharedAt: String
+    ) -> SharedPlacePost {
+        SharedPlacePost(
+            id: UUID(uuidString: id)!,
+            name: name,
+            address: address,
+            category: category,
+            status: status,
+            stars: nil,
+            caption: nil,
+            shared_at: sharedAt,
+            author_id: authorID,
+            author_name: authorName,
+            author_handle: authorID,
+            author_avatar_url: nil,
+            visible_to_followers: visible
+        )
     }
 }

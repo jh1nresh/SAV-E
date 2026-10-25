@@ -55,9 +55,12 @@ def build_similarity_report(
         "appearanceSimilarity": payload.get("appearanceSimilarity"),
         "sideBySide": side_by_side,
         "passed": payload.get("passed"),
+        "ignoredTopRows": payload.get("ignoredTopRows"),
+        "ignoreRects": payload.get("ignoreRects"),
+        "ignoreMask": payload.get("ignoreMask"),
     }
     if no_mask:
-        report["mask"] = {"coverage": "full-frame"}
+        report["mask"] = {"coverage": "no-map-mask"}
         return report
     if used_mask_image:
         report["mask"] = {"image": str(mask_image), "coverage": "mask-image"}

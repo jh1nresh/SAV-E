@@ -82,8 +82,67 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     }
 
     @MainActor
+    /// Real empty feed (no followed friends). Friends is shipped, so a
+    /// coming-soon state cannot occur and is not shown.
     func testFriendsComingSoon() throws {
         try assertFriendsComingSoonLanguages()
+    }
+
+    /// Real 375pt simulator (SE / mini). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testFriendsWidth375() throws {
+        try captureFriendsWidthEvidence(width: 375, columns: 1, name: "friends-375")
+    }
+
+    /// Real 390pt simulator (iPhone 14). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testFriendsWidth390() throws {
+        try captureFriendsWidthEvidence(width: 390, columns: 1, name: "friends-390")
+    }
+
+    /// Real 430pt simulator (Pro Max). Not a maxWidth letterbox on 402pt.
+    @MainActor
+    func testFriendsWidth430() throws {
+        try captureFriendsWidthEvidence(width: 430, columns: 1, name: "friends-430")
+    }
+
+    /// HoP width shots: assert the booted device point width and the
+    /// people-first single column, then attach `friends-375|390|430`.
+    @MainActor
+    private func captureFriendsWidthEvidence(width: Int, columns: Int, name: String) throws {
+        let language = width == 390 ? "zh-Hant" : "en"
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-friends-town",
+                "-save.appLanguage", language,
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        openRootTab("Friends", app: app)
+        let root = app.descendants(matching: .any)["friends.root"]
+        XCTAssertTrue(root.waitForExistence(timeout: stepTimeout))
+        let list = app.descendants(matching: .any)["friends.list"]
+        XCTAssertTrue(list.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(
+            Int(app.frame.width.rounded()),
+            width,
+            "Friends width shot must boot a real \(width)pt simulator"
+        )
+        XCTAssertEqual(
+            Int(root.frame.width.rounded()),
+            width,
+            "Friends root must use the full \(width)pt device width, not a letterbox"
+        )
+        XCTAssertEqual(list.value as? String, "\(columns)", "Friends is a 1-column people list")
+        attach(app, name: name)
+        attach(app, name: "friends-town-\(width)")
+        terminate(app)
     }
 
     @MainActor
@@ -113,7 +172,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertFalse(app.textFields["friends.invite"].exists)
             XCTAssertFalse(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'friends.save.' OR identifier BEGINSWITH 'friends.rate.'")).firstMatch.exists)
             XCTAssertLessThan(title.frame.maxY, rootTabButton("Friends", app: app).frame.minY)
-            attach(app, name: "friends-coming-soon-\(language)")
+            attach(app, name: "friends-empty-\(language)")
             let findFriends = app.buttons["friends.findFriends"]
             XCTAssertTrue(findFriends.isHittable)
             XCTAssertEqual(findFriends.label, language == "en" ? "Find friends" : "追蹤朋友")
@@ -137,6 +196,51 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             attach(app, name: "passport-shared-ratings-\(language)")
             app.buttons["profile.sharedRatings.done"].tap()
             XCTAssertTrue(emptyRatings.waitForNonExistence(timeout: stepTimeout))
+            terminate(app)
+        }
+
+        let dynamicType = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+            "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+            "--uitest-repair-review-demo-seed",
+            "-save.appLanguage", "en",
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(dynamicType)
+        try signInViaReviewDemoRequired(app: dynamicType)
+        XCTAssertTrue(dynamicType.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        openRootTab("Friends", app: dynamicType)
+        XCTAssertTrue(dynamicType.staticTexts["friends.empty"].waitForExistence(timeout: stepTimeout))
+        attach(dynamicType, name: "friends-dynamic-type-xxxl")
+        let widthNote = XCTAttachment(string: "friends.window.width=\(dynamicType.windows.firstMatch.frame.width)")
+        widthNote.name = "friends-window-width"
+        widthNote.lifetime = .keepAlways
+        add(widthNote)
+        terminate(dynamicType)
+
+        for (name, flag) in [
+            ("friends-loading", "--uitest-friends-loading"),
+            ("friends-error", "--uitest-friends-error"),
+        ] {
+            let app = makeApp(launchArguments: [
+                "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+                "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
+                "--uitest-repair-review-demo-seed", flag,
+                "-save.appLanguage", "en",
+            ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+            launch(app)
+            try signInViaReviewDemoRequired(app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+            openRootTab("Friends", app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
+            if name == "friends-loading" {
+                XCTAssertTrue(app.descendants(matching: .any)["friends.loading"].waitForExistence(timeout: stepTimeout))
+            }
+            if name == "friends-error" {
+                XCTAssertTrue(app.descendants(matching: .any)["posts.error"].waitForExistence(timeout: stepTimeout))
+                XCTAssertTrue(app.buttons["friends.retry"].waitForExistence(timeout: stepTimeout))
+            }
+            attach(app, name: name)
             terminate(app)
         }
     }
@@ -1125,8 +1229,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         attach(app, name: "atlas-map")
 
         openRootTab("Friends", app: app)
-        XCTAssertTrue(app.descendants(matching: .any)["friends.mapStrip"].waitForExistence(timeout: stepTimeout))
-        attach(app, name: "atlas-friends-town")
+        XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["friends.list"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.descendants(matching: .any)["friends.author.mia"].waitForExistence(timeout: stepTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["friends.mapStrip"].exists)
+        // Live Friends raster for the 0.90 gate. Codex packet §7.4.
+        attach(app, name: "five-tab-friends")
+        attach(app, name: "atlas-friends")
     }
 
     /// Root navigation includes Friends and keeps Plan as a child route.
@@ -1179,7 +1288,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.staticTexts["friends.empty"].waitForExistence(timeout: stepTimeout))
         XCTAssertEqual(app.staticTexts["friends.empty"].label, "Their next place could be yours")
         XCTAssertFalse(app.textFields["friends.invite"].exists)
-        attach(app, name: "five-tab-friends-coming-soon")
+        XCTAssertFalse(app.descendants(matching: .any)["friends.mapStrip"].exists)
+        attach(app, name: "five-tab-friends-empty")
 
         openRootTab("Map", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
@@ -1269,6 +1379,412 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected, "Capture cancellation returns to Passport")
     }
 
+    /// Founder lock: paywall parity target is the Doodle v1 mock at 0.90.
+    /// Purchasing is off, so the wall is forced with `--uitest-show-paywall`.
+    @MainActor
+    func testDoodlePaywallParity() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout),
+            "Doodle paywall must present as a full-screen modal for the 0.90 gate."
+        )
+        XCTAssertFalse(rootTabButton("Home", app: app).exists, "Paywall is a full-screen modal with no tab bar")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["paywall.benefit.unlimited"].waitForExistence(timeout: stepTimeout),
+            "The one benefit row must stay queryable after official noodle/coffee plan stickers."
+        )
+        XCTAssertEqual(app.descendants(matching: .any)["paywall.root"].value as? String, "settings")
+        XCTAssertFalse(app.staticTexts["Upgrade to Savvy Pro"].exists)
+        XCTAssertFalse(app.staticTexts["Pro isn't on sale yet"].exists)
+        XCTAssertFalse(app.staticTexts["You've saved 50 places. Keep going."].exists)
+        XCTAssertFalse(app.staticTexts["Plan trips from your saves"].exists)
+        XCTAssertFalse(app.staticTexts["Bonus sticker packs"].exists)
+
+        let capApp = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(capApp)
+        try signInViaReviewDemoRequired(app: capApp)
+        XCTAssertTrue(
+            capApp.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout),
+            "The 51st-save entry must open the same places-only wall."
+        )
+        XCTAssertEqual(capApp.descendants(matching: .any)["paywall.root"].value as? String, "savedPlacesCap")
+        let savedNote = capApp.descendants(matching: .any)["paywall.savedNote"]
+        XCTAssertTrue(savedNote.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(savedNote.label, "You've saved 50 places. Keep going.")
+        XCTAssertTrue(capApp.staticTexts["You've saved 50 places. Keep going."].exists)
+        XCTAssertFalse(capApp.staticTexts["Upgrade to Savvy Pro"].exists)
+        XCTAssertFalse(capApp.staticTexts["Pro isn't on sale yet"].exists)
+        XCTAssertFalse(rootTabButton("Home", app: capApp).exists)
+        attach(capApp, name: "five-tab-paywall")
+        attach(capApp, name: "doodle-paywall-light")
+        attach(capApp, name: "pr295-paywall-light")
+        attach(capApp, name: "pr295-paywall-cap-light")
+
+        let zh = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "-save.appLanguage", "zh-Hant",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(zh)
+        try signInViaReviewDemoRequired(app: zh)
+        XCTAssertTrue(zh.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(zh.staticTexts["已存 50 個地點，繼續存下去"].waitForExistence(timeout: stepTimeout))
+        attach(zh, name: "pr295-paywall-zh-hant-light")
+    }
+
+    @MainActor
+    func testAIQuotaExhaustedStaysOffThePaywall() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-ai-quota-exhausted",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.root"].exists)
+
+        let capture = rootTabButton("Save", app: app)
+        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
+        capture.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["ai.quotaExhausted"].waitForExistence(timeout: stepTimeout),
+            "Exhausted AI assist must show a neutral message on the assist surface."
+        )
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.root"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["paywall.savedNote"].exists)
+        XCTAssertFalse(app.buttons["paywall.retry"].exists)
+    }
+
+    /// Capture sheet over the Doodle Home map, matching the DESIGN mock.
+
+    /// Capture sheet over the Doodle Home map, matching the DESIGN mock.
+    @MainActor
+    func testDoodleCaptureParity() throws {
+        let app = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        waitForHomeCoverImagery(app)
+        XCTAssertFalse(app.descendants(matching: .any)["home.locationPrompt"].exists)
+        let capture = rootTabButton("Save", app: app)
+        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
+        capture.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "five-tab-capture")
+        attach(app, name: "doodle-capture-light")
+        attach(app, name: "pr295-capture-light")
+        XCTAssertFalse(app.descendants(matching: .any)["capture.suggestion"].exists)
+        let draft = app.textViews["capture.input"]
+        XCTAssertTrue(draft.waitForExistence(timeout: stepTimeout))
+        draft.tap()
+        draft.typeText("Fangzhuangchang Noodles")
+        attach(app, name: "pr295-capture-filled-light")
+        let nearby = app.buttons["capture.searchNearby"]
+        XCTAssertTrue(nearby.isHittable)
+        XCTAssertGreaterThanOrEqual(nearby.frame.height, 44)
+        nearby.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["capture.flow"].waitForNonExistence(timeout: stepTimeout))
+        XCTAssertTrue(app.textFields["map.search.input"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(rootTabButton("Map", app: app).isSelected)
+        attach(app, name: "doodle-capture-nearby-search")
+
+        let zh = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
+                "-save.appLanguage", "zh-Hant",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(zh)
+        try signInViaReviewDemoRequired(app: zh)
+        XCTAssertTrue(zh.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let zhSave = rootTabButton("Save", app: zh)
+        XCTAssertTrue(zhSave.waitForExistence(timeout: stepTimeout))
+        zhSave.tap()
+        XCTAssertTrue(zh.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(zh, name: "pr295-capture-zh-hant-light")
+    }
+
+    /// Warm-dark Capture sheet and Pro paywall for the founder compare rail.
+
+    /// Warm-dark Capture sheet and Pro paywall for the founder compare rail.
+    @MainActor
+    func testDoodleCapturePaywallDarkParity() throws {
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        XCUIDevice.shared.appearance = .dark
+        let captureApp = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(captureApp)
+        try signInViaReviewDemoRequired(app: captureApp)
+        XCTAssertTrue(captureApp.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let capture = rootTabButton("Save", app: captureApp)
+        XCTAssertTrue(capture.waitForExistence(timeout: stepTimeout))
+        capture.tap()
+        XCTAssertTrue(captureApp.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(captureApp, name: "doodle-capture-dark")
+        attach(captureApp, name: "pr295-capture-dark")
+        captureApp.buttons["Close capture"].tap()
+
+        let paywallApp = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(paywallApp)
+        try signInViaReviewDemoRequired(app: paywallApp)
+        XCTAssertTrue(
+            paywallApp.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout)
+        )
+        attach(paywallApp, name: "doodle-paywall-dark")
+        attach(paywallApp, name: "pr295-paywall-dark")
+    }
+
+    /// QA evidence for #295: paywall with large Dynamic Type on the CI
+    /// iPhone. Compact-height SE shots are captured by `testPR295SEEvidence`.
+
+    /// QA evidence for #295: paywall with large Dynamic Type on the CI
+    /// iPhone. Compact-height SE shots are captured by `testPR295SEEvidence`.
+    @MainActor
+    func testPR295PaywallLargeTypeEvidence() throws {
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        let light = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(light)
+        try signInViaReviewDemoRequired(app: light)
+        XCTAssertTrue(light.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(light.descendants(matching: .any)["paywall.scroll"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(light.staticTexts["You've saved 50 places. Keep going."].waitForExistence(timeout: stepTimeout))
+        attach(light, name: "pr295-paywall-large-type-light")
+
+        XCUIDevice.shared.appearance = .dark
+        let dark = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(dark)
+        try signInViaReviewDemoRequired(app: dark)
+        XCTAssertTrue(dark.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        attach(dark, name: "pr295-paywall-large-type-dark")
+    }
+
+    /// QA evidence for #295: capture sheet and paywall on iPhone SE.
+    /// The dedicated iOS workflow step boots the SE simulator for this test.
+
+    /// QA evidence for #295: capture sheet and paywall on iPhone SE.
+    /// The dedicated iOS workflow step boots the SE simulator for this test.
+    @MainActor
+    func testPR295SEEvidence() throws {
+        addTeardownBlock {
+            XCUIDevice.shared.appearance = .light
+        }
+        let capture = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(capture)
+        try signInViaReviewDemoRequired(app: capture)
+        XCTAssertTrue(capture.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let saveTab = rootTabButton("Save", app: capture)
+        XCTAssertTrue(saveTab.waitForExistence(timeout: stepTimeout))
+        saveTab.tap()
+        XCTAssertTrue(capture.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(capture, name: "pr295-capture-se-light")
+        capture.buttons["Close capture"].tap()
+
+        let paywall = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(paywall)
+        try signInViaReviewDemoRequired(app: paywall)
+        XCTAssertTrue(paywall.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        XCTAssertTrue(paywall.descendants(matching: .any)["paywall.scroll"].waitForExistence(timeout: stepTimeout))
+        attach(paywall, name: "pr295-paywall-se-light")
+
+        XCUIDevice.shared.appearance = .dark
+        let captureDark = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-doodle-parity-face",
+                "--uitest-location-allowed",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(captureDark)
+        try signInViaReviewDemoRequired(app: captureDark)
+        XCTAssertTrue(captureDark.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        let saveDark = rootTabButton("Save", app: captureDark)
+        XCTAssertTrue(saveDark.waitForExistence(timeout: stepTimeout))
+        saveDark.tap()
+        XCTAssertTrue(captureDark.descendants(matching: .any)["capture.flow"].waitForExistence(timeout: stepTimeout))
+        attach(captureDark, name: "pr295-capture-se-dark")
+
+        let paywallDark = makeApp(
+            launchArguments: [
+                "--uitest-complete-onboarding",
+                "--skip-map-tour",
+                "--uitest-location-denied",
+                "--uitest-repair-review-demo-seed",
+                "--uitest-review-demo-offline",
+                "--uitest-reset-review-demo-storage",
+                "--uitest-show-paywall-cap",
+                "--uitest-force-dark",
+                "-AppleInterfaceStyle", "Dark",
+                "-save.appLanguage", "en",
+            ],
+            launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString]
+        )
+        launch(paywallDark)
+        try signInViaReviewDemoRequired(app: paywallDark)
+        XCTAssertTrue(paywallDark.descendants(matching: .any)["paywall.root"].waitForExistence(timeout: launchTimeout))
+        attach(paywallDark, name: "pr295-paywall-se-dark")
+    }
+
+    /// H1–H4: Codex packet / spec §8 faces (light EN, dark EN, light
+    /// zh-Hant, dark zh-Hant). DESIGN judges these rasters manually; the
+    /// 0.90 score is not evidence. Warm dark tokens from spec §1 must
+    /// paint Home and Passport once Light is unlocked.
+    /// Appearance is forced before launch (`-AppleInterfaceStyle`, `--uitest-force-*`,
+    /// and `XCUIDevice.appearance`). Background pixels must be near #1E1C19 / #FFF9EB.
+    /// Attachment names stay off the production-parity set (`five-tab-*`, `atlas-*`).
+
     /// Warm-dark appearance aliases. These four rasters are all H2
     /// (location denied + waiting clues) in en/zh × light/dark — not
     /// spec §8.1 product states. Names stay `H2-*` so DESIGN does not
@@ -1289,6 +1805,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             forceArgument: "--uitest-force-dark",
             language: "en",
             homeName: "dark-home",
+            friendsName: "dark-friends",
             passportName: "dark-passport",
             referenceName: "H2-en-dark",
             expectedRed: 0x1E,
@@ -1301,6 +1818,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             forceArgument: "--uitest-force-light",
             language: "en",
             homeName: "light-home",
+            friendsName: "light-friends",
             passportName: "light-passport",
             referenceName: "H2-en-light",
             expectedRed: 0xFF,
@@ -1313,6 +1831,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             forceArgument: "--uitest-force-light",
             language: "zh-Hant",
             homeName: "light-home-zh",
+            friendsName: "light-friends-zh",
             passportName: "light-passport-zh",
             referenceName: "H2-zh-light",
             expectedRed: 0xFF,
@@ -1325,6 +1844,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             forceArgument: "--uitest-force-dark",
             language: "zh-Hant",
             homeName: "dark-home-zh",
+            friendsName: "dark-friends-zh",
             passportName: "dark-passport-zh",
             referenceName: "H2-zh-dark",
             expectedRed: 0x1E,
@@ -1412,6 +1932,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         forceArgument: String,
         language: String = "en",
         homeName: String,
+        friendsName: String? = nil,
         passportName: String,
         referenceName: String? = nil,
         expectedRed: Int,
@@ -1427,6 +1948,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-repair-review-demo-seed",
                 "--uitest-review-demo-offline", "--uitest-reset-review-demo-storage",
                 "--uitest-home-memory-fixture",
+                "--uitest-friends-town",
                 "-save.appLanguage", language,
                 "-AppleInterfaceStyle", appleInterfaceStyle,
                 forceArgument,
@@ -1453,6 +1975,21 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             blue: expectedBlue,
             name: homeName
         )
+
+        if let friendsName {
+            openRootTab("Friends", app: app)
+            XCTAssertTrue(app.descendants(matching: .any)["friends.root"].waitForExistence(timeout: stepTimeout))
+            XCTAssertTrue(app.descendants(matching: .any)["friends.author.mia"].waitForExistence(timeout: stepTimeout))
+            let friendsShot = app.screenshot()
+            attach(app, name: friendsName)
+            assertScreenshotBackground(
+                friendsShot,
+                nearRed: expectedRed,
+                green: expectedGreen,
+                blue: expectedBlue,
+                name: friendsName
+            )
+        }
 
         openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
@@ -4007,6 +4544,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         if attachM1 {
             attach(app, name: "M1")
         }
+        let unsavedPin = app.buttons["map.unsaved.uitest-unsaved-taipei"]
+        if !unsavedPin.waitForExistence(timeout: timeout(1)) {
+            // The selected saved stamp starts centered; the candidate is east
+            // of the viewport. Pan it into view without clearing search results.
+            let map = app.maps.firstMatch
+            map.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.45))
+                .press(forDuration: 0.1, thenDragTo: map.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.45)))
+        }
+        XCTAssertTrue(unsavedPin.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(unsavedPin.isHittable, "Unsaved native MapKit marker must receive taps")
+        unsavedPin.tap()
+        XCTAssertTrue(app.buttons["drawer.unsaved.primaryAction"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "map-unsaved-marker-receipt-\(language)")
         terminate(app)
     }
 
@@ -4015,6 +4565,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// 0.90. Capture that raster from the Codex Tiantan
     /// fixture at the Tiantan fix; a denied-location Taipei Home is a
     /// different state and scores ~0.66. Do not retune the gate script here.
+    /// Friends `five-tab-friends` is a real 0.90 gate against
+    /// `ProductionTargets/friends.png`. Home deferral on #290 does not
+    /// apply to Friends. Codex packet §7.4 remains the people-first layout
+    /// reference.
     @MainActor
     private func captureFiveTabHomeParityRaster() throws {
         let app = makeApp(

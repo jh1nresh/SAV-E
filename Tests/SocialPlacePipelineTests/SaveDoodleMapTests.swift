@@ -476,9 +476,28 @@ final class SaveDoodleMapTests: XCTestCase {
             mapViewModel: MapViewModel(usesRemotePersistence: false),
             isExactSearchSessionActive: false,
             exactSearchClueID: nil,
-            restoreResolution: {}
+            restoreResolution: {},
+            isCurrentRequest: { true }
         )
         XCTAssertEqual(idle, .openStamp(stamp.id))
+
+        let mismatched = await SaveDoodleMapPeekOpen.perform(
+            place: stamp, mapViewModel: map,
+            isExactSearchSessionActive: true, exactSearchClueID: UUID(),
+            restoreResolution: {}, isCurrentRequest: { true }
+        )
+        XCTAssertEqual(mismatched, .stayOnSearch)
+        XCTAssertEqual(map.activeExactSearchClueID, clue.id)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+
+        let cancelled = await SaveDoodleMapPeekOpen.perform(
+            place: stamp, mapViewModel: map,
+            isExactSearchSessionActive: true, exactSearchClueID: clue.id,
+            restoreResolution: { XCTFail("A stale tap must not restore a session") },
+            isCurrentRequest: { false }
+        )
+        XCTAssertEqual(cancelled, .stayOnSearch)
+        XCTAssertEqual(map.activeExactSearchClueID, clue.id)
 
         var restored = 0
         let outcome = await SaveDoodleMapPeekOpen.perform(
@@ -486,7 +505,8 @@ final class SaveDoodleMapTests: XCTestCase {
             mapViewModel: map,
             isExactSearchSessionActive: true,
             exactSearchClueID: clue.id,
-            restoreResolution: { restored += 1 }
+            restoreResolution: { restored += 1 },
+            isCurrentRequest: { true }
         )
         XCTAssertGreaterThan(restored, 0)
         XCTAssertEqual(outcome, .resolvedStamp(stamp.id))

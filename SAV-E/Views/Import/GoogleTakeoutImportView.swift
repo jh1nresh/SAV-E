@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct GoogleTakeoutImportView: View {
     let existingPlaces: [Place]
     let onSave: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary
+    var onClose: (() -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var isFileImporterPresented = false
@@ -18,69 +19,74 @@ struct GoogleTakeoutImportView: View {
     private let importService = GoogleTakeoutImportService.shared
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                SaveDottedBackground().ignoresSafeArea()
+        ZStack {
+            SaveDottedBackground().ignoresSafeArea()
 
-                VStack(spacing: 0) {
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 18) {
-                            postalHeader
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        postalHeader
 
-                            if let result {
-                                preview(result)
-                            } else {
-                                emptyState
-                            }
+                        if let result {
+                            preview(result)
+                        } else {
+                            emptyState
                         }
-                        .padding(.horizontal, 18)
-                        .padding(.top, 18)
-                        .padding(.bottom, result == nil ? 36 : 18)
                     }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 18)
+                    .padding(.bottom, result == nil ? 36 : 18)
+                }
 
-                    if let result {
-                        saveBar(result)
-                    }
+                if let result {
+                    saveBar(result)
+                } else {
+                    chooseFileBar
                 }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") {
-                        SaveHaptics.tap()
-                        dismiss()
-                    }
-                    .font(SaveAtlasType.strong(15))
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        SaveHaptics.tap()
-                        isFileImporterPresented = true
-                    } label: {
-                        Image(systemName: "folder.badge.plus")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(SaveAtlasPalette.ink)
-                            .frame(width: 38, height: 38)
-                            .background(SaveAtlasPalette.mint, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                                    .stroke(SaveAtlasPalette.forest.opacity(0.26), lineWidth: 1)
-                            }
-                    }
-                    .disabled(isParsing || isSaving)
-                    .accessibilityIdentifier("takeout.import.folder")
-                }
-            }
-            .toolbarBackground(SaveAtlasPalette.canvas.opacity(0.96), for: .navigationBar)
-            .fileImporter(
-                isPresented: $isFileImporterPresented,
-                allowedContentTypes: allowedContentTypes,
-                allowsMultipleSelection: false
-            ) { response in
-                Task { await handleFileImporter(response) }
             }
         }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("Close") {
+                    SaveHaptics.tap()
+                    if let onClose {
+                        onClose()
+                    } else {
+                        dismiss()
+                    }
+                }
+                .font(SaveAtlasType.strong(15))
+                .foregroundStyle(SaveAtlasPalette.forest)
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    SaveHaptics.tap()
+                    isFileImporterPresented = true
+                } label: {
+                    Image(systemName: "folder.badge.plus")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .frame(width: 38, height: 38)
+                        .background(SaveAtlasPalette.mint, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                                .stroke(SaveAtlasPalette.forest.opacity(0.26), lineWidth: 1)
+                        }
+                }
+                .disabled(isParsing || isSaving)
+                .accessibilityIdentifier("takeout.import.folder")
+            }
+        }
+        .toolbarBackground(SaveAtlasPalette.canvas.opacity(0.96), for: .navigationBar)
+        .fileImporter(
+            isPresented: $isFileImporterPresented,
+            allowedContentTypes: allowedContentTypes,
+            allowsMultipleSelection: false
+        ) { response in
+            Task { await handleFileImporter(response) }
+        }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("takeout.import.root")
     }
 
@@ -139,28 +145,6 @@ struct GoogleTakeoutImportView: View {
                     .foregroundStyle(SaveAtlasPalette.muted)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-
-                Button {
-                    SaveHaptics.tap()
-                    isFileImporterPresented = true
-                } label: {
-                    HStack(spacing: 9) {
-                        if isParsing {
-                            ProgressView().tint(.white)
-                        } else {
-                            Image(systemName: "doc.badge.plus")
-                        }
-                        Text(isParsing ? "Reading export…" : "Choose delivery file")
-                    }
-                    .font(SaveAtlasType.strong(17))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(minHeight: 52)
-                    .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .disabled(isParsing)
-                .accessibilityIdentifier("takeout.import.chooseFile")
             }
             .padding(22)
             .background {
@@ -409,6 +393,48 @@ struct GoogleTakeoutImportView: View {
         .buttonStyle(.plain)
         .disabled(!selectable)
         .accessibilityIdentifier("takeout.import.draft.\(draft.id.uuidString)")
+    }
+
+    /// Pinned empty-state chrome. The in-card CTA sat below the sheet fold,
+    /// so XCTest and humans saw Postal Import with no file picker. Keep the
+    /// in-sheet swap; do not remount this view.
+    private var chooseFileBar: some View {
+        VStack(spacing: 0) {
+            Button {
+                SaveHaptics.tap()
+                isFileImporterPresented = true
+            } label: {
+                HStack(spacing: 9) {
+                    if isParsing {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "doc.badge.plus")
+                    }
+                    Text(isParsing ? "Reading export…" : "Choose delivery file")
+                }
+                .font(SaveAtlasType.strong(17))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 52)
+                .background(
+                    SaveAtlasPalette.coral,
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isParsing)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel("Choose delivery file")
+            .accessibilityIdentifier("takeout.import.chooseFile")
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(SaveAtlasPalette.canvas.opacity(0.98))
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(SaveAtlasPalette.line.opacity(0.28))
+                .frame(height: 1)
+        }
     }
 
     private func saveBar(_ result: GoogleTakeoutImportResult) -> some View {

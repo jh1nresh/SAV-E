@@ -32,15 +32,26 @@ enum SaveDoodleMapPeekOpen {
         mapViewModel: MapViewModel,
         isExactSearchSessionActive: Bool,
         exactSearchClueID: UUID?,
-        restoreResolution: () -> Void
+        restoreResolution: () -> Void,
+        isCurrentRequest: () -> Bool
     ) async -> Outcome {
+        guard isCurrentRequest() else { return .stayOnSearch }
         restoreResolution()
         let shouldResolve = isExactSearchSessionActive
             || mapViewModel.hasActiveExactSearchResolution
             || exactSearchClueID != nil
         guard shouldResolve else { return .openStamp(place.id) }
         restoreResolution()
-        if let resolved = await mapViewModel.chooseSavedStampFromExactSearch(place) {
+        if let exactSearchClueID,
+           let activeID = mapViewModel.activeExactSearchClueID,
+           activeID != exactSearchClueID {
+            return .stayOnSearch
+        }
+        let resolved = await mapViewModel.chooseSavedStampFromExactSearch(place)
+        // Persistence may finish after the user closes or replaces this search.
+        // Never let its completion navigate or clear the new UI session.
+        guard isCurrentRequest() else { return .stayOnSearch }
+        if let resolved {
             return .resolvedStamp(resolved.id)
         }
         return .stayOnSearch
@@ -1020,7 +1031,7 @@ struct SaveDoodleCoralPin: View {
 }
 
 /// HoP 298-2: numbered coral lollipop. Fill stays solid when selected.
-struct SaveDoodleLollipopShape: Shape {
+nonisolated struct SaveDoodleLollipopShape: Shape {
     func path(in rect: CGRect) -> Path {
         let stemWidth = max(2.5, rect.width * 0.14)
         let stemHeight = max(8, rect.height * 0.28)

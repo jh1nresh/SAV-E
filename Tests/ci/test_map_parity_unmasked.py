@@ -37,13 +37,19 @@ class MapParityUnmaskedTests(unittest.TestCase):
                 "edgeF1": 0.9,
                 "appearanceSimilarity": 0.95,
                 "passed": True,
+                "ignoredTopRows": 48,
+                "ignoreRects": [],
+                "ignoreMask": None,
             },
             mask=(0, 0, 0, 0),
             mask_image=None,
             no_mask=True,
             side_by_side="side-by-side.png",
         )
-        self.assertEqual(report["mask"], {"coverage": "full-frame"})
+        self.assertEqual(report["mask"], {"coverage": "no-map-mask"})
+        self.assertEqual(report["ignoredTopRows"], 48)
+        self.assertEqual(report["ignoreRects"], [])
+        self.assertIsNone(report["ignoreMask"])
         self.assertNotIn("maskReason", report)
         self.assertEqual(report["threshold"], 0.90)
         self.assertNotIn("map masked", json.dumps(report))

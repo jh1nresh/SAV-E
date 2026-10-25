@@ -11,7 +11,7 @@
 > Home hero is withdrawn. Product Map is default Apple MapKit with Doodle
 > chrome (`SaveDoodleMapView`). **Soft Pixel** is accents-only on remaining
 > town surfaces (pins / seals / Memo). **Cream-notebook** tokens are
-> legacy-surface-only.> See "Tile Town", "Atlas Postcard Tokens", and "Legacy Cream-Notebook
+> legacy-surface-only. See "Tile Town", "Atlas Postcard Tokens", and "Legacy Cream-Notebook
 > Tokens" below.
 
 ## Product Frame
@@ -118,14 +118,13 @@ product Map used a full-pixel tile-town base. Soft Pixel accents-only on
 MapKit (H1/M1 from 2026-10-13 / PRs #277–#278) is **superseded for the map base**.
 Do not silent-partial Soft Pixel: a MapKit atlas with pixel pins is not the lock.
 Founder 2026-10-20 abandoned tile-town on Home; product Map now ships
-`SaveDoodleMapView` (default Apple MapKit + Doodle chrome). Friends may
-still show a leftover town peek.
+`SaveDoodleMapView` (default Apple MapKit + Doodle chrome). Friends (`SaveFriendsView`) is a doodle people list; the shared map stays hidden.
 
 Rules:
 
 - Product Map tab (`SaveDoodleMapView`) renders default Apple MapKit with Doodle chrome.
-  Home (`SaveDoodleHomeView`) is the Doodle nearby list + mini-map, not a
-  tile-town peek. Friends may still show a small peek strip of the town.- Tile-town is a memory map. Pins hash to village lots. It does not silently
+  Home (`SaveDoodleHomeView`) is the Doodle Eat/Go list only (no map). Friends (`SaveFriendsView`) is a doodle people list; the shared map stays hidden.
+- Tile-town is a memory map. Pins hash to village lots. It does not silently
   confirm places and it does not invent GPS truth. Navigate / Trip maps may
   still hand off to MapKit or Apple Maps.
 - Nearby / Saved / Friends filter chips live on **Map only**. Home must not
@@ -394,7 +393,8 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 
 | Surface | System |
 | --- | --- |
-| Home (`SaveDoodleHomeView`) | Doodle Eat/Go list only (no map) || Saves drawer + search results | Atlas |
+| Home (`SaveDoodleHomeView`) | Doodle Eat/Go list only (no map) |
+| Saves drawer + search results | Atlas |
 | Plan (`SavePlanView`) | Atlas |
 | Trips (`TripPackViews`) | Atlas |
 | Map shell and drawer panel (`SaveDoodleMapView`, `SaveMapDrawerPanel`) | Default Apple MapKit + Doodle chrome |
@@ -402,7 +402,7 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 | Onboarding | Atlas |
 | Google Takeout import | Atlas (some legacy tokens remain inline) |
 | Passport (`ProfileView`, `StatsView`, pet companion card chrome) | Atlas |
-| Friends (`SaveFriendsView`) | Atlas |
+| Friends (`SaveFriendsView`) | Doodle people list (shared map hidden) |
 | `CategoryPill`, `EmptyStateView`, `RelatedPlaceSourcesPanel` | Atlas |
 | Brand accents: pet preset colors (Spark = honey), stamp moment ripple, `SaveMemoryBadge` stamp palette, `MemoMascotMark` | Intentional — do not recolor in migrations |
 | App Clip shared place, trip, and list previews | Atlas |
@@ -759,6 +759,27 @@ at `eade369` (exact 402×874; `home-dark.png`) is archive only. v1 is
 retired. Home and Map still fail CI below 0.90; do not apply
 `map-mask.png` to the Map score.
 
+### Capture and Pro factual state
+
+Capture's photo action opens the system photo picker and reads text locally.
+The extracted text is editable and is only analyzed after the user taps Save;
+a photo never creates a confirmed Map Stamp directly. Empty or unreadable
+photos show an actionable error. Existing draft text is preserved.
+Search nearby opens the Map search drawer. It does not leave the user typing
+in Capture. Before analysis, Capture shows no invented suggestion from old
+saves. Its saved count is the actual count, without a fabricated 50-place cap.
+Pro retains the current modal layout. Settings / Passport open the same
+wall without an extra "Upgrade" or "not on sale" line. The 51st-save
+trigger uses "You've saved 50 places. Keep going." / "已存 50 個地點，繼續存下去".
+StoreKit prices come from the `SAVEPro.storekit` test catalog in DEBUG /
+UI tests and from App Store Connect once products are live; a failed load
+shows retry, never a hardcoded $6.99. An exhausted AI assist never opens
+this wall; the assist surface shows a neutral `ai.quotaExhausted` message
+instead. Product navigation does not mount TileTown Home, RootMap, or Canvas.
+The 200pt hero is the colored hand-drawn park (official color stickers
+plus a pencil). Do not use SF Symbols inside filled circles as place
+stickers.
+
 ### Sign-In
 
 First impression:
@@ -810,7 +831,8 @@ Rules:
   Unsaved places keep native Apple Markers. Pin count equals Home list
   rows under the same filters; pin numbers do not have to match the Home
   list. Map Eat/Go (`map.eat` / `map.go`) and city (`map.city`) write the
-  same session Home reads.- The town canvas pans with a drag. Pin tap selects the kraft peek card.
+  same session Home reads.
+- The town canvas pans with a drag. Pin tap selects the kraft peek card.
 - Drawer search (collapsed capsule) still opens the parked search panel.
   Category, Want to try, Visited, and Nearby-distance chips may remain in
   the drawer as Map Stamp lenses; they are not Home chrome.
@@ -952,10 +974,16 @@ source clues or visit timestamps appear in post projections.
 ### Friends
 
 Home / Map / + / Friends / Passport remains the root bar. Friends is
-people-first: postage-seal avatars, author name, and “Last at …” for the
-latest explicit post. A small tile-town strip may sit under the list; it
-must not duplicate the full Map tab. An author opens a read-only passport
-under the same live follower audience gate.
+people-first doodle: Caveat / Iansui “Friends” / 「朋友」 title at 34pt
+(zh-Hant also Iansui), ink outline “Invite”, 48pt forest-ring avatars
+(initial or photo), author name 17 semibold, “last at Place · 2d” at 13,
+~57pt rows, and right-side 32pt doodle stickers
+(coffee / noodle / lantern / hill). The shared map stays hidden (HoP; cut in DESIGN v1 and kept).
+Stickers are outlined if the friend only saved the place, colored if they visited.
+The visual reference is Codex packet spec §7.4. Live `five-tab-friends`
+gates at 0.90 against `ProductionTargets/friends.png` with no mask.
+This surface has no animation (F-B11). An
+author opens a read-only passport under the same live follower audience gate.
 Loading, retry, empty and withdrawn states are explicit; sample activity exists
 only in isolated UI fixtures. A follow or private memory update never publishes.
 

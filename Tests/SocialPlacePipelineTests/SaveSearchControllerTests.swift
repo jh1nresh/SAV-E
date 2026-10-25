@@ -2867,6 +2867,68 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testPeekCompletionCannotOpenStampAfterSearchIsClosedOrReplaced() async throws {
+        for (replacesWithNewClue, failureMode) in [(false, 0), (true, 0), (false, 1), (true, 1), (false, 2), (true, 2)] {
+            let vaultURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("peek-stale-\(UUID().uuidString).json")
+            let eventsURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("peek-stale-events-\(UUID().uuidString).json")
+            defer {
+                try? FileManager.default.removeItem(at: vaultURL)
+                try? FileManager.default.removeItem(at: eventsURL)
+            }
+            let supabase = RecordingSupabaseService()
+            supabase.holdNextUpdatePlace()
+            if failureMode == 1 { supabase.updatePlaceError = NSError(domain: "peek-stale-write", code: 1) }
+            if failureMode == 2 { supabase.recordDecisionError = NSError(domain: "peek-stale-decision", code: 2) }
+            let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            let stamp = Self.correctionStamp()
+            _ = try vault.saveConfirmedPlace(stamp)
+            var clueA = Self.correctionClue(overlappingStamp: true)
+            clueA.workflowRunId = UUID()
+            let clueB = PlaceReviewCandidate(
+                id: UUID(), captureId: nil, workflowRunId: UUID(),
+                name: "Unrelated Bookshop", address: "Tokyo", city: "Tokyo",
+                latitude: nil, longitude: nil,
+                evidence: ["Source URL: https://example.com/independent-bookshop"],
+                confidence: 0.8, missingInfo: ["Exact coordinates"],
+                status: "review", createdAt: Date()
+            )
+            let map = MapViewModel(
+                supabaseService: supabase, saveLocalVaultService: vault,
+                correctionEventStore: SavePlaceCorrectionEventStore(overrideURL: eventsURL),
+                usesRemotePersistence: true
+            )
+            map.places = [stamp]
+            map.reviewCandidates = [clueA, clueB]
+            supabase.remoteReviewCandidates = [clueA, clueB]
+            map.beginExactSearchResolution(for: clueA)
+            var presentationID = UUID()
+            let launchID = presentationID
+            let pending = Task { await SaveDoodleMapPeekOpen.perform(
+                place: stamp, mapViewModel: map,
+                isExactSearchSessionActive: true, exactSearchClueID: clueA.id,
+                restoreResolution: {}, isCurrentRequest: { presentationID == launchID }
+            ) }
+            for _ in 0..<500 where supabase.updatePlaceStarted == 0 { await Task.yield() }
+            guard supabase.updatePlaceStarted == 1 else {
+                supabase.resumeHeldUpdatePlace()
+                pending.cancel()
+                XCTFail("Expected the actual merge write to suspend")
+                return
+            }
+            presentationID = UUID()
+            map.clearMapSearchResults()
+            if replacesWithNewClue { map.beginExactSearchResolution(for: clueB) }
+            supabase.resumeHeldUpdatePlace()
+            let outcome = await pending.value
+            XCTAssertEqual(outcome, .stayOnSearch)
+            XCTAssertTrue(map.reviewCandidates.contains { $0.id == clueB.id })
+            XCTAssertEqual(map.activeExactSearchClueID, replacesWithNewClue ? clueB.id : nil)
+        }
+    }
+
+    @MainActor
     func testExactSearchResolutionRestoresSessionWhenMergeWriteFails() async throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("exact-search-restore-session-\(UUID().uuidString).json")
@@ -2893,12 +2955,14 @@ final class SaveSearchControllerTests: XCTestCase {
         map.reviewCandidates = [clue]
         map.beginExactSearchResolution(for: clue)
 
-        do {
-            _ = try await map.resolveExactSearchClue(toSavedPlace: stamp)
-            XCTFail("Merge PATCH failure must surface")
-        } catch {
-            XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
-        }
+        let failed = await SaveDoodleMapPeekOpen.perform(
+            place: stamp, mapViewModel: map,
+            isExactSearchSessionActive: true, exactSearchClueID: clue.id,
+            restoreResolution: {}, isCurrentRequest: { true }
+        )
+        XCTAssertEqual(failed, .stayOnSearch, "A failed PATCH must not open a stamp")
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+        XCTAssertEqual(map.activeExactSearchClueID, clue.id)
 
         supabase.updatePlaceError = nil
         let resolved = try await map.resolveExactSearchClue(toSavedPlace: stamp)
@@ -3035,6 +3099,9 @@ final class SaveSearchControllerTests: XCTestCase {
         let local = try XCTUnwrap(map.places.first { $0.id == stamp.id })
         XCTAssertFalse(local.sourceEvidence.contains("Original source note"))
 
+        let replacementClue = Self.correctionClue(overlappingStamp: false)
+        map.beginExactSearchResolution(for: replacementClue)
+        XCTAssertEqual(map.activeExactSearchClueID, clue.id, "Failed compensation must retain its original recovery lock")
         var other = Self.correctionStamp()
         other.name = "Other Harbor Stamp"
         let secondOpened = await map.chooseSavedStampFromExactSearch(other)
@@ -7080,6 +7147,8 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertFalse(content.contains("onClose: collapseMapPanel"))
         XCTAssertTrue(drawer.contains("onClearMapSearchResults(true)"))
         XCTAssertTrue(drawer.contains("onClearMapSearchResults(false)"))
+        XCTAssertTrue(mapModel.contains("removeReviewCandidateAfterRemoteConfirm"))
+        XCTAssertTrue(mapModel.contains("Unplaced cleanup must succeed"))
         XCTAssertTrue(mapModel.contains("retireResolvedReviewClue"))
         XCTAssertFalse(mapModel.contains("retireSameNameReviewClues"))
         XCTAssertTrue(content.contains("mapDrawerPresentedActionError"))
