@@ -72,12 +72,35 @@ FULL = list(BASELINE) + [
     RAIL + "testSavesTripsBackReturnsToSaves",
     RAIL + "testHomeDesignProductStates",
     RAIL + "testHomeShowOnMapFocusesPlace",
-    RAIL + "testHomeHintCountEvidence",
     RAIL + "testHomeTaipeiGrantedDistances",
-    RAIL + "testHomeTPEAEvidence",
     RAIL + "testHopU1SavedPlaceLimitPaywallShowsSavedFiftyWithoutManMan",
     RAIL + "testMapSavedUnsavedVisitedTaipeiFixture",
 ]
+
+# ~10 minutes each on macos-26 (RCA: HintCount 415–567s, TPEA 587–607s).
+# Keep the tests and screenshot flow; only run them on nightly schedule or
+# workflow_dispatch. PR and main-push full coverage omit them so the
+# required ios job stays inside the 160-minute wall.
+EVIDENCE = [
+    RAIL + "testHomeHintCountEvidence",
+    RAIL + "testHomeTPEAEvidence",
+]
+
+
+def include_nightly_evidence():
+    """Home Evidence rails are schedule / workflow_dispatch only."""
+    return os.environ.get("GITHUB_EVENT_NAME", "") in (
+        "schedule",
+        "workflow_dispatch",
+    )
+
+
+def full_tests():
+    tests = list(FULL)
+    if include_nightly_evidence():
+        tests += EVIDENCE
+    return tests
+
 
 # Temporary #279 iteration profiles. Empty SAVE_UI_TEST_FOCUS keeps default
 # selection. Never applied on main. Delete FOCUS_PROFILES + requested_focus()
@@ -112,7 +135,7 @@ def requested_focus():
 
 def select(paths, *, full=False):
     if full or not paths:
-        return result("full", FULL, trip=True)
+        return result("full", full_tests(), trip=True)
     surfaces = set()
     unit = False
     for path in paths:
