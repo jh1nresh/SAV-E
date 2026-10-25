@@ -7,16 +7,13 @@ struct SharedPostArtwork: View {
     var compact = false
     var body: some View {
         ZStack {
-            (post.status == .visited ? SaveAtlasPalette.mint : SaveAtlasPalette.kraft).opacity(0.65)
-            VStack(spacing: compact ? 8 : 18) {
-                Image(systemName: post.icon)
-                    .font(.system(size: compact ? 26 : 48, weight: .light))
-                if !compact {
-                    Text(post.address).font(SaveAtlasType.body(13)).lineLimit(2)
-                }
-            }
-            .foregroundStyle(SaveAtlasPalette.forest)
-            .padding(12)
+            SaveAtlasPalette.paper
+            SaveDoodleFriendSticker(
+                name: post.name,
+                category: post.category,
+                visited: SaveDoodleFriendSticker.showsColor(for: post.status)
+            )
+            .frame(width: compact ? 32 : 64, height: compact ? 32 : 64)
             if let count = post.photo_count, count > 0 {
                 if compact || count == 1 {
                     SharedPostPhoto(post: post, index: 0)
@@ -125,10 +122,10 @@ struct SharedPostsGrid: View {
             .pickerStyle(.segmented)
             .accessibilityIdentifier("posts.filter")
 
-            if store.isLoading && store.posts.isEmpty { ProgressView().padding() }
+            if store.isLoading && visiblePosts.isEmpty { ProgressView().padding() }
             if store.error != nil {
                 SocialLoadError()
-            } else if !store.isLoading && store.posts.isEmpty {
+            } else if !store.isLoading && visiblePosts.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "square.grid.3x3").font(.system(size: 30, weight: .light))
                     Text(language.localized(english: "No shared posts yet", traditionalChinese: "還沒有分享貼文"))
@@ -141,7 +138,7 @@ struct SharedPostsGrid: View {
                 .accessibilityIdentifier("posts.empty")
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 5, alignment: .top), count: textSize.isAccessibilitySize ? 2 : 3), spacing: 14) {
-                ForEach(store.posts) { post in
+                ForEach(visiblePosts) { post in
                     Button { onSelect(post) } label: {
                         VStack(alignment: .leading, spacing: 6) {
                             SharedPostArtwork(post: post, compact: true)
@@ -170,16 +167,50 @@ struct SharedPostsGrid: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.posts")
     }
+
+    private var visiblePosts: [SharedPlacePost] {
+        switch store.filter {
+        case .all: return store.posts
+        case .wantToGo: return store.posts.filter { $0.status == .wantToGo }
+        case .visited: return store.posts.filter { $0.status == .visited }
+        }
+    }
 }
 
 struct SocialLoadError: View {
+    var centered = false
+    var retryIdentifier = "posts.retry"
+    var onRetry: (() -> Void)? = nil
     @Environment(\.appLanguageSettings) private var language
+
     var body: some View {
-        Label(language.localized(english: "Couldn’t load sharing. Pull down to try again.", traditionalChinese: "暫時無法載入分享，下拉可重試。"), systemImage: "wifi.exclamationmark")
-            .font(SaveAtlasType.body(13)).foregroundStyle(SaveAtlasPalette.muted)
-            .padding().frame(maxWidth: .infinity, alignment: .leading)
-            .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 12))
-            .accessibilityIdentifier("posts.error")
+        VStack(spacing: SaveSpace.sm) {
+            Label(
+                language.localized(english: "Couldn’t load sharing. Pull down to try again.", traditionalChinese: "暫時無法載入分享，下拉可重試。"),
+                systemImage: "wifi.exclamationmark"
+            )
+            .font(SaveAtlasType.body(15))
+            .foregroundStyle(SaveAtlasPalette.ink)
+            .multilineTextAlignment(centered ? .center : .leading)
+            if let onRetry {
+                Button(action: onRetry) {
+                    Text(language.localized(english: "Retry", traditionalChinese: "重試"))
+                        .font(SaveAtlasType.strong(17))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .frame(minWidth: 120, minHeight: SaveLayout.minTap)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                                .stroke(SaveAtlasPalette.ink, lineWidth: 1)
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier(retryIdentifier)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
+        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityIdentifier("posts.error")
     }
 }
 

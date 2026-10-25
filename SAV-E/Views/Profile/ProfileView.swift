@@ -18,6 +18,10 @@ struct ProfileView: View {
     @State private var showLanguageSettings = false
     @State private var showTutorial = false
     @State private var showProPaywall = false
+    @ViewBuilder
+    private var settingsProPaywall: some View {
+        SaveProPaywallView(trigger: .settings)
+    }
     @State private var showDeleteAccountConfirmation = false
     @State private var draftDisplayName = ""
     @State private var draftAvatarData: Data?
@@ -469,7 +473,7 @@ struct ProfileView: View {
         .sheet(isPresented: $showLanguageSettings) {
             LanguageSettingsSheet()
         }
-        .sheet(isPresented: $showProPaywall) {
+        .fullScreenCover(isPresented: $showProPaywall) {
             SaveProPaywallView(trigger: .passport)
         }
         .confirmationDialog(

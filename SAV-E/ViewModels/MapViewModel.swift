@@ -892,6 +892,27 @@ final class MapViewModel: ObservableObject {
         return result
     }
 
+    /// HoP 298-10 screenshot fixture: one unsaved Taipei candidate next to
+    /// the shared H1/M1 saved+visited set. Production never sets this flag.
+    func seedUITestUnsavedCandidateIfNeeded() {
+#if DEBUG
+        guard ProcessInfo.processInfo.arguments.contains("--uitest-map-unsaved-candidate") else { return }
+        guard !mapCandidates.contains(where: { $0.id == "uitest-unsaved-taipei" }) else { return }
+        mapCandidates.append(
+            SaveMapCandidate(
+                id: "uitest-unsaved-taipei",
+                title: "Unsaved Night Market",
+                subtitle: "Taipei",
+                latitude: 25.0378,
+                longitude: 121.5672,
+                category: .attraction,
+                sourcePlatform: .other,
+                evidence: ["UITest unsaved"]
+            )
+        )
+#endif
+    }
+
     // MARK: - Free saved-place cap
 
     private var currentSavedPlaceTier: SaveProTier { entitlementTierProvider() }
@@ -4447,20 +4468,34 @@ final class MapViewModel: ObservableObject {
         guard selectedPlace?.id == place.id,
               authService.currentUserId == owner,
               authService.sessionGeneration == generation else { return }
-
-        selectedPlace = updatedPlace
-        if let index = places.firstIndex(where: { $0.id == place.id }) {
-            places[index] = updatedPlace
+        let latest = places.first(where: { $0.id == place.id }) ?? selectedPlace ?? place
+        // Preserve check-in and other edits made while provider details were in flight.
+        guard latest.name == place.name,
+              latest.address == place.address,
+              latest.coordinate.latitude == place.latitude,
+              latest.coordinate.longitude == place.longitude else { return }
+        var merged = latest
+        merged.businessPhotoUrls = updatedPlace.businessPhotoUrls
+        if merged.googlePlaceId == place.googlePlaceId {
+            merged.googlePlaceId = updatedPlace.googlePlaceId
         }
+        merged.googleRating = merged.googleRating ?? updatedPlace.googleRating
+        merged.priceRange = merged.priceRange ?? updatedPlace.priceRange
+        merged.openingHours = merged.openingHours ?? updatedPlace.openingHours
 
+        selectedPlace = merged
+        if let index = places.firstIndex(where: { $0.id == place.id }) {
+            places[index] = merged
+        }
+        try? mirrorToLocalVault(merged, startedBy: owner, generation: generation)
+
+        guard usesRemotePersistence else { return }
         do {
             // updatePlace PATCHes the existing row; the create endpoint is a
             // plain insert and 500s on the duplicate id, which silently kept
             // enriched photos from ever persisting.
-            if usesRemotePersistence {
-                try await supabaseService.updatePlace(updatedPlace, previous: place)
-            }
-            try? mirrorToLocalVault(updatedPlace, startedBy: owner, generation: generation)
+            try await supabaseService.updatePlace(merged, previous: latest)
+            try? mirrorToLocalVault(merged, startedBy: owner, generation: generation)
         } catch {
             selectedPlace = place
             if let index = places.firstIndex(where: { $0.id == place.id }) {

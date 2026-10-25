@@ -391,6 +391,21 @@ struct ContentView: View {
             await loadInitialContent()
             presentSavedPlaceLimitPaywallIfNeeded()
         }
+#if DEBUG
+        // Same outermost fullScreenCover as production Passport. A cover on
+        // `rootScaffold` leaves AtlasTabBar in the tree (`root.tab.home`).
+        .fullScreenCover(isPresented: .constant(
+            ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall")
+                || ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall-cap")
+        )) {
+            SaveProPaywallView(
+                trigger: ProcessInfo.processInfo.arguments.contains("--uitest-show-paywall-cap")
+                    ? .savedPlacesCap
+                    : .settings
+            )
+                .environment(\.appLanguageSettings, languageSettings)
+        }
+#endif
     }
 
     @MainActor
@@ -560,6 +575,25 @@ struct ContentView: View {
         )
     }
 
+
+    private var showsRootTabBar: Bool {
+#if DEBUG
+        // AtlasTabBar is a sibling of the tab pages. A fullScreenCover still
+        // leaves `root.tab.home` in the XCTest tree unless the bar is omitted.
+        !hidesRootTabBarForPaywallUITest
+#else
+        true
+#endif
+    }
+
+#if DEBUG
+    private var hidesRootTabBarForPaywallUITest: Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.contains("--uitest-show-paywall")
+            || arguments.contains("--uitest-show-paywall-cap")
+    }
+#endif
+
     private var rootTabs: some View {
         NavigationStack(path: $rootPath) {
             GeometryReader { safeArea in
@@ -624,6 +658,8 @@ struct ContentView: View {
                                     onSaved: { await mapVM.loadPlaces(force: true) },
                                     onParkedAtFreeLimit: { try mapVM.parkPlaceInUnplacedInbox($0, requestPaywall: false) },
                                     onRemoveParkedAtFreeLimit: { try mapVM.removeParkedUnplacedInboxItem($0) },
+                                    // Invite / 邀請: ProfileView.requestsConnections
+                                    // presents PassportConnectionsView (Friends section).
                                     onConnections: { requestsSocialConnections = true; selectedRootTab = .profile }
                                 )
                             case .profile:
@@ -636,7 +672,8 @@ struct ContentView: View {
                             }
                         }
 
-                        AtlasTabBar(
+                        if showsRootTabBar {
+                            AtlasTabBar(
                             items: SaveRootTab.allCases,
                             selection: selectedRootTab,
                             title: \.atlasTitle,
@@ -658,14 +695,15 @@ struct ContentView: View {
                             },
                             onSelect: { selectRootTab($0) }
                         )
-                        .placed(
-                            x: AtlasTabBarMetrics.leadingInset,
-                            y: selectedRootTab == .map
-                                ? AtlasTabBarMetrics.mapY
-                                : AtlasTabBarMetrics.standardY,
-                            width: AtlasTabBarMetrics.width,
-                            height: AtlasTabBarMetrics.height
-                        )
+                            .placed(
+                                x: AtlasTabBarMetrics.leadingInset,
+                                y: selectedRootTab == .map
+                                    ? AtlasTabBarMetrics.mapY
+                                    : AtlasTabBarMetrics.standardY,
+                                width: AtlasTabBarMetrics.width,
+                                height: AtlasTabBarMetrics.height
+                            )
+                        }
                     }
                 }
             }
@@ -826,8 +864,24 @@ struct ContentView: View {
     }
 
     private func closeMapSearch() {
+        endCanceledExactSearchCorrection()
         invalidateExactSearchRequest()
         collapseMapPanel()
+    }
+
+    /// `map.search.close` cancels Review correction. Collapse/reopen still
+    /// keeps the session so a refine remount can finish; this explicit close
+    /// drops it so a later pin or peek cannot silently confirm the canceled
+    /// clue.
+    private func endCanceledExactSearchCorrection() {
+        invalidateExactSearchRequest()
+        guard drawerLaunchRequest.preservesExactSearchClue else { return }
+        drawerLaunchRequest = DrawerLaunchRequest(
+            target: drawerLaunchRequest.target,
+            initialQuery: drawerLaunchRequest.initialQuery,
+            focusesSearch: drawerLaunchRequest.focusesSearch,
+            preservesExactSearchClue: false
+        )
     }
 
     @ViewBuilder
@@ -881,6 +935,10 @@ struct ContentView: View {
                     // the user in an immediately re-presented cover.
                     suppressPendingOnboardingCaptureResume = true
                     fullScreenRoute = nil
+                },
+                onSearchNearby: {
+                    suppressPendingOnboardingCaptureResume = true
+                    openMapSearch()
                 }
             )
             .environment(\.appLanguageSettings, languageSettings)
@@ -1006,8 +1064,7 @@ struct ContentView: View {
                 let resolvesOriginPlan = pendingOriginPlanCandidateID.map {
                     mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
                 } ?? false
-                let place = try await mapVM.saveMapCandidateAsPlace(candidate)
-                endExactSearchSessionAfterCandidateSave()
+                let place = try await saveMapCandidateAndEndExactSearchIfNeeded(candidate)
                 if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
                     requestTripAssignment(for: place)
@@ -1406,8 +1463,7 @@ struct ContentView: View {
                 let resolvesOriginPlan = pendingOriginPlanCandidateID.map {
                     mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0)
                 } ?? false
-                let place = try await mapVM.saveMapCandidateAsPlace(candidate)
-                endExactSearchSessionAfterCandidateSave()
+                let place = try await saveMapCandidateAndEndExactSearchIfNeeded(candidate)
                 if resolvesOriginPlan {
                     pendingOriginPlanCandidateID = nil
                     requestTripAssignment(for: place)
@@ -1541,11 +1597,39 @@ struct ContentView: View {
             // not open the stamp as if it were already corrected.
             restoreExactSearchResolutionIfNeeded()
             if let resolved = await mapVM.chooseSavedStampFromExactSearch(place) {
-                exactSearchClueID = nil
-                isExactSearchSessionActive = false
+                clearResolvedExactSearchSession()
                 openMapDetail(.savedPlace(resolved))
             }
         }
+    }
+
+    /// Saving an unsaved exact-search result retires the clue in MapViewModel
+    /// but used to leave this session live, so a later pin tap hit
+    /// `noActiveCorrectionSession` instead of opening the new stamp.
+    private func saveMapCandidateAndEndExactSearchIfNeeded(
+        _ candidate: SaveMapCandidate
+    ) async throws -> Place {
+        restoreExactSearchResolutionIfNeeded()
+        let endsExactSearch = isExactSearchSessionActive
+            && exactSearchClueID.map { mapVM.mapCandidate(candidate, resolvesReviewCandidateID: $0) } == true
+        let place = try await mapVM.saveMapCandidateAsPlace(candidate)
+        if endsExactSearch {
+            clearResolvedExactSearchSession()
+        }
+        endExactSearchSessionAfterCandidateSave()
+        return place
+    }
+
+    private func clearResolvedExactSearchSession() {
+        exactSearchClueID = nil
+        isExactSearchSessionActive = false
+        guard drawerLaunchRequest.preservesExactSearchClue else { return }
+        drawerLaunchRequest = DrawerLaunchRequest(
+            target: drawerLaunchRequest.target,
+            initialQuery: drawerLaunchRequest.initialQuery,
+            focusesSearch: drawerLaunchRequest.focusesSearch,
+            preservesExactSearchClue: false
+        )
     }
 
     /// Saving a new map candidate resolves the clue in MapViewModel but
@@ -1859,170 +1943,6 @@ struct ContentView: View {
            updatedFullScreenPlace != fullScreenPlace {
             fullScreenRoute = .placeDetail(.savedPlace(updatedFullScreenPlace))
         }
-    }
-}
-
-private struct SaveCaptureFlowView: View {
-    @Environment(\.appLanguageSettings) private var languageSettings
-    let tripName: String?
-    let initialText: String
-    let existingPlaces: [Place]
-    let onDraftChange: (String) -> Void
-    let onImport: (String) async throws -> [UUID]
-    let onSaveGoogleTakeoutImport: ([ImportedPlaceDraft]) async throws -> GoogleTakeoutSaveSummary
-    let onComplete: ([UUID]) -> Void
-    let onCancel: () -> Void
-    @State private var sharedText = ""
-    @State private var isAnalyzing = false
-    @State private var errorMessage: String?
-    @State private var isGoogleTakeoutPresented = false
-    @FocusState private var isInputFocused: Bool
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(localized("Save a place clue", "收下一個地點線索"))
-                        .font(SaveAtlasType.strong(23, relativeTo: .title2))
-                        .foregroundStyle(SaveAtlasPalette.forest)
-                    Text(localized("Paste a link or note. Review the place before saving.", "貼上連結或筆記，確認地點後再儲存。"))
-                        .font(SaveAtlasType.body(14))
-                        .foregroundStyle(SaveAtlasPalette.muted)
-                    if let tripName {
-                        Text(localized("For \(tripName)", "準備加入「\(tripName)」"))
-                            .font(SaveAtlasType.body(13))
-                            .foregroundStyle(SaveAtlasPalette.forest)
-                    }
-                    TextEditor(text: $sharedText)
-                        .font(SaveAtlasType.body(16))
-                        .foregroundStyle(SaveAtlasPalette.ink)
-                        .scrollContentBackground(.hidden)
-                        .frame(height: 88)
-                        .padding(8)
-                        .background(SaveAtlasPalette.paper, in: RoundedRectangle(cornerRadius: 14))
-                        .overlay { RoundedRectangle(cornerRadius: 14).stroke(SaveAtlasPalette.line.opacity(0.4)) }
-                        .focused($isInputFocused)
-                        .accessibilityLabel(localized("Link or note", "連結或筆記"))
-                        .accessibilityIdentifier("capture.input")
-                        .toolbar {
-                            ToolbarItemGroup(placement: .keyboard) {
-                                Spacer()
-                                Button(localized("Done", "完成")) { isInputFocused = false }
-                                    .accessibilityIdentifier("capture.keyboardDone")
-                            }
-                        }
-                    HStack {
-                        PasteButton(payloadType: String.self) { values in
-                            if let value = values.first { sharedText = value }
-                        }
-                        .tint(SaveAtlasPalette.forest)
-                        .accessibilityIdentifier("capture.paste")
-                        Spacer()
-                        Button {
-                            isInputFocused = false
-                            isGoogleTakeoutPresented = true
-                        } label: {
-                            Label(localized("Import file", "匯入檔案"), systemImage: "square.and.arrow.down")
-                                .font(SaveAtlasType.strong(14))
-                                .frame(minHeight: 44)
-                        }
-                        .foregroundStyle(SaveAtlasPalette.forest)
-                        .disabled(isAnalyzing)
-                        .accessibilityLabel(localized("Import Google Takeout", "匯入 Google Takeout"))
-                        .accessibilityIdentifier("capture.importGoogleTakeout")
-                    }
-                    if let errorMessage {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle")
-                            .font(SaveAtlasType.body(13))
-                            .foregroundStyle(SaveAtlasPalette.coral)
-                            .accessibilityIdentifier("capture.error")
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-            }
-            .scrollDismissesKeyboard(.interactively)
-            .background(SaveAtlasPalette.canvas)
-            .safeAreaInset(edge: .bottom) {
-                Button(action: analyze) {
-                    HStack(spacing: 8) {
-                        if isAnalyzing { ProgressView().tint(.white) }
-                        Text(isAnalyzing ? localized("Analyzing…", "分析中…") : localized("Find the place", "找出地點"))
-                    }
-                    .font(SaveAtlasType.strong(17))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity, minHeight: 48)
-                    .background(SaveAtlasPalette.coral, in: RoundedRectangle(cornerRadius: 14))
-                }
-                .disabled(trimmedText.isEmpty || isAnalyzing)
-                .opacity(trimmedText.isEmpty || isAnalyzing ? 0.48 : 1)
-                .accessibilityIdentifier("capture.analyze")
-                .padding(.horizontal, 20)
-                .padding(.bottom, 12)
-                .background(SaveAtlasPalette.canvas)
-            }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(action: onCancel) {
-                        Image(systemName: "xmark").frame(width: 44, height: 44)
-                    }
-                    .foregroundStyle(SaveAtlasPalette.forest)
-                    .disabled(isAnalyzing)
-                    .accessibilityLabel(localized("Close capture", "關閉新增線索"))
-                }
-            }
-        }
-        .interactiveDismissDisabled(isAnalyzing)
-        .accessibilityIdentifier("capture.flow")
-        .onAppear {
-            if sharedText.isEmpty {
-                sharedText = initialText
-            }
-        }
-        .onChange(of: sharedText) { _, draft in
-            onDraftChange(draft)
-        }
-        .sheet(isPresented: $isGoogleTakeoutPresented) {
-            GoogleTakeoutImportView(
-                existingPlaces: existingPlaces,
-                onSave: onSaveGoogleTakeoutImport
-            )
-        }
-    }
-
-    private var trimmedText: String {
-        sharedText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func analyze() {
-        guard !trimmedText.isEmpty, !isAnalyzing else { return }
-        isAnalyzing = true
-        errorMessage = nil
-        Task {
-            defer { isAnalyzing = false }
-            do {
-                let candidateIDs = try await onImport(trimmedText)
-                guard !candidateIDs.isEmpty else {
-                    errorMessage = localized(
-                        "No place clue was found. Add the post caption, city, or a map link and try again.",
-                        "沒有找到地點線索。請補上貼文文字、城市或地圖連結後再試。"
-                    )
-                    return
-                }
-                onComplete(candidateIDs)
-            } catch ReviewCandidateError.sourceAlreadyReviewed {
-                errorMessage = localized(
-                    "This source was already saved or reviewed. No new review was added.",
-                    "這個來源已收藏或處理過，沒有新增待確認項目。"
-                )
-            } catch {
-                errorMessage = localized("Analysis could not finish. Please try again later.", "分析暫時無法完成，請稍後再試。")
-            }
-        }
-    }
-
-    private func localized(_ english: String, _ traditionalChinese: String) -> String {
-        languageSettings.localized(english: english, traditionalChinese: traditionalChinese)
     }
 }
 

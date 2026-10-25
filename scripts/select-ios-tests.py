@@ -14,6 +14,9 @@ TRIP_SHEET = RAIL + "testTripStopEditorSurfaceIsReachable"
 BASELINE = [RAIL + name for name in (
     "testCaptureAtlasProductionParity",
     "testCaptureFiveTabLanding",
+    "testDoodlePaywallParity",
+    "testDoodleCaptureParity",
+    "testDoodleCapturePaywallDarkParity",
     "testHomeAndPassportWarmDarkMode",
     "testAtlasHomeAndSavesRenderPersistedPlaceData",
     "testHomeSearchAndPendingCandidateOpenDirectly",
@@ -72,6 +75,7 @@ FULL = list(BASELINE) + [
     RAIL + "testHomeTaipeiGrantedDistances",
     RAIL + "testHomeTPEAEvidence",
     RAIL + "testHopU1SavedPlaceLimitPaywallShowsSavedFiftyWithoutManMan",
+    RAIL + "testMapSavedUnsavedVisitedTaipeiFixture",
 ]
 
 # Temporary #279 iteration profiles. Empty SAVE_UI_TEST_FOCUS keeps default

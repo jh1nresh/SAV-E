@@ -12,6 +12,8 @@ enum SaveDoodleLens: String, CaseIterable, Identifiable {
 
     var accessibilityIdentifier: String { "home.\(rawValue)" }
 
+    var mapAccessibilityIdentifier: String { "map.\(rawValue)" }
+
     func title(language: AppLanguage) -> String {
         switch self {
         case .eat:
@@ -73,6 +75,11 @@ final class SaveDoodleSession: ObservableObject {
 
     /// One-shot Home detail → Map focus. Not persisted; not MiniMapHandoff.
     @Published var pendingShowOnMapPlaceID: UUID?
+
+    /// Map Eat/Go chips can follow Home's current lens + city. Opening the
+    /// Map tab leaves this false so the default Saved/Nearby/Friends set
+    /// stays unfiltered (#290). Not a mini-map handoff.
+    @Published var mapFollowsHomeFilter = false
 
     private let defaults: UserDefaults
 
@@ -656,6 +663,35 @@ final class SaveDoodleVisitStore {
         return true
     }
 
+    struct Snapshot: Equatable {
+        let id: UUID
+        let dates: [Double]
+        let count: Int
+    }
+
+    func snapshot(for id: UUID) -> Snapshot {
+        Snapshot(id: id, dates: visitPayload[id.uuidString] ?? [], count: count(for: id))
+    }
+
+    func restore(_ snapshot: Snapshot) {
+        var payload = visitPayload
+        payload[snapshot.id.uuidString] = snapshot.dates.isEmpty ? nil : snapshot.dates
+        defaults.set(payload, forKey: Self.datesKey)
+        defaults.set(snapshot.count, forKey: Self.countKey(snapshot.id))
+    }
+
+    func previousStatus(for id: UUID) -> PlaceStatus? {
+        defaults.string(forKey: Self.priorStatusKey(id)).flatMap(PlaceStatus.init(rawValue:))
+    }
+
+    func rememberPriorStatus(_ status: PlaceStatus, for id: UUID) {
+        defaults.set(status.rawValue, forKey: Self.priorStatusKey(id))
+    }
+
+    func clearPriorStatus(for id: UUID) {
+        defaults.removeObject(forKey: Self.priorStatusKey(id))
+    }
+
     private func dates(for id: UUID) -> [Date] {
         (visitPayload[id.uuidString] ?? []).map(Date.init(timeIntervalSince1970:))
     }
@@ -672,6 +708,10 @@ final class SaveDoodleVisitStore {
 
     static func countKey(_ id: UUID) -> String {
         "save.doodle.passport.visits.\(suiteSuffix).\(id.uuidString)"
+    }
+
+    static func priorStatusKey(_ id: UUID) -> String {
+        "save.doodle.checkin.priorStatus.\(suiteSuffix).\(id.uuidString)"
     }
 }
 

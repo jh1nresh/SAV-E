@@ -363,7 +363,20 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         let rail = try source(at: "Tests/SAVEUITests/SAVEScreenshotRailTests.swift")
 
         XCTAssertTrue(script.contains("five-tab-home*)"))
+        XCTAssertTrue(script.contains("five-tab-capture*)"))
+        XCTAssertTrue(script.contains("five-tab-paywall*)"))
+        XCTAssertFalse(script.contains("five-tab-passport*)"))
         XCTAssertTrue(script.contains("priority=1"))
+        XCTAssertTrue(script.contains("--ignore-rects"))
+        XCTAssertTrue(script.contains("24,132,354,176;24,444,354,22;24,698,354,50"))
+        XCTAssertFalse(script.contains("0,432,402,104"))
+        XCTAssertFalse(script.contains("0,728,402,146"))
+        XCTAssertTrue(selector.contains("\"testDoodlePaywallParity\""))
+        XCTAssertTrue(
+            baseline.contains(
+                "SAVEUITests/SAVEScreenshotRailTests/testDoodlePaywallParity"
+            )
+        )
         // Failure fixture: PR #220 moved UI selectors out of ci.yml into
         // select-ios-tests.py. The required `ios` job (now in ios.yml) must
         // keep that wiring. The live five-tab Home capture must stay in
@@ -390,11 +403,13 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertTrue(rail.contains("func testHomeHintCountEvidence"))
         XCTAssertTrue(rail.contains("func testHomeTaipeiGrantedDistances"))
         XCTAssertTrue(rail.contains("func testHomeTPEAEvidence"))
+        XCTAssertTrue(rail.contains("func testMapSavedUnsavedVisitedTaipeiFixture"))
         XCTAssertTrue(rail.contains("home.eat"))
         XCTAssertTrue(rail.contains("home.passport"))
         XCTAssertTrue(rail.contains("testHomeListProgressiveSearch"))
         XCTAssertTrue(selector.contains("testHomeListProgressiveSearch"))
         XCTAssertFalse(selector.contains("testMiniMapOpensMapWithCarriedFilterAndCityChange"))
+        XCTAssertTrue(selector.contains("testMapSavedUnsavedVisitedTaipeiFixture"))
     }
 
     func testReviewFirstViewportInventoryKeepsTicketNotForm() throws {
@@ -437,6 +452,11 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
         XCTAssertFalse(saves.contains("saves.pocket.reviewFooter"))
         XCTAssertTrue(saves.contains("saves.review.list"))
         XCTAssertTrue(saves.contains("saves.pocket.mapStampFooter"))
+        XCTAssertTrue(saves.contains("saves.place.\\(place.id.uuidString)"))
+        XCTAssertFalse(
+            saves.contains("saves.mapStamp.postcard"),
+            "A generic postcard identifier must not steal saves.place.<uuid> from the Map Stamp ticket."
+        )
     }
 
     func testPushedSavesDropsRootTabInsetsAndKeepsSystemBackChrome() throws {
@@ -593,6 +613,7 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
             < passport.range(of: "profile.controlsDisclosure")!.lowerBound)
     }
 
+    @MainActor
     func testPassportTodayOnSavvySitsBetweenStampLedgerAndControlPocket() throws {
         let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
@@ -679,14 +700,16 @@ final class AtlasOneJobPerTabUITests: XCTestCase {
     func testPassportActionsSharePlacesAndKeepBulkImportInCapture() throws {
         let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         let content = try source(at: "SAV-E/App/ContentView.swift")
+        let capture = try source(at: "SAV-E/Views/Capture/SaveCaptureFlowView.swift")
 
         XCTAssertTrue(passport.contains("SavePlaceShareButton(content: .place(place))"))
         XCTAssertTrue(passport.contains("profile.share.\\(place.id)"))
         XCTAssertTrue(passport.contains(".contentShape(Rectangle())"))
         XCTAssertFalse(passport.contains("profile.importGoogleTakeout"))
 
-        XCTAssertTrue(content.contains("capture.importGoogleTakeout"))
-        XCTAssertTrue(content.contains("GoogleTakeoutImportView("))
+        XCTAssertTrue(capture.contains("capture.importGoogleTakeout"))
+        XCTAssertTrue(capture.contains("GoogleTakeoutImportView("))
+        XCTAssertTrue(capture.contains("if isGoogleTakeoutPresented"))
         XCTAssertTrue(content.contains("onSaveGoogleTakeoutImport: { drafts in"))
     }
 

@@ -118,16 +118,15 @@ final class SaveEntitlementStore {
         )
     }
 
-    /// A paywall may only appear as a *reaction* to a refusal, and only once the
-    /// user has produced a confirmed Map Stamp. Both conditions are checked here
-    /// so no call site can bypass the trigger policy.
+    /// AI quota never opens the places paywall. Exhaustion is a neutral hint
+    /// on the assist surface; Pro is sold for unlimited saved places only.
     func shouldPresentPaywall(
         for decision: SaveAIAssistDecision,
         hasConfirmedMapStamp: Bool
     ) -> Bool {
-        // The value proof must exist before pricing is ever shown.
-        guard hasConfirmedMapStamp else { return false }
-        return decision.isRefusal
+        _ = decision
+        _ = hasConfirmedMapStamp
+        return false
     }
 
     /// Passive Passport entry. Still requires a confirmed Map Stamp so pricing

@@ -235,29 +235,6 @@ struct SaveKraftStampPixelArt: View {
     }
 }
 
-struct SavePostageSealAvatar: View {
-    var name: String
-    var systemImage: String = "person.fill"
-    var size: CGFloat = 48
-
-    var body: some View {
-        ZStack {
-            SavePostcardSealShape()
-                .fill(SaveAtlasPalette.paper)
-                .overlay {
-                    SavePostcardSealShape()
-                        .stroke(SaveAtlasPalette.kraft, lineWidth: 1.4)
-                }
-            Image(systemName: systemImage)
-                .font(.system(size: size * 0.36, weight: .semibold))
-                .foregroundStyle(SaveAtlasPalette.forest)
-        }
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
-        .accessibilityLabel(name)
-    }
-}
-
 /// Quiet 8×8 nearest-neighbor glyphs. Visible 44pt buttons, not SF Symbols.
 enum SavePixelChromeIconKind: Equatable {
     case trips
@@ -728,35 +705,5 @@ struct SaveDisplayTitle: View {
             .lineLimit(2)
             .minimumScaleFactor(locksPointSize ? 1 : 0.75)
             .fixedSize(horizontal: locksPointSize, vertical: locksPointSize)
-    }
-}
-
-enum SaveFriendLastAt {
-    struct Row: Identifiable, Equatable {
-        var id: String { authorID }
-        let authorID: String
-        let authorName: String
-        let lastPost: SharedPlacePost
-    }
-
-    static func rows(from posts: [SharedPlacePost]) -> [Row] {
-        var latest: [String: SharedPlacePost] = [:]
-        for post in posts {
-            if let existing = latest[post.author_id] {
-                if post.shared_at > existing.shared_at {
-                    latest[post.author_id] = post
-                }
-            } else {
-                latest[post.author_id] = post
-            }
-        }
-        return latest.values
-            .sorted { lhs, rhs in
-                if lhs.shared_at != rhs.shared_at { return lhs.shared_at > rhs.shared_at }
-                return lhs.author_name.localizedCaseInsensitiveCompare(rhs.author_name) == .orderedAscending
-            }
-            .map { post in
-                Row(authorID: post.author_id, authorName: post.author_name, lastPost: post)
-            }
     }
 }
