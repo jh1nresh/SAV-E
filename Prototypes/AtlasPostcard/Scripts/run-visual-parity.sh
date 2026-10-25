@@ -33,6 +33,7 @@ The result-bundle mode prefers five-tab-home and falls back to atlas-home
 for prototype-only runs. Saves, Plan, and Map use atlas-saves, atlas-plan,
 and atlas-map. Friends is a real 0.90 gate against friends.png; compare
 populated five-tab-friends, never five-tab-friends-empty.
+Home deferral on #290 does not apply to Friends.
 Capture and paywall use five-tab-capture and five-tab-paywall. Paywall
 comparison passes --ignore-rects over the hero, sale-state line and legal
 sentence. Only screens explicitly excluded by --skip-screens are omitted.
