@@ -30,15 +30,6 @@ private struct Scores {
     let appearanceSimilarity: Double
 }
 
-private struct Scores {
-    let composite: Double
-    let position: Double
-    let size: Double
-    let color: Double
-    let fontStyle: Double
-    let edgeF1: Double
-    let appearanceSimilarity: Double
-}
 
 private enum ParityError: Error, CustomStringConvertible {
     case usage
