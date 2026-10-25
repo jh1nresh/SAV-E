@@ -75,7 +75,7 @@ struct SaveDoodlePassportPage: View {
 
             SaveDisplayTitle(
                 text: languageSettings.localized(english: "Passport", traditionalChinese: "護照"),
-                pointSize: 34,
+                pointSize: SaveDoodlePassportCatalog.titlePointSize,
                 relativeTo: .largeTitle,
                 locksPointSize: true
             )
@@ -90,23 +90,13 @@ struct SaveDoodlePassportPage: View {
     private var subtitle: some View {
         HStack(alignment: .firstTextBaseline, spacing: SaveSpace.tight) {
             Button { showsCityPicker = true } label: {
-                HStack(alignment: .firstTextBaseline, spacing: SaveSpace.tight) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        SaveDisplayTitle(
-                            text: cityTitle,
-                            pointSize: 20,
-                            relativeTo: .title3,
-                            locksPointSize: true
-                        )
-                        Capsule()
-                            .fill(SaveAtlasPalette.coral)
-                            .frame(height: 2)
-                            .padding(.top, 1)
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
-                    Text("▾")
-                        .font(SaveAtlasType.body(13))
-                        .foregroundStyle(SaveAtlasPalette.forest)
+                HStack(alignment: .center, spacing: SaveSpace.tight) {
+                    SaveDoodleHandwriting(
+                        text: cityTitle,
+                        pointSize: SaveDoodlePassportCatalog.subtitlePointSize,
+                        locksPointSize: true
+                    )
+                    SaveDoodleSolidCaret()
                 }
                 .contentShape(Rectangle())
             }
@@ -114,16 +104,20 @@ struct SaveDoodlePassportPage: View {
             .accessibilityIdentifier("passport.citySwitcher")
             .accessibilityLabel(cityTitle)
 
-            Text("·")
-                .font(SaveAtlasType.body(15))
-                .foregroundStyle(SaveAtlasPalette.muted)
+            SaveDoodleHandwriting(
+                text: "·",
+                pointSize: SaveDoodlePassportCatalog.subtitlePointSize,
+                locksPointSize: true
+            )
 
             Button(action: onOpenCollected) {
-                Text(visitedLine)
-                    .font(SaveAtlasType.body(15))
-                    .foregroundStyle(SaveAtlasPalette.muted)
-                    .frame(minHeight: SaveLayout.minTap, alignment: .center)
-                    .contentShape(Rectangle())
+                SaveDoodleHandwriting(
+                    text: visitedLine,
+                    pointSize: SaveDoodlePassportCatalog.subtitlePointSize,
+                    locksPointSize: true
+                )
+                .frame(minHeight: SaveLayout.minTap, alignment: .center)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("profile.stampProgress")
@@ -266,53 +260,49 @@ struct SaveDoodlePassportPage: View {
 
     private var legend: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: SaveSpace.xs) {
-                legendItems
-            }
-            .fixedSize(horizontal: true, vertical: false)
-            VStack(alignment: .leading, spacing: SaveSpace.xs) {
-                legendItems
-            }
+            legendItems
+                .fixedSize(horizontal: true, vertical: false)
+            legendItems
         }
-        .font(SaveAtlasType.body(13))
-        .foregroundStyle(SaveAtlasPalette.muted)
         .accessibilityIdentifier("passport.legend")
     }
 
-    @ViewBuilder
     private var legendItems: some View {
-        HStack(spacing: SaveSpace.tight) {
-            legendSwatch(rank: .single)
-            Text(languageSettings.localized(english: "single ring  1", traditionalChinese: "單圈  1"))
+        HStack(alignment: .center, spacing: SaveSpace.tight) {
+            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                .fill(SaveDoodlePassportChrome.legendSwatch)
+                .frame(
+                    width: SaveDoodlePassportCatalog.legendSwatchSize,
+                    height: SaveDoodlePassportCatalog.legendSwatchSize
+                )
+            SaveDoodleHandwriting(
+                text: languageSettings.localized(
+                    english: "single ring 1 · double ring 3 · gold 5",
+                    traditionalChinese: "單圈 1 · 雙圈 3 · 金 5"
+                ),
+                pointSize: 18,
+                relativeTo: .footnote
+            )
         }
-        HStack(spacing: SaveSpace.tight) {
-            legendSwatch(rank: .double)
-            Text(languageSettings.localized(english: "double ring  3", traditionalChinese: "雙圈  3"))
-        }
-        HStack(spacing: SaveSpace.tight) {
-            legendSwatch(rank: .gold)
-            Text(languageSettings.localized(english: "gold  5", traditionalChinese: "金  5"))
-        }
-    }
-
-    private func legendSwatch(rank: SavePassportStampRank) -> some View {
-        RoundedRectangle(cornerRadius: 2, style: .continuous)
-            .fill(rank == .gold ? SaveDoodle.stampGold : SaveDoodle.stampRed)
-            .frame(width: 8, height: 8)
     }
 
     private var citiesRow: some View {
         Button { showsCityPicker = true } label: {
             HStack(spacing: SaveSpace.tight) {
-                Text(citiesLine)
-                    .font(SaveAtlasType.body(15))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                SaveDoodleHandwriting(
+                    text: citiesLine,
+                    pointSize: 20,
+                    relativeTo: .body,
+                    lineLimit: 1,
+                    minimumScaleFactor: 0.85
+                )
                 Spacer(minLength: SaveSpace.tight)
-                Text("›")
-                    .font(SaveAtlasType.strong(17))
-                    .foregroundStyle(SaveAtlasPalette.muted)
+                SaveDoodleHandwriting(
+                    text: "›",
+                    pointSize: 20,
+                    color: SaveAtlasPalette.ink,
+                    relativeTo: .body
+                )
             }
             .frame(maxWidth: .infinity, minHeight: SaveLayout.minTap, alignment: .leading)
             .contentShape(Rectangle())
@@ -517,6 +507,50 @@ struct SaveDoodlePassportPage: View {
         case .empty:
             return languageSettings.localized(english: "Empty sticker", traditionalChinese: "空貼紙格")
         }
+    }
+}
+
+/// Caveat + Iansui cascade. Latin uses Caveat-SemiBold; zh-Hant stays on
+/// the Iansui fallback already registered in `SaveDisplayType`.
+struct SaveDoodleHandwriting: View {
+    let text: String
+    var pointSize: CGFloat
+    var color: Color = SaveAtlasPalette.ink
+    var locksPointSize: Bool = false
+    var relativeTo: Font.TextStyle = .body
+    var lineLimit: Int? = nil
+    var minimumScaleFactor: CGFloat = 1
+
+    var body: some View {
+        Text(text)
+            .font(
+                locksPointSize
+                    ? SaveDisplayType.fixed(pointSize)
+                    : SaveDisplayType.display(pointSize, relativeTo: relativeTo)
+            )
+            .foregroundStyle(color)
+            .lineLimit(lineLimit)
+            .minimumScaleFactor(minimumScaleFactor)
+    }
+}
+
+/// Solid ▼. Caveat has no black triangle glyph, so this stays a drawn mark
+/// in the same ink as the subtitle handwriting.
+struct SaveDoodleSolidCaret: View {
+    var size: CGFloat = 9
+    var color: Color = SaveAtlasPalette.ink
+
+    var body: some View {
+        Canvas { context, canvasSize in
+            var path = Path()
+            path.move(to: CGPoint(x: canvasSize.width * 0.50, y: canvasSize.height * 0.88))
+            path.addLine(to: CGPoint(x: canvasSize.width * 0.08, y: canvasSize.height * 0.18))
+            path.addLine(to: CGPoint(x: canvasSize.width * 0.92, y: canvasSize.height * 0.18))
+            path.closeSubpath()
+            context.fill(path, with: .color(color))
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 

@@ -100,7 +100,7 @@ struct SaveDoodlePassportNumberStamp: View {
             Circle()
                 .stroke(ring, lineWidth: 2)
             Text("\(number)")
-                .font(SaveAtlasType.body(13))
+                .font(SaveDisplayType.fixed(14))
                 .foregroundStyle(ring)
         }
         .frame(
