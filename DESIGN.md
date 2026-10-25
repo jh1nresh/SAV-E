@@ -709,8 +709,8 @@ HoP locked D2 (city switcher) and D3 (Eat/Go + nearby own-saves) on
 2026-10-19. The 2026-10-14 tile-town Home chrome (quiet search, Trips /
 Saves / More header icons, tile-town peek, recent stamps) is superseded
 on Home only. Founder 2026-10-20: tile-town is abandoned; Home ships
-Doodle only. Product Map ships `SaveDoodleMapView`. Passport keeps its
-current town lock until that Doodle PR.
+Doodle only. Product Map ships `SaveDoodleMapView`. Passport ships the
+sticker-grid doodle face.
 
 Eat shows only Eat (food, cafe, bar). Go shows only Go (attraction, stay,
 shopping). The list is the user's own saves near the selected city or
@@ -758,6 +758,33 @@ Historical DESIGN v2 `design/doodle-targets-2026-10-20/home-light.png`
 at `eade369` (exact 402×874; `home-dark.png`) is archive only. v1 is
 retired. Home and Map still fail CI below 0.90; do not apply
 `map-mask.png` to the Map score.
+
+### Passport (Doodle v1)
+
+Root Passport shows stickers and cities. Collected is the posts
+sub-page. Missions, streak, and the stamp ledger stay flagged off.
+Settings live on Collected. Wordmark is Caveat SemiBold 34 locked;
+the city line is Caveat 20 with a 2pt coral underline under the city
+word only. Body copy stays `SaveAtlasType`.
+
+The locked parity face is DESIGN v2
+`design/doodle-targets-2026-10-20/passport-light.png` at `eade369`
+(exact 402×874; `passport-dark.png` for DESIGN comparison). Grade
+position, size, color and font style by side-by-side comparison; a
+0.90 gate score is not Passport sign-off. v1 is retired. The face is
+Passport + Beijing · 4 of 12, the kraft sticker grid, cities, and the
+five-tab rail with Passport selected. It is not the profile header,
+quests, or shared-post grid.
+
+The sticker grid uses up to four 64pt columns with 16pt gaps. It reflows
+to three columns on 375/390pt phones after the 24pt screen and panel
+insets. Columns = floor((availableGridWidth + 16) / 80), min 1 max 4.
+Official DESIGN stickers (duck, noodle, coffee, temple, lantern)
+fill the 64pt slot; stamp rings are secondary. Do not wrap a shrunken icon in a filled circle. The elephant is brand-only and
+appears on the empty Passport state, never as a place mark. The rank
+legend stacks when its full text cannot fit, including larger text
+sizes. Map and Passport share manual visit history and the same daily
+deduplication.
 
 ### Capture and Pro factual state
 

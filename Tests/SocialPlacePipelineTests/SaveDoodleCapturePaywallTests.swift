@@ -165,7 +165,7 @@ final class SaveDoodleCapturePaywallTests: XCTestCase {
         XCTAssertTrue(paywall.contains("paywall.retry"))
         XCTAssertTrue(paywall.contains("Plans are unavailable right now."))
         XCTAssertTrue(profile.contains(".fullScreenCover(isPresented: $showProPaywall)"))
-        XCTAssertTrue(profile.contains("SaveProPaywallView(trigger: .settings)"))
+        XCTAssertTrue(profile.contains("SaveProPaywallView(trigger: .passport)"))
         XCTAssertFalse(profile.contains(".sheet(isPresented: $showProPaywall)"))
         XCTAssertFalse(paywall.contains("presentationDetents"))
         XCTAssertTrue(paywall.contains("SaveAtlasPalette.coral"))
