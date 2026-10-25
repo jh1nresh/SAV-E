@@ -328,7 +328,7 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertFalse(script.contains("The 0.90 score is not a CI gate."))
         XCTAssertFalse(script.contains("\"$screen\" != \"home\" && \"$screen\" != \"map\""))
         XCTAssertTrue(script.contains("gate_failed=1"))
-        XCTAssertTrue(script.contains("Home, Map, Saves, and Plan all fail the job below 0.90."))
+        XCTAssertTrue(script.contains("Home, Map, Saves, Plan, and Passport all fail the job below 0.90."))
         XCTAssertTrue(script.contains("${#extra_args[@]} -gt 0"))
         XCTAssertTrue(script.contains("${#mask_args[@]} -gt 0"))
         XCTAssertTrue(map.contains("cityOpeningPins()"))

@@ -21,6 +21,7 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(actual, baseline | {
             selection.RAIL + "testHomeListProgressiveSearch",
             selection.RAIL + "testHomeCollectedOpensPassportWithCityCount",
+            selection.RAIL + "testHomeCollectedKeepsOtherCitiesAndActualCounts",
             selection.RAIL + "testSavesTripsBackReturnsToSaves",
             selection.RAIL + "testHomeDesignProductStates",
             selection.RAIL + "testHomeShowOnMapFocusesPlace",
