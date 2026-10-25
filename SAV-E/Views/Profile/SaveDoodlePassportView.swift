@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Doodle v1 Passport: sticker grid, city list, and Collected (spec §7.4).
 struct SaveDoodlePassportPage: View {
@@ -17,24 +18,16 @@ struct SaveDoodlePassportPage: View {
     @State private var showsCityPicker = false
     @State private var stampingID: String?
     @State private var visitRevision = 0
-    @State private var gridWidth: CGFloat = 0
     @State private var visitError: String?
     private let visitStore = SavePassportVisitStore.shared
 
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                header
-                    .padding(.top, AtlasMetrics.statusBarHeight + SaveSpace.lg)
-                    .padding(.bottom, SaveSpace.sm)
-
-                subtitle
-                    .padding(.bottom, SaveSpace.xl)
-
+                headerBand
                 kraftPanel
-                    .padding(.bottom, SaveLayout.sectionGap)
             }
-            .padding(.horizontal, SaveLayout.screenMargin)
+            .padding(.horizontal, SaveDoodlePassportCatalog.screenMargin)
             .padding(.bottom, SaveTileTownProductLock.rootTabScrollClearance)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -43,6 +36,26 @@ struct SaveDoodlePassportPage: View {
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
         }
+    }
+
+    /// 158pt band so the kraft panel starts at the measured y=158.
+    private var headerBand: some View {
+        ZStack(alignment: .topLeading) {
+            Color.clear
+            header
+                .padding(.top, SaveDoodlePassportCatalog.titleTopPadding)
+                .padding(
+                    .leading,
+                    SaveDoodlePassportCatalog.titleLeading - SaveDoodlePassportCatalog.screenMargin
+                )
+            subtitle
+                .padding(.top, SaveDoodlePassportCatalog.subtitleTopPadding)
+                .padding(
+                    .leading,
+                    SaveDoodlePassportCatalog.subtitleLeading - SaveDoodlePassportCatalog.screenMargin
+                )
+        }
+        .frame(height: SaveDoodlePassportCatalog.panelTop, alignment: .topLeading)
     }
 
     private var header: some View {
@@ -70,7 +83,8 @@ struct SaveDoodlePassportPage: View {
 
             Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity, minHeight: SaveLayout.minTap, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private var subtitle: some View {
@@ -122,47 +136,58 @@ struct SaveDoodlePassportPage: View {
 
     private var kraftPanel: some View {
         let columns = SaveDoodlePassportCatalog.columnCount(
-            availableGridWidth: measuredGridWidth
+            measuredGridWidth: SaveDoodlePassportCatalog.panelWidth
+                - SaveDoodlePassportCatalog.panelPadding * 2,
+            physicalScreenWidth: UIScreen.main.bounds.width
         )
-        return VStack(alignment: .leading, spacing: SaveSpace.md) {
+        return ZStack(alignment: .topLeading) {
             if showsEmptyPassport {
                 emptyPassport
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             } else {
-                stickerGrid
-                legend
+                stickerGrid(columns: columns)
             }
-            if let visitError {
-                Text(visitError)
-                    .font(SaveAtlasType.body(13))
-                    .foregroundStyle(SaveAtlasPalette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("profile.stamp.visitError")
+            VStack(alignment: .leading, spacing: SaveSpace.xs) {
+                Spacer(minLength: 0)
+                if !showsEmptyPassport {
+                    legend
+                }
+                if let visitError {
+                    Text(visitError)
+                        .font(SaveAtlasType.body(13))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("profile.stamp.visitError")
+                }
+                citiesRow
             }
-            citiesRow
+            .padding(SaveDoodlePassportCatalog.panelPadding)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            GeometryReader { proxy in
-                Color.clear
-                    .onAppear { gridWidth = proxy.size.width }
-                    .onChange(of: proxy.size.width) { _, width in gridWidth = width }
-            }
+        .frame(
+            width: SaveDoodlePassportCatalog.panelWidth,
+            height: SaveDoodlePassportCatalog.panelHeight,
+            alignment: .topLeading
         )
-        .padding(SaveDoodlePassportCatalog.panelPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
-                .fill(SaveAtlasPalette.kraft)
+            RoundedRectangle(
+                cornerRadius: SaveDoodlePassportCatalog.panelCornerRadius,
+                style: .continuous
+            )
+            .fill(SaveDoodlePassportChrome.panelFill)
+            .overlay {
+                RoundedRectangle(
+                    cornerRadius: SaveDoodlePassportCatalog.panelCornerRadius,
+                    style: .continuous
+                )
+                .stroke(
+                    SaveDoodlePassportChrome.panelStroke,
+                    lineWidth: SaveDoodlePassportCatalog.panelStrokeWidth
+                )
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("profile.stampGrid")
         .accessibilityValue("\(columns)")
-    }
-
-    /// Compact 375pt after 24pt screen + panel insets. Measuring the
-    /// LazyVGrid itself feeds the column count back into its own width.
-    private var measuredGridWidth: CGFloat {
-        gridWidth > 0 ? gridWidth : 279
     }
 
     private var showsEmptyPassport: Bool {
@@ -187,20 +212,31 @@ struct SaveDoodlePassportPage: View {
         .accessibilityIdentifier("passport.empty")
     }
 
-    private var stickerGrid: some View {
-        let columns = SaveDoodlePassportCatalog.columnCount(availableGridWidth: measuredGridWidth)
-        let items = Array(
-            repeating: GridItem(
-                .fixed(SaveDoodlePassportCatalog.slotSize),
-                spacing: SaveDoodlePassportCatalog.minColumnGap
-            ),
-            count: columns
-        )
-        return LazyVGrid(columns: items, alignment: .leading, spacing: SaveDoodlePassportCatalog.rowGap) {
-            ForEach(slots) { slot in
-                slotButton(slot)
+    private func stickerGrid(columns: Int) -> some View {
+        ZStack {
+            ForEach(Array(slots.enumerated()), id: \.element.id) { index, slot in
+                placedSlot(slot, index: index, columns: columns)
             }
         }
+        .frame(
+            width: SaveDoodlePassportCatalog.panelWidth,
+            height: SaveDoodlePassportCatalog.panelHeight,
+            alignment: .topLeading
+        )
+    }
+
+    private func placedSlot(
+        _ slot: SaveDoodlePassportSlot,
+        index: Int,
+        columns: Int
+    ) -> some View {
+        let point = SaveDoodlePassportCatalog.panelPoint(
+            column: index % columns,
+            row: index / columns,
+            columns: columns
+        )
+        return slotButton(slot)
+            .position(x: point.x, y: point.y)
     }
 
     private func slotButton(_ slot: SaveDoodlePassportSlot) -> some View {
@@ -211,8 +247,10 @@ struct SaveDoodlePassportPage: View {
                 slot: slot,
                 isStamping: stampingID == slot.id
             )
-            .frame(maxWidth: .infinity)
-            .frame(height: SaveDoodlePassportCatalog.cardHeight + SaveLayout.numberBadge + SaveSpace.tight)
+            .frame(
+                width: SaveDoodlePassportCatalog.cardHeight,
+                height: SaveDoodlePassportCatalog.cardHeight
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

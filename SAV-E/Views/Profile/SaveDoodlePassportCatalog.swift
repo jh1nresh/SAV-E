@@ -91,19 +91,95 @@ struct SaveDoodlePassportSlot: Identifiable, Equatable {
 enum SaveDoodlePassportCatalog {
     static let maxColumnCount = 4
     static let minColumnCount = 1
-    static let slotSize: CGFloat = SaveLayout.passportSlot
-    static let cardHeight: CGFloat = SaveLayout.passportSlot
-    static let columnStride: CGFloat = 80
-    static let rowGap: CGFloat = SaveSpace.lg
-    static let minColumnGap: CGFloat = SaveSpace.md
-    static let panelPadding: CGFloat = SaveSpace.lg
     static let pageSize = 12
 
-    /// Spec §7.3: `columns = floor((availableGridWidth + 16) / 80)`,
-    /// clamped to 1...4. 375/390pt → 3; 402/430pt → 4.
+    /// DESIGN target 402×874 (PR #297 diagnosis, 2026-10-25). Absolute
+    /// canvas points. Founder chose the measured target over spec §7.3.
+    static let screenMargin: CGFloat = 16
+    static let panelLeading: CGFloat = 16
+    static let panelWidth: CGFloat = 370
+    static let panelHeight: CGFloat = 496
+    static let panelTop: CGFloat = 158
+    static let panelCornerRadius: CGFloat = 12
+    static let panelStrokeWidth: CGFloat = 1
+    static let panelPadding: CGFloat = 16
+    static let unvisitedDiscSize: CGFloat = 75
+    static let visitedStickerSize = CGSize(width: 80, height: 76)
+    static let unvisitedArtSize: CGFloat = 44
+    static let slotSize: CGFloat = unvisitedDiscSize
+    static let cardHeight: CGFloat = 80
+    static let columnCenters: [CGFloat] = [70.5, 158, 245.5, 331]
+    static let rowCenters: [CGFloat] = [212, 336.5, 461]
+    static let columnStride: CGFloat = 87.5
+    static let rowStride: CGFloat = 124.5
+    static let minColumnGap: CGFloat = 12.5
+    static let rowGap: CGFloat = 49.5
+    static let stampDiameter: CGFloat = 28
+    static let stampOffset = CGSize(width: 22, height: 26.5)
+    static let titleLeading: CGFloat = 24
+    static let titleBaseline: CGFloat = 106
+    static let titlePointSize: CGFloat = 64
+    static let titleAscent: CGFloat = 61.44
+    static let titleTopPadding: CGFloat = 44.56
+    static let subtitleLeading: CGFloat = 28
+    static let subtitleBaseline: CGFloat = 138
+    static let subtitlePointSize: CGFloat = 22
+    static let subtitleAscent: CGFloat = 21.12
+    static let subtitleTopPadding: CGFloat = 116.88
+    static let legendSwatchSize: CGFloat = 9
+
+    static let panelFillLightHex = "E9DCC3"
+    static let panelStrokeLightHex = "C9BBA2"
+    static let panelFillDarkHex = "4A3F32"
+    static let panelStrokeDarkHex = "5A5246"
+    static let discFillLightHex = "F6F0E6"
+    static let discFillDarkHex = "3A332A"
+    static let stampBaseLightHex = "FAF7F1"
+    static let stampBaseDarkHex = "2A2620"
+    static let stampRingRedHex = "B3534A"
+    static let stampRingGoldHex = "C19349"
+    static let legendSwatchHex = "D85A3B"
+
+    /// `columns = floor((availableGridWidth + 12.5) / 87.5)`, clamped 1...4.
+    /// 375/390 physical → 3; 402/430 physical → 4.
     static func columnCount(availableGridWidth: CGFloat) -> Int {
         let raw = Int(floor((availableGridWidth + minColumnGap) / columnStride))
         return min(maxColumnCount, max(minColumnCount, raw))
+    }
+
+    /// ReferenceViewport always proposes the 402pt canvas. Width UI tests
+    /// still boot real 375/390 devices and expect 3 columns, so clamp the
+    /// measured canvas grid to the physical screen minus 16+16 insets.
+    static func columnCount(measuredGridWidth: CGFloat, physicalScreenWidth: CGFloat) -> Int {
+        let inset = screenMargin * 2 + panelPadding * 2
+        let physicalGrid = physicalScreenWidth - inset
+        let width: CGFloat
+        if measuredGridWidth > 0 {
+            width = min(measuredGridWidth, max(physicalGrid, 0))
+        } else if physicalGrid > 0 {
+            width = physicalGrid
+        } else {
+            width = panelWidth - panelPadding * 2
+        }
+        return columnCount(availableGridWidth: width)
+    }
+
+    static func columnCenterX(_ column: Int, columns: Int) -> CGFloat {
+        if columns == maxColumnCount, column >= 0, column < columnCenters.count {
+            return columnCenters[column]
+        }
+        return columnCenters[0] + CGFloat(column) * columnStride
+    }
+
+    static func rowCenterY(_ row: Int) -> CGFloat {
+        rowCenters[0] + CGFloat(row) * rowStride
+    }
+
+    static func panelPoint(column: Int, row: Int, columns: Int) -> CGPoint {
+        CGPoint(
+            x: columnCenterX(column, columns: columns) - panelLeading,
+            y: rowCenterY(row) - panelTop
+        )
     }
 
     /// Isolated screenshot face for `five-tab-passport`. Production never

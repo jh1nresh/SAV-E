@@ -1,25 +1,81 @@
 import SwiftUI
 
+/// Passport-only chrome. Do not replace `SaveAtlasPalette.kraft` globally —
+/// other screens still use the locked kraft pair.
+enum SaveDoodlePassportChrome {
+    static let panelFill = Color(
+        light: SaveDoodlePassportCatalog.panelFillLightHex,
+        dark: SaveDoodlePassportCatalog.panelFillDarkHex
+    )
+    static let panelStroke = Color(
+        light: SaveDoodlePassportCatalog.panelStrokeLightHex,
+        dark: SaveDoodlePassportCatalog.panelStrokeDarkHex
+    )
+    static let discFill = Color(
+        light: SaveDoodlePassportCatalog.discFillLightHex,
+        dark: SaveDoodlePassportCatalog.discFillDarkHex
+    )
+    static let stampBase = Color(
+        light: SaveDoodlePassportCatalog.stampBaseLightHex,
+        dark: SaveDoodlePassportCatalog.stampBaseDarkHex
+    )
+    static let stampRed = Color(
+        light: SaveDoodlePassportCatalog.stampRingRedHex,
+        dark: "E0675C"
+    )
+    static let stampGold = Color(
+        light: SaveDoodlePassportCatalog.stampRingGoldHex,
+        dark: "D9B45A"
+    )
+    static let legendSwatch = Color(
+        light: SaveDoodlePassportCatalog.legendSwatchHex,
+        dark: "E0675C"
+    )
+}
+
 /// Official DESIGN stickers when the kind has a unique asset. Extra kinds
 /// keep their own glyph so unvisited cells do not collapse to five repeats.
-/// Number stamps replace large rank rings. Do not wrap a shrunken icon in
+/// Number stamps overlay the visited sticker. Do not wrap a shrunken icon in
 /// a filled circle.
 struct SaveDoodlePassportSticker: View {
     let kind: SaveDoodleStickerKind
     let visited: Bool
 
     var body: some View {
-        if kind.usesOfficialAsset {
-            Image(kind.officialSticker.imageName(visited: visited, pointSize: SaveLayout.passportSlot))
-                .resizable()
-                .interpolation(.high)
-                .renderingMode(.original)
-                .scaledToFit()
-                .frame(width: SaveLayout.passportSlot, height: SaveLayout.passportSlot)
-                .accessibilityHidden(true)
+        if visited, kind.usesOfficialAsset {
+            Image(kind.officialSticker.imageName(
+                visited: true,
+                pointSize: SaveDoodlePassportCatalog.visitedStickerSize.width
+            ))
+            .resizable()
+            .interpolation(.high)
+            .renderingMode(.original)
+            .scaledToFit()
+            .frame(
+                width: SaveDoodlePassportCatalog.visitedStickerSize.width,
+                height: SaveDoodlePassportCatalog.visitedStickerSize.height
+            )
+            .accessibilityHidden(true)
+        } else if kind.usesOfficialAsset {
+            Image(kind.officialSticker.imageName(
+                visited: false,
+                pointSize: SaveDoodlePassportCatalog.unvisitedArtSize
+            ))
+            .resizable()
+            .interpolation(.high)
+            .renderingMode(.original)
+            .scaledToFit()
+            .frame(
+                width: SaveDoodlePassportCatalog.unvisitedArtSize,
+                height: SaveDoodlePassportCatalog.unvisitedArtSize
+            )
+            .accessibilityHidden(true)
         } else {
             SaveDoodlePassportUniqueGlyph(kind: kind)
-                .frame(width: SaveLayout.passportSlot, height: SaveLayout.passportSlot)
+                .frame(
+                    width: SaveDoodlePassportCatalog.unvisitedArtSize,
+                    height: SaveDoodlePassportCatalog.unvisitedArtSize
+                )
                 .accessibilityHidden(true)
         }
     }
@@ -27,18 +83,31 @@ struct SaveDoodlePassportSticker: View {
 
 struct SaveDoodlePassportNumberStamp: View {
     let number: Int
-    let gold: Bool
+    var rank: SavePassportStampRank = .single
 
     var body: some View {
-        Text("\(number)")
-            .font(SaveAtlasType.body(13))
-            .foregroundStyle(gold ? SaveDoodle.stampGold : SaveDoodle.stampRed)
-            .frame(width: SaveLayout.numberBadge, height: SaveLayout.numberBadge)
-            .overlay {
+        let ring = rank == .gold
+            ? SaveDoodlePassportChrome.stampGold
+            : SaveDoodlePassportChrome.stampRed
+        ZStack {
+            Circle()
+                .fill(SaveDoodlePassportChrome.stampBase)
+            if rank == .double {
                 Circle()
-                    .stroke(gold ? SaveDoodle.stampGold : SaveDoodle.stampRed, lineWidth: 1.5)
+                    .stroke(ring, lineWidth: 1.25)
+                    .padding(3.5)
             }
-            .accessibilityHidden(true)
+            Circle()
+                .stroke(ring, lineWidth: 2)
+            Text("\(number)")
+                .font(SaveAtlasType.body(13))
+                .foregroundStyle(ring)
+        }
+        .frame(
+            width: SaveDoodlePassportCatalog.stampDiameter,
+            height: SaveDoodlePassportCatalog.stampDiameter
+        )
+        .accessibilityHidden(true)
     }
 }
 
@@ -47,40 +116,40 @@ struct SaveDoodlePassportSlotView: View {
     var isStamping: Bool = false
 
     var body: some View {
-        VStack(spacing: SaveSpace.tight) {
-            ZStack {
-                if showsCard {
-                    Circle()
-                        .stroke(
-                            SaveDoodle.pencil,
-                            style: StrokeStyle(lineWidth: 1, dash: [4, 4])
-                        )
-                        .background(
-                            SaveAtlasPalette.paper
-                                .clipShape(Circle())
-                        )
-                }
-                switch slot.content {
-                case let .place(_, kind, rank):
-                    SaveDoodlePassportSticker(kind: kind, visited: rank != .none)
-                case .empty:
-                    EmptyView()
-                }
+        ZStack {
+            if showsCard {
+                Circle()
+                    .stroke(
+                        SaveDoodle.pencil,
+                        style: StrokeStyle(lineWidth: 1, dash: [4, 4])
+                    )
+                    .background(
+                        SaveDoodlePassportChrome.discFill
+                            .clipShape(Circle())
+                    )
+                    .frame(
+                        width: SaveDoodlePassportCatalog.unvisitedDiscSize,
+                        height: SaveDoodlePassportCatalog.unvisitedDiscSize
+                    )
             }
-            .frame(width: SaveDoodlePassportCatalog.slotSize, height: SaveDoodlePassportCatalog.cardHeight)
-
+            switch slot.content {
+            case let .place(_, kind, rank):
+                SaveDoodlePassportSticker(kind: kind, visited: rank != .none)
+            case .empty:
+                EmptyView()
+            }
             if let number = slot.stampNumber {
-                SaveDoodlePassportNumberStamp(
-                    number: number,
-                    gold: {
-                        if case let .place(_, _, rank) = slot.content { return rank == .gold }
-                        return false
-                    }()
-                )
-            } else {
-                Color.clear.frame(width: SaveLayout.numberBadge, height: SaveLayout.numberBadge)
+                SaveDoodlePassportNumberStamp(number: number, rank: stampRank)
+                    .offset(
+                        x: SaveDoodlePassportCatalog.stampOffset.width,
+                        y: SaveDoodlePassportCatalog.stampOffset.height
+                    )
             }
         }
+        .frame(
+            width: SaveDoodlePassportCatalog.cardHeight,
+            height: SaveDoodlePassportCatalog.cardHeight
+        )
         .scaleEffect(isStamping ? 1.08 : 1)
         .animation(SaveTheme.Motion.stampSpring, value: isStamping)
     }
@@ -92,6 +161,11 @@ struct SaveDoodlePassportSlotView: View {
         case .empty:
             return true
         }
+    }
+
+    private var stampRank: SavePassportStampRank {
+        if case let .place(_, _, rank) = slot.content { return rank }
+        return .single
     }
 }
 
@@ -107,7 +181,7 @@ struct SaveDoodlePassportUniqueGlyph: View {
             SaveDoodleFerrisGlyph()
         } else {
             Image(systemName: kind.systemImageName)
-                .font(.system(size: 28, weight: .light))
+                .font(.system(size: 22, weight: .light))
                 .foregroundStyle(SaveAtlasPalette.ink)
         }
     }
