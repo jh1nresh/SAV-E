@@ -297,6 +297,7 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertEqual(SaveListItem.from(candidate: candidate).googlePlaceId, candidate.id)
     }
 
+    @MainActor
     func testSelectedPlaceEnrichmentKeepsCheckInMadeWhileInFlight() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
