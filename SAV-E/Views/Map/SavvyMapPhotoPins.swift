@@ -552,51 +552,76 @@ extension PlaceCategory {
 
 // MARK: - Visit log (P7)
 
-final class SavvyMapVisitStore: ObservableObject, @unchecked Sendable {
+/// Prototype adapter; shared Doodle/Passport history is authoritative.
+@MainActor
+final class SavvyMapVisitStore: ObservableObject {
     static let shared = SavvyMapVisitStore()
 
     private let defaults: UserDefaults
-    private let key: String
-    private let lock = NSLock()
+    private let calendar: Calendar
+    private let history: SaveDoodleVisitStore
+    private var pending: Set<UUID> = []
 
-    init(defaults: UserDefaults = .standard, key: String = "savvy.map.visits.v1") {
+    init(defaults: UserDefaults = .standard, key: String = "savvy.map.visits.v1",
+         calendar: Calendar = .current) {
         self.defaults = defaults
-        self.key = key
+        self.calendar = calendar
+        history = SaveDoodleVisitStore(defaults: defaults, calendar: calendar)
+        // Preserve the old payload verbatim. Import each date only once per
+        // calendar day; existing shared counters must never be decremented.
+        let migrationKey = key + ".imported." + SaveDoodleVisitStore.datesKey
+        guard !defaults.bool(forKey: migrationKey) else { return }
+        let legacy = defaults.dictionary(forKey: key) as? [String: [Double]] ?? [:]
+        for (rawID, timestamps) in legacy {
+            guard let id = UUID(uuidString: rawID) else { continue }
+            let snapshot = history.snapshot(for: id)
+            var dates = snapshot.dates
+            for stamp in timestamps.sorted() {
+                let date = Date(timeIntervalSince1970: stamp)
+                if !dates.contains(where: { calendar.isDate(Date(timeIntervalSince1970: $0), inSameDayAs: date) }) {
+                    dates.append(stamp)
+                }
+            }
+            history.restore(.init(id: id, dates: dates, count: max(snapshot.count, dates.count)))
+        }
+        defaults.set(true, forKey: migrationKey)
     }
 
     func visits(for placeID: UUID) -> [Date] {
-        lock.lock()
-        defer { lock.unlock() }
-        return stored()[placeID.uuidString, default: []].map { Date(timeIntervalSince1970: $0) }
+        history.snapshot(for: placeID).dates.map(Date.init(timeIntervalSince1970:))
     }
 
     func visitCount(for placeID: UUID, fallbackVisited: Bool) -> Int {
-        let count = visits(for: placeID).count
-        if count > 0 { return count }
-        return fallbackVisited ? 1 : 0
+        max(history.count(for: placeID), fallbackVisited ? 1 : 0)
     }
 
     func lastVisit(for placeID: UUID, fallback: Date?) -> Date? {
-        visits(for: placeID).max() ?? fallback
+        history.latestVisit(for: placeID) ?? fallback
     }
 
     @discardableResult
     func recordVisit(placeID: UUID, at date: Date = Date()) -> Int {
-        lock.lock()
-        var values = stored()
-        var stamps = values[placeID.uuidString, default: []]
-        stamps.append(date.timeIntervalSince1970)
-        values[placeID.uuidString] = stamps
-        defaults.set(values, forKey: key)
-        lock.unlock()
-        DispatchQueue.main.async { [weak self] in
-            self?.objectWillChange.send()
-        }
-        return stamps.count
+        let datedHistory = SaveDoodleVisitStore(defaults: defaults, calendar: calendar, now: { date })
+        objectWillChange.send()
+        datedHistory.recordVisit(for: placeID)
+        return history.count(for: placeID)
     }
 
-    private func stored() -> [String: [TimeInterval]] {
-        defaults.dictionary(forKey: key) as? [String: [TimeInterval]] ?? [:]
+    /// No history mutation precedes persistence, including when the awaited
+    /// operation resumes after sign-out or a same-account session replacement.
+    @discardableResult
+    func recordPersistedVisit(
+        placeID: UUID,
+        isCurrent: () -> Bool,
+        persist: () async throws -> Void
+    ) async throws -> Bool {
+        guard isCurrent(), pending.insert(placeID).inserted else { return false }
+        defer { pending.remove(placeID) }
+        try await persist()
+        try Task.checkCancellation()
+        guard isCurrent() else { throw CancellationError() }
+        recordVisit(placeID: placeID)
+        return true
     }
 }
 
@@ -676,6 +701,7 @@ struct SavvyMapCardBackModel: Equatable {
 
     var hasVisited: Bool { visitCount > 0 }
 
+    @MainActor
     static func make(
         place: Place,
         visits: SavvyMapVisitStore
@@ -1513,7 +1539,7 @@ struct SavvyMapPhotoPinPreviewCell: View {
             for index in 0..<visitCount {
                 _ = store.recordVisit(
                     placeID: SavvyMapPhotoPinPreviewFixtures.placeID,
-                    at: last.addingTimeInterval(TimeInterval(index - visitCount + 1))
+                    at: last.addingTimeInterval(TimeInterval(index - visitCount + 1) * 86_400)
                 )
             }
         }

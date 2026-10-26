@@ -3,6 +3,7 @@ import SwiftUI
 struct SaveHomeView: View {
     @ObservedObject var store: TripPackStore
     @ObservedObject var mapViewModel: MapViewModel
+    let headerTopPadding: CGFloat
     let onCapture: () -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
@@ -10,25 +11,35 @@ struct SaveHomeView: View {
     let onOpenTrips: () -> Void
     let onOpenTrip: (UUID) -> Void
     let onOpenPassport: () -> Void
+    let onOpenCollectedPassport: () -> Void
     @Environment(\.appLanguageSettings) private var languageSettings
+    @Environment(\.scenePhase) private var scenePhase
     @ObservedObject private var locationService = LocationService.shared
 
     var body: some View {
-        Group {
-            if SaveAtlasRuntime.usesParityFixture {
-                HomeAtlasScreen()
-            } else {
-                SaveTileTownHomeView()
-            }
-        }
+        SaveDoodleHomeView(
+            locationService: locationService,
+            onOpenCollectedPassport: onOpenCollectedPassport,
+            headerTopPadding: headerTopPadding,
+            collectionReady: mapViewModel.isSavedCollectionReady
+        )
         .environment(\.atlasPresentation, atlasPresentation)
         .task(id: locationService.authorizationStatus) {
-            guard !ReviewDemo.isOfflineUITestMode,
-                  [.authorizedAlways, .authorizedWhenInUse].contains(locationService.authorizationStatus) else { return }
-            _ = await locationService.requestCurrentLocation()
+            await refreshHomeLocation(forceRefresh: false)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            Task { await refreshHomeLocation(forceRefresh: true) }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.root")
+    }
+
+    private func refreshHomeLocation(forceRefresh: Bool) async {
+        guard !ReviewDemo.isOfflineUITestMode,
+              [.authorizedAlways, .authorizedWhenInUse].contains(locationService.authorizationStatus)
+        else { return }
+        _ = await locationService.requestCurrentLocation(forceRefresh: forceRefresh)
     }
 
     private var atlasPresentation: AtlasPresentation {
@@ -68,6 +79,7 @@ struct SaveLibraryView: View {
     let onOpenReviewCandidate: (PlaceReviewCandidate) -> Void
     let onOpenSavedPlace: (Place) -> Void
     let onOpenPassport: () -> Void
+    var onOpenTrips: () -> Void = {}
     var captureResultCount: Int? = nil
     var onLoadDuplicateAudit: () async throws -> [SaveReviewDuplicateGroup] = { [] }
     @State private var showsDuplicateAudit = false
@@ -93,6 +105,20 @@ struct SaveLibraryView: View {
         // back control when the child's toolbar modifier won.
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("saves.root")
+        .toolbar {
+            if captureResultCount == nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: onOpenTrips) {
+                        Text(localized("Trips ›", "行程 ›"))
+                            .font(SaveAtlasType.strong(15))
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(localized("Trips", "行程"))
+                    .accessibilityIdentifier("saves.trips")
+                }
+            }
+        }
         .sheet(isPresented: $showsDuplicateAudit, onDismiss: {
             if let candidate = auditSelection {
                 auditSelection = nil
@@ -532,33 +558,37 @@ struct SaveMapRootView: View {
 
     var body: some View {
         Group {
-            if SaveAtlasRuntime.usesParityFixture {
-                // Fixture-only illustrated atlas. Production Map is default
-                // Apple MapKit with coral photo pins (HoP 2026-10-21). Home
-                // peek stays tile-town. Parity attachments stay on this fixture.
-                RootAtlasMapScreen()
-                    .environment(\.atlasPresentation, atlasPresentation)
-            } else {
-                SaveMapPhotoPinsRoot(
-                    mapViewModel: mapViewModel,
-                    presentation: atlasPresentation,
-                    onClearSelection: mapViewModel.clearSelectedMapObject,
-                    onPlanAroundPlace: onPlanAroundPlace
-                )
-            }
+            SaveDoodleMapView(
+                mapViewModel: mapViewModel,
+                presentation: atlasPresentation,
+                onClearSelection: mapViewModel.clearSelectedMapObject,
+                onPlanAroundPlace: onPlanAroundPlace,
+                shouldFocusOnUserLocation: shouldFocusOnUserLocation
+            )
         }
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
 #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("--uitest-map-place-selected"),
-               mapViewModel.selectedPlace == nil,
-               let firstPlace = mapViewModel.places.first {
-                mapViewModel.selectedPlace = firstPlace
+               mapViewModel.selectedPlace == nil {
+                let taipei = mapViewModel.places.first { place in
+                    abs(place.latitude - 25.04) < 0.35 && abs(place.longitude - 121.56) < 0.35
+                }
+                mapViewModel.selectedPlace = taipei ?? mapViewModel.places.first
             }
 #endif
         }
+        // MapKit's Map reports a short a11y frame (307pt on 375pt). Keep
+        // map.root on a full-bleed stand-in so XCTest measures the canvas,
+        // not the padded header/sheet union.
+        .background {
+            Color.clear
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityElement()
+                .accessibilityIdentifier("map.root")
+                .allowsHitTesting(false)
+        }
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("map.root")
     }
 
     private var atlasPresentation: AtlasPresentation {
@@ -724,7 +754,6 @@ private struct SaveAtlasMapStampTicket: View {
             "Open the lifted saved postcard",
             "打開收藏明信片詳情"
         ))
-        .accessibilityIdentifier("saves.mapStamp.postcard")
     }
 
     private var detail: String {
