@@ -1180,7 +1180,7 @@ final class MapViewModel: ObservableObject {
         guard !isLoadingPlaces else { return }
 
         if !usesRemotePersistence {
-            places = localConfirmedPlaces()
+            places = localConfirmedPlaces(markCollectionReady: true)
             reviewCandidates = localReviewCandidates()
             return
         }
