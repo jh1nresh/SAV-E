@@ -17,7 +17,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
         {
           "tier": "pro",
           "status": "active",
-          "product_id": "com.wanderly.app.pro.annual",
+          "product_id": "savvy.pro.annual",
           "expires_at": "2027-08-19T00:00:00.000Z",
           "environment": "Sandbox"
         }
@@ -26,7 +26,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
         let response = try JSONDecoder().decode(SaveEntitlementResponse.self, from: json)
         XCTAssertEqual(response.resolvedTier, .pro)
         XCTAssertEqual(response.status, "active")
-        XCTAssertEqual(response.productID, "com.wanderly.app.pro.annual")
+        XCTAssertEqual(response.productID, "savvy.pro.annual")
         XCTAssertEqual(response.environment, "Sandbox")
     }
 
@@ -36,7 +36,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
         {
           "tier": "platinum",
           "status": "active",
-          "product_id": "com.wanderly.app.pro.annual",
+          "product_id": "savvy.pro.annual",
           "expires_at": null,
           "environment": "Production"
         }
@@ -118,7 +118,7 @@ final class SaveEntitlementWiringTests: XCTestCase {
         )
         XCTAssertFalse(
             store.shouldPresentPaywall(for: .refusedAllowanceExhausted, hasConfirmedMapStamp: true),
-            "AI quota exhaustion must never open the places-only paywall"
+            "exhausted model allowance is not a Pro sales trigger"
         )
     }
 
@@ -170,14 +170,41 @@ final class SaveEntitlementWiringTests: XCTestCase {
         XCTAssertFalse(store.shouldPresentPaywall(for: decision, hasConfirmedMapStamp: true))
     }
 
-    /// A Pro user is unmetered regardless of how much they used.
+    /// Pro does not raise model allowance. Exhausted quota is a notice, not a paywall.
     @MainActor
-    func testProUserIsNeverGated() async {
-        let store = Self.makeStore(loadQuota: { Self.quota(tier: "pro", used: 9_999, limit: 500) })
+    func testProUserSharesModelAllowanceAndNeverOpensPaywallForIt() async {
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "pro", used: 20, limit: 20) })
         await store.refresh()
 
         XCTAssertEqual(store.tier, .pro)
-        XCTAssertEqual(store.decideAIAssist(), .allowed)
+        XCTAssertEqual(store.decideAIAssist(), .allowedEnforcementDisabled)
+        XCTAssertFalse(store.shouldPresentPaywall(for: store.decideAIAssist(), hasConfirmedMapStamp: true))
+        XCTAssertNil(store.allowanceNotice())
+    }
+
+    @MainActor
+    func testExhaustedAllowanceShowsNeutralNoticeWithoutPaywall() async {
+        let store = Self.makeStore(loadQuota: { Self.quota(tier: "free", used: 20, limit: 20) })
+        await store.refresh()
+
+        let decision = SaveAIAssistGate.decide(
+            tier: .free, usedUnits: 20, limitUnits: 20, warningThresholdUnits: 15,
+            enforcementEnabled: true
+        )
+        XCTAssertEqual(decision, .refusedAllowanceExhausted)
+        XCTAssertFalse(store.shouldPresentPaywall(for: decision, hasConfirmedMapStamp: true))
+        XCTAssertEqual(
+            SaveEntitlementStore.exhaustedAllowanceMessage(language: .english),
+            "This month's model allowance is used up. Try again next period."
+        )
+        XCTAssertEqual(
+            SaveEntitlementStore.exhaustedAllowanceMessage(language: .traditionalChinese),
+            "這個月的模型額度已用完。下個週期再試。"
+        )
+        XCTAssertFalse(SaveAIAssistUserCopy.exhaustedEnglish.contains("AI"))
+        XCTAssertFalse(SaveAIAssistUserCopy.exhaustedEnglish.localizedCaseInsensitiveContains("assist"))
+        XCTAssertFalse(SaveAIAssistUserCopy.exhaustedTraditionalChinese.contains("AI"))
+        XCTAssertFalse(SaveAIAssistUserCopy.exhaustedTraditionalChinese.contains("次數"))
     }
 
     // MARK: - Source-level guarantees

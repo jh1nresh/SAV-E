@@ -309,10 +309,18 @@ final class SAVEProductionConfigTests: XCTestCase {
     /// The gate is the only thing allowed to refuse an AI assist, so its truth
     /// table is pinned here.
     func testAIAssistGateFailsOpenAndRespectsEnforcementSwitch() {
-        // Pro is unmetered regardless of usage.
+        // Pro uses the same model allowance as free. Unlimited saves is the
+        // only Pro benefit.
         XCTAssertEqual(
             SaveAIAssistGate.decide(tier: .pro, usedUnits: 999, limitUnits: 20, warningThresholdUnits: 15),
-            .allowed
+            .allowedEnforcementDisabled
+        )
+        XCTAssertEqual(
+            SaveAIAssistGate.decide(
+                tier: .pro, usedUnits: 20, limitUnits: 20, warningThresholdUnits: 15,
+                enforcementEnabled: true
+            ),
+            .refusedAllowanceExhausted
         )
 
         // Metering unavailable: fail open rather than guess.
@@ -5919,8 +5927,14 @@ final class SAVEProductionConfigTests: XCTestCase {
         let store = try source(at: "SAV-E/Services/SaveEntitlementStore.swift")
         let map = try source(at: "SAV-E/ViewModels/MapViewModel.swift")
         let listing = try source(at: "specs/app-store-listing.md")
-        XCTAssertTrue(listing.contains("Monthly AI-assist allowance is higher on Pro (Free 20, Pro 500)."))
-        XCTAssertFalse(listing.contains("Monthly AI-assist allowance is the same on Free and Pro"))
+        XCTAssertTrue(
+            listing.contains(
+                "Savvy Pro is an optional auto-renewing subscription for unlimited saved places. Free includes 50 saved places."
+            )
+        )
+        XCTAssertFalse(listing.contains("AI-assist"))
+        XCTAssertFalse(listing.contains("Free 20"))
+        XCTAssertFalse(listing.contains("Pro 500"))
         let supabase = try source(at: "SAV-E/Services/SupabaseService.swift")
         XCTAssertTrue(
             supabase.contains("func saveFriendRestaurant(placeID: UUID) async throws -> Place"),
@@ -7435,8 +7449,31 @@ final class SAVEProductionConfigTests: XCTestCase {
         XCTAssertEqual(schemes, ["savvy", "wanderly"])
 
         XCTAssertTrue(projectSpec.contains("PRODUCT_BUNDLE_IDENTIFIER: com.wanderly.app"))
-        XCTAssertTrue(storeKit.contains("com.wanderly.app.pro.annual"))
-        XCTAssertTrue(storeKit.contains("com.wanderly.app.pro.monthly"))
+        XCTAssertTrue(storeKit.contains("savvy.pro.annual"))
+        XCTAssertTrue(storeKit.contains("savvy.pro.monthly"))
+        XCTAssertEqual(
+            storeKit.components(separatedBy: "Save unlimited places. Free plan includes 50.").count - 1,
+            2,
+            "monthly and annual must share the HoP English subscription description"
+        )
+        XCTAssertEqual(
+            storeKit.components(separatedBy: "無限收藏地點。免費版可收藏 50 個。").count - 1,
+            2,
+            "monthly and annual must share the HoP Traditional Chinese description"
+        )
+        for forbidden in ["AI", "assist", "次數"] {
+            XCTAssertFalse(
+                storeKit.contains(forbidden),
+                "SAVEPro.storekit must not mention \(forbidden)"
+            )
+        }
+        let paywallCopy = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
+        for forbidden in ["AI", "assist", "次數"] {
+            XCTAssertFalse(
+                paywallCopy.contains(forbidden),
+                "paywall copy must not mention \(forbidden)"
+            )
+        }
     }
 
     func testShareExtensionUsesAtlasStatesWithoutConfirmingUnverifiedCandidates() throws {
