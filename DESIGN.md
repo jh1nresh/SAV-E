@@ -125,8 +125,8 @@ Rules:
 - Product Map tab (`SaveDoodleMapView`) renders default Apple MapKit with Doodle chrome.
   Home (`SaveDoodleHomeView`) is the Doodle Eat/Go list only (no map). Friends (`SaveFriendsView`) is a doodle people list; the shared map stays hidden.
 - Tile-town is a memory map. Pins hash to village lots. It does not silently
-  confirm places and it does not invent GPS truth. Navigate / Trip maps may
-  still hand off to MapKit or Apple Maps.
+  confirm places and it does not invent GPS truth. Navigate / Trip maps stay
+  MapKit. The product Map tab is also MapKit as of 2026-10-21.
 - Nearby / Saved / Friends filter chips live on **Map only**. Home must not
   reuse that chrome.
 - Coral outline lollipop pins only (paper fill, coral stroke, numbered).
@@ -646,14 +646,16 @@ Every UI object must map to one of these states:
 | --- | --- | --- | --- |
 | Source Clue | Savvy preserved source evidence but lacks a confirmed place | No | Find exact place |
 | Review Candidate | Likely place match, user confirmation needed | Only with reliable coordinates | Confirm or reject |
-| Unsaved Candidate | Recommendation or visible map object not saved | Optional if map-originated | Save or inspect |
-| Map Stamp | Confirmed saved place | Yes | Navigate or plan |
-| Visited Map Stamp | Confirmed place with visited memory | Yes | Update memory |
+| Unsaved Candidate | Recommendation or visible map object not saved | Apple native POI only — never a Savvy/photo pin | Save or inspect |
+| Map Stamp | Confirmed saved place | Yes — Savvy pin | Navigate or plan |
+| Visited Map Stamp | Confirmed place with visited memory | Yes — visited Savvy pin | Update memory |
 | Private Review | User review proof or note, private by default | No by itself | Add proof |
 | Trip Stop | Route/planning object, not necessarily saved | In trip context only | Review plan |
 | Travel window | Arrival, departure, check-in, or check-out constraint on a Trip Plan | No pin of its own | Adjust time |
 
 Never collapse Source Clue, Review Candidate, and Map Stamp into one visual state.
+On the product Map, saved vs unsaved must also be obvious in five seconds:
+Savvy pin = Map Stamp, visited treatment = Visited Map Stamp, Apple POI = unsaved.
 
 ## Screen Rules
 
@@ -843,8 +845,8 @@ private input, or adds a place.
 
 ### Map
 
-The map is the spatial memory canvas. The product Map tab is tile-town, not
-live MapKit.
+The map is the spatial memory canvas. The product Map tab is default Apple
+Maps with Doodle chrome (`SaveDoodleMapView`). Home is the nearby Eat/Go list.
 
 Rules:
 
@@ -863,16 +865,17 @@ Rules:
 - Drawer search (collapsed capsule) still opens the parked search panel.
   Category, Want to try, Visited, and Nearby-distance chips may remain in
   the drawer as Map Stamp lenses; they are not Home chrome.
-- Only reliable states get pins on the town. Source-only clues have no pin.
-- Unsaved nearby candidates are shown only after an explicit drawer action.
-- Selected stamp shows a kraft peek (name + date/area), not a default card
-  at rest.
+- Only reliable states get pins. Source-only clues have no pin. Unsaved
+  places never become Savvy / photo pins; they remain Apple native POIs.
+- Unsaved nearby candidates are shown only after an explicit drawer action
+  or a native POI tap into the existing save flow. After save, the stamp
+  appears as a Savvy pin immediately.
 - Tapping the collapsed search shelf opens the existing full-height panel,
   focuses the search field, and shows the keyboard.
 - Dragging the handle or panel resizes through parked stages and must not
   request keyboard focus. Tapping the resize handle remains a resize control.
-- Trip maps and Navigate may still use MapKit / Apple Maps. That is not the
-  product Map base.
+- Navigate keeps MapKit / Apple Maps. Home and Map retain their shared
+  Doodle city and Eat/Go filters.
 
 ### Plan
 
@@ -1087,3 +1090,13 @@ city/filter/place-sheet/action geometry and hit-target assertions; the
 unmasked screenshots remain required for human visual review. Manual
 visit counts use the shared `SaveDoodleVisitStore` read by Map and
 Passport.
+
+### Photo-pin prototype integration status
+
+`SaveMapPhotoPinsRoot` and `SavvyMapPhotoPins` remain inactive prototype components.
+The production root stays `SaveDoodleMapView`, including unsaved search candidates,
+route polylines, selection and shared Home filters. DEBUG photo-pin catalogs and
+motion captures are component evidence only; they do not show the production Map
+or establish its visual acceptance. No own/friend-photo binding ships here. The
+prototype records visits after persistence and shares daily-deduplicated history
+with Passport; activation requires reconciling the live map behaviors first.
