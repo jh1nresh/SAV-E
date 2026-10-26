@@ -1,0 +1,47 @@
+name: Verify
+
+# Linux seed/check only. Do not add macOS jobs here; live simulator capture
+# stays manual on ios.yml workflow_dispatch so this does not compete with
+# #290 / #293 for macOS runners.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TZ: UTC
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      PYTHONHASHSEED: "0"
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Linux verify seed/check
+        run: |
+          python3 -B -m unittest discover -s Tests/ci -p 'test_verify.py' -v
+          ./verify seed taipei-12
+          ./verify run V2
+          ./verify screenshot home
+          ./verify check
+
+      - name: Upload verify report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: save-verify-${{ github.sha }}
+          path: .verify/
+          if-no-files-found: ignore
+          retention-days: 14
