@@ -60,7 +60,7 @@ railway run --service save-backend -- bash -c \
   'PGSSLMODE=require psql "${DATABASE_URL%%\?*}" -v ON_ERROR_STOP=1 -1 -c "set search_path to public" -f sql/google-photo-url-cleanup.sql'
 ```
 
-Expect `BEGIN` / `UPDATE` / `COMMIT`. If it errors, the transaction rolls back.
+Expect `BEGIN` / `UPDATE` / `COMMIT`. If it errors, the transaction rolls back. Cleanup and verification decode layered URL escapes and compare parsed host/path boundaries; non-Google source URL bytes remain unchanged. Invalid UTF-8/NUL escapes or non-ASCII hosts requiring IDNA normalization deliberately stop the operation. Inspect those rows separately before a newly authorized run; an error is never a clean verification result.
 
 ## 3. VERIFY
 

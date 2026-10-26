@@ -66,6 +66,13 @@ class CoverageTests(unittest.TestCase):
         self.assertFalse(plan["trip"])
         self.assertLess(len(plan["tests"]), len(selection.FULL))
 
+    def test_shared_place_detail_keeps_full_integration(self):
+        plan = selection.select(["SAV-E/Views/Map/PlaceBottomSheet.swift"])
+        self.assertEqual(plan["profile"], "full")
+        self.assertTrue(plan["units"])
+        self.assertTrue(plan["trip"])
+        self.assertEqual(plan["tests"], selection.select([], full=True)["tests"])
+
     def test_every_ui_route_keeps_parity_and_five_tab_home(self):
         parity = selection.RAIL + "testCaptureAtlasProductionParity"
         five_tab = selection.RAIL + "testCaptureFiveTabLanding"

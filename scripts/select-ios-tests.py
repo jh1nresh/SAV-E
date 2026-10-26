@@ -43,7 +43,6 @@ BASELINE = [RAIL + name for name in (
 # Exact-file allowlist: adding another view/service requires coverage review.
 SURFACES = {
     "SAV-E/Views/Map/SaveMapDrawerPanel.swift": "map",
-    "SAV-E/Views/Map/PlaceBottomSheet.swift": "place-photos",
     "SAV-E/Views/Onboarding/OnboardingView.swift": "onboarding",
     "SAV-E/Views/Plan/SavePlanView.swift": "plan",
 }
@@ -62,7 +61,6 @@ TESTS = {
         "testTripUsesPlanMapAndTopSharePostcardPocket",
         "testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch",
     )],
-    "place-photos": [PHOTO_ATTR],
 }
 # Full/main retains every frozen selector plus the social passport flow. Plan extras belong on the
 # Plan route only. Folding them into FULL made this CI-scoping PR require

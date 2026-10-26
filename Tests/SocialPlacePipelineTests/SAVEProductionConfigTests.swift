@@ -972,6 +972,8 @@ final class SAVEProductionConfigTests: XCTestCase {
 
     @MainActor
     func testHomePhotoEnrichmentRestoresOriginalAfterCappedPatch() async throws {
+        GoogleMapsPlatformAvailability.updateTerritory(regionCode: "TW")
+        defer { GoogleMapsPlatformAvailability.updateTerritory(regionCode: nil) }
         let auth = PrivyAuthService.shared
         let originalAuth = auth.authState
         let originalDefaults = SavePlaceLimitHandoff.testDefaults
@@ -9376,6 +9378,8 @@ final class SAVEAnalysisTransportTests: XCTestCase {
     }
 
     func testGoogleUsesServerWithoutClientKeyAndKeepsOrdinarySearchRoute() async throws {
+        GoogleMapsPlatformAvailability.updateTerritory(regionCode: "TW")
+        defer { GoogleMapsPlatformAvailability.updateTerritory(regionCode: nil) }
         let result = #"{"status":"OK","results":[{"place_id":"fixture","name":"Fixture","geometry":{"location":{"lat":25.03,"lng":121.56}}}]}"#
         AnalysisRequestURLProtocol.handler = { _ in (200, result) }
         let places = GooglePlacesService(apiKey: "REPLACE_ME", session: session(), apiBaseURL: "https://analysis.test",
@@ -9398,6 +9402,8 @@ final class SAVEAnalysisTransportTests: XCTestCase {
     }
 
     func testGoogleDenialNeverFallsBackToClientKeyOrMakesLaterAnalysisCall() async {
+        GoogleMapsPlatformAvailability.updateTerritory(regionCode: "TW")
+        defer { GoogleMapsPlatformAvailability.updateTerritory(regionCode: nil) }
         AnalysisRequestURLProtocol.handler = { _ in (429, #"{"code":"analysis_limit_exceeded"}"#) }
         let places = GooglePlacesService(apiKey: "must-not-be-used", session: session(), apiBaseURL: "https://analysis.test",
             accessTokenProvider: { "synthetic-token" })

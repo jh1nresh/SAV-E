@@ -5,6 +5,17 @@ import XCTest
 @testable import SAVE
 
 final class SaveCollaborativeListTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        // Deterministic physical-territory fixture; no locale or live geocoder.
+        GoogleMapsPlatformAvailability.updateTerritory(regionCode: "TW")
+    }
+
+    override func tearDown() {
+        GoogleMapsPlatformAvailability.updateTerritory(regionCode: nil)
+        super.tearDown()
+    }
+
     @MainActor
     func testSharedListLinkRoundTripsViewerRole() throws {
         var list = SaveCollaborativeList(title: "Tokyo cafes", note: "For Saturday")
@@ -1181,11 +1192,46 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
+    func testUnknownTerritoryBlocksCachedGooglePhotosAndProviderRequests() async throws {
+        let google = try XCTUnwrap(URL(string: "https://maps.googleapis.com/maps/api/place/photo?photo_reference=territory"))
+        let own = try XCTUnwrap(URL(string: "https://example.com/territory-own.jpg"))
+        seedThumbFixture(google)
+        seedThumbFixture(own)
+        GoogleMapsPlatformAvailability.updateTerritory(regionCode: nil)
+        XCTAssertNil(CachedImageStore.shared.image(for: google))
+        XCTAssertNotNil(CachedImageStore.shared.image(for: own))
+        do {
+            _ = try await CachedImageStore.shared.loadImage(for: google)
+            XCTFail("Unknown territory must reject even cached Google photos")
+        } catch { XCTAssertEqual((error as? URLError)?.code, .networkConnectionLost) }
+        let service = GooglePlacesService(apiKey: "SYNTHETIC_TERRITORY_TEST_KEY")
+        do {
+            _ = try await service.getPlaceDetails(placeId: "fixture")
+            XCTFail("Unknown territory must not request details")
+        } catch { XCTAssertEqual((error as? URLError)?.code, .networkConnectionLost) }
+        do {
+            _ = try await service.searchPlace(query: "fixture", near: nil)
+            XCTFail("Unknown territory must not request search")
+        } catch { XCTAssertEqual((error as? URLError)?.code, .networkConnectionLost) }
+    }
+
+    @MainActor
     func testMapsPlatformIsBlockedOnlyForMainlandChinaRegion() {
         XCTAssertFalse(GoogleMapsPlatformAvailability.isAllowed(regionCode: "CN"))
         XCTAssertTrue(GoogleMapsPlatformAvailability.isAllowed(regionCode: "TW"))
         XCTAssertTrue(GoogleMapsPlatformAvailability.isAllowed(regionCode: "US"))
         XCTAssertTrue(GoogleMapsPlatformAvailability.isAllowed(regionCode: "HK"))
+        XCTAssertFalse(GoogleMapsPlatformAvailability.isAllowed(regionCode: nil))
+        XCTAssertFalse(GoogleMapsPlatformAvailability.isAllowed(regionCode: ""))
+        XCTAssertFalse(GoogleMapsPlatformAvailability.isAllowed(regionCode: "ZZ"))
+        let now = Date(timeIntervalSince1970: 10_000)
+        XCTAssertFalse(GoogleMapsPlatformAvailability.isAllowed(regionCode: "TW", observedAt: now.addingTimeInterval(-301), at: now))
+        GoogleMapsPlatformAvailability.updateTerritory(regionCode: nil)
+        XCTAssertFalse(GoogleMapsPlatformAvailability.isAllowed())
+        GoogleMapsPlatformAvailability.updateTerritory(regionCode: "CN")
+        XCTAssertFalse(GoogleMapsPlatformAvailability.isAllowed())
+        GoogleMapsPlatformAvailability.updateTerritory(regionCode: "TW")
+        XCTAssertTrue(GoogleMapsPlatformAvailability.isAllowed())
     }
 
     // MARK: - Server short-code links (`?c=`)

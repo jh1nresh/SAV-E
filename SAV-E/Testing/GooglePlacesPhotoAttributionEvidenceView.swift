@@ -730,6 +730,8 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
     }
 
     private func seedPhotoFixtures() {
+        // This DEBUG-only scene uses a synthetic permitted-territory fixture.
+        GoogleMapsPlatformAvailability.updateTerritory(regionCode: "TW")
         CachedImageStore.shared.store(
             Self.renderPhoto(
                 top: UIColor(red: 0.93, green: 0.90, blue: 0.82, alpha: 1),

@@ -100,6 +100,7 @@ final class CachedImageStore {
 
     func image(for url: URL) -> UIImage? {
         let cacheURL = GooglePlacesPhotoURL.persistableURL(url)
+        guard !GooglePlacesPhotoURL.isGooglePlacesPhotoURL(cacheURL) || GoogleMapsPlatformAvailability.isAllowed() else { return nil }
         return memoryCache.object(forKey: cacheURL as NSURL)
     }
 
@@ -111,20 +112,20 @@ final class CachedImageStore {
 
     func loadImage(for url: URL) async throws -> UIImage {
         let cacheURL = GooglePlacesPhotoURL.persistableURL(url)
-        if let cached = memoryCache.object(forKey: cacheURL as NSURL) {
-            return cached
-        }
-
         let isGooglePlacesPhoto = GooglePlacesPhotoURL.isGooglePlacesPhotoURL(cacheURL)
         if isGooglePlacesPhoto && !GoogleMapsPlatformAvailability.isAllowed() {
             throw URLError(.networkConnectionLost)
         }
+        if let cached = memoryCache.object(forKey: cacheURL as NSURL) { return cached }
         guard var request = GooglePlacesService.shared.authorizedPhotoRequest(for: cacheURL) else {
             throw URLError(.userAuthenticationRequired)
         }
         request.cachePolicy = isGooglePlacesPhoto ? .reloadIgnoringLocalCacheData : .returnCacheDataElseLoad
         let requestSession = isGooglePlacesPhoto ? sensitiveSession : session
         let (data, response) = try await requestSession.data(for: request)
+        if isGooglePlacesPhoto && !GoogleMapsPlatformAvailability.isAllowed() {
+            throw URLError(.networkConnectionLost)
+        }
         if let httpResponse = response as? HTTPURLResponse,
            !(200..<300).contains(httpResponse.statusCode) {
             throw URLError(.badServerResponse)

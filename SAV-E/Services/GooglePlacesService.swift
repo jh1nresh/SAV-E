@@ -65,18 +65,31 @@ struct GooglePlacePhotoRecord: Hashable {
     var googleMapsURI: URL?
 }
 
-enum GoogleMapsPlatformAvailability {
-    /// Mainland China is a Google Maps Platform prohibited territory.
-    /// Users there must not trigger Places calls; show coral / own photos.
-    nonisolated static func isAllowed(regionCode: String? = nil) -> Bool {
-        let resolved = regionCode ?? currentRegionCode()
-        return resolved?.uppercased() != "CN"
+nonisolated enum GoogleMapsPlatformAvailability {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var territory: (code: String, observedAt: Date)?
+    static let maxAge: TimeInterval = 5 * 60
+
+    /// Only a fresh country resolved from an authorized physical location may
+    /// permit Google requests. Device language/region is never territory proof.
+    static func isAllowed(at now: Date = Date()) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let territory else { return false }
+        return isAllowed(regionCode: territory.code, observedAt: territory.observedAt, at: now)
     }
 
-    /// `Locale.current` is main-actor isolated; CFLocale is safe from
-    /// persist/display helpers that must stay `nonisolated`.
-    nonisolated static func currentRegionCode() -> String? {
-        CFLocaleGetValue(CFLocaleCopyCurrent(), CFLocaleKey.countryCode) as? String
+    static func isAllowed(regionCode: String?, observedAt: Date = Date(), at now: Date = Date()) -> Bool {
+        guard let code = regionCode?.uppercased(),
+              Locale.isoRegionCodes.contains(code), code != "CN" else { return false }
+        let age = now.timeIntervalSince(observedAt)
+        return age >= -60 && age < maxAge
+    }
+
+    static func updateTerritory(regionCode: String?, observedAt: Date = Date()) {
+        lock.lock()
+        defer { lock.unlock() }
+        territory = regionCode.map { ($0.uppercased(), observedAt) }
     }
 }
 
@@ -554,6 +567,13 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
         return placeholders.contains(trimmed.uppercased()) ? nil : trimmed
     }
 
+    private func territoryCheckedData(for request: URLRequest) async throws -> (Data, URLResponse) {
+        guard GoogleMapsPlatformAvailability.isAllowed() else { throw URLError(.networkConnectionLost) }
+        let result = try await session.data(for: request)
+        guard GoogleMapsPlatformAvailability.isAllowed() else { throw URLError(.networkConnectionLost) }
+        return result
+    }
+
     // MARK: - Text Search
 
     func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] {
@@ -575,7 +595,7 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
             request.setValue("Bearer \(try await accessTokenProvider())", forHTTPHeaderField: "Authorization")
             request.setValue(context.id.uuidString, forHTTPHeaderField: "x-save-analysis-id")
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            let (responseData, response) = try await session.data(for: request)
+            let (responseData, response) = try await territoryCheckedData(for: request)
             guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                 if SAVEAnalysisError.isControlDenial(responseData) {
                     await context.markDenied()
@@ -600,7 +620,7 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
                 throw GooglePlacesError.noResults
             }
 
-            (data, _) = try await session.data(for: authorizedRequest(for: url))
+            (data, _) = try await territoryCheckedData(for: authorizedRequest(for: url))
         }
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
@@ -651,7 +671,7 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
             throw GooglePlacesError.noResults
         }
 
-        let (data, _) = try await session.data(for: authorizedRequest(for: url))
+        let (data, _) = try await territoryCheckedData(for: authorizedRequest(for: url))
         let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
 
         guard let result = json?["result"] as? [String: Any] else {
