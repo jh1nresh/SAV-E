@@ -43,6 +43,44 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testForegroundRetryAfterFailedPlacesLoadMarksCollectionReady() async throws {
+        let auth = PrivyAuthService.shared
+        let previous = auth.authState
+        auth.authState = .authenticated(userId: "did:privy:city-retry-owner")
+        defer { auth.authState = previous }
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("home-city-retry-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let service = RecordingSupabaseService()
+        service.fetchPlacesError = NSError(domain: "test-offline", code: 1)
+        let map = MapViewModel(
+            supabaseService: service,
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: true
+        )
+        await map.loadPlaces()
+        XCTAssertFalse(map.isSavedCollectionReady, "A failed initial fetch must not mark the collection ready")
+        XCTAssertEqual(service.fetchPlacesCalls, 1)
+        service.fetchPlacesError = nil
+        await map.handleSceneDidBecomeActive()
+        XCTAssertEqual(service.fetchPlacesCalls, 2)
+        XCTAssertTrue(
+            map.isSavedCollectionReady,
+            "A successful foreground /places retry must mark the collection ready"
+        )
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+                current: .city("tokyo"),
+                places: map.places,
+                locationDenied: false,
+                collectionReady: map.isSavedCollectionReady
+            ),
+            .nearYou
+        )
+    }
+
+    @MainActor
     func testReviewNextStepUsesEvidenceWithoutPromotingClues() {
         XCTAssertEqual(SaveReviewNextStep(pending: true, savable: false, address: "", city: nil, missingInfo: []), .pendingAnalysis)
         XCTAssertEqual(SaveReviewNextStep(pending: false, savable: false, address: " ", city: " ", missingInfo: []), .addCity)

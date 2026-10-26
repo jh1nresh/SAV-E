@@ -1201,6 +1201,12 @@ final class MapViewModel: ObservableObject {
             let remotePlaces = try await supabaseService.fetchPlaces(for: userId)
             try ensureConfirmationSession(userId, generation)
             rememberAuthoritativeSavedPlaceCount(Place.consolidated(remotePlaces).count, owner: userId)
+            places = mergeRemotePlaces(remotePlaces, withLocalPlaces: localConfirmedPlaces())
+            if authService.currentUserId == userId, authService.sessionGeneration == generation {
+                savedCollectionOwner = userId
+                savedCollectionGeneration = generation
+                savedCollectionLoaded = true
+            }
             syncSavedPlaceLimitCache()
         } catch {
             guard authService.currentUserId == userId,
