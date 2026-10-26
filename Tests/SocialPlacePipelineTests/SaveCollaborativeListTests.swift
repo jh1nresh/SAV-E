@@ -989,6 +989,9 @@ final class SaveCollaborativeListTests: XCTestCase {
         legacyPlace.businessPhotoUrls = [legacyURL]
         var list = SaveCollaborativeList(title: "Safe list")
         list.add(.from(place: legacyPlace))
+        var ownPlace = place(name: "Own Cafe", category: .cafe)
+        ownPlace.businessPhotoUrls = [ownPhoto]
+        list.add(.from(place: ownPlace))
 
         let suiteName = "clip-private-photos-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
@@ -996,13 +999,13 @@ final class SaveCollaborativeListTests: XCTestCase {
         let store = SaveCollaborativeListStore(defaults: defaults)
         store.save([list])
         let restored = try XCTUnwrap(store.load().first)
-        let privatePhoto = try XCTUnwrap(restored.items.first?.photoURLs.first)
-        XCTAssertTrue(privatePhoto.contains("photo_reference=legacy-ref"))
-        XCTAssertFalse(privatePhoto.contains("key="))
+        XCTAssertTrue(restored.items.first?.photoURLs.isEmpty == true)
+        XCTAssertEqual(restored.items.last?.photoURLs, [ownPhoto])
 
         let shareURL = try XCTUnwrap(restored.shareURL())
         let payload = try XCTUnwrap(SaveSharedListPayload.from(url: shareURL))
         XCTAssertTrue(payload.list.items.first?.photoURLs.isEmpty == true)
+        XCTAssertEqual(payload.list.items.last?.photoURLs, [ownPhoto])
     }
 
     @MainActor
