@@ -11,6 +11,7 @@ struct SaveDoodleHomeView: View {
     @ObservedObject var locationService: LocationService
     var onOpenCollectedPassport: () -> Void = {}
     var headerTopPadding: CGFloat = AtlasMetrics.statusBarHeight + SaveSpace.xs
+    var collectionReady = false
 
     @State private var showsCityPicker = false
 
@@ -73,17 +74,30 @@ struct SaveDoodleHomeView: View {
         .sheet(isPresented: $showsCityPicker) {
             cityPicker
         }
-        .onAppear { replaceMissingCitySelection(with: resolvedSelection) }
-        .onChange(of: resolvedSelection) { _, resolved in
-            replaceMissingCitySelection(with: resolved)
+        .onAppear { syncPersistedCitySelection() }
+        .onChange(of: resolvedSelection) { _, _ in
+            syncPersistedCitySelection()
+        }
+        .onChange(of: allPlaces.count) { _, _ in
+            syncPersistedCitySelection()
+        }
+        .onChange(of: collectionReady) { _, _ in
+            syncPersistedCitySelection()
         }
     }
 
     /// Persist a replacement when the selected city's last save disappeared
-    /// so the picker check and header do not keep a stale ID.
-    private func replaceMissingCitySelection(with resolved: SaveDoodleCitySelection) {
-        guard session.city != resolved, case .city = session.city else { return }
-        session.city = resolved
+    /// so the picker check and header do not keep a stale ID. Empty
+    /// `allPlaces` on cold launch is "not loaded yet", not a deletion.
+    private func syncPersistedCitySelection() {
+        let next = SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+            current: session.city,
+            places: allPlaces,
+            locationDenied: locationService.isAuthorizationDenied,
+            collectionReady: collectionReady
+        )
+        guard session.city != next else { return }
+        session.city = next
     }
 
     /// A visible production route, also available when there are no waiting clues.
@@ -626,6 +640,7 @@ struct SaveDoodleHomeView: View {
         SaveDoodleHomeCatalog.rowMetaText(
             distance: item.distance,
             place: item.place,
+            visitedAt: SaveDoodleVisitStore().latestVisit(for: item.place.id),
             now: SaveUITestClock.now,
             language: languageSettings.language
         )
