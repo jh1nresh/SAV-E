@@ -955,7 +955,6 @@ private struct SaveAtlasMapPlaceThumbnail: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(AtlasPalette.line.opacity(0.28), lineWidth: 1)
         }
-        .accessibilityHidden(true)
     }
 
     private var fallback: some View {

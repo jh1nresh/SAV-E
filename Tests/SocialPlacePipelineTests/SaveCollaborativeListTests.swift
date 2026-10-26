@@ -557,6 +557,20 @@ final class SaveCollaborativeListTests: XCTestCase {
             "Detail postcard must not mark an own photo. saw=\(postcardOwn)"
         )
 
+        // The carousel correctly rejects Google photos without author metadata.
+        // Exercise both the protected fallback and a real attributed session photo.
+        GooglePlacePhotoSessionStore.resetForTests()
+        defer { GooglePlacePhotoSessionStore.resetForTests() }
+        XCTAssertTrue(PlacePhotoPage.pages(
+            imageURLs: [google.absoluteString], googlePlaceId: "ChIJ-test", googleMapsURI: nil
+        ).isEmpty)
+        GooglePlacePhotoSessionStore.remember([
+            GooglePlacePhotoRecord(
+                url: google,
+                authors: [GooglePlacePhotoAuthor(displayName: "Fixture photographer", uri: nil)],
+                googleMapsURI: URL(string: "https://maps.google.com/?cid=1")
+            )
+        ])
         let detailCarousel = hostedTexts(
             of: PlaceBusinessPhotoCarousel(
                 imageURLs: [google.absoluteString],
