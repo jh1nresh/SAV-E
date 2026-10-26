@@ -6,7 +6,6 @@ import {
   runPlacePhotoBackfill,
   selectBestPhotoCandidate,
   selectMissingPlacePhotosSQL,
-  updateMissingPlacePhotosSQL,
   type BackfillFetch,
   type BackfillQuery,
   type MissingPhotoPlace,
@@ -74,10 +73,10 @@ test("dry run is owner scoped and performs no writes", async () => {
     mode: "dry_run",
     selected: 1,
     matched: 1,
-    wouldUpdate: 1,
+    wouldUpdate: 0,
     updated: 0,
     raced: 0,
-    skipped: 0,
+    skipped: 1,
     failed: 0,
   });
   assert.equal(calls.length, 1);
@@ -86,13 +85,12 @@ test("dry run is owner scoped and performs no writes", async () => {
   assert.deepEqual(calls[0].values, [place.userId, 20]);
 });
 
-test("apply updates only the selected owner row if photos are still missing", async () => {
+test("apply never writes Places photo URLs", async () => {
   const calls: { sql: string; values: readonly unknown[] }[] = [];
   const query: BackfillQuery = async (sql, values) => {
     calls.push({ sql, values });
     if (sql === selectMissingPlacePhotosSQL) return { rows: [databaseRow()] };
-    assert.equal(sql, updateMissingPlacePhotosSQL);
-    return { rows: [{ id: place.id }] };
+    throw new Error(`unexpected write: ${sql}`);
   };
 
   const receipt = await runPlacePhotoBackfill({
@@ -104,14 +102,11 @@ test("apply updates only the selected owner row if photos are still missing", as
     fetcher: googleSearchFetcher,
   });
 
-  assert.equal(receipt.updated, 1);
-  assert.equal(calls.length, 2);
-  assert.match(calls[1].sql, /where id = \$1/);
-  assert.match(calls[1].sql, /and user_id = \$2/);
-  assert.match(calls[1].sql, /source_image_url is null/);
-  assert.equal(calls[1].values[0], place.id);
-  assert.equal(calls[1].values[1], place.userId);
-  assert.doesNotMatch(String(calls[1].values[2]), /key=/);
+  assert.equal(receipt.updated, 0);
+  assert.equal(receipt.matched, 1);
+  assert.equal(receipt.skipped, 1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].sql, selectMissingPlacePhotosSQL);
 });
 
 function databaseRow(): Record<string, unknown> {

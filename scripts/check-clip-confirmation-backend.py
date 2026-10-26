@@ -25,6 +25,7 @@ list_entry = method(map_source, '    func saveClipListHandoff(')
 configured = method(service_source, 'var isConfigured: Bool {\n        apiBaseURL')
 fetch = method(service_source, '    func fetchPlaces(for userId: String) async throws -> [Place] {')
 save = method(service_source, '    func savePlace(_ place: Place, userId: String) async throws {')
+encode = method(service_source, '    func encodedForRemoteWrite() throws -> Data {')
 source = r'''
 import Foundation
 enum SupabaseError: Error { case notConfigured, notAuthenticated }
@@ -32,6 +33,7 @@ struct Place: Codable { var id = UUID() }
 struct PlaceRow: Codable {
     static func from(place: Place, userId: String) -> Self { Self() }
     func toPlace() -> Place { Place() }
+''' + encode + r'''
 }
 extension JSONEncoder { static var supabase: JSONEncoder { JSONEncoder() } }
 extension JSONDecoder { static var supabase: JSONDecoder { JSONDecoder() } }

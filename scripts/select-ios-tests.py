@@ -10,6 +10,7 @@ from pathlib import Path
 
 RAIL = "SAVEUITests/SAVEScreenshotRailTests/"
 ONBOARDING = "SAVEUITests/SAVEOnboardingCarouselTests"
+PHOTO_ATTR = "SAVEUITests/SAVEGooglePhotoAttributionTests/testCaptureLightAndDarkEvidence"
 TRIP_SHEET = RAIL + "testTripStopEditorSurfaceIsReachable"
 BASELINE = [RAIL + name for name in (
     "testCaptureAtlasProductionParity",
@@ -77,6 +78,7 @@ FULL = list(BASELINE) + [
     RAIL + "testHomeTPEAEvidence",
     RAIL + "testHopU1SavedPlaceLimitPaywallShowsSavedFiftyWithoutManMan",
     RAIL + "testMapSavedUnsavedVisitedTaipeiFixture",
+    PHOTO_ATTR,
 ]
 
 # Temporary #279 iteration profiles. Empty SAVE_UI_TEST_FOCUS keeps default

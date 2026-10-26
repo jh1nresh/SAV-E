@@ -285,7 +285,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         guard isConfigured else { return }
 
         let row = PlaceRow.from(place: place, userId: userId)
-        let body = try JSONEncoder.supabase.encode(row)
+        let body = try row.encodedForRemoteWrite()
 
         do {
             try await request(path: "/places", method: "POST", body: body)
@@ -309,7 +309,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         guard isConfigured else { throw SupabaseError.notConfigured }
 
         let row = PlaceRow.from(place: place, userId: userId, friendShareCode: code)
-        let body = try JSONEncoder.supabase.encode(row)
+        let body = try row.encodedForRemoteWrite()
         let data: Data
         do {
             data = try await request(path: "/places", method: "POST", body: body)
@@ -343,8 +343,14 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         Self.assignChangedOptional("google_price_level", place.googlePriceLevel, previous: previous?.googlePriceLevel, hasPrevious: hasPrevious, into: &updates)
         Self.assignChangedOptional("price_range", place.priceRange, previous: previous?.priceRange, hasPrevious: hasPrevious, into: &updates)
         Self.assignChangedOptional("opening_hours", place.openingHours, previous: previous?.openingHours, hasPrevious: hasPrevious, into: &updates)
-        Self.assignChangedOptional("source_image_url", place.sourceImageUrl, previous: previous?.sourceImageUrl, hasPrevious: hasPrevious, into: &updates)
-        Self.assignChangedOptional("business_photo_urls", place.businessPhotoUrls, previous: previous?.businessPhotoUrls, hasPrevious: hasPrevious, into: &updates)
+        Self.assignChangedOptional(
+            "source_image_url",
+            GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
+            previous: GooglePlacesPhotoURL.persistableString(previous?.sourceImageUrl),
+            hasPrevious: hasPrevious,
+            into: &updates
+        )
+        // `business_photo_urls` is retired. Session photos are not written back.
         // Account-backed attribution lives on `recommender`. Send a handle
         // only when it is displayable and actually changed, so a photo
         // enrichment PATCH cannot rewrite or invent one.
@@ -2111,9 +2117,7 @@ struct PlaceRecoveryDecisionDraft: Equatable {
         if let value = GooglePlacesPhotoURL.persistableString(finalPlace.sourceImageUrl) {
             payload["source_image_url"] = value
         }
-        if let value = GooglePlacesPhotoURL.persistableStrings(finalPlace.businessPhotoUrls) {
-            payload["business_photo_urls"] = value
-        }
+        // `business_photo_urls` is retired; do not send session photo URLs.
         if let value = finalPlace.extractedDishes { payload["extracted_dishes"] = value }
         if let value = finalPlace.priceRange { payload["price_range"] = value }
         if let value = finalPlace.recommender { payload["recommender"] = value }
@@ -2278,7 +2282,7 @@ private struct PlaceRow: Codable {
             providerPlaceId: provider_place_id,
             providerMapUrl: provider_map_url,
             sourceImageUrl: GooglePlacesPhotoURL.persistableString(source_image_url),
-            businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(business_photo_urls),
+            businessPhotoUrls: PlaceBusinessPhotoPersistence.importedRemoteURLs(business_photo_urls),
             extractedDishes: extracted_dishes,
             priceRange: price_range,
             recommender: recommender,
@@ -2316,7 +2320,7 @@ private struct PlaceRow: Codable {
             provider_place_id: place.providerPlaceId,
             provider_map_url: place.confirmableProviderMapUrl,
             source_image_url: GooglePlacesPhotoURL.persistableString(place.sourceImageUrl),
-            business_photo_urls: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoUrls),
+            business_photo_urls: PlaceBusinessPhotoPersistence.importedRemoteURLs(place.businessPhotoUrls),
             extracted_dishes: place.extractedDishes,
             memory_meta: place.memoryMetaForPersistence(),
             price_range: place.priceRange,
@@ -2329,6 +2333,23 @@ private struct PlaceRow: Codable {
             social_signal: nil,
             friend_share_code: friendShareCode
         )
+    }
+
+    /// Omits `business_photo_urls` entirely. JSON `null` would still be a
+    /// writable field on insert; founder cleanup owns clearing existing rows.
+    func encodedForRemoteWrite() throws -> Data {
+        let data = try JSONEncoder.supabase.encode(self)
+        guard var object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw EncodingError.invalidValue(
+                self,
+                EncodingError.Context(
+                    codingPath: [],
+                    debugDescription: "Place write body was not a JSON object"
+                )
+            )
+        }
+        object.removeValue(forKey: "business_photo_urls")
+        return try JSONSerialization.data(withJSONObject: object)
     }
 }
 
@@ -2516,7 +2537,7 @@ private struct TripRow: Codable {
     let end_date: String?
     let is_optimized: Bool
     let created_at: String
-    let trip_stops: [TripStopRow]?
+    let trip_stops: [TripStopPersistRow]?
 
     func toTrip() -> Trip {
         let df = DateFormatter()
@@ -2549,12 +2570,12 @@ private struct TripRow: Codable {
             end_date: trip.endDate.map { df.string(from: $0) },
             is_optimized: trip.isOptimized,
             created_at: ISO8601DateFormatter().string(from: trip.createdAt),
-            trip_stops: includeStops ? trip.places.map { TripStopRow.from(stop: $0, tripId: trip.id) } : nil
+            trip_stops: includeStops ? trip.places.map { TripStopPersistRow.from(stop: $0, tripId: trip.id) } : nil
         )
     }
 }
 
-private struct TripStopRow: Codable {
+private struct TripStopPersistRow: Codable {
     let id: UUID
     let trip_id: UUID
     let place_id: UUID?
@@ -2579,8 +2600,8 @@ private struct TripStopRow: Codable {
         )
     }
 
-    static func from(stop: TripStop, tripId: UUID) -> TripStopRow {
-        TripStopRow(
+    static func from(stop: TripStop, tripId: UUID) -> TripStopPersistRow {
+        TripStopPersistRow(
             id: stop.id,
             trip_id: tripId,
             place_id: stop.placeId,

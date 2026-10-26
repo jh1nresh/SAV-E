@@ -288,6 +288,7 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(stamp.contains("enum SaveKraftStampFace"))
         XCTAssertTrue(stamp.contains("case scene"))
         XCTAssertTrue(stamp.contains("SaveKraftStampPixelArt"))
+        XCTAssertTrue(stamp.contains("GooglePlacesPhotoSourceMark"))
         XCTAssertTrue(stamp.contains("SaveDisplayTitle"))
         XCTAssertTrue(stamp.contains("enum SavePixelChromeIconKind"))
         XCTAssertTrue(stamp.contains("struct SavePixelChromeIcon"))

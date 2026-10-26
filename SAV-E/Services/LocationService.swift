@@ -25,6 +25,8 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     @Published private(set) var currentLocation: CLLocation?
 
     private let manager = CLLocationManager()
+    private let territoryGeocoder = CLGeocoder()
+    private var territoryRequest = UUID()
     private var pendingContinuations: [CheckedContinuation<CLLocation?, Never>] = []
 
 #if DEBUG
@@ -116,6 +118,9 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         if simulatesDeniedAuthorization || simulatesAllowedAuthorization { return }
         authorizationStatus = manager.authorizationStatus
+        if authorizationStatus != .authorizedAlways && authorizationStatus != .authorizedWhenInUse {
+            invalidateTerritory()
+        }
 
         guard !pendingContinuations.isEmpty else { return }
 
@@ -141,6 +146,7 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     }
 
     private func startRequest() {
+        invalidateTerritory()
         switch manager.authorizationStatus {
         case .notDetermined:
             manager.requestWhenInUseAuthorization()
@@ -153,9 +159,36 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
         }
     }
 
+    private func invalidateTerritory() {
+        territoryRequest = UUID()
+        territoryGeocoder.cancelGeocode()
+        GoogleMapsPlatformAvailability.updateTerritory(regionCode: nil)
+    }
+
+    private func refreshTerritory(from location: CLLocation) {
+        invalidateTerritory()
+        guard manager.authorizationStatus == .authorizedAlways || manager.authorizationStatus == .authorizedWhenInUse,
+              location.horizontalAccuracy >= 0, location.horizontalAccuracy <= 10_000,
+              abs(location.timestamp.timeIntervalSinceNow) < GoogleMapsPlatformAvailability.maxAge else { return }
+        let request = territoryRequest
+        territoryGeocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
+            Task { @MainActor [weak self] in
+                guard let self, self.territoryRequest == request,
+                      self.manager.authorizationStatus == .authorizedAlways || self.manager.authorizationStatus == .authorizedWhenInUse else { return }
+                GoogleMapsPlatformAvailability.updateTerritory(
+                    regionCode: error == nil ? placemarks?.first?.isoCountryCode : nil,
+                    observedAt: location.timestamp
+                )
+            }
+        }
+    }
+
     private func finish(with location: CLLocation?) {
         if let location {
             currentLocation = location
+            refreshTerritory(from: location)
+        } else {
+            invalidateTerritory()
         }
         let waiters = pendingContinuations
         pendingContinuations = []

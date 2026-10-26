@@ -98,6 +98,7 @@ struct SaveApp: App {
     private let relatedSourcesHarnessActive = SaveSmokeHarness.isRelatedSourcesLaunchEnabled
     @State private var forceOnboardingForUITests = ProcessInfo.processInfo.arguments.contains("--uitest-reset-onboarding")
     private let stampFeedFixtureActive = ProcessInfo.processInfo.arguments.contains("--uitest-stamp-feed-fixture")
+    private let photoAttributionEvidenceActive = GooglePlacesPhotoAttributionEvidence.isLaunchEnabled
     private let mapPhotoPinCatalogActive = ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-catalog")
     private let mapPhotoPinMotionActive = ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-motion")
     private let mapPhotoPinCoralCardActive = ProcessInfo.processInfo.arguments.contains("--uitest-map-photo-pin-coral-card")
@@ -226,7 +227,9 @@ struct SaveApp: App {
     @ViewBuilder
     private var rootContent: some View {
 #if DEBUG
-        if stampFeedFixtureActive {
+        if photoAttributionEvidenceActive {
+            GooglePlacesPhotoAttributionEvidenceView()
+        } else if stampFeedFixtureActive {
             SaveStampFeedFixtureView()
         } else if mapPhotoPinCatalogActive {
             SavvyMapPhotoPinPreviewCatalog(

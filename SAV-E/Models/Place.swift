@@ -689,6 +689,7 @@ struct Place: Identifiable, Codable, Hashable {
         return values
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+            .filter { GooglePlacesPhotoURL.isDisplayable($0) }
             .removingDuplicates()
     }
 
