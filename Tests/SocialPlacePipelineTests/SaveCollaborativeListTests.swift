@@ -1352,6 +1352,7 @@ final class SaveCollaborativeListTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func homeStickerRow(title: String) -> some View {
         HStack(alignment: .center, spacing: 0) {
             SaveDoodleSticker(category: .cafe, placeName: title, visited: false)
