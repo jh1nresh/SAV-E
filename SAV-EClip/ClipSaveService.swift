@@ -1,20 +1,9 @@
-import AuthenticationServices
 import Foundation
 import UIKit
 
 enum ClipSaveOutcome: Equatable {
     case handedOff
-    case saved
-    case duplicate
-    case capReached
-    case listSaved(ClipListSaveCounts)
-    case listFailed(ClipListSaveCounts?)
-    case signInCancelled
-    case failed
-}
-
-enum ClipSaveError: Error, Equatable, Sendable {
-    case cancelled
+    case pending(Int)
     case failed
 }
 
@@ -116,76 +105,11 @@ enum ClipFullApp {
     static var queryURL: URL? { URL(string: "savvy://") }
 
     static var isInstalled: Bool {
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--uitest-clip-no-full-app") { return false }
+#endif
         guard let queryURL else { return false }
         return UIApplication.shared.canOpenURL(queryURL)
-    }
-}
-
-enum ClipAppleAccountStore {
-    static let suiteName = PendingShareStore.suiteName
-    static let key = "clipAppleUserID"
-
-    static func defaults(_ store: UserDefaults? = nil) -> UserDefaults? {
-        store ?? UserDefaults(suiteName: suiteName)
-    }
-
-    static func read(from store: UserDefaults? = nil) -> String? {
-        guard let value = defaults(store)?.string(forKey: key)?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-              !value.isEmpty
-        else { return nil }
-        return value
-    }
-
-    static func write(_ userID: String, to store: UserDefaults? = nil) {
-        let trimmed = userID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        defaults(store)?.set(trimmed, forKey: key)
-    }
-
-    static func clear(_ store: UserDefaults? = nil) {
-        defaults(store)?.removeObject(forKey: key)
-    }
-}
-
-enum ClipSaveAPI {
-    static func parseOutcome(status: Int, data: Data) -> ClipSaveOutcome {
-        if let result = ClipListSavePlanner.onePlaceResult(status: status, data: data) {
-            switch result {
-            case .saved: return .saved
-            case .duplicate: return .duplicate
-            case .capReached: return .capReached
-            case .failed: return .failed
-            }
-        }
-        if status == 403, let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            let code = body["code"] as? String
-            let error = body["error"] as? String
-            if code == "over_free_limit" || error == "saved_place_limit" {
-                return .capReached
-            }
-        }
-        if (200...299).contains(status) {
-            if let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let outcome = body["outcome"] as? String,
-               outcome == "already_saved" {
-                return .duplicate
-            }
-            return .saved
-        }
-        if status == 409 {
-            return .duplicate
-        }
-        return .failed
-    }
-
-    static func parseListOutcome(status: Int, data: Data) -> ClipSaveOutcome {
-        switch ClipListSavePlanner.parseOutcome(status: status, data: data) {
-        case .success(let counts):
-            return .listSaved(counts)
-        case .failure:
-            return .listFailed(nil)
-        }
     }
 }
 
@@ -257,33 +181,19 @@ enum ClipSaveService {
         )
     }
 
+    /// A Clip tap records intent, never a saved place or an authenticated owner.
     static func save(
         draft: ClipPlaceDraft,
         handoffURL: URL,
         sender: String?,
-        openURL: @MainActor @escaping (URL, @escaping (Bool) -> Void) -> Void = openInstalledApp,
-        signIn: @escaping () async throws -> String = { try await ClipAppleAuth.signIn() },
-        postPlace: @escaping (ClipPlaceDraft, String) async throws -> (Int, Data) = postPlace
+        isInstalled: Bool = ClipFullApp.isInstalled,
+        openURL: @MainActor @escaping (URL, @escaping (Bool) -> Void) -> Void = openInstalledApp
     ) async -> ClipSaveOutcome {
+        guard !Task.isCancelled else { return .failed }
         let written = persist(draft, url: handoffURL, sender: sender)
         guard written else { return .failed }
-        if ClipFullApp.isInstalled {
-            return await withCheckedContinuation { continuation in
-                openURL(handoffURL) { opened in
-                    let handedOff = ClipListSavePlanner.handoffAfterPersist(written: written, opened: opened)
-                    continuation.resume(returning: handedOff ? .handedOff : .failed)
-                }
-            }
-        }
-        do {
-            let token = try await signIn()
-            let (status, data) = try await postPlace(draft, token)
-            return ClipSaveAPI.parseOutcome(status: status, data: data)
-        } catch let error as ClipSaveError {
-            return error == .cancelled ? .signInCancelled : .failed
-        } catch {
-            return .failed
-        }
+        guard isInstalled else { return .pending(1) }
+        return await handoff(handoffURL, count: 1, openURL: openURL)
     }
 
     static func saveList(
@@ -292,144 +202,37 @@ enum ClipSaveService {
         shareCode: String?,
         handoffURL: URL,
         sender: String?,
-        openURL: @MainActor @escaping (URL, @escaping (Bool) -> Void) -> Void = openInstalledApp,
-        signIn: @escaping () async throws -> String = { try await ClipAppleAuth.signIn() },
-        postPlaces: @escaping ([ClipListSaveItem], String) async throws -> (Int, Data) = postPlaces
+        isInstalled: Bool = ClipFullApp.isInstalled,
+        openURL: @MainActor @escaping (URL, @escaping (Bool) -> Void) -> Void = openInstalledApp
     ) async -> ClipSaveOutcome {
-        let handoff = ClipListSavePlanner.compactHandoffURL(
-            incoming: handoffURL,
-            shareCode: shareCode,
-            listId: listId
+        guard !Task.isCancelled else { return .failed }
+        let unique = ClipListSavePlanner.uniqueItems(from: drafts.map(\.listSaveItem))
+        guard !unique.isEmpty else { return .failed }
+        let handoffURL = ClipListSavePlanner.compactHandoffURL(
+            incoming: handoffURL, shareCode: shareCode, listId: listId
         )
         let written = persistList(
-            listId: listId,
-            shareCode: shareCode,
-            url: handoff,
-            sender: sender,
-            drafts: drafts
+            listId: listId, shareCode: shareCode, url: handoffURL,
+            sender: sender, drafts: drafts
         )
-        if ClipFullApp.isInstalled {
-            guard written else { return .failed }
-            return await withCheckedContinuation { continuation in
-                openURL(handoff) { opened in
-                    let handedOff = ClipListSavePlanner.handoffAfterPersist(written: written, opened: opened)
-                    continuation.resume(returning: handedOff ? .handedOff : .failed)
-                }
+        guard written else { return .failed }
+        guard isInstalled else { return .pending(unique.count) }
+        return await handoff(handoffURL, count: unique.count, openURL: openURL)
+    }
+
+    private static func handoff(
+        _ url: URL, count: Int,
+        openURL: @MainActor @escaping (URL, @escaping (Bool) -> Void) -> Void
+    ) async -> ClipSaveOutcome {
+        await withCheckedContinuation { continuation in
+            openURL(url) { opened in
+                // A failed open leaves the durable journal available for retry.
+                continuation.resume(returning: opened ? .handedOff : .pending(count))
             }
-        }
-        do {
-            let token = try await signIn()
-            let unique = ClipListSavePlanner.itemsToSave(
-                confirmed: drafts.map(\.listSaveItem),
-                liveList: []
-            )
-            let (status, data) = try await postPlaces(unique, token)
-            return ClipSaveAPI.parseListOutcome(status: status, data: data)
-        } catch let error as ClipSaveError {
-            return error == .cancelled ? .signInCancelled : .listFailed(nil)
-        } catch {
-            return .listFailed(nil)
         }
     }
 
     private static func openInstalledApp(_ url: URL, completion: @escaping (Bool) -> Void) {
-        UIApplication.shared.open(
-            url,
-            options: [.universalLinksOnly: true],
-            completionHandler: completion
-        )
-    }
-
-    private static func postPlace(_ draft: ClipPlaceDraft, token: String) async throws -> (Int, Data) {
-        guard let base = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]),
-              let url = URL(string: "\(base)/places")
-        else { throw ClipSaveError.failed }
-
-        let body = ClipListSavePlanner.onePlacePayload(
-            item: draft.listSaveItem,
-            friendShareCode: draft.friendShareCode
-        )
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw ClipSaveError.failed }
-        return (http.statusCode, data)
-    }
-
-    private static func postPlaces(_ items: [ClipListSaveItem], token: String) async throws -> (Int, Data) {
-        guard let base = SAVEProductionConfig.URLConfigValue(for: ["SAVE_API_URL", "WANDERLY_API_URL"]),
-              let url = URL(string: "\(base)/places")
-        else { throw ClipSaveError.failed }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try JSONSerialization.data(withJSONObject: ClipListSavePlanner.requestBody(items: items))
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { throw ClipSaveError.failed }
-        return (http.statusCode, data)
-    }
-}
-
-@MainActor
-final class ClipAppleAuth: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
-    private var continuation: CheckedContinuation<String, Error>?
-
-    static func signIn() async throws -> String {
-        let auth = ClipAppleAuth()
-        retained = auth
-        defer { retained = nil }
-        return try await auth.run()
-    }
-
-    private static var retained: ClipAppleAuth?
-
-    private func run() async throws -> String {
-        let provider = ASAuthorizationAppleIDProvider()
-        let request = provider.createRequest()
-        request.requestedScopes = [.fullName]
-        let controller = ASAuthorizationController(authorizationRequests: [request])
-        controller.delegate = self
-        controller.presentationContextProvider = self
-        return try await withCheckedThrowingContinuation { continuation in
-            self.continuation = continuation
-            controller.performRequests()
-        }
-    }
-
-    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first { $0.isKeyWindow } ?? ASPresentationAnchor()
-    }
-
-    func authorizationController(
-        controller: ASAuthorizationController,
-        didCompleteWithAuthorization authorization: ASAuthorization
-    ) {
-        guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
-              let tokenData = credential.identityToken,
-              let token = String(data: tokenData, encoding: .utf8),
-              !token.isEmpty
-        else {
-            continuation?.resume(throwing: ClipSaveError.failed)
-            continuation = nil
-            return
-        }
-        ClipAppleAccountStore.write(credential.user)
-        continuation?.resume(returning: token)
-        continuation = nil
-    }
-
-    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        let cancelled = (error as? ASAuthorizationError)?.code == .canceled
-        continuation?.resume(throwing: cancelled ? ClipSaveError.cancelled : ClipSaveError.failed)
-        continuation = nil
+        UIApplication.shared.open(url, options: [.universalLinksOnly: true], completionHandler: completion)
     }
 }

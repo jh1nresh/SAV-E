@@ -52,15 +52,15 @@ export function shareFallbackCopy(language: string): {
 } {
   if (usesTraditionalChinese(language)) {
     return {
-      button: "🧭 用 Safari 開啟，免安裝就能存",
+      button: "🧭 用 Safari 開啟預覽",
       step: "點右上 ⋯ → 在瀏覽器開啟",
-      note: "LINE／IG／微信內建瀏覽器打不開 App Clip，換 Safari 就可以",
+      note: "LINE／IG／微信請改用 Safari 預覽；收藏需到完整 Savvy App 登入後確認。",
     };
   }
   return {
-    button: "Open in Safari to save, no install",
+    button: "Open in Safari to preview",
     step: "Tap ⋯ → Open in browser",
-    note: "In-app browsers (LINE, IG, WeChat) can't open App Clips. Safari can.",
+    note: "In LINE, IG or WeChat, open Safari to preview. To save, sign in to the full Savvy App and confirm.",
   };
 }
 

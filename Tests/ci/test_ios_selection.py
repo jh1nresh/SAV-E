@@ -18,7 +18,19 @@ class CoverageTests(unittest.TestCase):
         full = selection.select([], full=True)
         actual = set(full["tests"] + [selection.TRIP_SHEET])
         baseline = set(json.loads((ROOT / "Tests/ci/full-ui-baseline.json").read_text()))
-        self.assertEqual(actual, baseline | {selection.RAIL + "testHomeListProgressiveSearch"})
+        self.assertEqual(actual, baseline | {
+            selection.RAIL + "testHomeListProgressiveSearch",
+            selection.RAIL + "testHomeCollectedOpensPassportWithCityCount",
+            selection.RAIL + "testHomeCollectedKeepsOtherCitiesAndActualCounts",
+            selection.RAIL + "testSavesTripsBackReturnsToSaves",
+            selection.RAIL + "testHomeDesignProductStates",
+            selection.RAIL + "testHomeShowOnMapFocusesPlace",
+            selection.RAIL + "testHomeHintCountEvidence",
+            selection.RAIL + "testHomeTaipeiGrantedDistances",
+            selection.RAIL + "testHomeTPEAEvidence",
+            selection.RAIL + "testHopU1SavedPlaceLimitPaywallShowsSavedFiftyWithoutManMan",
+            selection.RAIL + "testMapSavedUnsavedVisitedTaipeiFixture",
+        })
         self.assertIn(selection.RAIL + "testUnplacedLabelFullScreenAtDeviceWidth", full["tests"])
         self.assertIn(selection.RAIL + "testUnplacedLabelFullScreenAtDeviceWidth", selection.select([])["tests"])
         self.assertTrue(full["trip"])
@@ -167,6 +179,7 @@ class CoverageTests(unittest.TestCase):
             self.assertIn(selection.RAIL + name, spec["tests"])
         self.assertNotIn(selection.TRIP_SHEET, spec["tests"])
         self.assertNotIn(selection.RAIL + "testAnalyzedMapLinkPersistsAsTripStopAfterRelaunch", spec["tests"])
+        self.assertNotIn(selection.RAIL + "testDoodlePaywallParity", spec["tests"])
 
     def test_cli_honors_save_ui_test_focus_off_main(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -218,6 +231,10 @@ class CoverageTests(unittest.TestCase):
         self.assertIn("appclip-doodle-screenshots-", ci_workflow)
         self.assertIn("run-visual-parity.sh", ios_workflow)
         self.assertIn("--threshold 0.90", ios_workflow)
+        self.assertIn("--skip-screens", ios_workflow)
+        self.assertIn("testDoodlePaywallParity", ios_workflow)
+        self.assertIn("grep -q 'testDoodleCaptureParity'", ios_workflow)
+        self.assertIn("pr295-capture-light.png", ios_workflow)
         self.assertIn("xcrun simctl io booted screenshot", ios_workflow)
         self.assertNotIn("run-visual-parity.sh", ci_workflow)
         self.assertIn("SAVE_UI_TEST_FOCUS", ios_workflow)
@@ -250,6 +267,10 @@ class CoverageTests(unittest.TestCase):
         self.assertRegex(ios_workflow, r"(?m)^    timeout-minutes: 160\s*$")
         self.assertIn("timeout-minutes: 100", ios_workflow)
         self.assertNotIn("timeout-minutes: 60", ios_workflow)
+        self.assertIn("testCoralTokenContrastScreens", ios_workflow)
+        self.assertIn("save-coral-t3-screens-${{ github.sha }}", ios_workflow)
+        self.assertIn("scripts/extract-named-ui-screenshots.py", ios_workflow)
+        self.assertIn("--also-prefix t3-main", ios_workflow)
 
     def test_unknown_focus_fails_loudly(self):
         with tempfile.TemporaryDirectory() as temp:

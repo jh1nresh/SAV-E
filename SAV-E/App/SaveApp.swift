@@ -74,8 +74,8 @@ struct SaveApp: App {
         store: UserDefaults(suiteName: "group.com.wanderly.app")
     ) private var pendingFriendShareURL = ""
     @State private var incomingPlaceReceipt: SharedPlaceReceiptDestination?
-    @State private var autoSaveIncomingShare = false
-    @State private var autoSaveIncomingList = false
+    @State private var requiresShareConfirmation = false
+    @State private var requiresListConfirmation = false
     @State private var pendingClipListSave: SaveCollaborativeList?
     @State private var openedTrip: SharedTripData?
     @State private var openedList: SaveCollaborativeList?
@@ -172,9 +172,8 @@ struct SaveApp: App {
             .onChange(of: incomingPlaceReceipt?.id) { _, receiptID in
                 if receiptID == nil {
                     pendingFriendShareURL = ""
-                    if !autoSaveIncomingShare && !autoSaveIncomingList {
-                        PendingShareStore.clear()
-                    }
+                    // Closing a preview is not confirmation or dismissal of its
+                    // durable Clip journal. Relaunch can offer it again.
                 }
             }
             .onOpenURL(perform: handleIncomingURL)
@@ -267,8 +266,8 @@ struct SaveApp: App {
                     sessionGeneration: authService.sessionGeneration,
                     sessionOrigin: authService.sessionOrigin,
                     incomingPlaceReceipt: $incomingPlaceReceipt,
-                    autoSaveIncomingShare: $autoSaveIncomingShare,
-                    autoSaveIncomingList: $autoSaveIncomingList,
+                    requiresShareConfirmation: $requiresShareConfirmation,
+                    requiresListConfirmation: $requiresListConfirmation,
                     pendingClipListSave: $pendingClipListSave,
                     pendingOnboardingClue: $pendingOnboardingClue,
                     pendingOnboardingClueOwnerID: $pendingOnboardingClueOwnerID,
@@ -310,7 +309,7 @@ struct SaveApp: App {
                 pending: PendingShareStore.load(),
                 incomingURL: url
             ) else { return }
-            autoSaveIncomingShare = false
+            requiresShareConfirmation = false
             deferredAccountScopedLink = DeferredAccountScopedLink(
                 id: UUID(),
                 url: accepted,
@@ -323,7 +322,7 @@ struct SaveApp: App {
 
         if SaveReferralLink.target(from: url) != nil {
             guard url.absoluteString.utf8.count <= accountScopedURLMaxBytes else { return }
-            autoSaveIncomingShare = false
+            requiresShareConfirmation = false
             deferredAccountScopedLink = DeferredAccountScopedLink(
                 id: UUID(),
                 url: url,
@@ -337,13 +336,13 @@ struct SaveApp: App {
         if isPlaceLink(url) {
             guard url.absoluteString.utf8.count <= ShareRoutePayloadLimits.pendingPlaceURLMaxBytes else {
                 pendingFriendShareURL = ""
-                PendingShareStore.clear()
+                // A malformed new link does not acknowledge an existing intent.
                 incomingPlaceReceipt = .malformed(url)
                 return
             }
             pendingFriendShareURL = url.absoluteString
-            autoSaveIncomingList = false
-            autoSaveIncomingShare = ClipPlaceHandoff.shouldAutoSavePlace(
+            requiresListConfirmation = false
+            requiresShareConfirmation = ClipPlaceHandoff.shouldConfirmPlace(
                 pending: PendingShareStore.load(),
                 incomingURL: url
             )
@@ -397,9 +396,9 @@ struct SaveApp: App {
             currentUserId: currentUserId
         ) else { return }
         pendingClipListSave = nil
-        autoSaveIncomingList = false
+        requiresListConfirmation = false
         incomingPlaceReceipt = nil
-        autoSaveIncomingShare = false
+        requiresShareConfirmation = false
         pendingFriendShareURL = ""
         deferredAccountScopedLink = nil
         ClipPlaceHandoff.resetPlaceHandoffOnAccountChange()
@@ -518,20 +517,19 @@ struct SaveApp: App {
         deferredAccountScopedLink = nil
     }
 
-    /// Clip “save all” already confirmed a snapshot. Join may show the live
-    /// list; stamping uses only those confirmed placeIds — including when
-    /// the optional live join fails.
+    /// Clip selected a pending snapshot. A separate full App action confirms
+    /// it; live list changes must not add or remove selected places.
     private func presentOpenedList(_ list: SaveCollaborativeList?, incomingURL: URL) {
-        if let list {
-            openedList = list
-        }
         if let stamp = ClipListHandoff.stampList(
             pending: PendingShareStore.load(),
             incomingURL: incomingURL,
             joined: list
         ) {
-            autoSaveIncomingList = true
+            requiresListConfirmation = true
             pendingClipListSave = stamp
+            openedList = nil
+        } else if let list {
+            openedList = list
         }
     }
 
@@ -692,8 +690,8 @@ private struct AuthenticatedRootView: View {
     let sessionGeneration: Int
     let sessionOrigin: AccountSessionOrigin
     @Binding var incomingPlaceReceipt: SharedPlaceReceiptDestination?
-    @Binding var autoSaveIncomingShare: Bool
-    @Binding var autoSaveIncomingList: Bool
+    @Binding var requiresShareConfirmation: Bool
+    @Binding var requiresListConfirmation: Bool
     @Binding var pendingClipListSave: SaveCollaborativeList?
     @Binding var pendingOnboardingClue: String
     @Binding var pendingOnboardingClueOwnerID: String
@@ -748,8 +746,8 @@ private struct AuthenticatedRootView: View {
     private var verifiedAccountContent: some View {
         ContentView(
             incomingPlaceReceipt: $incomingPlaceReceipt,
-            autoSaveIncomingShare: $autoSaveIncomingShare,
-            autoSaveIncomingList: $autoSaveIncomingList,
+            requiresShareConfirmation: $requiresShareConfirmation,
+            requiresListConfirmation: $requiresListConfirmation,
             pendingClipListSave: $pendingClipListSave,
             pendingOnboardingClue: pendingClueForVerifiedAccount,
             storageScope: authService.isReviewerDemo ? .reviewerDemo : .production

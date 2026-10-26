@@ -86,32 +86,32 @@ final class SAVEClipScreenshotTests: XCTestCase {
     }
 
     func test19ListSavedCountsZhHant() {
-        capture(screen: "list-saved", appearance: .light, language: "zh-Hant", locale: "zh_TW", name: "19-list-saved-zh-Hant", identifier: "clip.list.saved")
+        capture(screen: "list-saved", appearance: .light, language: "zh-Hant", locale: "zh_TW", name: "19-list-saved-zh-Hant", identifier: "clip.pending")
     }
 
     func test19bListPartialZhHant() {
         let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "list-partial")
-        XCTAssertTrue(app.descendants(matching: .any)["clip.list.partial"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["clip.list.counts"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending.body"].exists)
         attachScreenshot(app.screenshot(), name: "19b-list-partial-zh-Hant")
         app.terminate()
     }
 
     func test19bListPartialEnglishDark() {
         let app = launchClip(appearance: .dark, language: "en", locale: "en_US", screen: "list-partial")
-        XCTAssertTrue(app.descendants(matching: .any)["clip.list.partial"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["clip.list.counts"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending.body"].exists)
         attachScreenshot(app.screenshot(), name: "19b-list-partial-en-dark", appearance: .dark)
         app.terminate()
     }
 
     func test19ListSavedEnglishDark() {
         let app = launchClip(appearance: .dark, language: "en", locale: "en_US", screen: "list-saved")
-        XCTAssertTrue(app.descendants(matching: .any)["clip.list.saved"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["clip.list.counts"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending.body"].exists)
         attachScreenshot(app.screenshot(), name: "19-list-saved-en-dark", appearance: .dark)
         app.terminate()
     }
@@ -172,19 +172,19 @@ final class SAVEClipScreenshotTests: XCTestCase {
     }
 
     func testSavedZhHantLight() {
-        capture(screen: "saved", appearance: .light, language: "zh-Hant", locale: "zh_TW", name: "saved-zh-Hant-light", identifier: "clip.saved")
+        capture(screen: "saved", appearance: .light, language: "zh-Hant", locale: "zh_TW", name: "saved-zh-Hant-light", identifier: "clip.pending")
     }
 
     func testSavedEnglishDark() {
-        capture(screen: "saved", appearance: .dark, language: "en", locale: "en_US", name: "saved-en-dark", identifier: "clip.saved")
+        capture(screen: "saved", appearance: .dark, language: "en", locale: "en_US", name: "saved-en-dark", identifier: "clip.pending")
     }
 
     func testCap50ZhHantLight() {
         let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "cap50")
-        XCTAssertTrue(app.descendants(matching: .any)["clip.cap50"].waitForExistence(timeout: 20))
-        XCTAssertTrue(app.descendants(matching: .any)["clip.cap50.saved"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending.body"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["clip.cap50.back"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending.back"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["clip.skoverlay"].exists)
         attachScreenshot(app.screenshot(), name: "cap50-zh-Hant-light")
         app.terminate()
@@ -192,8 +192,8 @@ final class SAVEClipScreenshotTests: XCTestCase {
 
     func testCap50EnglishDark() {
         let app = launchClip(appearance: .dark, language: "en", locale: "en_US", screen: "cap50")
-        XCTAssertTrue(app.descendants(matching: .any)["clip.cap50"].waitForExistence(timeout: 20))
-        XCTAssertTrue(app.descendants(matching: .any)["clip.cap50.saved"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending.body"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
         let title = app.descendants(matching: .any)["clip.cap50.title"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))
@@ -225,28 +225,28 @@ final class SAVEClipScreenshotTests: XCTestCase {
 
     func testDuplicateZhHantLight() {
         let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "duplicate")
-        XCTAssertTrue(app.descendants(matching: .any)["clip.duplicate"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending"].waitForExistence(timeout: 20))
         XCTAssertFalse(app.descendants(matching: .any)["clip.skoverlay"].exists)
         attachScreenshot(app.screenshot(), name: "duplicate-zh-Hant-light")
         app.terminate()
     }
 
     func testDuplicateEnglishDark() {
-        capture(screen: "duplicate", appearance: .dark, language: "en", locale: "en_US", name: "duplicate-en-dark", identifier: "clip.duplicate")
+        capture(screen: "duplicate", appearance: .dark, language: "en", locale: "en_US", name: "duplicate-en-dark", identifier: "clip.pending")
     }
 
     func testSignInOnePlaceZhHant() {
         let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "signin")
-        XCTAssertTrue(app.descendants(matching: .any)["clip.signin"].waitForExistence(timeout: 20))
-        XCTAssertTrue(app.descendants(matching: .any)["clip.signin.continue"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending.continue"].exists)
         attachScreenshot(app.screenshot(), name: "signin-one-zh-Hant")
         app.terminate()
     }
 
     func testSignInWholeListEnglish() {
         let app = launchClip(appearance: .light, language: "en", locale: "en_US", screen: "signin-list")
-        XCTAssertTrue(app.descendants(matching: .any)["clip.signin"].waitForExistence(timeout: 20))
-        XCTAssertTrue(app.descendants(matching: .any)["clip.signin.continue"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending.continue"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
         attachScreenshot(app.screenshot(), name: "signin-list-en")
         app.terminate()
@@ -254,7 +254,7 @@ final class SAVEClipScreenshotTests: XCTestCase {
 
     func testSignInOnePlaceEnglishDark() {
         let app = launchClip(appearance: .dark, language: "en", locale: "en_US", screen: "signin")
-        XCTAssertTrue(app.descendants(matching: .any)["clip.signin"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
         attachScreenshot(app.screenshot(), name: "signin-one-en-dark", appearance: .dark)
         app.terminate()
@@ -262,15 +262,15 @@ final class SAVEClipScreenshotTests: XCTestCase {
 
     func testSignInFailZhHantLight() {
         let app = launchClip(appearance: .light, language: "zh-Hant", locale: "zh_TW", screen: "signin-fail")
-        XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
-        XCTAssertTrue(app.descendants(matching: .any)["clip.signin.hint"].exists)
-        XCTAssertTrue(app.descendants(matching: .any)["clip.place.open"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending.body"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["clip.saved"].exists)
         attachScreenshot(app.screenshot(), name: "signin-fail-zh-Hant-light")
         app.terminate()
     }
 
     func testSignInFailEnglishDark() {
-        capture(screen: "signin-fail", appearance: .dark, language: "en", locale: "en_US", name: "signin-fail-en-dark", identifier: "clip.signin.hint")
+        capture(screen: "signin-fail", appearance: .dark, language: "en", locale: "en_US", name: "signin-fail-en-dark", identifier: "clip.pending.body")
     }
 
     func testSaveFailZhHantLight() {
@@ -296,6 +296,20 @@ final class SAVEClipScreenshotTests: XCTestCase {
 
     func testSKOverlayDarkEnglish() {
         capture(screen: "skoverlay", appearance: .dark, language: "en", locale: "en_US", name: "skoverlay-en-dark", identifier: "clip.skoverlay")
+    }
+
+    func testClipTapQueuesUntilFullAppConfirmation() {
+        let app = launchClip(appearance: .light, language: "en", locale: "en_US",
+                             url: Self.placeInvokeURL, extraArguments: ["--uitest-clip-no-full-app"])
+        XCTAssertTrue(app.descendants(matching: .any)["clip.place.open"].waitForExistence(timeout: 20))
+        app.buttons["clip.place.open"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["clip.pending.body"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["clip.saved"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["clip.signin"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["clip.skoverlay"].exists)
+        attachScreenshot(app.screenshot(), name: "pending-after-actual-clip-tap-en")
+        app.terminate()
     }
 
     func testShareLinksStillOpenWithoutFixture() {

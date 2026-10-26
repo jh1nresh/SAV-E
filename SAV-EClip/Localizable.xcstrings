@@ -1,6 +1,70 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "clip.pending.title" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ready to confirm in Savvy"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "到 Savvy 確認收藏"
+          }
+        }
+      }
+    },
+    "clip.pending.body" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pending places on this device: %d. Sign in to the full app, then confirm to save. Nothing has been added to your saved places yet."
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這台裝置保留了 %d 個待收藏地點。到完整版登入後，再確認收藏；目前尚未加入你的收藏。"
+          }
+        }
+      }
+    },
+    "clip.pending.open" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Savvy"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打開 Savvy"
+          }
+        }
+      }
+    },
+    "clip.pending.install" : {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Get Savvy"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安裝 Savvy"
+          }
+        }
+      }
+    },
     "clip.from" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ shared with you" } },
@@ -9,14 +73,14 @@
     },
     "clip.save" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "+ Save to my Savvy" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "＋ 存到我的 Savvy" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Continue in Savvy" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "到 Savvy 確認收藏" } }
       }
     },
     "clip.saveAll" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save all %d places" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "整份清單都存（%d家）" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Continue with %d places" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "帶 %d 家到 Savvy" } }
       }
     },
     "clip.listSaved.title" : {
@@ -159,14 +223,14 @@
     },
     "clip.saveFailed.title" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn’t save" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "沒有存進去" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn’t prepare this handoff" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "無法準備待辦" } }
       }
     },
     "clip.saveFailed.body" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Check your connection and try again. Nothing was saved." } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "檢查網路後再試一次。沒有存任何東西。" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Please try again. No new pending item was prepared and nothing was saved." } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "請再試一次。這次沒有建立新的待辦，也沒有收藏任何地點。" } }
       }
     },
     "clip.meta.areaCategory" : {

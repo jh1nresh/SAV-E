@@ -3,7 +3,7 @@ import Foundation
 import Observation
 
 /// Compact list snapshot written at Clip “save all” tap. Stamp only these
-/// after SIWA / handoff — never the live joined list.
+/// only after full App authentication and confirmation — never the live joined list.
 struct PendingConfirmedPlace: Codable, Equatable {
     var placeId: String
     var name: String
@@ -45,13 +45,15 @@ struct PendingConfirmedPlace: Codable, Equatable {
 }
 
 /// App Group payload written by the Clip at “Save to my Savvy” tap time.
-/// The full app reads `pendingShare` on first launch, auto-saves, then clears.
+/// The full app reads `pendingShare`, asks for confirmation after login, then saves.
 struct PendingSharePayload: Codable, Equatable {
     enum Kind: String, Codable {
         case place
         case list
     }
 
+    /// Distinguishes a newer tap on the same link from an older completion.
+    var invocationID: UUID? = UUID()
     var kind: Kind
     var shareCode: String?
     var placeId: String?
@@ -61,7 +63,7 @@ struct PendingSharePayload: Codable, Equatable {
     var confirmedPlaceIds: [String]? = nil
     var confirmedPlaces: [PendingConfirmedPlace]? = nil
 
-    /// Auto-save only the place the Clip journal actually confirmed.
+    /// Offer confirmation only for the place the Clip journal selected.
     /// A leftover failed/cancelled journal, or a list payload, must not
     /// save an unrelated `/p` launch.
     func matchesIncomingPlace(url: URL) -> Bool {
@@ -178,6 +180,14 @@ enum PendingShareStore {
         return url
     }
 
+    /// Never acknowledge a newer Clip invocation when an older save completes.
+    @discardableResult
+    static func clear(ifUnchanged expected: PendingSharePayload?, from store: UserDefaults? = nil) -> Bool {
+        guard let expected, load(from: store) == expected else { return false }
+        clear(store)
+        return true
+    }
+
     static func clear(_ store: UserDefaults? = nil) {
         guard let defaults = defaults(store) else { return }
         defaults.removeObject(forKey: key)
@@ -188,8 +198,24 @@ enum PendingShareStore {
 /// Always recompute from the incoming URL. A leftover true flag must not
 /// save an unrelated `/p` that arrived before sign-in finished.
 enum ClipPlaceHandoff {
-    static func shouldAutoSavePlace(pending: PendingSharePayload?, incomingURL: URL) -> Bool {
+    static func shouldConfirmPlace(pending: PendingSharePayload?, incomingURL: URL) -> Bool {
         pending?.matchesIncomingPlace(url: incomingURL) == true
+    }
+
+    static func journalForConfirmation(
+        pending: PendingSharePayload?, destination: SharedPlaceReceiptDestination
+    ) -> PendingSharePayload? {
+        guard let pending, pending.kind == .place else { return nil }
+        switch destination {
+        case .shortLink(let url):
+            return pending.matchesIncomingPlace(url: url) ? pending : nil
+        case .embedded(let payload):
+            guard let url = URL(string: pending.url), let selected = SharedPlaceData.from(url: url),
+                  selected.embeddedReceiptID == payload.embeddedReceiptID else { return nil }
+            return pending
+        case .malformed:
+            return nil
+        }
     }
 
     /// Sign-out / account switch must not stamp the previous user's pending place.
@@ -244,8 +270,8 @@ enum ClipListHandoffError: Error, Equatable {
     case capReached
 }
 
-/// A matching Clip “save all” journal is user confirmation to stamp the
-/// confirmed snapshot. A list link without that journal is join-only.
+/// A Clip journal selects a snapshot for later confirmation in the full App.
+/// A list link without that journal is join-only.
 @MainActor
 @Observable
 final class ClipListHandoffAttempt {
@@ -264,38 +290,47 @@ final class ClipListHandoffAttempt {
         canRetry = !succeeded
     }
 
-    /// The pending binding is the latest confirmed invocation. A trigger during
-    /// an in-flight save is coalesced; the current runner drains its replacement.
-    func runLatest(
+    /// One tap confirms exactly the displayed snapshot. A replacement waits
+    /// for its own confirmation even when the first request is suspended.
+    func runConfirmed(
         pending: () -> SaveCollaborativeList?,
         save: (SaveCollaborativeList) async throws -> (toStamp: [SaveListItem], counts: ClipListHandoffCounts),
         succeeded: (SaveCollaborativeList, ClipListHandoffCounts) -> Void,
         failed: (Error) -> Void
     ) async {
-        guard begin() else { return }
-        while let list = pending() {
-            do {
-                let result = try await save(list)
-                guard pending()?.id == list.id else { continue }
-                finish(succeeded: true)
-                succeeded(list, result.counts)
-                return
-            } catch {
-                guard pending()?.id == list.id else { continue }
-                finish(succeeded: false)
-                failed(error)
-                return
-            }
+        guard let list = pending(), begin() else { return }
+        do {
+            let result = try await save(list)
+            finish(succeeded: true)
+            guard pending() == list else { return }
+            succeeded(list, result.counts)
+        } catch {
+            let isCurrent = pending() == list
+            finish(succeeded: !isCurrent)
+            if isCurrent { failed(error) }
         }
-        finish(succeeded: true)
     }
+
 }
 
 enum ClipListHandoff {
     static let freeLimit = 50
 
-    static func shouldSaveItems(pending: PendingSharePayload?, incomingURL: URL) -> Bool {
+    static func shouldConfirmList(pending: PendingSharePayload?, incomingURL: URL) -> Bool {
         pending?.matchesIncomingList(url: incomingURL) == true
+    }
+
+    /// The displayed selection must come from this exact pending snapshot.
+    /// Item UI UUIDs are ephemeral; every persisted place field must agree.
+    static func matchesPendingSelection(_ list: SaveCollaborativeList, pending: PendingSharePayload?) -> Bool {
+        guard pending?.kind == .list, let snapshots = pending?.confirmedPlaces,
+              !snapshots.isEmpty, snapshots.count == list.items.count else { return false }
+        return zip(snapshots, list.items).allSatisfy { snapshot, displayed in
+            let expected = snapshot.asListItem()
+            var normalized = displayed
+            normalized.id = expected.id
+            return normalized == expected
+        }
     }
 
     static let listURLMaxBytes = 8 * 1024
@@ -334,7 +369,7 @@ enum ClipListHandoff {
         liveItems: [SaveListItem]
     ) -> [SaveListItem] {
         _ = liveItems
-        guard shouldSaveItems(pending: pending, incomingURL: incomingURL),
+        guard shouldConfirmList(pending: pending, incomingURL: incomingURL),
               let places = pending?.confirmedPlaces, !places.isEmpty
         else { return [] }
         return places.map { $0.asListItem() }
@@ -405,7 +440,7 @@ enum ClipListHandoff {
         return (toStamp, counts)
     }
 
-    /// One-place installed-app handoff uses the same three counts as Clip SIWA.
+    /// A confirmed full-App handoff uses the same three quota result counts.
     static func onePlaceImport(counts: ClipListHandoffCounts) -> OnePlaceImport {
         if counts.newlySaved > 0 { return .saved }
         if counts.alreadySaved > 0 { return .alreadySaved }

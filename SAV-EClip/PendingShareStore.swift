@@ -1,13 +1,15 @@
 import Foundation
 
 /// App Group payload written by the Clip at “Save to my Savvy” tap time.
-/// The full app reads `pendingShare` on first launch, auto-saves, then clears.
+/// The full app reads `pendingShare` on first launch, asks for confirmation before saving, then clears.
 struct PendingSharePayload: Codable, Equatable {
     enum Kind: String, Codable {
         case place
         case list
     }
 
+    /// Distinguishes a newer tap on the same link from an older completion.
+    var invocationID: UUID? = UUID()
     var kind: Kind
     var shareCode: String?
     var placeId: String?
@@ -19,7 +21,7 @@ struct PendingSharePayload: Codable, Equatable {
 }
 
 /// Compact list snapshot written at “save all” tap. The full app stamps
-/// these rows after SIWA / handoff and must not re-fetch the live list.
+/// these rows after full App login and confirmation / handoff and must not re-fetch the live list.
 struct PendingConfirmedPlace: Codable, Equatable {
     var placeId: String
     var name: String

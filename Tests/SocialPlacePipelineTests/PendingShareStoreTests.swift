@@ -17,6 +17,60 @@ final class PendingShareStoreTests: XCTestCase {
         super.tearDown()
     }
 
+    func testSameLinkNewInvocationCannotBeClearedByOlderCompletion() throws {
+        let suite = "clip.same-link.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let first = PendingSharePayload(kind: .place, shareCode: "same", placeId: nil,
+                                       listId: nil, sender: nil, url: "https://example.com/p/same")
+        let second = PendingSharePayload(kind: .place, shareCode: "same", placeId: nil,
+                                        listId: nil, sender: nil, url: "https://example.com/p/same")
+        XCTAssertNotEqual(first.invocationID, second.invocationID)
+        XCTAssertTrue(PendingShareStore.write(first, to: defaults))
+        XCTAssertTrue(PendingShareStore.write(second, to: defaults))
+        XCTAssertFalse(PendingShareStore.clear(ifUnchanged: first, from: defaults))
+        XCTAssertEqual(PendingShareStore.load(from: defaults), second)
+        XCTAssertTrue(PendingShareStore.clear(ifUnchanged: second, from: defaults))
+    }
+
+    func testOnlyUnchangedConfirmedJournalCanBeAcknowledged() {
+        let first = PendingSharePayload(kind: .place, shareCode: "First", placeId: nil, listId: nil,
+                                        sender: nil, url: "https://sav-e-app.vercel.app/p/First")
+        var replacement = first
+        replacement.shareCode = "Second"
+        replacement.url = "https://sav-e-app.vercel.app/p/Second"
+        XCTAssertTrue(PendingShareStore.write(first, to: store))
+        XCTAssertEqual(PendingShareStore.load(from: store), first, "Cancellation and relaunch do not consume pending")
+        XCTAssertFalse(PendingShareStore.clear(ifUnchanged: nil, from: store))
+        XCTAssertTrue(PendingShareStore.write(replacement, to: store))
+        XCTAssertFalse(PendingShareStore.clear(ifUnchanged: first, from: store))
+        XCTAssertEqual(PendingShareStore.load(from: store), replacement)
+        XCTAssertTrue(PendingShareStore.clear(ifUnchanged: replacement, from: store))
+        XCTAssertNil(PendingShareStore.load(from: store))
+    }
+
+    func testConfirmationCannotAcknowledgeAnotherPendingSelection() throws {
+        let a = PendingConfirmedPlace(placeId: "a", name: "A", address: "Tokyo", latitude: 35.6,
+                                      longitude: 139.7, category: "Cafe", sourceURL: nil)
+        let b = PendingConfirmedPlace(placeId: "b", name: "B", address: "Taipei", latitude: 25.0,
+                                      longitude: 121.5, category: "Cafe", sourceURL: nil)
+        var journal = PendingSharePayload(kind: .list, shareCode: "List", placeId: nil, listId: nil,
+                                          sender: nil, url: "https://sav-e-app.vercel.app/list?c=List", confirmedPlaces: [a])
+        let displayed = SaveCollaborativeList(title: "Pending", items: [a.asListItem()])
+        XCTAssertTrue(ClipListHandoff.matchesPendingSelection(displayed, pending: journal))
+        journal.confirmedPlaces = [b]
+        XCTAssertFalse(ClipListHandoff.matchesPendingSelection(displayed, pending: journal))
+        XCTAssertNil(ClipPlaceHandoff.journalForConfirmation(pending: journal,
+                    destination: .shortLink(URL(string: "https://sav-e-app.vercel.app/p/A")!)))
+        journal.kind = .place
+        journal.shareCode = "B"
+        journal.url = "https://sav-e-app.vercel.app/p/B"
+        XCTAssertNil(ClipPlaceHandoff.journalForConfirmation(pending: journal,
+                    destination: .shortLink(URL(string: "https://sav-e-app.vercel.app/p/A")!)))
+        XCTAssertEqual(ClipPlaceHandoff.journalForConfirmation(pending: journal,
+                    destination: .shortLink(URL(string: journal.url)!)), journal)
+    }
+
     func testAccountGenerationChangeClearsPlaceHandoffJournal() {
         XCTAssertTrue(ClipPlaceHandoff.shouldKeepPlaceHandoff(ownerGeneration: 4, currentGeneration: 4))
         XCTAssertFalse(ClipPlaceHandoff.shouldKeepPlaceHandoff(ownerGeneration: 4, currentGeneration: 5))
@@ -172,7 +226,7 @@ final class PendingShareStoreTests: XCTestCase {
 
         let journal = try XCTUnwrap(PendingShareStore.load(from: store))
         XCTAssertTrue(
-            ClipPlaceHandoff.shouldAutoSavePlace(
+            ClipPlaceHandoff.shouldConfirmPlace(
                 pending: journal,
                 incomingURL: URL(string: journal.url)!
             )
@@ -284,10 +338,10 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertTrue(list.matchesIncomingList(url: URL(string: "https://sav-e-app.vercel.app/list?c=LiSt99_z")!))
         XCTAssertFalse(list.matchesIncomingList(url: otherURL))
         XCTAssertFalse(place.matchesIncomingList(url: listURL))
-        XCTAssertTrue(ClipListHandoff.shouldSaveItems(pending: list, incomingURL: listURL))
-        XCTAssertFalse(ClipListHandoff.shouldSaveItems(pending: list, incomingURL: otherURL))
-        XCTAssertFalse(ClipListHandoff.shouldSaveItems(pending: nil, incomingURL: listURL))
-        XCTAssertFalse(ClipListHandoff.shouldSaveItems(pending: place, incomingURL: listURL))
+        XCTAssertTrue(ClipListHandoff.shouldConfirmList(pending: list, incomingURL: listURL))
+        XCTAssertFalse(ClipListHandoff.shouldConfirmList(pending: list, incomingURL: otherURL))
+        XCTAssertFalse(ClipListHandoff.shouldConfirmList(pending: nil, incomingURL: listURL))
+        XCTAssertFalse(ClipListHandoff.shouldConfirmList(pending: place, incomingURL: listURL))
     }
 
     func testConfirmedListHandoffStampsOriginalFiveAfterOwnerAddAndDelete() {
@@ -930,9 +984,9 @@ final class PendingShareStoreTests: XCTestCase {
             sender: "Mina",
             url: urlA.absoluteString
         )
-        XCTAssertTrue(ClipPlaceHandoff.shouldAutoSavePlace(pending: journal, incomingURL: urlA))
-        XCTAssertFalse(ClipPlaceHandoff.shouldAutoSavePlace(pending: journal, incomingURL: urlB))
-        XCTAssertFalse(ClipPlaceHandoff.shouldAutoSavePlace(pending: nil, incomingURL: urlB))
+        XCTAssertTrue(ClipPlaceHandoff.shouldConfirmPlace(pending: journal, incomingURL: urlA))
+        XCTAssertFalse(ClipPlaceHandoff.shouldConfirmPlace(pending: journal, incomingURL: urlB))
+        XCTAssertFalse(ClipPlaceHandoff.shouldConfirmPlace(pending: nil, incomingURL: urlB))
     }
 
     func testListPayloadKeepsShareCodeAndListId() {

@@ -71,6 +71,11 @@ assert.equal(isInAppShareBrowser("Mozilla/5.0 (Macintosh) Mobile/15E148 Instagra
 assert.equal(usesTraditionalChinese("zh-Hant-TW"), true);
 assert.match(shareFallbackCopy("zh-Hant").button, /Safari/);
 assert.match(shareFallbackCopy("en").button, /Open in Safari/);
+assert.match(shareFallbackCopy("zh-Hant").note, /完整 Savvy App.*登入.*確認/);
+assert.match(shareFallbackCopy("en").note, /sign in to the full Savvy App and confirm/);
+for (const language of ["zh-Hant", "en"]) {
+  assert.doesNotMatch(Object.values(shareFallbackCopy(language)).join(" "), /免安裝就能存|no install/i);
+}
 assert.equal(publicOwnedPhotoURL([
   "https://maps.googleapis.com/maps/api/place/photo?photo_reference=x",
   "https://example.com/own.jpg",
