@@ -509,14 +509,8 @@ final class SaveCollaborativeListTests: XCTestCase {
             atlasGoogle.contains(where: { $0.contains("Photo: Google Maps") }),
             "map.place.card must not show a Google photo or mark. saw=\(atlasGoogle)"
         )
-        XCTAssertTrue(
-            atlasGoogle.contains(where: { $0.contains("map.place.thumb.fallback") }),
-            "Google URL on map.place.card must render coral/fallback, not a Google image. saw=\(atlasGoogle)"
-        )
-        XCTAssertFalse(
-            atlasGoogle.contains(where: { $0.contains("map.place.thumb.own") }),
-            "Google URL must not take the own-photo thumb path. saw=\(atlasGoogle)"
-        )
+        // hostedTexts collects labels, not SwiftUI identifiers. Image source is
+        // the same mapSafePhotoURL transform the 56pt thumb uses (nil = coral).
         XCTAssertNil(GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL(google))
 
         let atlasOwnPlace = photoPlace(name: "Own shot", photoURL: own)
@@ -539,10 +533,6 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertFalse(
             atlasOwn.contains(where: { $0.contains("Photo: Google Maps") }),
             "Own photo on the map card stays unmarked. saw=\(atlasOwn)"
-        )
-        XCTAssertTrue(
-            atlasOwn.contains(where: { $0.contains("map.place.thumb.own") }),
-            "Own/friend photo may sit on the map card. saw=\(atlasOwn)"
         )
 
         let postcardGoogle = hostedTexts(
@@ -590,10 +580,16 @@ final class SaveCollaborativeListTests: XCTestCase {
             .frame(width: 320, height: 220)
         )
         XCTAssertTrue(
-            detailCarousel.contains(where: {
-                $0.contains("place.photo.attribution.row") || $0.contains("Google Maps")
-            }),
-            "Off-map detail carousel still marks a Google photo (G1/G2/G4/G8). saw=\(detailCarousel)"
+            detailCarousel.contains(where: { $0.contains("Photo by Fixture photographer") }),
+            "Off-map detail carousel still marks a Google photo with the G1 author. saw=\(detailCarousel)"
+        )
+        XCTAssertTrue(
+            detailCarousel.contains(where: { $0.contains("Business photo") }),
+            "Attributed Google session photo must render, not the empty coral fallback. saw=\(detailCarousel)"
+        )
+        XCTAssertFalse(
+            detailCarousel.contains(where: { $0.contains("No business photo available") }),
+            "Seeded author metadata must keep the Google photo. saw=\(detailCarousel)"
         )
     }
 
