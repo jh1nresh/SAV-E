@@ -430,6 +430,126 @@ final class SaveDoodleMapTests: XCTestCase {
         )
     }
 
+    func testPeekDuringExactSearchResolvesTheReviewClue() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("peek-exact-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let stamp = Place(
+            id: UUID(),
+            name: "Review Coffee Xinyi",
+            address: "Taipei",
+            latitude: 25.033,
+            longitude: 121.565,
+            category: .cafe,
+            status: .wantToGo,
+            sourcePlatform: .other,
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let clue = PlaceReviewCandidate(
+            id: UUID(),
+            captureId: nil,
+            name: "Coffee clue",
+            address: "Taipei",
+            city: "Taipei",
+            latitude: nil,
+            longitude: nil,
+            evidence: ["Original source note"],
+            confidence: 0.8,
+            missingInfo: ["Exact coordinates"],
+            status: "review",
+            createdAt: Date()
+        )
+        _ = try vault.saveConfirmedPlace(stamp)
+        let map = MapViewModel(
+            saveLocalVaultService: vault,
+            usesRemotePersistence: false
+        )
+        map.places = [stamp]
+        map.reviewCandidates = [clue]
+        map.beginExactSearchResolution(for: clue)
+        XCTAssertTrue(map.hasActiveExactSearchResolution)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+
+        let idle = await SaveDoodleMapPeekOpen.perform(
+            place: stamp,
+            mapViewModel: MapViewModel(usesRemotePersistence: false),
+            isExactSearchSessionActive: false,
+            exactSearchClueID: nil,
+            restoreResolution: {},
+            isCurrentRequest: { true }
+        )
+        XCTAssertEqual(idle, .openStamp(stamp.id))
+
+        let mismatched = await SaveDoodleMapPeekOpen.perform(
+            place: stamp, mapViewModel: map,
+            isExactSearchSessionActive: true, exactSearchClueID: UUID(),
+            restoreResolution: {}, isCurrentRequest: { true }
+        )
+        XCTAssertEqual(mismatched, .stayOnSearch)
+        XCTAssertEqual(map.activeExactSearchClueID, clue.id)
+        XCTAssertTrue(map.reviewCandidates.contains { $0.id == clue.id })
+
+        let cancelled = await SaveDoodleMapPeekOpen.perform(
+            place: stamp, mapViewModel: map,
+            isExactSearchSessionActive: true, exactSearchClueID: clue.id,
+            restoreResolution: { XCTFail("A stale tap must not restore a session") },
+            isCurrentRequest: { false }
+        )
+        XCTAssertEqual(cancelled, .stayOnSearch)
+        XCTAssertEqual(map.activeExactSearchClueID, clue.id)
+
+        var restored = 0
+        let outcome = await SaveDoodleMapPeekOpen.perform(
+            place: stamp,
+            mapViewModel: map,
+            isExactSearchSessionActive: true,
+            exactSearchClueID: clue.id,
+            restoreResolution: { restored += 1 },
+            isCurrentRequest: { true }
+        )
+        XCTAssertGreaterThan(restored, 0)
+        XCTAssertEqual(outcome, .resolvedStamp(stamp.id))
+        XCTAssertFalse(map.reviewCandidates.contains { $0.id == clue.id })
+        XCTAssertFalse(map.hasActiveExactSearchResolution)
+        XCTAssertTrue(map.places.contains { $0.id == stamp.id })
+    }
+
+    func testUnsavedMarkerSelectReopensReceiptSelection() {
+        let saved = Place(
+            id: UUID(),
+            name: "Saved Cafe",
+            address: "Taipei",
+            latitude: 25.033,
+            longitude: 121.565,
+            category: .cafe,
+            status: .wantToGo,
+            sourcePlatform: .other,
+            createdAt: Date()
+        )
+        let candidate = SaveMapCandidate(
+            id: "unsaved-night-market",
+            title: "Unsaved Night Market",
+            subtitle: "Taipei",
+            latitude: 25.0378,
+            longitude: 121.5672,
+            category: .attraction
+        )
+        let map = MapViewModel(usesRemotePersistence: false)
+        map.places = [saved]
+        map.mapCandidates = [candidate]
+        map.selectPlace(saved)
+        XCTAssertEqual(map.selectedPlace?.id, saved.id)
+        XCTAssertNil(map.selectedMapCandidate)
+
+        SaveDoodleMapUnsavedMarker.select(candidate, on: map)
+
+        XCTAssertEqual(map.selectedMapCandidate?.id, candidate.id)
+        XCTAssertEqual(map.selectedMapCandidate?.title, "Unsaved Night Market")
+        XCTAssertNil(map.selectedPlace)
+        XCTAssertTrue(map.visibleMapCandidates.contains { $0.id == candidate.id })
+    }
+
     private func source(at relativePath: String) throws -> String {
         try String(contentsOf: repositoryRoot.appendingPathComponent(relativePath), encoding: .utf8)
     }
