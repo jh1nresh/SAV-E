@@ -695,14 +695,16 @@ final class GooglePlacesService: GooglePlacesServiceProtocol {
     }
 
     func authorizedPhotoURL(for persistedURL: URL) -> URL? {
-        guard GooglePlacesPhotoURL.isGooglePlacesPhotoURL(persistedURL) else { return persistedURL }
+        guard GooglePlacesPhotoURL.acceptsAPIKey(persistedURL) else {
+            return GooglePlacesPhotoURL.persistableURL(persistedURL)
+        }
         guard let apiKey else { return nil }
         return GooglePlacesPhotoURL.authorizedURL(persistedURL, apiKey: apiKey)
     }
 
     func authorizedPhotoRequest(for persistedURL: URL) -> URLRequest? {
         guard let requestURL = authorizedPhotoURL(for: persistedURL) else { return nil }
-        return GooglePlacesPhotoURL.isGooglePlacesPhotoURL(persistedURL)
+        return GooglePlacesPhotoURL.acceptsAPIKey(persistedURL)
             ? authorizedRequest(for: requestURL)
             : URLRequest(url: requestURL)
     }
@@ -784,7 +786,7 @@ enum GooglePlacesPhotoURL {
         guard scheme == "https" else { return false }
         if hostname == host && decoded.path == path { return true }
         if hostname == "places.googleapis.com" && decoded.path.contains("/media") { return true }
-        if hostname.hasSuffix("googleusercontent.com")
+        if (hostname == "googleusercontent.com" || hostname.hasSuffix(".googleusercontent.com"))
             && googleusercontentPathIsPlacesPhoto(decoded.path) {
             return true
         }
@@ -822,10 +824,26 @@ enum GooglePlacesPhotoURL {
         return !isGooglePlacesPhotoURL(url) || mapsAllowed
     }
 
+    /// Credential authorization uses the actual transport URL, never the
+    /// percent-decoded classification copy or a broad photo-host suffix.
+    nonisolated static func acceptsAPIKey(_ url: URL) -> Bool {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              components.scheme?.lowercased() == "https",
+              components.user == nil, components.password == nil,
+              components.port == nil || components.port == 443 else { return false }
+        let hostname = components.host?.lowercased()
+        if hostname == host { return components.path == path }
+        guard hostname == "places.googleapis.com" else { return false }
+        let parts = components.path.split(separator: "/", omittingEmptySubsequences: false)
+        return parts.count == 7 && parts[0].isEmpty && parts[1] == "v1"
+            && parts[2] == "places" && !parts[3].isEmpty
+            && parts[4] == "photos" && !parts[5].isEmpty && parts[6] == "media"
+    }
+
     nonisolated static func authorizedURL(_ persistedURL: URL, apiKey: String) -> URL? {
-        guard isGooglePlacesPhotoURL(persistedURL),
+        guard acceptsAPIKey(persistedURL),
               var components = URLComponents(url: persistableURL(persistedURL), resolvingAgainstBaseURL: false)
-        else { return persistedURL }
+        else { return persistableURL(persistedURL) }
 
         var queryItems = components.queryItems ?? []
         queryItems.append(URLQueryItem(name: "key", value: apiKey))

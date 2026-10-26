@@ -85,7 +85,7 @@ export function isGooglePlacesPhotoURL(value: string): boolean {
     if (host === "places.googleapis.com" && (path.includes("/photos/") || path.includes("/media"))) {
       return true;
     }
-    if (host.endsWith("googleusercontent.com") && googleusercontentPathIsPlacesPhoto(path)) {
+    if ((host === "googleusercontent.com" || host.endsWith(".googleusercontent.com")) && googleusercontentPathIsPlacesPhoto(path)) {
       return true;
     }
     if (hasPhotoReference && (googlePhotoHosts.has(host) || host.endsWith(".googleapis.com"))) {

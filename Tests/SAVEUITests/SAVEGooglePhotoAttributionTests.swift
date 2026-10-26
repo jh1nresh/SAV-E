@@ -176,11 +176,7 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         XCTAssertTrue(
             app.descendants(matching: .any)["evidence.homeThumbs"]
                 .waitForExistence(timeout: stepTimeout),
-            "Home 44pt featured and 52pt recent thumbs must render in the harness"
-        )
-        XCTAssertTrue(
-            app.descendants(matching: .any)["evidence.homeThumbs.featuredGoogle"]
-                .waitForExistence(timeout: stepTimeout)
+            "Retained 52pt photo-stamp components must render in the harness"
         )
         XCTAssertTrue(
             app.descendants(matching: .any)["evidence.homeThumbs.recentGoogle"]
@@ -199,7 +195,7 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         XCTAssertTrue(
             app.descendants(matching: .any)["evidence.homeThumbsZh"]
                 .waitForExistence(timeout: stepTimeout),
-            "Home thumbs zh-Hant scene must render featured and recent"
+            "Photo-stamp component scene must render in zh-Hant"
         )
         saveEvidence(app, name: "\(appearance)-home-thumbs-zh-Hant")
 

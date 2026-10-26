@@ -309,22 +309,10 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
         languageNote: String = "en VoiceOver"
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Home featured 44pt and recent 52pt. Single-line Google Maps footer on the row. \(languageNote).")
+            Text("Retained 52pt photo-stamp components. Current Home uses illustrated stickers; this is not a Home screenshot. \(languageNote).")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.saveInk)
                 .accessibilityIdentifier(identifier)
-            SaveTileTownPeekCard(
-                title: "Harbor Oven",
-                subtitle: "Featured · Google",
-                photoURL: Self.googleThumbURL,
-                accessibilityNameID: "evidence.homeThumbs.featuredGoogle"
-            )
-            SaveTileTownPeekCard(
-                title: "Own shot",
-                subtitle: "Featured · own",
-                photoURL: Self.ownThumbURL,
-                accessibilityNameID: "evidence.homeThumbs.featuredOwn"
-            )
             HStack(alignment: .top, spacing: 16) {
                 SaveKraftStamp(
                     title: "Harbor Oven",

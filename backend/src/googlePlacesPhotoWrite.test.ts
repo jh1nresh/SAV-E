@@ -113,6 +113,16 @@ test("place/photo match is host- or resource-name scoped so marketplace photos s
   assert.equal(persistableSourceImageURL(friendImport), friendImport);
 });
 
+test("googleusercontent lookalike hosts remain non-Google images", () => {
+  for (const url of [
+    "https://attackergoogleusercontent.com/p/photo.jpg?signature=a%2Fb",
+    "https://googleusercontent.com.attacker.example/p/photo.jpg",
+  ]) {
+    assert.equal(isGooglePlacesPhotoURL(url), false);
+    assert.equal(persistableSourceImageURL(url), url);
+  }
+});
+
 const googleusercontentPlacesPaths = {
   "/places/": "https://lh3.googleusercontent.com/places/ANXAkqG-places-path",
   "/place-photos/": "https://lh3.googleusercontent.com/place-photos/AF1Qip-place-photos",
