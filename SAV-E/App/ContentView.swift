@@ -207,6 +207,7 @@ struct ContentView: View {
     /// Survives a search-panel reopen that would otherwise drop
     /// `exactSearchResolution` before the saved-stamp tap.
     @State private var exactSearchClueID: UUID?
+    @State private var exactSearchPresentationID = UUID()
     @State private var pendingOriginPlanCandidateID: UUID?
     /// True while chrome is swapping one exclusive presentation for another.
     /// Dismiss handlers must not resume capture or re-present a sheet mid-swap.
@@ -648,7 +649,7 @@ struct ContentView: View {
                                     // the canvas never draws its own copy.
                                     hidesCommandShelf: true,
                                     onOpenSearch: { openMapSearch() },
-                                    onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
+                                    onOpenSavedPlace: { openSavedPlaceFromMapSearch($0) },
                                     onPlanAroundPlace: openPlanAround,
                                     onOpenPassport: openPassport
                                 )
@@ -1102,6 +1103,7 @@ struct ContentView: View {
             },
             onClearMapSearchResults: { endsExactSearch in
                 if endsExactSearch {
+                    exactSearchPresentationID = UUID()
                     isExactSearchSessionActive = false
                     exactSearchClueID = nil
                 }
@@ -1566,6 +1568,7 @@ struct ContentView: View {
     /// Peek-card taps use this same path so a selected 64pt sticker cannot
     /// open the stamp while leaving the correction session unresolved.
     private func activateExactSearchSession(for candidate: PlaceReviewCandidate) {
+        exactSearchPresentationID = UUID()
         exactSearchClueID = candidate.id
         isExactSearchSessionActive = true
         mapVM.beginExactSearchResolution(for: candidate)
@@ -1580,25 +1583,29 @@ struct ContentView: View {
     }
 
     private func openSavedPlaceFromMapSearch(_ place: Place) {
-        restoreExactSearchResolutionIfNeeded()
-        // The launch request can keep `preservesExactSearchClue` after an
-        // explicit close or a successful resolve. Only a live session may
-        // claim the next saved-pin tap; otherwise the peek never opens.
-        let shouldResolveClue = isExactSearchSessionActive
-            || mapVM.hasActiveExactSearchResolution
-            || exactSearchClueID != nil
-        guard shouldResolveClue else {
-            openMapDetail(.savedPlace(place))
-            return
-        }
+        let presentationID = exactSearchPresentationID
         Task {
             // Stay on the Map search/correction surface. The embedded drawer
             // binds `mapVM.correctionDrawerError` so a failed decision does
             // not open the stamp as if it were already corrected.
-            restoreExactSearchResolutionIfNeeded()
-            if let resolved = await mapVM.chooseSavedStampFromExactSearch(place) {
+            let outcome = await SaveDoodleMapPeekOpen.perform(
+                place: place,
+                mapViewModel: mapVM,
+                isExactSearchSessionActive: isExactSearchSessionActive,
+                exactSearchClueID: exactSearchClueID,
+                restoreResolution: restoreExactSearchResolutionIfNeeded,
+                isCurrentRequest: { exactSearchPresentationID == presentationID }
+            )
+            switch outcome {
+            case .openStamp(let id):
+                let opened = mapVM.places.first(where: { $0.id == id }) ?? place
+                openMapDetail(.savedPlace(opened))
+            case .resolvedStamp(let id):
                 clearResolvedExactSearchSession()
-                openMapDetail(.savedPlace(resolved))
+                let opened = mapVM.places.first(where: { $0.id == id }) ?? place
+                openMapDetail(.savedPlace(opened))
+            case .stayOnSearch:
+                break
             }
         }
     }
@@ -1621,6 +1628,7 @@ struct ContentView: View {
     }
 
     private func clearResolvedExactSearchSession() {
+        exactSearchPresentationID = UUID()
         exactSearchClueID = nil
         isExactSearchSessionActive = false
         guard drawerLaunchRequest.preservesExactSearchClue else { return }
@@ -1636,12 +1644,14 @@ struct ContentView: View {
     /// must also drop the ContentView session so the next saved-row tap
     /// opens the stamp instead of `chooseSavedStampFromExactSearch`.
     private func endExactSearchSessionAfterCandidateSave() {
+        exactSearchPresentationID = UUID()
         exactSearchClueID = nil
         isExactSearchSessionActive = false
     }
 
     private func invalidateExactSearchRequest() {
         guard exactSearchRequestID != nil || isExactSearchSessionActive || exactSearchClueID != nil || mapVM.hasActiveExactSearchResolution else { return }
+        exactSearchPresentationID = UUID()
         exactSearchRequestID = nil
         isExactSearchSessionActive = false
         exactSearchClueID = nil
