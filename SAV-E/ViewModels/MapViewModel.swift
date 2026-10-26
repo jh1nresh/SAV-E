@@ -4828,7 +4828,8 @@ final class MapViewModel: ObservableObject {
     }
 
     func updatePlace(_ place: Place) async throws {
-        guard let index = places.firstIndex(where: { $0.id == place.id }) else { return }
+        try Task.checkCancellation()
+        guard let index = places.firstIndex(where: { $0.id == place.id }) else { throw CancellationError() }
         let previousPlace = places[index]
         let owner = authService.currentUserId
         let generation = authService.sessionGeneration
@@ -4845,13 +4846,21 @@ final class MapViewModel: ObservableObject {
             } else {
                 _ = try saveLocalVaultService.saveConfirmedPlace(place, ownerSubject: owner)
             }
+            guard authService.currentUserId == owner, authService.sessionGeneration == generation else {
+                throw ReviewCandidateError.sessionChangedAfterCommit
+            }
             if SavePassportFieldStreakStore.countsVisit(previous: previousPlace.status, updated: place.status) {
                 SavePassportFieldStreakStore.shared.recordFieldAction()
             }
         } catch {
-            places[index] = previousPlace
-            if selectedPlace?.id == place.id {
-                selectedPlace = previousPlace
+            guard authService.currentUserId == owner, authService.sessionGeneration == generation else {
+                throw error
+            }
+            if let currentIndex = places.firstIndex(where: { $0.id == place.id }) {
+                places[currentIndex] = previousPlace
+                if selectedPlace?.id == place.id {
+                    selectedPlace = previousPlace
+                }
             }
             // 2026-10-23 P2 ruling (B): a PATCH growth refusal keeps the
             // confirmed stamp as the server left it and parks the attempted
