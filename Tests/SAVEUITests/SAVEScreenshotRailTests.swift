@@ -2257,9 +2257,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["profile.root"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "t3-passport-\(suffix)")
 
-        let settings = app.buttons["profile.settings"]
-        XCTAssertTrue(settings.waitForExistence(timeout: stepTimeout))
-        tapReachable(settings)
+        openPassportSettings(app)
         XCTAssertTrue(
             app.descendants(matching: .any)["profile.stampLedger"].waitForExistence(timeout: stepTimeout)
                 || app.buttons["profile.tutorial"].waitForExistence(timeout: stepTimeout),
