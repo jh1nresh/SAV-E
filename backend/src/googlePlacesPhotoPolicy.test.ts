@@ -22,16 +22,18 @@ test("founder Google photo cleanup SQL is transactional and non-destructive", ()
   assert.doesNotMatch(cleanup, /drop\s+(table|column)/i);
   assert.match(cleanup, /business_photo_urls = '\{\}'/);
   assert.match(cleanup, /source_image_url = null/);
-  assert.match(cleanup, /googleusercontent\.com%\/places\/%/);
-  assert.match(cleanup, /googleusercontent\.com%\/place-photos\/%/);
-  assert.match(cleanup, /googleusercontent\.com%\/p\/%/);
-  assert.match(cleanup, /googleusercontent\.com%\/gps-cs-s\/%/);
-  assert.match(cleanup, /googleusercontent\.com%\/gps-proxy\/%/);
-  assert.match(verify, /googleusercontent\.com%\/places\/%/);
-  assert.match(verify, /googleusercontent\.com%\/place-photos\/%/);
-  assert.match(verify, /googleusercontent\.com%\/p\/%/);
-  assert.match(verify, /googleusercontent\.com%\/gps-cs-s\/%/);
-  assert.match(verify, /googleusercontent\.com%\/gps-proxy\/%/);
+  const classifier = (sql: string) => sql.split("-- BEGIN shared Google photo classifier")[1]
+    ?.split("-- END shared Google photo classifier")[0];
+  assert.ok(classifier(cleanup));
+  assert.equal(classifier(cleanup), classifier(verify));
+  for (const sql of [cleanup, verify]) {
+    assert.match(sql, /with recursive decoded/);
+    assert.ok(sql.includes("host = 'googleusercontent.com' or host like '%.googleusercontent.com'"));
+    for (const path of ["places", "place-photos", "p", "gps-cs-s", "gps-proxy"]) {
+      assert.ok(sql.includes(`'${path}'`), `Missing Googleusercontent path ${path}`);
+    }
+    assert.doesNotMatch(sql, /googleusercontent\.com%/);
+  }
   assert.match(verify, /leftover_business_photo_urls/);
   assert.match(verify, /leftover_google_source_image_urls/);
   assert.match(runbook, /railway run --service save-backend/);
@@ -46,11 +48,10 @@ test("founder Google photo cleanup SQL is transactional and non-destructive", ()
     new URL("../../docs/evidence/pr306/README.md", import.meta.url),
     "utf8",
   );
-  assert.match(evidence, /googleusercontent\.com%\/places\/%/);
-  assert.match(evidence, /googleusercontent\.com%\/place-photos\/%/);
-  assert.match(evidence, /googleusercontent\.com%\/p\/%/);
-  assert.match(evidence, /googleusercontent\.com%\/gps-cs-s\/%/);
-  assert.match(evidence, /googleusercontent\.com%\/gps-proxy\/%/);
+  assert.match(evidence, /google-photo-url-verify\.sql/);
+  assert.match(evidence, /layered percent escapes/);
+  assert.match(evidence, /exact Google host/);
+  assert.doesNotMatch(evidence, /googleusercontent\.com%/);
   assert.match(evidence, /Do not treat avatar paths `\/a\/` or `\/a-\/`/);
 });
 

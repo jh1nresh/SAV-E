@@ -77,43 +77,10 @@ App / write path (this PR):
 | `backend/sql/google-photo-url-cleanup.sql` | Founder-only apply. Not run from this PR. |
 | `backend/sql/google-photo-url-verify.sql` | Read-only leftover count. |
 
-Expected verify query (founder `railway run`, not this agent).
-Copy matches `backend/sql/google-photo-url-verify.sql` line for line so QA can tick each Googleusercontent Places path:
+The canonical verification query is [`backend/sql/google-photo-url-verify.sql`](../../../backend/sql/google-photo-url-verify.sql). Use that file through the [founder runbook](../../operations/google-photo-url-cleanup.md) after separately authorized backup and cleanup; do not copy an older substring-based query from this document.
 
-```sql
-select
-  (
-    select count(*)
-    from public.places
-    where coalesce(cardinality(business_photo_urls), 0) > 0
-  ) as leftover_business_photo_urls,
-  (
-    select count(*)
-    from public.places
-    where source_image_url is not null
-      and (
-        source_image_url ilike '%maps.googleapis.com/maps/api/place/photo%'
-        or source_image_url ilike '%places.googleapis.com%/%/media%'
-        or source_image_url ilike '%photo_reference=%'
-        or source_image_url ~* '^places/.+/photos/'
-        or source_image_url ilike '%googleusercontent.com%/places/%'
-        or source_image_url ilike '%googleusercontent.com%/place-photos/%'
-        or source_image_url ilike '%googleusercontent.com%/p/%'
-        or source_image_url ilike '%googleusercontent.com%/gps-cs-s/%'
-        or source_image_url ilike '%googleusercontent.com%/gps-proxy/%'
-      )
-  ) as leftover_google_source_image_urls;
-```
+Cleanup and verification share one classifier: decode layered percent escapes, parse the exact Google host or dot-delimited Googleusercontent subdomain, and inspect normalized path segments. Googleusercontent Places segments are `places`, `place-photos`, `p`, `gps-cs-s` and `gps-proxy`. Lookalike hosts, query/fragment text and sender-owned URLs are not host matches. Preserved source URLs keep their original bytes.
 
-QA tick list for leftover `source_image_url` (same five googleusercontent Places styles as cleanup):
+Do not treat avatar paths `/a/` or `/a-/` as leftovers. Invalid UTF-8/NUL or IDNA-dependent hosts stop verification and roll back cleanup; a query error is not a clean result.
 
-1. `source_image_url ilike '%googleusercontent.com%/places/%'`
-2. `source_image_url ilike '%googleusercontent.com%/place-photos/%'`
-3. `source_image_url ilike '%googleusercontent.com%/p/%'`
-4. `source_image_url ilike '%googleusercontent.com%/gps-cs-s/%'`
-5. `source_image_url ilike '%googleusercontent.com%/gps-proxy/%'`
-
-Do not treat avatar paths `/a/` or `/a-/` as leftovers. Cleanup uses the same five `ilike` rows in `backend/sql/google-photo-url-cleanup.sql`.
-
-This Linux agent has no `DATABASE_URL` / Railway login, so it cannot attach
-a live row count. Cleanup remains founder-owned and is not run here.
+The offline synthetic PostgreSQL regression `backend/scripts/check-google-photo-sql.py` compares actual SQL with the production TypeScript classifier and verifies read-only checks, rollback and exact non-Google byte preservation. No production database was accessed, and no live leftover count is claimed. Cleanup remains founder-owned.
