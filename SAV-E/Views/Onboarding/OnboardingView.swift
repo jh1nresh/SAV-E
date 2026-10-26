@@ -162,13 +162,17 @@ struct OnboardingView: View {
                                 .font(SaveAtlasType.strong(22))
                                 .foregroundStyle(SaveAtlasPalette.forest)
                                 .fixedSize(horizontal: false, vertical: true)
-                            Label(step == .candidate ? text("Review Candidate", "待確認地點") : text("Map Stamp · Example", "地圖章・範例"),
-                                  systemImage: step == .candidate ? "magnifyingglass" : "checkmark.seal.fill")
-                                .font(SaveAtlasType.body(12))
-                                .foregroundStyle(SaveAtlasPalette.ink)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(step == .candidate ? SaveAtlasPalette.sky : SaveAtlasPalette.mint, in: Capsule())
+                            HStack(spacing: 6) {
+                                Image(systemName: step == .candidate ? "magnifyingglass" : "checkmark.seal.fill")
+                                    .accessibilityHidden(true)
+                                Text(step == .candidate ? text("Review Candidate", "待確認地點") : text("Map Stamp · Example", "地圖章・範例"))
+                            }
+                            .font(SaveAtlasType.body(12))
+                            .foregroundStyle(SaveAtlasPalette.ink)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(step == .candidate ? SaveAtlasPalette.sky : SaveAtlasPalette.mint, in: Capsule())
+                            .accessibilityElement(children: .contain)
                         }
                         Spacer(minLength: 0)
                         if step == .mapStamp {
@@ -199,6 +203,7 @@ struct OnboardingView: View {
         }
         .shadow(color: SaveAtlasPalette.ink.opacity(0.07), radius: 16, x: 0, y: 8)
         .rotationEffect(.degrees(reduceMotion || step != .clue ? 0 : -2))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("onboarding.postcard.\(step)")
     }
 

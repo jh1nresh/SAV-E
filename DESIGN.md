@@ -1,15 +1,18 @@
 # Savvy Design System
 
-> Last updated: 2026-10-21
+> Last updated: 2026-10-24
 > Status: source of truth for native iOS design work
 > Token systems: **Atlas Postcard** still governs paper, type, kraft, and coral
-> chrome, with the 2026-10-19 v5 cream/ink/stroke lock below. **Tile-town** is
-> the product Map / Home peek / Friends strip base (founder lock 2026-10-14).
-> The 2026-10-19 founder decision replaces the Home hero and Map tab with a
-> full-pixel **isometric** tile town; that renderer is a follow-up PR. **Soft
-> Pixel** is accents-only *on* tile-town (pins / seals / Memo). **Cream-notebook**
-> tokens are legacy-surface-only. See "Tile Town", "Atlas Postcard Tokens",
-> and "Legacy Cream-Notebook Tokens" below.
+> chrome, with the 2026-10-19 v5 cream/ink/stroke lock below. **Tile-town**
+> remains the Friends strip / Passport leftover until those Doodle PRs land
+> (founder lock 2026-10-14). Home and product Map no longer use it. Founder
+> 2026-10-20: 「像素小鎮已經不要了」 — tile-town is abandoned; this stack
+> keeps only shared leftovers for a later cleanup. The 2026-10-19 isometric
+> Home hero is withdrawn. Product Map is default Apple MapKit with Doodle
+> chrome (`SaveDoodleMapView`). **Soft Pixel** is accents-only on remaining
+> town surfaces (pins / seals / Memo). **Cream-notebook** tokens are
+> legacy-surface-only. See "Tile Town", "Atlas Postcard Tokens", and "Legacy Cream-Notebook
+> Tokens" below.
 
 ## Product Frame
 
@@ -23,9 +26,12 @@ for place memory, evidence, and review.
 
 Assumptions locked by current code:
 
-- Native app is SwiftUI. Product Map and Home peek use `SaveTileTownCanvas`,
-  not a live MapKit basemap. MapKit remains for Trip maps and Apple Maps
-  handoff only.
+- Native app is SwiftUI. Product Home is `SaveDoodleHomeView`: a nearby
+  Eat/Go list only — no map component (founder option B, 2026-10-24).
+  Product Map is
+  `SaveDoodleMapView`: default Apple MapKit with Doodle chrome (city, Eat/Go,
+  paper sheet + 我來過了). MapKit also remains for Trip maps and Apple Maps
+  handoff.
 - `Color+Theme.swift` owns the current palette tokens, including
   `SaveTileTownPalette`.
 - `MemoMascotMark` owns the Memo elephant mark.
@@ -107,29 +113,31 @@ Rules:
 
 ### Tile Town (product map base)
 
-**Lock (2026-10-14 founder, via CEO):** product Map and Home peek use a
-full-pixel tile-town base. Soft Pixel accents-only on MapKit (H1/M1 from
-2026-10-13 / PRs #277–#278) is **superseded for the map base**. Do not
-silent-partial Soft Pixel: a MapKit atlas with pixel pins is not the lock.
+**Lock (2026-10-14 founder, via CEO; Map Doodle PR supersedes the base):**
+product Map used a full-pixel tile-town base. Soft Pixel accents-only on
+MapKit (H1/M1 from 2026-10-13 / PRs #277–#278) is **superseded for the map base**.
+Do not silent-partial Soft Pixel: a MapKit atlas with pixel pins is not the lock.
+Founder 2026-10-20 abandoned tile-town on Home; product Map now ships
+`SaveDoodleMapView` (default Apple MapKit + Doodle chrome). Friends (`SaveFriendsView`) is a doodle people list; the shared map stays hidden.
 
 Rules:
 
-- Product Map tab (`SaveTileTownRootMap`) and Home peek (`SaveTileTownHomeView`)
-  render `SaveTileTownCanvas`. Friends may show a small peek strip of the same
-  town. One town language, three sizes.
+- Product Map tab (`SaveDoodleMapView`) renders default Apple MapKit with Doodle chrome.
+  Home (`SaveDoodleHomeView`) is the Doodle Eat/Go list only (no map). Friends (`SaveFriendsView`) is a doodle people list; the shared map stays hidden.
 - Tile-town is a memory map. Pins hash to village lots. It does not silently
   confirm places and it does not invent GPS truth. Navigate / Trip maps may
   still hand off to MapKit or Apple Maps.
 - Nearby / Saved / Friends filter chips live on **Map only**. Home must not
   reuse that chrome.
-- Coral pins only. Selected stamp elevates to a kraft peek card (name + date/area).
+- Coral outline lollipop pins only (paper fill, coral stroke, numbered).
+  Selected stamp elevates to a kraft peek card (name + date/area).
   Source-only clues still have no pin.
 - Tile-town is nearest-neighbor integer tiles (`SaveTileTownRaster`): buildings,
   roofs, trees, water, and roads are crisp cells. No anti-aliased vector houses
   or curved roads. Do not blurry-upscale pixel art.
-- **2026-10-19:** Home hero and Map become a full-pixel isometric tile town
-  (place-memory, not navigation). Pins and saved stamps stay tappable. The
-  isometric renderer is sequenced after this chrome/token PR.
+- **2026-10-19/20:** The isometric tile-town Home hero is withdrawn.
+  Map stays on the current town renderer until the Doodle Map PR. Pins
+  and saved stamps stay tappable on Map.
 - App Store frames and product UI share this town. In-app **titles** (Savvy
   wordmark, page titles) use `SavePixelDisplayText` / `SavePixelType`
   (Pixelify Sans Latin + Fusion Pixel CJK). Stamp names stay SF Rounded until
@@ -330,7 +338,7 @@ accept `relativeTo:`, and editorial scales relative to headline.
 | Role | Token | Face | Use |
 | --- | --- | --- | --- |
 | Pixel display | `SavePixelDisplayText` / `SavePixelType` | Pixelify Sans + Fusion Pixel CJK | Savvy wordmark and page titles. OFL. Zpix is not bundled (commercial). Stamp names wait for the shared stamp PR. |
-| Pixel chrome | `SavePixelChromeIcon` | 8×8 nearest-neighbor | Quiet Home header Trips / Saves / More and 24px root tab icons |
+| Pixel chrome | `SavePixelChromeIcon` | 8×8 nearest-neighbor | Retired on the root tab bar. Doodle v1 uses 24pt hand-drawn template icons (`SaveDoodleTabIcon`). |
 | Display | `SaveAtlasType.display(_:)` | System Rounded Semibold (SF) | Hero numerals, action labels, display moments |
 | Strong | `SaveAtlasType.strong(_:)` | System Rounded Bold | Card/ticket titles, CTAs, uppercased eyebrows with tracking |
 | Body | `SaveAtlasType.body(_:)` | System Rounded Medium | Body and detail copy |
@@ -385,16 +393,16 @@ Coral is the postage accent and the strongest color on any Atlas surface.
 
 | Surface | System |
 | --- | --- |
-| Home (`SaveTileTownHomeView`) | Tile-town peek + Atlas chrome |
+| Home (`SaveDoodleHomeView`) | Doodle Eat/Go list only (no map) |
 | Saves drawer + search results | Atlas |
 | Plan (`SavePlanView`) | Atlas |
 | Trips (`TripPackViews`) | Atlas |
-| Map shell and drawer panel (`SaveTileTownRootMap`, `SaveMapDrawerPanel`) | Tile-town base + Atlas chrome |
+| Map shell and drawer panel (`SaveDoodleMapView`, `SaveMapDrawerPanel`) | Default Apple MapKit + Doodle chrome |
 | Ask drawer (`AIDrawerView`) | Atlas |
 | Onboarding | Atlas |
 | Google Takeout import | Atlas (some legacy tokens remain inline) |
 | Passport (`ProfileView`, `StatsView`, pet companion card chrome) | Atlas |
-| Friends (`SaveFriendsView`) | Atlas |
+| Friends (`SaveFriendsView`) | Doodle people list (shared map hidden) |
 | `CategoryPill`, `EmptyStateView`, `RelatedPlaceSourcesPanel` | Atlas |
 | Brand accents: pet preset colors (Spark = honey), stamp moment ripple, `SaveMemoryBadge` stamp palette, `MemoMascotMark` | Intentional — do not recolor in migrations |
 | App Clip shared place, trip, and list previews | Atlas |
@@ -534,13 +542,16 @@ Source: `SAV-E/Extensions/Color+Theme.swift`.
 
 ### Map Pins
 
-Source: product Map uses `SaveTileTownPinMark` on `SaveTileTownCanvas`.
-Trip / Navigate MapKit still uses `SAV-E/Views/Map/MapView.swift`.
+Source: product Map uses coral numbered pins via `SaveDoodleMapPinStyle`
+on `SaveDoodleMapView`. Trip / Navigate MapKit still uses
+`SAV-E/Views/Map/MapView.swift`.
 
 Rules:
 
-- Product Map pins are coral teardrops. Selected stamp elevates to a kraft
-  peek card. Do not invent a six-color pin rainbow.
+- Product Map pins are coral outline lollipops (`SaveDoodleCoralPin`):
+  paper fill, coral stroke, numbered head and a short stem. Visited uses
+  stamp red on the same outline. Selected stamp elevates to a kraft peek
+  card. Do not invent a six-color pin rainbow.
 - Trip MapKit confirmed places use `PlaceMapPin`: compact forest category
   symbols; a checkmark means user-marked Visited. A selected stamp gains the
   honey focus ring.
@@ -650,54 +661,151 @@ Never collapse Source Clue, Review Candidate, and Map Stamp into one visual stat
 
 - Root controls are Home / Map / + / Friends / Passport, in that order.
 - Tab bible: flat full-width cream bar (`canvas`) with a hard 2px `stroke`
-  top rule; 24px pixel line icons (`SavePixelChromeIcon`: house, map, plus,
-  people, booklet); coral on the active destination only; the center `+` is
-  a coral (`SaveAtlasPalette.coral`) circle with no visible "Save" label, but VoiceOver and
-  `root.tab.save` keep the capture name. **DESIGN question:** the 2026-10-19
-  packet asked for a red `+` circle; this PR keeps production coral until
-  that token is decided. Do not use a mint selection pill or a floating
-  rounded capsule.
-- Home owns waiting clues and recent Map Stamps, with a tile-town peek. The
-  full private library stays reachable from More → Manage saved places and
-  from quiet Home search. Do not add a duplicate Saves tab.
+  top rule; 24pt hand-drawn template icons (`SaveDoodleTabIcon`: house,
+  folded map, plus, people, booklet); coral on the active destination only,
+  muted when idle; the center `+` is a coral (`SaveAtlasPalette.coral`) circle with no visible "Save" label, but VoiceOver and `root.tab.save` keep the capture
+  name. **DESIGN question:** the 2026-10-19 packet asked for a red `+`
+  circle; this PR keeps production coral until that token is decided. Do
+  not use a mint selection pill or a floating glass capsule.
+- Home owns waiting clues and the nearby Eat/Go list. Home has no map
+  component; the Map tab is the only map. The hint row is always
+  visible: a time-of-day greeting, plus `N clues waiting · Review ›`
+  on the same line when clues wait.  Collected opens Passport. Saves remains a child of Review / existing
+  library routes — Home no longer shows a See all saves row. Do not add a
+  duplicate Saves tab. Trips stay a production child reached from Saves as
+  `Trips ›` (HoP acceptance H-6).
 - + opens capture and leaves the previous destination selected when dismissed.
 - Plan is a secondary route while planning demand remains unvalidated.
-- Home's More menu retains Trips and existing trip data. Trips offers Resume
-  planning for the current conversation; New trip retains its explicit reset
-  and unsaved-draft confirmation behavior.
+- Trips remain a child route. Home no longer shows a More menu.
 - Planning and trip child pages have a back path to their parent. Plan has no
   root tab bar; the conversation remains owned by the app shell across visits.
 
-### Home collection search
+### Home (Doodle v1)
 
-Resting Home is Savvy + tile-town peek + clues bar + recent stamps. It is not
-the Map tab. Nearby / Saved / Friends chips must not appear here.
+Home exposes a visible 44pt-minimum Saves control when no clues are
+waiting. Test-only or invisible navigation controls are not valid user
+routes. When clues wait, Review is that route. Visited Home/Map stickers
+use the official DESIGN color die-cut (duck, noodle, coffee, temple,
+lantern); unvisited stickers use the matching pencil outline.
+Founder-approved DESIGN v2 (2026-10-24) puts a small Memo elephant in
+the header with Savvy and Eat/Go. The elephant is never a place sticker
+and does not return to the empty plate. Code-drawn geometry is not a
+place sticker. Art sits in a 48pt box at ≤40pt.
 
-Quiet search remains at the top of the collection job. Typing filters the
-confirmed collection locally. Category and city terms intersect: “cafe” then
-“Taipei” and “台北咖啡店” have the same meaning. Recognized city aliases use
-saved addresses, not incidental mentions in notes. Other terms search stored
-place metadata. No provider search or analysis calls, inference of missing
-facts, public discovery or automatic saves occur on this Home surface.
-Clearing search returns to the peek + clues + recent-stamps rest state.
+Resting Home is Savvy + small elephant + Eat/Go in the header, then
+Near you · city ▾, the always-visible hint row, 68pt own-save rows,
+then Collected. It is not the Map tab and it has no mini-map and no
+map component. Do not add a top-right map icon. No Eat/Go grouping or
+section headers. No pixel style. No Google photos.
+Nearby / Saved / Friends chips must not appear here.
+Each 68pt row has a 24pt coral rank (near to far), a 48pt official
+DoodleSticker (Duck / Noodle / Coffee / Lantern / Temple), 17pt
+semibold name, and a second line
+`<distance, or neighborhood if location is denied> · <visit status>`.
+That subtitle is never truncated at 375, 390, or 430pt.
+Tapping a row opens place detail. Detail has View on map
+(`home.row.showOnMap`, 44pt) — that is the only Home path onto Map.
+HoP locked D2 (city switcher) and D3 (Eat/Go + nearby own-saves) on
+2026-10-19. The 2026-10-14 tile-town Home chrome (quiet search, Trips /
+Saves / More header icons, tile-town peek, recent stamps) is superseded
+on Home only. Founder 2026-10-20: tile-town is abandoned; Home ships
+Doodle only. Product Map ships `SaveDoodleMapView`. Passport ships the
+sticker-grid doodle face.
 
-The peek card and recent stamps use `SaveKraftStamp` (photo face + name).
-Recent-stamp labels scroll above the tab bar (`rootTabScrollClearance`).
-The clues bar keeps Review clues. Waiting for review (Review Candidate and
-Source Clue tickets, distinct) lives under More, not on the resting Home
-canvas. Header Trips / Saves / More are visible quiet 44pt pixel-icon
-buttons (`SavePixelChromeIcon`). Do not hide hittable entries with
-near-zero opacity. The More menu keeps collection management, Trips, and
-the review queue.
+Eat shows only Eat (food, cafe, bar). Go shows only Go (attraction, stay,
+shopping). The list is the user's own saves near the selected city or
+current location, sorted by distance. No discovery feed. Home does
+not host a map. Place detail View on map focuses that stamp on the Map
+tab with Home's current Eat/Go and city.
+Near you header, Collected, and Passport share one city: the nearest
+save across every category, not the nearest Eat/Go row. Fallback
+addresses use the locality (Berkeley), not a state+ZIP fragment.
+European postcode-first lines (`8001 Zürich`) parse as the city.
+Stable city IDs keep a region qualifier so Springfield IL and
+Springfield MA stay apart; the picker still shows the locality.
+Collected X/Y is visited / all saved places in the current city scope,
+every category. Eat/Go and the listed row count do not change it;
+switching city does. When the Eat/Go list is empty but the city still
+has saves, keep the Collected strip and show a filter-empty message
+instead of the whole empty Home. The strip opens Passport with the same
+city numbers (HoP 2026-10-21). Unknown location is not worldwide nearby.
 
-Reduce Motion, VoiceOver and accessibility text sizes use the same static
-list. Existing distance/newest ordering remains the ordering within matching
-results.
+Location denied: hide "Near you", show the last city sorted by most
+recent save, and prompt to allow location. Empty nearby: Caveat title,
+coral + Save link, and a latest-save jump when another city has saves.
 
-Density cuts proposed in the 2026-10-19 packet (removing Home search plus the
-three round header buttons, Passport social counts, and the Map search sheet)
-are **not approved**. Head of Product must OK them before any of those
-controls leave the product.
+The hint row is always shown. It starts with a greeting from device
+local time: 05:00–11:59 早安 / Good morning; 12:00–17:59 午安 / Good
+afternoon; 18:00–04:59 晚安 / Good evening. With clues the same line
+continues `· 3 條線索待看 · 去看看 ›` / `· 3 clues waiting · Review ›`
+(English N=1 is `1 clue`; counts above 99 are `99+`). With no clues,
+show only the greeting. Only `去看看 ›` / `Review ›` is coral and
+tappable; the rest is secondary text. English that does not fit 375pt
+shortens to `3 clues` (drop “waiting”). No ellipsis.
+Home no longer shows `See all saves`. Review still opens Saves when
+N>0. Saves reaches Trips from its header as `Trips ›`(`saves.trips`) — HoP acceptance H-6. Do not add a second Home Trips
+row. Collected opens
+Passport. Wordmark is Caveat SemiBold 34; the city line is Caveat 20 with
+a 2pt coral underline under the city word only. Body copy stays
+`SaveAtlasType`. Coral is `SaveAtlasPalette.coral` (#F26B4A light,
+#D97861 dark). DESIGN v2 is the Home layout contract. The Home
+visual-parity TARGET remains `ProductionTargets/home.png`
+(md5 `79ae24aaf02002cd10f429c2869dcfc0`), the pre-v2 baseline, until
+the founder personally approves a new raster. H1–H4 CI rasters are
+judged manually by DESIGN. Home's unmasked score against the pre-v2
+`home.png` is an expected FAIL on the current list-only Home.
+Historical DESIGN v2 `design/doodle-targets-2026-10-20/home-light.png`
+at `eade369` (exact 402×874; `home-dark.png`) is archive only. v1 is
+retired. Home and Map still fail CI below 0.90; do not apply
+`map-mask.png` to the Map score.
+
+### Passport (Doodle v1)
+
+Root Passport shows stickers and cities. Collected is the posts
+sub-page. Missions, streak, and the stamp ledger stay flagged off.
+Settings live on Collected. Wordmark is Caveat SemiBold 34 locked;
+the city line is Caveat 20 with a 2pt coral underline under the city
+word only. Body copy stays `SaveAtlasType`.
+
+The locked parity face is DESIGN v2
+`design/doodle-targets-2026-10-20/passport-light.png` at `eade369`
+(exact 402×874; `passport-dark.png` for DESIGN comparison). Grade
+position, size, color and font style by side-by-side comparison; a
+0.90 gate score is not Passport sign-off. v1 is retired. The face is
+Passport + Beijing · 4 of 12, the kraft sticker grid, cities, and the
+five-tab rail with Passport selected. It is not the profile header,
+quests, or shared-post grid.
+
+The sticker grid uses up to four 64pt columns with 16pt gaps. It reflows
+to three columns on 375/390pt phones after the 24pt screen and panel
+insets. Columns = floor((availableGridWidth + 16) / 80), min 1 max 4.
+Official DESIGN stickers (duck, noodle, coffee, temple, lantern)
+fill the 64pt slot; stamp rings are secondary. Do not wrap a shrunken icon in a filled circle. The elephant is brand-only and
+appears on the empty Passport state, never as a place mark. The rank
+legend stacks when its full text cannot fit, including larger text
+sizes. Map and Passport share manual visit history and the same daily
+deduplication.
+
+### Capture and Pro factual state
+
+Capture's photo action opens the system photo picker and reads text locally.
+The extracted text is editable and is only analyzed after the user taps Save;
+a photo never creates a confirmed Map Stamp directly. Empty or unreadable
+photos show an actionable error. Existing draft text is preserved.
+Search nearby opens the Map search drawer. It does not leave the user typing
+in Capture. Before analysis, Capture shows no invented suggestion from old
+saves. Its saved count is the actual count, without a fabricated 50-place cap.
+Pro retains the current modal layout. Settings / Passport open the same
+wall without an extra "Upgrade" or "not on sale" line. The 51st-save
+trigger uses "You've saved 50 places. Keep going." / "已存 50 個地點，繼續存下去".
+StoreKit prices come from the `SAVEPro.storekit` test catalog in DEBUG /
+UI tests and from App Store Connect once products are live; a failed load
+shows retry, never a hardcoded $6.99. An exhausted AI assist never opens
+this wall; the assist surface shows a neutral `ai.quotaExhausted` message
+instead. Product navigation does not mount TileTown Home, RootMap, or Canvas.
+The 200pt hero is the colored hand-drawn park (official color stickers
+plus a pencil). Do not use SF Symbols inside filled circles as place
+stickers.
 
 ### Sign-In
 
@@ -744,7 +852,13 @@ Rules:
   three chips are Map-only, 44pt buttons (`map.lens.*`), and stay below the
   48pt status band. The search drawer never covers them: large stop ends
   below `SaveTileTownProductLock.mapChromeHeight`, and only the visible
-  paper hits so pins stay tappable through medium.
+  paper hits so pins stay tappable through medium. Home's shared Eat/Go +
+  city (`SaveDoodleSession`) are one source of truth, synced both ways.
+  Map draws only saved places that match the current Eat/Go + city.
+  Unsaved places keep native Apple Markers. Pin count equals Home list
+  rows under the same filters; pin numbers do not have to match the Home
+  list. Map Eat/Go (`map.eat` / `map.go`) and city (`map.city`) write the
+  same session Home reads.
 - The town canvas pans with a drag. Pin tap selects the kraft peek card.
 - Drawer search (collapsed capsule) still opens the parked search panel.
   Category, Want to try, Visited, and Nearby-distance chips may remain in
@@ -887,10 +1001,16 @@ source clues or visit timestamps appear in post projections.
 ### Friends
 
 Home / Map / + / Friends / Passport remains the root bar. Friends is
-people-first: postage-seal avatars, author name, and “Last at …” for the
-latest explicit post. A small tile-town strip may sit under the list; it
-must not duplicate the full Map tab. An author opens a read-only passport
-under the same live follower audience gate.
+people-first doodle: Caveat / Iansui “Friends” / 「朋友」 title at 34pt
+(zh-Hant also Iansui), ink outline “Invite”, 48pt forest-ring avatars
+(initial or photo), author name 17 semibold, “last at Place · 2d” at 13,
+~57pt rows, and right-side 32pt doodle stickers
+(coffee / noodle / lantern / hill). The shared map stays hidden (HoP; cut in DESIGN v1 and kept).
+Stickers are outlined if the friend only saved the place, colored if they visited.
+The visual reference is Codex packet spec §7.4. Live `five-tab-friends`
+gates at 0.90 against `ProductionTargets/friends.png` with no mask.
+This surface has no animation (F-B11). An
+author opens a read-only passport under the same live follower audience gate.
 Loading, retry, empty and withdrawn states are explicit; sample activity exists
 only in isolated UI fixtures. A follow or private memory update never publishes.
 
@@ -941,3 +1061,29 @@ Rules:
 - If a screen needs a new state, update the State Model first.
 
 <!-- ci: pull_request required-check tip 20260922T184802Z -->
+
+### Doodle Map verification boundary
+
+HoP 298-7 / B-4: Home and Map share one Eat/Go + city state, synced both
+ways. HoP 298-3: Map draws only saved places matching those filters;
+pin count equals Home list rows; pin numbers need not match the Home
+list. Unsaved places keep native Apple Markers.
+HoP P-4 (founder 2026-10-24): `map.png` / `map-dark.png` are live
+Taipei Apple Maps screenshots from #298 CI iPhone 16 Pro (402pt / 3×
+1206×2622) head `ae37a7d1` (Taipei fixture `298-10` / `M1`, English
+`dark-map`). Do not apply `map-mask.png` to the 0.90 score. Head
+`8ea05f5e` ios `40048795885` scored map `0.999988` against that
+Taipei golden with no mask (298-10, iPhone 16 Pro 402pt). Home and
+Map still fail CI below 0.90. DESIGN still signs off on city / Eat-Go /
+sheet / tab chrome. City and Eat/Go sit on a cream `paper` header band,
+not on the live map. Pins are coral outline lollipops. The place sheet
+uses a 64pt official DESIGN sticker (color die-cut when visited, pencil
+outline when not) and a 12pt text gap. Do not replace default Apple
+MapKit `.standard` with a paper or hand-drawn basemap. City strip, place
+sheet, tab bar, and
+status bar are judged manually by DESIGN in addition to the 0.90 gate.
+Light and dark screenshot rails must also pass the
+city/filter/place-sheet/action geometry and hit-target assertions; the
+unmasked screenshots remain required for human visual review. Manual
+visit counts use the shared `SaveDoodleVisitStore` read by Map and
+Passport.
