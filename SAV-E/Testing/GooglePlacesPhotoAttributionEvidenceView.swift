@@ -309,44 +309,59 @@ struct GooglePlacesPhotoAttributionEvidenceView: View {
         languageNote: String = "en VoiceOver"
     ) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Home featured 44pt and recent 52pt. Single-line Google Maps footer on the row. \(languageNote).")
+            Text("Home doodle list uses category stickers, not Google photos. \(languageNote).")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(.saveInk)
                 .accessibilityIdentifier(identifier)
-            SaveTileTownPeekCard(
+            homeListRow(
                 title: "Harbor Oven",
-                subtitle: "Featured · Google",
-                photoURL: Self.googleThumbURL,
-                accessibilityNameID: "evidence.homeThumbs.featuredGoogle"
+                subtitle: "Eat/Go row · sticker",
+                identifier: "evidence.homeThumbs.featuredGoogle"
             )
-            SaveTileTownPeekCard(
+            homeListRow(
                 title: "Own shot",
-                subtitle: "Featured · own",
-                photoURL: Self.ownThumbURL,
-                accessibilityNameID: "evidence.homeThumbs.featuredOwn"
+                subtitle: "Eat/Go row · sticker",
+                identifier: "evidence.homeThumbs.featuredOwn"
             )
             HStack(alignment: .top, spacing: 16) {
-                SaveKraftStamp(
+                homeListRow(
                     title: "Harbor Oven",
-                    face: .photo(Self.googleThumbURL),
-                    size: .recent,
-                    accessibilityIdentifier: "evidence.homeThumbs.recentGoogle"
+                    subtitle: "Collected · sticker",
+                    identifier: "evidence.homeThumbs.recentGoogle"
                 )
-                SaveKraftStamp(
+                homeListRow(
                     title: "Own shot",
-                    face: .photo(Self.ownThumbURL),
-                    size: .recent,
-                    accessibilityIdentifier: "evidence.homeThumbs.recentOwn"
+                    subtitle: "Collected · sticker",
+                    identifier: "evidence.homeThumbs.recentOwn"
                 )
-                SaveKraftStamp(
+                homeListRow(
                     title: "Friend shot",
-                    face: .photo(Self.friendThumbURL),
-                    size: .recent,
-                    accessibilityIdentifier: "evidence.homeThumbs.recentFriend"
+                    subtitle: "Collected · sticker",
+                    identifier: "evidence.homeThumbs.recentFriend"
                 )
             }
         }
         .onAppear(perform: seedPhotoFixtures)
+    }
+
+    private func homeListRow(title: String, subtitle: String, identifier: String) -> some View {
+        HStack(alignment: .center, spacing: 0) {
+            SaveDoodleSticker(category: .cafe, placeName: title, visited: false)
+                .frame(width: SaveLayout.stickerBox, height: SaveLayout.stickerBox)
+                .padding(.trailing, SaveLayout.stickerToText)
+            VStack(alignment: .leading, spacing: SaveLayout.titleToMeta) {
+                Text(title)
+                    .font(SaveAtlasType.strong(17))
+                    .foregroundStyle(SaveAtlasPalette.ink)
+                    .lineLimit(2)
+                Text(subtitle)
+                    .font(SaveAtlasType.body(13))
+                    .foregroundStyle(SaveAtlasPalette.muted)
+                    .lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .accessibilityIdentifier(identifier)
     }
 
     private var drawerThumbsContent: some View {

@@ -208,12 +208,14 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertFalse(stamp.contains(".font(.system(size: 6, weight: .semibold))"))
 
         let peek = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
-        XCTAssertTrue(peek.contains("GooglePlacesPhotoSourceMark(style: .footer)"))
-        XCTAssertTrue(peek.contains("displaysGooglePhoto("))
-        XCTAssertTrue(peek.contains("availableWidth: rowWidth"))
-        XCTAssertFalse(peek.contains("homeStacked"))
-        XCTAssertFalse(peek.contains("availableWidth: 44"))
-        XCTAssertFalse(peek.contains("ZStack(alignment: .bottom"))
+        // Was featured peek + footer on SaveTileTownPeekCard. Main removed that view.
+        XCTAssertFalse(peek.contains("struct SaveTileTownPeekCard"))
+        XCTAssertFalse(peek.contains("GooglePlacesPhotoSourceMark"))
+        XCTAssertFalse(peek.contains("displaysGooglePhoto("))
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        XCTAssertTrue(home.contains("SaveDoodleSticker("))
+        XCTAssertFalse(home.contains("GooglePlacesPhotoSourceMark"))
+        XCTAssertFalse(home.contains("SaveTileTownPeekCard"))
     }
 
     @MainActor
@@ -335,6 +337,9 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertFalse(atlas.contains("displaysStackedGooglePhoto"))
         XCTAssertFalse(atlas.contains("homeStacked"))
         XCTAssertTrue(atlas.contains("GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL"))
+        XCTAssertTrue(atlas.contains("place.businessPhotoURLStrings.first"))
+        XCTAssertTrue(atlas.contains("map.place.thumb.fallback"))
+        XCTAssertTrue(atlas.contains("map.place.thumb.own"))
         XCTAssertTrue(atlas.contains("AtlasPalette.coral"))
         XCTAssertTrue(atlas.contains("map.place.card"))
         XCTAssertTrue(atlas.contains("callout"))
@@ -345,12 +350,14 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertTrue(postcard.contains("GooglePlacesPhotoSourceMark(style: .footer)"))
         XCTAssertTrue(postcard.contains("displaysGooglePhoto("))
         XCTAssertTrue(postcard.contains("availableWidth: 104"))
+        XCTAssertTrue(postcard.contains("detailPlace.businessPhotoURLStrings"))
 
         let carousel = try source(at: "SAV-E/Views/Map/PlaceBottomSheet.swift")
         XCTAssertTrue(
             carousel.contains("GooglePlacesPhotoAttributionBar"),
             "Detail (off the map) still marks Google photos"
         )
+        XCTAssertTrue(carousel.contains("place.photo.attribution.row"))
     }
 
     @MainActor
@@ -371,27 +378,25 @@ final class SaveCollaborativeListTests: XCTestCase {
             google: google,
             own: own
         )
-        XCTAssertTrue(
+        // Was 52pt stamp / 44pt peek VoiceOver "Photo: Google Maps".
+        // Live Home is doodle stickers; it must not announce a Google photo.
+        XCTAssertFalse(
             english.contains(where: { $0.contains("Photo: Google Maps") }),
-            "Rendered 52pt Google stamp must expose a VoiceOver Google Maps label. saw=\(english)"
+            "Home sticker rows must not mark Google photos. saw=\(english)"
         )
         XCTAssertTrue(
-            english.contains(where: { $0.contains("Map Stamp, Harbor Oven") }),
-            "Rendered stamp must keep Map Stamp language. saw=\(english)"
-        )
-        XCTAssertTrue(
-            english.contains(where: { $0.contains("Harbor Oven, Photo: Google Maps") }),
-            "Rendered 44pt featured peek must announce Photo: Google Maps. saw=\(english)"
+            english.contains(where: { $0.contains("Harbor Oven") }),
+            "Home row must still name the place. saw=\(english)"
         )
         XCTAssertFalse(
             english.contains(where: { $0.contains("Own shot") && $0.contains("Photo: Google Maps") }),
-            "Own photo must stay unlabeled. saw=\(english)"
+            "Own Home row stays unlabeled. saw=\(english)"
         )
 
         let chinese = hostedTexts(language: .traditionalChinese, google: google, own: own)
-        XCTAssertTrue(
+        XCTAssertFalse(
             chinese.contains(where: { $0.contains("照片來源：Google Maps") }),
-            "zh-Hant VoiceOver must say 照片來源：Google Maps. saw=\(chinese)"
+            "Home zh-Hant stickers must not announce Google Maps. saw=\(chinese)"
         )
     }
 
@@ -413,11 +418,11 @@ final class SaveCollaborativeListTests: XCTestCase {
         )
 
         let peek = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
-        XCTAssertTrue(peek.contains("displaysGooglePhoto("))
-        XCTAssertTrue(peek.contains("availableWidth: rowWidth"))
-        XCTAssertTrue(peek.contains("style: .footer"))
-        XCTAssertFalse(peek.contains("displaysStackedGooglePhoto("))
-        XCTAssertFalse(peek.contains("style: .homeStacked"))
+        XCTAssertFalse(peek.contains("displaysGooglePhoto("))
+        XCTAssertFalse(peek.contains("SaveTileTownPeekCard"))
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        XCTAssertFalse(home.contains("GooglePlacesPhotoSourceMark"))
+        XCTAssertTrue(home.contains("SaveDoodleSticker("))
 
         let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
         XCTAssertTrue(stamp.contains("displaysGooglePhoto("))
@@ -426,31 +431,13 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertFalse(stamp.contains("displaysStackedGooglePhoto("))
         XCTAssertFalse(stamp.contains("style: .homeStacked"))
 
-        let featuredWide = hostedTexts(
-            of: SaveTileTownPeekCard(title: "Harbor Oven", subtitle: "Featured", photoURL: google)
-                .frame(width: 280, height: 130)
-        )
-        XCTAssertTrue(
-            featuredWide.contains(where: { $0.contains("Photo: Google Maps") }),
-            "Featured production view must keep Google + footer when the row fits. saw=\(featuredWide)"
-        )
-
-        let featuredNarrow = hostedTexts(
-            of: SaveTileTownPeekCard(title: "Harbor Oven", subtitle: "Featured", photoURL: google)
-                .frame(width: 68, height: 90)
+        let homeRow = hostedTexts(
+            of: homeStickerRow(title: "Harbor Oven")
+                .frame(width: 280, height: 72)
         )
         XCTAssertFalse(
-            featuredNarrow.contains(where: { $0.contains("Photo: Google Maps") }),
-            "Featured production view must drop the Google photo when the row is thumb-narrow. saw=\(featuredNarrow)"
-        )
-
-        let recent = hostedTexts(
-            of: SaveKraftStamp(title: "Harbor Oven", face: .photo(google), size: .recent)
-                .environment(\.dynamicTypeSize, .large)
-        )
-        XCTAssertTrue(
-            recent.contains(where: { $0.contains("Photo: Google Maps") }),
-            "Recent production stamp grows tileWidth to the live mark width. saw=\(recent)"
+            homeRow.contains(where: { $0.contains("Photo: Google Maps") }),
+            "Live Home is sticker-only after doodle v1; it must not mark a Google photo. saw=\(homeRow)"
         )
 
         let drawer = hostedTexts(
@@ -499,9 +486,16 @@ final class SaveCollaborativeListTests: XCTestCase {
             "Origin production card must call displaysGooglePhoto with container width. saw=\(origin)"
         )
 
+        let atlasGooglePlace = photoPlace(name: "Harbor Oven", photoURL: google)
+        XCTAssertNil(
+            GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL(
+                atlasGooglePlace.businessPhotoURLStrings.first.flatMap(URL.init(string:))
+            ),
+            "map.place.card photoURL uses mapSafePhotoURL; a Google Places URL must become nil"
+        )
         let atlasGoogle = hostedTexts(
             of: SaveAtlasLivePlaceCard(
-                place: photoPlace(name: "Harbor Oven", photoURL: google),
+                place: atlasGooglePlace,
                 onClose: {},
                 onOpen: {},
                 onOpenAssistant: {},
@@ -513,11 +507,26 @@ final class SaveCollaborativeListTests: XCTestCase {
             atlasGoogle.contains(where: { $0.contains("Photo: Google Maps") }),
             "map.place.card must not show a Google photo or mark. saw=\(atlasGoogle)"
         )
+        XCTAssertTrue(
+            atlasGoogle.contains(where: { $0.contains("map.place.thumb.fallback") }),
+            "Google URL on map.place.card must render coral/fallback, not a Google image. saw=\(atlasGoogle)"
+        )
+        XCTAssertFalse(
+            atlasGoogle.contains(where: { $0.contains("map.place.thumb.own") }),
+            "Google URL must not take the own-photo thumb path. saw=\(atlasGoogle)"
+        )
         XCTAssertNil(GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL(google))
 
+        let atlasOwnPlace = photoPlace(name: "Own shot", photoURL: own)
+        XCTAssertEqual(
+            GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL(
+                atlasOwnPlace.businessPhotoURLStrings.first.flatMap(URL.init(string:))
+            ),
+            own
+        )
         let atlasOwn = hostedTexts(
             of: SaveAtlasLivePlaceCard(
-                place: photoPlace(name: "Own shot", photoURL: own),
+                place: atlasOwnPlace,
                 onClose: {},
                 onOpen: {},
                 onOpenAssistant: {},
@@ -529,6 +538,10 @@ final class SaveCollaborativeListTests: XCTestCase {
             atlasOwn.contains(where: { $0.contains("Photo: Google Maps") }),
             "Own photo on the map card stays unmarked. saw=\(atlasOwn)"
         )
+        XCTAssertTrue(
+            atlasOwn.contains(where: { $0.contains("map.place.thumb.own") }),
+            "Own/friend photo may sit on the map card. saw=\(atlasOwn)"
+        )
 
         let postcardGoogle = hostedTexts(
             of: SavedPostcardPhoto(imageURLs: [google.absoluteString], isSearching: false)
@@ -537,6 +550,13 @@ final class SaveCollaborativeListTests: XCTestCase {
             postcardGoogle.contains(where: { $0.contains("Photo: Google Maps") }),
             "Detail postcard production view marks a Google URL. saw=\(postcardGoogle)"
         )
+        XCTAssertTrue(
+            GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: 104, dynamicType: .large)
+        )
+        XCTAssertTrue(
+            GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: 104, dynamicType: .xxxLarge),
+            "16sp clamp still fits the 104pt postcard container at .xxxLarge"
+        )
 
         let postcardOwn = hostedTexts(
             of: SavedPostcardPhoto(imageURLs: [own.absoluteString], isSearching: false)
@@ -544,6 +564,20 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertFalse(
             postcardOwn.contains(where: { $0.contains("Photo: Google Maps") }),
             "Detail postcard must not mark an own photo. saw=\(postcardOwn)"
+        )
+
+        let detailCarousel = hostedTexts(
+            of: PlaceBusinessPhotoCarousel(
+                imageURLs: [google.absoluteString],
+                googlePlaceId: "ChIJ-test"
+            )
+            .frame(width: 320, height: 220)
+        )
+        XCTAssertTrue(
+            detailCarousel.contains(where: {
+                $0.contains("place.photo.attribution.row") || $0.contains("Google Maps")
+            }),
+            "Off-map detail carousel still marks a Google photo (G1/G2/G4/G8). saw=\(detailCarousel)"
         )
     }
 
@@ -983,14 +1017,16 @@ final class SaveCollaborativeListTests: XCTestCase {
             evidence.contains("case .homeThumbs:\n            homeThumbsScene("),
             "A default-argument function used as a View is a function value"
         )
-        XCTAssertTrue(evidence.contains("SaveTileTownPeekCard("))
-        XCTAssertTrue(evidence.contains("size: .recent"))
+        XCTAssertFalse(evidence.contains("SaveTileTownPeekCard("))
+        XCTAssertTrue(evidence.contains("SaveDoodleSticker("))
         XCTAssertTrue(evidence.contains("evidence.homeThumbs"))
         XCTAssertTrue(evidence.contains("case atlasThumbs"))
         XCTAssertTrue(evidence.contains("case layoutXSmall"))
         XCTAssertTrue(evidence.contains("SaveAtlasLivePlaceCard("))
         XCTAssertTrue(evidence.contains("evidence.atlasThumbs"))
         XCTAssertTrue(evidence.contains("dynamicTypeSize(.xSmall)"))
+        XCTAssertTrue(uiTest.contains("map.place.thumb.fallback"))
+        XCTAssertTrue(uiTest.contains("map.place.thumb.own"))
         XCTAssertTrue(uiTest.contains("evidence.openedPage.author"))
         XCTAssertTrue(uiTest.contains("appearance)-mixed-card"))
         XCTAssertTrue(uiTest.contains("appearance)-map-pins"))
@@ -1316,6 +1352,17 @@ final class SaveCollaborativeListTests: XCTestCase {
         )
     }
 
+    private func homeStickerRow(title: String) -> some View {
+        HStack(alignment: .center, spacing: 0) {
+            SaveDoodleSticker(category: .cafe, placeName: title, visited: false)
+                .frame(width: SaveLayout.stickerBox, height: SaveLayout.stickerBox)
+            Text(title)
+                .font(SaveAtlasType.strong(17))
+                .padding(.leading, 12)
+        }
+        .accessibilityLabel(title)
+    }
+
     @MainActor
     private func seedThumbFixture(_ url: URL) {
         let fixture = UIGraphicsImageRenderer(size: CGSize(width: 16, height: 16)).image { context in
@@ -1433,34 +1480,10 @@ final class SaveCollaborativeListTests: XCTestCase {
         defaults.set(language.rawValue, forKey: "save.appLanguage")
         let settings = AppLanguageSettings(userDefaults: defaults)
         let root = VStack(alignment: .leading, spacing: 12) {
-            SaveTileTownPeekCard(
-                title: "Harbor Oven",
-                subtitle: "Featured",
-                photoURL: google,
-                accessibilityNameID: "test.featured.google"
-            )
-            .frame(width: 280, height: 130)
-            SaveTileTownPeekCard(
-                title: "Own shot",
-                subtitle: "Featured",
-                photoURL: own,
-                accessibilityNameID: "test.featured.own"
-            )
-            .frame(width: 280, height: 130)
-            HStack(alignment: .top, spacing: 16) {
-                SaveKraftStamp(
-                    title: "Harbor Oven",
-                    face: .photo(google),
-                    size: .recent,
-                    accessibilityIdentifier: "test.recent.google"
-                )
-                SaveKraftStamp(
-                    title: "Own shot",
-                    face: .photo(own),
-                    size: .recent,
-                    accessibilityIdentifier: "test.recent.own"
-                )
-            }
+            homeStickerRow(title: "Harbor Oven")
+                .frame(width: 280, height: 72)
+            homeStickerRow(title: "Own shot")
+                .frame(width: 280, height: 72)
         }
         .environment(\.appLanguageSettings, settings)
         .frame(width: 320, height: 360)

@@ -176,7 +176,7 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         XCTAssertTrue(
             app.descendants(matching: .any)["evidence.homeThumbs"]
                 .waitForExistence(timeout: stepTimeout),
-            "Home 44pt featured and 52pt recent thumbs must render in the harness"
+            "Home doodle sticker rows must render in the harness"
         )
         XCTAssertTrue(
             app.descendants(matching: .any)["evidence.homeThumbs.featuredGoogle"]
@@ -199,7 +199,7 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         XCTAssertTrue(
             app.descendants(matching: .any)["evidence.homeThumbsZh"]
                 .waitForExistence(timeout: stepTimeout),
-            "Home thumbs zh-Hant scene must render featured and recent"
+            "Home zh-Hant scene must render sticker rows"
         )
         saveEvidence(app, name: "\(appearance)-home-thumbs-zh-Hant")
 
@@ -238,10 +238,22 @@ final class SAVEGooglePhotoAttributionTests: SAVEUITestCase {
         XCTAssertTrue(
             app.descendants(matching: .any)["evidence.atlasThumbs"]
                 .waitForExistence(timeout: stepTimeout),
-            "Atlas selected-place card must render Google and own thumbs"
+            "Atlas selected-place card must render own/friend or coral, never Google"
         )
         XCTAssertTrue(app.descendants(matching: .any)["evidence.atlas.google"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["evidence.atlas.own"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.place.thumb.fallback"].exists,
+            "Google URL on map.place.card must take the coral/fallback thumb"
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["map.place.thumb.own"].exists,
+            "Own/friend photo may sit on map.place.card"
+        )
+        XCTAssertFalse(
+            app.descendants(matching: .any)["place.photo.sourceMark"].exists,
+            "map.place.card must not show a Google Maps source mark"
+        )
         saveEvidence(app, name: "\(appearance)-atlas-thumbs")
 
         if appearance == "light" {
