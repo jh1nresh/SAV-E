@@ -332,6 +332,9 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertFalse(atlas.contains("displaysStackedGooglePhoto"))
         XCTAssertFalse(atlas.contains("homeStacked"))
         XCTAssertTrue(atlas.contains("GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL"))
+        XCTAssertTrue(atlas.contains("place.businessPhotoURLStrings.first"))
+        XCTAssertTrue(atlas.contains("map.place.thumb.fallback"))
+        XCTAssertTrue(atlas.contains("map.place.thumb.own"))
         XCTAssertTrue(atlas.contains("AtlasPalette.coral"))
         XCTAssertTrue(atlas.contains("map.place.card"))
         XCTAssertTrue(atlas.contains("callout"))
@@ -342,12 +345,14 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertTrue(postcard.contains("GooglePlacesPhotoSourceMark(style: .footer)"))
         XCTAssertTrue(postcard.contains("displaysGooglePhoto("))
         XCTAssertTrue(postcard.contains("availableWidth: 104"))
+        XCTAssertTrue(postcard.contains("detailPlace.businessPhotoURLStrings"))
 
         let carousel = try source(at: "SAV-E/Views/Map/PlaceBottomSheet.swift")
         XCTAssertTrue(
             carousel.contains("GooglePlacesPhotoAttributionBar"),
             "Detail (off the map) still marks Google photos"
         )
+        XCTAssertTrue(carousel.contains("place.photo.attribution.row"))
     }
 
     @MainActor
@@ -472,9 +477,16 @@ final class SaveCollaborativeListTests: XCTestCase {
             "Origin production card must call displaysGooglePhoto with container width. saw=\(origin)"
         )
 
+        let atlasGooglePlace = photoPlace(name: "Harbor Oven", photoURL: google)
+        XCTAssertNil(
+            GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL(
+                atlasGooglePlace.businessPhotoURLStrings.first.flatMap(URL.init(string:))
+            ),
+            "map.place.card photoURL uses mapSafePhotoURL; a Google Places URL must become nil"
+        )
         let atlasGoogle = hostedTexts(
             of: SaveAtlasLivePlaceCard(
-                place: photoPlace(name: "Harbor Oven", photoURL: google),
+                place: atlasGooglePlace,
                 onClose: {},
                 onOpen: {},
                 onOpenAssistant: {},
@@ -486,11 +498,26 @@ final class SaveCollaborativeListTests: XCTestCase {
             atlasGoogle.contains(where: { $0.contains("Photo: Google Maps") }),
             "map.place.card must not show a Google photo or mark. saw=\(atlasGoogle)"
         )
+        XCTAssertTrue(
+            atlasGoogle.contains(where: { $0.contains("map.place.thumb.fallback") }),
+            "Google URL on map.place.card must render coral/fallback, not a Google image. saw=\(atlasGoogle)"
+        )
+        XCTAssertFalse(
+            atlasGoogle.contains(where: { $0.contains("map.place.thumb.own") }),
+            "Google URL must not take the own-photo thumb path. saw=\(atlasGoogle)"
+        )
         XCTAssertNil(GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL(google))
 
+        let atlasOwnPlace = photoPlace(name: "Own shot", photoURL: own)
+        XCTAssertEqual(
+            GooglePlacesPhotoSourceMarkMetrics.mapSafePhotoURL(
+                atlasOwnPlace.businessPhotoURLStrings.first.flatMap(URL.init(string:))
+            ),
+            own
+        )
         let atlasOwn = hostedTexts(
             of: SaveAtlasLivePlaceCard(
-                place: photoPlace(name: "Own shot", photoURL: own),
+                place: atlasOwnPlace,
                 onClose: {},
                 onOpen: {},
                 onOpenAssistant: {},
@@ -502,6 +529,10 @@ final class SaveCollaborativeListTests: XCTestCase {
             atlasOwn.contains(where: { $0.contains("Photo: Google Maps") }),
             "Own photo on the map card stays unmarked. saw=\(atlasOwn)"
         )
+        XCTAssertTrue(
+            atlasOwn.contains(where: { $0.contains("map.place.thumb.own") }),
+            "Own/friend photo may sit on the map card. saw=\(atlasOwn)"
+        )
 
         let postcardGoogle = hostedTexts(
             of: SavedPostcardPhoto(imageURLs: [google.absoluteString], isSearching: false)
@@ -510,6 +541,13 @@ final class SaveCollaborativeListTests: XCTestCase {
             postcardGoogle.contains(where: { $0.contains("Photo: Google Maps") }),
             "Detail postcard production view marks a Google URL. saw=\(postcardGoogle)"
         )
+        XCTAssertTrue(
+            GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: 104, dynamicType: .large)
+        )
+        XCTAssertTrue(
+            GooglePlacesPhotoSourceMarkMetrics.canShowGooglePhoto(in: 104, dynamicType: .xxxLarge),
+            "16sp clamp still fits the 104pt postcard container at .xxxLarge"
+        )
 
         let postcardOwn = hostedTexts(
             of: SavedPostcardPhoto(imageURLs: [own.absoluteString], isSearching: false)
@@ -517,6 +555,20 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertFalse(
             postcardOwn.contains(where: { $0.contains("Photo: Google Maps") }),
             "Detail postcard must not mark an own photo. saw=\(postcardOwn)"
+        )
+
+        let detailCarousel = hostedTexts(
+            of: PlaceBusinessPhotoCarousel(
+                imageURLs: [google.absoluteString],
+                googlePlaceId: "ChIJ-test"
+            )
+            .frame(width: 320, height: 220)
+        )
+        XCTAssertTrue(
+            detailCarousel.contains(where: {
+                $0.contains("place.photo.attribution.row") || $0.contains("Google Maps")
+            }),
+            "Off-map detail carousel still marks a Google photo (G1/G2/G4/G8). saw=\(detailCarousel)"
         )
     }
 
@@ -1007,6 +1059,8 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertTrue(evidence.contains("SaveAtlasLivePlaceCard("))
         XCTAssertTrue(evidence.contains("evidence.atlasThumbs"))
         XCTAssertTrue(evidence.contains("dynamicTypeSize(.xSmall)"))
+        XCTAssertTrue(uiTest.contains("map.place.thumb.fallback"))
+        XCTAssertTrue(uiTest.contains("map.place.thumb.own"))
         XCTAssertTrue(uiTest.contains("evidence.openedPage.author"))
         XCTAssertTrue(uiTest.contains("appearance)-mixed-card"))
         XCTAssertTrue(uiTest.contains("appearance)-map-pins"))

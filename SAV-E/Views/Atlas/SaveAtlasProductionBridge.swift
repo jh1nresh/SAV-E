@@ -923,6 +923,9 @@ private struct SaveAtlasMapPlaceThumbnail: View {
         thumb
             .accessibilityElement(children: .combine)
             .accessibilityLabel(place.name)
+            .accessibilityIdentifier(
+                photoURL == nil ? "map.place.thumb.fallback" : "map.place.thumb.own"
+            )
     }
 
     private var photoURL: URL? {

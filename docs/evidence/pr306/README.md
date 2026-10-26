@@ -21,9 +21,9 @@ Light and dark sets:
 | `*-map-pins.png` | G6 | Apple Map symbol pins, no Google photos |
 | `*-city-page.png` | G7 | City card uses coral art, no Google photo |
 | `*-report-entry.png` | G8 | Viewer “View on Google Maps” report entry |
-| `*-home-thumbs.png` | Home DESIGN | Featured 44pt + recent 52pt; single-line Google Maps footer on the row |
-| `*-home-thumbs-en.png` | Home DESIGN | Same Home thumbs, English VoiceOver environment |
-| `*-home-thumbs-zh-Hant.png` | Home DESIGN | Same Home thumbs, zh-Hant VoiceOver environment |
+| `*-home-thumbs.png` | Home DESIGN | Retained 52pt SaveKraftStamp components (Google/own/friend), not a current Home screenshot. |
+| `*-home-thumbs-en.png` | Home DESIGN | Same retained photo-stamp components, English VoiceOver environment |
+| `*-home-thumbs-zh-Hant.png` | Home DESIGN | Same retained photo-stamp components, zh-Hant VoiceOver environment |
 | `*-drawer-thumbs.png` | G2 | Drawer search rows; single-line Google Maps footer under the row |
 | `*-trip-stop.png` | G2 | Trip stop paper card; single-line Google Maps footer under the row |
 | `*-origin-food.png` | G2 | Origin food card; single-line Google Maps footer under the photo |
@@ -38,9 +38,24 @@ CI artifact (DESIGN judges these PNGs, not the Linux checkout):
 
 Launch argument: `--uitest-google-photo-attribution`.
 
-Home / Drawer / Trip / Origin / saved-postcard (DESIGN rejudge 2026-10-24): untranslated single-line `Google Maps`, 12–16sp regular, 6pt from the photo, paper/canvas background, no bar, no wrap. Light `#1F1F1F` on `#FFF9EB` and white on `#1E1C19` both ≥ 4.5:1. Measure the full single-line width against the container, not the thumb; if it cannot fit, show a non-Google image. Stacked 10pt has no written basis.
+Home / Drawer / Trip / Origin / saved-postcard (DESIGN rejudge 2026-10-24): untranslated single-line `Google Maps`, 12–16sp regular (weight 400), 6pt from the photo, paper/canvas background, no bar, no wrap. Light `#1F1F1F` on `#FFF9EB` and white on `#1E1C19` both ≥ 4.5:1. Measure the full single-line width against the container, not the thumb; if it cannot fit, show a non-Google image. Stacked 10pt has no written basis.
 
-`map.place.card` is a callout over a live Apple MapView (G6): own/friend photo or coral, never a Google photo and never a mark. Detail (off the map) still shows Google photos with G1/G2/G4/G8 attribution. Google terms on wording/placement are still unverified; do not overlay the photo.
+The historical `home-thumbs` artifact names remain for compatibility; the caption explicitly identifies retained photo-stamp component fixtures, not production Home evidence. Live Home after doodle v1 is Eat/Go stickers (`SaveDoodleSticker`). It has no Google photo and no mark. `SaveKraftStamp` leftover file still has a footer gate but product Home/Map/Passport must not call `SaveKraftStamp(`.
+
+`map.place.card` is a callout over a live Apple MapView (G6): own/friend photo or coral, never a Google photo and never a mark. `SaveAtlasMapPlaceThumbnail` (56pt) uses `mapSafePhotoURL`. Detail (off the map) still shows Google photos with G1/G2/G4/G8 attribution. Google terms on wording/placement are still unverified; do not overlay the photo.
+
+## SavedPostcardPhoto (G2) — actual image sources
+
+`SavedPostcardPhoto` (`AIDrawerView`, 104pt) reads `detailPlace.businessPhotoURLStrings` only:
+
+| Source | What it is | Mark? |
+| --- | --- | --- |
+| In-memory `Place.businessPhotoUrls` from `PlaceBusinessEnricher` | Live Places session URLs. Persist no longer writes this column. Usually Google. | Yes, if Google and 104pt fits the live 12–16sp line |
+| In-memory leftover `businessPhotoUrls` | Same array, still held in the session Place after enrich / merge | Same gate |
+| `Place.sourceImageUrl` appended by `businessPhotoURLStrings` | Social / import / user photo. Persist strips Google leftovers; G9 leftovers can still appear until founder cleanup | Yes only when the URL is still a Google Places photo |
+| Empty / Google that cannot fit | Mint rectangle fallback | No |
+
+`isDisplayable` already drops Google URLs when Maps is disallowed. Own / friend / social URLs stay unmarked. The 12–16sp clamp at `.xxxLarge` is still expected to fit 104pt; if a future live `markWidth` exceeds 104, the view shows the non-Google fallback instead of wrapping or shrinking the mark.
 
 Contrast (P1-4): white author type over the cream fixture at gradient
 top 0.55 measures **5.62:1** in `testAttributionWhiteTextMeetsContrastOnLightPhoto`.
