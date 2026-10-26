@@ -1734,7 +1734,10 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(search.contains("homeUSStates"))
         XCTAssertTrue(root.contains("scenePhase"))
         XCTAssertTrue(root.contains("forceRefresh: true"))
-        XCTAssertTrue(home.contains("replaceMissingCitySelection"))
+        XCTAssertTrue(home.contains("syncPersistedCitySelection"))
+        XCTAssertTrue(home.contains("persistedCityAfterCollectionChange"))
+        XCTAssertTrue(home.contains("collectionReady: collectionReady"))
+        XCTAssertTrue(home.contains("visitedAt: SaveDoodleVisitStore().latestVisit"))
         let locationService = try source(at: "SAV-E/Services/LocationService.swift")
         XCTAssertTrue(locationService.contains("SaveLocationFreshness"))
         XCTAssertTrue(locationService.contains("forceRefresh"))
@@ -1987,6 +1990,82 @@ final class SaveDoodleHomeTests: XCTestCase {
         )
     }
 
+    /// View on map from Saves/detail can focus a stamp outside Home Eat/Go + city.
+    /// Clearing `activeFilter` is not enough: the focused stamp must still list.
+    func testListedPlacesIncludesFocusedStampOutsideHomeFilter() throws {
+        let tokyoEat = place(
+            "Ichiran",
+            "1-22-7 Jinnan, Shibuya City, Tokyo, Japan",
+            .food
+        )
+        let tokyoGo = place(
+            "teamLab",
+            "1-3-8 Aomi, Koto City, Tokyo, Japan",
+            .attraction
+        )
+        let taipeiEat = place(
+            "Fujin",
+            "No. 353, Section 1, Fuxing S Rd, Da'an District, Taipei",
+            .cafe
+        )
+        let places = [tokyoEat, tokyoGo, taipeiEat]
+
+        let filtered = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .city("tokyo"),
+            location: nil,
+            locationDenied: true
+        )
+        XCTAssertEqual(filtered.map(\.place.id), [tokyoEat.id])
+
+        let offLens = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .city("tokyo"),
+            location: nil,
+            locationDenied: true,
+            including: tokyoGo
+        )
+        XCTAssertEqual(offLens.map(\.place.id), [tokyoEat.id, tokyoGo.id])
+
+        let offCity = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .city("tokyo"),
+            location: nil,
+            locationDenied: true,
+            including: taipeiEat
+        )
+        XCTAssertEqual(offCity.map(\.place.id), [tokyoEat.id, taipeiEat.id])
+
+        let alreadyListed = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .city("tokyo"),
+            location: nil,
+            locationDenied: true,
+            including: tokyoEat
+        )
+        XCTAssertEqual(alreadyListed.map(\.place.id), [tokyoEat.id])
+
+        let unknown = place("Unknown", "Somewhere", .food)
+        let notInCollection = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .city("tokyo"),
+            location: nil,
+            locationDenied: true,
+            including: unknown
+        )
+        XCTAssertEqual(notInCollection.map(\.place.id), [tokyoEat.id])
+
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        XCTAssertTrue(map.contains("including: mapViewModel.selectedPlace"))
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        XCTAssertFalse(home.contains("including: mapViewModel.selectedPlace"))
+    }
+
     private var tiantanFix: CLLocation {
         CLLocation(latitude: 39.8822, longitude: 116.4066)
     }
@@ -2030,6 +2109,147 @@ final class SaveDoodleHomeTests: XCTestCase {
             | UInt32(bytes[1]) << 16
             | UInt32(bytes[2]) << 8
             | UInt32(bytes[3])
+    }
+
+    func testColdLaunchEmptyCollectionDoesNotWashPersistedCityToNearYou() {
+        let tokyo = place(
+            "Ichiran",
+            "1-22-7 Jinnan, Shibuya City, Tokyo, Japan",
+            .food,
+            status: .visited
+        )
+        let taipei = place(
+            "Fujin",
+            "No. 353, Section 1, Fuxing S Rd, Da'an District, Taipei",
+            .cafe
+        )
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: tokyo), "tokyo")
+        XCTAssertEqual(SaveDoodleHomeCatalog.cityID(for: taipei), "taipei")
+        let current = SaveDoodleCitySelection.city("tokyo")
+
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+                current: current,
+                places: [],
+                locationDenied: false,
+                collectionReady: false
+            ),
+            current,
+            "Cold launch empty collection is not a deleted-city fallback"
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+                current: current,
+                places: [tokyo],
+                locationDenied: false,
+                collectionReady: true
+            ),
+            current
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+                current: current,
+                places: [taipei],
+                locationDenied: false,
+                collectionReady: true
+            ),
+            .nearYou
+        )
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+                current: current,
+                places: [taipei],
+                locationDenied: true,
+                collectionReady: true
+            ),
+            .city("taipei")
+        )
+    }
+
+    func testLoadedEmptyCollectionClearsDeletedCityWithoutResurrectingIt() async {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("home-empty-loaded-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: false
+        )
+        var selected = SaveDoodleCitySelection.city("tokyo")
+        XCTAssertFalse(map.isSavedCollectionReady)
+        selected = SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+            current: selected, places: map.places, locationDenied: false,
+            collectionReady: map.isSavedCollectionReady
+        )
+        XCTAssertEqual(selected, .city("tokyo"))
+        await map.loadPlaces()
+        XCTAssertTrue(map.isSavedCollectionReady, "A loaded empty collection is distinct from startup")
+        XCTAssertTrue(map.places.isEmpty)
+        selected = SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+            current: selected, places: map.places, locationDenied: false,
+            collectionReady: map.isSavedCollectionReady
+        )
+        XCTAssertEqual(selected, .nearYou)
+        let tokyo = place("Ichiran", "1-22-7 Jinnan, Shibuya City, Tokyo, Japan", .food)
+        selected = SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+            current: selected, places: [tokyo], locationDenied: false,
+            collectionReady: map.isSavedCollectionReady
+        )
+        XCTAssertEqual(selected, .nearYou, "Adding a place must not resurrect the deleted-city filter")
+        let afterLastDeletion = SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+            current: .city("tokyo"), places: [], locationDenied: false,
+            collectionReady: map.isSavedCollectionReady
+        )
+        XCTAssertEqual(afterLastDeletion, .nearYou)
+    }
+
+    func testHomeRowMetaUsesRecordedVisitNotCreatedAt() throws {
+        let suite = "save.doodle.visit-meta.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+        let created = now.addingTimeInterval(-30 * 86_400)
+        let cafe = place(
+            "Grey",
+            "Beijing, China",
+            .cafe,
+            status: .visited,
+            createdAt: created
+        )
+        let withoutHistory = SaveDoodleHomeCatalog.rowMetaText(
+            distance: 120,
+            place: cafe,
+            now: now,
+            language: .english
+        )
+        XCTAssertTrue(withoutHistory.contains("visited"), withoutHistory)
+        XCTAssertFalse(
+            withoutHistory.contains("visited 30d ago"),
+            "Save date must not be presented as the visit date"
+        )
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let store = SaveDoodleVisitStore(defaults: defaults, calendar: calendar, now: { now })
+        XCTAssertTrue(store.recordVisit(for: cafe.id))
+        let visitedAt = try XCTUnwrap(store.latestVisit(for: cafe.id))
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.visitStatusText(
+                status: .visited,
+                visitedAt: visitedAt,
+                now: now,
+                language: .english
+            ),
+            "visited today"
+        )
+        let withHistory = SaveDoodleHomeCatalog.rowMetaText(
+            distance: 120,
+            place: cafe,
+            visitedAt: visitedAt,
+            now: now,
+            language: .english
+        )
+        XCTAssertTrue(withHistory.hasPrefix("120m · visited today"), withHistory)
+        XCTAssertFalse(withHistory.contains("30d"))
     }
 
     func testHomeReviewActionUsesFounderC8442AOnLightOnly() throws {

@@ -231,6 +231,21 @@ enum SaveDoodleHomeCatalog {
         return newestResolvableCity(in: places) ?? selection
     }
 
+    /// Cold launch starts with an empty collection. That empty list is not
+    /// "the selected city's last save disappeared" — wait until the initial
+    /// load has produced places before persisting a replacement.
+    static func persistedCityAfterCollectionChange(
+        current: SaveDoodleCitySelection,
+        places: [Place],
+        locationDenied: Bool,
+        collectionReady: Bool
+    ) -> SaveDoodleCitySelection {
+        guard collectionReady else { return current }
+        let resolved = resolvedSelection(current, places: places, locationDenied: locationDenied)
+        guard current != resolved, case .city = current else { return current }
+        return resolved
+    }
+
     private static func newestResolvableCity(in places: [Place]) -> SaveDoodleCitySelection? {
         guard let match = places.sorted(by: moreRecent).first(where: { cityID(for: $0) != nil }),
               let id = cityID(for: match)
@@ -268,14 +283,18 @@ enum SaveDoodleHomeCatalog {
         }
     }
 
+    /// Home Eat/Go + city rows. Map may pass `including` so a one-shot
+    /// View-on-map focus still renders when that stamp is outside the
+    /// current lens or city. Home chrome stays on the current filter.
     static func listedPlaces(
         from places: [Place],
         lens: SaveDoodleLens,
         selection: SaveDoodleCitySelection,
         location: CLLocation?,
-        locationDenied: Bool
+        locationDenied: Bool,
+        including focused: Place? = nil
     ) -> [SaveDoodleListedPlace] {
-        visiblePlaces(
+        var listed = visiblePlaces(
             from: places,
             lens: lens,
             selection: selection,
@@ -290,6 +309,18 @@ enum SaveDoodleHomeCatalog {
                 distance: location.flatMap { distance(from: $0, to: place) }
             )
         }
+        if let focused,
+           places.contains(where: { $0.id == focused.id }),
+           !listed.contains(where: { $0.id == focused.id }) {
+            listed.append(
+                SaveDoodleListedPlace(
+                    place: focused,
+                    index: listed.count + 1,
+                    distance: location.flatMap { distance(from: $0, to: focused) }
+                )
+            )
+        }
+        return listed
     }
 
     static func isNearbyEmpty(
@@ -412,7 +443,7 @@ enum SaveDoodleHomeCatalog {
             ?? neighborhoodText(for: place, language: language)
         let status = visitStatusText(
             status: place.status,
-            visitedAt: place.status == .visited ? (visitedAt ?? place.createdAt) : nil,
+            visitedAt: place.status == .visited ? visitedAt : nil,
             now: now,
             language: language
         )
@@ -432,7 +463,9 @@ enum SaveDoodleHomeCatalog {
         case .wantToGo:
             return language.localized(english: "saved, not yet", traditionalChinese: "已存，還沒去")
         case .visited:
-            let reference = visitedAt ?? now
+            guard let reference = visitedAt else {
+                return language.localized(english: "visited", traditionalChinese: "已去過")
+            }
             let days = max(0, Calendar.current.dateComponents([.day], from: reference, to: now).day ?? 0)
             if days == 0 {
                 return language.localized(english: "visited today", traditionalChinese: "今天去過")
@@ -604,6 +637,10 @@ final class SaveDoodleVisitStore {
     func hasVisitedToday(_ id: UUID) -> Bool {
         let today = now()
         return dates(for: id).contains { calendar.isDate($0, inSameDayAs: today) }
+    }
+
+    func latestVisit(for id: UUID) -> Date? {
+        dates(for: id).max()
     }
 
     @discardableResult
