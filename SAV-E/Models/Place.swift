@@ -98,6 +98,51 @@ struct Place: Identifiable, Codable, Hashable {
         return merged
     }
 
+    /// Keep recipient memory and adopt the server identity so later edits
+    /// hit the inserted row instead of a local-only UUID.
+    func rekeyed(to newID: UUID) -> Place {
+        guard id != newID else { return self }
+        var aliases = Set(mergedPlaceIDs ?? [])
+        aliases.insert(id)
+        aliases.remove(newID)
+        return Place(
+            id: newID,
+            name: name,
+            address: address,
+            latitude: latitude,
+            longitude: longitude,
+            googlePlaceId: googlePlaceId,
+            category: category,
+            status: status,
+            rating: rating,
+            note: note,
+            sourceUrl: sourceUrl,
+            sourcePlatform: sourcePlatform,
+            coordinateSystem: coordinateSystem,
+            locationProvider: locationProvider,
+            providerPlaceId: providerPlaceId,
+            providerMapUrl: providerMapUrl,
+            sourceImageUrl: sourceImageUrl,
+            businessPhotoUrls: businessPhotoUrls,
+            extractedDishes: extractedDishes,
+            priceRange: priceRange,
+            recommender: recommender,
+            googleRating: googleRating,
+            googlePriceLevel: googlePriceLevel,
+            openingHours: openingHours,
+            createdAt: createdAt,
+            visibility: visibility,
+            socialSignal: socialSignal,
+            placeHighlights: placeHighlights,
+            recommendedItems: recommendedItems,
+            vibeTags: vibeTags,
+            accessNotes: accessNotes,
+            sourceHandle: sourceHandle,
+            mergedPlaceIDs: aliases.sorted { $0.uuidString < $1.uuidString },
+            additionalSourceEvidence: additionalSourceEvidence
+        )
+    }
+
     /// Attach a Review clue to an already-saved stamp. Evidence, extra URLs,
     /// and structured fields go through `mergingSources` so nothing is dropped
     /// before the clue is deleted. Stamp order (`createdAt`) stays put.
@@ -705,6 +750,21 @@ private extension String {
 
 enum PlaceCategory: String, Codable, CaseIterable, Hashable {
     case food, cafe, bar, attraction, stay, shopping
+
+    /// Clip journal snapshot stores a string; restore the confirmed category.
+    static func fromClipSnapshot(_ raw: String?) -> PlaceCategory {
+        let value = (raw ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if let exact = PlaceCategory(rawValue: value.lowercased()) {
+            return exact
+        }
+        let lower = value.lowercased()
+        if lower.contains("cafe") || lower.contains("coffee") || lower.contains("咖啡") { return .cafe }
+        if lower.contains("bar") || lower.contains("酒") { return .bar }
+        if lower.contains("stay") || lower.contains("hotel") || lower.contains("宿") { return .stay }
+        if lower.contains("shop") || lower.contains("購") { return .shopping }
+        if lower.contains("attraction") || lower.contains("museum") || lower.contains("景") { return .attraction }
+        return .food
+    }
 
     var displayName: String {
         switch self {

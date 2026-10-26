@@ -5680,7 +5680,7 @@ final class SaveSearchControllerTests: XCTestCase {
         XCTAssertTrue(shareText.contains("Bright Coffee Bar"))
         XCTAssertTrue(shareText.contains("Rating: 4.8"))
         XCTAssertTrue(shareText.contains("Reviews: 1200"))
-        XCTAssertTrue(shareText.contains("Source: https://maps.google.com/"))
+        XCTAssertFalse(shareText.contains("google.com"))
         XCTAssertFalse(shareText.contains("token=private"))
         XCTAssertFalse(candidate.saveShareURL?.absoluteString.contains("token=private") == true)
         XCTAssertTrue(shareText.contains("Open in Savvy: https://sav-e-app.vercel.app/p/"))
@@ -7558,6 +7558,340 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual(map.places[0].address, "臺北市信義區")
     }
 
+    func testStrictClipConfirmationRejectsRealUnconfiguredNoOpServiceForNewAndDuplicatePlaces() async throws {
+        let auth = PrivyAuthService.shared
+        let previous = auth.authState
+        defer { auth.authState = previous }
+        auth.authState = .authenticated(userId: "clip-noop-owner")
+        for duplicate in [false, true] {
+            let service = SupabaseService(apiBaseURL: nil)
+            let place = savedPlace(name: "Pending Cafe", address: "Taipei", coordinate: taipei)
+            // Demonstrate the real contract: these calls do not throw without configuration.
+            try await service.savePlace(place, userId: "clip-noop-owner")
+            try await service.updatePlace(place, previous: place)
+            let remote = try await service.fetchPlaces(for: "clip-noop-owner")
+            XCTAssertTrue(remote.isEmpty)
+            let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("clip-noop-\(UUID()).json")
+            defer { try? FileManager.default.removeItem(at: vaultURL) }
+            let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            if duplicate { _ = try vault.saveConfirmedPlace(place, ownerSubject: "clip-noop-owner") }
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault, usesRemotePersistence: true)
+            if duplicate { map.places = [place] }
+            let beforePlaces = map.places.map(\.id)
+            let beforeVault = try vault.confirmedPlaces().map(\.id)
+            let suite = "clip-noop-journal.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let journal = PendingSharePayload(kind: .place, shareCode: nil, placeId: place.id.uuidString,
+                                              listId: nil, sender: nil, url: "https://example.com/p/pending")
+            XCTAssertTrue(PendingShareStore.write(journal, to: defaults))
+            var acknowledged = false
+            do {
+                _ = try await map.saveSharedPlaceReceipt(.embedded(SharedPlaceData.from(place: place)), requiringAuthenticatedSession: true)
+                acknowledged = PendingShareStore.clear(ifUnchanged: journal, from: defaults)
+                XCTFail("A nonthrowing offline service must never acknowledge Clip confirmation")
+            } catch SupabaseError.notConfigured {}
+            XCTAssertFalse(acknowledged)
+            XCTAssertEqual(PendingShareStore.load(from: defaults), journal)
+            XCTAssertEqual(map.places.map(\.id), beforePlaces)
+            XCTAssertEqual(try vault.confirmedPlaces().map(\.id), beforeVault)
+            XCTAssertNil(map.selectedPlace, "No saved-place reveal on refusal")
+        }
+    }
+
+    func testClipShortCodeReceiptAlwaysUsesVerifiedSaveAndNeverFallsBack() async throws {
+        let auth = PrivyAuthService.shared
+        let previous = auth.authState
+        defer { auth.authState = previous }
+        auth.authState = .authenticated(userId: "clip-receipt-owner")
+        for failureStatus: Int? in [nil, 410, 403] {
+            let service = RecordingSupabaseService()
+            var receiptCalls = 0
+            service.friendSaveHandler = { place, code, owner in
+                receiptCalls += 1
+                XCTAssertEqual(code, "abc123")
+                XCTAssertEqual(owner, "clip-receipt-owner")
+                XCTAssertNil(place.note)
+                XCTAssertNil(place.rating)
+                if let failureStatus {
+                    throw SupabaseError.apiError(failureStatus, failureStatus == 410 ? "expired" : "self_share")
+                }
+                return FriendSharedPlaceSaveResult(place: place, outcome: .saved)
+            }
+            let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("clip-receipt-\(UUID()).json")
+            defer { try? FileManager.default.removeItem(at: vaultURL) }
+            let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault, usesRemotePersistence: true)
+            var senderPlace = savedPlace(name: "Receipt Cafe", address: "Taipei", coordinate: taipei)
+            senderPlace.note = "Private sender note"
+            senderPlace.rating = 5
+            let receipt = SharedPlaceReceipt(code: "abc123", payload: SharedPlaceData.from(place: senderPlace),
+                                            sourcePlaceID: senderPlace.id.uuidString, expiresAt: nil, sender: nil)
+            do {
+                _ = try await map.saveSharedPlaceReceipt(receipt, requiringAuthenticatedSession: true)
+                XCTAssertNil(failureStatus)
+            } catch SupabaseError.apiError(let status, _) {
+                XCTAssertEqual(status, failureStatus)
+            }
+            XCTAssertEqual(receiptCalls, 1)
+            XCTAssertEqual(service.savePlaceStarted, 0, "Never use ordinary /places semantics for a receipt")
+            XCTAssertEqual(map.places.count, failureStatus == nil ? 1 : 0)
+            XCTAssertEqual(try vault.confirmedPlaces().count, failureStatus == nil ? 1 : 0)
+        }
+    }
+
+    func testFullAppClipConfirmationRequiresAuthenticationAndBackend() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original }
+        let place = savedPlace(name: "Pending Cafe", address: "Taipei", coordinate: taipei)
+        let receipt = SharedPlaceReceipt.embedded(SharedPlaceData.from(place: place))
+        let list = SaveCollaborativeList(title: "Pending", items: [SaveListItem.from(place: place)])
+        for signedIn in [false, true] {
+            auth.authState = signedIn ? .authenticated(userId: "clip-owner") : .unauthenticated
+            let service = RecordingSupabaseService()
+            service.savePlaceError = SupabaseError.notConfigured
+            let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("clip-confirm-auth-\(UUID()).json")
+            defer { try? FileManager.default.removeItem(at: vaultURL) }
+            let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault, usesRemotePersistence: true)
+            do {
+                _ = try await map.saveSharedPlaceReceipt(receipt, requiringAuthenticatedSession: true)
+                XCTFail("No confirmation success without a real authenticated backend save")
+            } catch SupabaseError.notAuthenticated { XCTAssertFalse(signedIn) }
+              catch SupabaseError.notConfigured { XCTAssertTrue(signedIn) }
+            do {
+                _ = try await map.saveClipListHandoff(list, requiringAuthenticatedSession: true)
+                XCTFail("List confirmation cannot fall back to a local stamp")
+            } catch SupabaseError.notAuthenticated { XCTAssertFalse(signedIn) }
+              catch SupabaseError.notConfigured { XCTAssertTrue(signedIn) }
+            XCTAssertTrue(map.places.isEmpty)
+            XCTAssertTrue(try vault.confirmedPlaces().isEmpty)
+        }
+    }
+
+    func testConfirmedPlaceReadbackCannotApplyAfterAccountSwitch() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original }
+        auth.authState = .authenticated(userId: "clip-owner-a")
+        let gate = ClipHandoffSuspension()
+        let service = RecordingSupabaseService()
+        let place = savedPlace(name: "Pending Cafe", address: "Taipei", coordinate: taipei)
+        service.fetchPlacesHandler = { _ in await gate.suspend(); return [place] }
+        let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("clip-confirm-read-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault, usesRemotePersistence: true)
+        let receipt = SharedPlaceReceipt.embedded(SharedPlaceData.from(place: place))
+        let task = Task { try await map.saveSharedPlaceReceipt(receipt, requiringAuthenticatedSession: true) }
+        await gate.waitUntilStarted()
+        auth.authState = .authenticated(userId: "clip-owner-b")
+        gate.resume()
+        do { _ = try await task.value; XCTFail("Prior account confirmation must cancel") }
+        catch is CancellationError {} catch { XCTFail("Unexpected \(error)") }
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertTrue(try vault.confirmedPlaces().isEmpty)
+        XCTAssertNil(service.clipOwner, "No mutation may follow a stale initial read")
+    }
+
+    func testConfirmedPlaceUsesTapSnapshotWhenNewJournalArrivesDuringInitialRead() async throws {
+        let auth = PrivyAuthService.shared
+        let originalAuth = auth.authState
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: PendingShareStore.suiteName))
+        let originalJournal = defaults.object(forKey: PendingShareStore.key)
+        defer {
+            auth.authState = originalAuth
+            if let originalJournal { defaults.set(originalJournal, forKey: PendingShareStore.key) }
+            else { defaults.removeObject(forKey: PendingShareStore.key) }
+        }
+        auth.authState = .authenticated(userId: "clip-snapshot-owner")
+        let place = savedPlace(name: "Pending Cafe", address: "Taipei", coordinate: taipei)
+        let receipt = SharedPlaceReceipt.embedded(SharedPlaceData.from(place: place))
+        let selected = PendingConfirmedPlace(placeId: "tap-a", name: place.name, address: place.address,
+                                             latitude: place.latitude, longitude: place.longitude, category: "cafe",
+                                             sourceURL: nil, coordinateSystem: "WGS84", locationProvider: "google_places",
+                                             providerMapUrl: "https://maps.google.com/?q=tap-a", googlePlaceId: "ChIJTapA")
+        let confirmed = PendingSharePayload(kind: .place, shareCode: nil, placeId: "tap-a", listId: nil,
+                                            sender: nil, url: "https://example.com/p/tap-a", confirmedPlaces: [selected])
+        var replacement = confirmed
+        replacement.placeId = "new-b"
+        replacement.url = "https://example.com/p/new-b"
+        replacement.confirmedPlaces?[0].googlePlaceId = "ChIJNewB"
+        replacement.confirmedPlaces?[0].coordinateSystem = "GCJ-02"
+        replacement.confirmedPlaces?[0].providerMapUrl = "https://example.com/new-b-map"
+        let gate = ClipHandoffSuspension()
+        let service = RecordingSupabaseService()
+        service.fetchPlacesHandler = { _ in await gate.suspend(); return [] }
+        let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("clip-confirm-snapshot-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let map = MapViewModel(supabaseService: service,
+                               saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+                               usesRemotePersistence: true)
+        let task = Task { try await map.saveSharedPlaceReceipt(receipt, requiringAuthenticatedSession: true,
+                                                              confirmedJournal: confirmed) }
+        await gate.waitUntilStarted()
+        XCTAssertTrue(PendingShareStore.write(replacement))
+        gate.resume()
+        _ = try await task.value
+        let saved = try XCTUnwrap(service.savedPlaces.first)
+        XCTAssertEqual(saved.googlePlaceId, "ChIJTapA")
+        XCTAssertEqual(saved.coordinateSystem, .wgs84)
+        XCTAssertEqual(saved.providerMapUrl, selected.providerMapUrl)
+        XCTAssertEqual(PendingShareStore.load(), replacement)
+        XCTAssertFalse(PendingShareStore.clear(ifUnchanged: confirmed))
+        XCTAssertEqual(PendingShareStore.load(), replacement, "B still needs its own confirmation")
+    }
+
+    func testConfirmedPlaceWriteCannotStampAfterSignOut() async throws {
+        let auth = PrivyAuthService.shared
+        let previous = auth.authState
+        defer { auth.authState = previous }
+        auth.authState = .authenticated(userId: "clip-write-owner")
+        let service = RecordingSupabaseService()
+        service.holdNextSavePlace = true
+        let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("clip-confirm-write-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault, usesRemotePersistence: true)
+        let place = savedPlace(name: "Pending Cafe", address: "Taipei", coordinate: taipei)
+        let receipt = SharedPlaceReceipt.embedded(SharedPlaceData.from(place: place))
+        let task = Task { try await map.saveSharedPlaceReceipt(receipt, requiringAuthenticatedSession: true) }
+        let deadline = Date().addingTimeInterval(2)
+        while service.savePlaceStarted == 0 && Date() < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        guard service.savePlaceStarted > 0 else {
+            task.cancel()
+            XCTFail("Confirmation never reached the controlled save boundary")
+            return
+        }
+        auth.authState = .unauthenticated
+        service.resumeHeldSavePlace()
+        do { _ = try await task.value; XCTFail("Old account completion must not stamp") }
+        catch is CancellationError {} catch { XCTFail("Unexpected \(error)") }
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertTrue(try vault.confirmedPlaces().isEmpty)
+    }
+
+    func testClipHandoffResponseCannotMutateAnotherAccountOrSignedOutVault() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original }
+        for (signOut, notConfigured) in [(false, false), (true, false), (false, true), (true, true)] {
+            auth.authState = .authenticated(userId: "clip-owner-a")
+            let gate = ClipHandoffSuspension()
+            let service = RecordingSupabaseService()
+            let item = SaveListItem.from(place: savedPlace(name: "A Cafe", address: "Taipei", coordinate: taipei))
+            service.clipSaveHandler = { _ in
+                await gate.suspend()
+                if notConfigured { throw SupabaseError.notConfigured }
+                return (201, try self.clipSavedResponse(item))
+            }
+            let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("clip-response-\(UUID()).json")
+            defer { try? FileManager.default.removeItem(at: vaultURL) }
+            let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault, usesRemotePersistence: true)
+            let task = Task { try await map.saveClipListHandoff(SaveCollaborativeList(title: "A", items: [item])) }
+            await gate.waitUntilStarted()
+            XCTAssertEqual(service.clipOwner, "clip-owner-a")
+            auth.authState = signOut ? .unauthenticated : .authenticated(userId: "clip-owner-b")
+            gate.resume()
+            do { _ = try await task.value; XCTFail("Old account response must cancel") }
+            catch is CancellationError {} catch { XCTFail("Unexpected \(error)") }
+            XCTAssertTrue(map.places.isEmpty)
+            XCTAssertTrue(try vault.confirmedPlaces().isEmpty)
+            XCTAssertEqual(service.fetchPlacesCalls, 0)
+        }
+    }
+
+    func testClipHandoffRefreshCannotApplyAnotherAccountsRows() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original }
+        auth.authState = .authenticated(userId: "clip-owner-a")
+        let gate = ClipHandoffSuspension()
+        let service = RecordingSupabaseService()
+        let place = savedPlace(name: "Existing A", address: "Taipei", coordinate: taipei)
+        let item = SaveListItem.from(place: place)
+        service.clipSaveHandler = { _ in
+            (201, Data(#"{"newly_saved":0,"already_saved":1,"over_cap":0,"remaining":49,"limit":50,"saved":[]}"#.utf8))
+        }
+        service.fetchPlacesHandler = { _ in await gate.suspend(); return [place] }
+        let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("clip-refresh-\(UUID()).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+        let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault, usesRemotePersistence: true)
+        let task = Task { try await map.saveClipListHandoff(SaveCollaborativeList(title: "A", items: [item])) }
+        await gate.waitUntilStarted()
+        auth.authState = .authenticated(userId: "clip-owner-b")
+        gate.resume()
+        do { _ = try await task.value; XCTFail("Old refresh must cancel") }
+        catch is CancellationError {} catch { XCTFail("Unexpected \(error)") }
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertTrue(try vault.confirmedPlaces().isEmpty)
+    }
+
+    func testClipHandoffRequiresSeparateConfirmationForBWhileAIsSuspended() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original }
+        auth.authState = .authenticated(userId: "clip-owner")
+        for firstFails in [false, true] {
+            let gate = ClipHandoffSuspension()
+            let service = RecordingSupabaseService()
+            let a = SaveCollaborativeList(title: "A", items: [SaveListItem.from(place: savedPlace(name: "A Cafe", address: "Taipei", coordinate: taipei))])
+            let b = SaveCollaborativeList(title: "B", items: [SaveListItem.from(place: savedPlace(name: "B Cafe", address: "Osaka", coordinate: osaka))])
+            var requests: [String] = []
+            service.clipSaveHandler = { items in
+                let name = items.first?["name"] as? String ?? ""
+                requests.append(name)
+                if name == "A Cafe" {
+                    await gate.suspend()
+                    if firstFails { throw SupabaseError.notAuthenticated }
+                }
+                return (201, try self.clipSavedResponse(name == "A Cafe" ? a.items[0] : b.items[0]))
+            }
+            let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("clip-drain-\(UUID()).json")
+            defer { try? FileManager.default.removeItem(at: vaultURL) }
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL), usesRemotePersistence: true)
+            let coordinator = ClipListHandoffAttempt()
+            var pending: SaveCollaborativeList? = a
+            var completed: [UUID] = []
+            let runner = Task { @MainActor in
+                await coordinator.runConfirmed(pending: { pending }, save: { try await map.saveClipListHandoff($0) },
+                    succeeded: { list, _ in completed.append(list.id); pending = nil },
+                    failed: { XCTFail("Superseded A cannot fail B: \($0)") })
+            }
+            await gate.waitUntilStarted()
+            pending = b
+            await coordinator.runConfirmed(pending: { pending }, save: { try await map.saveClipListHandoff($0) },
+                succeeded: { _, _ in XCTFail("Second caller must coalesce") }, failed: { _ in XCTFail("Second caller must coalesce") })
+            XCTAssertEqual(requests, ["A Cafe"])
+            gate.resume()
+            await runner.value
+            XCTAssertEqual(requests, ["A Cafe"], "A confirmation cannot silently save replacement B")
+            XCTAssertTrue(completed.isEmpty)
+            XCTAssertEqual(pending, b)
+            XCTAssertFalse(map.places.contains { $0.name == "B Cafe" })
+            await coordinator.runConfirmed(pending: { pending }, save: { try await map.saveClipListHandoff($0) },
+                succeeded: { list, _ in completed.append(list.id); pending = nil }, failed: { XCTFail("B confirmation failed: \($0)") })
+            XCTAssertEqual(requests, ["A Cafe", "B Cafe"])
+            XCTAssertEqual(completed, [b.id])
+            XCTAssertNil(pending)
+            XCTAssertFalse(coordinator.isSaving)
+            XCTAssertFalse(coordinator.canRetry)
+        }
+    }
+
+    private func clipSavedResponse(_ item: SaveListItem) throws -> Data {
+        try JSONSerialization.data(withJSONObject: [
+            "newly_saved": 1, "already_saved": 0, "over_cap": 0, "remaining": 49, "limit": 50,
+            "saved": [["id": UUID().uuidString, "provider_place_id": item.sourceID,
+                       "name": item.title, "latitude": item.latitude, "longitude": item.longitude]]
+        ])
+    }
+
     private func cameraCenter(_ map: MapViewModel) -> CLLocationCoordinate2D? {
         map.cameraPosition.region?.center
     }
@@ -7628,6 +7962,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
 }
 
 private final class RecordingSupabaseService: SupabaseServiceProtocol {
+    var isConfigured: Bool { true }
     private(set) var updatedPlaces: [Place] = []
     private(set) var recoveryDecisions: [PlaceRecoveryDecisionDraft] = []
     private(set) var recoveryDecisionRuns: [UUID] = []
@@ -7664,6 +7999,9 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
         resumeUpdatePlace = nil
     }
 
+    var clipSaveHandler: (@MainActor ([[String: Any]]) async throws -> (Int, Data))?
+    var fetchPlacesHandler: (@MainActor (String) async throws -> [Place])?
+    private(set) var clipOwner: String?
     var holdNextFetchPlaces = false
     var returnsPersistedPlaces = false
     private var resumeFetchPlaces: (() -> Void)?
@@ -7699,6 +8037,7 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
             fetchPlacesCalls += 1
         }
         onFetchPlaces?()
+        if let fetchPlacesHandler { return try await fetchPlacesHandler(userId) }
         return returnsPersistedPlaces ? savedPlaces + updatedPlaces : []
     }
     func savePlace(_ place: Place, userId: String) async throws {
@@ -7715,7 +8054,14 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
         savedPlaces.append(place)
         onSavePlace?()
     }
+    func saveClipListPlaces(_ items: [[String: Any]]) async throws -> (Int, Data) {
+        clipOwner = SAVEPendingImportSessionScope.current?.owner
+        if let clipSaveHandler { return try await clipSaveHandler(items) }
+        throw SupabaseError.notConfigured
+    }
+    var friendSaveHandler: (@MainActor (Place, String, String) async throws -> FriendSharedPlaceSaveResult)?
     func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult {
+        if let friendSaveHandler { return try await friendSaveHandler(place, code, userId) }
         throw SupabaseError.notConfigured
     }
     func updatePlace(_ place: Place, previous: Place?) async throws {
@@ -7892,6 +8238,30 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     }
 }
 
+@MainActor
+private final class ClipHandoffSuspension {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func suspend() async {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            let pending = waiters
+            waiters = []
+            pending.forEach { $0.resume() }
+        }
+    }
+
+    func waitUntilStarted() async {
+        if continuation != nil { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+
+    func resume() {
+        continuation?.resume()
+        continuation = nil
+    }
+}
 /// The gate suspends only scoped work. Missing propagation produces an explicit
 /// bounded fixture failure instead of trapping an unrelated background GET.
 @MainActor

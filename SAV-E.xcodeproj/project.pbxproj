@@ -7,6 +7,26 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+
+
+		C1A000000000000000000041 /* PendingShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000040 /* PendingShareStore.swift */; };
+		C1A000000000000000000043 /* PendingShareStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000042 /* PendingShareStore.swift */; };
+		C1A000000000000000000047 /* ClipSaveService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000046 /* ClipSaveService.swift */; };
+		C1A000000000000000000045 /* Iansui-ClipTitles.ttf in SAVEClip Resources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000044 /* Iansui-ClipTitles.ttf */; };
+		C1A000000000000000000049 /* PendingShareStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000048 /* PendingShareStoreTests.swift */; };
+		C8A100000000000000000002 /* ClipAppleAccountStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A100000000000000000001 /* ClipAppleAccountStore.swift */; };
+		C8A100000000000000000004 /* ClipSignInCarryOver.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A100000000000000000003 /* ClipSignInCarryOver.swift */; };
+		C8A100000000000000000006 /* ClipSignInCarryOverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A100000000000000000005 /* ClipSignInCarryOverTests.swift */; };
+		C8A100000000000000000008 /* ClipListSavePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A100000000000000000007 /* ClipListSavePlanner.swift */; };
+		C8A100000000000000000009 /* ClipListSavePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A100000000000000000007 /* ClipListSavePlanner.swift */; };
+		C8A10000000000000000000B /* ClipListSaveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8A10000000000000000000A /* ClipListSaveTests.swift */; };
+		C1A000000000000000000002 /* ClipDoodleTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000001 /* ClipDoodleTheme.swift */; };
+		C1A000000000000000000021 /* ClipPreviewFixtures.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000020 /* ClipPreviewFixtures.swift */; };
+		C1A000000000000000000023 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000022 /* Localizable.xcstrings */; };
+		C1A000000000000000000025 /* Caveat-SemiBold.ttf in SAVEClip Resources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000024 /* Caveat-SemiBold.ttf */; };
+		C1A000000000000000000006 /* ClipAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000005 /* Assets.xcassets */; };
+		C1A00000000000000000000B /* SAVEClipScreenshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A00000000000000000000A /* SAVEClipScreenshotTests.swift */; };
+		C1A000000000000000000015 /* SaveClipJournalLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A000000000000000000016 /* SaveClipJournalLockTests.swift */; };
 		C4P100000000000000000001 /* SaveCaptureFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4P100000000000000000002 /* SaveCaptureFlowView.swift */; };
 		C4P100000000000000000003 /* SaveDoodleCapturePaywallTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4P100000000000000000004 /* SaveDoodleCapturePaywallTests.swift */; };
 		D2E200000000000000000001 /* SaveDoodlePassportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2E200000000000000000002 /* SaveDoodlePassportView.swift */; };
@@ -24,6 +44,9 @@
 		D3E100000000000000000001 /* SaveDoodleMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E100000000000000000002 /* SaveDoodleMapView.swift */; };
 		D3E100000000000000000003 /* SaveDoodleCheckInStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E100000000000000000004 /* SaveDoodleCheckInStore.swift */; };
 		D3E100000000000000000005 /* SaveDoodleMapTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3E100000000000000000006 /* SaveDoodleMapTests.swift */; };
+		P13A10000000000000000001 /* SavvyMapPhotoPins.swift in Sources */ = {isa = PBXBuildFile; fileRef = P13A10000000000000000002 /* SavvyMapPhotoPins.swift */; };
+		P13A10000000000000000003 /* SaveMapPhotoPinsRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = P13A10000000000000000004 /* SaveMapPhotoPinsRoot.swift */; };
+		P13A10000000000000000005 /* SavvyMapPhotoPinsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = P13A10000000000000000006 /* SavvyMapPhotoPinsTests.swift */; };
 		T7A100000000000000000009 /* SaveTileTownLockTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = T7A10000000000000000000A /* SaveTileTownLockTests.swift */; };
 		C91900000000000000000001 /* DisplayFont in Resources */ = {isa = PBXBuildFile; fileRef = C91900000000000000000002 /* DisplayFont */; };
 		A117DCD202609100000000003 /* SavePlanAgentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A117DCD202609100000000004 /* SavePlanAgentTests.swift */; };
@@ -91,7 +114,6 @@
 		9D0E1F2A3B4C5D6E7F8091A2 /* SavePlanDraftBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C9D0E1F2A3B4C5D6E7F8091 /* SavePlanDraftBuilder.swift */; };
 		B1C2D3E4F5061728394A5B6C /* SaveDayRhythmSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0B1C2D3E4F5061728394A5B /* SaveDayRhythmSchedulerTests.swift */; };
 		67B0D4C02A1500F6B8D902CF /* PlaceListComponent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A1053C8B2E3E25288C2A6C /* PlaceListComponent.swift */; };
-		67B23BF4F68B65D050156E0F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 8EBE852DE7618089938F9421 /* Assets.xcassets */; };
 		67F4455E1D94BD5A3556586A /* SAVEShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = DDE3CB001CD908CEC842B197 /* SAVEShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		6834F63ABDFBD48BAB5825EA /* CategoryPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5009253F9320E70D431D935 /* CategoryPill.swift */; };
 		6BA6AA3BA685D1C25A0E9816 /* SaveMemoryBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 367F5599ADEF24B59D31AE6F /* SaveMemoryBadge.swift */; };
@@ -227,6 +249,14 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+
+		C1A000000000000000000011 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 86ECD4C69BB955CE8C1DBB83 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BCD0A8DE7E85AFADB1C8514C;
+			remoteInfo = SAVEClip;
+		};
 		05E4C3760FDCA961F77E0A3E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 86ECD4C69BB955CE8C1DBB83 /* Project object */;
@@ -318,6 +348,25 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+
+		C1A000000000000000000001 /* ClipDoodleTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipDoodleTheme.swift; sourceTree = "<group>"; };
+		C1A000000000000000000040 /* PendingShareStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingShareStore.swift; sourceTree = "<group>"; };
+		C1A000000000000000000046 /* ClipSaveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipSaveService.swift; sourceTree = "<group>"; };
+		C1A000000000000000000042 /* PendingShareStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingShareStore.swift; sourceTree = "<group>"; };
+		C1A000000000000000000044 /* Iansui-ClipTitles.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "Iansui-ClipTitles.ttf"; path = "SAV-E/Resources/DisplayFont/Iansui-ClipTitles.ttf"; sourceTree = SOURCE_ROOT; };
+		C1A000000000000000000048 /* PendingShareStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingShareStoreTests.swift; sourceTree = "<group>"; };
+		C8A100000000000000000001 /* ClipAppleAccountStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipAppleAccountStore.swift; sourceTree = "<group>"; };
+		C8A100000000000000000003 /* ClipSignInCarryOver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipSignInCarryOver.swift; sourceTree = "<group>"; };
+		C8A100000000000000000005 /* ClipSignInCarryOverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipSignInCarryOverTests.swift; sourceTree = "<group>"; };
+		C8A100000000000000000007 /* ClipListSavePlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipListSavePlanner.swift; sourceTree = "<group>"; };
+		C8A10000000000000000000A /* ClipListSaveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipListSaveTests.swift; sourceTree = "<group>"; };
+		C1A000000000000000000005 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		C1A000000000000000000020 /* ClipPreviewFixtures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipPreviewFixtures.swift; sourceTree = "<group>"; };
+		C1A000000000000000000022 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		C1A000000000000000000024 /* Caveat-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; name = "Caveat-SemiBold.ttf"; path = "SAV-E/Resources/DisplayFont/Caveat-SemiBold.ttf"; sourceTree = SOURCE_ROOT; };
+		C1A000000000000000000008 /* SAVEClipUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SAVEClipUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1A00000000000000000000A /* SAVEClipScreenshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SAVEClipScreenshotTests.swift; sourceTree = "<group>"; };
+		C1A000000000000000000016 /* SaveClipJournalLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveClipJournalLockTests.swift; sourceTree = "<group>"; };
 		C4P100000000000000000002 /* SaveCaptureFlowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveCaptureFlowView.swift; sourceTree = "<group>"; };
 		C4P100000000000000000004 /* SaveDoodleCapturePaywallTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleCapturePaywallTests.swift; sourceTree = "<group>"; };
 		D2E200000000000000000002 /* SaveDoodlePassportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodlePassportView.swift; sourceTree = "<group>"; };
@@ -335,6 +384,9 @@
 		D3E100000000000000000002 /* SaveDoodleMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleMapView.swift; sourceTree = "<group>"; };
 		D3E100000000000000000004 /* SaveDoodleCheckInStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleCheckInStore.swift; sourceTree = "<group>"; };
 		D3E100000000000000000006 /* SaveDoodleMapTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveDoodleMapTests.swift; sourceTree = "<group>"; };
+		P13A10000000000000000002 /* SavvyMapPhotoPins.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavvyMapPhotoPins.swift; sourceTree = "<group>"; };
+		P13A10000000000000000004 /* SaveMapPhotoPinsRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveMapPhotoPinsRoot.swift; sourceTree = "<group>"; };
+		P13A10000000000000000006 /* SavvyMapPhotoPinsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavvyMapPhotoPinsTests.swift; sourceTree = "<group>"; };
 		T7A10000000000000000000A /* SaveTileTownLockTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SaveTileTownLockTests.swift; sourceTree = "<group>"; };
 		C91900000000000000000002 /* DisplayFont */ = {isa = PBXFileReference; lastKnownFileType = folder; path = DisplayFont; sourceTree = "<group>"; };
 		A117DCD202609100000000004 /* SavePlanAgentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavePlanAgentTests.swift; sourceTree = "<group>"; };
@@ -573,7 +625,16 @@
 		0A32D4ADB26D43F114C08A4A /* SAV-EClip */ = {
 			isa = PBXGroup;
 			children = (
+				C1A000000000000000000005 /* Assets.xcassets */,
+				C1A000000000000000000024 /* Caveat-SemiBold.ttf */,
+				C1A000000000000000000044 /* Iansui-ClipTitles.ttf */,
 				C2F29BED31958E2047FAE72E /* ClipContentView.swift */,
+				C1A000000000000000000040 /* PendingShareStore.swift */,
+				C1A000000000000000000046 /* ClipSaveService.swift */,
+				C8A100000000000000000007 /* ClipListSavePlanner.swift */,
+				C1A000000000000000000001 /* ClipDoodleTheme.swift */,
+				C1A000000000000000000020 /* ClipPreviewFixtures.swift */,
+				C1A000000000000000000022 /* Localizable.xcstrings */,
 				482E0F42191576E75DFAA558 /* SAV-EClip.entitlements */,
 				738ABD2C0F107820DE7B6E16 /* SAV-EClipApp.swift */,
 				088DFD7077650B834811C66B /* SharedTripData.swift */,
@@ -640,6 +701,7 @@
 				DDE3CB001CD908CEC842B197 /* SAVEShareExtension.appex */,
 				BE34326AB142B818431A5A1F /* SAVETests.xctest */,
 				75980C64772B9E80FBEA8DF6 /* SAVEUITests.xctest */,
+				C1A000000000000000000008 /* SAVEClipUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -741,6 +803,7 @@
 				A7713D4B597C4062FFE2C08C /* AccountReferenceStore.swift */,
 				736FAD76F2C8F9181B521ED7 /* AccountSessionGate.swift */,
 				24848A1006E5A3FFBB38324D /* AccountSessionGateLogic.swift */,
+				C8A100000000000000000003 /* ClipSignInCarryOver.swift */,
 				53130D5A88AAB65EF3312276 /* AIParsingService.swift */,
 				0B1F7AA648D0752919A33C09 /* DebugLegacyMigrator.swift */,
 				5260F9D4E1EEB779C3623B77 /* DebugVaultExporter.swift */,
@@ -884,6 +947,7 @@
 				A2E50A68C45C77F93AD3F626 /* SAV-EShared */,
 				051C942F7137E365C09B7E40 /* SAV-EShareExtension */,
 				ABC8567013403AA25EA4E4F0 /* SAVEUITests */,
+				C1A000000000000000000009 /* SAVEClipUITests */,
 				B93FB6B6B4E89556609BBBEE /* SocialPlacePipelineTests */,
 				95BF84D9EC38221803F5C639 /* Sources */,
 				11C717FAE02813E9F58CF778 /* Products */,
@@ -926,6 +990,16 @@
 			path = "SAV-EShared";
 			sourceTree = "<group>";
 		};
+
+		C1A000000000000000000009 /* SAVEClipUITests */ = {
+			isa = PBXGroup;
+			children = (
+				C1A00000000000000000000A /* SAVEClipScreenshotTests.swift */,
+			);
+			name = SAVEClipUITests;
+			path = Tests/SAVEClipUITests;
+			sourceTree = "<group>";
+		};
 		ABC8567013403AA25EA4E4F0 /* SAVEUITests */ = {
 			isa = PBXGroup;
 			children = (
@@ -957,11 +1031,16 @@
 				5CD5DE6A80F7B22D67182A2C /* AtlasHomeHeroPresentationTests.swift */,
 				6F3BF7069E799A11086D07F7 /* AtlasOneFaceUITests.swift */,
 				T7A10000000000000000000A /* SaveTileTownLockTests.swift */,
+				C1A000000000000000000016 /* SaveClipJournalLockTests.swift */,
+				C1A000000000000000000048 /* PendingShareStoreTests.swift */,
+				C8A100000000000000000005 /* ClipSignInCarryOverTests.swift */,
+				C8A10000000000000000000A /* ClipListSaveTests.swift */,
 				C4P100000000000000000004 /* SaveDoodleCapturePaywallTests.swift */,
 				D2E100000000000000000006 /* SaveDoodleHomeTests.swift */,
 				D2E200000000000000000008 /* SaveDoodlePassportTests.swift */,
 				F815A0000000000000000004 /* SaveDoodleFriendsTests.swift */,
 				D3E100000000000000000006 /* SaveDoodleMapTests.swift */,
+				P13A10000000000000000006 /* SavvyMapPhotoPinsTests.swift */,
 				A5629446727F6C92D09FD7BE /* AtlasOneJobPerTabUITests.swift */,
 				396D972F2C07BCC409ADBEC7 /* DebugLegacyMigratorTests.swift */,
 				8B41297E1503EE02BE975D45 /* DeterministicTripPlannerTests.swift */,
@@ -1017,6 +1096,8 @@
 			isa = PBXGroup;
 			children = (
 				1A55AC71904B498274561F2D /* MapView.swift */,
+				P13A10000000000000000004 /* SaveMapPhotoPinsRoot.swift */,
+				P13A10000000000000000002 /* SavvyMapPhotoPins.swift */,
 				61781274A9C071CEF671ADD7 /* PlaceBottomSheet.swift */,
 				B6B5881221BD233BF5F2C4EA /* SaveMapDrawerPanel.swift */,
 				D3E100000000000000000002 /* SaveDoodleMapView.swift */,
@@ -1083,6 +1164,8 @@
 				4D50D8F2711C9E3010A9DDA9 /* SavePlaceCorrectionEvent.swift */,
 				4029203B816A870C920B8924 /* SavePlanAroundModels.swift */,
 				DE718959747F6AEEAE3393B7 /* SaveSearchModels.swift */,
+				C1A000000000000000000042 /* PendingShareStore.swift */,
+				C8A100000000000000000001 /* ClipAppleAccountStore.swift */,
 				85338A305203F41DF18FAE27 /* SharedTripData.swift */,
 				87D86203F9ECA96AB9E58AA6 /* SocialMapSignals.swift */,
 				A10100000000000000000001 /* SharedPlacePost.swift */,
@@ -1124,6 +1207,25 @@
 /* End PBXHeadersBuildPhase section */
 
 /* Begin PBXNativeTarget section */
+
+		C1A00000000000000000000C /* SAVEClipUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C1A000000000000000000014 /* Build configuration list for PBXNativeTarget "SAVEClipUITests" */;
+			buildPhases = (
+				C1A00000000000000000000D /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C1A000000000000000000010 /* PBXTargetDependency */,
+			);
+			name = SAVEClipUITests;
+			packageProductDependencies = (
+			);
+			productName = SAVEClipUITests;
+			productReference = C1A000000000000000000008 /* SAVEClipUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		0B5351F22114512D2367DDDD /* SAVEUITests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B163A4556135703D2EE45CC2 /* Build configuration list for PBXNativeTarget "SAVEUITests" */;
@@ -1338,6 +1440,10 @@
 						DevelopmentTeam = JC6858UYM9;
 						ProvisioningStyle = Automatic;
 					};
+					C1A00000000000000000000C = {
+						DevelopmentTeam = JC6858UYM9;
+						ProvisioningStyle = Automatic;
+					};
 					E8D7959A4EAEA853A7737203 = {
 						DevelopmentTeam = JC6858UYM9;
 						ProvisioningStyle = Automatic;
@@ -1374,6 +1480,7 @@
 				2C46EB502B5B4F5C95F36907 /* SAVEShareExtension */,
 				F150541C6B87E28EBACEF1CB /* SAVETests */,
 				0B5351F22114512D2367DDDD /* SAVEUITests */,
+				C1A00000000000000000000C /* SAVEClipUITests */,
 				43550FDD34C39407C1B8C2DC /* SAVEiMessageExtension */,
 			);
 		};
@@ -1392,7 +1499,10 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				67B23BF4F68B65D050156E0F /* Assets.xcassets in Resources */,
+				C1A000000000000000000006 /* ClipAssets.xcassets in Resources */,
+				C1A000000000000000000023 /* Localizable.xcstrings in Resources */,
+				C1A000000000000000000025 /* Caveat-SemiBold.ttf in SAVEClip Resources */,
+				C1A000000000000000000045 /* Iansui-ClipTitles.ttf in SAVEClip Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1512,11 +1622,17 @@
 				1C753DEBFAB2D59B79856E1C /* AtlasHomeHeroPresentationTests.swift in Sources */,
 				3A214817A2A61AB5299EEC7E /* AtlasOneFaceUITests.swift in Sources */,
 				T7A100000000000000000009 /* SaveTileTownLockTests.swift in Sources */,
+				C1A000000000000000000015 /* SaveClipJournalLockTests.swift in Sources */,
+				C1A000000000000000000049 /* PendingShareStoreTests.swift in Sources */,
+				C8A100000000000000000006 /* ClipSignInCarryOverTests.swift in Sources */,
+				C8A100000000000000000009 /* ClipListSavePlanner.swift in Sources */,
+				C8A10000000000000000000B /* ClipListSaveTests.swift in Sources */,
 				C4P100000000000000000003 /* SaveDoodleCapturePaywallTests.swift in Sources */,
 				D2E100000000000000000005 /* SaveDoodleHomeTests.swift in Sources */,
 				D2E200000000000000000007 /* SaveDoodlePassportTests.swift in Sources */,
 				F815A0000000000000000003 /* SaveDoodleFriendsTests.swift in Sources */,
 				D3E100000000000000000005 /* SaveDoodleMapTests.swift in Sources */,
+				P13A10000000000000000005 /* SavvyMapPhotoPinsTests.swift in Sources */,
 				44FE5138EF536EBF57B0EA3A /* AtlasOneJobPerTabUITests.swift in Sources */,
 				94AF43877A54FD0C34CD7217 /* DebugLegacyMigratorTests.swift in Sources */,
 				793EB5D582636871FD6FA8CE /* DeterministicTripPlannerTests.swift in Sources */,
@@ -1587,6 +1703,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				3F861CFCBB89E535C6F88B20 /* ClipContentView.swift in Sources */,
+				C1A000000000000000000002 /* ClipDoodleTheme.swift in Sources */,
+				C1A000000000000000000041 /* PendingShareStore.swift in Sources */,
+				C1A000000000000000000047 /* ClipSaveService.swift in Sources */,
+				C8A100000000000000000008 /* ClipListSavePlanner.swift in Sources */,
+				C1A000000000000000000021 /* ClipPreviewFixtures.swift in Sources */,
 				430205DF9D71CB213764DAEB /* SAV-EClipApp.swift in Sources */,
 				6F9A7F7D67162AAFC701986F /* SAVEProductionConfig.swift in Sources */,
 				991602CD0733FC27340D71D1 /* SharedTripData.swift in Sources */,
@@ -1604,6 +1725,7 @@
 				667EBE401889BD9FF4AC9837 /* AccountReferenceStore.swift in Sources */,
 				A06CCC19D0A1DA3530BCEDD4 /* AccountSessionGate.swift in Sources */,
 				D3AA331E90FFFA7BCC1B47E1 /* AccountSessionGateLogic.swift in Sources */,
+				C8A100000000000000000004 /* ClipSignInCarryOver.swift in Sources */,
 				1F79DA008704EED14416137B /* AppLanguageSettings.swift in Sources */,
 				DEFD9661422D70531B103B4B /* AskSaveMemoryIntent.swift in Sources */,
 				8F948E6B162F7A83125B0421 /* CachedAsyncImage.swift in Sources */,
@@ -1627,6 +1749,8 @@
 				C3F9723CC4B97DD1915AFFC3 /* MaatAnalysisCache.swift in Sources */,
 				7D221A99C9D47E9AA8E5D3C8 /* MapCoachmarkTour.swift in Sources */,
 				AEDD117BBD3A0FD842D535BF /* MapView.swift in Sources */,
+				P13A10000000000000000003 /* SaveMapPhotoPinsRoot.swift in Sources */,
+				P13A10000000000000000001 /* SavvyMapPhotoPins.swift in Sources */,
 				97D2C4B481F634DA55B6437C /* MapViewModel.swift in Sources */,
 				B4DAEDB0A245CE1D4707844F /* MemoMascotMark.swift in Sources */,
 				973C85F47B09BEDF4824A262 /* NavigationCardComponent.swift in Sources */,
@@ -1705,6 +1829,8 @@
 				620EFD4BCF446FCB18A843DA /* SaveStoreKitService.swift in Sources */,
 				D84C166D8B51EAB41CCD7F23 /* SavedPlaceTripRecommender.swift in Sources */,
 				885D0A9AE9CBA0CD485ACBF5 /* Screens.swift in Sources */,
+				C1A000000000000000000043 /* PendingShareStore.swift in Sources */,
+				C8A100000000000000000002 /* ClipAppleAccountStore.swift in Sources */,
 				6BC478C8D4778B2BE248D315 /* SharedTripData.swift in Sources */,
 				57E8DF73087D818758660998 /* SocialCaptionVenueExtractor.swift in Sources */,
 				FD6208D015EEAD7A1B6BEA66 /* SocialLinkReviewCandidateService.swift in Sources */,
@@ -1740,6 +1866,15 @@
 				243E890DEA29D17ED9DB31CF /* SAVEScreenshotRailTests.swift in Sources */,
 				B214EF983BE6DB35168A6EF2 /* SAVEUISmokeHarnessTests.swift in Sources */,
 				4F0D78F6B793A1B0F5B3F4CC /* SAVEUITestCase.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+
+		C1A00000000000000000000D /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C1A00000000000000000000B /* SAVEClipScreenshotTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1791,9 +1926,56 @@
 			target = 0CE8DEFDD69CB655D29FBDC8 /* DebugBridgeUI */;
 			targetProxy = A0E2C394154CEC5CAD22F112 /* PBXContainerItemProxy */;
 		};
+
+		C1A000000000000000000010 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BCD0A8DE7E85AFADB1C8514C /* SAVEClip */;
+			targetProxy = C1A000000000000000000011 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+
+		C1A000000000000000000012 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = SAVEClipUITests;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app.clip.uitests;
+				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = SAVEClip;
+			};
+			name = Debug;
+		};
+		C1A000000000000000000013 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = JC6858UYM9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = SAVEClipUITests;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.wanderly.app.clip.uitests;
+				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = SAVEClip;
+			};
+			name = Release;
+		};
 		0C123CD07FB25ECEB12839AF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1807,7 +1989,16 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = Savvy;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_LSApplicationQueriesSchemes = (
+					savvy,
+				);
 				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
+
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				INFOPLIST_KEY_UIAppFonts = (
+					"Caveat-SemiBold.ttf",
+					"Iansui-ClipTitles.ttf",
+				);
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
@@ -2112,7 +2303,16 @@
 				INFOPLIST_GENERATION_MODE = GeneratedFile;
 				INFOPLIST_KEY_CFBundleDisplayName = Savvy;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_LSApplicationQueriesSchemes = (
+					savvy,
+				);
 				INFOPLIST_KEY_NSAppClip = "[\"NSAppClipRequestEphemeralUserNotification\": false, \"NSAppClipRequestLocationConfirmation\": false]";
+
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				INFOPLIST_KEY_UIAppFonts = (
+					"Caveat-SemiBold.ttf",
+					"Iansui-ClipTitles.ttf",
+				);
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
@@ -2357,6 +2557,16 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+
+		C1A000000000000000000014 /* Build configuration list for PBXNativeTarget "SAVEClipUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C1A000000000000000000012 /* Debug */,
+				C1A000000000000000000013 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 		33D14ED917168C81B926DE67 /* Build configuration list for PBXNativeTarget "DebugBridgeTouch" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

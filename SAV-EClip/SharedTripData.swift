@@ -18,6 +18,9 @@ struct SharedPlaceData: Codable {
     let sourceURL: String?
     let photoURLs: [String]
     let note: String?
+    var coordinateSystem: String? = nil
+    var locationProvider: String? = nil
+    var providerMapUrl: String? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: lat, longitude: lng)
@@ -80,8 +83,34 @@ struct SharedPlaceData: Codable {
             hours: hours,
             sourceLabel: sourceLabel,
             sourceURL: safeSourceURL?.absoluteString,
-            photoURLs: Array(photoURLs.compactMap(Self.sanitizedPublicHTTPURL).map(\.absoluteString).prefix(1)),
-            note: Self.publicNote(note)
+            photoURLs: Self.ownedPhotoURLs(photoURLs),
+            note: Self.publicNote(note),
+            coordinateSystem: coordinateSystem,
+            locationProvider: locationProvider,
+            providerMapUrl: providerMapUrl
+        )
+    }
+
+    /// Installed-app handoff must not copy sender note/rating into the recipient vault.
+    func strippingSenderMemory() -> SharedPlaceData {
+        SharedPlaceData(
+            id: id,
+            name: name,
+            address: address,
+            lat: lat,
+            lng: lng,
+            category: category,
+            rating: nil,
+            reviewCount: reviewCount,
+            priceRange: priceRange,
+            hours: hours,
+            sourceLabel: sourceLabel,
+            sourceURL: sourceURL,
+            photoURLs: photoURLs,
+            note: nil,
+            coordinateSystem: coordinateSystem,
+            locationProvider: locationProvider,
+            providerMapUrl: providerMapUrl
         )
     }
 
@@ -93,9 +122,19 @@ struct SharedPlaceData: Codable {
               components.user == nil,
               components.password == nil
         else { return nil }
+        if let candidate = components.url,
+           ShareRoutePhotoPolicy.isGoogleDomainURL(candidate)
+            || ShareRoutePhotoPolicy.isGooglePlacesPhotoURL(candidate)
+            || ShareRoutePhotoPolicy.looksLikeGooglePlacesPhotoReference(value) {
+            return nil
+        }
         components.query = nil
         components.fragment = nil
-        return components.url
+        guard let url = components.url,
+              !ShareRoutePhotoPolicy.isGoogleDomainURL(url),
+              !ShareRoutePhotoPolicy.isGooglePlacesPhotoURL(url)
+        else { return nil }
+        return url
     }
 
     private static func publicNote(_ value: String?) -> String? {
@@ -145,6 +184,10 @@ struct SharedPlaceData: Codable {
             usedUTF16Units += characterUnits
         }
         return truncated.trimmingCharacters(in: .whitespacesAndNewlines) + "…"
+    }
+
+    static func ownedPhotoURLs(_ values: [String]) -> [String] {
+        Array(ShareRoutePhotoPolicy.persistablePhotoURLs(values).prefix(1))
     }
 }
 
@@ -350,6 +393,51 @@ struct SharedTripData: Codable {
         let countLabel = stops.count == 1 ? "1 stop" : "\(stops.count) stops"
         guard !city.isEmpty else { return countLabel }
         return "\(countLabel) in \(city)"
+    }
+}
+
+enum ShareRoutePhotoPolicy {
+    static func isGoogleDomainHost(_ host: String) -> Bool {
+        let h = host.lowercased()
+        let labels = h.split(separator: ".")
+        if labels.contains("google") { return true }
+        if labels.contains("googleapis") { return true }
+        if labels.contains("googleusercontent") { return true }
+        if labels.contains("gstatic") { return true }
+        if h == "goo.gl" || h.hasSuffix(".goo.gl") { return true }
+        if h == "g.co" || h.hasSuffix(".g.co") { return true }
+        return false
+    }
+
+    static func isGoogleDomainURL(_ url: URL) -> Bool {
+        guard let host = url.host else { return false }
+        return isGoogleDomainHost(host)
+    }
+
+    static func isGooglePlacesPhotoURL(_ url: URL) -> Bool {
+        let host = url.host?.lowercased() ?? ""
+        let path = url.path
+        if host == "maps.googleapis.com" && path == "/maps/api/place/photo" { return true }
+        if host == "places.googleapis.com" && path.contains("/media") { return true }
+        return false
+    }
+
+    static func looksLikeGooglePlacesPhotoReference(_ value: String) -> Bool {
+        let lower = value.lowercased()
+        if lower.contains("photo_reference=") { return true }
+        if lower.hasPrefix("places/") && lower.contains("/photos/") { return true }
+        return false
+    }
+
+    static func persistablePhotoURLs(_ values: [String]) -> [String] {
+        values.compactMap { value in
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalized.isEmpty else { return nil }
+            if looksLikeGooglePlacesPhotoReference(normalized) { return nil }
+            guard let url = URL(string: normalized) else { return nil }
+            if isGoogleDomainURL(url) || isGooglePlacesPhotoURL(url) { return nil }
+            return normalized
+        }
     }
 }
 
@@ -581,7 +669,7 @@ struct SharedListPayload: Codable {
             payload.role = role
             payload.list.viewerRole = role
         }
-        return payload
+        return payload.strippingGooglePhotos()
     }
 
     static func shareCode(from url: URL) -> String? {
@@ -629,7 +717,51 @@ struct SharedListPayload: Codable {
         guard let payload = try? decoder.decode(SharedListPayload.self, from: data) else {
             throw SharedListPreviewError.invalidResponse
         }
-        return payload
+        return payload.strippingGooglePhotos()
+    }
+
+    func strippingGooglePhotos() -> SharedListPayload {
+        SharedListPayload(
+            list: SharedListData(
+                id: list.id,
+                title: list.title,
+                note: list.note,
+                ownerDisplayName: list.ownerDisplayName,
+                viewerRole: list.viewerRole,
+                items: list.items.map { item in
+                    SharedListItem(
+                        id: item.id,
+                        source: item.source,
+                        sourceID: item.sourceID,
+                        title: item.title,
+                        subtitle: item.subtitle,
+                        latitude: item.latitude,
+                        longitude: item.longitude,
+                        category: item.category,
+                        rating: item.rating,
+                        reviewCount: item.reviewCount,
+                        sourceURL: {
+                            guard let raw = item.sourceURL,
+                                  let url = URL(string: raw),
+                                  !ShareRoutePhotoPolicy.isGoogleDomainURL(url)
+                            else { return nil }
+                            return raw
+                        }(),
+                        photoURLs: ShareRoutePhotoPolicy.persistablePhotoURLs(item.photoURLs),
+                        note: item.note,
+                        addedByDisplayName: item.addedByDisplayName,
+                        addedAt: item.addedAt,
+                        coordinateSystem: item.coordinateSystem,
+                        locationProvider: item.locationProvider,
+                        providerMapUrl: item.providerMapUrl,
+                        googlePlaceId: item.googlePlaceId
+                    )
+                },
+                createdAt: list.createdAt,
+                updatedAt: list.updatedAt
+            ),
+            role: role
+        )
     }
 
     static func isListLink(_ url: URL) -> Bool {
@@ -697,6 +829,10 @@ struct SharedListItem: Codable, Identifiable {
     let note: String?
     let addedByDisplayName: String
     let addedAt: Date
+    var coordinateSystem: String? = nil
+    var locationProvider: String? = nil
+    var providerMapUrl: String? = nil
+    var googlePlaceId: String? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)

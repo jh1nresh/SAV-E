@@ -247,6 +247,23 @@ final class PlaceDeduplicationTests: XCTestCase {
     }
 
     @MainActor
+    func testRekeyToServerIDKeepsRecipientMemory() {
+        var local = makePlace(name: "Cafe", address: "1 Test Way", googlePlaceId: "venue", sourceUrl: nil)
+        let localID = local.id
+        let serverID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+        local.status = .visited
+        local.note = "Ask for the window"
+        local.category = .food
+        let rekeyed = local.rekeyed(to: serverID)
+        XCTAssertEqual(rekeyed.id, serverID)
+        XCTAssertEqual(rekeyed.status, .visited)
+        XCTAssertEqual(rekeyed.note, "Ask for the window")
+        XCTAssertEqual(rekeyed.category, .food)
+        XCTAssertTrue(rekeyed.savedIDs.contains(localID))
+        XCTAssertEqual(local.rekeyed(to: localID).id, localID)
+    }
+
+    @MainActor
     func testSameVenueSupplementPreservesFirstCollectionDate() {
         var first = makePlace(name: "Cafe", address: "1 Test Way", googlePlaceId: "venue", sourceUrl: nil)
         first.createdAt = Date(timeIntervalSince1970: 1)

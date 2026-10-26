@@ -81,6 +81,34 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertEqual(saved.googleRating, 4.7)
         XCTAssertEqual(saved.recommender, "Ezven")
         XCTAssertEqual(saved.sourceUrl, "https://maps.apple.com/?q=List%20Ramen")
+        let recipient = item.asPlace(includeSenderMemory: false)
+        XCTAssertNil(recipient.note)
+        XCTAssertNil(recipient.googleRating)
+        XCTAssertNil(recipient.rating)
+    }
+
+    @MainActor
+    func testListItemKeepsNonWGS84Coordinates() {
+        var amap = place(name: "Onibus Coffee", category: .cafe)
+        amap.latitude = 35.644
+        amap.longitude = 139.699
+        amap.coordinateSystem = .gcj02
+        amap.locationProvider = .amap
+        amap.providerPlaceId = "amap-onibus"
+        amap.providerMapUrl = "https://uri.amap.com/marker?position=139.699,35.644"
+        let item = SaveListItem.from(place: amap)
+        XCTAssertEqual(item.coordinateSystem, .gcj02)
+        XCTAssertEqual(item.locationProvider, .amap)
+        XCTAssertEqual(item.providerMapUrl, "https://uri.amap.com/marker?position=139.699,35.644")
+        let stamp = item.asPlace(includeSenderMemory: false)
+        XCTAssertEqual(stamp.coordinateSystem, .gcj02)
+        XCTAssertEqual(stamp.locationProvider, .amap)
+        XCTAssertEqual(stamp.providerMapUrl, "https://uri.amap.com/marker?position=139.699,35.644")
+        XCTAssertFalse(stamp.isMapKitMappable)
+        let body = ClipListHandoff.placeBody(from: item)
+        XCTAssertEqual(body["coordinate_system"] as? String, "GCJ-02")
+        XCTAssertEqual(body["location_provider"] as? String, "amap")
+        XCTAssertEqual(body["provider_map_url"] as? String, "https://uri.amap.com/marker?position=139.699,35.644")
     }
 
     @MainActor
@@ -258,6 +286,18 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
+    func testListRetainsExplicitGoogleProvenanceWithoutPrefixInference() {
+        var saved = place(name: "Known Google venue", category: .cafe)
+        saved.googlePlaceId = "opaque-google-venue"
+        let savedItem = SaveListItem.from(place: saved)
+        XCTAssertEqual(savedItem.googlePlaceId, saved.googlePlaceId)
+        XCTAssertEqual(savedItem.asPlace().googlePlaceId, saved.googlePlaceId)
+        let candidate = SaveMapCandidate(id: "another-opaque-id", title: "Google result", subtitle: "Tokyo",
+                                         latitude: 35.6, longitude: 139.7, sourcePlatform: .googleMaps)
+        XCTAssertEqual(SaveListItem.from(candidate: candidate).googlePlaceId, candidate.id)
+    }
+
+    @MainActor
     func testSelectedPlaceEnrichmentKeepsCheckInMadeWhileInFlight() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -319,9 +359,36 @@ final class SaveCollaborativeListTests: XCTestCase {
         var list = SaveCollaborativeList(title: "Safe list")
         list.add(.from(place: legacyPlace))
 
-        let shareURL = try XCTUnwrap(list.shareURL())
+        let suiteName = "clip-private-photos-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = SaveCollaborativeListStore(defaults: defaults)
+        store.save([list])
+        let restored = try XCTUnwrap(store.load().first)
+        let privatePhoto = try XCTUnwrap(restored.items.first?.photoURLs.first)
+        XCTAssertTrue(privatePhoto.contains("photo_reference=legacy-ref"))
+        XCTAssertFalse(privatePhoto.contains("key="))
+
+        let shareURL = try XCTUnwrap(restored.shareURL())
         let payload = try XCTUnwrap(SaveSharedListPayload.from(url: shareURL))
-        XCTAssertFalse(try XCTUnwrap(payload.list.items.first?.photoURLs.first).contains("key="))
+        XCTAssertTrue(payload.list.items.first?.photoURLs.isEmpty == true)
+    }
+
+    @MainActor
+    func testSharedListPayloadDropsGooglePhotoURLsAndKeepsOwnedPhotos() throws {
+        var owned = place(name: "Owned Cafe", category: .cafe)
+        owned.businessPhotoUrls = ["https://example.com/own.jpg"]
+        var google = place(name: "Google Cafe", category: .cafe)
+        google.businessPhotoUrls = [
+            "https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=abc"
+        ]
+        var list = SaveCollaborativeList(title: "Mixed photos")
+        list.add(.from(place: owned))
+        list.add(.from(place: google))
+
+        let payload = try XCTUnwrap(SaveSharedListPayload.from(url: try XCTUnwrap(list.shareURL())))
+        XCTAssertEqual(payload.list.items.first?.photoURLs, ["https://example.com/own.jpg"])
+        XCTAssertEqual(payload.list.items.last?.photoURLs, [])
     }
 
     // MARK: - Server short-code links (`?c=`)
@@ -350,6 +417,21 @@ final class SaveCollaborativeListTests: XCTestCase {
         XCTAssertNil(SaveSharedListPayload.shareCode(from: try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/list?c=abc%20def1"))))
         XCTAssertNil(SaveSharedListPayload.shareCode(from: try XCTUnwrap(URL(string: "https://evil.example.com/list?c=abcdef"))))
         XCTAssertNil(SaveSharedListPayload.shareCode(from: try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/trip?c=abcdef"))))
+    }
+
+    @MainActor
+    func testEmbeddedAndShortCodeListLinksStayOnThePublicListRoute() throws {
+        var list = SaveCollaborativeList(title: "Tokyo cafes", note: "Saturday")
+        list.add(.from(place: place(name: "Onibus Coffee", category: .cafe)))
+        let embedded = try XCTUnwrap(list.shareURL(role: .viewer))
+        XCTAssertEqual(embedded.path, "/list")
+        XCTAssertTrue(SaveSharedListPayload.isListLink(embedded))
+        XCTAssertNotNil(SaveSharedListPayload.from(url: embedded))
+
+        let short = try XCTUnwrap(URL(string: "https://sav-e-app.vercel.app/list?c=AbC123_x"))
+        XCTAssertTrue(SaveSharedListPayload.isListLink(short))
+        XCTAssertEqual(SaveSharedListPayload.shareCode(from: short), "AbC123_x")
+        XCTAssertNil(SaveSharedListPayload.from(url: short))
     }
 
     // MARK: - Server row mapping

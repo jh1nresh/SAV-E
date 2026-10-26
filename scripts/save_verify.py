@@ -73,7 +73,7 @@ PR_PROBES = {
     297: ("passport.root",),
     298: ("SaveDoodleMapView",),
     304: ("map.card.beenHere",),
-    307: ("clip.cap50", "clip.signin", "clip.skoverlay"),
+    307: ("clip.pending", "app.handoff.confirmList", "clip.skoverlay"),
     308: (),
 }
 
@@ -645,9 +645,9 @@ def evaluate_v7(root: Path, cache: dict[str, str]) -> list[dict[str, Any]]:
             "V7.clip-ids",
             all(
                 source_has(root, token, cache)
-                for token in ("clip.signin", "clip.saved", "clip.skoverlay", "clip.cap50")
+                for token in ("clip.pending", "app.handoff.confirmList", "clip.skoverlay")
             ),
-            "clip.signin / clip.saved / clip.skoverlay / clip.cap50",
+            "clip.pending / app.handoff.confirmList / clip.skoverlay (pending-only flow)",
         ),
         assertion(
             "V7.no-google-payload",
