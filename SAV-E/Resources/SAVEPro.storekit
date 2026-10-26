@@ -31,12 +31,17 @@
           },
           "localizations" : [
             {
-              "description" : "Higher monthly AI assist allowance. Saved places stay free.",
-              "displayName" : "Savvy Pro Annual",
+              "description" : "Save unlimited places. Free plan includes 50.",
+              "displayName" : "Savvy Pro",
               "locale" : "en_US"
+            },
+            {
+              "description" : "無限收藏地點。免費版可收藏 50 個。",
+              "displayName" : "Savvy Pro",
+              "locale" : "zh_Hant"
             }
           ],
-          "productID" : "com.wanderly.app.pro.annual",
+          "productID" : "savvy.pro.annual",
           "recurringSubscriptionPeriod" : "P1Y",
           "referenceName" : "Savvy Pro Annual",
           "subscriptionGroupID" : "21500000",
@@ -52,12 +57,17 @@
           "introductoryOffer" : null,
           "localizations" : [
             {
-              "description" : "Higher monthly AI assist allowance. Saved places stay free.",
-              "displayName" : "Savvy Pro Monthly",
+              "description" : "Save unlimited places. Free plan includes 50.",
+              "displayName" : "Savvy Pro",
               "locale" : "en_US"
+            },
+            {
+              "description" : "無限收藏地點。免費版可收藏 50 個。",
+              "displayName" : "Savvy Pro",
+              "locale" : "zh_Hant"
             }
           ],
-          "productID" : "com.wanderly.app.pro.monthly",
+          "productID" : "savvy.pro.monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "Savvy Pro Monthly",
           "subscriptionGroupID" : "21500000",
