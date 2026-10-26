@@ -179,7 +179,7 @@ class VerifyToolTests(unittest.TestCase):
             source = root / "SAV-E/Fixture.swift"
             source.parent.mkdir()
             source.write_text("\n".join((
-                "freeSavedPlaceLimit", "paywall.benefit.unlimited",
+                "let freeSavedPlaceLimit = 1", "paywall.benefit.unlimited",
                 "paywall.savedNote", "paywall.retry", "已存 50 個",
                 "saves.unplaced", "saves.unplaced.row.", "ai.quotaExhausted",
             )))
@@ -190,7 +190,23 @@ class VerifyToolTests(unittest.TestCase):
             rows = {row["id"]: row for row in result["assertions"]}
             self.assertEqual(rows["V5.paywall.savedNote"]["status"], "PASS")
             self.assertEqual(rows["V5.paywall.no-ai-copy"]["status"], "SKIP")
+            for item in ("save-50-ok", "save-51-unplaced-paywall", "pro-51-allowed"):
+                self.assertEqual(rows[f"V5.{item}"]["status"], "SKIP")
+                self.assertEqual(rows[f"V5.reference-fixture.{item}"]["status"], "PASS")
             self.assertNotIn("未合併", result["reason"])
+
+    def test_full_app_copy_cannot_prove_clip_cap_screen(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            app = root / "SAV-E/Paywall.swift"
+            app.parent.mkdir()
+            app.write_text('let savedNote = "已存 50 個"')
+            clip = root / "SAV-EClip/Cap.swift"
+            clip.parent.mkdir()
+            clip.write_text("clip.cap50 clip.signin clip.saved clip.skoverlay")
+            rows = {row["id"]: row for row in verify.evaluate_v7(root, {})}
+            self.assertEqual(rows["V7.clip-cap50-copy"]["status"], "SKIP")
+            self.assertFalse(rows["V7.clip-cap50-copy"]["ok"])
 
     def test_v7_guard_probe_reads_tests_without_counting_them_as_product(self):
         with tempfile.TemporaryDirectory() as temp:

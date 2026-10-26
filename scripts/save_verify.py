@@ -569,29 +569,35 @@ def merge_assertions(
 
 
 def evaluate_v5(root: Path, cache: dict[str, str]) -> list[dict[str, Any]]:
-    rows = []
+    rows = [
+        skipped_row(
+            f"V5.{item}",
+            "SKIP：production SavePlaceLimitGate and save flow are not executed here",
+        )
+        for item in ("save-50-ok", "save-51-unplaced-paywall", "pro-51-allowed")
+    ]
     rows.append(
         assertion(
-            "V5.save-50-ok",
+            "V5.reference-fixture.save-50-ok",
             decide_saved_place_insert(tier="free", saved_place_count=49, is_new_place=True)
             == "allowed",
-            "free 49 → 50th insert allowed",
+            "Python reference fixture only: free 49 → 50th insert allowed",
         )
     )
     rows.append(
         assertion(
-            "V5.save-51-unplaced-paywall",
+            "V5.reference-fixture.save-51-unplaced-paywall",
             decide_saved_place_insert(tier="free", saved_place_count=50, is_new_place=True)
             == "over_free_limit",
-            "free 50 → 51st parks (over_free_limit)",
+            "Python reference fixture only: free 50 → over_free_limit",
         )
     )
     rows.append(
         assertion(
-            "V5.pro-51-allowed",
+            "V5.reference-fixture.pro-51-allowed",
             decide_saved_place_insert(tier="pro", saved_place_count=50, is_new_place=True)
             == "allowed",
-            "pro 50 → 51st allowed",
+            "Python reference fixture only: pro 50 → 51st allowed",
         )
     )
     rows.append(
@@ -631,10 +637,9 @@ def evaluate_v7(root: Path, cache: dict[str, str]) -> list[dict[str, Any]]:
     guard_test = root / "Tests/SocialPlacePipelineTests/ShareRouteCodecTests.swift"
     guard_source = guard_test.read_text(encoding="utf-8") if guard_test.is_file() else ""
     rows = [
-        assertion(
+        skipped_row(
             "V7.clip-cap50-copy",
-            source_has(root, "clip.cap50", cache) and source_has(root, SAVED_50_COPY, cache),
-            f"App Clip cap screen (mockup 15) must assert {SAVED_50_COPY}",
+            f"SKIP：actual App Clip cap screen must assert {SAVED_50_COPY}; screen not executed here",
         ),
         assertion(
             "V7.clip-ids",
