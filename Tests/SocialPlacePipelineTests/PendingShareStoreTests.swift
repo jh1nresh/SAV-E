@@ -178,7 +178,7 @@ final class PendingShareStoreTests: XCTestCase {
         XCTAssertNil(PendingShareStore.loadURL(from: store))
     }
 
-    func testPhoneOnlyClipSaveThenSamePhoneSignInIncrementsServerCount() throws {
+    func testPendingClipSelectionRequiresAppSignInAndExplicitConfirmationBeforePhoneImport() throws {
         let snapshot = PendingConfirmedPlace(
             placeId: "quarter-sheets-pizza-club",
             name: "Quarter Sheets Pizza Club",
@@ -215,14 +215,24 @@ final class PendingShareStoreTests: XCTestCase {
             ),
             "first phone sign-in must keep the Clip journal"
         )
-        XCTAssertEqual(
-            ClipSignInCarryOver.decide(
-                storedAppleUserID: "001234.clip-apple-user",
-                credentialState: .authorized
-            ),
-            .showSignIn,
-            "Apple carry-over must not consume the journal before phone sign-in"
+        let pendingBeforeSignIn = try XCTUnwrap(PendingShareStore.load(from: store))
+        ClipAppleAccountStore.write("001234.clip-apple-user", to: store)
+        defer { ClipAppleAccountStore.clear(store) }
+        XCTAssertNotNil(ClipAppleAccountStore.read(from: store))
+        XCTAssertTrue(
+            ClipSignInCarryOver.requiresFullAppSignIn(hasAuthenticatedSession: false),
+            "A legacy Clip Apple identifier cannot authorize a full App save"
         )
+        XCTAssertEqual(PendingShareStore.load(from: store), pendingBeforeSignIn,
+                       "Requiring normal sign-in must retain the pending confirmation")
+        XCTAssertFalse(
+            ClipSignInCarryOver.requiresFullAppSignIn(hasAuthenticatedSession: true),
+            "Only the full App's authenticated session satisfies the sign-in guard"
+        )
+        XCTAssertEqual(PendingShareStore.load(from: store), pendingBeforeSignIn,
+                       "An authenticated session still cannot silently consume the journal")
+        XCTAssertNil(store.string(forKey: "identityToken"))
+        XCTAssertNil(store.string(forKey: "privyJWT"))
 
         let journal = try XCTUnwrap(PendingShareStore.load(from: store))
         XCTAssertTrue(
@@ -237,9 +247,11 @@ final class PendingShareStoreTests: XCTestCase {
             alreadySaved: { _ in false },
             savedPlaceCount: 0
         )
-        XCTAssertEqual(planned.counts.newlySaved, 1, "phone account count must go +1")
+        XCTAssertEqual(planned.counts.newlySaved, 1, "The selected-place plan contains one new stamp")
         XCTAssertEqual(ClipListHandoff.onePlaceImport(counts: planned.counts), .saved)
         XCTAssertNil(item.note, "recipient stamp must not inherit the sender publicNote")
+        XCTAssertEqual(PendingShareStore.load(from: store), pendingBeforeSignIn,
+                       "Preparing the confirmation plan does not acknowledge or save it")
 
         let serverBody = Data(#"""
         {"newly_saved":1,"already_saved":0,"over_cap":0,"remaining":49,"limit":50,"saved":[{"id":"11111111-1111-1111-1111-111111111111","name":"Quarter Sheets Pizza Club","latitude":34.0779,"longitude":-118.2543}]}
