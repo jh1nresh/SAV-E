@@ -326,7 +326,7 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertFalse(collapseBody.contains("SavvyMapMotion.camera"))
     }
 
-    func testP7BeenHereIncrementsAndSurvivesReread() {
+    func testP7BeenHereDeduplicatesDailyAndSurvivesReread() {
         let suite = "savvy.map.visits.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
@@ -334,11 +334,54 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         let id = UUID()
         XCTAssertEqual(store.visitCount(for: id, fallbackVisited: false), 0)
         XCTAssertEqual(store.recordVisit(placeID: id, at: Date(timeIntervalSince1970: 10)), 1)
-        XCTAssertEqual(store.recordVisit(placeID: id, at: Date(timeIntervalSince1970: 20)), 2)
+        XCTAssertEqual(store.recordVisit(placeID: id, at: Date(timeIntervalSince1970: 20)), 1)
+        XCTAssertEqual(store.recordVisit(placeID: id, at: Date(timeIntervalSince1970: 86_410)), 2)
         let reread = SavvyMapVisitStore(defaults: defaults, key: "test.visits")
         XCTAssertEqual(reread.visitCount(for: id, fallbackVisited: false), 2)
-        XCTAssertEqual(reread.lastVisit(for: id, fallback: nil)?.timeIntervalSince1970, 20)
+        XCTAssertEqual(reread.lastVisit(for: id, fallback: nil)?.timeIntervalSince1970, 86_410)
         XCTAssertEqual(reread.visitCount(for: UUID(), fallbackVisited: true), 1)
+    }
+
+    func testVisitPersistenceFailureAndStaleSessionDoNotWriteHistory() async throws {
+        let suite = "savvy.map.transaction.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = SavvyMapVisitStore(defaults: defaults)
+        let passport = SavePassportVisitStore(defaults: defaults)
+        let id = UUID()
+        struct Offline: Error {}
+        do {
+            try await store.recordPersistedVisit(placeID: id, isCurrent: { true }) { throw Offline() }
+            XCTFail("Failed persistence must throw")
+        } catch is Offline {}
+        XCTAssertEqual(passport.count(for: id), 0)
+        var current = true
+        do {
+            try await store.recordPersistedVisit(placeID: id, isCurrent: { current }) { current = false }
+            XCTFail("Stale completion must throw")
+        } catch is CancellationError {}
+        XCTAssertEqual(passport.count(for: id), 0)
+        let saved = try await store.recordPersistedVisit(placeID: id, isCurrent: { true }) {}
+        XCTAssertTrue(saved)
+        XCTAssertEqual(passport.count(for: id), 1)
+        try await store.recordPersistedVisit(placeID: id, isCurrent: { true }) {}
+        XCTAssertEqual(passport.count(for: id), 1, "Repeated taps share Passport daily deduplication")
+    }
+
+    func testLegacyVisitImportRetainsPayloadAndDoesNotResurrectUndo() {
+        let suite = "savvy.map.legacy.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let id = UUID()
+        let dates = [1_700_000_000.0, 1_700_000_001.0, 1_700_086_400.0]
+        defaults.set([id.uuidString: dates], forKey: "legacy")
+        let store = SavvyMapVisitStore(defaults: defaults, key: "legacy")
+        XCTAssertEqual(store.visitCount(for: id, fallbackVisited: false), 2)
+        XCTAssertEqual(defaults.dictionary(forKey: "legacy") as? [String: [Double]], [id.uuidString: dates])
+        let history = SaveDoodleVisitStore(defaults: defaults, now: { Date(timeIntervalSince1970: dates.last!) })
+        XCTAssertTrue(history.undoToday(for: id))
+        let reread = SavvyMapVisitStore(defaults: defaults, key: "legacy")
+        XCTAssertEqual(reread.visitCount(for: id, fallbackVisited: false), 1)
     }
 
     func testP7BeenHereUsesVisitedPinStyle() throws {
@@ -347,14 +390,14 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
         XCTAssertTrue(pins.contains("SavvyMapPinMetrics.visitedRing"))
         let root = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")
         XCTAssertTrue(root.contains("place.status == .visited || visits.visitCount"))
-        XCTAssertTrue(root.contains("visits.recordVisit(placeID:"))
+        XCTAssertTrue(root.contains("visits.recordPersistedVisit(placeID:"))
         XCTAssertTrue(root.contains("updated.status = .visited"))
     }
 
     func testP8MapMotionTokensAreIsolatedFromThemeSprings() throws {
         XCTAssertEqual(SavvyMapPinMetrics.pinShadowOpacity, 0.45, accuracy: 0.0001)
         XCTAssertEqual(SavvyMapPinMetrics.cardShadowOpacity, 0.35, accuracy: 0.0001)
-        let home = try source(at: "SAV-E/Views/TileTown/SaveTileTownHomeView.swift")
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertFalse(home.contains("SavvyMapMotion"))
         XCTAssertFalse(home.contains("SavvyMapPinMetrics.cardShadow"))
         let paywall = try source(at: "SAV-E/Views/Profile/SaveProPaywallView.swift")
@@ -635,12 +678,16 @@ final class SavvyMapPhotoPinsTests: XCTestCase {
     }
 
     func testP13HomeCapAndUnplacedStayOutOfThisDiff() throws {
-        let home = try source(at: "SAV-E/Views/TileTown/SaveTileTownHomeView.swift")
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
         XCTAssertTrue(home.contains("home.savedPlaces"))
-        XCTAssertTrue(home.contains("SaveTileTownCanvas"))
+        XCTAssertFalse(home.contains("SaveTileTownCanvas"))
         let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
-        XCTAssertTrue(root.contains("SaveTileTownHomeView()"))
-        XCTAssertTrue(root.contains("SaveMapPhotoPinsRoot("))
+        XCTAssertTrue(root.contains("SaveDoodleHomeView("))
+        XCTAssertTrue(root.contains("SaveDoodleMapView("))
+        XCTAssertFalse(root.contains("SaveMapPhotoPinsRoot("))
+        let liveMap = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        XCTAssertTrue(liveMap.contains("nativeUnsavedCandidates"))
+        XCTAssertTrue(liveMap.contains("routePolyline"))
         XCTAssertFalse(root.contains("SaveAtlasInteractiveRootMap("))
 
         let map = try source(at: "SAV-E/Views/Map/SaveMapPhotoPinsRoot.swift")

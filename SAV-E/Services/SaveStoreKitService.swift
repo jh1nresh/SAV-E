@@ -144,12 +144,6 @@ final class SaveStoreKitService {
     // MARK: - Products
 
     func loadProducts() async {
-        guard purchasingAvailable() else {
-            // Products do not exist in App Store Connect yet. Loading would log
-            // a spurious failure on every launch, so skip it deliberately.
-            products = []
-            return
-        }
         guard !isLoadingProducts else { return }
         isLoadingProducts = true
         defer { isLoadingProducts = false }

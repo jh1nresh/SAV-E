@@ -15,9 +15,11 @@ enum SaveSpace {
 
 enum SaveLayout {
     static let screenMargin: CGFloat = 24
-    static let rowMinHeight: CGFloat = 64
+    static let rowMinHeight: CGFloat = 68
     static let rowVerticalPadding: CGFloat = 12
     static let stickerBox: CGFloat = 48
+    static let stickerArt: CGFloat = 40
+    static let passportSlot: CGFloat = 64
     static let stickerToText: CGFloat = 12
     static let numberBadge: CGFloat = 24
     static let titleToMeta: CGFloat = 4
@@ -205,6 +207,11 @@ enum SaveAtlasPalette {
     /// Postage accent: primary CTA and source-clue fill. Matches landing `--coral`.
     nonisolated static let coralLightHex = brandCoralHex
     nonisolated static let coralDarkHex = "D97861"
+    /// Home hint `Review ›` only. Founder 2026-10-24: light #C8442A, dark #F26B4A.
+    /// Do not reuse this pair for other coral.
+    nonisolated static let homeReviewActionLightHex = "C8442A"
+    nonisolated static let homeReviewActionDarkHex = brandCoralHex
+    static let homeReviewAction = Color(light: homeReviewActionLightHex, dark: homeReviewActionDarkHex)
 
     static let canvas = Color(light: creamHex, dark: "1E1C19")
     static let paper = Color(light: creamHex, dark: "1E1C19")
@@ -328,11 +335,23 @@ enum SaveDisplayType {
         Font(scaledFont(size: size, name: latinName, relativeTo: style))
     }
 
+    /// Spec-locked wordmark and city sizes. Dynamic Type must not shrink
+    /// Caveat 34 / 20 down to the visual 22 / 12 the Home mock measured.
+    static func fixed(_ size: CGFloat) -> Font {
+        Font(cascadeFont(size: size, name: latinName))
+    }
+
     private static func scaledFont(
         size: CGFloat,
         name: String,
         relativeTo style: Font.TextStyle
     ) -> UIFont {
+        UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(
+            for: cascadeFont(size: size, name: name)
+        )
+    }
+
+    private static func cascadeFont(size: CGFloat, name: String) -> UIFont {
         _ = register
         let latin = UIFont(name: name, size: size)
             ?? UIFont.systemFont(ofSize: size, weight: .semibold)
@@ -343,16 +362,11 @@ enum SaveDisplayType {
         if let pingFang = UIFont(name: "PingFangTC-Regular", size: size) {
             cascade.append(pingFang.fontDescriptor)
         }
-        let font: UIFont
-        if cascade.isEmpty {
-            font = latin
-        } else {
-            let descriptor = latin.fontDescriptor.addingAttributes([
-                UIFontDescriptor.AttributeName(rawValue: kCTFontCascadeListAttribute as String): cascade,
-            ])
-            font = UIFont(descriptor: descriptor, size: size)
-        }
-        return UIFontMetrics(forTextStyle: style.uiTextStyle).scaledFont(for: font)
+        guard !cascade.isEmpty else { return latin }
+        let descriptor = latin.fontDescriptor.addingAttributes([
+            UIFontDescriptor.AttributeName(rawValue: kCTFontCascadeListAttribute as String): cascade,
+        ])
+        return UIFont(descriptor: descriptor, size: size)
     }
 }
 

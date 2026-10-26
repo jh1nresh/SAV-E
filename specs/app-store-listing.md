@@ -144,14 +144,14 @@ Check each contact sheet before upload. App icon:
 
 ### Subscription terms (paste only if IAP is attached to this version)
 
-Founder lock: monthly **$6.99** (`com.wanderly.app.pro.monthly`), annual
-**$39.99** with a 3-day free trial (`com.wanderly.app.pro.annual`).
+Founder lock: monthly **$6.99** (`savvy.pro.monthly`), annual
+**$39.99** with a 3-day free trial (`savvy.pro.annual`).
 `SAVEPro.storekit` is local sandbox config and does **not** update App Store
 Connect. If this version does not attach IAP, leave the public listing as a
 free download and do not imply Pro is on sale.
 
 ```
-Savvy Pro is an optional auto-renewing subscription for unlimited saved places. Free includes 50 saved places. Monthly AI-assist allowance is higher on Pro (Free 20, Pro 500).
+Savvy Pro is an optional auto-renewing subscription for unlimited saved places. Free includes 50 saved places.
 
 • Monthly: $6.99
 • Annual: $39.99 (3-day free trial)

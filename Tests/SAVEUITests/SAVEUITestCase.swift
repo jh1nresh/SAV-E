@@ -189,10 +189,21 @@ class SAVEUITestCase: XCTestCase {
 
     @MainActor
     func attach(_ app: XCUIApplication, name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
+        let screenshot = app.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+        if let dir = ProcessInfo.processInfo.environment["SAVE_SCREENSHOT_DIR"],
+           !dir.isEmpty {
+            let url = URL(fileURLWithPath: dir)
+                .appendingPathComponent("\(name).png")
+            try? FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try? screenshot.pngRepresentation.write(to: url)
+        }
     }
 
     /// Median RGB from several points just below the status bar on the left

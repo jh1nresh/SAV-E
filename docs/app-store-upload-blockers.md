@@ -15,7 +15,7 @@ Live tree facts used here:
   version *Prepare for Submission*; last TestFlight seen **104** — stale vs 110)
 - Local StoreKit monthly display price **4.99 → 6.99** in this change
 - Annual remains **39.99** with a 3-day intro offer
-- Product IDs: `com.wanderly.app.pro.monthly` / `com.wanderly.app.pro.annual`
+- Product IDs: `savvy.pro.monthly` / `savvy.pro.annual`
 - Privacy + support HTTP **200** on 2026-10-13:
   `https://sav-e-app.vercel.app/privacy` and `/support` (`/terms` also 200)
 
@@ -35,7 +35,7 @@ update the App Store Connect IAP price.
 | Legal | ASC **App Privacy** nutrition label, age-rating questionnaire (**4+**), and export-compliance answer (**No** — `ITSAppUsesNonExemptEncryption = false`) are still unconfirmed in ASC. | **founder Apple** |
 | Legal | Any unpaid Apple developer, Paid Apps, tax, or banking agreement. Unknown from the repo; confirm before submit. | **founder Apple** |
 | IAP product price | Local monthly display/config is now **$6.99**. ASC IAP price is a separate record and is **not** updated by this PR. | **founder Apple** (ASC) / **Tim PR** (local, this change) |
-| IAP product price | Subscription products may not exist or may still be at a non-$6.99 monthly price. Create/edit `com.wanderly.app.pro.monthly` at **$6.99** and `com.wanderly.app.pro.annual` at **$39.99** with the 3-day trial on annual. | **founder Apple** |
+| IAP product price | Subscription products may not exist or may still be at a non-$6.99 monthly price. Create/edit `savvy.pro.monthly` at **$6.99** and `savvy.pro.annual` at **$39.99** with the 3-day trial on annual. | **founder Apple** |
 | IAP product price | Launch posture stays **free download + purchase path later**. `purchasingIsAvailable` and `enforcementEnabled` remain `false`. Do not flip them in the same step as the first upload. Attaching IAPs to this version is a founder decision; if attached, listing copy must repeat subscription terms. | **founder Apple** |
 | IAP product price | App Store Server Notifications v2 URL is still a human ASC registration (`POST /v0/notifications/apple`). Needed before live renewals; not required to archive a free 1.0 binary. | **founder Apple** |
 | Metadata gaps | In-repo listing/checklist build numbers were stale (80 / 103 / 104). This change aligns them to **110**. ASC fields themselves are still empty-or-unverified from here. | **Tim PR** (docs) / **founder Apple** (ASC paste + screenshot upload) |
@@ -51,7 +51,7 @@ update the App Store Connect IAP price.
 | Field | Before | After |
 |---|---|---|
 | File | `SAV-E/Resources/SAVEPro.storekit` | same |
-| Product | `com.wanderly.app.pro.monthly` | same |
+| Product | `savvy.pro.monthly` | same |
 | `displayPrice` | **4.99** | **6.99** |
 | Annual `displayPrice` | 39.99 | 39.99 (unchanged) |
 | Paywall UI | `SaveProPaywallView` renders `product.displayPrice` from StoreKit; no hardcoded `$4.99` | same |
@@ -81,8 +81,8 @@ to an agent.
    `APPLE_TEAM_ID=JC6858UYM9` (see [releasing.md](releasing.md)).
 4. App Store Connect → app **6769216556** **Savvy: Save Places** → wait until
    build **1.0.0 (110)** is processed.
-5. **Subscriptions** → product `com.wanderly.app.pro.monthly` → price
-   **$6.99**. Annual `com.wanderly.app.pro.annual` → **$39.99** + 3-day free
+5. **Subscriptions** → product `savvy.pro.monthly` → price
+   **$6.99**. Annual `savvy.pro.annual` → **$39.99** + 3-day free
    trial. Local StoreKit is not this step.
 6. Paste listing fields from `specs/app-store-listing.md`. Upload the v5
    screenshot sets (not the older v3 names).

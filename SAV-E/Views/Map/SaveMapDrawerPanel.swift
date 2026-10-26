@@ -316,7 +316,7 @@ struct SaveMapSearchContent: View {
                         } label: {
                             resultRow(place.name, detail: place.address, state: localized("Saved", "已存"), tint: SaveAtlasPalette.mint)
                         }
-                        .accessibilityIdentifier("map.search.saved.\(place.id)")
+                        .accessibilityIdentifier("map.search.saved.\(place.id.uuidString)")
                     }
                     if savedResults.isEmpty {
                         Text(localized("No saved places match.", "沒有符合的已存地點。"))

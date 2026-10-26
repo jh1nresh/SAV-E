@@ -1,7 +1,11 @@
 # Map photo-pin evidence (DESIGN gate 5)
 
-Authoritative stills and the 60fps motion recording are produced on the
+Prototype component stills and motion recordings are produced on the
 macOS CI runner from this SwiftUI code — not from composed HTML.
+
+The live root remains `SaveDoodleMapView`. `SaveMapPhotoPinsRoot` is inactive;
+these DEBUG fixtures do not prove production search, routes, Home filters or
+photo binding. Frame rate requires inspecting the recorded file, not its name.
 
 ## How they are made
 
@@ -44,8 +48,7 @@ Named ImageRenderer stills now also include `zh-Hant-coralCardVisitedBack.png`
 (美食 · 吃), `light-shoppingBadge.png` (8-letter arc), and
 `xxxLarge-photoBadge.png` (word path).
 
-Committed copies of the named stills also live in this folder after a
-green `ios-fast` run.
+CI artifacts are the evidence location; a green run does not commit images into this folder.
 
 Launch arguments (DEBUG only, not shipping):
 

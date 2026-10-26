@@ -965,7 +965,9 @@ private extension SaveMemoryRecord {
 
     var confirmedPlace: Place? {
         guard state == .confirmedPlace else { return nil }
-        guard let latitude, let longitude, latitude != 0 || longitude != 0 else { return nil }
+        // 0,0 is a deliberate unmappable city-scope save (Doodle Collected
+        // extras). Dropping it here made Home read 3/4 instead of 4/12.
+        guard let latitude, let longitude else { return nil }
 
         let name = displayTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return nil }

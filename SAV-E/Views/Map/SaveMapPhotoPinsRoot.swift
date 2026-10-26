@@ -2,11 +2,8 @@ import CoreLocation
 import MapKit
 import SwiftUI
 
-/// Product Map tab: default Apple MapKit + coral photo pins (HoP 2026-10-21).
-/// P14: only confirmed saved Map Stamps get Savvy pins. Unsaved places stay
-/// as Apple native POIs. Home peek stays tile-town. Shadows/springs stay on
-/// pins, the callout, and the delayed camera move — not on the wordmark,
-/// lenses, or locate control.
+/// Inactive photo-pin prototype. SaveMapRootView keeps SaveDoodleMapView
+/// until this surface preserves its search, routes and shared Home filters.
 struct SaveMapPhotoPinsRoot: View {
     @ObservedObject var mapViewModel: MapViewModel
     let presentation: AtlasPresentation
@@ -16,7 +13,7 @@ struct SaveMapPhotoPinsRoot: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject private var locationService = LocationService.shared
     @ObservedObject private var visits = SavvyMapVisitStore.shared
-    @State private var lens: SaveTileTownMapLens = .saved
+    @State private var lens: SavvyPhotoMapLens = .saved
     @State private var latitudeDelta: CLLocationDegrees = 0.04
     @State private var liveCamera = MapCamera(
         centerCoordinate: CLLocationCoordinate2D(latitude: 37.7749, longitude: -122.4194),
@@ -29,6 +26,7 @@ struct SaveMapPhotoPinsRoot: View {
     @State private var session = SavvyMapCardSession()
     @State private var editingNote = false
     @State private var draftNote = ""
+    @State private var saveError: String?
     @State private var badgeTick: Int = 0
     @State private var ignoreMapTapUntil = Date.distantPast
 
@@ -101,6 +99,12 @@ struct SaveMapPhotoPinsRoot: View {
                 Task { await saveNote() }
             }
             Button(languageSettings.localized(english: "Cancel", traditionalChinese: "取消"), role: .cancel) {}
+        }
+        .alert(languageSettings.localized(english: "Could not save", traditionalChinese: "無法儲存"),
+               isPresented: Binding(get: { saveError != nil }, set: { if !$0 { saveError = nil } })) {
+            Button(languageSettings.localized(english: "OK", traditionalChinese: "確定")) { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
         }
     }
 
@@ -220,7 +224,7 @@ struct SaveMapPhotoPinsRoot: View {
 
     private var lensRail: some View {
         HStack(spacing: 8) {
-            ForEach(SaveTileTownMapLens.allCases) { item in
+            ForEach(SavvyPhotoMapLens.allCases) { item in
                 Button {
                     lens = item
                     if item != .saved, mapViewModel.selectedPlace != nil {
@@ -412,18 +416,41 @@ struct SaveMapPhotoPinsRoot: View {
     }
 
     private func markBeenHere(_ place: Place) async {
-        visits.recordVisit(placeID: place.id)
-        guard place.status != .visited else { return }
-        var updated = place
-        updated.status = .visited
-        try? await mapViewModel.updatePlace(updated)
+        let auth = PrivyAuthService.shared
+        let owner = auth.currentUserId
+        let generation = auth.sessionGeneration
+        do {
+            try await visits.recordPersistedVisit(placeID: place.id, isCurrent: {
+                auth.currentUserId == owner && auth.sessionGeneration == generation
+            }) {
+                guard var updated = mapViewModel.places.first(where: { $0.id == place.id }) else {
+                    throw CancellationError()
+                }
+                updated.status = .visited
+                try await mapViewModel.updatePlace(updated)
+            }
+        } catch {
+            // An old account's operation must not put an alert on a new session.
+            if auth.currentUserId == owner && auth.sessionGeneration == generation {
+                saveError = error.localizedDescription
+            }
+        }
     }
 
     private func saveNote() async {
         guard var place = mapViewModel.selectedPlace else { return }
+        let auth = PrivyAuthService.shared
+        let owner = auth.currentUserId
+        let generation = auth.sessionGeneration
         let trimmed = draftNote.trimmingCharacters(in: .whitespacesAndNewlines)
         place.note = trimmed.isEmpty ? nil : trimmed
-        try? await mapViewModel.updatePlace(place)
+        do {
+            try await mapViewModel.updatePlace(place)
+        } catch {
+            if auth.currentUserId == owner && auth.sessionGeneration == generation {
+                saveError = error.localizedDescription
+            }
+        }
     }
 
     private func openDirections(_ place: Place) {
@@ -455,5 +482,37 @@ struct SaveMapPhotoPinsRoot: View {
     private func openSystemSettings() {
         guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
+    }
+}
+
+// Prototype-only lenses; the live map uses the shared Doodle session.
+private enum SavvyPhotoMapLens: String, CaseIterable, Identifiable {
+    case nearby
+    case saved
+    case friends
+
+    var id: String { rawValue }
+
+    var accessibilityIdentifier: String {
+        "map.lens.\(rawValue)"
+    }
+
+    var systemImage: String {
+        switch self {
+        case .nearby: return "mappin"
+        case .saved: return "star"
+        case .friends: return "leaf"
+        }
+    }
+
+    func title(language: AppLanguage) -> String {
+        switch self {
+        case .nearby:
+            return language.localized(english: "Nearby", traditionalChinese: "附近")
+        case .saved:
+            return language.localized(english: "Saved", traditionalChinese: "已存")
+        case .friends:
+            return language.localized(english: "Friends", traditionalChinese: "朋友")
+        }
     }
 }

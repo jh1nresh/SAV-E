@@ -475,7 +475,7 @@ private struct SocialPlaceMapPin: View {
     }
 }
 
-private struct ReviewCandidateMapPin: View {
+struct ReviewCandidateMapPin: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let candidate: PlaceReviewCandidate
     var isSelected = false
@@ -500,7 +500,7 @@ private struct ReviewCandidateMapPin: View {
     }
 }
 
-private struct UnsavedMapCandidatePin: View {
+struct UnsavedMapCandidatePin: View {
     @Environment(\.appLanguageSettings) private var languageSettings
     let candidate: SaveMapCandidate
     var isSelected = false
@@ -569,7 +569,7 @@ private struct TripMapOrderMarker: View {
     }
 }
 
-private struct DefaultPOIMarker: View {
+struct DefaultPOIMarker: View {
     var systemName: String
     var tint: Color
     var state: MapMarkerState
@@ -602,7 +602,7 @@ private struct DefaultPOIMarker: View {
     }
 }
 
-private enum MapMarkerState: Equatable {
+enum MapMarkerState: Equatable {
     case saved
     case shared
     case review
@@ -622,7 +622,7 @@ private enum MapMarkerState: Equatable {
     }
 }
 
-private extension PlaceCategory {
+extension PlaceCategory {
     var mapMarkerSymbol: String {
         self == .attraction ? "binoculars.fill" : iconName
     }
@@ -639,7 +639,7 @@ private extension PlaceCategory {
     }
 }
 
-private extension PlaceReviewCandidate {
+extension PlaceReviewCandidate {
     var inferredCategory: PlaceCategory {
         PlaceCategory.inferred(from: ([name, address, city ?? ""] + evidence).joined(separator: " "))
     }

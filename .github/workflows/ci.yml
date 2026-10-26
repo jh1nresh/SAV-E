@@ -9,12 +9,12 @@ on:
     types: [opened, synchronize, reopened, labeled, ready_for_review]
     branches:
       - main
+      - cursor/doodle-v1-home-eef3
       - cursor/tile-town-product-lock-4894
       - codex/share-analysis-recovery
       - codex/p0-provider-status
       - codex/p1-share-keep-working
       - codex/p1-analysis-cost-efficiency
-      - cursor/doodle-v1-home-eef3
   workflow_dispatch:
 
 permissions:
