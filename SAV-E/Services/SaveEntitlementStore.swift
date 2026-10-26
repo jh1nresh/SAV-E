@@ -118,8 +118,8 @@ final class SaveEntitlementStore {
         )
     }
 
-    /// AI quota never opens the places paywall. Exhaustion is a neutral hint
-    /// on the assist surface; Pro is sold for unlimited saved places only.
+    /// Model-allowance refusal is not a Pro sales trigger. AI quota never opens the places paywall.
+    /// Pro's only benefit is unlimited saved places; exhausted allowance shows a neutral notice.
     func shouldPresentPaywall(
         for decision: SaveAIAssistDecision,
         hasConfirmedMapStamp: Bool
@@ -127,6 +127,20 @@ final class SaveEntitlementStore {
         _ = decision
         _ = hasConfirmedMapStamp
         return false
+    }
+
+    /// Neutral copy when the monthly model allowance is used up. Not a paywall.
+    nonisolated static func exhaustedAllowanceMessage(language: AppLanguage = .english) -> String {
+        switch language {
+        case .traditionalChinese:
+            return SaveAIAssistUserCopy.exhaustedTraditionalChinese
+        case .english:
+            return SaveAIAssistUserCopy.exhaustedEnglish
+        }
+    }
+
+    func allowanceNotice(language: AppLanguage = .english) -> String? {
+        decideAIAssist().isRefusal ? Self.exhaustedAllowanceMessage(language: language) : nil
     }
 
     /// Passive Passport entry. Still requires a confirmed Map Stamp so pricing
