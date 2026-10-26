@@ -133,19 +133,58 @@ jobs:
           # Boot now and block until the device reports ready, so first-boot
           # work never lands inside a test's launch budget.
           xcrun simctl bootstatus "$udid" -b
+          xcrun simctl privacy "$udid" grant location com.wanderly.app || true
+          xcrun simctl privacy "$udid" grant location-always com.wanderly.app || true
 
       - name: Run unit tests
+        env:
+          SAVE_GATE5_EVIDENCE_DIR: ${{ runner.temp }}/SAVE-Gate5/imagerenderer
+          SAVE_SKIP_LOCATION_PROMPT: "1"
         run: |
+          mkdir -p "$SAVE_GATE5_EVIDENCE_DIR"
           scripts/xcodebuild-clean.sh \
             -project SAV-E.xcodeproj \
             -scheme SAV-E \
             -configuration Debug \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
             -derivedDataPath "$RUNNER_TEMP/SAVE-DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/SAVE-Units.xcresult" \
             -only-testing:SAVETests \
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             test
+
+      - name: Export ImageRenderer gate 5 attachments
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/SAVE-Gate5/xcattachments"
+          mkdir -p "$RUNNER_TEMP/SAVE-Gate5/imagerenderer"
+          if [[ -d "$RUNNER_TEMP/SAVE-Units.xcresult" ]]; then
+            xcrun xcresulttool export attachments \
+              --path "$RUNNER_TEMP/SAVE-Units.xcresult" \
+              --output-path "$RUNNER_TEMP/SAVE-Gate5/xcattachments"
+          fi
+          if [[ -f "$RUNNER_TEMP/SAVE-Gate5/xcattachments/manifest.json" ]]; then
+            python3 scripts/export-gate5-named-stills.py \
+              --manifest "$RUNNER_TEMP/SAVE-Gate5/xcattachments/manifest.json" \
+              --attachments "$RUNNER_TEMP/SAVE-Gate5/xcattachments" \
+              --dest "$RUNNER_TEMP/SAVE-Gate5/imagerenderer"
+          fi
+
+      - name: Capture simulator catalog screenshots and 60fps motion
+        run: |
+          scripts/capture-map-photo-pin-gate5.sh \
+            '${{ steps.simulator.outputs.udid }}' \
+            "$RUNNER_TEMP/SAVE-Gate5"
+
+      - name: Upload map photo-pin gate 5 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: save-map-photo-pins-gate5-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ${{ runner.temp }}/SAVE-Gate5
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Capture E4 free-cap screenshots
         if: always() && steps.simulator.outputs.udid != ''
@@ -189,6 +228,156 @@ jobs:
         with:
           name: save-free-cap-e4-${{ github.sha }}
           path: ${{ runner.temp }}/SAVE-E4
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Tear down simulator
+        if: always() && steps.simulator.outputs.udid != ''
+        run: |
+          cleanup_status=0
+          xcrun simctl shutdown '${{ steps.simulator.outputs.udid }}' || true
+          if ! xcrun simctl list devices |
+            grep -F '${{ steps.simulator.outputs.udid }}' |
+            grep -Fq '(Shutdown)'; then
+            echo 'Simulator shutdown could not be verified.' >&2
+            cleanup_status=1
+          fi
+          if ! xcrun simctl delete '${{ steps.simulator.outputs.udid }}'; then
+            echo 'Simulator deletion failed.' >&2
+            cleanup_status=1
+          elif xcrun simctl list devices | grep -Fq '${{ steps.simulator.outputs.udid }}'; then
+            echo 'Simulator deletion could not be verified.' >&2
+            cleanup_status=1
+          fi
+          exit "$cleanup_status"
+
+  # Draft-safe App Clip journal screenshots. XCTAttachments are produced on
+  # the macOS runner and uploaded as appclip-doodle-screenshots-<sha>.
+  appclip-screenshots:
+    runs-on: macos-26
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+
+      - name: Verify toolchain
+        run: xcodebuild -version
+
+      - name: Cache SwiftPM packages
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/SAVEClip-DerivedData/SourcePackages
+          key: clip-spm-${{ runner.os }}-${{ hashFiles('SAV-E.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          restore-keys: |
+            clip-spm-${{ runner.os }}-
+
+      - name: Create focused test simulator
+        id: simulator
+        run: |
+          udid="$(xcrun simctl create \
+            'SAV-E Clip CI' \
+            'com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro' \
+            'com.apple.CoreSimulator.SimRuntime.iOS-26-5')"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl bootstatus "$udid" -b
+
+      - name: Run App Clip screenshot UI tests
+        run: |
+          scripts/xcodebuild-clean.sh \
+            -project SAV-E.xcodeproj \
+            -scheme SAVEClip \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
+            -derivedDataPath "$RUNNER_TEMP/SAVEClip-DerivedData" \
+            -only-testing:SAVEClipUITests \
+            -resultBundlePath "$RUNNER_TEMP/SAVEClipUITests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            test
+          bash scripts/extract-xcresult-attachments.sh \
+            "$RUNNER_TEMP/SAVEClipUITests.xcresult" \
+            "$RUNNER_TEMP/appclip-doodle-screenshots"
+
+      - name: App Clip size inventory
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/appclip-doodle-screenshots"
+          python3 scripts/appclip-size-inventory.py \
+            --out "$RUNNER_TEMP/appclip-doodle-screenshots/10-size-report.md"
+          {
+            echo
+            echo "## Built SAVEClip.app (Debug, not a thinning report)"
+            echo
+            find "$RUNNER_TEMP/SAVEClip-DerivedData" -name 'SAVEClip.app' -type d \
+              -exec du -sh {} \; || true
+          } >> "$RUNNER_TEMP/appclip-doodle-screenshots/10-size-report.md"
+          python3 - "$RUNNER_TEMP/appclip-doodle-screenshots" "$GITHUB_SHA" <<'PY'
+          from pathlib import Path
+          import sys
+          out = Path(sys.argv[1])
+          sha = sys.argv[2]
+          (out / "11-iansui-proof.md").write_text(
+              "# Iansui proof\n\n"
+              "This VM cannot copy into `/workspace/shared/eng/2026-10-22-pr307-shots/`.\n\n"
+              "- Bundled file path: `SAV-E/Resources/DisplayFont/Iansui-ClipTitles.ttf`\n"
+              "- SAVEClip resource in `SAV-E.xcodeproj/project.pbxproj`: "
+              "`Iansui-ClipTitles.ttf in SAVEClip Resources`\n"
+              "- UIFont / PostScript name in code: `Iansui-Regular` "
+              "(`ClipDisplayType.cjkName` in `SAV-EClip/ClipDoodleTheme.swift`)\n"
+              "- Register: `CTFontManagerRegisterFontsForURL` of `Iansui-ClipTitles.ttf` "
+              "in `ClipDisplayType.register`\n"
+              "- Used for: place name, list title, and state titles when locale is zh-Hant "
+              "(`ClipDisplayType.title`)\n"
+              "- Latin shop-name fallback: Iansui cascades to Caveat "
+              "(`UIFontDescriptor.AttributeName.cascadeList`)\n"
+              "- Not shipped: `Iansui-SavvySubset.ttf` (3.48 MB)\n"
+          )
+          (out / "12-screenshot-manifest.md").write_text(
+              "# Screenshot attachment names\n\n"
+              f"Artifact: `appclip-doodle-screenshots-{sha}`\n\n"
+              "QA asked for a copy into `/workspace/shared/eng/2026-10-22-pr307-shots/`. "
+              "This runner cannot write that folder; XCTAttachment names below are the "
+              "files in this artifact / xcresult.\n\n"
+              "## Requested copies\n\n"
+              "- 01-place: `01-place-zh-Hant-sender`, `02-place-en-inline`, "
+              "`place-zh-Hant-dark`, `place-en-dark`\n"
+              "- 05-state: `05-state-loading`, `05-state-expired`, `05-state-offline`, "
+              "`05-state-server`, `05-state-malformed` plus `-dark` for each\n"
+              "- save-fail: `save-fail-zh-Hant-light`, `save-fail-en-dark`\n"
+              "- skoverlay: `skoverlay-zh-Hant-light`, `skoverlay-en-dark`\n\n"
+              "## Screens 01–18 (light + dark where captured)\n\n"
+              "01. `01-place-zh-Hant-sender` / `place-zh-Hant-dark`\n"
+              "02. `02-place-en-inline` / `place-en-dark`\n"
+              "03. `03-list-zh-Hant-five-places` / `list-en-dark`\n"
+              "04. `04-list-en-light` / `list-en-dark`\n"
+              "05. `05-state-*` light + `05-state-*-dark`\n"
+              "06. `06-place-max-dynamic-type`\n"
+              "07. `saved-zh-Hant-light` / `saved-en-dark`\n"
+              "08. `cap50-zh-Hant-light` / `cap50-en-dark`\n"
+              "09. `duplicate-zh-Hant-light` / `duplicate-en-dark`\n"
+              "10. `signin-one-zh-Hant` / `signin-one-en-dark`\n"
+              "11. `signin-list-en`\n"
+              "12. `signin-fail-zh-Hant-light` / `signin-fail-en-dark`\n"
+              "13. `save-fail-zh-Hant-light` / `save-fail-en-dark`\n"
+              "14. `skoverlay-zh-Hant-light` / `skoverlay-en-dark`\n"
+              "15. `offline-dark`\n"
+              "16. `19-list-saved-zh-Hant` / `19-list-saved-en-dark`\n"
+              "17. `19b-list-partial-zh-Hant`\n"
+              "18. `19b-list-partial-en-dark`\n"
+          )
+          PY
+
+      - name: Upload App Clip screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: appclip-doodle-screenshots-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/appclip-doodle-screenshots
+            ${{ runner.temp }}/SAVEClipUITests.xcresult
           if-no-files-found: error
           retention-days: 14
 

@@ -218,6 +218,8 @@ test("server keeps the share token route-scoped and inline analysis has no uncon
   assert.doesNotMatch(resolver, /x-save-share-token/);
   const handler = source.slice(source.indexOf("async function handleShareExtension"), source.indexOf("function requiredShareExtensionToken"));
   assert.doesNotMatch(handler, /insert into\s+(places|captures|place_candidates)/i);
+  assert.match(handler, /verifiedPrivyAccessSubject\(bearer\)/);
+  assert.doesNotMatch(handler, /verifiedBearerPrivySubject/);
   assert.match(handler, /shareExtensionAnalysisResponse/);
   assert.match(handler, /analysisUsageStore\.start\(session\.ownerId, input\.analysisId, false, true\)/);
 });

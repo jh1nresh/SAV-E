@@ -54,6 +54,7 @@ final class PrivyAuthService: ObservableObject {
     private var shareSessionOwner: String?
     private var shareSessionAttempt: UUID?
     private var interactiveAuthAttempts: Set<UUID> = []
+    private var isPerformingInitialRestore = true
     private var signingOutOwners = Set<String>()
     private var signOutWaiters: [String: [CheckedContinuation<Void, Never>]] = [:]
 #if DEBUG
@@ -147,12 +148,17 @@ final class PrivyAuthService: ObservableObject {
 
     func restoreSession() async {
         sessionOrigin = .restored
-        guard let privy else {
-            transitionToUnauthenticated()
+        defer { isPerformingInitialRestore = false }
+        if let privy {
+            let state = await privy.getAuthState()
+            if case .unauthenticated = state {
+                transitionToUnauthenticated()
+                return
+            }
+            applyPrivyState(state)
             return
         }
-        let state = await privy.getAuthState()
-        applyPrivyState(state)
+        transitionToUnauthenticated()
     }
 
     private func observeAuthState() {
@@ -293,6 +299,7 @@ final class PrivyAuthService: ObservableObject {
     // MARK: - Sign Out
 
     func signOut() async {
+        ClipAppleAccountStore.clear()
         let owner = currentUserId
         let generation = sessionGeneration
         if let owner, signingOutOwners.contains(owner) {
@@ -385,6 +392,7 @@ final class PrivyAuthService: ObservableObject {
             }
             transitionToAuthenticated(userId: user.id)
         case .unauthenticated:
+            if isPerformingInitialRestore { return }
             if !hasInteractiveAuthenticationInFlight {
                 sessionOrigin = .restored
             }

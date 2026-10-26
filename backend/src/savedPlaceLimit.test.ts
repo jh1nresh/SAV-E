@@ -151,8 +151,8 @@ test("C1 every production places insert is behind the atomic cap", () => {
   );
   assert.equal(
     (production.match(/buildInsert\(\s*"places"/g) ?? []).length,
-    3,
-    "POST /places, friend-share receipt, and workflow final_place use buildInsert",
+    4,
+    "POST /places, friend-share receipt, clip list save, and workflow final_place use buildInsert",
   );
 
   const callSite = server.slice(
@@ -169,11 +169,12 @@ test("C1 every production places insert is behind the atomic cap", () => {
   const writePaths = [
     { name: "POST /places", test: "place create and shared-post save enforce the cap after dedup" },
     { name: "POST /places friend-share receipt", test: "place create and shared-post save enforce the cap after dedup" },
+    { name: "saveClipListPlaces", test: "place create and shared-post save enforce the cap after dedup" },
     { name: "saveSharedPost", test: "place create and shared-post save enforce the cap after dedup" },
     { name: "saveFriendRating", test: "place create and shared-post save enforce the cap after dedup" },
     { name: "insertFinalPlaceForDecision", test: "place create and shared-post save enforce the cap after dedup" },
   ];
-  assert.equal(writePaths.length, 5);
+  assert.equal(writePaths.length, 6);
   for (const path of writePaths) {
     assert.ok(path.name.length > 0);
     assert.ok(path.test.length > 0);
@@ -248,8 +249,8 @@ test("A3 same-id retry is not a new insert", () => {
   );
   assert.match(places, /on conflict \(id\) do update\s+set id = excluded.id\s+where places.user_id = excluded.user_id/);
   assert.match(places, /friendSharePlaceOriginConflictClause/);
-  assert.equal((places.match(/savedPlaceGrowthSnapshot/g) ?? []).length, 2);
-  assert.equal((places.match(/assertSavedPlaceGrowthAllowed/g) ?? []).length, 2);
+  assert.equal((places.match(/savedPlaceGrowthSnapshot/g) ?? []).length, 3);
+  assert.equal((places.match(/assertSavedPlaceGrowthAllowed/g) ?? []).length, 3);
 });
 
 test("C3 direct API writes nothing and returns over_free_limit", () => {

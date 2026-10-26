@@ -8,11 +8,14 @@ enum SAVEPendingImportSessionScope {
 // MARK: - Protocol
 
 protocol SupabaseServiceProtocol {
+    /// Strict confirmation must reject services whose writes are offline no-ops.
+    var isConfigured: Bool { get }
     func startAnalysis(id: UUID) async throws -> UUID?
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async
 
     func fetchPlaces(for userId: String) async throws -> [Place]
     func savePlace(_ place: Place, userId: String) async throws
+    func saveClipListPlaces(_ items: [[String: Any]]) async throws -> (Int, Data)
     func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult
     func updatePlace(_ place: Place, previous: Place?) async throws
     func deletePlace(_ placeId: UUID) async throws
@@ -121,6 +124,9 @@ enum SupabaseError: LocalizedError {
 
 // Existing service fakes opt out; production always creates a server session.
 extension SupabaseServiceProtocol {
+    // Fakes/alternate services must explicitly opt into strict backend confirmation.
+    var isConfigured: Bool { false }
+
     func deletePlaceGroup(_ placeId: UUID) async throws {
         try await deletePlace(placeId)
     }
@@ -137,6 +143,9 @@ extension SupabaseServiceProtocol {
     }
     func startAnalysis(id: UUID) async throws -> UUID? { nil }
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {}
+    func saveClipListPlaces(_ items: [[String: Any]]) async throws -> (Int, Data) {
+        throw SupabaseError.notConfigured
+    }
 }
 
 // MARK: - Implementation
@@ -210,7 +219,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }.value
     }
 
-    private var isConfigured: Bool {
+    var isConfigured: Bool {
         apiBaseURL != nil
     }
 
@@ -283,6 +292,13 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         } catch {
             throw mappedSavedPlaceLimit(error)
         }
+    }
+
+    func saveClipListPlaces(_ items: [[String: Any]]) async throws -> (Int, Data) {
+        guard isConfigured else { throw SupabaseError.notConfigured }
+        let body = try JSONSerialization.data(withJSONObject: ["places": items])
+        let (data, response) = try await requestWithResponse(path: "/places", method: "POST", body: body)
+        return (response.statusCode, data)
     }
 
     func saveFriendSharedPlace(

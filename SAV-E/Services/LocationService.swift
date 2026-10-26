@@ -32,6 +32,7 @@ final class LocationService: NSObject, ObservableObject, @preconcurrency CLLocat
     /// alerts are too flaky to drive the spec P4 recovery path.
     private let simulatesDeniedAuthorization = ProcessInfo.processInfo.arguments
         .contains("--uitest-location-denied")
+        || ProcessInfo.processInfo.environment["SAVE_SKIP_LOCATION_PROMPT"] == "1"
     /// Deterministic allowed-state with a Taipei fix so Home can show
     /// Near you without a springboard permission alert.
     private let simulatesTiantanFix = ProcessInfo.processInfo.arguments

@@ -2,8 +2,19 @@ export type PrivyUser = {
   id: string;
 };
 
+export class PrivyUserProvisioningError extends Error {
+  readonly status: number;
+  constructor(message: string, status = 503) {
+    super(message);
+    this.name = "PrivyUserProvisioningError";
+    this.status = status;
+  }
+}
+
 export type PrivyUserProvisioner = {
   ensureUserForPhone(phoneE164: string): Promise<PrivyUser | null>;
+  findUserForApple(appleSubject: string): Promise<PrivyUser | null>;
+  ensureUserForApple(appleSubject: string): Promise<PrivyUser>;
   deleteUser(userId: string): Promise<void>;
 };
 
@@ -25,13 +36,17 @@ export function createPrivyUserProvisioner(
   const fetchImpl = config.fetchImpl ?? fetch;
   const auth = Buffer.from(`${appId}:${appSecret}`).toString("base64");
 
+  const headers = {
+    "Authorization": `Basic ${auth}`,
+    "privy-app-id": appId,
+  };
+
   const request = async (path: string, body: unknown): Promise<Response> =>
     fetchImpl(`${endpoint}${path}`, {
       method: "POST",
       headers: {
-        "Authorization": `Basic ${auth}`,
+        ...headers,
         "Content-Type": "application/json",
-        "privy-app-id": appId,
       },
       body: JSON.stringify(body),
     });
@@ -41,6 +56,20 @@ export function createPrivyUserProvisioner(
     if (!parsed || typeof parsed !== "object") return null;
     const id = (parsed as Record<string, unknown>).id;
     return typeof id === "string" && id.trim() ? { id: id.trim() } : null;
+  };
+
+  const lookupStatus = (status: number): number => (status === 503 ? 502 : status);
+
+  // Apple bearer authorization must observe unlink/delete/relink immediately.
+  // Never reuse a prior subject-to-owner mapping for a new authorization.
+  const findUserByAppleSubject = async (appleSubject: string): Promise<PrivyUser | null> => {
+    const existing = await request("/v1/users/apple/subject", { subject: appleSubject });
+    if (existing.ok) return await parseUser(existing);
+    if (existing.status === 404) return null;
+    throw new PrivyUserProvisioningError(
+      `Privy Apple user lookup failed: HTTP ${existing.status}`,
+      lookupStatus(existing.status),
+    );
   };
 
   return {
@@ -66,6 +95,55 @@ export function createPrivyUserProvisioner(
       }
 
       throw new Error(`Privy user import failed: HTTP ${created.status}`);
+    },
+    async findUserForApple(appleSubject: string): Promise<PrivyUser | null> {
+      const subject = appleSubject.trim();
+      if (!subject) {
+        throw new PrivyUserProvisioningError("Missing Apple subject", 401);
+      }
+      const existing = await findUserByAppleSubject(subject);
+      return existing;
+    },
+    async ensureUserForApple(appleSubject: string): Promise<PrivyUser> {
+      const subject = appleSubject.trim();
+      if (!subject) {
+        throw new PrivyUserProvisioningError("Missing Apple subject", 401);
+      }
+
+      const existing = await findUserByAppleSubject(subject);
+      if (existing) {
+        return existing;
+      }
+
+      // Never attach Apple email on create. An email owned by another Privy
+      // user must not 503, and accounts are never auto-merged by email.
+      const created = await request("/v1/users", {
+        linked_accounts: [{ type: "apple_oauth", subject }],
+        custom_metadata: {
+          save_origin: "appclip",
+        },
+      });
+      if (created.ok) {
+        const user = await parseUser(created);
+        if (!user) {
+          throw new PrivyUserProvisioningError("Privy Apple user import failed: missing id", 502);
+        }
+        return user;
+      }
+      if (created.status === 409 || created.status === 400) {
+        const retried = await findUserByAppleSubject(subject);
+        if (retried) {
+          return retried;
+        }
+        throw new PrivyUserProvisioningError(
+          `Privy Apple user import failed: HTTP ${created.status}`,
+          created.status === 409 ? 409 : 400,
+        );
+      }
+      throw new PrivyUserProvisioningError(
+        `Privy Apple user import failed: HTTP ${created.status}`,
+        lookupStatus(created.status),
+      );
     },
     async deleteUser(userId: string): Promise<void> {
       const response = await fetchImpl(`${endpoint}/v1/users/${encodeURIComponent(userId)}`, {

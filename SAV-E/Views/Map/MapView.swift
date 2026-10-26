@@ -43,7 +43,14 @@ struct MapView: View {
 
             ZStack {
                 Map(position: $viewModel.cameraPosition, selection: $viewModel.selectedMapFeature) {
+#if DEBUG
+                    if ProcessInfo.processInfo.environment["SAVE_SKIP_LOCATION_PROMPT"] != "1"
+                        && !ProcessInfo.processInfo.arguments.contains("--uitest-location-denied") {
+                        UserAnnotation()
+                    }
+#else
                     UserAnnotation()
+#endif
 
                     ForEach((displayedPlaces ?? viewModel.filteredPlaces).filter(\.isMapKitMappable)) { place in
                         Annotation("", coordinate: place.coordinate) {

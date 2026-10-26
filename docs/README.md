@@ -9,6 +9,7 @@
 | [Product overview](product-overview.md) | App surfaces, stack, and product boundaries |
 | [Local setup](setup.md) | Local configuration and Xcode project generation |
 | [Verification](verification.md) | Native, backend, web, and fixture checks |
+| [Map photo-pin evidence](evidence/map-photo-pins/README.md) | DESIGN gate 5 CI ImageRenderer + simulator captures |
 | [Sharing](sharing.md) | Share routes, Universal Links, and App Clip configuration |
 | [Release and TestFlight](releasing.md) | Signing, archives, upload, and release prerequisites |
 | [App Store upload blockers](app-store-upload-blockers.md) | What blocks archive → TestFlight → ASC submit now |

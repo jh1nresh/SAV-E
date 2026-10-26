@@ -724,6 +724,7 @@ final class MapViewModel: ObservableObject {
     private let mapCandidateUserIDProvider: () -> String?
     private let relatedPlaceSourcesService: RelatedPlaceSourcesProviding
     private let authService: PrivyAuthService
+    var sessionGeneration: Int { authService.sessionGeneration }
     private let pendingImportService: PendingPlaceImportService
     private let locationService: LocationService
     private let mapCandidateDistanceLocationProvider: () async -> CLLocation?
@@ -2922,7 +2923,38 @@ final class MapViewModel: ObservableObject {
     }
 
     @discardableResult
-    func saveSharedPlaceReceipt(_ receipt: SharedPlaceReceipt) async throws -> SharedPlaceSaveOutcome {
+    func saveSharedPlaceReceipt(
+        _ receipt: SharedPlaceReceipt, requiringAuthenticatedSession: Bool = false,
+        confirmedJournal: PendingSharePayload? = nil
+    ) async throws -> SharedPlaceSaveOutcome {
+        let owner = authService.currentUserId
+        let generation = authService.sessionGeneration
+        let journal = requiringAuthenticatedSession ? confirmedJournal : (confirmedJournal ?? PendingShareStore.load())
+        guard !requiringAuthenticatedSession || owner != nil else { throw SupabaseError.notAuthenticated }
+        guard !requiringAuthenticatedSession || (usesRemotePersistence && supabaseService.isConfigured) else {
+            throw SupabaseError.notConfigured
+        }
+        if let owner {
+            return try await SAVEPendingImportSessionScope.$current.withValue((generation, owner)) {
+                try await saveSharedPlaceReceiptForSession(receipt, owner: owner, generation: generation,
+                    requiringAuthenticatedSession: requiringAuthenticatedSession, journal: journal)
+            }
+        }
+        return try await saveSharedPlaceReceiptForSession(receipt, owner: nil, generation: generation,
+            requiringAuthenticatedSession: requiringAuthenticatedSession, journal: journal)
+    }
+
+    private func saveSharedPlaceReceiptForSession(
+        _ receipt: SharedPlaceReceipt, owner: String?, generation: Int,
+        requiringAuthenticatedSession: Bool, journal: PendingSharePayload?
+    ) async throws -> SharedPlaceSaveOutcome {
+        func requireSession() throws {
+            try Task.checkCancellation()
+            guard authService.currentUserId == owner, authService.sessionGeneration == generation else {
+                throw CancellationError()
+            }
+        }
+        try requireSession()
         if let code = receipt.code {
             Task {
                 try? await supabaseService.recordFriendShareEvent(
@@ -2934,10 +2966,24 @@ final class MapViewModel: ObservableObject {
         }
 
         if !hasLoadedPlaces {
-            await loadPlaces()
+            if requiringAuthenticatedSession, let owner {
+                let remote = try await supabaseService.fetchPlaces(for: owner)
+                try requireSession()
+                rememberAuthoritativeSavedPlaceCount(Place.consolidated(remote).count, owner: owner)
+                places = mergeRemotePlaces(remote, withLocalPlaces: localConfirmedPlaces())
+                hasLoadedPlaces = true
+                savedCollectionOwner = owner
+                savedCollectionGeneration = generation
+                savedCollectionLoaded = true
+                syncSavedPlaceLimitCache()
+            } else {
+                await loadPlaces()
+            }
         }
+        try requireSession()
 
-        let place = receipt.privatePlace(ownerSubject: authService.currentUserId)
+        var place = receipt.recipientOwnedPlace(ownerSubject: authService.currentUserId)
+        place = ClipPlaceHandoff.applyingJournalCoordinates(place, pending: journal)
 
         // A verified short-code receipt is server-owned. The server must accept
         // the save before we mirror it locally, otherwise an expired, forged,
@@ -2963,6 +3009,7 @@ final class MapViewModel: ObservableObject {
                 ) { throw error }
                 throw error
             }
+            try requireSession()
             let savedPlace = result.place
             try mirrorToLocalVault(savedPlace, startedBy: userId, generation: receiptGeneration)
             places.removeAll { $0.matches(savedPlace) }
@@ -2986,6 +3033,7 @@ final class MapViewModel: ObservableObject {
                     generation: generation
                 )
             }
+            try requireSession()
             focusSavedPlace(existing, showStampMoment: false)
             return .alreadySaved(existing)
         }
@@ -3002,6 +3050,7 @@ final class MapViewModel: ObservableObject {
         if let receiptUserId {
             do {
                 try await supabaseService.savePlace(place, userId: receiptUserId)
+                try requireSession()
                 insertedRemotely = usesRemotePersistence
                 recordPassportFieldActionAfterSavingPlace()
             } catch {
@@ -3011,6 +3060,8 @@ final class MapViewModel: ObservableObject {
                     startedBy: receiptUserId,
                     generation: receiptGeneration
                 ) { throw error }
+                try requireSession()
+                if requiringAuthenticatedSession { throw error }
                 print("MapViewModel: failed to sync friend share receipt \(place.name): \(error)")
                 try Task.checkCancellation()
                 try ensureConfirmationSession(receiptUserId, receiptGeneration)
@@ -3370,9 +3421,172 @@ final class MapViewModel: ObservableObject {
         Task { await refreshSocialSignals() }
     }
 
+    func saveClipListHandoff(_ list: SaveCollaborativeList, requiringAuthenticatedSession: Bool = false) async throws -> (toStamp: [SaveListItem], counts: ClipListHandoffCounts) {
+        let owner = authService.currentUserId
+        let generation = authService.sessionGeneration
+        guard !requiringAuthenticatedSession || owner != nil else { throw SupabaseError.notAuthenticated }
+        guard !requiringAuthenticatedSession || (usesRemotePersistence && supabaseService.isConfigured) else {
+            throw SupabaseError.notConfigured
+        }
+        if let owner {
+            return try await SAVEPendingImportSessionScope.$current.withValue((generation, owner)) {
+                try await saveClipListHandoff(list, owner: owner, generation: generation, requiringAuthenticatedSession: requiringAuthenticatedSession)
+            }
+        }
+        return try await saveClipListHandoff(list, owner: nil, generation: generation, requiringAuthenticatedSession: requiringAuthenticatedSession)
+    }
+
+    private func saveClipListHandoff(
+        _ list: SaveCollaborativeList, owner: String?, generation: Int, requiringAuthenticatedSession: Bool
+    ) async throws -> (toStamp: [SaveListItem], counts: ClipListHandoffCounts) {
+        func requireSession() throws {
+            try Task.checkCancellation()
+            guard authService.currentUserId == owner, authService.sessionGeneration == generation else {
+                throw CancellationError()
+            }
+        }
+        try requireSession()
+        let confirmed = list.items
+        if let owner {
+            do {
+                let payload = confirmed.map(ClipListHandoff.placeBody)
+                let (status, data) = try await supabaseService.saveClipListPlaces(payload)
+                try requireSession()
+                if SavePlaceLimitError.matchesServerResponse(
+                    status: status,
+                    body: String(data: data, encoding: .utf8) ?? ""
+                ) {
+                    try parkNovelHandoffItems(confirmed)
+                    throw SavePlaceLimitError.parkedInUnplacedInbox
+                }
+                guard let remote = ClipListHandoff.parseRemote(status: status, data: data),
+                      let insertedPlaces = ClipListHandoff.placesFromRemoteRows(
+                        confirmed: confirmed,
+                        rows: remote.saved
+                      )
+                else {
+                    throw ClipListHandoffError.unconfirmed
+                }
+                applyHandoffPlaces(insertedPlaces)
+                if ClipListHandoff.needsPlaceRefresh(
+                    confirmed: confirmed,
+                    places: places,
+                    newlySaved: remote.counts.newlySaved,
+                    alreadySaved: remote.counts.alreadySaved
+                ) {
+                    // Refresh only the canonical rows needed by this handoff. The
+                    // broad loader also imports clues and must not run in this scope.
+                    let remotePlaces = try await supabaseService.fetchPlaces(for: owner)
+                    try requireSession()
+                    places = mergeRemotePlaces(remotePlaces, withLocalPlaces: localConfirmedPlaces())
+                }
+                if ClipListHandoff.needsPlaceRefresh(
+                    confirmed: confirmed,
+                    places: places,
+                    newlySaved: remote.counts.newlySaved,
+                    alreadySaved: remote.counts.alreadySaved
+                ) {
+                    throw ClipListHandoffError.unconfirmed
+                }
+                try parkHandoffOverflowIfNeeded(confirmed: confirmed, overCap: remote.counts.overCap)
+                return (Self.stampedHandoffItems(confirmed: confirmed, imported: insertedPlaces), remote.counts)
+            } catch SupabaseError.notConfigured {
+                try requireSession()
+                if requiringAuthenticatedSession { throw SupabaseError.notConfigured }
+                // Unconfigured builds keep the local quota plan.
+            }
+        }
+        try requireSession()
+        let planned = ClipListHandoff.planStamps(
+            confirmed: confirmed,
+            alreadySaved: { $0.alreadySaved(in: places) },
+            savedPlaceCount: places.count
+        )
+        applyHandoffPlaces(planned.toStamp.map { $0.asPlace(includeSenderMemory: false) })
+        try parkHandoffOverflowIfNeeded(confirmed: confirmed, overCap: planned.counts.overCap)
+        return planned
+    }
+
+    private func parkHandoffOverflowIfNeeded(confirmed: [SaveListItem], overCap: Int) throws {
+        guard overCap > 0 else { return }
+        try parkNovelHandoffItems(confirmed)
+        throw SavePlaceLimitError.parkedInUnplacedInbox
+    }
+
+    private func parkNovelHandoffItems(_ confirmed: [SaveListItem]) throws {
+        for item in confirmed {
+            let place = item.asPlace(includeSenderMemory: false)
+            if existingSavedPlace(matching: place) != nil { continue }
+            try parkPlaceInUnplacedInbox(place)
+        }
+    }
+
+    private static func stampedHandoffItems(confirmed: [SaveListItem], imported: [Place]) -> [SaveListItem] {
+        var stamped: [SaveListItem] = []
+        for item in confirmed {
+            if imported.contains(where: { place in
+                Self.importedPlace(place, matches: item)
+            }) {
+                stamped.append(item)
+            }
+        }
+        return stamped
+    }
+
+    private static func importedPlace(_ place: Place, matches item: SaveListItem) -> Bool {
+        let ids = ([item.sourceID] + (item.extraPlaceIds ?? []))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        if let provider = place.providerPlaceId, !provider.isEmpty,
+           ids.contains(where: { $0.caseInsensitiveCompare(provider) == .orderedSame }) {
+            return true
+        }
+        if let google = place.googlePlaceId, !google.isEmpty,
+           ids.contains(where: { $0.caseInsensitiveCompare(google) == .orderedSame }) {
+            return true
+        }
+        return place.matchesMapFeature(title: item.title, coordinate: item.coordinate)
+    }
+
+    private func applyHandoffPlaces(_ imported: [Place]) {
+        var added: [Place] = []
+        var replaced: [Place] = []
+        for place in imported {
+            if let existing = existingSavedPlace(matching: place) {
+                if existing.id != place.id {
+                    var reconciled = existing.rekeyed(to: place.id)
+                    if reconciled.providerPlaceId == nil {
+                        reconciled.providerPlaceId = place.providerPlaceId
+                    }
+                    try? mirrorToLocalVault(
+                        reconciled,
+                        startedBy: authService.currentUserId,
+                        generation: authService.sessionGeneration
+                    )
+                    places = places.map { $0.id == existing.id ? reconciled : $0 }
+                    replaced.append(reconciled)
+                }
+                continue
+            }
+            try? mirrorToLocalVault(
+                place,
+                startedBy: authService.currentUserId,
+                generation: authService.sessionGeneration
+            )
+            added.append(place)
+        }
+        if !added.isEmpty {
+            places = added + places
+        }
+        let revealed = added + replaced
+        if !revealed.isEmpty {
+            revealImportedPlaces(revealed)
+        }
+    }
+
     @discardableResult
-    func saveListItemAsPlace(_ item: SaveListItem) async throws -> Place {
-        let place = item.asPlace()
+    func saveListItemAsPlace(_ item: SaveListItem, includeSenderMemory: Bool = true) async throws -> Place {
+        let place = item.asPlace(includeSenderMemory: includeSenderMemory)
         let userId = authService.currentUserId
         let saveGeneration = authService.sessionGeneration
         if let match = existingSavedPlace(matching: place) {
@@ -4828,7 +5042,8 @@ final class MapViewModel: ObservableObject {
     }
 
     func updatePlace(_ place: Place) async throws {
-        guard let index = places.firstIndex(where: { $0.id == place.id }) else { return }
+        try Task.checkCancellation()
+        guard let index = places.firstIndex(where: { $0.id == place.id }) else { throw CancellationError() }
         let previousPlace = places[index]
         let owner = authService.currentUserId
         let generation = authService.sessionGeneration
@@ -4845,13 +5060,21 @@ final class MapViewModel: ObservableObject {
             } else {
                 _ = try saveLocalVaultService.saveConfirmedPlace(place, ownerSubject: owner)
             }
+            guard authService.currentUserId == owner, authService.sessionGeneration == generation else {
+                throw ReviewCandidateError.sessionChangedAfterCommit
+            }
             if SavePassportFieldStreakStore.countsVisit(previous: previousPlace.status, updated: place.status) {
                 SavePassportFieldStreakStore.shared.recordFieldAction()
             }
         } catch {
-            places[index] = previousPlace
-            if selectedPlace?.id == place.id {
-                selectedPlace = previousPlace
+            guard authService.currentUserId == owner, authService.sessionGeneration == generation else {
+                throw error
+            }
+            if let currentIndex = places.firstIndex(where: { $0.id == place.id }) {
+                places[currentIndex] = previousPlace
+                if selectedPlace?.id == place.id {
+                    selectedPlace = previousPlace
+                }
             }
             // 2026-10-23 P2 ruling (B): a PATCH growth refusal keeps the
             // confirmed stamp as the server left it and parks the attempted

@@ -3647,7 +3647,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
         let selectedName = app.staticTexts["map.peek.name"]
         XCTAssertTrue(selectedName.waitForExistence(timeout: stepTimeout),
-            "The tile-town selection should expose its real place name.")
+            "The selected callout should expose its real place name.")
         XCTAssertFalse(selectedName.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         XCTAssertTrue(app.staticTexts["map.peek.subtitle"].exists,
             "The selected Map Stamp should show its saved-date context.")

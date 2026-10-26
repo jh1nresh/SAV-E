@@ -4,6 +4,10 @@ export const listTitleMaxLength = 120;
 export const listNoteMaxLength = 500;
 export const listItemPayloadMaxBytes = 8 * 1024;
 export const listMaxItems = 200;
+/// JSON envelope (`{"places":[...]}`, commas, status/id keys) around 200 items.
+export const clipListPlacesEnvelopeMaxBytes = 16 * 1024;
+export const clipListPlacesBodyMaxBytes =
+  listMaxItems * listItemPayloadMaxBytes + clipListPlacesEnvelopeMaxBytes;
 export const listBodyMaxBytes = 16 * 1024;
 export const listShareCodePattern = /^[A-Za-z0-9_-]{6,32}$/;
 export const listMemberUserIdMaxLength = 128;
