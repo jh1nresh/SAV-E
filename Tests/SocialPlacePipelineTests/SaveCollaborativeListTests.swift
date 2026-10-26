@@ -813,6 +813,22 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
+    func testNonGooglePhotoURLsPreserveEncodedPathAndQueryOnPersistence() {
+        for url in [
+            "https://cdn.example/photo.jpg?token=a%26b&sig=c%2Bd%3D",
+            "https://cdn.example/folder%2Fphoto%20one.jpg?key=x%252Fy",
+            "https://lh3.googleusercontent.com/a/avatar?token=a%26b",
+        ] {
+            XCTAssertEqual(GooglePlacesPhotoURL.persistableString(url), url)
+            XCTAssertEqual(GooglePlacesPhotoURL.persistableStrings([url]), [url])
+            XCTAssertEqual(GooglePlacesPhotoURL.persistableString("  \(url)\n"), url)
+        }
+        XCTAssertNil(GooglePlacesPhotoURL.persistableString(
+            "https://lh3.googleusercontent.com/%2570/photo-token"
+        ))
+    }
+
+    @MainActor
     func testPersistedMemoryAndSharedListsDropGooglePhotoURLs() throws {
         let legacyURL = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref&key=TEST_ONLY_NON_SECRET_VALUE"
         let ownPhoto = "https://example.com/own-photo.jpg"

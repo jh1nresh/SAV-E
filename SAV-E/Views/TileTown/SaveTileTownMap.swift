@@ -65,4 +65,3 @@ nonisolated enum SaveTileTownLayout: Sendable {
         return result
     }
 }
-

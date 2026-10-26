@@ -760,12 +760,15 @@ enum GooglePlacesPhotoURL {
     /// photo references must not be stored; `place_id` is the exempt field.
     nonisolated static func persistableString(_ value: String?) -> String? {
         guard let value else { return nil }
-        let normalized = decodePercentLayers(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return nil }
-        if looksLikeGooglePlacesPhotoReference(normalized) { return nil }
-        guard let url = URL(string: normalized) else { return normalized }
+        let classified = decodePercentLayers(normalized)
+        if looksLikeGooglePlacesPhotoReference(classified) { return nil }
+        guard let url = URL(string: classified) else { return normalized }
         if isGooglePlacesPhotoURL(url) { return nil }
-        return persistableURL(url).absoluteString
+        // Decoding is for classification only: signed queries and encoded
+        // path separators on user/friend photos must survive persistence.
+        return normalized
     }
 
     nonisolated static func persistableStrings(_ values: [String]?) -> [String]? {
