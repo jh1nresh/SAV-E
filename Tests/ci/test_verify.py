@@ -114,10 +114,10 @@ class VerifyToolTests(unittest.TestCase):
 
     def test_unmerged_flows_are_skip_never_pass(self):
         with tempfile.TemporaryDirectory() as temp:
-            workspace = Path(temp)
-            check = run_cli("check", workspace=workspace)
-            self.assertEqual(check.returncode, 0, check.stderr + check.stdout)
-            body = load_stdout(check)
+            source_root = Path(temp) / "empty-source"
+            workspace = Path(temp) / "output"
+            code, body = verify.cmd_check(source_root, workspace)
+            self.assertEqual(code, 0, body)
             self.assertTrue(body["ok"])
             self.assertFalse(body["passed"])
             for flow in verify.FLOW_DEPS:
@@ -143,11 +143,10 @@ class VerifyToolTests(unittest.TestCase):
 
     def test_v5_and_v7_skip_details_state_skip_reason(self):
         with tempfile.TemporaryDirectory() as temp:
-            workspace = Path(temp)
-            for name in verify.FLOW_SEEDS["V5"] + verify.FLOW_SEEDS["V7"]:
-                self.assertEqual(run_cli("seed", name, workspace=workspace).returncode, 0)
-            v5 = load_stdout(run_cli("run", "V5", workspace=workspace))
-            v7 = load_stdout(run_cli("run", "V7", workspace=workspace))
+            source_root = Path(temp) / "empty-source"
+            workspace = Path(temp) / "output"
+            _, v5 = verify.cmd_run(source_root, workspace, "V5")
+            _, v7 = verify.cmd_run(source_root, workspace, "V7")
             v5_ids = [row["id"] for row in v5["assertions"]]
             v7_ids = [row["id"] for row in v7["assertions"]]
             self.assertIn("V5.paywall.savedNote", v5_ids)
@@ -173,6 +172,38 @@ class VerifyToolTests(unittest.TestCase):
             self.assertEqual(v7["status"], "SKIP")
             self.assertFalse(v5["passed"])
             self.assertFalse(v7["passed"])
+
+    def test_landed_v5_source_checks_do_not_claim_ui_pass(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "SAV-E/Fixture.swift"
+            source.parent.mkdir()
+            source.write_text("\n".join((
+                "freeSavedPlaceLimit", "paywall.benefit.unlimited",
+                "paywall.savedNote", "paywall.retry", "已存 50 個",
+                "saves.unplaced", "saves.unplaced.row.", "ai.quotaExhausted",
+            )))
+            code, result = verify.cmd_run(root, root / "output", "V5")
+            self.assertEqual(code, 0, result)
+            self.assertEqual(result["status"], "SKIP")
+            self.assertFalse(result["passed"])
+            rows = {row["id"]: row for row in result["assertions"]}
+            self.assertEqual(rows["V5.paywall.savedNote"]["status"], "PASS")
+            self.assertEqual(rows["V5.paywall.no-ai-copy"]["status"], "SKIP")
+            self.assertNotIn("未合併", result["reason"])
+
+    def test_v7_guard_probe_reads_tests_without_counting_them_as_product(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "Tests/SocialPlacePipelineTests/ShareRouteCodecTests.swift"
+            source.parent.mkdir(parents=True)
+            source.write_text("func testSharedPublicPayloadsContainNoGoogleDomainURLs() {}\nclip.cap50 clip.signin clip.skoverlay")
+            rows = {row["id"]: row for row in verify.evaluate_v7(root, {})}
+            self.assertEqual(rows["V7.no-google-payload"]["status"], "PASS")
+            self.assertFalse(verify.landed_prs(root)[307])
+            source.write_text("// guard missing")
+            rows = {row["id"]: row for row in verify.evaluate_v7(root, {})}
+            self.assertEqual(rows["V7.no-google-payload"]["status"], "FAIL")
 
     def test_screenshot_home_skips_until_simulator_is_wired(self):
         parity = ROOT / "Prototypes/AtlasPostcard/Reference/ProductionTargets/home.png"

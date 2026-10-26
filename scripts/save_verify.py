@@ -628,6 +628,8 @@ def evaluate_v5(root: Path, cache: dict[str, str]) -> list[dict[str, Any]]:
 
 
 def evaluate_v7(root: Path, cache: dict[str, str]) -> list[dict[str, Any]]:
+    guard_test = root / "Tests/SocialPlacePipelineTests/ShareRouteCodecTests.swift"
+    guard_source = guard_test.read_text(encoding="utf-8") if guard_test.is_file() else ""
     rows = [
         assertion(
             "V7.clip-cap50-copy",
@@ -644,8 +646,8 @@ def evaluate_v7(root: Path, cache: dict[str, str]) -> list[dict[str, Any]]:
         ),
         assertion(
             "V7.no-google-payload",
-            source_has(root, "testSharedPublicPayloadsContainNoGoogleDomainURLs", cache),
-            "ShareRouteCodecTests Google-domain guard",
+            "testSharedPublicPayloadsContainNoGoogleDomainURLs" in guard_source,
+            "ShareRouteCodecTests Google-domain guard source exists (not executed here)",
         ),
     ]
     return rows
