@@ -1498,7 +1498,7 @@ struct ContentView: View {
         rootPath.removeAll()
         isMapPanelExpanded = false
         doodleSession.pendingShowOnMapPlaceID = place.id
-        mapVM.selectPlace(place)
+        mapVM.showSavedPlaceOnMap(place)
         showMapTab()
     }
 

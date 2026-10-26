@@ -7,6 +7,111 @@ import UIKit
 
 final class SaveSearchControllerTests: XCTestCase {
     @MainActor
+    func testHomeCityReadinessWaitsForSuccessfulOwnerCollection() async throws {
+        let auth = PrivyAuthService.shared
+        let previous = auth.authState
+        auth.authState = .authenticated(userId: "did:privy:city-loading-owner")
+        defer { auth.authState = previous }
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("home-city-load-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let service = RecordingSupabaseService()
+        service.fetchPlacesError = NSError(domain: "test-offline", code: 1)
+        let map = MapViewModel(
+            supabaseService: service,
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: true
+        )
+        XCTAssertFalse(map.isSavedCollectionReady)
+        await map.loadPlaces()
+        XCTAssertFalse(map.isSavedCollectionReady, "A failed fetch cannot prove the selected city was deleted")
+        let selected = SaveDoodleCitySelection.city("tokyo")
+        XCTAssertEqual(SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+            current: selected, places: map.places, locationDenied: false,
+            collectionReady: map.isSavedCollectionReady
+        ), selected)
+        service.fetchPlacesError = nil
+        await map.loadPlaces(force: true)
+        XCTAssertTrue(map.isSavedCollectionReady)
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertEqual(SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+            current: selected, places: map.places, locationDenied: false,
+            collectionReady: map.isSavedCollectionReady
+        ), .nearYou)
+        auth.authState = .authenticated(userId: "did:privy:other-city-owner")
+        XCTAssertFalse(map.isSavedCollectionReady, "Readiness belongs only to the loaded account session")
+    }
+
+    @MainActor
+    func testForegroundRetryAfterFailedPlacesLoadMarksCollectionReady() async throws {
+        let auth = PrivyAuthService.shared
+        let previous = auth.authState
+        auth.authState = .authenticated(userId: "did:privy:city-retry-owner")
+        defer { auth.authState = previous }
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("home-city-retry-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        let service = RecordingSupabaseService()
+        service.fetchPlacesError = NSError(domain: "test-offline", code: 1)
+        let map = MapViewModel(
+            supabaseService: service,
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: true
+        )
+        await map.loadPlaces()
+        XCTAssertFalse(map.isSavedCollectionReady, "A failed initial fetch must not mark the collection ready")
+        XCTAssertEqual(service.fetchPlacesCalls, 0, "RecordingSupabaseService does not count a thrown fetchPlaces")
+        service.fetchPlacesError = nil
+        await map.handleSceneDidBecomeActive()
+        XCTAssertEqual(service.fetchPlacesCalls, 1)
+        XCTAssertTrue(
+            map.isSavedCollectionReady,
+            "A successful foreground /places retry must mark the collection ready"
+        )
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+                current: .city("tokyo"),
+                places: map.places,
+                locationDenied: false,
+                collectionReady: map.isSavedCollectionReady
+            ),
+            .nearYou
+        )
+    }
+
+    @MainActor
+    func testLocalForegroundReloadAfterFailedVaultReadMarksCollectionReady() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("home-local-retry-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        try Data("not-json".utf8).write(to: vaultURL)
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: false
+        )
+        await map.loadPlaces()
+        XCTAssertFalse(map.isSavedCollectionReady, "A failed local vault read must not mark the collection ready")
+        XCTAssertTrue(map.places.isEmpty)
+        try Data("[]".utf8).write(to: vaultURL)
+        await map.handleSceneDidBecomeActive()
+        XCTAssertTrue(
+            map.isSavedCollectionReady,
+            "A successful local foreground vault reload must mark the collection ready"
+        )
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+                current: .city("tokyo"),
+                places: map.places,
+                locationDenied: false,
+                collectionReady: map.isSavedCollectionReady
+            ),
+            .nearYou
+        )
+    }
+
+    @MainActor
     func testReviewNextStepUsesEvidenceWithoutPromotingClues() {
         XCTAssertEqual(SaveReviewNextStep(pending: true, savable: false, address: "", city: nil, missingInfo: []), .pendingAnalysis)
         XCTAssertEqual(SaveReviewNextStep(pending: false, savable: false, address: " ", city: " ", missingInfo: []), .addCity)
@@ -4547,6 +4652,37 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testSavedPlaceHandoffClearsRouteAndRefocusesAlreadySelectedStamp() throws {
+        let map = MapViewModel()
+        let stamp = place(
+            name: "Saved Stop", address: "Taipei", category: .food,
+            latitude: 25.04, longitude: 121.54
+        )
+        var route = [
+            CLLocationCoordinate2D(latitude: 34.0522, longitude: -118.2437),
+            CLLocationCoordinate2D(latitude: 34.1184, longitude: -118.3004)
+        ]
+        map.places = [stamp]
+        map.selectedPlace = stamp
+        map.activeFilter = [UUID()]
+        map.routeCoordinates = route
+        map.calculatedRoute = MKPolyline(coordinates: &route, count: route.count)
+        map.cameraPosition = .region(MKCoordinateRegion(
+            center: route[0], span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
+        ))
+
+        map.showSavedPlaceOnMap(stamp)
+
+        XCTAssertTrue(map.routeCoordinates.isEmpty)
+        XCTAssertNil(map.calculatedRoute)
+        XCTAssertNil(map.activeFilter)
+        XCTAssertEqual(map.selectedPlace?.id, stamp.id)
+        let region = try XCTUnwrap(map.cameraPosition.region)
+        XCTAssertEqual(region.center.latitude, stamp.latitude, accuracy: 0.000001)
+        XCTAssertEqual(region.center.longitude, stamp.longitude, accuracy: 0.000001)
+    }
+
+    @MainActor
     func testMapNonRouteActionsClearStaleTripRoute() {
         let map = MapViewModel()
         var route = [
@@ -7550,7 +7686,9 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
     func startAnalysis(id: UUID) async throws -> UUID? { nil }
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async {}
     var onFetchPlaces: (() -> Void)?
+    var fetchPlacesError: Error?
     func fetchPlaces(for userId: String) async throws -> [Place] {
+        if let fetchPlacesError { throw fetchPlacesError }
         if holdNextFetchPlaces {
             holdNextFetchPlaces = false
             await withCheckedContinuation { continuation in
