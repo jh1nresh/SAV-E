@@ -20,7 +20,8 @@ struct SaveHomeView: View {
         SaveDoodleHomeView(
             locationService: locationService,
             onOpenCollectedPassport: onOpenCollectedPassport,
-            headerTopPadding: headerTopPadding
+            headerTopPadding: headerTopPadding,
+            collectionReady: mapViewModel.isSavedCollectionReady
         )
         .environment(\.atlasPresentation, atlasPresentation)
         .task(id: locationService.authorizationStatus) {

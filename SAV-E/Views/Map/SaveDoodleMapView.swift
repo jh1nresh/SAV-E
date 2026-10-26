@@ -604,7 +604,8 @@ struct SaveDoodleMapView: View {
             lens: session.lens,
             selection: session.city,
             location: locationService.isAuthorizationDenied ? nil : locationService.currentLocation,
-            locationDenied: locationService.isAuthorizationDenied
+            locationDenied: locationService.isAuthorizationDenied,
+            including: mapViewModel.selectedPlace
         )
     }
 
