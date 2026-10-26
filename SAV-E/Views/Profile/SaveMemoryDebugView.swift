@@ -1,5 +1,18 @@
 import SwiftUI
 
+/// Memory & Preferences reads the shared device vault through the same owner
+/// filter as Ask Savvy Memory. An account switch must not show the previous
+/// owner's names, addresses, source URLs, or evidence.
+enum SaveMemoryInspector {
+    static func records(
+        in vault: SaveLocalVaultService,
+        belongingTo currentUserId: String?,
+        limit: Int = 50
+    ) throws -> [SaveMemoryRecord] {
+        try vault.recentRecords(limit: limit, belongingTo: currentUserId)
+    }
+}
+
 struct SaveMemoryDebugView: View {
     @State private var records: [SaveMemoryRecord] = []
     @State private var preferences: [SaveMemoryPreference] = []
@@ -141,7 +154,10 @@ struct SaveMemoryDebugView: View {
     @MainActor
     private func loadMemory() async {
         do {
-            records = try localVaultService.recentRecords(limit: 50)
+            records = try SaveMemoryInspector.records(
+                in: localVaultService,
+                belongingTo: PrivyAuthService.shared.currentUserId
+            )
             preferences = try await service.fetchMemoryPreferences()
             errorMessage = nil
         } catch {

@@ -6,7 +6,7 @@ final class AtlasOneFaceUITests: XCTestCase {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
         let prototype = try source(at: "Prototypes/AtlasPostcard/Sources/Theme.swift")
         let spec = try source(at: "Prototypes/AtlasPostcard/design.md")
-        let productionHexes = ["FFF9EB", "0E4A33", "F26B4A", "B5E3F5", "2F2E23", "62594F"]
+        let productionHexes = ["FFF9EB", "0E4A33", SaveAtlasPalette.coralLightHex, "B5E3F5", "2F2E23", "62594F"]
         let retiredDraftHexes = ["FFF8EE", "174E37", "F27D5C", "CDEDF4", "3F281A", "80664F"]
 
         for hex in productionHexes {
@@ -19,6 +19,44 @@ final class AtlasOneFaceUITests: XCTestCase {
             XCTAssertFalse(prototype.contains(hex), "AtlasPalette restored retired draft hex \(hex)")
             XCTAssertFalse(spec.contains(hex), "design.md restored retired draft hex \(hex)")
         }
+    }
+
+    func testCoralHardcodesStayOnTheAtlasToken() throws {
+        let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
+        let clip = try source(at: "SAV-EClip/ClipContentView.swift")
+        let share = try source(at: "SAV-EShareExtension/ShareViewController.swift")
+        let pin = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
+        let design = try source(at: "DESIGN.md")
+        XCTAssertEqual(SaveAtlasPalette.creamHex, "FFF9EB")
+        XCTAssertEqual(SaveAtlasPalette.coralLightHex, SaveAtlasPalette.brandCoralHex)
+        XCTAssertEqual(SaveAtlasPalette.brandCoralHex, "F26B4A")
+        XCTAssertEqual(SaveAtlasPalette.coralDarkHex, "D97861")
+        XCTAssertTrue(theme.contains("nonisolated static let creamHex"))
+        XCTAssertTrue(theme.contains("nonisolated static let brandCoralHex"))
+        XCTAssertTrue(theme.contains("nonisolated static let coralLightHex"))
+        XCTAssertTrue(theme.contains("nonisolated static let coralDarkHex"))
+        XCTAssertTrue(theme.contains("static let coral = Color(light: coralLightHex, dark: coralDarkHex)"))
+        XCTAssertTrue(theme.contains("static let brandCoral = Color(hex: brandCoralHex)"))
+        XCTAssertTrue(theme.contains("static let cream = Color(hex: creamHex)"))
+        XCTAssertTrue(clip.contains(SaveAtlasPalette.coralLightHex))
+        XCTAssertTrue(share.contains(SaveAtlasPalette.coralLightHex))
+        XCTAssertTrue(share.contains("static let coral = Color(hex: \"F26B4A\")"))
+        XCTAssertTrue(share.contains("static let yellow = coral"))
+        XCTAssertEqual(share.components(separatedBy: "F26B4A").count - 1, 1)
+        XCTAssertTrue(pin.contains("enum SaveTileTownProductLock"))
+        XCTAssertFalse(pin.contains("struct SaveTileTownCanvas"))
+        XCTAssertFalse(pin.contains("struct SaveTileTownPinMark"))
+        XCTAssertFalse(pin.contains("map.tilePin.\\(pin.id.uuidString)"))
+        XCTAssertFalse(pin.contains("showsPins"))
+        XCTAssertFalse(pin.contains("SaveAtlasPalette.brandCoral"))
+        XCTAssertFalse(pin.contains("let coral = SaveAtlasPalette.coral\n"))
+        XCTAssertFalse(pin.contains("0.949"))
+        XCTAssertTrue(design.contains("#\(SaveAtlasPalette.coralLightHex)"))
+        XCTAssertTrue(design.contains("#\(SaveAtlasPalette.coralDarkHex)"))
+        XCTAssertTrue(design.contains("#\(SaveAtlasPalette.creamHex)"))
+        XCTAssertTrue(design.contains("Token consolidation map"))
+        XCTAssertTrue(design.contains("| Old (`main`) | New token | Light | Dark |"))
+        XCTAssertFalse(theme.contains("coralStrong"))
     }
 
     func testReviewTicketFaceOmitsMapReadyAndConfidencePercent() throws {
@@ -40,6 +78,15 @@ final class AtlasOneFaceUITests: XCTestCase {
     func testOnboardingKeepsMemoMascotMark() throws {
         let firstRun = try source(at: "SAV-E/Views/Onboarding/OnboardingView.swift")
         XCTAssertTrue(firstRun.contains("MemoMascotMark"))
+        XCTAssertTrue(firstRun.contains("Text(step == .candidate ? text(\"Review Candidate\""))
+        XCTAssertFalse(firstRun.contains("Label(step == .candidate"))
+        XCTAssertTrue(
+            firstRun.contains("""
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("onboarding.postcard.\\(step)")
+            """),
+            "postcard identifier without contain hides Review Candidate from staticTexts queries"
+        )
     }
 
     func testHomeTripCardAndTripsTabShowBeta() throws {
@@ -64,8 +111,8 @@ final class AtlasOneFaceUITests: XCTestCase {
         XCTAssertFalse(home.contains("assetName: \"SoftPixel"))
         XCTAssertFalse(home.contains("assetName: \"16-bit"))
         XCTAssertFalse(home.contains("assetName: \"pixel-art"))
-        XCTAssertTrue(mapRoot.contains("SaveTileTownHomeView()"))
-        XCTAssertTrue(mapRoot.contains("SaveTileTownRootMap("))
+        XCTAssertTrue(mapRoot.contains("SaveDoodleHomeView("))
+        XCTAssertTrue(mapRoot.contains("SaveDoodleMapView("))
         XCTAssertFalse(mapRoot.contains("Image(\"SoftPixel"))
     }
 

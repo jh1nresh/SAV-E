@@ -253,10 +253,11 @@ enum SaveCorrectionLearning {
         proposed.correctionLearningPlaceID = place.id
         proposed.correctionLearningUserID = userId
         // Old provider identity fields cannot travel with the corrected identity.
-        proposed.evidence = candidate.evidence.filter {
-            !$0.localizedCaseInsensitiveContains("Amap POI id:") &&
-            !$0.localizedCaseInsensitiveContains("Amap reference coordinates") &&
-            !$0.localizedCaseInsensitiveContains("Provider map URL:") && $0 != provenance
+        proposed.evidence = candidate.evidence.filter { line in
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            return line != provenance && !PlaceReviewCandidate.providerVenueEvidencePrefixes.contains {
+                trimmed.lowercased().hasPrefix($0.lowercased())
+            }
         } + [provenance]
         return proposed
     }

@@ -3,6 +3,68 @@ import XCTest
 
 @MainActor
 final class SaveTileTownLockTests: XCTestCase {
+    func testTileTownHasNoReachableProductPath() throws {
+        let productFiles = [
+            "SAV-E/App/ContentView.swift",
+            "SAV-E/Views/Home/SaveRootViews.swift",
+            "SAV-E/Views/Home/SaveDoodleHomeView.swift",
+            "SAV-E/Views/Map/SaveDoodleMapView.swift",
+            "SAV-E/Views/Capture/SaveCaptureFlowView.swift",
+            "SAV-E/Views/Profile/SaveProPaywallView.swift",
+            "SAV-E/Views/Origin/SaveFriendsView.swift",
+            "SAV-E/Views/Onboarding/OnboardingView.swift",
+        ]
+        let forbidden = [
+            "SaveTileTownCanvas(",
+            "SaveTileTownRootMap(",
+            "SaveTileTownHomeView(",
+            "SavePixelChromeIcon(",
+            "SaveKraftStamp(",
+            "SaveKraftStampPixelArt(",
+            "interpolationQuality = .none",
+        ]
+        for file in productFiles {
+            let text = try source(at: file)
+            for token in forbidden {
+                XCTAssertFalse(text.contains(token), "\(file) must not reach \(token)")
+            }
+        }
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent(
+                "SAV-E/Views/TileTown/SaveTileTownHomeView.swift"
+            ).path
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent(
+                "SAV-E/Views/TileTown/SaveTileTownRootMap.swift"
+            ).path
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: repositoryRoot.appendingPathComponent("SAV-E/Resources/PixelFont").path
+        ))
+        let leftoverTown = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
+        XCTAssertTrue(leftoverTown.contains("enum SaveTileTownProductLock"))
+        XCTAssertFalse(leftoverTown.contains("struct SaveTileTownCanvas"))
+        XCTAssertFalse(leftoverTown.contains("struct SaveTileTownPin"))
+        XCTAssertFalse(leftoverTown.contains("map.tilePin.\\(pin.id.uuidString)"))
+        XCTAssertFalse(leftoverTown.contains("showsPins"))
+        XCTAssertFalse(leftoverTown.contains("enum SaveTileTownRaster"))
+        XCTAssertFalse(leftoverTown.contains("enum SaveTileTownMapLens"))
+        XCTAssertFalse(leftoverTown.contains("struct SaveTileTownPeekCard"))
+        let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
+        XCTAssertFalse(friends.contains("friends.mapStrip"))
+        XCTAssertTrue(friends.contains("friends.root"))
+        XCTAssertTrue(friends.contains("friends.list"))
+        XCTAssertTrue(friends.contains("friends.empty"))
+        XCTAssertTrue(friends.contains("friends.findFriends"))
+        XCTAssertTrue(friends.contains("friends.author."))
+        XCTAssertFalse(friends.contains("SaveTileTownCanvas"))
+        XCTAssertFalse(friends.contains("SaveTileTownPin"))
+        let design = try source(at: "DESIGN.md")
+        XCTAssertTrue(design.contains("Product navigation does not mount"))
+        XCTAssertTrue(design.contains("TileTown Home, RootMap, or Canvas"))
+    }
+
     func testFounderLockSupersedesMapKitSoftPixelBase() {
         XCTAssertTrue(SaveTileTownProductLock.productMapBaseIsTileTown)
         XCTAssertFalse(SaveTileTownProductLock.homeShowsMapFilterChips)
@@ -28,8 +90,12 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertEqual(AtlasPalette.strokeWidth, 1)
         let root = try source(at: "SAV-E/App/ContentView.swift")
         XCTAssertTrue(root.contains("hidesTitle: { $0.isCaptureControl }"))
-        XCTAssertTrue(root.contains("SavePixelChromeIcon("))
+        XCTAssertTrue(root.contains("SaveDoodleTabIcon("))
+        XCTAssertFalse(root.contains("SavePixelChromeIcon("))
         XCTAssertTrue(root.contains("pointSize: 24"))
+        let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
+        XCTAssertTrue(stamp.contains("struct SaveDoodleTabIcon"))
+        XCTAssertTrue(stamp.contains("lineWidth: 1.5"))
         let design = try source(at: "DESIGN.md")
         XCTAssertTrue(design.contains("coral on the active destination only"))
         XCTAssertTrue(design.contains("full-pixel tile-town"))
@@ -53,16 +119,29 @@ final class SaveTileTownLockTests: XCTestCase {
 
     func testTownPinsRemainTappableOnHomeAndMap() throws {
         let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
-        XCTAssertTrue(town.contains("map.tilePin.\\(pin.id.uuidString)"))
-        XCTAssertTrue(town.contains("showsPins"))
-        let home = try source(at: "SAV-E/Views/TileTown/SaveTileTownHomeView.swift")
-        XCTAssertTrue(home.contains("home.tileTown"))
-        XCTAssertTrue(home.contains("SaveTileTownCanvas"))
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        XCTAssertTrue(town.contains("enum SaveTileTownProductLock"))
+        XCTAssertFalse(town.contains("map.tilePin.\\(pin.id.uuidString)"))
+        XCTAssertFalse(town.contains("map.tilePin."))
+        XCTAssertFalse(town.contains("showsPins"))
+        XCTAssertFalse(town.contains("struct SaveTileTownCanvas"))
+        XCTAssertFalse(town.contains("struct SaveTileTownPin"))
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        XCTAssertFalse(home.contains("home.miniMap"))
+        XCTAssertFalse(home.contains("Map("))
+        XCTAssertFalse(home.contains("MKMapView"))
+        XCTAssertFalse(home.contains("Map(initialPosition:"))
+        XCTAssertFalse(home.contains("Annotation("))
+        XCTAssertFalse(home.contains("onOpenMap"))
+        XCTAssertFalse(home.contains("map.tilePin."))
+        XCTAssertTrue(map.contains("map.tilePin.\\(item.place.id.uuidString)"))
+        XCTAssertTrue(map.contains("map.tilePin."))
     }
 
     func testDisplayFontIsOFLWithCJKFallbackAndSFBody() throws {
         let theme = try source(at: "SAV-E/Extensions/Color+Theme.swift")
         XCTAssertTrue(theme.contains("enum SaveDisplayType"))
+        XCTAssertTrue(theme.contains("static func fixed("))
         XCTAssertTrue(theme.contains("Caveat-SemiBold"))
         XCTAssertTrue(theme.contains("Iansui-Regular"))
         XCTAssertTrue(theme.contains("Iansui-SavvySubset"))
@@ -124,74 +203,87 @@ final class SaveTileTownLockTests: XCTestCase {
     }
 
     func testHomeChromeOmitsMapLensesAndKeepsSearch() throws {
-        let home = try source(at: "SAV-E/Views/TileTown/SaveTileTownHomeView.swift")
-        XCTAssertTrue(home.contains("SaveTileTownCanvas"))
-        XCTAssertTrue(home.contains("home.tileTown"))
-        XCTAssertTrue(home.contains("home.cluesBar"))
-        XCTAssertTrue(home.contains("Recent stamps") || home.contains("home.recentSaves"))
-        XCTAssertTrue(home.contains("SaveKraftStamp"))
-        XCTAssertTrue(home.contains("rootTabScrollClearance"))
-        XCTAssertTrue(home.contains("home.search"))
-        XCTAssertTrue(home.contains("home.featuredName"))
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        XCTAssertFalse(home.contains("SaveDoodleMiniMap"))
+        XCTAssertFalse(home.contains("home.miniMap"))
+        XCTAssertTrue(home.contains("home.review"))
+        XCTAssertTrue(home.contains("accessibilityIdentifier(\"home.saves\")"))
+        XCTAssertFalse(home.contains("home.openSaves"))
+        XCTAssertTrue(home.contains("home.collected"))
         XCTAssertTrue(home.contains("home.empty.capture"))
         XCTAssertTrue(home.contains("home.savedPlaces"))
-        XCTAssertTrue(home.contains("home.trips"))
-        XCTAssertTrue(home.contains("home.saves"))
-        XCTAssertTrue(home.contains("headerIconButton("))
-        XCTAssertTrue(home.contains("SavePixelChromeIcon"))
+        XCTAssertTrue(home.contains("home.citySwitcher"))
+        XCTAssertTrue(home.contains("lens.accessibilityIdentifier"))
+        XCTAssertTrue(home.contains(".contentShape(Rectangle())"))
+        let catalog = try source(at: "SAV-E/Services/SaveDoodleHomeCatalog.swift")
+        XCTAssertTrue(catalog.contains("home.\\(rawValue)"))
+        XCTAssertTrue(catalog.contains("case eat"))
+        XCTAssertTrue(catalog.contains("case go"))
+        XCTAssertTrue(home.contains("AtlasTabBarMetrics.height"))
+        XCTAssertFalse(home.contains("rootTabScrollClearance"))
+        XCTAssertTrue(home.contains("\"home.saves\""))
+        XCTAssertFalse(home.contains("See all saves"))
+        XCTAssertFalse(home.contains("accessibilityIdentifier(\"home.trips\")"))
+        XCTAssertTrue(home.contains("SaveDisplayTitle"))
         XCTAssertTrue(home.contains("AtlasMetrics.statusBarHeight"))
         XCTAssertTrue(home.contains("allowsHitTesting(false)"))
-        XCTAssertFalse(home.contains(".overlay(alignment: .topTrailing)"))
-        XCTAssertFalse(home.contains(".opacity(0.02)"))
         XCTAssertTrue(home.contains(".accessibilityHidden(true)"))
-        let moreSheet = memberBody("moreActionsSheet", in: home)
-        let resting = memberBody("restingHome", in: home)
-        let empty = memberBody("emptyHome", in: home)
-        XCTAssertTrue(moreSheet.contains("reviewQueuePreview"))
-        XCTAssertFalse(resting.contains("reviewQueuePreview"))
-        XCTAssertFalse(empty.contains("reviewQueuePreview"))
-        XCTAssertTrue(home.contains("Waiting for review"))
+        XCTAssertFalse(home.contains("home.search"))
+        XCTAssertFalse(home.contains("SaveTileTownCanvas"))
         XCTAssertFalse(home.contains("map.lens.nearby"))
         XCTAssertFalse(home.contains("map.lens.saved"))
         XCTAssertFalse(home.contains("map.lens.friends"))
         XCTAssertFalse(home.contains("SaveTileTownMapLens"))
         let design = try source(at: "DESIGN.md")
-        XCTAssertTrue(design.contains("SavePixelChromeIcon"))
-        XCTAssertTrue(design.contains("lives under More"))
+        XCTAssertTrue(design.contains("SaveDoodleHomeView"))
+        XCTAssertTrue(design.contains("Eat/Go"))
     }
 
     func testMapOwnsNearbySavedFriendsChipsOnTileTown() throws {
-        let map = try source(at: "SAV-E/Views/TileTown/SaveTileTownRootMap.swift")
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
         let root = try source(at: "SAV-E/Views/Home/SaveRootViews.swift")
-        XCTAssertTrue(map.contains("SaveTileTownCanvas"))
+        XCTAssertTrue(map.contains(".mapStyle(.standard(emphasis: .automatic))"))
         XCTAssertTrue(map.contains("AtlasMetrics.statusBarHeight"))
-        XCTAssertFalse(map.contains(".padding(.top, 8)"))
-        XCTAssertTrue(map.contains("SaveTileTownPeekCard"))
-        XCTAssertTrue(map.contains("allowsPan: true"))
-        XCTAssertTrue(map.contains(".frame(minHeight: 44)"))
+        XCTAssertFalse(map.contains("emphasis: .muted"))
+        XCTAssertFalse(map.contains(".saturation("))
+        XCTAssertFalse(map.contains(".colorMultiply("))
+        XCTAssertFalse(map.contains("SaveTileTownCanvas"))
+        XCTAssertTrue(map.contains("map.placeSheet"))
+        XCTAssertTrue(map.contains(".frame(minHeight: 44)") || map.contains("SaveLayout.minTap"))
         let town = try source(at: "SAV-E/Views/TileTown/SaveTileTownMap.swift")
-        XCTAssertTrue(town.contains("interpolationQuality = .none"))
-        XCTAssertTrue(town.contains("interpolation(.none)"))
-        XCTAssertTrue(town.contains("enum SaveTileTownRaster"))
-        XCTAssertTrue(town.contains("var allowsPan = false"))
-        XCTAssertTrue(town.contains("map.tileTown.pan"))
         XCTAssertTrue(town.contains("mapChromeHeight"))
+        XCTAssertTrue(town.contains("enum SaveTileTownProductLock"))
+        XCTAssertFalse(town.contains("map.tilePin.\\(pin.id.uuidString)"))
+        XCTAssertFalse(town.contains("map.tilePin."))
+        XCTAssertFalse(town.contains("showsPins"))
+        XCTAssertFalse(town.contains("interpolationQuality = .none"))
+        XCTAssertFalse(town.contains("enum SaveTileTownRaster"))
+        XCTAssertFalse(town.contains("struct SaveTileTownCanvas"))
         XCTAssertFalse(town.contains("addQuadCurve"))
         XCTAssertFalse(town.contains("struct Triangle"))
-        XCTAssertTrue(map.contains("map.lens.nearby") || map.contains("map.lensRail"))
-        XCTAssertTrue(map.contains("SaveTileTownMapLens"))
         XCTAssertTrue(map.contains("map.liveSurface"))
+        XCTAssertTrue(map.contains("SaveDoodleSession"))
+        XCTAssertTrue(map.contains("SaveDoodleHomeCatalog.listedPlaces("))
+        XCTAssertTrue(map.contains("mapAccessibilityIdentifier"))
+        XCTAssertTrue(map.contains("map.city"))
+        XCTAssertTrue(map.contains("map.eatGo"))
         let panel = try source(at: "SAV-E/Views/Map/SaveMapDrawerPanel.swift")
         XCTAssertTrue(panel.contains("Spacer(minLength: 0)"))
         XCTAssertTrue(panel.contains("alignment: .bottom"))
         XCTAssertTrue(panel.contains("SaveTileTownProductLock.mapChromeHeight"))
-        XCTAssertTrue(root.contains("SaveTileTownRootMap("))
+        XCTAssertTrue(root.contains("SaveDoodleMapView("))
+        XCTAssertFalse(root.contains("SaveTileTownRootMap("))
         XCTAssertFalse(root.contains("SaveAtlasInteractiveRootMap("))
+        let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
+        XCTAssertFalse(friends.contains("SaveTileTownCanvas("))
+        XCTAssertFalse(friends.contains("friends.mapStrip"))
+        XCTAssertTrue(friends.contains("friends.root"))
+        XCTAssertTrue(friends.contains("friends.list"))
     }
 
     func testStampLanguageIsOneSystem() throws {
         let stamp = try source(at: "SAV-E/Views/TileTown/SaveKraftStamp.swift")
-        let home = try source(at: "SAV-E/Views/TileTown/SaveTileTownHomeView.swift")
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
         let passport = try source(at: "SAV-E/Views/Profile/ProfileView.swift")
         XCTAssertTrue(stamp.contains("enum SaveKraftStampFace"))
         XCTAssertTrue(stamp.contains("case scene"))
@@ -201,27 +293,31 @@ final class SaveTileTownLockTests: XCTestCase {
         XCTAssertTrue(stamp.contains("struct SavePixelChromeIcon"))
         XCTAssertTrue(stamp.contains("case locked"))
         XCTAssertTrue(stamp.contains("SaveSoftPixelAccentsLock.visibleStampText"))
-        XCTAssertTrue(home.contains("SaveKraftStamp("))
-        XCTAssertTrue(passport.contains("SaveKraftStamp("))
-        XCTAssertTrue(passport.contains("face: .locked"))
-        XCTAssertTrue(passport.contains("profile.stampGrid"))
-        XCTAssertTrue(passport.contains("onOpenPlace(place)"))
-        XCTAssertTrue(passport.contains("rootTabScrollClearance"))
-        XCTAssertTrue(passport.contains("???"))
+        XCTAssertTrue(home.contains("SaveDoodleCollectedMark"))
+        XCTAssertTrue(passport.contains("SaveDoodlePassportPage("))
+        XCTAssertFalse(passport.contains("PassportTileTownCollection"))
+        XCTAssertFalse(passport.contains("SaveKraftStamp("))
+        XCTAssertTrue(passport.contains("onOpenPlace: onOpenPlace"))
+        let page = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportView.swift")
+        XCTAssertTrue(page.contains("profile.stampGrid"))
+        XCTAssertTrue(page.contains("rootTabScrollClearance"))
     }
 
     func testFriendsIsPeopleFirstWithLastAt() throws {
         let friends = try source(at: "SAV-E/Views/Origin/SaveFriendsView.swift")
-        XCTAssertTrue(friends.contains("SavePostageSealAvatar"))
-        XCTAssertTrue(friends.contains("Last at"))
-        XCTAssertTrue(friends.contains("friends.mapStrip"))
+        XCTAssertTrue(friends.contains("SaveDoodleFriendAvatar"))
+        XCTAssertTrue(friends.contains("last at"))
+        XCTAssertTrue(friends.contains("SaveDoodleFriendSticker"))
+        XCTAssertFalse(friends.contains("SavePostageSealAvatar"))
+        XCTAssertFalse(friends.contains("friends.mapStrip"))
+        XCTAssertFalse(friends.contains("SaveTileTownCanvas"))
         XCTAssertTrue(friends.contains("friends.empty"))
         XCTAssertTrue(friends.contains("friends.findFriends"))
         XCTAssertTrue(friends.contains("friends.author."))
         XCTAssertTrue(friends.contains("SharedAuthorPassport"))
         XCTAssertFalse(friends.contains(".disabled(store.isDemo)"))
         let store = try source(at: "SAV-E/ViewModels/SharedPostsStore.swift")
-        XCTAssertTrue(store.contains("applyDemoFixture()"))
+        XCTAssertTrue(store.contains("applyDemoFixture(items:"))
         XCTAssertTrue(store.contains("case .author(let id):"))
         XCTAssertFalse(friends.contains("friends.invite"))
         let posts = try JSONDecoder().decode([SharedPlacePost].self, from: Data(
