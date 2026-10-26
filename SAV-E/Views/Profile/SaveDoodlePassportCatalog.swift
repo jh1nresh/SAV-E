@@ -91,16 +91,43 @@ struct SaveDoodlePassportSlot: Identifiable, Equatable {
 enum SaveDoodlePassportCatalog {
     static let maxColumnCount = 4
     static let minColumnCount = 1
+    static let pageSize = 12
+
+    /// Width-based grid (founder 2026-10-25). Same formula as main:
+    /// `columns = clamp(floor((availableGridWidth + 16) / 80), 1, 4)`.
+    /// 375pt after 24+24 screen and panel insets → 3 columns. Do not pin
+    /// a 402 canvas or a physical-screen heuristic.
     static let slotSize: CGFloat = SaveLayout.passportSlot
     static let cardHeight: CGFloat = SaveLayout.passportSlot
     static let columnStride: CGFloat = 80
     static let rowGap: CGFloat = SaveSpace.lg
     static let minColumnGap: CGFloat = SaveSpace.md
     static let panelPadding: CGFloat = SaveSpace.lg
-    static let pageSize = 12
+    static let unvisitedDiscSize: CGFloat = slotSize
+    static let visitedStickerSize = CGSize(width: slotSize, height: slotSize)
+    static let unvisitedArtSize: CGFloat = 40
+    static let stampDiameter: CGFloat = SaveLayout.numberBadge
+    static let panelCornerRadius: CGFloat = SaveAtlasPalette.cardRadius
+    static let panelStrokeWidth: CGFloat = 1
+    static let titlePointSize: CGFloat = 64
+    static let subtitlePointSize: CGFloat = 22
+    static let legendSwatchSize: CGFloat = 9
 
-    /// Spec §7.3: `columns = floor((availableGridWidth + 16) / 80)`,
-    /// clamped to 1...4. 375/390pt → 3; 402/430pt → 4.
+    static let panelFillLightHex = "E9DCC3"
+    static let panelStrokeLightHex = "C9BBA2"
+    static let panelFillDarkHex = "4A3F32"
+    static let panelStrokeDarkHex = "5A5246"
+    static let discFillLightHex = "F6F0E6"
+    static let discFillDarkHex = "3A332A"
+    static let stampBaseLightHex = "FAF7F1"
+    static let stampBaseDarkHex = "2A2620"
+    static let stampRingRedHex = "B3534A"
+    static let stampRingGoldHex = "C19349"
+    static let legendSwatchHex = "D85A3B"
+
+    /// Spec §7.3 / main: `columns = floor((availableGridWidth + 16) / 80)`,
+    /// clamped to 1...4. 375/390pt → 3; 402/430pt → 4 when the view is
+    /// proposed its real width.
     static func columnCount(availableGridWidth: CGFloat) -> Int {
         let raw = Int(floor((availableGridWidth + minColumnGap) / columnStride))
         return min(maxColumnCount, max(minColumnCount, raw))

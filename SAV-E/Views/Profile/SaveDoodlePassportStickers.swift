@@ -1,25 +1,130 @@
 import SwiftUI
+import UIKit
+
+/// Passport-only chrome. Do not replace `SaveAtlasPalette.kraft` globally —
+/// other screens still use the locked kraft pair.
+enum SaveDoodlePassportChrome {
+    static let panelFill = Color(
+        light: SaveDoodlePassportCatalog.panelFillLightHex,
+        dark: SaveDoodlePassportCatalog.panelFillDarkHex
+    )
+    static let panelStroke = Color(
+        light: SaveDoodlePassportCatalog.panelStrokeLightHex,
+        dark: SaveDoodlePassportCatalog.panelStrokeDarkHex
+    )
+    static let discFill = Color(
+        light: SaveDoodlePassportCatalog.discFillLightHex,
+        dark: SaveDoodlePassportCatalog.discFillDarkHex
+    )
+    static let stampBase = Color(
+        light: SaveDoodlePassportCatalog.stampBaseLightHex,
+        dark: SaveDoodlePassportCatalog.stampBaseDarkHex
+    )
+    static let stampRed = Color(
+        light: SaveDoodlePassportCatalog.stampRingRedHex,
+        dark: "E0675C"
+    )
+    static let stampGold = Color(
+        light: SaveDoodlePassportCatalog.stampRingGoldHex,
+        dark: "D9B45A"
+    )
+    static let legendSwatch = Color(
+        light: SaveDoodlePassportCatalog.legendSwatchHex,
+        dark: "E0675C"
+    )
+}
+
+/// DESIGN DRAFT v0 color plates for the 8 unvisited 75pt discs.
+/// Not final: DESIGN will redo ink lines and the mountain hill. The swap
+/// must be a pure asset replacement that keeps these exact imageset names
+/// (`DoodlePlate{Baozi,Bicycle,Book,Bridge,Coffee,Ferris,Mountain,Tea}Color`).
+/// One asset-name-keyed lookup. `resolvedImageName` is nil when the
+/// imageset is missing, and the slot keeps today's line art (official
+/// coffee outline or `SaveDoodlePassportUniqueGlyph`). Do not draw those
+/// illustrations here.
+enum SaveDoodlePassportUnvisitedArt {
+    static let assetNames: [SaveDoodleStickerKind: String] = [
+        .coffee: "DoodlePlateCoffeeColor",
+        .hill: "DoodlePlateMountainColor",
+        .bridge: "DoodlePlateBridgeColor",
+        .baozi: "DoodlePlateBaoziColor",
+        .tea: "DoodlePlateTeaColor",
+        .bookstore: "DoodlePlateBookColor",
+        .bicycle: "DoodlePlateBicycleColor",
+        .ferris: "DoodlePlateFerrisColor",
+    ]
+
+    static func assetName(for kind: SaveDoodleStickerKind) -> String? {
+        assetNames[kind]
+    }
+
+    /// DRAFT v0 rasters are 75pt. Display them at the width-based slot
+    /// (`SaveLayout.passportSlot` = 64). Same-name asset swap later; do not
+    /// edit the PNGs. Line-art fallback stays on `unvisitedArtSize`.
+    static var plateSize: CGFloat { SaveDoodlePassportCatalog.slotSize }
+
+    /// Nil when the imageset is not in the catalog yet.
+    @MainActor
+    static func resolvedImageName(for kind: SaveDoodleStickerKind) -> String? {
+        guard let name = assetName(for: kind), UIImage(named: name) != nil else { return nil }
+        return name
+    }
+}
 
 /// Official DESIGN stickers when the kind has a unique asset. Extra kinds
 /// keep their own glyph so unvisited cells do not collapse to five repeats.
-/// Number stamps replace large rank rings. Do not wrap a shrunken icon in
+/// Number stamps overlay the visited sticker. Do not wrap a shrunken icon in
 /// a filled circle.
 struct SaveDoodlePassportSticker: View {
     let kind: SaveDoodleStickerKind
     let visited: Bool
 
     var body: some View {
-        if kind.usesOfficialAsset {
-            Image(kind.officialSticker.imageName(visited: visited, pointSize: SaveLayout.passportSlot))
+        if visited, kind.usesOfficialAsset {
+            Image(kind.officialSticker.imageName(
+                visited: true,
+                pointSize: SaveDoodlePassportCatalog.slotSize
+            ))
+            .resizable()
+            .interpolation(.high)
+            .renderingMode(.original)
+            .scaledToFit()
+            .frame(
+                width: SaveDoodlePassportCatalog.slotSize,
+                height: SaveDoodlePassportCatalog.slotSize
+            )
+            .accessibilityHidden(true)
+        } else if let colorArt = SaveDoodlePassportUnvisitedArt.resolvedImageName(for: kind) {
+            Image(colorArt)
                 .resizable()
                 .interpolation(.high)
                 .renderingMode(.original)
                 .scaledToFit()
-                .frame(width: SaveLayout.passportSlot, height: SaveLayout.passportSlot)
+                .frame(
+                    width: SaveDoodlePassportUnvisitedArt.plateSize,
+                    height: SaveDoodlePassportUnvisitedArt.plateSize
+                )
                 .accessibilityHidden(true)
+        } else if kind.usesOfficialAsset {
+            Image(kind.officialSticker.imageName(
+                visited: false,
+                pointSize: SaveDoodlePassportCatalog.unvisitedArtSize
+            ))
+            .resizable()
+            .interpolation(.high)
+            .renderingMode(.original)
+            .scaledToFit()
+            .frame(
+                width: SaveDoodlePassportCatalog.unvisitedArtSize,
+                height: SaveDoodlePassportCatalog.unvisitedArtSize
+            )
+            .accessibilityHidden(true)
         } else {
             SaveDoodlePassportUniqueGlyph(kind: kind)
-                .frame(width: SaveLayout.passportSlot, height: SaveLayout.passportSlot)
+                .frame(
+                    width: SaveDoodlePassportCatalog.unvisitedArtSize,
+                    height: SaveDoodlePassportCatalog.unvisitedArtSize
+                )
                 .accessibilityHidden(true)
         }
     }
@@ -27,18 +132,31 @@ struct SaveDoodlePassportSticker: View {
 
 struct SaveDoodlePassportNumberStamp: View {
     let number: Int
-    let gold: Bool
+    var rank: SavePassportStampRank = .single
 
     var body: some View {
-        Text("\(number)")
-            .font(SaveAtlasType.body(13))
-            .foregroundStyle(gold ? SaveDoodle.stampGold : SaveDoodle.stampRed)
-            .frame(width: SaveLayout.numberBadge, height: SaveLayout.numberBadge)
-            .overlay {
+        let ring = rank == .gold
+            ? SaveDoodlePassportChrome.stampGold
+            : SaveDoodlePassportChrome.stampRed
+        ZStack {
+            Circle()
+                .fill(SaveDoodlePassportChrome.stampBase)
+            if rank == .double {
                 Circle()
-                    .stroke(gold ? SaveDoodle.stampGold : SaveDoodle.stampRed, lineWidth: 1.5)
+                    .stroke(ring, lineWidth: 1.25)
+                    .padding(3.5)
             }
-            .accessibilityHidden(true)
+            Circle()
+                .stroke(ring, lineWidth: 2)
+            Text("\(number)")
+                .font(SaveDisplayType.fixed(14))
+                .foregroundStyle(ring)
+        }
+        .frame(
+            width: SaveDoodlePassportCatalog.stampDiameter,
+            height: SaveDoodlePassportCatalog.stampDiameter
+        )
+        .accessibilityHidden(true)
     }
 }
 
@@ -47,7 +165,7 @@ struct SaveDoodlePassportSlotView: View {
     var isStamping: Bool = false
 
     var body: some View {
-        VStack(spacing: SaveSpace.tight) {
+        ZStack(alignment: .bottomTrailing) {
             ZStack {
                 if showsCard {
                     Circle()
@@ -56,7 +174,7 @@ struct SaveDoodlePassportSlotView: View {
                             style: StrokeStyle(lineWidth: 1, dash: [4, 4])
                         )
                         .background(
-                            SaveAtlasPalette.paper
+                            SaveDoodlePassportChrome.discFill
                                 .clipShape(Circle())
                         )
                 }
@@ -67,20 +185,19 @@ struct SaveDoodlePassportSlotView: View {
                     EmptyView()
                 }
             }
-            .frame(width: SaveDoodlePassportCatalog.slotSize, height: SaveDoodlePassportCatalog.cardHeight)
-
+            .frame(
+                width: SaveDoodlePassportCatalog.slotSize,
+                height: SaveDoodlePassportCatalog.cardHeight
+            )
             if let number = slot.stampNumber {
-                SaveDoodlePassportNumberStamp(
-                    number: number,
-                    gold: {
-                        if case let .place(_, _, rank) = slot.content { return rank == .gold }
-                        return false
-                    }()
-                )
-            } else {
-                Color.clear.frame(width: SaveLayout.numberBadge, height: SaveLayout.numberBadge)
+                SaveDoodlePassportNumberStamp(number: number, rank: stampRank)
+                    .offset(x: 4, y: 4)
             }
         }
+        .frame(
+            width: SaveDoodlePassportCatalog.slotSize,
+            height: SaveDoodlePassportCatalog.cardHeight
+        )
         .scaleEffect(isStamping ? 1.08 : 1)
         .animation(SaveTheme.Motion.stampSpring, value: isStamping)
     }
@@ -92,6 +209,11 @@ struct SaveDoodlePassportSlotView: View {
         case .empty:
             return true
         }
+    }
+
+    private var stampRank: SavePassportStampRank {
+        if case let .place(_, _, rank) = slot.content { return rank }
+        return .single
     }
 }
 
@@ -107,7 +229,7 @@ struct SaveDoodlePassportUniqueGlyph: View {
             SaveDoodleFerrisGlyph()
         } else {
             Image(systemName: kind.systemImageName)
-                .font(.system(size: 28, weight: .light))
+                .font(.system(size: 22, weight: .light))
                 .foregroundStyle(SaveAtlasPalette.ink)
         }
     }
