@@ -4,8 +4,9 @@ import SwiftUI
 /// Pro paywall — Doodle v2 full-screen modal (DESIGN eade369).
 ///
 /// Opened from Settings / Passport, or from the 51st-save gate. Never
-/// automatic, never at launch, never for an exhausted AI assist.
-/// `SaveEntitlementStore.shouldPresentPaywall` stays false for AI refusals.
+/// automatic, never at launch. Exhausted model allowance is a neutral
+/// notice, not this sheet. `SaveEntitlementStore.shouldPresentPaywall`
+/// stays false for allowance refusals.
 ///
 /// Pro v1 names one benefit: unlimited saved places. Quota headlines,
 /// itinerary planning, and collectible extras stay off this screen.

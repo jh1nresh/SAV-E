@@ -4666,6 +4666,19 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         if attachM1 {
             attach(app, name: "M1")
         }
+        let unsavedPin = app.buttons["map.unsaved.uitest-unsaved-taipei"]
+        if !unsavedPin.waitForExistence(timeout: timeout(1)) {
+            // The selected saved stamp starts centered; the candidate is east
+            // of the viewport. Pan it into view without clearing search results.
+            let map = app.maps.firstMatch
+            map.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.45))
+                .press(forDuration: 0.1, thenDragTo: map.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.45)))
+        }
+        XCTAssertTrue(unsavedPin.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(unsavedPin.isHittable, "Unsaved native MapKit marker must receive taps")
+        unsavedPin.tap()
+        XCTAssertTrue(app.buttons["drawer.unsaved.primaryAction"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "map-unsaved-marker-receipt-\(language)")
         terminate(app)
     }
 
