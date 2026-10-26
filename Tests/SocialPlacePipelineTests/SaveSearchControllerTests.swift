@@ -81,6 +81,37 @@ final class SaveSearchControllerTests: XCTestCase {
     }
 
     @MainActor
+    func testLocalForegroundReloadAfterFailedVaultReadMarksCollectionReady() async throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("home-local-retry-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: vaultURL) }
+        try Data("not-json".utf8).write(to: vaultURL)
+        let map = MapViewModel(
+            saveLocalVaultService: SaveLocalVaultService(overrideVaultURL: vaultURL),
+            usesRemotePersistence: false
+        )
+        await map.loadPlaces()
+        XCTAssertFalse(map.isSavedCollectionReady, "A failed local vault read must not mark the collection ready")
+        XCTAssertTrue(map.places.isEmpty)
+        try Data("[]".utf8).write(to: vaultURL)
+        await map.handleSceneDidBecomeActive()
+        XCTAssertTrue(
+            map.isSavedCollectionReady,
+            "A successful local foreground vault reload must mark the collection ready"
+        )
+        XCTAssertTrue(map.places.isEmpty)
+        XCTAssertEqual(
+            SaveDoodleHomeCatalog.persistedCityAfterCollectionChange(
+                current: .city("tokyo"),
+                places: map.places,
+                locationDenied: false,
+                collectionReady: map.isSavedCollectionReady
+            ),
+            .nearYou
+        )
+    }
+
+    @MainActor
     func testReviewNextStepUsesEvidenceWithoutPromotingClues() {
         XCTAssertEqual(SaveReviewNextStep(pending: true, savable: false, address: "", city: nil, missingInfo: []), .pendingAnalysis)
         XCTAssertEqual(SaveReviewNextStep(pending: false, savable: false, address: " ", city: " ", missingInfo: []), .addCity)
