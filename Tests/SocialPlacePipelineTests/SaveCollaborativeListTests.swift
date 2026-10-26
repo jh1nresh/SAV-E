@@ -1614,6 +1614,21 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
+    func testAccessibilityWalkerReadsIdentifierGetterWithoutProtocolConformance() {
+        let proxy: NSObject = AccessibilityIdentifierGetterProxy(identifier: "fixture.proxy.identifier")
+        XCTAssertFalse(proxy is UIAccessibilityIdentification,
+                       "The regression fixture must expose the getter without declaring the UIKit protocol")
+        XCTAssertTrue(collectAccessibilityStrings(from: proxy, seen: NSHashTable<NSObject>.weakObjects())
+            .contains("fixture.proxy.identifier"))
+        XCTAssertTrue(collectAccessibilityStrings(from: NSObject(), seen: NSHashTable<NSObject>.weakObjects()).isEmpty,
+                      "Objects without the getter must not receive an undefined-key KVC lookup")
+        XCTAssertTrue(collectAccessibilityStrings(
+            from: AccessibilityIdentifierGetterProxy(identifier: ""),
+            seen: NSHashTable<NSObject>.weakObjects()
+        ).isEmpty, "Empty identifiers must not enter the collected strings")
+    }
+
+    @MainActor
     private func collectAccessibilityStrings(from element: Any?, seen: NSHashTable<NSObject>) -> [String] {
         guard let node = element as? NSObject else { return [] }
         if seen.contains(node) { return [] }
@@ -1623,6 +1638,12 @@ final class SaveCollaborativeListTests: XCTestCase {
         if let value = node.accessibilityValue as? String, !value.isEmpty { texts.append(value) }
         if let identified = node as? UIAccessibilityIdentification,
            let identifier = identified.accessibilityIdentifier, !identifier.isEmpty {
+            texts.append(identifier)
+        } else if node.responds(to: NSSelectorFromString("accessibilityIdentifier")),
+                  let identifier = node.value(forKey: "accessibilityIdentifier") as? String,
+                  !identifier.isEmpty {
+            // SwiftUI accessibility proxies can expose the public getter without
+            // declaring UIAccessibilityIdentification protocol conformance.
             texts.append(identifier)
         }
         if let view = node as? UIView {
@@ -1658,6 +1679,15 @@ final class SaveCollaborativeListTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+    }
+}
+
+private final class AccessibilityIdentifierGetterProxy: NSObject {
+    @objc var accessibilityIdentifier: String?
+
+    init(identifier: String?) {
+        accessibilityIdentifier = identifier
+        super.init()
     }
 }
 
