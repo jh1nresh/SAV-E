@@ -47,6 +47,11 @@ import {
 } from "./src/models";
 import { hasPrivyConfig, useOptionalPrivy, SavePrivyProvider } from "./src/privy";
 import {
+  isInAppShareBrowser,
+  isShareFallbackPath,
+} from "./src/inAppBrowser";
+import { ShareClipFallback, placeArea } from "./src/ShareClipFallback";
+import {
   buildAppleMapsUrl,
   buildSharedTripData,
   decodePlaceLink,
@@ -666,6 +671,28 @@ function SaveApp() {
       return;
     }
     privy.login();
+  }
+
+  const pageHref = typeof window !== "undefined" ? window.location.href : "";
+  const pageUA = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const pageLanguage = typeof navigator !== "undefined"
+    ? (navigator.languages?.[0] || navigator.language || "en")
+    : "en";
+  const showClipFallback = isInAppShareBrowser(pageUA) && isShareFallbackPath(pageHref);
+
+  if (showClipFallback) {
+    return (
+      <ShareClipFallback
+        href={pageHref}
+        userAgent={pageUA}
+        language={pageLanguage}
+        placeName={incomingPlace?.name}
+        category={incomingPlace?.category}
+        area={placeArea(incomingPlace)}
+        sender={incomingSenderName}
+        note={incomingPlace?.note}
+      />
+    );
   }
 
   if (!isReady) {
