@@ -60,10 +60,10 @@ final class SaveSearchControllerTests: XCTestCase {
         )
         await map.loadPlaces()
         XCTAssertFalse(map.isSavedCollectionReady, "A failed initial fetch must not mark the collection ready")
-        XCTAssertEqual(service.fetchPlacesCalls, 1)
+        XCTAssertEqual(service.fetchPlacesCalls, 0, "RecordingSupabaseService does not count a thrown fetchPlaces")
         service.fetchPlacesError = nil
         await map.handleSceneDidBecomeActive()
-        XCTAssertEqual(service.fetchPlacesCalls, 2)
+        XCTAssertEqual(service.fetchPlacesCalls, 1)
         XCTAssertTrue(
             map.isSavedCollectionReady,
             "A successful foreground /places retry must mark the collection ready"
