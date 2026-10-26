@@ -118,8 +118,9 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
     var isRaisedControl: (Item) -> Bool = { _ in false }
     /// Raised capture keeps its VoiceOver name but drops the visible "Save" label.
     var hidesTitle: (Item) -> Bool = { _ in false }
-    /// Production injects 24pt pixel line icons. The prototype keeps SF Symbols.
+    /// Production injects 24pt hand-drawn template icons. The prototype keeps SF Symbols.
     var iconView: ((Item) -> AnyView)? = nil
+    var raisedBackground: (() -> AnyView)? = nil
     let onSelect: (Item) -> Void
 
     private var tabItems: some View {
@@ -130,8 +131,13 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
                 } label: {
                     ZStack {
                         if isRaisedControl(item) {
-                            Circle()
-                                .fill(AtlasPalette.coral)
+                            Group {
+                                if let raisedBackground {
+                                    raisedBackground()
+                                } else {
+                                    Circle().fill(AtlasPalette.coral)
+                                }
+                            }
                                 .frame(
                                     width: AtlasTabBarMetrics.raisedControlDiameter,
                                     height: AtlasTabBarMetrics.raisedControlDiameter

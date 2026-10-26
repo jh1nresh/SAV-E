@@ -769,6 +769,50 @@ final class SaveCollaborativeListTests: XCTestCase {
     }
 
     @MainActor
+    func testSelectedPlaceEnrichmentKeepsCheckInMadeWhileInFlight() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let service = GatedPhotoGooglePlacesService()
+        let map = MapViewModel(
+            googlePlacesService: service,
+            saveLocalVaultService: SaveLocalVaultService(
+                overrideVaultURL: directory.appendingPathComponent("save-memory-records.json")
+            ),
+            usesRemotePersistence: false
+        )
+        let saved = place(name: "Memory Cafe", category: .cafe)
+        map.places = [saved]
+        map.selectPlace(saved)
+
+        await service.waitUntilStarted()
+        var visited = saved
+        visited.status = .visited
+        try await map.updatePlace(visited)
+        XCTAssertEqual(map.places.first?.status, .visited)
+        XCTAssertEqual(map.selectedPlace?.status, .visited)
+
+        service.release()
+        await service.waitUntilDetailsReturned()
+        let deadline = Date().addingTimeInterval(1)
+        while Date() < deadline {
+            if map.places.first?.businessPhotoURLStrings.isEmpty == false { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        XCTAssertEqual(map.places.first?.status, .visited)
+        XCTAssertEqual(map.selectedPlace?.status, .visited)
+        XCTAssertEqual(
+            map.places.first?.businessPhotoURLStrings,
+            ["https://example.com/memory-cafe.jpg"]
+        )
+        XCTAssertEqual(
+            map.selectedPlace?.businessPhotoURLStrings,
+            ["https://example.com/memory-cafe.jpg"]
+        )
+        XCTAssertEqual(map.places.first?.googlePlaceId, "memory-cafe")
+    }
+
+    @MainActor
     func testPersistedMemoryAndSharedListsDropGooglePhotoURLs() throws {
         let legacyURL = "https://maps.googleapis.com/maps/api/place/photo?maxwidth=900&photo_reference=legacy-ref&key=TEST_ONLY_NON_SECRET_VALUE"
         let ownPhoto = "https://example.com/own-photo.jpg"
@@ -1525,6 +1569,74 @@ private final class StaleGooglePlaceIDService: GooglePlacesServiceProtocol {
 
     func photoURL(reference: String, maxWidth: Int) -> URL? {
         URL(string: "https://example.com/amamotobros.jpg")
+    }
+}
+
+@MainActor
+private final class GatedPhotoGooglePlacesService: GooglePlacesServiceProtocol {
+    private var startedContinuation: CheckedContinuation<Void, Never>?
+    private var releaseContinuation: CheckedContinuation<Void, Never>?
+    private var detailsContinuation: CheckedContinuation<Void, Never>?
+    private var didStart = false
+    private var didReturnDetails = false
+
+    func waitUntilStarted() async {
+        if didStart { return }
+        await withCheckedContinuation { startedContinuation = $0 }
+    }
+
+    func release() {
+        releaseContinuation?.resume()
+        releaseContinuation = nil
+    }
+
+    func waitUntilDetailsReturned() async {
+        if didReturnDetails { return }
+        await withCheckedContinuation { detailsContinuation = $0 }
+    }
+
+    func searchPlace(query: String, near: CLLocationCoordinate2D?) async throws -> [GooglePlaceMatch] {
+        await withCheckedContinuation { continuation in
+            releaseContinuation = continuation
+            didStart = true
+            startedContinuation?.resume()
+            startedContinuation = nil
+        }
+        return [
+            GooglePlaceMatch(
+                id: "memory-cafe",
+                name: "Memory Cafe",
+                address: "Irvine, CA",
+                latitude: 33.6849,
+                longitude: -117.8262,
+                rating: 4.6,
+                photoReference: "memory-cafe-photo"
+            )
+        ]
+    }
+
+    func getPlaceDetails(placeId: String) async throws -> GooglePlaceDetails {
+        let details = GooglePlaceDetails(
+            placeId: placeId,
+            name: "Memory Cafe",
+            formattedAddress: "Irvine, CA",
+            latitude: 33.6849,
+            longitude: -117.8262,
+            rating: 4.6,
+            priceLevel: nil,
+            openingHours: nil,
+            phoneNumber: nil,
+            websiteUrl: nil,
+            photoReferences: ["memory-cafe-photo"]
+        )
+        didReturnDetails = true
+        detailsContinuation?.resume()
+        detailsContinuation = nil
+        return details
+    }
+
+    func photoURL(reference: String, maxWidth: Int) -> URL? {
+        URL(string: "https://example.com/memory-cafe.jpg")
     }
 }
 
