@@ -1990,6 +1990,82 @@ final class SaveDoodleHomeTests: XCTestCase {
         )
     }
 
+    /// View on map from Saves/detail can focus a stamp outside Home Eat/Go + city.
+    /// Clearing `activeFilter` is not enough: the focused stamp must still list.
+    func testListedPlacesIncludesFocusedStampOutsideHomeFilter() throws {
+        let tokyoEat = place(
+            "Ichiran",
+            "1-22-7 Jinnan, Shibuya City, Tokyo, Japan",
+            .food
+        )
+        let tokyoGo = place(
+            "teamLab",
+            "1-3-8 Aomi, Koto City, Tokyo, Japan",
+            .attraction
+        )
+        let taipeiEat = place(
+            "Fujin",
+            "No. 353, Section 1, Fuxing S Rd, Da'an District, Taipei",
+            .cafe
+        )
+        let places = [tokyoEat, tokyoGo, taipeiEat]
+
+        let filtered = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .city("tokyo"),
+            location: nil,
+            locationDenied: true
+        )
+        XCTAssertEqual(filtered.map(\.place.id), [tokyoEat.id])
+
+        let offLens = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .city("tokyo"),
+            location: nil,
+            locationDenied: true,
+            including: tokyoGo
+        )
+        XCTAssertEqual(offLens.map(\.place.id), [tokyoEat.id, tokyoGo.id])
+
+        let offCity = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .city("tokyo"),
+            location: nil,
+            locationDenied: true,
+            including: taipeiEat
+        )
+        XCTAssertEqual(offCity.map(\.place.id), [tokyoEat.id, taipeiEat.id])
+
+        let alreadyListed = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .city("tokyo"),
+            location: nil,
+            locationDenied: true,
+            including: tokyoEat
+        )
+        XCTAssertEqual(alreadyListed.map(\.place.id), [tokyoEat.id])
+
+        let unknown = place("Unknown", "Somewhere", .food)
+        let notInCollection = SaveDoodleHomeCatalog.listedPlaces(
+            from: places,
+            lens: .eat,
+            selection: .city("tokyo"),
+            location: nil,
+            locationDenied: true,
+            including: unknown
+        )
+        XCTAssertEqual(notInCollection.map(\.place.id), [tokyoEat.id])
+
+        let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
+        XCTAssertTrue(map.contains("including: mapViewModel.selectedPlace"))
+        let home = try source(at: "SAV-E/Views/Home/SaveDoodleHomeView.swift")
+        XCTAssertFalse(home.contains("including: mapViewModel.selectedPlace"))
+    }
+
     private var tiantanFix: CLLocation {
         CLLocation(latitude: 39.8822, longitude: 116.4066)
     }

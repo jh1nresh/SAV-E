@@ -283,14 +283,18 @@ enum SaveDoodleHomeCatalog {
         }
     }
 
+    /// Home Eat/Go + city rows. Map may pass `including` so a one-shot
+    /// View-on-map focus still renders when that stamp is outside the
+    /// current lens or city. Home chrome stays on the current filter.
     static func listedPlaces(
         from places: [Place],
         lens: SaveDoodleLens,
         selection: SaveDoodleCitySelection,
         location: CLLocation?,
-        locationDenied: Bool
+        locationDenied: Bool,
+        including focused: Place? = nil
     ) -> [SaveDoodleListedPlace] {
-        visiblePlaces(
+        var listed = visiblePlaces(
             from: places,
             lens: lens,
             selection: selection,
@@ -305,6 +309,18 @@ enum SaveDoodleHomeCatalog {
                 distance: location.flatMap { distance(from: $0, to: place) }
             )
         }
+        if let focused,
+           places.contains(where: { $0.id == focused.id }),
+           !listed.contains(where: { $0.id == focused.id }) {
+            listed.append(
+                SaveDoodleListedPlace(
+                    place: focused,
+                    index: listed.count + 1,
+                    distance: location.flatMap { distance(from: $0, to: focused) }
+                )
+            )
+        }
+        return listed
     }
 
     static func isNearbyEmpty(
