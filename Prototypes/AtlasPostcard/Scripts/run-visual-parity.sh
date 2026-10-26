@@ -28,15 +28,16 @@ Options:
                         UI set did not capture them (e.g. paywall,capture).
 
 The screenshots directory must contain home.png, saves.png, plan.png,
-and map.png. The result-bundle mode prefers the live five-tab-home
-attachment for Home and falls back to atlas-home for prototype-only
-runs. Saves, Plan, and Map use the stable atlas-saves, atlas-plan,
-and atlas-map XCTest attachments. Friends is a real 0.90 gate against
-`friends.png` (Home deferral on #290 does not apply to Friends).
-Capture and paywall use five-tab-capture and five-tab-paywall when
-those rails ran. Passport prefers five-tab-passport and falls back to
-atlas-passport. Paywall comparison passes `--ignore-rects` over the
-hero, sale-state line, and legal sentence.
+map.png, and friends.png, plus Capture, paywall, and passport when those
+rails ran. The result-bundle mode prefers five-tab-home and falls back to
+atlas-home for prototype-only runs. Saves, Plan, and Map use atlas-saves,
+atlas-plan, and atlas-map. Friends is a real 0.90 gate against friends.png;
+compare populated five-tab-friends, never five-tab-friends-empty.
+Home deferral on #290 does not apply to Friends.
+Capture and paywall use five-tab-capture and five-tab-paywall. Passport
+prefers five-tab-passport and falls back to atlas-passport. Paywall
+comparison passes --ignore-rects over the hero, sale-state line and legal
+sentence. Only screens explicitly excluded by --skip-screens are omitted.
 
 --destination runs the prototype XCTest testCaptureFourLockedScreens
 (Home, Saves, Plan, Map only). Friends is not in that prototype shell;
@@ -359,6 +360,9 @@ if [[ -n "$RESULT_BUNDLE" ]]; then
                 five-tab-friends-coming-soon*)
                     continue
                     ;;
+                five-tab-friends-empty*)
+                    continue
+                    ;;
                 five-tab-friends*)
                     screen="friends"
                     priority=1
@@ -455,7 +459,10 @@ else
         echo "error: screenshots directory not found: $SCREENSHOTS_DIR" >&2
         exit 2
     fi
-    for screen in home saves plan map; do
+    for screen in "${parity_screens[@]}"; do
+        if should_skip_screen "$screen"; then
+            continue
+        fi
         if [[ ! -f "$SCREENSHOTS_DIR/$screen.png" ]]; then
             echo "error: missing screenshot: $SCREENSHOTS_DIR/$screen.png" >&2
             exit 2
@@ -541,7 +548,7 @@ for screen in "${compare_screens[@]}"; do
             --result "$ARTIFACT_DIR/results/map.json"
             --output "$ARTIFACT_DIR/map-doodle-similarity/side-by-side.png"
             --report "$ARTIFACT_DIR/map-doodle-similarity/report.json"
-            --mask "0,0,0,0"
+            --no-mask
             --status "$status"
             --threshold "$THRESHOLD"
             --modes-output "$ARTIFACT_DIR/map-doodle-similarity/mock-light-dark.png"

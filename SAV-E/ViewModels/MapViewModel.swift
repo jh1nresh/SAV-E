@@ -747,6 +747,16 @@ final class MapViewModel: ObservableObject {
     private var didRequestInitialLocation = false
     private var isLoadingPlaces = false
     private var hasLoadedPlaces = false
+    @Published private var savedCollectionLoaded = false
+    private var savedCollectionOwner: String?
+    private var savedCollectionGeneration = 0
+    /// A finished fetch attempt is not evidence that the collection is empty.
+    var isSavedCollectionReady: Bool {
+        savedCollectionLoaded && (!usesRemotePersistence || (
+            savedCollectionOwner != nil && savedCollectionOwner == authService.currentUserId
+                && savedCollectionGeneration == authService.sessionGeneration
+        ))
+    }
     /// Last successful `/places` count for the active account. `mergeRemotePlaces`
     /// can keep a confirmed vault row another device already deleted, so the
     /// local cap must not use that inflated `places.count`.
@@ -1092,7 +1102,7 @@ final class MapViewModel: ObservableObject {
 
         if !usesRemotePersistence {
             clearAuthoritativeSavedPlaceCount()
-            places = localConfirmedPlaces()
+            places = localConfirmedPlaces(markCollectionReady: true)
             reviewCandidates = localReviewCandidates()
             socialPlaces = []
             return
@@ -1107,6 +1117,7 @@ final class MapViewModel: ObservableObject {
             return
         }
 
+        let loadGeneration = authService.sessionGeneration
         do {
             let remotePlaces = try await supabaseService.fetchPlaces(for: userId)
             rememberAuthoritativeSavedPlaceCount(
@@ -1114,6 +1125,11 @@ final class MapViewModel: ObservableObject {
                 owner: userId
             )
             places = mergeRemotePlaces(remotePlaces, withLocalPlaces: localConfirmedPlaces())
+            if authService.currentUserId == userId, authService.sessionGeneration == loadGeneration {
+                savedCollectionOwner = userId
+                savedCollectionGeneration = loadGeneration
+                savedCollectionLoaded = true
+            }
             await completeReferralHandoffIfNeeded()
             // Each sync step is isolated: a failed pending import must not
             // blank the review queue, and a failed place import must not
@@ -1164,7 +1180,7 @@ final class MapViewModel: ObservableObject {
         guard !isLoadingPlaces else { return }
 
         if !usesRemotePersistence {
-            places = localConfirmedPlaces()
+            places = localConfirmedPlaces(markCollectionReady: true)
             reviewCandidates = localReviewCandidates()
             return
         }
@@ -1185,6 +1201,12 @@ final class MapViewModel: ObservableObject {
             let remotePlaces = try await supabaseService.fetchPlaces(for: userId)
             try ensureConfirmationSession(userId, generation)
             rememberAuthoritativeSavedPlaceCount(Place.consolidated(remotePlaces).count, owner: userId)
+            places = mergeRemotePlaces(remotePlaces, withLocalPlaces: localConfirmedPlaces())
+            if authService.currentUserId == userId, authService.sessionGeneration == generation {
+                savedCollectionOwner = userId
+                savedCollectionGeneration = generation
+                savedCollectionLoaded = true
+            }
             syncSavedPlaceLimitCache()
         } catch {
             guard authService.currentUserId == userId,
@@ -1254,12 +1276,14 @@ final class MapViewModel: ObservableObject {
         pendingImportService.restorePendingPlaces(keepQueued, restorationToken: restorationToken)
     }
 
-    private func localConfirmedPlaces() -> [Place] {
+    private func localConfirmedPlaces(markCollectionReady: Bool = false) -> [Place] {
         do {
-            return try saveLocalVaultService.confirmedPlaces(
+            let confirmed = try saveLocalVaultService.confirmedPlaces(
                 limit: 500,
                 belongingTo: authService.currentUserId
             )
+            if markCollectionReady { savedCollectionLoaded = true }
+            return confirmed
         } catch {
             print("MapViewModel: failed to load local confirmed places: \(error)")
             return []
@@ -2424,10 +2448,13 @@ final class MapViewModel: ObservableObject {
     func chooseSavedStampFromExactSearch(_ place: Place) async -> Place? {
         let owner = authService.currentUserId
         let generation = authService.sessionGeneration
+        let clueID = liveExactSearchResolution?.clue.id
         do {
             return try await resolveExactSearchClue(toSavedPlace: place)
         } catch {
             guard !usesRemotePersistence || (authService.currentUserId == owner && authService.sessionGeneration == generation) else { return nil }
+            guard exactSearchIntentActive else { return nil }
+            if let clueID, let activeID = liveExactSearchResolution?.clue.id, activeID != clueID { return nil }
             if correctionDrawerError == nil, let message = (error as? LocalizedError)?.errorDescription,
                !message.isEmpty {
                 correctionDrawerError = message
@@ -2637,13 +2664,23 @@ final class MapViewModel: ObservableObject {
                 correctionDrawerError = rollbackError.localizedDescription
                 throw rollbackError
             }
-            exactSearchResolution = resolution
-            exactSearchRollbackLockPlaceID = nil
-        } else {
+            if mayRestoreExactSearch(resolution) {
+                exactSearchResolution = resolution
+                exactSearchRollbackLockPlaceID = nil
+            }
+        } else if mayRestoreExactSearch(resolution) {
             exactSearchResolution = resolution
         }
-        correctionDrawerError = error.localizedDescription
+        if mayRestoreExactSearch(resolution) { correctionDrawerError = error.localizedDescription }
         throw error
+    }
+
+    /// Compensation still runs for an old write. Only its normal retry UI is
+    /// suppressed after close/replacement; failed compensation above retains
+    /// the original recovery plan and lock unconditionally.
+    private func mayRestoreExactSearch(_ resolution: ExactSearchResolution) -> Bool {
+        exactSearchIntentActive && (liveExactSearchResolution == nil
+            || liveExactSearchResolution?.clue.id == resolution.clue.id)
     }
 
     private func rollBackRemoteStampMerge(original: Place, merged: Place, resolution: ExactSearchResolution) async throws {
@@ -4398,6 +4435,19 @@ final class MapViewModel: ObservableObject {
         return selectionIsCameraOnly
     }
 
+    /// Explicit saved-place handoff leaves a previous itinerary and focuses
+    /// the requested stamp, including when that stamp was already selected.
+    func showSavedPlaceOnMap(_ place: Place) {
+        clearRoute()
+        activeFilter = nil
+        selectPlace(place)
+        guard place.isMapKitMappable else { return }
+        cameraPosition = .region(MKCoordinateRegion(
+            center: place.coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04)
+        ))
+    }
+
     func selectPlace(_ place: Place) {
         selectionIsCameraOnly = false
         selectedPlace = place
@@ -4596,6 +4646,7 @@ final class MapViewModel: ObservableObject {
     }
 
     var hasActiveExactSearchResolution: Bool { liveExactSearchResolution != nil }
+    var activeExactSearchClueID: UUID? { liveExactSearchResolution?.clue.id }
 
     private func dropExactSearchResolutionUnlessLocked() {
         exactSearchIntentActive = false
