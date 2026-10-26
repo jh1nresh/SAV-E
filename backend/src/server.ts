@@ -5,7 +5,12 @@ import { AnalysisControlError, AnalysisUsageStore, analysisID, analysisLimits, a
 import { runAnalysisRecovery } from "./analysisRecovery.js";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomUUID, randomBytes, createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { importSPKI, jwtVerify, type JWTPayload, type KeyLike } from "jose";
+import { decodeJwt, importSPKI, jwtVerify, type JWTPayload, type KeyLike } from "jose";
+import {
+  APPLE_IDENTITY_ISSUER,
+  AppleIdentityTokenError,
+  verifiedAppleIdentity,
+} from "./appleIdentityToken.js";
 import pg, { type PoolClient } from "pg";
 import {
   evaluateAccountConfirmationRequest,
@@ -104,6 +109,12 @@ import {
   type FriendShareShareMetricsRow,
 } from "./friendShareEvents.js";
 import {
+  clipListPlaceIdentities,
+  clipListSaveResponse,
+  existingPlaceMatchingClipIdentity,
+  planClipListSave,
+} from "./clipListSave.js";
+import {
   communityRecommendationSignal,
   normalizeFollowRequest,
   normalizeVisibilityRequest,
@@ -123,6 +134,7 @@ import {
   formatListRow,
   formatPublicListPreview,
   formatShareCodeRow,
+  clipListPlacesBodyMaxBytes,
   listBodyMaxBytes,
   listForMember,
   listMaxItems,
@@ -173,7 +185,7 @@ import {
 } from "./receiptEnvelope.js";
 import { readSourceRecoveryConfigStatus } from "./sourceRecoveryConfig.js";
 import { readAnalysisReadiness } from "./analysisReadiness.js";
-import { createPrivyUserProvisioner } from "./privyUsers.js";
+import { createPrivyUserProvisioner, PrivyUserProvisioningError } from "./privyUsers.js";
 import {
   MemoryContractError,
   normalizePreferenceCreate,
@@ -1022,6 +1034,33 @@ createServer(async (request, response) => {
       return await handleMySaves(response, id);
     }
 
+    if (isV0 && request.method === "GET" && resource === "clip-apple-session" && !id) {
+      response.setHeader("Cache-Control", "private, no-store");
+      const token = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+      if (!token) return sendJson(response, { error: "Missing bearer token" }, 401);
+      let appleIssuer = false;
+      try {
+        appleIssuer = decodeJwt(token).iss === APPLE_IDENTITY_ISSUER;
+      } catch {
+        appleIssuer = false;
+      }
+      if (!appleIssuer) {
+        return sendJson(response, { error: "Apple identity token required" }, 401);
+      }
+      try {
+        const privyUserId = await lookupAppleLinkedPrivySubject(token);
+        return sendJson(response, { version: "v0", privy_user_id: privyUserId });
+      } catch (error) {
+        if (error instanceof AppleIdentityTokenError) {
+          return sendJson(response, { error: error.message }, 401);
+        }
+        if (error instanceof ApiError) {
+          return sendJson(response, { error: error.message }, error.status);
+        }
+        throw error;
+      }
+    }
+
     if (isV0 && resource === "account-status") {
       if (segments.length > 2 || (segments.length === 2 && segments[1] !== "confirm")) {
         return sendJson(response, { error: "Not found" }, 404);
@@ -1041,7 +1080,7 @@ createServer(async (request, response) => {
             authorizationHeader: request.headers.authorization,
             accountRefSecret: stableAccountRefSecret(process.env),
             expectedAccountRef: body.account_ref,
-            verifySubject: verifiedPrivySubject,
+            verifySubject: verifiedPrivyAccessSubject,
             beginTransaction: async () => { await client.query("begin"); },
             lockSubject: (subject) => lockProfileSubject(client, subject),
             query: (sql, values) => client.query(sql, [...values] as QueryValue[]),
@@ -1070,7 +1109,7 @@ createServer(async (request, response) => {
         accountRefSecret: stableAccountRefSecret(process.env),
         previousAccountRefSecrets: previousAccountRefSecrets(process.env),
         presentedAccountRef: request.headers["x-save-account-ref"],
-        verifySubject: verifiedPrivySubject,
+        verifySubject: verifiedPrivyAccessSubject,
         query: (sql, values) => pool.query(sql, [...values] as QueryValue[]),
       });
       return sendJson(response, result.body, result.statusCode);
@@ -1094,7 +1133,7 @@ createServer(async (request, response) => {
       }
       const token = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
       if (!token) return sendJson(response, { error: "Missing bearer token" }, 401);
-      const privyUserId = await verifiedPrivySubject(token);
+      const privyUserId = await verifiedPrivyAccessSubject(token);
       await deleteAccount({
         deleteProfile: async () => {
           await pool.query(
@@ -1582,7 +1621,10 @@ async function handlePlaces(
   }
 
   if (request.method === "POST" && !placeId) {
-    const rawBody = await readJson(request);
+    const rawBody = await readJson(request, clipListPlacesBodyMaxBytes);
+    if (Array.isArray(rawBody.places)) {
+      return await saveClipListPlaces(response, userId, rawBody.places);
+    }
     const providerFieldError = providerCoordinateFieldError(rawBody);
     if (providerFieldError) return sendJson(response, { error: providerFieldError }, 400);
     let friendShareCode: string | undefined;
@@ -1606,46 +1648,80 @@ async function handlePlaces(
         return sendJson(response, { error: "Place does not match the shared place" }, 409);
       }
 
-      const receiptBody: JsonBody = {
-        ...body,
-        origin_shared_place_link_id: link.id,
-      };
-      const insert = buildInsert(
-        "places",
-        receiptBody,
-        [...placeFields, "user_id", "origin_shared_place_link_id"],
-      );
       const client = await pool.connect();
       try {
         await client.query("begin");
         await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
         const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
-        const { rows } = await client.query(
-          `${insert.sql}
-           ${friendSharePlaceOriginConflictClause}
-           returning *, (xmax = 0) as friend_share_receipt_created`,
-          insert.values,
+        const existing = await client.query(
+          "select * from places where user_id = $1",
+          [userId],
         );
-        const result = asObject(rows[0]);
-        const { friend_share_receipt_created: created, ...canonicalPlace } = result;
-        const terminalEvent = created === true
-          ? "friend_share_saved"
-          : "friend_share_duplicate_blocked";
-        await client.query(
-          `insert into friend_share_events (
-             shared_place_link_id,
-             sender_user_id,
-             recipient_user_id,
-             recipient_place_id,
-             event_type,
-             surface
-           )
-           values ($1, $2, $3, $4, $5, 'server')
-           on conflict do nothing`,
-          [link.id, link.user_id, userId, canonicalPlace.id, terminalEvent],
-        );
+        const matched = existingPlaceMatchingClipIdentity(existing.rows, body);
+        let created: unknown;
+        let canonicalPlace: JsonBody | undefined;
+        if (matched) {
+          await client.query(
+            `insert into friend_share_events (
+               shared_place_link_id,
+               sender_user_id,
+               recipient_user_id,
+               recipient_place_id,
+               event_type,
+               surface
+             )
+             values ($1, $2, $3, $4, $5, 'server')
+             on conflict do nothing`,
+            [link.id, link.user_id, userId, matched.id, "friend_share_duplicate_blocked"],
+          );
+        } else {
+          const receiptBody: JsonBody = {
+            ...body,
+            origin_shared_place_link_id: link.id,
+          };
+          const insert = buildInsert(
+            "places",
+            receiptBody,
+            [...placeFields, "user_id", "origin_shared_place_link_id"],
+          );
+          const { rows } = await client.query(
+            `${insert.sql}
+             ${friendSharePlaceOriginConflictClause}
+             returning *, (xmax = 0) as friend_share_receipt_created`,
+            insert.values,
+          );
+          const result = asObject(rows[0]);
+          const { friend_share_receipt_created: nextCreated, ...nextPlace } = result;
+          created = nextCreated;
+          canonicalPlace = nextPlace;
+          const terminalEvent = nextCreated === true
+            ? "friend_share_saved"
+            : "friend_share_duplicate_blocked";
+          await client.query(
+            `insert into friend_share_events (
+               shared_place_link_id,
+               sender_user_id,
+               recipient_user_id,
+               recipient_place_id,
+               event_type,
+               surface
+             )
+             values ($1, $2, $3, $4, $5, 'server')
+             on conflict do nothing`,
+            [link.id, link.user_id, userId, nextPlace.id, terminalEvent],
+          );
+        }
         await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
         await client.query("commit");
+        if (matched) {
+          return sendJson(response, {
+            place: formatPlace(asObject(matched)),
+            outcome: "already_saved",
+          }, 201);
+        }
+        if (!canonicalPlace) {
+          throw new Error("Friend share insert returned no place");
+        }
         return sendJson(response, {
           place: formatPlace(canonicalPlace),
           outcome: created === true ? "saved" : "already_saved",
@@ -1732,6 +1808,75 @@ async function handlePlaces(
   }
 
   return sendJson(response, { error: "Unsupported places route" }, 405);
+}
+
+async function saveClipListPlaces(
+  response: ServerResponse,
+  userId: string,
+  items: unknown,
+): Promise<void> {
+  if (!Array.isArray(items) || items.length === 0) {
+    return sendJson(response, { error: "places required" }, 400);
+  }
+  if (items.length > listMaxItems) {
+    return sendJson(response, { error: "Too many places" }, 400);
+  }
+
+  // Validate the complete batch before opening a transaction or inserting any row.
+  for (const item of items) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return sendJson(response, { error: "Invalid place in batch" }, 400);
+    }
+    const providerFieldError = providerCoordinateFieldError(item as JsonBody);
+    if (providerFieldError) return sendJson(response, { error: providerFieldError }, 400);
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtextextended($1, 0))", [userId]);
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`clip-list-save:${userId}`]);
+    const savedPlaceCountBefore = await savedPlaceGrowthSnapshot(client, userId);
+    const existing = await client.query(
+      "select id, name, latitude, longitude, google_place_id, provider_place_id from places where user_id = $1",
+      [userId],
+    );
+    const existingIdentities = existing.rows.flatMap((row) => clipListPlaceIdentities(row));
+    const plan = planClipListSave({
+      items,
+      existingIdentities,
+      existingPlaces: existing.rows,
+      savedPlaceCount: savedPlaceCountBefore,
+    });
+
+    const inserted: Record<string, unknown>[] = [];
+    for (const item of plan.toInsert) {
+      const body = withOwner(item, userId);
+      if (typeof body.id !== "string" || !body.id) body.id = randomUUID();
+      const insert = buildInsert("places", body, [...placeFields, "user_id"]);
+      const { rows } = await client.query(
+        `${insert.sql}
+         on conflict (id) do update
+         set id = excluded.id
+         where places.user_id = excluded.user_id
+         returning *`,
+        insert.values,
+      );
+      if (!rows[0]) {
+        throw new Error("Place id conflict");
+      }
+      inserted.push(rows[0]);
+    }
+
+    await assertSavedPlaceGrowthAllowed(client, userId, savedPlaceCountBefore);
+    await client.query("commit");
+    return sendJson(response, clipListSaveResponse(plan, inserted), 201);
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function providerCoordinateFieldError(body: JsonBody): string | undefined {
@@ -2513,7 +2658,7 @@ async function handleShareExtension(
       const bearer = request.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
       if (!bearer) throw new ShareExtensionSessionError(401, "A Privy bearer token is required");
       let ownerSubject: string;
-      try { ownerSubject = await verifiedPrivySubject(bearer); }
+      try { ownerSubject = await verifiedPrivyAccessSubject(bearer); }
       catch { throw new ShareExtensionSessionError(401, "Invalid Privy bearer token"); }
       const body = await readJson(request, 2_048);
       if (Object.keys(body).some(key => key !== "installation_id")) {
@@ -6647,11 +6792,82 @@ async function ensurePrivyPhoneProfile(
   }
 }
 
+async function lookupAppleLinkedPrivySubject(token: string): Promise<string> {
+  const identity = await verifiedAppleIdentity(token);
+  if (!privyUserProvisioner) {
+    throw new ApiError(503, "Apple identity linking unavailable");
+  }
+  try {
+    const privyUser = await privyUserProvisioner.findUserForApple(identity.subject);
+    if (!privyUser?.id) {
+      throw new ApiError(404, "Apple identity is not linked");
+    }
+    return privyUser.id;
+  } catch (error) {
+    if (error instanceof PrivyUserProvisioningError) {
+      throw new ApiError(error.status, error.message);
+    }
+    throw error;
+  }
+}
+
+async function verifiedAppleLinkedPrivySubject(token: string): Promise<string> {
+  const identity = await verifiedAppleIdentity(token);
+  if (!privyUserProvisioner) {
+    throw new ApiError(503, "Apple identity linking unavailable");
+  }
+  try {
+    const privyUser = await privyUserProvisioner.ensureUserForApple(identity.subject);
+    if (!privyUser.id) {
+      throw new ApiError(502, "Apple identity linking unavailable");
+    }
+    return privyUser.id;
+  } catch (error) {
+    if (error instanceof PrivyUserProvisioningError) {
+      throw new ApiError(error.status, error.message);
+    }
+    throw error;
+  }
+}
+
+async function verifiedPrivyAccessSubject(token: string): Promise<string> {
+  let appleIssuer = false;
+  try {
+    appleIssuer = decodeJwt(token).iss === APPLE_IDENTITY_ISSUER;
+  } catch {
+    appleIssuer = false;
+  }
+  if (appleIssuer) {
+    throw new ApiError(401, "Privy bearer token required");
+  }
+  return await verifiedPrivySubject(token);
+}
+
+async function verifiedBearerPrivySubject(token: string): Promise<string> {
+  let appleIssuer = false;
+  try {
+    appleIssuer = decodeJwt(token).iss === APPLE_IDENTITY_ISSUER;
+  } catch {
+    appleIssuer = false;
+  }
+  if (appleIssuer) {
+    try {
+      return await verifiedAppleLinkedPrivySubject(token);
+    } catch (error) {
+      if (error instanceof AppleIdentityTokenError) {
+        throw new ApiError(401, error.message);
+      }
+      throw error;
+    }
+  }
+  return await verifiedPrivySubject(token);
+}
+
 async function resolveUserId(request: IncomingMessage): Promise<string> {
   const header = request.headers.authorization ?? "";
   const token = header.match(/^Bearer\s+(.+)$/i)?.[1];
   if (token) {
-    const privySubject = await verifiedPrivySubject(token);
+    const privySubject = await verifiedBearerPrivySubject(token);
     return await profileIdForPrivySubject(privySubject);
   }
 

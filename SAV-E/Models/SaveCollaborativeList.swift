@@ -47,6 +47,11 @@ struct SaveListItem: Identifiable, Codable, Hashable {
     var note: String?
     var addedByDisplayName: String
     var addedAt: Date
+    var extraPlaceIds: [String]? = nil
+    var coordinateSystem: PlaceCoordinateSystem? = nil
+    var locationProvider: PlaceMatchProvider? = nil
+    var providerMapUrl: String? = nil
+    var googlePlaceId: String? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -72,7 +77,11 @@ struct SaveListItem: Identifiable, Codable, Hashable {
             photoURLs: GooglePlacesPhotoURL.persistableStrings(place.businessPhotoURLStrings) ?? [],
             note: place.note,
             addedByDisplayName: addedByDisplayName,
-            addedAt: addedAt
+            addedAt: addedAt,
+            coordinateSystem: place.coordinateSystem,
+            locationProvider: place.locationProvider,
+            providerMapUrl: place.providerMapUrl,
+            googlePlaceId: place.googlePlaceId
         )
     }
 
@@ -92,7 +101,8 @@ struct SaveListItem: Identifiable, Codable, Hashable {
             photoURLs: GooglePlacesPhotoURL.persistableStrings(candidate.businessPhotoURLStrings) ?? [],
             note: candidate.shareNote,
             addedByDisplayName: addedByDisplayName,
-            addedAt: addedAt
+            addedAt: addedAt,
+            googlePlaceId: candidate.sourcePlatform == .googleMaps ? candidate.id : nil
         )
     }
 
@@ -104,32 +114,48 @@ struct SaveListItem: Identifiable, Codable, Hashable {
     }
 
     func alreadySaved(in places: [Place]) -> Bool {
-        places.contains { place in
-            place.matchesMapFeature(title: title, coordinate: coordinate) ||
-                place.name.localizedCaseInsensitiveCompare(title) == .orderedSame
+        let ids = ([sourceID] + (extraPlaceIds ?? []) + [googlePlaceId].compactMap({ $0 }))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return places.contains { place in
+            for id in ids {
+                if let provider = place.providerPlaceId, !provider.isEmpty,
+                   id.caseInsensitiveCompare(provider) == .orderedSame {
+                    return true
+                }
+                if let google = place.googlePlaceId, !google.isEmpty,
+                   id.caseInsensitiveCompare(google) == .orderedSame {
+                    return true
+                }
+            }
+            return place.matchesMapFeature(title: title, coordinate: coordinate)
+                || ClipListHandoff.isNearbyDuplicate(title: title, coordinate: coordinate, place: place)
         }
     }
 
-    func asPlace(createdAt: Date = Date()) -> Place {
+    func asPlace(id: UUID = UUID(), createdAt: Date = Date(), includeSenderMemory: Bool = true) -> Place {
         Place(
-            id: UUID(),
+            id: id,
             name: title,
             address: subtitle,
             latitude: latitude,
             longitude: longitude,
-            googlePlaceId: nil,
+            googlePlaceId: googlePlaceId ?? ([sourceID] + (extraPlaceIds ?? [])).first(where: ClipListHandoff.isGooglePlaceID),
             category: category ?? .food,
             status: .wantToGo,
             rating: nil,
-            note: note,
+            note: includeSenderMemory ? note : nil,
             sourceUrl: sourceURL,
             sourcePlatform: .other,
+            coordinateSystem: coordinateSystem,
+            locationProvider: locationProvider,
+            providerMapUrl: providerMapUrl,
             sourceImageUrl: GooglePlacesPhotoURL.persistableString(photoURLs.first),
             businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(photoURLs),
             extractedDishes: nil,
             priceRange: nil,
             recommender: addedByDisplayName,
-            googleRating: rating,
+            googleRating: includeSenderMemory ? rating : nil,
             googlePriceLevel: nil,
             openingHours: nil,
             createdAt: createdAt
@@ -270,14 +296,14 @@ struct SaveSharedListPayload: Codable, Hashable {
            let role = SaveListRole(rawValue: roleValue) {
             payload.role = role
         }
-        payload.list = payload.list.sanitizingPhotoURLs()
+        payload.list = payload.list.sanitizingPublicPayload()
         payload.list.viewerRole = payload.role
         return payload
     }
 
     func toURL(baseURL: String? = nil) -> URL? {
         var safePayload = self
-        safePayload.list = list.sanitizingPhotoURLs()
+        safePayload.list = list.sanitizingPublicPayload()
         guard let jsonData = try? JSONEncoder().encode(safePayload),
               let base64 = jsonData.base64EncodedString().addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
             return nil
@@ -436,6 +462,17 @@ private extension SaveCollaborativeList {
         copy.items = items.map { item in
             var safeItem = item
             safeItem.photoURLs = GooglePlacesPhotoURL.persistableStrings(item.photoURLs) ?? []
+            return safeItem
+        }
+        return copy
+    }
+
+    func sanitizingPublicPayload() -> SaveCollaborativeList {
+        var copy = sanitizingPhotoURLs()
+        copy.items = copy.items.map { item in
+            var safeItem = item
+            safeItem.sourceURL = ShareRoutePayloadSanitizer.publicURL(from: item.sourceURL)?.absoluteString
+            safeItem.photoURLs = ShareRoutePayloadSanitizer.persistablePhotoURLs(item.photoURLs)
             return safeItem
         }
         return copy

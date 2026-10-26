@@ -1,0 +1,456 @@
+import XCTest
+
+final class ClipListSaveTests: XCTestCase {
+    func testSL1OneRequestBodyDedupeFirst() {
+        let items = [
+            item("a", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("a", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("b", "Katsu Midori", lat: 35.690, lng: 139.700),
+            item(nil, "Onibus Coffee", lat: 35.644, lng: 139.699),
+        ]
+        let unique = ClipListSavePlanner.uniqueItems(from: items)
+        XCTAssertEqual(unique.map(\.placeId), ["a", "b"])
+
+        let body = ClipListSavePlanner.requestBody(items: items)
+        let places = body["places"] as? [[String: Any]]
+        XCTAssertEqual(places?.count, 2)
+        XCTAssertEqual(places?.compactMap { $0["provider_place_id"] as? String }, ["a", "b"])
+        XCTAssertEqual(body.keys.sorted(), ["places"], "SL1: one POST /places payload")
+    }
+
+    func testSL2OverflowUsesListOrderAndRemainingQuota() {
+        let counts = ClipListSavePlanner.allocate(
+            novelCount: 4,
+            alreadySaved: 1,
+            savedPlaceCount: 48
+        )
+        XCTAssertEqual(counts.newlySaved, 2)
+        XCTAssertEqual(counts.alreadySaved, 1)
+        XCTAssertEqual(counts.overCap, 2)
+        XCTAssertEqual(counts.remaining, 0)
+        XCTAssertEqual(counts.limit, 50)
+    }
+
+    func testSL2FullAccountStopsAtCap() {
+        let counts = ClipListSavePlanner.allocate(
+            novelCount: 5,
+            alreadySaved: 0,
+            savedPlaceCount: 50
+        )
+        XCTAssertEqual(counts.newlySaved, 0)
+        XCTAssertEqual(counts.overCap, 5)
+        XCTAssertEqual(counts.remaining, 0)
+        XCTAssertFalse(counts.addedAnything)
+    }
+
+    func testSL3RequiresThreeRealCounts() {
+        let ok = ClipListSavePlanner.parseCounts(
+            status: 201,
+            body: [
+                "newly_saved": 3,
+                "already_saved": 1,
+                "over_cap": 1,
+                "remaining": 12,
+                "limit": 50,
+            ]
+        )
+        XCTAssertEqual(ok, ClipListSaveCounts(newlySaved: 3, alreadySaved: 1, overCap: 1, remaining: 12, limit: 50))
+
+        XCTAssertNil(
+            ClipListSavePlanner.parseCounts(status: 201, body: ["outcome": "saved"]),
+            "a 2xx without the three counts is not a list success"
+        )
+        XCTAssertNil(
+            ClipListSavePlanner.parseCounts(
+                status: 201,
+                body: ["newly_saved": 3, "already_saved": 1]
+            )
+        )
+    }
+
+    func testSL4NetworkOrIncompleteResponseIsNotSilentSuccess() {
+        XCTAssertNil(ClipListSavePlanner.parseCounts(status: 500, body: [
+            "newly_saved": 2,
+            "already_saved": 0,
+            "over_cap": 0,
+        ]))
+        XCTAssertNil(ClipListSavePlanner.parseCounts(status: 0, body: [:]))
+
+        let data = Data(#"{"newly_saved":1,"already_saved":2,"over_cap":3,"remaining":0}"#.utf8)
+        XCTAssertEqual(
+            ClipListSavePlanner.parseOutcome(status: 201, data: data),
+            .success(ClipListSaveCounts(newlySaved: 1, alreadySaved: 2, overCap: 3, remaining: 0, limit: 50))
+        )
+        XCTAssertEqual(ClipListSavePlanner.parseOutcome(status: 500, data: data), .failure(.unconfirmed))
+        XCTAssertEqual(ClipListSavePlanner.parseOutcome(status: 200, data: Data("{}".utf8)), .failure(.unconfirmed))
+        let asError: Error = ClipListSaveFailure.unconfirmed
+        XCTAssertEqual((asError as? ClipListSaveFailure), .unconfirmed)
+    }
+
+    func testSL6SwipeHintOnlyOnFirstPageUntilDismissed() {
+        XCTAssertTrue(ClipListSwipeHint.shouldShow(pageIndex: 0, pageCount: 5, dismissed: false))
+        XCTAssertFalse(ClipListSwipeHint.shouldShow(pageIndex: 1, pageCount: 5, dismissed: false))
+        XCTAssertFalse(ClipListSwipeHint.shouldShow(pageIndex: 0, pageCount: 1, dismissed: false))
+        XCTAssertFalse(ClipListSwipeHint.shouldShow(pageIndex: 0, pageCount: 5, dismissed: true))
+    }
+
+    func testSL6SwipeHintPersistsDismissFlag() {
+        let suite = "clip.list.swipe.test.\(UUID().uuidString)"
+        let store = UserDefaults(suiteName: suite)
+        defer { store?.removePersistentDomain(forName: suite) }
+        XCTAssertEqual(ClipListSwipeHint.suiteName, "group.com.wanderly.app")
+        XCTAssertFalse(ClipListSwipeHint.isDismissed(in: store))
+        ClipListSwipeHint.dismiss(in: store)
+        XCTAssertTrue(ClipListSwipeHint.isDismissed(in: store))
+        XCTAssertFalse(ClipListSwipeHint.shouldShow(pageIndex: 0, pageCount: 5, dismissed: ClipListSwipeHint.isDismissed(in: store)))
+        ClipListSwipeHint.reset(in: store)
+        XCTAssertFalse(ClipListSwipeHint.isDismissed(in: store))
+    }
+
+    func testLS4SignInCopyUsesOneLayoutAndTwoTitles() {
+        XCTAssertEqual(ClipSignInKind.onePlace.titleKey, "clip.signin.saveOne")
+        XCTAssertEqual(ClipSignInKind.wholeList(5).titleKey, "clip.signin.saveCount")
+        XCTAssertEqual(ClipSignInKind.onePlace.placeCount, 1)
+        XCTAssertEqual(ClipSignInKind.wholeList(5).placeCount, 5)
+        XCTAssertNotEqual(ClipSignInKind.onePlace.titleKey, ClipSignInKind.wholeList(5).titleKey)
+    }
+
+    func testRecipientPlaceBodyOmitsSenderNoteAndRating() {
+        let item = ClipListSaveItem(
+            name: "Onibus Coffee",
+            address: "Tokyo",
+            latitude: 35.644,
+            longitude: 139.699,
+            category: "Cafe",
+            rating: 4.6,
+            note: "Mina's late-night pick",
+            placeId: "source-owner-id"
+        )
+        let body = ClipListSavePlanner.placeBody(from: item)
+        XCTAssertNil(body["note"])
+        XCTAssertNil(body["rating"])
+        XCTAssertEqual(body["provider_place_id"] as? String, "source-owner-id")
+        XCTAssertEqual(body["name"] as? String, "Onibus Coffee")
+    }
+
+    func testRecipientOwnedPlaceIDDoesNotReuseSourceUUID() {
+        let sourceId = UUID().uuidString
+        let items = [item(sourceId, "Onibus Coffee", lat: 35.644, lng: 139.699)]
+        let places = ClipListSavePlanner.requestBody(items: items)["places"] as? [[String: Any]]
+        let id = places?.first?["id"] as? String
+        XCTAssertNotNil(UUID(uuidString: id ?? ""))
+        XCTAssertNotEqual(id?.lowercased(), sourceId.lowercased())
+        XCTAssertEqual(places?.first?["provider_place_id"] as? String, sourceId)
+        let again = ClipListSavePlanner.requestBody(items: items)["places"] as? [[String: Any]]
+        XCTAssertNotEqual(again?.first?["id"] as? String, id)
+    }
+
+    func testConfirmedSnapshotIgnoresOwnerAddAndDeleteAfterSignIn() {
+        let confirmed = [
+            item("shop-1", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("shop-2", "Katsu Midori", lat: 35.690, lng: 139.700),
+            item("shop-3", "Kagari", lat: 35.671, lng: 139.767),
+            item("shop-4", "Yanaka Coffee", lat: 35.727, lng: 139.768),
+            item("shop-5", "Little Nap", lat: 35.668, lng: 139.705),
+        ]
+        let liveAfterOwnerEdit = [
+            confirmed[0],
+            confirmed[1],
+            confirmed[2],
+            confirmed[3],
+            item("shop-6", "New Shop Owner Added", lat: 35.650, lng: 139.710),
+        ]
+        let saved = ClipListSavePlanner.itemsToSave(
+            confirmed: confirmed,
+            liveList: liveAfterOwnerEdit
+        )
+        XCTAssertEqual(saved.map(\.placeId), ["shop-1", "shop-2", "shop-3", "shop-4", "shop-5"])
+        XCTAssertFalse(saved.contains(where: { $0.placeId == "shop-6" }))
+        XCTAssertTrue(saved.contains(where: { $0.placeId == "shop-5" }))
+        XCTAssertEqual(saved.count, 5)
+    }
+
+    func testListSignInUsesTappedDraftNotStaleListPage() {
+        let page0 = item("page0", "Onibus Coffee", lat: 35.644, lng: 139.699)
+        let page2 = item("page2", "Katsu Midori", lat: 35.690, lng: 139.700)
+        XCTAssertEqual(
+            ClipListSavePlanner.onePlaceItem(pending: page2, pageItem: page0)?.placeId,
+            "page2",
+            "SIWA must save the tapped shop even if listPage drifted to 0"
+        )
+        XCTAssertNotEqual(
+            ClipListSavePlanner.onePlaceItem(pending: page2, pageItem: page0)?.placeId,
+            page0.placeId
+        )
+        XCTAssertEqual(
+            ClipListSavePlanner.onePlaceItem(pending: nil, pageItem: page0)?.placeId,
+            "page0"
+        )
+        XCTAssertNil(ClipListSavePlanner.onePlaceItem(pending: nil, pageItem: nil))
+        XCTAssertEqual(ClipListSavePlanner.visiblePage(current: 2, incoming: nil), 2)
+        XCTAssertEqual(ClipListSavePlanner.visiblePage(current: 2, incoming: 3), 3)
+        XCTAssertEqual(ClipListSavePlanner.visiblePage(current: 0, incoming: 0), 0)
+    }
+
+    func testCompactHandoffURLFitsFullAppListGate() {
+        let blob = String(repeating: "A", count: 9000)
+        let oversized = URL(string: "https://sav-e-app.vercel.app/list?d=\(blob)")!
+        XCTAssertGreaterThan(oversized.absoluteString.utf8.count, ClipListSavePlanner.fullAppListURLMaxBytes)
+        let compact = ClipListSavePlanner.compactHandoffURL(
+            incoming: oversized,
+            shareCode: "LiSt99_z",
+            listId: "22222222-2222-2222-2222-222222222222"
+        )
+        XCTAssertEqual(compact.absoluteString, "https://sav-e-app.vercel.app/list?c=LiSt99_z")
+        XCTAssertLessThanOrEqual(compact.absoluteString.utf8.count, ClipListSavePlanner.fullAppListURLMaxBytes)
+        XCTAssertEqual(
+            ClipListSavePlanner.compactHandoffURL(
+                incoming: oversized,
+                shareCode: nil,
+                listId: nil
+            ).absoluteString,
+            "https://sav-e-app.vercel.app/list"
+        )
+        let small = URL(string: "https://sav-e-app.vercel.app/list?c=LiSt99_z")!
+        XCTAssertEqual(
+            ClipListSavePlanner.compactHandoffURL(
+                incoming: small,
+                shareCode: nil,
+                listId: nil
+            ),
+            small
+        )
+    }
+
+    func testHandoffRequiresJournalWrite() {
+        XCTAssertFalse(ClipListSavePlanner.handoffAfterPersist(written: false, opened: true))
+        XCTAssertFalse(ClipListSavePlanner.handoffAfterPersist(written: true, opened: false))
+        XCTAssertFalse(ClipListSavePlanner.handoffAfterPersist(written: false, opened: false))
+        XCTAssertTrue(ClipListSavePlanner.handoffAfterPersist(written: true, opened: true))
+    }
+
+    func testSL5AlreadySavedPlacesCountOnce() {
+        let items = [
+            item("place1", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("PLACE1", "Onibus Coffee", lat: 35.644, lng: 139.699),
+        ]
+        XCTAssertEqual(ClipListSavePlanner.uniqueItems(from: items).count, 1)
+        XCTAssertEqual(
+            ClipListSavePlanner.identity(of: items[0]),
+            ClipListSavePlanner.identity(of: items[1])
+        )
+    }
+
+    func testUniqueItemsRecordsSkippedIdentities() {
+        let items = [
+            item(nil, "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("shop-b", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("shop-b", "Katsu Midori", lat: 35.67, lng: 139.77),
+        ]
+        XCTAssertEqual(ClipListSavePlanner.uniqueItems(from: items).map(\.name), ["Onibus Coffee"])
+        let places = ClipListSavePlanner.requestBody(items: items)["places"] as? [[String: Any]]
+        XCTAssertEqual(places?.count, 1)
+    }
+
+    func testOnePlacePayloadUsesPlannerUnlessFriendShare() {
+        let item = item("shop-1", "Onibus Coffee", lat: 35.644, lng: 139.699)
+        let planned = ClipListSavePlanner.onePlacePayload(item: item, friendShareCode: nil)
+        XCTAssertEqual(planned.keys.sorted(), ["places"])
+        let places = planned["places"] as? [[String: Any]]
+        XCTAssertEqual(places?.count, 1)
+        XCTAssertEqual(places?.first?["provider_place_id"] as? String, "shop-1")
+        XCTAssertNil(planned["friend_share_code"])
+        XCTAssertNil(places?.first?["note"])
+        XCTAssertNil(places?.first?["rating"])
+
+        let receipt = ClipListSavePlanner.onePlacePayload(item: item, friendShareCode: "AbC123")
+        XCTAssertNil(receipt["places"])
+        XCTAssertEqual(receipt["friend_share_code"] as? String, "AbC123")
+        XCTAssertEqual(receipt["provider_place_id"] as? String, "shop-1")
+        XCTAssertNil(receipt["note"])
+    }
+
+    func testOnePlaceResultDoesNotTreatQuotaOrDuplicateCountsAsSaved() {
+        func result(status: Int, json: String) -> ClipListSavePlanner.OnePlaceResult? {
+            ClipListSavePlanner.onePlaceResult(status: status, data: Data(json.utf8))
+        }
+        XCTAssertEqual(
+            result(status: 201, json: #"{"newly_saved":1,"already_saved":0,"over_cap":0,"remaining":49,"limit":50}"#),
+            .saved
+        )
+        XCTAssertEqual(
+            result(status: 201, json: #"{"newly_saved":0,"already_saved":1,"over_cap":0,"remaining":12,"limit":50}"#),
+            .duplicate
+        )
+        XCTAssertEqual(
+            result(status: 201, json: #"{"newly_saved":0,"already_saved":0,"over_cap":1,"remaining":0,"limit":50}"#),
+            .capReached
+        )
+        XCTAssertEqual(
+            result(status: 201, json: #"{"newly_saved":0,"already_saved":0,"over_cap":0,"remaining":0,"limit":50}"#),
+            .failed
+        )
+        XCTAssertNil(result(status: 201, json: #"{"id":"11111111-1111-1111-1111-111111111111","name":"Onibus"}"#))
+        XCTAssertNil(result(status: 201, json: #"{"outcome":"already_saved"}"#))
+        XCTAssertNil(result(status: 403, json: #"{"code":"over_free_limit"}"#))
+        XCTAssertNil(result(status: 500, json: #"{"newly_saved":0,"already_saved":0,"over_cap":1}"#))
+    }
+
+    func testUniqueItemsMergesEveryBridgedGroup() {
+        let items = [
+            item("id-a", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("id-c", "Katsu Midori", lat: 35.690, lng: 139.700),
+            item("id-c", "Onibus Coffee", lat: 35.644, lng: 139.699),
+        ]
+        let unique = ClipListSavePlanner.uniqueItems(from: items)
+        XCTAssertEqual(unique.count, 1, "B bridges A and C into one stamp")
+        XCTAssertEqual(unique.first?.placeId, "id-a")
+        XCTAssertEqual(unique.first?.extraPlaceIds, ["id-c"])
+        let places = ClipListSavePlanner.requestBody(items: items)["places"] as? [[String: Any]]
+        XCTAssertEqual(places?.count, 1)
+        XCTAssertEqual(places?.first?["provider_place_id"] as? String, "id-a")
+        XCTAssertNil(places?.first?["google_place_id"], "ordinary aliases must not become google_place_id")
+        XCTAssertEqual(places?.first?["extra_place_ids"] as? [String], ["id-c"])
+        XCTAssertFalse(ClipListSavePlanner.isGooglePlaceID("id-c"))
+        XCTAssertFalse(ClipListSavePlanner.isGooglePlaceID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"))
+        XCTAssertTrue(ClipListSavePlanner.isGooglePlaceID("ChIJ123"))
+        XCTAssertTrue(ClipListSavePlanner.isGooglePlaceID("GhIJ456"))
+        XCTAssertTrue(ClipListSavePlanner.isGooglePlaceID("EicABC"))
+        XCTAssertTrue(ClipListSavePlanner.isGooglePlaceID("IhoXYZ"))
+        XCTAssertTrue(ClipListSavePlanner.isGooglePlaceID("eicabc"))
+        XCTAssertTrue(ClipListSavePlanner.isGooglePlaceID("ihoXYZ"))
+    }
+
+    func testPlaceBodySerializesEveryMergedIdentity() {
+        let items = [
+            item("id-a", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("id-b", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("ChIJ123", "Onibus Coffee", lat: 35.644, lng: 139.699),
+        ]
+        let unique = ClipListSavePlanner.uniqueItems(from: items)
+        XCTAssertEqual(unique.count, 1)
+        XCTAssertEqual(unique.first?.placeId, "id-a")
+        XCTAssertEqual(unique.first?.extraPlaceIds, ["ChIJ123", "id-b"])
+        let places = ClipListSavePlanner.requestBody(items: items)["places"] as? [[String: Any]]
+        XCTAssertEqual(places?.first?["provider_place_id"] as? String, "id-a")
+        XCTAssertEqual(places?.first?["google_place_id"] as? String, "ChIJ123")
+        XCTAssertEqual(places?.first?["extra_place_ids"] as? [String], ["ChIJ123", "id-b"])
+    }
+
+    func testUniqueItemsPreservesBridgePlaceIds() {
+        let senderUUID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        let items = [
+            item(senderUUID, "Onibus Coffee", lat: 35.644, lng: 139.699),
+            item("ChIJ123", "Onibus Coffee", lat: 35.644, lng: 139.699),
+        ]
+        let unique = ClipListSavePlanner.uniqueItems(from: items)
+        XCTAssertEqual(unique.count, 1)
+        XCTAssertEqual(unique.first?.placeId, senderUUID)
+        XCTAssertEqual(unique.first?.extraPlaceIds, ["ChIJ123"])
+        let places = ClipListSavePlanner.requestBody(items: items)["places"] as? [[String: Any]]
+        XCTAssertEqual(places?.first?["provider_place_id"] as? String, senderUUID)
+        XCTAssertEqual(places?.first?["google_place_id"] as? String, "ChIJ123")
+    }
+
+    func testPrimaryGooglePlaceIdIsWrittenToGooglePlaceId() {
+        let places = ClipListSavePlanner.requestBody(items: [
+            item("ChIJ123", "Onibus Coffee", lat: 35.644, lng: 139.699),
+        ])["places"] as? [[String: Any]]
+        XCTAssertEqual(places?.first?["provider_place_id"] as? String, "ChIJ123")
+        XCTAssertEqual(places?.first?["google_place_id"] as? String, "ChIJ123")
+        XCTAssertNil(places?.first?["extra_place_ids"])
+        XCTAssertNil(
+            (ClipListSavePlanner.requestBody(items: [
+                item("id-a", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            ])["places"] as? [[String: Any]])?.first?["google_place_id"]
+        )
+        XCTAssertEqual(
+            (ClipListSavePlanner.requestBody(items: [
+                item("EicABC", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            ])["places"] as? [[String: Any]])?.first?["google_place_id"] as? String,
+            "EicABC"
+        )
+        XCTAssertEqual(
+            (ClipListSavePlanner.requestBody(items: [
+                item("IhoXYZ", "Onibus Coffee", lat: 35.644, lng: 139.699),
+            ])["places"] as? [[String: Any]])?.first?["google_place_id"] as? String,
+            "IhoXYZ"
+        )
+    }
+
+    func testPlaceBodyKeepsNonWGS84Coordinates() {
+        var gcj = item("amap-onibus", "Onibus Coffee", lat: 35.644, lng: 139.699)
+        gcj.coordinateSystem = "GCJ-02"
+        gcj.locationProvider = "amap"
+        gcj.providerMapURL = "https://uri.amap.com/marker?position=139.699,35.644"
+        let places = ClipListSavePlanner.requestBody(items: [gcj])["places"] as? [[String: Any]]
+        XCTAssertEqual(places?.first?["coordinate_system"] as? String, "GCJ-02")
+        XCTAssertEqual(places?.first?["location_provider"] as? String, "amap")
+        XCTAssertEqual(places?.first?["provider_map_url"] as? String, "https://uri.amap.com/marker?position=139.699,35.644")
+        var wgs = item("ChIJ123", "Onibus Coffee", lat: 35.644, lng: 139.699)
+        wgs.coordinateSystem = "WGS84"
+        XCTAssertNil(
+            (ClipListSavePlanner.requestBody(items: [wgs])["places"] as? [[String: Any]])?.first?["provider_map_url"]
+        )
+        XCTAssertEqual(
+            (ClipListSavePlanner.requestBody(items: [wgs])["places"] as? [[String: Any]])?.first?["coordinate_system"] as? String,
+            "WGS84"
+        )
+    }
+
+    func testUniqueItemsMergesSameNameVenuesWithin120Meters() {
+        let kept = item("sender-uuid", "Onibus Coffee", lat: 35.644, lng: 139.699)
+        let drifted = item("other", "Onibus Coffee", lat: 35.6444, lng: 139.699)
+        let far = item("far", "Onibus Coffee", lat: 35.66, lng: 139.699)
+        XCTAssertTrue(ClipListSavePlanner.isNearbyDuplicate(kept, drifted))
+        XCTAssertFalse(ClipListSavePlanner.isNearbyDuplicate(kept, far))
+        XCTAssertEqual(ClipListSavePlanner.uniqueItems(from: [kept, drifted]).count, 1)
+        XCTAssertEqual(ClipListSavePlanner.uniqueItems(from: [kept, far]).count, 2)
+    }
+
+    func testOpaqueGoogleProvenanceSurvivesMergedRequest() {
+        var google = item("source-uuid", "Onibus Coffee", lat: 35.644, lng: 139.699)
+        google.googlePlaceId = "opaque-google-venue-without-known-prefix"
+        let first = item("other-source-uuid", "Onibus Coffee", lat: 35.644, lng: 139.699)
+        let merged = ClipListSavePlanner.uniqueItems(from: [first, google])
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged.first?.googlePlaceId, google.googlePlaceId)
+        let body = ClipListSavePlanner.requestBody(items: merged)["places"] as? [[String: Any]]
+        XCTAssertEqual(body?.first?["google_place_id"] as? String, google.googlePlaceId)
+        XCTAssertTrue(ClipListSavePlanner.identities(of: merged[0]).contains("g:opaque-google-venue-without-known-prefix"))
+    }
+
+    func testPlaceholderListOwnerDoesNotClaimAttribution() {
+        XCTAssertNil(ClipPreviewPolicy.senderLabel("Shared list"))
+        XCTAssertNil(ClipPreviewPolicy.senderLabel("  shared LIST  "))
+        XCTAssertNil(ClipPreviewPolicy.senderLabel(" "))
+        XCTAssertEqual(ClipPreviewPolicy.senderLabel(" Mina "), "Mina")
+    }
+
+    func testOverlayDismissesAndCanPresentForTheNextConfirmedSave() {
+        var overlay = ClipOverlayPresentationState()
+        XCTAssertEqual(overlay.update(requested: false, hasScene: true), .none)
+        XCTAssertEqual(overlay.update(requested: true, hasScene: false), .none)
+        XCTAssertEqual(overlay.update(requested: true, hasScene: true), .present)
+        XCTAssertEqual(overlay.update(requested: true, hasScene: true), .none)
+        XCTAssertEqual(overlay.update(requested: false, hasScene: false), .dismiss)
+        XCTAssertFalse(overlay.didPresent)
+        XCTAssertEqual(overlay.update(requested: true, hasScene: true), .present)
+    }
+
+    private func item(
+        _ placeId: String?,
+        _ name: String,
+        lat: Double,
+        lng: Double
+    ) -> ClipListSaveItem {
+        ClipListSaveItem(
+            name: name,
+            address: "Tokyo",
+            latitude: lat,
+            longitude: lng,
+            category: "Cafe",
+            placeId: placeId
+        )
+    }
+}

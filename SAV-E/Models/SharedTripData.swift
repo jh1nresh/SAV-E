@@ -19,6 +19,9 @@ struct SharedPlaceData: Codable {
     let sourceURL: String?
     let photoURLs: [String]
     let note: String?
+    var coordinateSystem: String? = nil
+    var locationProvider: String? = nil
+    var providerMapUrl: String? = nil
 
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: lat, longitude: lng)
@@ -84,7 +87,10 @@ struct SharedPlaceData: Codable {
             sourceLabel: place.sourcePlatform == .other ? "Savvy" : place.sourcePlatform.displayName,
             sourceURL: place.publicShareSourceURL?.absoluteString,
             photoURLs: ShareRoutePayloadSanitizer.publicPhotoURLs(place.businessPhotoURLStrings),
-            note: nil
+            note: nil,
+            coordinateSystem: place.coordinateSystem?.rawValue,
+            locationProvider: place.locationProvider?.rawValue,
+            providerMapUrl: place.providerMapUrl
         )
     }
 
@@ -103,7 +109,10 @@ struct SharedPlaceData: Codable {
             sourceLabel: sourceLabel,
             sourceURL: sourceURL,
             photoURLs: photoURLs,
-            note: ShareRoutePayloadSanitizer.publicNote(note)
+            note: ShareRoutePayloadSanitizer.publicNote(note),
+            coordinateSystem: coordinateSystem,
+            locationProvider: locationProvider,
+            providerMapUrl: providerMapUrl
         )
     }
 
@@ -122,7 +131,33 @@ struct SharedPlaceData: Codable {
             sourceLabel: sourceLabel,
             sourceURL: safeSourceURL?.absoluteString,
             photoURLs: ShareRoutePayloadSanitizer.publicPhotoURLs(photoURLs),
-            note: ShareRoutePayloadSanitizer.publicNote(note)
+            note: ShareRoutePayloadSanitizer.publicNote(note),
+            coordinateSystem: coordinateSystem,
+            locationProvider: locationProvider,
+            providerMapUrl: providerMapUrl
+        )
+    }
+
+    /// Installed-app handoff must not copy sender note/rating into the recipient vault.
+    func strippingSenderMemory() -> SharedPlaceData {
+        SharedPlaceData(
+            id: id,
+            name: name,
+            address: address,
+            lat: lat,
+            lng: lng,
+            category: category,
+            rating: nil,
+            reviewCount: reviewCount,
+            priceRange: priceRange,
+            hours: hours,
+            sourceLabel: sourceLabel,
+            sourceURL: sourceURL,
+            photoURLs: photoURLs,
+            note: nil,
+            coordinateSystem: coordinateSystem,
+            locationProvider: locationProvider,
+            providerMapUrl: providerMapUrl
         )
     }
 
@@ -318,6 +353,9 @@ struct SharedPlaceReceipt: Identifiable {
             note: payload.note,
             sourceUrl: payload.sourceURL,
             sourcePlatform: payload.sourcePlatform,
+            coordinateSystem: payload.coordinateSystem.flatMap(PlaceCoordinateSystem.init(rawValue:)),
+            locationProvider: payload.locationProvider.flatMap(PlaceMatchProvider.init(rawValue:)),
+            providerMapUrl: payload.providerMapUrl,
             sourceImageUrl: GooglePlacesPhotoURL.persistableString(payload.photoURLs.first),
             businessPhotoUrls: GooglePlacesPhotoURL.persistableStrings(payload.photoURLs),
             extractedDishes: nil,
@@ -330,6 +368,15 @@ struct SharedPlaceReceipt: Identifiable {
             visibility: .privateMemory,
             socialSignal: nil
         )
+    }
+
+    /// Preview may show a consented share note. Recipient stamps never inherit it.
+    func recipientOwnedPlace(ownerSubject: String? = nil) -> Place {
+        var place = privatePlace(ownerSubject: ownerSubject)
+        place.rating = nil
+        place.note = nil
+        place.googleRating = nil
+        return place
     }
 }
 
@@ -568,6 +615,17 @@ struct SharedTripData: Codable {
     }
 }
 
+/// Preview copy for another person's publicNote. Saving still strips it.
+enum FriendShareNoteCopy {
+    static func title(sender: String?) -> (english: String, traditionalChinese: String) {
+        let name = sender?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !name.isEmpty else {
+            return ("Shared note", "分享備註")
+        }
+        return ("\(name)'s note", "\(name)的手寫便條")
+    }
+}
+
 enum ShareRoutePayloadLimits {
     static let placePayloadMaxBytes = 12 * 1024
     // Base64 expands by roughly one third. Keep raw Trip JSON at or below
@@ -614,12 +672,55 @@ enum ShareRoutePayloadSanitizer {
         "Stack trace:",
     ]
 
-    static func publicPhotoURLs(_ values: [String]) -> [String] {
+    static func isGoogleDomainHost(_ host: String) -> Bool {
+        let h = host.lowercased()
+        let labels = h.split(separator: ".")
+        if labels.contains("google") { return true }
+        if labels.contains("googleapis") { return true }
+        if labels.contains("googleusercontent") { return true }
+        if labels.contains("gstatic") { return true }
+        if h == "goo.gl" || h.hasSuffix(".goo.gl") { return true }
+        if h == "g.co" || h.hasSuffix(".g.co") { return true }
+        return false
+    }
+
+    static func isGoogleDomainURL(_ url: URL) -> Bool {
+        guard let host = url.host else { return false }
+        return isGoogleDomainHost(host)
+    }
+
+    static func isGooglePlacesPhotoURL(_ url: URL) -> Bool {
+        let host = url.host?.lowercased() ?? ""
+        let path = url.path
+        if host == "maps.googleapis.com" && path == "/maps/api/place/photo" { return true }
+        if host == "places.googleapis.com" && path.contains("/media") { return true }
+        return false
+    }
+
+    static func looksLikeGooglePlacesPhotoReference(_ value: String) -> Bool {
+        let lower = value.lowercased()
+        if lower.contains("photo_reference=") { return true }
+        if lower.hasPrefix("places/") && lower.contains("/photos/") { return true }
+        return false
+    }
+
+    static func persistablePhotoURLs(_ values: [String]) -> [String] {
         var seen = Set<String>()
-        return Array(values
-            .compactMap { publicURL(from: $0)?.absoluteString }
-            .filter { seen.insert($0).inserted }
-            .prefix(1))
+        return values.compactMap { value -> String? in
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalized.isEmpty else { return nil }
+            if looksLikeGooglePlacesPhotoReference(normalized) { return nil }
+            guard let url = URL(string: normalized) else { return nil }
+            if isGoogleDomainURL(url) || isGooglePlacesPhotoURL(url) { return nil }
+            guard let publicURL = publicURL(from: normalized) else { return nil }
+            if isGoogleDomainURL(publicURL) || isGooglePlacesPhotoURL(publicURL) { return nil }
+            return publicURL.absoluteString
+        }
+        .filter { seen.insert($0).inserted }
+    }
+
+    static func publicPhotoURLs(_ values: [String]) -> [String] {
+        Array(persistablePhotoURLs(values).prefix(1))
     }
 
     static func publicURL(from value: String?) -> URL? {
@@ -634,7 +735,8 @@ enum ShareRoutePayloadSanitizer {
         else { return nil }
         components.query = nil
         components.fragment = nil
-        return components.url
+        guard let url = components.url, !isGoogleDomainURL(url) else { return nil }
+        return url
     }
 
     static func publicNote(_ value: String?) -> String? {

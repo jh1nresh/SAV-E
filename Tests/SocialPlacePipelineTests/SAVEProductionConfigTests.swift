@@ -1321,6 +1321,81 @@ final class SAVEProductionConfigTests: XCTestCase {
     }
 
     @MainActor
+    func testHandoffAlreadySavedPlaceDoesNotGrowOrError() async throws {
+        let map = makeCappedMap(tier: .free)
+        await map.loadPlaces()
+        let existing = makeCappedPlaces(1)[0]
+        map.places = [existing]
+        let receipt = SharedPlaceReceipt.embedded(
+            SharedPlaceData(
+                id: UUID().uuidString,
+                name: existing.name,
+                address: existing.address,
+                lat: existing.latitude,
+                lng: existing.longitude,
+                category: "Cafe",
+                rating: nil,
+                reviewCount: nil,
+                priceRange: nil,
+                hours: nil,
+                sourceLabel: "Savvy",
+                sourceURL: nil,
+                photoURLs: [],
+                note: nil
+            )
+        )
+
+        let outcome = try await map.saveSharedPlaceReceipt(receipt)
+        XCTAssertTrue(outcome.isDuplicate)
+        XCTAssertEqual(map.places.count, 1)
+        XCTAssertEqual(map.places.first?.id, existing.id)
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    @MainActor
+    func testListHandoffAlreadySavedPlaceDoesNotGrowOrError() async throws {
+        let map = makeCappedMap(tier: .free)
+        await map.loadPlaces()
+        let existing = makeCappedPlaces(1)[0]
+        map.places = [existing]
+        let list = SaveCollaborativeList(title: "Handoff", items: [SaveListItem.from(place: existing)])
+
+        let result = try await map.saveClipListHandoff(list)
+        XCTAssertEqual(result.counts.newlySaved, 0)
+        XCTAssertEqual(result.counts.alreadySaved, 1)
+        XCTAssertEqual(result.counts.overCap, 0)
+        XCTAssertEqual(map.places.count, 1)
+        XCTAssertEqual(map.places.first?.id, existing.id)
+        XCTAssertTrue(map.reviewCandidates.isEmpty)
+        XCTAssertFalse(map.shouldPresentSavedPlaceLimitPaywall)
+    }
+
+    @MainActor
+    func testListHandoffAtCapParksOverflowWithoutFullCapCopy() async throws {
+        let map = makeCappedMap(tier: .free)
+        await map.loadPlaces()
+        map.places = makeCappedPlaces(50)
+        let novel = makeCappedPlaces(1, indexOffset: 80)[0]
+        let list = SaveCollaborativeList(title: "Handoff", items: [SaveListItem.from(place: novel)])
+
+        do {
+            _ = try await map.saveClipListHandoff(list)
+            XCTFail("a list handoff at the free cap must not become a Map Stamp")
+        } catch SavePlaceLimitError.parkedInUnplacedInbox {
+            XCTAssertEqual(map.places.count, 50)
+            XCTAssertEqual(map.reviewCandidates.first?.name, novel.name)
+            XCTAssertEqual(map.reviewCandidates.first?.status, "review")
+            XCTAssertTrue(map.shouldPresentSavedPlaceLimitPaywall)
+        }
+
+        let content = try source(at: "SAV-E/App/ContentView.swift")
+        XCTAssertFalse(content.contains("Free Savvy is full (50 places)."))
+        XCTAssertFalse(content.contains("免費版 Savvy 已滿 50 個地點。"))
+        XCTAssertFalse(content.contains("已滿 50 個"))
+    }
+
+    @MainActor
     func testEmbeddedReceiptServerCapParksInsteadOfConfirmingLocally() async throws {
         let previousAuth = PrivyAuthService.shared.authState
         PrivyAuthService.shared.authState = .authenticated(userId: "receipt-owner")
@@ -9912,6 +9987,95 @@ final class ShareInlineAnalysisTests: XCTestCase {
         }
     }
 
+    func testClipHandoffCannotSendAfterSuspendedTokenChangesAccount() async throws {
+        let auth = PrivyAuthService.shared
+        let original = auth.authState
+        defer { auth.authState = original; AnalysisRequestURLProtocol.reset() }
+        let owner = "did:privy:clip-owner"
+        let savedID = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
+        // nil is the unchanged-account control; false switches owner, true signs out.
+        for signOut in [nil, false, true] as [Bool?] {
+            auth.authState = .authenticated(userId: owner)
+            let generation = auth.sessionGeneration
+            let gate = ClipTokenSuspension()
+            AnalysisRequestURLProtocol.reset()
+            AnalysisRequestURLProtocol.handler = { request in
+                if request.httpMethod == "GET" { return (200, "[]") }
+                guard request.httpMethod == "POST", request.url?.path == "/places" else {
+                    throw URLError(.unsupportedURL)
+                }
+                return (201, """
+                {"newly_saved":1,"already_saved":0,"over_cap":0,"remaining":49,"limit":50,
+                 "saved":[{"id":"\(savedID.uuidString)","provider_place_id":"clip-cafe",
+                 "name":"Confirmed cafe","latitude":25,"longitude":121}]}
+                """)
+            }
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.protocolClasses = [AnalysisRequestURLProtocol.self]
+            let session = URLSession(configuration: configuration)
+            defer { session.invalidateAndCancel() }
+            let service = SupabaseService(apiBaseURL: "https://clip.test", session: session,
+                accessTokenProvider: {
+                    guard let scope = SAVEPendingImportSessionScope.current else { return "background-token" }
+                    await gate.suspend(scope: scope)
+                    return await MainActor.run {
+                        auth.currentUserId == owner ? "owner-token" : "replacement-account-token"
+                    }
+                })
+            let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("clip-token-\(UUID()).json")
+            defer { try? FileManager.default.removeItem(at: vaultURL) }
+            let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault, usesRemotePersistence: true)
+            let snapshot = PendingConfirmedPlace(placeId: "clip-cafe", name: "Confirmed cafe", address: "Taipei",
+                latitude: 25, longitude: 121, category: "cafe", sourceURL: nil)
+            let list = SaveCollaborativeList(title: "Confirmed", items: [snapshot.asListItem()])
+            let task = Task { try await map.saveClipListHandoff(list) }
+            guard await gate.waitUntilStarted() else {
+                // Removing the production TaskLocal binding must fail promptly,
+                // even if its unscoped request already completed successfully.
+                task.cancel()
+                gate.resume()
+                _ = try? await task.value
+                XCTFail("Handoff did not enter its initiating-account token scope")
+                continue
+            }
+            XCTAssertEqual(gate.observedScope?.owner, owner)
+            XCTAssertEqual(gate.observedScope?.generation, generation)
+            if let signOut {
+                auth.authState = signOut ? .unauthenticated : .authenticated(userId: "did:privy:other")
+            }
+            gate.resume()
+            do {
+                let result = try await task.value
+                XCTAssertNil(signOut, "A stale confirmation must not use the replacement token")
+                XCTAssertEqual(result.counts.newlySaved, 1)
+            } catch is CancellationError {
+                XCTAssertNotNil(signOut, "The unchanged-account control must save successfully")
+            } catch { XCTFail("Unexpected error \(error)") }
+            let posts = AnalysisRequestURLProtocol.requests.filter {
+                $0.httpMethod == "POST" && $0.url?.path == "/places"
+            }
+            if signOut == nil {
+                XCTAssertEqual(posts.count, 1)
+                let request = try XCTUnwrap(posts.first)
+                XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer owner-token")
+                let body = try AnalysisRequestURLProtocol.body(request)
+                let places = try XCTUnwrap(body["places"] as? [[String: Any]])
+                XCTAssertEqual(places.count, 1)
+                XCTAssertEqual(places.first?["provider_place_id"] as? String, "clip-cafe")
+                XCTAssertEqual(places.first?["name"] as? String, "Confirmed cafe")
+                XCTAssertEqual(places.first?["latitude"] as? Double, 25)
+                XCTAssertEqual(places.first?["longitude"] as? Double, 121)
+                XCTAssertEqual(map.places.map(\.id), [savedID])
+                XCTAssertEqual(try vault.confirmedPlaces().map(\.id), [savedID])
+            } else {
+                XCTAssertEqual(posts.count, 0)
+                XCTAssertTrue(map.places.isEmpty)
+                XCTAssertTrue(try vault.confirmedPlaces().isEmpty)
+            }
+        }
+    }
+
     func testReviewSourceIsAlsoBoundToOriginatingAccount() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -10036,4 +10200,34 @@ private final class ShareFailureURLProtocol: URLProtocol, @unchecked Sendable {
         client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}
+}
+
+@MainActor
+private final class ClipTokenSuspension {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private(set) var observedScope: (generation: Int, owner: String)?
+
+    func suspend(scope: (generation: Int, owner: String)) async {
+        guard continuation == nil else {
+            XCTFail("Only one handoff token lookup may occupy the gate")
+            return
+        }
+        observedScope = scope
+        await withCheckedContinuation { continuation = $0 }
+    }
+
+    func waitUntilStarted() async -> Bool {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(2))
+        while continuation == nil, clock.now < deadline {
+            do { try await Task.sleep(for: .milliseconds(5)) }
+            catch { return false }
+        }
+        return continuation != nil
+    }
+
+    func resume() {
+        continuation?.resume()
+        continuation = nil
+    }
 }
