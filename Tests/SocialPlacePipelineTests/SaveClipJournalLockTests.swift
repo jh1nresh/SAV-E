@@ -372,6 +372,9 @@ final class SaveClipJournalLockTests: XCTestCase {
             ..< clip.range(of: "private func openLeftover")!.lowerBound
         ]
         XCTAssertTrue(handoff.contains("strippingSenderMemory()"))
+        XCTAssertTrue(handoff.contains("if let code = draft.friendShareCode"))
+        XCTAssertTrue(handoff.contains("ClipSaveService.shortCodeHandoffURL"))
+        XCTAssertTrue(save.contains("SharedPlaceData.shortCode(from: incomingURL) == code"))
         XCTAssertFalse(
             handoff.split(whereSeparator: \.isNewline).contains { line in
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
@@ -393,7 +396,8 @@ final class SaveClipJournalLockTests: XCTestCase {
         }
         let proto = String(supabase[protoStart.lowerBound..<implStart.lowerBound])
         XCTAssertTrue(proto.contains("func saveClipListPlaces"))
-        XCTAssertFalse(mapVM.contains("supabaseService.isConfigured"))
+        XCTAssertTrue(proto.contains("var isConfigured: Bool { get }"))
+        XCTAssertTrue(mapVM.contains("usesRemotePersistence && supabaseService.isConfigured"))
         XCTAssertTrue(mapVM.contains("catch SupabaseError.notConfigured"))
         XCTAssertTrue(mapVM.contains("stampedHandoffItems"))
         XCTAssertTrue(mapVM.contains("importedPlace(_ place: Place, matches item: SaveListItem)"))

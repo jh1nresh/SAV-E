@@ -181,6 +181,17 @@ enum ClipSaveService {
         )
     }
 
+    /// Preserve receipt provenance: a short-code share must be revalidated by
+    /// the full App's server receipt route, never converted to embedded evidence.
+    static func shortCodeHandoffURL(code: String, incomingURL: URL?) -> URL? {
+        guard let canonical = URL(string: "https://sav-e-app.vercel.app/p/\(code)"),
+              SharedPlaceData.shortCode(from: canonical) == code else { return nil }
+        if let incomingURL, SharedPlaceData.shortCode(from: incomingURL) == code {
+            return incomingURL
+        }
+        return canonical
+    }
+
     /// A Clip tap records intent, never a saved place or an authenticated owner.
     static func save(
         draft: ClipPlaceDraft,

@@ -7,8 +7,8 @@ export type ClipListSavePlan = {
   newlySaved: number;
   alreadySaved: number;
   overCap: number;
-  remaining: number;
-  limit: number;
+  remaining: number | null;
+  limit: number | null;
 };
 
 function extraPlaceIdsFrom(place: Record<string, unknown> | {
@@ -219,10 +219,11 @@ export function planClipListSave(input: {
   items: unknown[];
   existingIdentities: Iterable<string>;
   existingPlaces?: Record<string, unknown>[];
-  savedPlaceCount: number;
+  savedPlaceCount: number | undefined;
   limit?: number;
 }): ClipListSavePlan {
-  const limit = input.limit ?? FREE_LIST_SAVE_LIMIT;
+  // Undefined is the authoritative Pro/unknown-tier snapshot, not a free count.
+  const limit = input.savedPlaceCount === undefined ? null : (input.limit ?? FREE_LIST_SAVE_LIMIT);
   const existing = new Set(input.existingIdentities);
   const rowByKey = new Map<string, Record<string, unknown>>();
   for (const row of input.existingPlaces ?? []) {
@@ -250,7 +251,8 @@ export function planClipListSave(input: {
     novel.push(raw);
   }
 
-  const remainingSlots = Math.max(0, limit - Math.max(0, input.savedPlaceCount));
+  const remainingSlots = limit === null ? novel.length
+    : Math.max(0, limit - Math.max(0, input.savedPlaceCount ?? 0));
   const toInsert = novel.slice(0, remainingSlots);
   return {
     toInsert,
@@ -258,7 +260,7 @@ export function planClipListSave(input: {
     newlySaved: toInsert.length,
     alreadySaved,
     overCap: novel.length - toInsert.length,
-    remaining: remainingSlots - toInsert.length,
+    remaining: limit === null ? null : remainingSlots - toInsert.length,
     limit,
   };
 }
@@ -306,8 +308,8 @@ export function clipListSaveResponse(
   newly_saved: number;
   already_saved: number;
   over_cap: number;
-  remaining: number;
-  limit: number;
+  remaining: number | null;
+  limit: number | null;
   saved: ClipListSavedIdentity[];
   already: ClipListSavedIdentity[];
 } {

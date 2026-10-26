@@ -477,3 +477,30 @@ test("H-3 same identity different row matches an existing place", () => {
     "a different venue must still occupy a new slot",
   );
 });
+
+test("Pro or unknown-tier batches keep undefined unlimited snapshot and still dedupe", () => {
+  const owned = Array.from({ length: 60 }, (_, i) => cafe(`owned-${i}`, `Owned ${i}`));
+  const incoming = cafe("new", "New Place");
+  const plan = planClipListSave({
+    items: [owned[0], incoming, { ...incoming }],
+    existingIdentities: owned.flatMap(clipListPlaceIdentities),
+    existingPlaces: owned,
+    savedPlaceCount: undefined,
+  });
+  assert.deepEqual(plan.toInsert.map((place) => place.id), ["new"]);
+  assert.equal(plan.alreadySaved, 2);
+  assert.equal(plan.overCap, 0);
+  assert.equal(plan.limit, null);
+  assert.equal(plan.remaining, null);
+  const response = JSON.parse(JSON.stringify(clipListSaveResponse(plan, plan.toInsert)));
+  assert.equal(response.newly_saved, 1);
+  assert.equal(response.over_cap, 0);
+  assert.equal(response.limit, null);
+});
+
+test("batch route forwards the entitlement snapshot without converting unlimited to a free count", () => {
+  const server = readFileSync(new URL("../src/server.ts", import.meta.url), "utf8");
+  const handler = server.slice(server.indexOf("async function saveClipListPlaces"), server.indexOf("function providerCoordinateFieldError"));
+  assert.match(handler, /savedPlaceCount: savedPlaceCountBefore,/);
+  assert.doesNotMatch(handler, /savedPlaceCountBefore \?\? existing\.rows\.length/);
+});

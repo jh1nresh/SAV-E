@@ -626,7 +626,12 @@ struct ClipContentView: View {
 
     private func handoffURL(for draft: ClipPlaceDraft, listTitle: String?) -> URL {
         _ = listTitle
-        // Incoming /p URLs can embed sender note/rating. Always synthesize a stripped payload.
+        if let code = draft.friendShareCode {
+            // Invalid receipt identities fail closed as a malformed /p route.
+            return ClipSaveService.shortCodeHandoffURL(code: code, incomingURL: lastIncomingURL)
+                ?? URL(string: "https://sav-e-app.vercel.app/p")!
+        }
+        // Actual embedded/list-item shares still strip sender note/rating.
         if let encoded = SharedPlaceData(
             id: draft.placeId ?? "",
             name: draft.name,

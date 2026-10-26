@@ -31,9 +31,17 @@ service += '''    private static func openInstalledApp(_ url: URL, completion: @
 draft = section(clip, 'struct ClipPlaceDraft:', '    static func from(place:') + '}\n'
 outcome = section(clip, 'enum ClipSaveOutcome:', 'struct ClipPlaceDraft:')
 planner = (ROOT / 'SAV-EClip/ClipListSavePlanner.swift').read_text()
+clip_routes = (ROOT / 'SAV-EClip/SharedTripData.swift').read_text()
+codec = section(clip_routes, 'enum ShareRouteCodec {', 'private struct SharedPlaceLinkResponse:')
 suite = 'save.clip.host.' + str(uuid.uuid4())
 source = 'import Foundation\nimport CoreLocation\nimport Observation\n' + pending + app_store + outcome + draft + planner
-source += '''
+source += codec + '''
+enum SAVEProductionConfig {
+    static func supportsCustomURLScheme(_ url: URL) -> Bool { url.scheme == "savvy" || url.scheme == "wanderly" }
+}
+struct SharedPlaceData {
+    static func shortCode(from url: URL) -> String? { ShareRouteCodec.shortCode(from: url, route: "p") }
+}
 @MainActor enum ClipFullApp { static var isInstalled: Bool { false } }
 enum SaveSharedListPayload {
     static func shareCode(from url: URL) -> String? {
@@ -65,6 +73,16 @@ struct Failure: Error {}
         let url = URL(string: "https://sav-e-app.vercel.app/p/test")!
         let draft = ClipPlaceDraft(name: "Selected", address: "Taipei", latitude: 25.03, longitude: 121.56,
             category: "cafe", rating: 5, note: "sender private note", sourceURL: nil, placeId: "selected", friendShareCode: nil)
+        let originalShort = URL(string: "https://sav-e-app.vercel.app/p/abc123?source=clip")!
+        precondition(ClipSaveService.shortCodeHandoffURL(code: "abc123", incomingURL: originalShort) == originalShort)
+        let canonicalShort = ClipSaveService.shortCodeHandoffURL(code: "abc123", incomingURL: url)!
+        precondition(SharedPlaceData.shortCode(from: canonicalShort) == "abc123")
+        precondition(ClipSaveService.shortCodeHandoffURL(code: "bad/code", incomingURL: originalShort) == nil)
+        var shortDraft = draft; shortDraft.friendShareCode = "abc123"
+        _ = await ClipSaveService.save(draft: shortDraft, handoffURL: originalShort, sender: nil, isInstalled: false)
+        let shortJournal = AppPendingShareStore.load()!
+        precondition(shortJournal.shareCode == "abc123" && shortJournal.url == originalShort.absoluteString)
+        precondition(SharedPlaceData.shortCode(from: URL(string: shortJournal.url)!) == "abc123")
         let absent = await ClipSaveService.save(draft: draft, handoffURL: url, sender: nil, isInstalled: false,
             openURL: { _, _ in preconditionFailure("Absent app cannot open") })
         precondition(absent == .pending(1))
@@ -127,7 +145,7 @@ struct Failure: Error {}
         let legacy = Data(#"{"kind":"place","url":"https://example.com/p/legacy"}"#.utf8)
         defaults.set(legacy, forKey: PendingShareStore.key)
         precondition(AppPendingShareStore.load()?.invocationID == nil)
-        print("PASS: Clip absent/open-failed/successful handoff retains durable intent; same-link newer invocation survives; selected snapshot excludes live extras; failed/cancelled confirmation retains journal; replacement requires separate tap; matching success clears; legacy journal decodes")
+        print("PASS: short-code receipt handoff and journal preserve code; Clip absent/open-failed/successful handoff retains durable intent; same-link newer invocation survives; selected snapshot excludes live extras; failed/cancelled confirmation retains journal; replacement requires separate tap; matching success clears; legacy journal decodes")
     }
 }
 '''

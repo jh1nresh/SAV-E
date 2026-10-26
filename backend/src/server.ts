@@ -1808,6 +1808,15 @@ async function saveClipListPlaces(
     return sendJson(response, { error: "Too many places" }, 400);
   }
 
+  // Validate the complete batch before opening a transaction or inserting any row.
+  for (const item of items) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return sendJson(response, { error: "Invalid place in batch" }, 400);
+    }
+    const providerFieldError = providerCoordinateFieldError(item as JsonBody);
+    if (providerFieldError) return sendJson(response, { error: providerFieldError }, 400);
+  }
+
   const client = await pool.connect();
   try {
     await client.query("begin");
@@ -1823,7 +1832,7 @@ async function saveClipListPlaces(
       items,
       existingIdentities,
       existingPlaces: existing.rows,
-      savedPlaceCount: savedPlaceCountBefore ?? existing.rows.length,
+      savedPlaceCount: savedPlaceCountBefore,
     });
 
     const inserted: Record<string, unknown>[] = [];

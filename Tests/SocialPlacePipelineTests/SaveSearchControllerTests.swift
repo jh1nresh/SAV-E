@@ -7558,6 +7558,88 @@ final class MapReviewLocationRepairTests: XCTestCase {
         XCTAssertEqual(map.places[0].address, "臺北市信義區")
     }
 
+    func testStrictClipConfirmationRejectsRealUnconfiguredNoOpServiceForNewAndDuplicatePlaces() async throws {
+        let auth = PrivyAuthService.shared
+        let previous = auth.authState
+        defer { auth.authState = previous }
+        auth.authState = .authenticated(userId: "clip-noop-owner")
+        for duplicate in [false, true] {
+            let service = SupabaseService(apiBaseURL: nil)
+            let place = savedPlace(name: "Pending Cafe", address: "Taipei", coordinate: taipei)
+            // Demonstrate the real contract: these calls do not throw without configuration.
+            try await service.savePlace(place, userId: "clip-noop-owner")
+            try await service.updatePlace(place, previous: place)
+            let remote = try await service.fetchPlaces(for: "clip-noop-owner")
+            XCTAssertTrue(remote.isEmpty)
+            let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("clip-noop-\(UUID()).json")
+            defer { try? FileManager.default.removeItem(at: vaultURL) }
+            let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            if duplicate { _ = try vault.saveConfirmedPlace(place, ownerSubject: "clip-noop-owner") }
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault, usesRemotePersistence: true)
+            if duplicate { map.places = [place] }
+            let beforePlaces = map.places.map(\.id)
+            let beforeVault = try vault.confirmedPlaces().map(\.id)
+            let suite = "clip-noop-journal.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let journal = PendingSharePayload(kind: .place, shareCode: nil, placeId: place.id.uuidString,
+                                              listId: nil, sender: nil, url: "https://example.com/p/pending")
+            XCTAssertTrue(PendingShareStore.write(journal, to: defaults))
+            var acknowledged = false
+            do {
+                _ = try await map.saveSharedPlaceReceipt(.embedded(SharedPlaceData.from(place: place)), requiringAuthenticatedSession: true)
+                acknowledged = PendingShareStore.clear(ifUnchanged: journal, from: defaults)
+                XCTFail("A nonthrowing offline service must never acknowledge Clip confirmation")
+            } catch SupabaseError.notConfigured {}
+            XCTAssertFalse(acknowledged)
+            XCTAssertEqual(PendingShareStore.load(from: defaults), journal)
+            XCTAssertEqual(map.places.map(\.id), beforePlaces)
+            XCTAssertEqual(try vault.confirmedPlaces().map(\.id), beforeVault)
+            XCTAssertNil(map.selectedPlace, "No saved-place reveal on refusal")
+        }
+    }
+
+    func testClipShortCodeReceiptAlwaysUsesVerifiedSaveAndNeverFallsBack() async throws {
+        let auth = PrivyAuthService.shared
+        let previous = auth.authState
+        defer { auth.authState = previous }
+        auth.authState = .authenticated(userId: "clip-receipt-owner")
+        for failureStatus: Int? in [nil, 410, 403] {
+            let service = RecordingSupabaseService()
+            var receiptCalls = 0
+            service.friendSaveHandler = { place, code, owner in
+                receiptCalls += 1
+                XCTAssertEqual(code, "abc123")
+                XCTAssertEqual(owner, "clip-receipt-owner")
+                XCTAssertNil(place.note)
+                XCTAssertNil(place.rating)
+                if let failureStatus {
+                    throw SupabaseError.apiError(failureStatus, failureStatus == 410 ? "expired" : "self_share")
+                }
+                return FriendSharedPlaceSaveResult(place: place, outcome: .saved)
+            }
+            let vaultURL = FileManager.default.temporaryDirectory.appendingPathComponent("clip-receipt-\(UUID()).json")
+            defer { try? FileManager.default.removeItem(at: vaultURL) }
+            let vault = SaveLocalVaultService(overrideVaultURL: vaultURL)
+            let map = MapViewModel(supabaseService: service, saveLocalVaultService: vault, usesRemotePersistence: true)
+            var senderPlace = savedPlace(name: "Receipt Cafe", address: "Taipei", coordinate: taipei)
+            senderPlace.note = "Private sender note"
+            senderPlace.rating = 5
+            let receipt = SharedPlaceReceipt(code: "abc123", payload: SharedPlaceData.from(place: senderPlace),
+                                            sourcePlaceID: senderPlace.id.uuidString, expiresAt: nil, sender: nil)
+            do {
+                _ = try await map.saveSharedPlaceReceipt(receipt, requiringAuthenticatedSession: true)
+                XCTAssertNil(failureStatus)
+            } catch SupabaseError.apiError(let status, _) {
+                XCTAssertEqual(status, failureStatus)
+            }
+            XCTAssertEqual(receiptCalls, 1)
+            XCTAssertEqual(service.savePlaceStarted, 0, "Never use ordinary /places semantics for a receipt")
+            XCTAssertEqual(map.places.count, failureStatus == nil ? 1 : 0)
+            XCTAssertEqual(try vault.confirmedPlaces().count, failureStatus == nil ? 1 : 0)
+        }
+    }
+
     func testFullAppClipConfirmationRequiresAuthenticationAndBackend() async throws {
         let auth = PrivyAuthService.shared
         let original = auth.authState
@@ -7880,6 +7962,7 @@ final class MapReviewLocationRepairTests: XCTestCase {
 }
 
 private final class RecordingSupabaseService: SupabaseServiceProtocol {
+    var isConfigured: Bool { true }
     private(set) var updatedPlaces: [Place] = []
     private(set) var recoveryDecisions: [PlaceRecoveryDecisionDraft] = []
     private(set) var recoveryDecisionRuns: [UUID] = []
@@ -7976,7 +8059,9 @@ private final class RecordingSupabaseService: SupabaseServiceProtocol {
         if let clipSaveHandler { return try await clipSaveHandler(items) }
         throw SupabaseError.notConfigured
     }
+    var friendSaveHandler: (@MainActor (Place, String, String) async throws -> FriendSharedPlaceSaveResult)?
     func saveFriendSharedPlace(_ place: Place, code: String, userId: String) async throws -> FriendSharedPlaceSaveResult {
+        if let friendSaveHandler { return try await friendSaveHandler(place, code, userId) }
         throw SupabaseError.notConfigured
     }
     func updatePlace(_ place: Place, previous: Place?) async throws {

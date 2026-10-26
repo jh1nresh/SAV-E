@@ -8,6 +8,8 @@ enum SAVEPendingImportSessionScope {
 // MARK: - Protocol
 
 protocol SupabaseServiceProtocol {
+    /// Strict confirmation must reject services whose writes are offline no-ops.
+    var isConfigured: Bool { get }
     func startAnalysis(id: UUID) async throws -> UUID?
     func finishAnalysis(_ context: SAVEAnalysisContext, outcome: String?) async
 
@@ -122,6 +124,9 @@ enum SupabaseError: LocalizedError {
 
 // Existing service fakes opt out; production always creates a server session.
 extension SupabaseServiceProtocol {
+    // Fakes/alternate services must explicitly opt into strict backend confirmation.
+    var isConfigured: Bool { false }
+
     func deletePlaceGroup(_ placeId: UUID) async throws {
         try await deletePlace(placeId)
     }
@@ -214,7 +219,7 @@ final class SupabaseService: SupabaseServiceProtocol, RelatedPlaceSourcesProvidi
         }.value
     }
 
-    private var isConfigured: Bool {
+    var isConfigured: Bool {
         apiBaseURL != nil
     }
 

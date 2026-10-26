@@ -2931,6 +2931,9 @@ final class MapViewModel: ObservableObject {
         let generation = authService.sessionGeneration
         let journal = requiringAuthenticatedSession ? confirmedJournal : (confirmedJournal ?? PendingShareStore.load())
         guard !requiringAuthenticatedSession || owner != nil else { throw SupabaseError.notAuthenticated }
+        guard !requiringAuthenticatedSession || (usesRemotePersistence && supabaseService.isConfigured) else {
+            throw SupabaseError.notConfigured
+        }
         if let owner {
             return try await SAVEPendingImportSessionScope.$current.withValue((generation, owner)) {
                 try await saveSharedPlaceReceiptForSession(receipt, owner: owner, generation: generation,
@@ -3422,6 +3425,9 @@ final class MapViewModel: ObservableObject {
         let owner = authService.currentUserId
         let generation = authService.sessionGeneration
         guard !requiringAuthenticatedSession || owner != nil else { throw SupabaseError.notAuthenticated }
+        guard !requiringAuthenticatedSession || (usesRemotePersistence && supabaseService.isConfigured) else {
+            throw SupabaseError.notConfigured
+        }
         if let owner {
             return try await SAVEPendingImportSessionScope.$current.withValue((generation, owner)) {
                 try await saveClipListHandoff(list, owner: owner, generation: generation, requiringAuthenticatedSession: requiringAuthenticatedSession)

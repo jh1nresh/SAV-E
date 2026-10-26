@@ -40,7 +40,6 @@ export function createPrivyUserProvisioner(
     "Authorization": `Basic ${auth}`,
     "privy-app-id": appId,
   };
-  const appleSubjectCache = new Map<string, string>();
 
   const request = async (path: string, body: unknown): Promise<Response> =>
     fetchImpl(`${endpoint}${path}`, {
@@ -61,6 +60,8 @@ export function createPrivyUserProvisioner(
 
   const lookupStatus = (status: number): number => (status === 503 ? 502 : status);
 
+  // Apple bearer authorization must observe unlink/delete/relink immediately.
+  // Never reuse a prior subject-to-owner mapping for a new authorization.
   const findUserByAppleSubject = async (appleSubject: string): Promise<PrivyUser | null> => {
     const existing = await request("/v1/users/apple/subject", { subject: appleSubject });
     if (existing.ok) return await parseUser(existing);
@@ -100,10 +101,7 @@ export function createPrivyUserProvisioner(
       if (!subject) {
         throw new PrivyUserProvisioningError("Missing Apple subject", 401);
       }
-      const cached = appleSubjectCache.get(subject);
-      if (cached) return { id: cached };
       const existing = await findUserByAppleSubject(subject);
-      if (existing) appleSubjectCache.set(subject, existing.id);
       return existing;
     },
     async ensureUserForApple(appleSubject: string): Promise<PrivyUser> {
@@ -111,12 +109,9 @@ export function createPrivyUserProvisioner(
       if (!subject) {
         throw new PrivyUserProvisioningError("Missing Apple subject", 401);
       }
-      const cached = appleSubjectCache.get(subject);
-      if (cached) return { id: cached };
 
       const existing = await findUserByAppleSubject(subject);
       if (existing) {
-        appleSubjectCache.set(subject, existing.id);
         return existing;
       }
 
@@ -133,13 +128,11 @@ export function createPrivyUserProvisioner(
         if (!user) {
           throw new PrivyUserProvisioningError("Privy Apple user import failed: missing id", 502);
         }
-        appleSubjectCache.set(subject, user.id);
         return user;
       }
       if (created.status === 409 || created.status === 400) {
         const retried = await findUserByAppleSubject(subject);
         if (retried) {
-          appleSubjectCache.set(subject, retried.id);
           return retried;
         }
         throw new PrivyUserProvisioningError(

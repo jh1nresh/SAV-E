@@ -317,3 +317,57 @@ test("deleteUser rejects upstream failures", async () => {
     /Privy user deletion failed: HTTP 503/,
   );
 });
+
+for (const method of ["findUserForApple", "ensureUserForApple"] as const) {
+  test(`${method} revalidates an Apple link and fails closed after upstream failure`, async () => {
+    let requests = 0;
+    const provisioner = createPrivyUserProvisioner({
+      appId: "test-app", appSecret: "test-secret",
+      fetchImpl: async () => ++requests === 1
+        ? Response.json({ id: "did:privy:old-owner" })
+        : new Response(null, { status: 503 }),
+    })!;
+    assert.equal((await provisioner[method]("apple-subject"))?.id, "did:privy:old-owner");
+    await assert.rejects(() => provisioner[method]("apple-subject"), PrivyUserProvisioningError);
+    assert.equal(requests, 2);
+  });
+}
+
+test("Apple lookup observes unlink and relink without authorizing the old DID", async () => {
+  let current: string | undefined = "did:privy:old-owner";
+  let requests = 0;
+  const provisioner = createPrivyUserProvisioner({
+    appId: "test-app", appSecret: "test-secret",
+    fetchImpl: async () => {
+      requests += 1;
+      return current ? Response.json({ id: current }) : new Response(null, { status: 404 });
+    },
+  })!;
+  assert.equal((await provisioner.findUserForApple("apple-subject"))?.id, current);
+  current = undefined;
+  assert.equal(await provisioner.findUserForApple("apple-subject"), null);
+  current = "did:privy:new-owner";
+  assert.equal((await provisioner.ensureUserForApple("apple-subject"))?.id, current);
+  assert.equal(requests, 3);
+});
+
+test("Apple provisioning after deletion looks up and creates a new DID", async () => {
+  let current: string | undefined = "did:privy:deleted";
+  let creates = 0;
+  const provisioner = createPrivyUserProvisioner({
+    appId: "test-app", appSecret: "test-secret", endpoint: "https://privy.test",
+    fetchImpl: async (url, init) => {
+      if (init?.method === "DELETE") { current = undefined; return new Response(null, { status: 204 }); }
+      if (String(url).endsWith("/apple/subject")) {
+        return current ? Response.json({ id: current }) : new Response(null, { status: 404 });
+      }
+      creates += 1;
+      current = "did:privy:replacement";
+      return Response.json({ id: current });
+    },
+  })!;
+  assert.equal((await provisioner.ensureUserForApple("apple-subject")).id, "did:privy:deleted");
+  await provisioner.deleteUser("did:privy:deleted");
+  assert.equal((await provisioner.ensureUserForApple("apple-subject")).id, "did:privy:replacement");
+  assert.equal(creates, 1);
+});
