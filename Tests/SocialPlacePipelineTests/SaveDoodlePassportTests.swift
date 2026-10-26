@@ -225,22 +225,34 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertTrue(page.contains("SaveHaptics.stamp()"))
         let stickers = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportStickers.swift")
         XCTAssertTrue(stickers.contains("SaveDoodleOfficialSticker"))
-        XCTAssertTrue(stickers.contains("SaveLayout.passportSlot"))
+        XCTAssertTrue(stickers.contains("SaveDoodlePassportCatalog.slotSize"))
         XCTAssertTrue(stickers.contains("officialSticker"))
         XCTAssertFalse(stickers.contains("dieCut"))
         XCTAssertFalse(stickers.contains("249 / 255"))
         XCTAssertFalse(stickers.contains("SaveDoodlePassportStickerArt"))
-        XCTAssertFalse(stickers.contains(".fill("))
+        XCTAssertTrue(stickers.contains(".fill(SaveDoodlePassportChrome.stampBase)"))
         let catalog = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportCatalog.swift")
         XCTAssertTrue(catalog.contains("SaveDoodleHomeProgressCatalog.cityPlaces"))
         XCTAssertTrue(catalog.contains("SaveDoodleHomeProgressCatalog.visitedCount"))
         XCTAssertFalse(catalog.contains("enum SaveDoodleHomeProgressCatalog"))
         XCTAssertTrue(page.contains("columnCount(availableGridWidth:"))
+        XCTAssertFalse(page.contains("physicalScreenWidth:"))
+        XCTAssertFalse(page.contains("UIScreen.main"))
+        XCTAssertFalse(catalog.contains("physicalScreenWidth"))
+        XCTAssertFalse(catalog.contains("columnCenters"))
+        XCTAssertFalse(catalog.contains("panelWidth"))
         XCTAssertTrue(page.contains("MemoMascotMark"))
         XCTAssertFalse(page.contains("SaveDoodleElephant"))
         XCTAssertTrue(page.contains("passport.empty"))
         XCTAssertTrue(page.contains("showsEmptyPassport"))
-        XCTAssertTrue(page.contains(".frame(width: 8, height: 8)"))
+        XCTAssertTrue(page.contains("legendSwatchSize"))
+        XCTAssertFalse(page.contains(".frame(width: 8, height: 8)"))
+        XCTAssertTrue(page.contains("SaveDoodleHandwriting"))
+        XCTAssertTrue(page.contains("SaveDoodleSolidCaret"))
+        XCTAssertTrue(page.contains("SaveDoodlePassportCatalog.titlePointSize"))
+        XCTAssertTrue(page.contains("single ring 1 · double ring 3 · gold 5"))
+        XCTAssertFalse(page.contains("Text(\"▾\")"))
+        XCTAssertFalse(page.contains("Capsule()"))
         XCTAssertTrue(page.contains("guard stampingID == nil else { return }"))
         XCTAssertTrue(page.contains("if stampingID != nil { return true }"))
         XCTAssertTrue(page.contains("profile.stamp.visitError"))
@@ -257,11 +269,58 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertFalse(page.contains("--uitest-passport-width="))
         XCTAssertTrue(page.contains(".accessibilityValue(\"\\(columns)\")"))
         XCTAssertTrue(page.contains("SaveSpace.lg"))
-        XCTAssertTrue(page.contains(".fill(SaveAtlasPalette.kraft)"))
+        XCTAssertTrue(page.contains(".fill(SaveDoodlePassportChrome.panelFill)"))
         XCTAssertTrue(stickers.contains("SaveDoodlePassportNumberStamp"))
+        XCTAssertTrue(stickers.contains("SaveDisplayType.fixed(14)"))
         XCTAssertTrue(stickers.contains("usesOfficialAsset"))
         XCTAssertTrue(stickers.contains("SaveDoodlePassportUniqueGlyph"))
+        XCTAssertTrue(stickers.contains(".bottomTrailing"))
+        XCTAssertTrue(stickers.contains("enum SaveDoodlePassportUnvisitedArt"))
+        XCTAssertTrue(stickers.contains("resolvedImageName(for:"))
         XCTAssertFalse(stickers.contains("struct SaveDoodlePassportStamp"))
+    }
+
+    func testUnvisitedColorArtLookupUsesDraftPlateNamesAt75() throws {
+        let expected: [(SaveDoodleStickerKind, String)] = [
+            (.coffee, "DoodlePlateCoffeeColor"),
+            (.hill, "DoodlePlateMountainColor"),
+            (.bridge, "DoodlePlateBridgeColor"),
+            (.baozi, "DoodlePlateBaoziColor"),
+            (.tea, "DoodlePlateTeaColor"),
+            (.bookstore, "DoodlePlateBookColor"),
+            (.bicycle, "DoodlePlateBicycleColor"),
+            (.ferris, "DoodlePlateFerrisColor"),
+        ]
+        XCTAssertEqual(SaveDoodlePassportUnvisitedArt.assetNames.count, 8)
+        XCTAssertEqual(
+            Set(SaveDoodlePassportUnvisitedArt.assetNames.keys),
+            Set(expected.map(\.0))
+        )
+        XCTAssertEqual(SaveDoodlePassportUnvisitedArt.plateSize, SaveDoodlePassportCatalog.slotSize)
+        XCTAssertEqual(SaveDoodlePassportCatalog.slotSize, 64)
+        for (kind, name) in expected {
+            XCTAssertEqual(SaveDoodlePassportUnvisitedArt.assetName(for: kind), name)
+            let imageset = repositoryRoot.appendingPathComponent(
+                "SAV-E/Resources/Assets.xcassets/\(name).imageset"
+            )
+            let contents = imageset.appendingPathComponent("Contents.json")
+            XCTAssertTrue(
+                FileManager.default.fileExists(atPath: contents.path),
+                "Missing DRAFT v0 imageset \(name)"
+            )
+            let json = try String(contentsOf: contents, encoding: .utf8)
+            XCTAssertTrue(json.contains("\"template-rendering-intent\" : \"original\"") || json.contains("\"template-rendering-intent\": \"original\""))
+            XCTAssertTrue(json.contains("\"scale\": \"1x\"") || json.contains("\"scale\" : \"1x\""))
+            XCTAssertTrue(json.contains("\"scale\": \"2x\"") || json.contains("\"scale\" : \"2x\""))
+            XCTAssertTrue(json.contains("\"scale\": \"3x\"") || json.contains("\"scale\" : \"3x\""))
+        }
+        XCTAssertNil(SaveDoodlePassportUnvisitedArt.assetName(for: .duck))
+        XCTAssertNil(SaveDoodlePassportUnvisitedArt.resolvedImageName(for: .duck))
+        let stickers = try source(at: "SAV-E/Views/Profile/SaveDoodlePassportStickers.swift")
+        XCTAssertTrue(stickers.contains("DRAFT v0"))
+        XCTAssertTrue(stickers.contains("SaveDoodlePassportUniqueGlyph"))
+        XCTAssertTrue(stickers.contains("resolvedImageName(for: kind)"))
+        XCTAssertTrue(stickers.contains("else if kind.usesOfficialAsset"))
     }
 
     func testUnhintedStickerKindIsStableForTheSamePlace() {
@@ -382,6 +441,29 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertEqual(SaveDoodlePassportCatalog.columnCount(availableGridWidth: 390 - 96), 3)
         XCTAssertEqual(SaveDoodlePassportCatalog.columnCount(availableGridWidth: 402 - 96), 4)
         XCTAssertEqual(SaveDoodlePassportCatalog.columnCount(availableGridWidth: 430 - 96), 4)
+    }
+
+    func testPassportGridFormulaIsWidthBasedLikeMain() {
+        XCTAssertEqual(SaveDoodlePassportCatalog.slotSize, 64)
+        XCTAssertEqual(SaveDoodlePassportCatalog.cardHeight, 64)
+        XCTAssertEqual(SaveDoodlePassportCatalog.columnStride, 80)
+        XCTAssertEqual(SaveDoodlePassportCatalog.minColumnGap, 16)
+        XCTAssertEqual(SaveDoodlePassportCatalog.panelPadding, 24)
+        XCTAssertEqual(SaveDoodlePassportCatalog.unvisitedDiscSize, 64)
+        XCTAssertEqual(SaveLayout.screenMargin, 24)
+        XCTAssertEqual(
+            SaveDoodlePassportCatalog.columnCount(availableGridWidth: 279),
+            3,
+            "375pt after 24+24 screen and panel insets"
+        )
+        XCTAssertEqual(SaveDoodlePassportCatalog.panelFillLightHex, "E9DCC3")
+        XCTAssertEqual(SaveDoodlePassportCatalog.panelStrokeLightHex, "C9BBA2")
+        XCTAssertEqual(SaveDoodlePassportCatalog.discFillLightHex, "F6F0E6")
+        XCTAssertEqual(SaveDoodlePassportCatalog.stampBaseLightHex, "FAF7F1")
+        XCTAssertEqual(SaveDoodlePassportCatalog.stampRingRedHex, "B3534A")
+        XCTAssertEqual(SaveDoodlePassportCatalog.stampRingGoldHex, "C19349")
+        XCTAssertEqual(SaveDoodlePassportCatalog.titlePointSize, 64)
+        XCTAssertEqual(SaveDoodlePassportCatalog.subtitlePointSize, 22)
     }
 
     private func place(
