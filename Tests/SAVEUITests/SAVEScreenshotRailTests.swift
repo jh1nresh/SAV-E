@@ -4806,6 +4806,33 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         if attachM1 {
             attach(app, name: "M1")
         }
+        let card = app.descendants(matching: .any)["map.placeSheet"]
+        let close = app.buttons["map.peek.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: stepTimeout))
+        XCTAssertGreaterThanOrEqual(close.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(close.frame.height, 44)
+        XCTAssertEqual(close.label, language == "zh-Hant" ? "關閉地點卡片" : "Close place card")
+        let selectedPin = app.buttons.matching(NSPredicate(
+            format: "identifier BEGINSWITH 'map.tilePin.' AND label BEGINSWITH 'Selected Map Stamp, '"
+        )).firstMatch
+        XCTAssertTrue(selectedPin.waitForExistence(timeout: stepTimeout))
+        let selectedPinID = selectedPin.identifier
+        let selectedName = app.buttons["map.peek.card"].label
+        for _ in 0..<2 {
+            close.tap()
+            XCTAssertTrue(card.waitForNonExistence(timeout: stepTimeout))
+            XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
+            let pin = app.buttons[selectedPinID]
+            XCTAssertTrue(pin.waitForExistence(timeout: stepTimeout))
+            pin.tap()
+            XCTAssertTrue(card.waitForExistence(timeout: stepTimeout))
+            XCTAssertEqual(app.buttons["map.peek.card"].label, selectedName)
+            XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "map.placeSheet").count, 1)
+            XCTAssertTrue(app.buttons["map.directions"].isHittable)
+            XCTAssertTrue(app.buttons["map.card.beenHere"].isHittable
+                || app.buttons["map.card.beenHere.undo"].isHittable)
+        }
+        attach(app, name: "map-peek-reopened-\(language)")
         let unsavedPin = app.buttons["map.unsaved.uitest-unsaved-taipei"]
         if !unsavedPin.waitForExistence(timeout: timeout(1)) {
             // The selected saved stamp starts centered; the candidate is east

@@ -79,6 +79,7 @@ struct SaveDoodleMapView: View {
 
     @Environment(\.appLanguageSettings) private var languageSettings
     @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var session: SaveDoodleSession
     @ObservedObject private var locationService = LocationService.shared
     @StateObject private var checkIns = SaveDoodleCheckInStore()
@@ -134,10 +135,22 @@ struct SaveDoodleMapView: View {
                     .padding(.horizontal, SaveLayout.screenMargin)
                 }
 
-                if let place = mapViewModel.selectedPlace {
-                    placeSheet(place)
-                        .padding(.horizontal, SaveLayout.screenMargin)
+                // Keep one card identity when switching pins. Replacing the card
+                // would leave two actionable sheets during the removal transition.
+                ZStack(alignment: .bottom) {
+                    if let place = mapViewModel.selectedPlace {
+                        placeSheet(place)
+                            .transition(peekTransition)
+                    }
                 }
+                .padding(.horizontal, SaveLayout.screenMargin)
+                .allowsHitTesting(mapViewModel.selectedPlace != nil)
+                .accessibilityHidden(mapViewModel.selectedPlace == nil)
+                .animation(
+                    reduceMotion ? .easeOut(duration: 0.15)
+                        : .spring(response: 0.38, dampingFraction: 0.78),
+                    value: mapViewModel.selectedPlace != nil
+                )
             }
             .padding(.bottom, bottomChromeClearance)
         }
@@ -364,17 +377,45 @@ struct SaveDoodleMapView: View {
         .accessibilityIdentifier("map.eatGo")
     }
 
+    private var peekTransition: AnyTransition {
+        reduceMotion ? .opacity : .asymmetric(
+            insertion: .scale(scale: 0.92, anchor: .top)
+                .combined(with: .offset(y: SaveSpace.sm))
+                .combined(with: .opacity),
+            removal: .opacity
+        )
+    }
+
     private func placeSheet(_ place: Place) -> some View {
         let listed = displayedListedPlaces.first(where: { $0.place.id == place.id })
         let visited = place.status == .visited || checkIns.visitCount(for: place.id) > 0
         let checkedInToday = checkIns.hasCheckedInToday(placeID: place.id)
         return VStack(spacing: 0) {
-            Capsule()
-                .fill(SaveAtlasPalette.line)
-                .frame(width: 36, height: 5)
-                .padding(.top, SaveSpace.xs)
-                .padding(.bottom, SaveSpace.md)
-                .accessibilityHidden(true)
+            ZStack(alignment: .trailing) {
+                Capsule()
+                    .fill(SaveAtlasPalette.line)
+                    .frame(width: 36, height: 5)
+                    .frame(maxWidth: .infinity)
+                    .accessibilityHidden(true)
+
+                Button(action: onClearSelection) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(SaveAtlasPalette.ink)
+                        .frame(width: 28, height: 28)
+                        .background(SaveAtlasPalette.paper, in: Circle())
+                        .overlay {
+                            Circle().stroke(SaveAtlasPalette.line, lineWidth: SaveAtlasPalette.strokeWidth)
+                        }
+                        .frame(width: SaveLayout.minTap, height: SaveLayout.minTap)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(languageSettings.localized(
+                    english: "Close place card", traditionalChinese: "關閉地點卡片"
+                ))
+                .accessibilityIdentifier("map.peek.close")
+            }
 
             HStack(alignment: .center, spacing: SaveLayout.stickerToText) {
                 Button {
@@ -516,8 +557,14 @@ struct SaveDoodleMapView: View {
             RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
                 .stroke(SaveAtlasPalette.line, lineWidth: SaveAtlasPalette.strokeWidth)
         }
+        .shadow(
+            color: SaveAtlasPalette.ink.opacity(SaveTheme.Elevation.cardOpacity),
+            radius: SaveTheme.Elevation.cardRadius,
+            y: SaveTheme.Elevation.cardY
+        )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.placeSheet")
+        .accessibilityAction(.escape, onClearSelection)
     }
 
     private var locateButton: some View {
