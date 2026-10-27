@@ -4812,7 +4812,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertGreaterThanOrEqual(close.frame.width, 44)
         XCTAssertGreaterThanOrEqual(close.frame.height, 44)
         XCTAssertEqual(close.label, language == "zh-Hant" ? "關閉地點卡片" : "Close place card")
-        let selectedPin = app.buttons.matching(NSPredicate(
+        let selectedPin = app.descendants(matching: .any).matching(NSPredicate(
             format: "identifier BEGINSWITH 'map.tilePin.' AND label BEGINSWITH 'Selected Map Stamp, '"
         )).firstMatch
         XCTAssertTrue(selectedPin.waitForExistence(timeout: stepTimeout))
@@ -4822,7 +4822,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             close.tap()
             XCTAssertTrue(card.waitForNonExistence(timeout: stepTimeout))
             XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
-            let pin = app.buttons[selectedPinID]
+            let pin = app.descendants(matching: .any)[selectedPinID]
             XCTAssertTrue(pin.waitForExistence(timeout: stepTimeout))
             pin.tap()
             XCTAssertTrue(card.waitForExistence(timeout: stepTimeout))
@@ -4833,6 +4833,22 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 || app.buttons["map.card.beenHere.undo"].isHittable)
         }
         attach(app, name: "map-peek-reopened-\(language)")
+        let otherPin = try XCTUnwrap(app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.' AND identifier != %@", selectedPinID)
+        ).allElementsBoundByIndex.first(where: { $0.isHittable }))
+        let nameStart = try XCTUnwrap(otherPin.label.range(of: "Map Stamp, "))
+        let otherName = String(otherPin.label[nameStart.upperBound...])
+        otherPin.tap()
+        XCTAssertTrue(app.buttons.matching(identifier: "map.peek.card").matching(
+            NSPredicate(format: "label == %@", otherName)
+        ).firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "map.placeSheet").count, 1)
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
+        attach(app, name: "map-peek-switched-\(language)")
+        app.descendants(matching: .any)[selectedPinID].tap()
+        XCTAssertTrue(app.buttons.matching(identifier: "map.peek.card").matching(
+            NSPredicate(format: "label == %@", selectedName)
+        ).firstMatch.waitForExistence(timeout: stepTimeout))
         let unsavedPin = app.buttons["map.unsaved.uitest-unsaved-taipei"]
         if !unsavedPin.waitForExistence(timeout: timeout(1)) {
             // The selected saved stamp starts centered; the candidate is east

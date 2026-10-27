@@ -125,7 +125,7 @@ struct SaveDoodleMapView: View {
         .ignoresSafeArea(edges: .top)
         .background(SaveAtlasPalette.paper)
         .overlay(alignment: .bottom) {
-            VStack(spacing: SaveSpace.md) {
+            VStack(spacing: 0) {
                 Spacer(minLength: 0)
                 if mapViewModel.selectedPlace == nil {
                     HStack {
