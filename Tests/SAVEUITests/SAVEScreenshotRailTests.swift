@@ -4756,6 +4756,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     func testMapSavedUnsavedVisitedTaipeiFixture() throws {
         try captureTaipeiMapStates(language: "en", attachM1: true)
         try captureTaipeiMapStates(language: "zh-Hant", attachM1: false)
+        try exerciseMapPeekInteractions()
     }
 
     @MainActor
@@ -4806,6 +4807,45 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         if attachM1 {
             attach(app, name: "M1")
         }
+        let close = app.buttons["map.peek.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: stepTimeout))
+        XCTAssertGreaterThanOrEqual(close.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(close.frame.height, 44)
+        XCTAssertEqual(close.label, language == "zh-Hant" ? "關閉地點卡片" : "Close place card")
+        let unsavedPin = app.buttons["map.unsaved.uitest-unsaved-taipei"]
+        if !unsavedPin.waitForExistence(timeout: timeout(1)) {
+            // The selected saved stamp starts centered; the candidate is east
+            // of the viewport. Pan it into view without clearing search results.
+            let map = app.maps.firstMatch
+            map.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.45))
+                .press(forDuration: 0.1, thenDragTo: map.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.45)))
+        }
+        XCTAssertTrue(unsavedPin.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(unsavedPin.isHittable, "Unsaved native MapKit marker must receive taps")
+        unsavedPin.tap()
+        XCTAssertTrue(app.buttons["drawer.unsaved.primaryAction"].waitForExistence(timeout: stepTimeout))
+        attach(app, name: "map-unsaved-marker-receipt-\(language)")
+        terminate(app)
+    }
+
+    /// Use separated map coordinates for taps; the M1 memory raster intentionally
+    /// stacks its seeds at one coordinate and cannot verify pin switching.
+    @MainActor
+    private func exerciseMapPeekInteractions() throws {
+        let language = "en"
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+            "--uitest-repair-review-demo-seed", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "--uitest-home-taipei-granted",
+            "--uitest-map-place-selected", "-save.appLanguage", language,
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        let notice = app.buttons["map.locationNotice.dismiss"]
+        if notice.waitForExistence(timeout: timeout(2)) { notice.tap() }
         let card = app.descendants(matching: .any)["map.placeSheet"]
         let close = app.buttons["map.peek.close"]
         XCTAssertTrue(close.waitForExistence(timeout: stepTimeout))
@@ -4849,19 +4889,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons.matching(identifier: "map.peek.card").matching(
             NSPredicate(format: "label == %@", selectedName)
         ).firstMatch.waitForExistence(timeout: stepTimeout))
-        let unsavedPin = app.buttons["map.unsaved.uitest-unsaved-taipei"]
-        if !unsavedPin.waitForExistence(timeout: timeout(1)) {
-            // The selected saved stamp starts centered; the candidate is east
-            // of the viewport. Pan it into view without clearing search results.
-            let map = app.maps.firstMatch
-            map.coordinate(withNormalizedOffset: CGVector(dx: 0.75, dy: 0.45))
-                .press(forDuration: 0.1, thenDragTo: map.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.45)))
-        }
-        XCTAssertTrue(unsavedPin.waitForExistence(timeout: stepTimeout))
-        XCTAssertTrue(unsavedPin.isHittable, "Unsaved native MapKit marker must receive taps")
-        unsavedPin.tap()
-        XCTAssertTrue(app.buttons["drawer.unsaved.primaryAction"].waitForExistence(timeout: stepTimeout))
-        attach(app, name: "map-unsaved-marker-receipt-\(language)")
+        app.buttons["map.peek.card"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(card.waitForNonExistence(timeout: stepTimeout))
         terminate(app)
     }
 
