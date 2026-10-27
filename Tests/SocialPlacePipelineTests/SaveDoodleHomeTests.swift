@@ -6,6 +6,49 @@ import XCTest
 
 @MainActor
 final class SaveDoodleHomeTests: XCTestCase {
+    func testLatestVisitsSnapshotKeepsSparseHistoryAndMatchesIndividualReads() {
+        let suite = "save.doodle.visit-snapshot.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let visited = UUID()
+        let empty = UUID()
+        let legacy = UUID()
+        let omitted = UUID()
+        defaults.set([
+            visited.uuidString: [300.0, 100.0, 200.0],
+            empty.uuidString: [],
+            omitted.uuidString: [400.0]
+        ], forKey: SaveDoodleVisitStore.datesKey)
+        defaults.set(5, forKey: SaveDoodleVisitStore.countKey(legacy))
+        let store = SaveDoodleVisitStore(defaults: defaults)
+        let ids = [visited, empty, legacy, UUID(), visited]
+        let snapshot = store.latestVisits(for: ids)
+        XCTAssertEqual(snapshot, [visited: Date(timeIntervalSince1970: 300)])
+        for id in ids {
+            XCTAssertEqual(snapshot[id], store.latestVisit(for: id))
+        }
+        XCTAssertTrue(store.latestVisits(for: []).isEmpty)
+        XCTAssertNil(snapshot[omitted], "Only requested places enter the render snapshot")
+    }
+
+    func testLatestVisitsSnapshotRefreshesAfterAnotherSurfaceRecordsUndoesAndRestores() {
+        let suite = "save.doodle.visit-snapshot-refresh.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let id = UUID()
+        let today = Date(timeIntervalSince1970: 1_760_000_000)
+        let home = SaveDoodleVisitStore(defaults: defaults, now: { today })
+        let map = SaveDoodleVisitStore(defaults: defaults, now: { today })
+        XCTAssertTrue(home.latestVisits(for: [id]).isEmpty)
+        XCTAssertTrue(map.recordVisit(for: id))
+        let saved = map.snapshot(for: id)
+        XCTAssertEqual(home.latestVisits(for: [id])[id], today)
+        XCTAssertTrue(map.undoToday(for: id))
+        XCTAssertNil(home.latestVisits(for: [id])[id])
+        map.restore(saved)
+        XCTAssertEqual(home.latestVisits(for: [id])[id], today)
+    }
+
     func testVisitHistoryIsSharedAcrossSurfacesAndSurvivesUndoAndRelaunch() {
         let suite = "save.doodle.shared-visits.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
