@@ -848,8 +848,11 @@ jobs:
       # Real device types are selected by run-ios-width-device-test.sh:
       # iPhone-SE-3rd-generation, iPhone-14, and iPhone-15-Pro-Max.
       # Do not substitute iPhone-16-Pro-Max (440pt); assert real widths.
+      # Hosted first-boot migration can consume ten minutes before XCTest.
+      # Allow 25 minutes for boot + tests + export. Test waits and the
+      # 65-minute lane cap stay fixed; retain raw logs on interruption.
       - name: Capture Map width evidence
-        timeout-minutes: 15
+        timeout-minutes: 25
         if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.products.outcome == 'success' && startsWith(matrix.lane, 'width-') }}
         env:
           WIDTH: ${{ matrix.width }}
@@ -864,7 +867,7 @@ jobs:
             --result-bundle "$RUNNER_TEMP/SAVE-Map-$WIDTH.xcresult" \
             --log "$RUNNER_TEMP/SAVE-Map-$WIDTH-tests.log"
       - name: Capture Friends width evidence
-        timeout-minutes: 15
+        timeout-minutes: 25
         if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.products.outcome == 'success' && startsWith(matrix.lane, 'width-') }}
         env:
           WIDTH: ${{ matrix.width }}
@@ -879,7 +882,7 @@ jobs:
             --result-bundle "$RUNNER_TEMP/SAVE-Friends-$WIDTH.xcresult" \
             --log "$RUNNER_TEMP/SAVE-Friends-$WIDTH-tests.log"
       - name: Capture Passport width evidence
-        timeout-minutes: 15
+        timeout-minutes: 25
         if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.products.outcome == 'success' && startsWith(matrix.lane, 'width-') }}
         env:
           WIDTH: ${{ matrix.width }}
@@ -939,6 +942,7 @@ jobs:
           path: |
             ${{ runner.temp }}/SAVE-First-Run
             ${{ runner.temp }}/SAVE-*-tests.log
+            ${{ runner.temp }}/SAVE-*-tests-attempt*.log
             ${{ runner.temp }}/ios-ui-*-args.txt
           if-no-files-found: error
           retention-days: 14
