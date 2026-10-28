@@ -1429,7 +1429,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected, "Capture cancellation returns to Passport")
     }
 
-    /// Founder lock: paywall parity target is the Doodle v1 mock at 0.90.
+    /// Founder-approved native paywall raster (2026-10-28), gated at 0.90.
     /// Purchasing is off, so the wall is forced with `--uitest-show-paywall`.
     @MainActor
     func testDoodlePaywallParity() throws {
@@ -2187,7 +2187,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
                 "--uitest-map-place-selected",
-                "--uitest-show-paywall",
+                // This rail opens Pro from Passport at the end. Forcing its
+                // cover at launch hides the root bar needed by every earlier shot.
                 "-save.appLanguage", "en",
                 "-AppleInterfaceStyle", appleInterfaceStyle,
                 forceArgument,

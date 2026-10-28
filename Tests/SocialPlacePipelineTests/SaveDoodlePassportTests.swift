@@ -351,7 +351,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         )
     }
 
-    func testPassportParityTargetIsTheDoodleMockAtExactly90() throws {
+    func testPassportParityTargetIsFounderApprovedAtExactly90() throws {
         let script = try source(at: "Prototypes/AtlasPostcard/Scripts/run-visual-parity.sh")
         XCTAssertTrue(script.contains("five-tab-passport*)"))
         XCTAssertTrue(script.contains("screen=\"passport\""))
@@ -364,7 +364,7 @@ final class SaveDoodlePassportTests: XCTestCase {
         XCTAssertEqual([UInt8](png.prefix(8)), [137, 80, 78, 71, 13, 10, 26, 10])
         XCTAssertEqual(pngDimension(png, at: 16), 402)
         XCTAssertEqual(pngDimension(png, at: 20), 874)
-        XCTAssertEqual(png[25], 2, "Passport target must stay RGB 8-bit, not a generated screenshot.")
+        XCTAssertEqual(png[25], 2, "Approved Passport target must stay RGB 8-bit.")
         let darkTarget = repositoryRoot.appendingPathComponent(
             "Prototypes/AtlasPostcard/Reference/ProductionTargets/passport-dark.png"
         )
