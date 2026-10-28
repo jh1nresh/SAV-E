@@ -550,19 +550,19 @@ struct SaveDoodleMapView: View {
         }
         .padding(.horizontal, SaveLayout.screenMargin)
         .padding(.bottom, SaveSpace.md)
-        .background(
-            SaveAtlasPalette.paper,
-            in: RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
-        )
+        .background {
+            RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
+                .fill(SaveAtlasPalette.paper)
+                .shadow(
+                    color: SaveAtlasPalette.ink.opacity(SaveTheme.Elevation.cardOpacity),
+                    radius: SaveTheme.Elevation.cardRadius,
+                    y: SaveTheme.Elevation.cardY
+                )
+        }
         .overlay {
             RoundedRectangle(cornerRadius: SaveAtlasPalette.cardRadius, style: .continuous)
                 .stroke(SaveAtlasPalette.line, lineWidth: SaveAtlasPalette.strokeWidth)
         }
-        .shadow(
-            color: SaveAtlasPalette.ink.opacity(SaveTheme.Elevation.cardOpacity),
-            radius: SaveTheme.Elevation.cardRadius,
-            y: SaveTheme.Elevation.cardY
-        )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.placeSheet")
         .accessibilityAction(.escape, onClearSelection)

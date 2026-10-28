@@ -4811,7 +4811,25 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         if !reduceMotion.isHittable { settings.swipeUp() }
         XCTAssertTrue(reduceMotion.isHittable)
         let expectedSwitchValue = enabled ? "1" : "0"
-        if reduceMotion.value as? String != expectedSwitchValue { reduceMotion.tap() }
+        if reduceMotion.value as? String != expectedSwitchValue {
+            // Settings exposes a row-wide labeled Switch plus a separate,
+            // unlabeled physical control. Tapping the label's center is a no-op.
+            let labelFrame = reduceMotion.frame
+            let row = settings.cells.containing(.switch, identifier: reduceMotion.identifier).firstMatch
+            let isPhysicalControl: (XCUIElement) -> Bool = { candidate in
+                let frame = candidate.frame
+                return frame.width > 0 && frame.width < labelFrame.width
+                    && frame.intersects(labelFrame)
+                    && abs(frame.midY - labelFrame.midY) < min(frame.height, labelFrame.height) / 2
+                    && candidate.isHittable
+            }
+            let rowControls = row.exists ? row.switches.allElementsBoundByIndex.filter(isPhysicalControl) : []
+            let controls = rowControls.isEmpty
+                ? settings.switches.allElementsBoundByIndex.filter(isPhysicalControl) : rowControls
+            XCTAssertEqual(controls.count, 1, "Reduce Motion must identify one physical switch in its row")
+            let control = try XCTUnwrap(controls.first, "Reduce Motion's physical switch must be hittable")
+            control.tap()
+        }
         let switchMatches = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "value == %@", expectedSwitchValue),
             object: reduceMotion
