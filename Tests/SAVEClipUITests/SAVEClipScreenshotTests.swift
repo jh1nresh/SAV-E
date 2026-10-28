@@ -30,6 +30,21 @@ final class SAVEClipScreenshotTests: XCTestCase {
         app.terminate()
     }
 
+    func testSharerContrastSamplerFindsNonblackInk() {
+        var samples = ClipScreenshotContrast.Samples()
+        samples.include((255, 245, 231))
+        samples.include((47, 46, 35))
+        samples.include((120, 120, 120))
+        XCTAssertEqual(samples.darkest.0, 47)
+        XCTAssertEqual(samples.darkest.1, 46)
+        XCTAssertEqual(samples.darkest.2, 35)
+        XCTAssertEqual(samples.light, 1)
+        XCTAssertEqual(samples.dark, 1)
+        XCTAssertGreaterThan(ClipScreenshotContrast.ratio(
+            lightest: samples.lightest, darkest: samples.darkest
+        ), 4.5)
+    }
+
     func testSharerChipEnglishDarkIsReadable() {
         let app = launchClip(appearance: .dark, language: "en", locale: "en_US", screen: "place-sender")
         XCTAssertTrue(app.descendants(matching: .any)["clip.place.preview"].waitForExistence(timeout: 20))
@@ -195,29 +210,19 @@ final class SAVEClipScreenshotTests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["clip.pending"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.descendants(matching: .any)["clip.pending.body"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["clip.wordmark"].exists)
-        let title = app.descendants(matching: .any)["clip.cap50.title"]
+        // Legacy cap links now enter the pending full-App confirmation flow.
+        let title = app.staticTexts["Ready to confirm in Savvy"]
         XCTAssertTrue(title.waitForExistence(timeout: 5))
-        let normalized = title.label
-            .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "  ", with: " ")
-        XCTAssertTrue(
-            normalized.contains("Free limit") && normalized.contains("reached"),
-            "cap50 title must keep Free limit reached, not a clipped 'reachea': \(title.label)"
-        )
-        XCTAssertFalse(
-            normalized.contains("reachea") && !normalized.contains("reached"),
-            "cap50 title must not truncate the last d of reached"
-        )
-        XCTAssertGreaterThan(
-            title.frame.height,
-            40,
-            "cap50 title must wrap onto a second line so Caveat ink is not clipped"
-        )
+        XCTAssertTrue(app.buttons["clip.pending.continue"].isHittable)
+        XCTAssertTrue(app.buttons["clip.pending.back"].isHittable)
+        XCTAssertFalse(app.descendants(matching: .any)["clip.cap50.title"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["clip.saved"].exists)
+        XCTAssertGreaterThan(title.frame.height, 0)
         XCTAssertGreaterThanOrEqual(title.frame.minX, app.frame.minX + 8)
         XCTAssertLessThanOrEqual(
             title.frame.maxX,
             app.frame.maxX - 8,
-            "cap50 title must stay inside the screen so the last glyph is not clipped"
+            "Pending title must stay inside the screen so the last glyph is not clipped"
         )
         attachScreenshot(app.screenshot(), name: "cap50-en-dark")
         app.terminate()
@@ -440,12 +445,7 @@ final class SAVEClipScreenshotTests: XCTestCase {
         XCTAssertGreaterThan(maxX, minX, "\(name): empty chip frame")
         XCTAssertGreaterThan(maxY, minY, "\(name): empty chip frame")
 
-        var light = 0
-        var dark = 0
-        var darkest = (255, 255, 255)
-        var lightest = (0, 0, 0)
-        var darkestY = 1.0
-        var lightestY = 0.0
+        var samples = ClipScreenshotContrast.Samples()
         let stepX = max((maxX - minX) / 12, 1)
         let stepY = max((maxY - minY) / 6, 1)
         var y = minY
@@ -453,29 +453,19 @@ final class SAVEClipScreenshotTests: XCTestCase {
             var x = minX
             while x <= maxX {
                 if let rgb = samplePixel(image, x: x, y: y) {
-                    let lum = 0.2126 * Double(rgb.0) + 0.7152 * Double(rgb.1) + 0.0722 * Double(rgb.2)
-                    if lum > 200 { light += 1 }
-                    if lum < 80 { dark += 1 }
-                    if lum < darkestY {
-                        darkestY = lum
-                        darkest = rgb
-                    }
-                    if lum > lightestY {
-                        lightestY = lum
-                        lightest = rgb
-                    }
+                    samples.include(rgb)
                 }
                 x += stepX
             }
             y += stepY
         }
-        let note = XCTAttachment(string: "\(name) chip light=\(light) dark=\(dark) darkest=\(darkest) lightest=\(lightest)")
+        let note = XCTAttachment(string: "\(name) chip light=\(samples.light) dark=\(samples.dark) darkest=\(samples.darkest) lightest=\(samples.lightest)")
         note.name = "\(name)-chip-contrast"
         note.lifetime = .keepAlways
         add(note)
-        XCTAssertGreaterThan(light, 0, "\(name): cream pill background missing")
-        XCTAssertGreaterThan(dark, 0, "\(name): ClipStickerInk text missing — white-on-white")
-        let ratio = ClipScreenshotContrast.ratio(lightest: lightest, darkest: darkest)
+        XCTAssertGreaterThan(samples.light, 0, "\(name): cream pill background missing")
+        XCTAssertGreaterThan(samples.dark, 0, "\(name): ClipStickerInk text missing — white-on-white")
+        let ratio = ClipScreenshotContrast.ratio(lightest: samples.lightest, darkest: samples.darkest)
         XCTAssertGreaterThan(ratio, 4.5, "\(name): chip contrast \(ratio) is below AA")
     }
 
@@ -519,6 +509,24 @@ final class SAVEClipScreenshotTests: XCTestCase {
 }
 
 private enum ClipScreenshotContrast {
+    struct Samples {
+        var light = 0
+        var dark = 0
+        var darkest = (255, 255, 255)
+        var lightest = (0, 0, 0)
+        // Samples use byte luminance (0...255), not normalized luminance.
+        private var darkestY = Double.infinity
+        private var lightestY = -Double.infinity
+
+        mutating func include(_ rgb: (Int, Int, Int)) {
+            let lum = 0.2126 * Double(rgb.0) + 0.7152 * Double(rgb.1) + 0.0722 * Double(rgb.2)
+            if lum > 200 { light += 1 }
+            if lum < 80 { dark += 1 }
+            if lum < darkestY { darkestY = lum; darkest = rgb }
+            if lum > lightestY { lightestY = lum; lightest = rgb }
+        }
+    }
+
     static func ratio(lightest: (Int, Int, Int), darkest: (Int, Int, Int)) -> Double {
         func luminance(_ rgb: (Int, Int, Int)) -> Double {
             func linear(_ channel: Int) -> Double {
