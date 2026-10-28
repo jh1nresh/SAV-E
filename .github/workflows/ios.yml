@@ -150,12 +150,10 @@ jobs:
   # concurrency group cancel a superseded run.
   ios:
     if: ${{ !cancelled() }}
-    needs: [ios-build]
+    needs: [ios-build, ios-supplemental]
     runs-on: macos-26
-    # Products come from ios-build (no second compile). Setup + units +
-    # simulator is ~15-20m; UI step 100; width evidence 15 per capture;
-    # Trip 15; T3 screens 15; parity/teardown and the main-only Release
-    # compile share the existing 160-minute budget. Timeouts are unchanged.
+    # Keep all coverage, with Home evidence and width captures on isolated
+    # runners. This final ios gate also requires every supplemental lane.
     timeout-minutes: 160
     env:
       # Re-enabled for the 2026-10-15 pixel-art pass. Disable again after the
@@ -178,6 +176,10 @@ jobs:
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: python3 scripts/select-ios-tests.py --output-dir "$RUNNER_TEMP"
+
+      - name: Partition UI execution without dropping selectors
+        if: steps.scope.outputs.ui == 'true'
+        run: python3 scripts/partition-ios-ui-tests.py --directory "$RUNNER_TEMP"
 
       - name: Upload test selection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -468,7 +470,7 @@ jobs:
             --max-attempts "$max_attempts" \
             --result-bundle "$RUNNER_TEMP/SAVE-UI.xcresult" \
             --log "$RUNNER_TEMP/SAVE-UI-tests.log" \
-            --only-testing-file "$RUNNER_TEMP/ios-ui-args.txt" \
+            --only-testing-file "$RUNNER_TEMP/ios-ui-core-args.txt" \
             -- \
             -xctestrun '${{ steps.products.outputs.xctestrun }}' \
             -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
@@ -599,180 +601,6 @@ jobs:
               shutil.copy2(candidate[1], dest)
               print(f"{dest.stat().st_size} {dest}")
           PY
-
-      # Real 375 / 390 / 430 simulators. iPhone-SE-3rd-generation (375),
-      # iPhone-14 (390; not iPhone-16 at 393), iPhone-16-Pro-Max (430).
-      # Letterboxing the 402pt CI device does not count.
-      - name: Capture Map 375pt width evidence
-        timeout-minutes: 15
-        if: always() && (steps.scope.outputs.ui == 'true')
-        env:
-          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Map-375-tests.log
-        run: |
-          scripts/run-ios-width-device-test.sh \
-            --width 375 \
-            --test SAVEUITests/SAVEScreenshotRailTests/testMapWidth375 \
-            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
-            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Map-375.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Map-375-tests.log"
-
-      - name: Capture Map 390pt width evidence
-        timeout-minutes: 15
-        if: always() && (steps.scope.outputs.ui == 'true')
-        env:
-          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Map-390-tests.log
-        run: |
-          scripts/run-ios-width-device-test.sh \
-            --width 390 \
-            --test SAVEUITests/SAVEScreenshotRailTests/testMapWidth390 \
-            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
-            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Map-390.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Map-390-tests.log"
-
-      - name: Capture Map 430pt width evidence
-        timeout-minutes: 15
-        if: always() && (steps.scope.outputs.ui == 'true')
-        env:
-          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Map-430-tests.log
-        run: |
-          scripts/run-ios-width-device-test.sh \
-            --width 430 \
-            --test SAVEUITests/SAVEScreenshotRailTests/testMapWidth430 \
-            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
-            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Map-430.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Map-430-tests.log"
-
-      - name: Require Map width evidence
-        if: always() && (steps.scope.outputs.ui == 'true')
-        run: |
-          missing=0
-          for name in map-375 map-390 map-430; do
-            path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
-            if [[ -f "$path" ]]; then
-              wc -c "$path"
-            else
-              echo "missing $name.png" >&2
-              missing=1
-            fi
-          done
-          exit "$missing"
-
-      - name: Capture Friends 375pt width evidence
-        timeout-minutes: 15
-        if: always() && (steps.scope.outputs.ui == 'true')
-        env:
-          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Friends-375-tests.log
-        run: |
-          scripts/run-ios-width-device-test.sh \
-            --width 375 \
-            --test SAVEUITests/SAVEScreenshotRailTests/testFriendsWidth375 \
-            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
-            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Friends-375.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Friends-375-tests.log"
-
-      - name: Capture Friends 390pt width evidence
-        timeout-minutes: 15
-        if: always() && (steps.scope.outputs.ui == 'true')
-        env:
-          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Friends-390-tests.log
-        run: |
-          scripts/run-ios-width-device-test.sh \
-            --width 390 \
-            --test SAVEUITests/SAVEScreenshotRailTests/testFriendsWidth390 \
-            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
-            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Friends-390.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Friends-390-tests.log"
-
-      - name: Capture Friends 430pt width evidence
-        timeout-minutes: 15
-        if: always() && (steps.scope.outputs.ui == 'true')
-        env:
-          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Friends-430-tests.log
-        run: |
-          scripts/run-ios-width-device-test.sh \
-            --width 430 \
-            --test SAVEUITests/SAVEScreenshotRailTests/testFriendsWidth430 \
-            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
-            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Friends-430.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Friends-430-tests.log"
-
-      - name: Require Friends width evidence
-        if: always() && (steps.scope.outputs.ui == 'true')
-        run: |
-          missing=0
-          for name in friends-375 friends-390 friends-430; do
-            path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
-            if [[ -f "$path" ]]; then
-              wc -c "$path"
-            else
-              echo "missing $name.png" >&2
-              missing=1
-            fi
-          done
-          exit "$missing"
-
-      - name: Capture Passport 375pt width evidence
-        timeout-minutes: 15
-        if: always() && (steps.scope.outputs.ui == 'true')
-        env:
-          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Passport-375-tests.log
-        run: |
-          scripts/run-ios-width-device-test.sh \
-            --width 375 \
-            --test SAVEUITests/SAVEScreenshotRailTests/testPassportWidth375 \
-            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
-            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Passport-375.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Passport-375-tests.log"
-
-      - name: Capture Passport 390pt width evidence
-        timeout-minutes: 15
-        if: always() && (steps.scope.outputs.ui == 'true')
-        env:
-          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Passport-390-tests.log
-        run: |
-          scripts/run-ios-width-device-test.sh \
-            --width 390 \
-            --test SAVEUITests/SAVEScreenshotRailTests/testPassportWidth390 \
-            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
-            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Passport-390.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Passport-390-tests.log"
-
-      - name: Capture Passport 430pt width evidence
-        timeout-minutes: 15
-        if: always() && (steps.scope.outputs.ui == 'true')
-        env:
-          SAVE_XCODEBUILD_LOG: ${{ runner.temp }}/SAVE-Passport-430-tests.log
-        run: |
-          scripts/run-ios-width-device-test.sh \
-            --width 430 \
-            --test SAVEUITests/SAVEScreenshotRailTests/testPassportWidth430 \
-            --xctestrun '${{ steps.products.outputs.xctestrun }}' \
-            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
-            --result-bundle "$RUNNER_TEMP/SAVE-Passport-430.xcresult" \
-            --log "$RUNNER_TEMP/SAVE-Passport-430-tests.log"
-
-      - name: Require Passport width evidence
-        if: always() && (steps.scope.outputs.ui == 'true')
-        run: |
-          missing=0
-          for name in passport-375 passport-390 passport-430; do
-            path="$RUNNER_TEMP/SAVE-First-Run/${name}.png"
-            if [[ -f "$path" ]]; then
-              wc -c "$path"
-            else
-              echo "missing $name.png" >&2
-              missing=1
-            fi
-          done
-          exit "$missing"
 
       - name: Reset focused simulator before Trip sheet UI test
         if: steps.scope.outputs.trip == 'true'
@@ -934,6 +762,12 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      - name: Require every supplemental lane
+        if: always()
+        env:
+          SUPPLEMENTAL_RESULT: ${{ needs.ios-supplemental.result }}
+        run: '[[ "$SUPPLEMENTAL_RESULT" == success ]]'
+
       - name: Build unsigned release candidate without a simulator
         if: github.event_name == 'push'
         run: |
@@ -954,6 +788,164 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             COMPILER_INDEX_STORE_ENABLE=NO \
             build
+
+  ios-supplemental:
+    needs: [ios-build]
+    runs-on: macos-26
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: home-evidence
+          - lane: width-375
+            width: 375
+            map_test: testMapWidth375
+            friends_test: testFriendsWidth375
+            passport_test: testPassportWidth375
+          - lane: width-390
+            width: 390
+            map_test: testMapWidth390
+            friends_test: testFriendsWidth390
+            passport_test: testPassportWidth390
+          - lane: width-430
+            width: 430
+            map_test: testMapWidth430
+            friends_test: testFriendsWidth430
+            passport_test: testPassportWidth430
+    env:
+      SAVE_UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus || (github.head_ref == 'cursor/tile-town-product-lock-4894' && 'tile-town-home') || '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+      - name: Select the same iOS coverage
+        id: scope
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 scripts/select-ios-tests.py --output-dir "$RUNNER_TEMP"
+      - name: Partition UI execution without dropping selectors
+        id: partition
+        run: python3 scripts/partition-ios-ui-tests.py --directory "$RUNNER_TEMP"
+      - name: Select Xcode 26.6
+        if: steps.scope.outputs.ui == 'true'
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+      - name: Download this-run test products
+        if: steps.scope.outputs.ui == 'true'
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: save-ios-test-products-${{ github.run_id }}
+          path: ${{ runner.temp }}/SAVE-TestProducts-dl
+      - name: Locate transferred xctestrun
+        id: products
+        if: steps.scope.outputs.ui == 'true'
+        run: |
+          mkdir -p "$RUNNER_TEMP/SAVE-DerivedData/Build/Products"
+          tar -xf "$RUNNER_TEMP/SAVE-TestProducts-dl/save-ios-test-products.tar" -C "$RUNNER_TEMP/SAVE-DerivedData/Build/Products"
+          xctestrun="$(find "$RUNNER_TEMP/SAVE-DerivedData/Build/Products" -name '*.xctestrun' | sort | head -n 1)"
+          [[ -n "$xctestrun" && -f "$xctestrun" ]]
+          echo "xctestrun=$xctestrun" >> "$GITHUB_OUTPUT"
+      # Real device types are selected by run-ios-width-device-test.sh:
+      # iPhone-SE-3rd-generation, iPhone-14, and iPhone-15-Pro-Max.
+      # Do not substitute iPhone-16-Pro-Max (440pt); assert real widths.
+      # Hosted first-boot migration can consume ten minutes before XCTest.
+      # Allow 25 minutes for boot + tests + export. Test waits and the
+      # 65-minute lane cap stay fixed; retain raw logs on interruption.
+      - name: Capture Map width evidence
+        timeout-minutes: 25
+        if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.products.outcome == 'success' && startsWith(matrix.lane, 'width-') }}
+        env:
+          WIDTH: ${{ matrix.width }}
+          TEST: ${{ matrix.map_test }}
+          XCTESTRUN_PATH: ${{ steps.products.outputs.xctestrun }}
+        run: |
+          scripts/run-ios-width-device-test.sh \
+            --width "$WIDTH" \
+            --test "SAVEUITests/SAVEScreenshotRailTests/$TEST" \
+            --xctestrun "$XCTESTRUN_PATH" \
+            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
+            --result-bundle "$RUNNER_TEMP/SAVE-Map-$WIDTH.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Map-$WIDTH-tests.log"
+      - name: Capture Friends width evidence
+        timeout-minutes: 25
+        if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.products.outcome == 'success' && startsWith(matrix.lane, 'width-') }}
+        env:
+          WIDTH: ${{ matrix.width }}
+          TEST: ${{ matrix.friends_test }}
+          XCTESTRUN_PATH: ${{ steps.products.outputs.xctestrun }}
+        run: |
+          scripts/run-ios-width-device-test.sh \
+            --width "$WIDTH" \
+            --test "SAVEUITests/SAVEScreenshotRailTests/$TEST" \
+            --xctestrun "$XCTESTRUN_PATH" \
+            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
+            --result-bundle "$RUNNER_TEMP/SAVE-Friends-$WIDTH.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Friends-$WIDTH-tests.log"
+      - name: Capture Passport width evidence
+        timeout-minutes: 25
+        if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && steps.products.outcome == 'success' && startsWith(matrix.lane, 'width-') }}
+        env:
+          WIDTH: ${{ matrix.width }}
+          TEST: ${{ matrix.passport_test }}
+          XCTESTRUN_PATH: ${{ steps.products.outputs.xctestrun }}
+        run: |
+          scripts/run-ios-width-device-test.sh \
+            --width "$WIDTH" \
+            --test "SAVEUITests/SAVEScreenshotRailTests/$TEST" \
+            --xctestrun "$XCTESTRUN_PATH" \
+            --output-dir "$RUNNER_TEMP/SAVE-First-Run" \
+            --result-bundle "$RUNNER_TEMP/SAVE-Passport-$WIDTH.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Passport-$WIDTH-tests.log"
+      - name: Require every width raster
+        if: ${{ !cancelled() && steps.scope.outputs.ui == 'true' && startsWith(matrix.lane, 'width-') }}
+        env:
+          WIDTH: ${{ matrix.width }}
+        run: |
+          for surface in map friends passport; do
+            [[ -s "$RUNNER_TEMP/SAVE-First-Run/${surface}-${WIDTH}.png" ]]
+          done
+      - name: Create Home evidence simulator
+        id: simulator
+        if: matrix.lane == 'home-evidence' && steps.partition.outputs.home == 'true'
+        run: |
+          udid="$(xcrun simctl create 'SAV-E Home evidence' 'com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro' 'com.apple.CoreSimulator.SimRuntime.iOS-26-5')"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl bootstatus "$udid" -b
+      - name: Run every selected Home evidence test
+        if: matrix.lane == 'home-evidence' && steps.partition.outputs.home == 'true'
+        run: |
+          scripts/run-ios-xcodebuild-retry.sh \
+            --max-attempts 3 \
+            --result-bundle "$RUNNER_TEMP/SAVE-Home-Evidence.xcresult" \
+            --log "$RUNNER_TEMP/SAVE-Home-Evidence-tests.log" \
+            --only-testing-file "$RUNNER_TEMP/ios-ui-home-args.txt" \
+            -- \
+            -xctestrun '${{ steps.products.outputs.xctestrun }}' \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
+            COMPILER_INDEX_STORE_ENABLE=NO test-without-building
+      - name: Export Home evidence attachments
+        if: always() && matrix.lane == 'home-evidence' && steps.partition.outputs.home == 'true'
+        run: |
+          xcrun xcresulttool export attachments --path "$RUNNER_TEMP/SAVE-Home-Evidence.xcresult" --output-path "$RUNNER_TEMP/SAVE-First-Run"
+      - name: Tear down Home evidence simulator
+        if: always() && steps.simulator.outputs.udid != ''
+        run: |
+          udid='${{ steps.simulator.outputs.udid }}'
+          xcrun simctl shutdown "$udid" || true
+          xcrun simctl list devices | grep -F "$udid" | grep -Fq '(Shutdown)'
+          xcrun simctl delete "$udid"
+      - name: Upload supplemental verification evidence
+        if: always() && steps.scope.outputs.ui == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: save-supplemental-${{ matrix.lane }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/SAVE-First-Run
+            ${{ runner.temp }}/SAVE-*-tests.log
+            ${{ runner.temp }}/SAVE-*-tests-attempt*.log
+            ${{ runner.temp }}/ios-ui-*-args.txt
+          if-no-files-found: error
+          retention-days: 14
 
   release-readiness:
     if: github.event_name == 'push'

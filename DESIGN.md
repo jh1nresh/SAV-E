@@ -751,15 +751,24 @@ Passport. Wordmark is Caveat SemiBold 34; the city line is Caveat 20 with
 a 2pt coral underline under the city word only. Body copy stays
 `SaveAtlasType`. Coral is `SaveAtlasPalette.coral` (#F26B4A light,
 #D97861 dark). DESIGN v2 is the Home layout contract. The Home
-visual-parity TARGET remains `ProductionTargets/home.png`
-(md5 `79ae24aaf02002cd10f429c2869dcfc0`), the pre-v2 baseline, until
-the founder personally approves a new raster. H1–H4 CI rasters are
-judged manually by DESIGN. Home's unmasked score against the pre-v2
-`home.png` is an expected FAIL on the current list-only Home.
+visual-parity target is `ProductionTargets/home.png`
+(md5 `a4d08600dfba758e1ac714894ef02728`), the list-only native raster
+personally approved by the founder on 2026-10-28. H1–H4 CI rasters are
+judged manually by DESIGN. Home must now pass 0.90.
 Historical DESIGN v2 `design/doodle-targets-2026-10-20/home-light.png`
 at `eade369` (exact 402×874; `home-dark.png`) is archive only. v1 is
 retired. Home and Map still fail CI below 0.90; do not apply
 `map-mask.png` to the Map score.
+
+The same 2026-10-28 approval covers the native Home, Friends, Capture,
+Paywall, and Passport rasters from CI run `40654854143`, head
+`b68f9824c7dd672f8bef92f463fbf8a6acbcd66b`, normalized from 1206×2622
+to 402×874. The founder inspected the existing-versus-current comparisons
+and explicitly approved these five targets. Paywall records the CI offline
+unavailable-product / Retry state; this approval does not change products,
+prices, or purchase availability. All 0.90 thresholds, masks, interaction
+tests, and the other reference images remain unchanged. Future target
+changes still require the founder's personal raster approval.
 
 ### Passport (Doodle v1)
 
@@ -769,9 +778,10 @@ Settings live on Collected. Wordmark is Caveat SemiBold 34 locked;
 the city line is Caveat 20 with a 2pt coral underline under the city
 word only. Body copy stays `SaveAtlasType`.
 
-The locked parity face is DESIGN v2
-`design/doodle-targets-2026-10-20/passport-light.png` at `eade369`
-(exact 402×874; `passport-dark.png` for DESIGN comparison). Grade
+The locked light parity face is the founder-approved native
+`ProductionTargets/passport.png` described above. Historical DESIGN v2
+`design/doodle-targets-2026-10-20/passport-light.png` at `eade369` is
+archive only; `passport-dark.png` remains a manual dark-mode reference. Grade
 position, size, color and font style by side-by-side comparison; a
 0.90 gate score is not Passport sign-off. v1 is retired. The face is
 Passport + Beijing · 4 of 12, the kraft sticker grid, cities, and the

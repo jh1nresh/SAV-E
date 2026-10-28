@@ -51,21 +51,20 @@ must score at least `0.90`. XCTest locks the application window to 402 × 874
 points; the comparator accepts only exact, uniform Retina pixel multiples of
 that viewport and rejects other dimensions.
 
-`--destination` runs the prototype XCTest `testCaptureFourLockedScreens` and compares only Home, Saves, Plan, and Map. That prototype shell has no Friends tab, so a local four-screen pass is not Friends evidence. CI result-bundle mode gates live `five-tab-friends` at 0.90 against `ProductionTargets/friends.png` (the DESIGN v2 `friends-light.png` lock). Home deferral on #290 does not apply to Friends. Codex packet spec §7.4 remains the people-first layout reference. Live `five-tab-friends` attachments still ship in the iOS First-Run artifact. XCTest locks the application window to 402 × 874 points; the Home/Saves/Plan/Map comparator accepts only exact, uniform Retina pixel multiples of that viewport and rejects other dimensions.
+`--destination` runs the prototype XCTest `testCaptureFourLockedScreens` and compares only Home, Saves, Plan, and Map. That prototype shell has no Friends tab, so a local four-screen pass is not Friends evidence. Its legacy Home may fail the current native Home target; CI result-bundle mode remains the production evidence route. CI gates live `five-tab-friends` at 0.90 against `ProductionTargets/friends.png`, the founder-approved native raster; historical `friends-light.png` is archive only. Home deferral on #290 does not apply to Friends. Codex packet spec §7.4 remains the people-first layout reference. Live `five-tab-friends` attachments still ship in the iOS First-Run artifact. XCTest locks the application window to 402 × 874 points; the Home/Saves/Plan/Map comparator accepts only exact, uniform Retina pixel multiples of that viewport and rejects other dimensions.
 
 Production parity uses `Reference/ProductionTargets`. The original
 `Reference/Targets` remain the immutable inputs for deterministic illustration
 extraction, so approving a UI refresh cannot silently alter generated assets.
 
-The Home production TARGET is still the old
-`Reference/ProductionTargets/home.png` baseline
-(md5 `79ae24aaf02002cd10f429c2869dcfc0`), **not** DESIGN v2
-`home-light.png` at `eade369`. That v2 raster is archive / DESIGN
-comparison only until the founder personally approves a new Home
-baseline. Home grades unmasked against the old target at 0.90; the
-score is expected to FAIL on the current list-only Home and is not
-evidence. Do not swap `home.png`, do not add a Home mask, and do not
-lower the threshold. `home-dark.png` is DESIGN comparison only and
+The Home production target is the founder-approved native raster
+`Reference/ProductionTargets/home.png`
+(md5 `a4d08600dfba758e1ac714894ef02728`), approved on 2026-10-28 after
+the existing-versus-current comparison. Historical DESIGN v2
+`home-light.png` at `eade369` is archive only. Home grades unmasked
+at 0.90 and must pass. Future raster changes still require the founder's
+personal approval; do not add a Home mask or lower the threshold.
+`home-dark.png` is DESIGN comparison only and
 does not enter parity. `VisualParity.swift` still accepts only a
 1× 402 × 874 target. Unmasked Home uses the legacy composite; the
 optional `--mask` path reports position, size, color, and fontStyle
@@ -75,10 +74,17 @@ from #298; `map-mask.png` is not applied to the 0.90 score. Saves and
 Plan stay on their current locks until those Doodle PRs. The `0.90`
 threshold remains the CI gate for Home, Map, Saves, and Plan.
 
-The Passport production target is DESIGN v2's exact 402×874
-`passport-light.png` from `design/doodle-targets-2026-10-20` at `eade369`.
-`passport-dark.png` sits next to it for DESIGN comparison.
-Those rasters are rendered at 1× 402×874, not a crop. The locked
+The same personal approval covers Friends, Capture, Paywall and Passport.
+These five targets come from CI run `40654854143`, head
+`b68f9824c7dd672f8bef92f463fbf8a6acbcd66b`, uniformly normalized from
+1206×2622 to 402×874. Paywall is the CI offline unavailable-product / Retry
+state; approving its raster does not change prices, products or purchasing.
+No threshold, ignore region, mask or other reference image changed.
+
+The Passport light production target is the approved native 402×874 raster.
+Historical `passport-light.png` from `design/doodle-targets-2026-10-20` at
+`eade369` is archive only; `passport-dark.png` remains a DESIGN comparison.
+These rasters use 1× 402×874, not a crop. The locked
 face is stickers and cities: Passport + Beijing · 4 of 12, the kraft
 sticker grid, the city list, and the five-tab rail with Passport
 selected. `VisualParity.swift` still accepts only a 1× 402 × 874

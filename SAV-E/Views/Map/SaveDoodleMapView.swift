@@ -254,10 +254,11 @@ struct SaveDoodleMapView: View {
                     Button {
                         SaveDoodleMapUnsavedMarker.select(candidate, on: mapViewModel)
                     } label: {
-                        Color.clear.frame(width: 44, height: 56)
+                        Color.clear
+                            .frame(width: 44, height: 56)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .contentShape(Rectangle())
                     .accessibilityIdentifier("map.unsaved.\(candidate.id)")
                     .accessibilityLabel(candidate.title)
                     .accessibilityAddTraits(.isButton)

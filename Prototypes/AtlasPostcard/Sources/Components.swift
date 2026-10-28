@@ -114,6 +114,7 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
     let title: KeyPath<Item, String>
     let icon: KeyPath<Item, String>
     let accessibilityPrefix: String
+    var availableWidth: CGFloat = AtlasTabBarMetrics.width
     var displayTitle: ((Item) -> String)? = nil
     var isRaisedControl: (Item) -> Bool = { _ in false }
     /// Raised capture keeps its VoiceOver name but drops the visible "Save" label.
@@ -192,7 +193,7 @@ struct AtlasTabBar<Item: Identifiable & Equatable>: View {
             }
         }
         .padding(.horizontal, AtlasTabBarMetrics.horizontalPadding)
-        .frame(width: AtlasTabBarMetrics.width, height: AtlasTabBarMetrics.height)
+        .frame(width: availableWidth, height: AtlasTabBarMetrics.height)
     }
 
     var body: some View {
