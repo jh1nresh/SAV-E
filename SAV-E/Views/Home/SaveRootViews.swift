@@ -578,9 +578,8 @@ struct SaveMapRootView: View {
             }
 #endif
         }
-        // MapKit's Map reports a short a11y frame (307pt on 375pt). Keep
-        // map.root on a full-bleed stand-in so XCTest measures the canvas,
-        // not the padded header/sheet union.
+        // Identify the full canvas separately from the padded header and
+        // selected-card contents in the accessibility tree.
         .background {
             Color.clear
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
