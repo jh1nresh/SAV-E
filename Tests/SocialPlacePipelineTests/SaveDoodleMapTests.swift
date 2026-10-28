@@ -47,7 +47,13 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains(".fill(pinColor)"))
         XCTAssertTrue(map.contains(".foregroundStyle(Color.white)"))
         XCTAssertTrue(map.contains("visited ? SaveDoodle.stampRed : SaveAtlasPalette.coral"))
-        XCTAssertFalse(map.contains(".fill(SaveAtlasPalette.paper)"))
+        let pinAt = try XCTUnwrap(map.range(of: "struct SaveDoodleCoralPin: View"))
+        let pinShapeAt = try XCTUnwrap(map.range(of: "nonisolated struct SaveDoodleLollipopShape"))
+        let pin = map[pinAt.lowerBound..<pinShapeAt.lowerBound]
+        XCTAssertFalse(
+            pin.contains(".fill(SaveAtlasPalette.paper)"),
+            "Numbered pins keep their coral fill; the separate place card may use paper."
+        )
         XCTAssertTrue(map.contains("nativeUnsavedCandidates"))
         XCTAssertTrue(map.contains("Marker(candidate.title, coordinate: candidate.coordinate)"))
         XCTAssertFalse(map.contains("AsyncImage"))

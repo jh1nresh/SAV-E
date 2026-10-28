@@ -813,6 +813,7 @@ jobs:
             map_test: testMapWidth430
             friends_test: testFriendsWidth430
             passport_test: testPassportWidth430
+          - lane: map-motion
     env:
       SAVE_UI_TEST_FOCUS: ${{ github.event.inputs.ui_test_focus || (github.head_ref == 'cursor/tile-town-product-lock-4894' && 'tile-town-home') || '' }}
     steps:
@@ -904,6 +905,31 @@ jobs:
           for surface in map friends passport; do
             [[ -s "$RUNNER_TEMP/SAVE-First-Run/${surface}-${WIDTH}.png" ]]
           done
+      - name: Create production Map motion simulator
+        id: motion_simulator
+        if: matrix.lane == 'map-motion' && steps.scope.outputs.ui == 'true'
+        run: |
+          udid="$(xcrun simctl create 'SAV-E Map motion evidence' 'com.apple.CoreSimulator.SimDeviceType.iPhone-16-Pro' 'com.apple.CoreSimulator.SimRuntime.iOS-26-5')"
+          echo "udid=$udid" >> "$GITHUB_OUTPUT"
+          xcrun simctl bootstatus "$udid" -b
+      - name: Capture production Map card motion
+        timeout-minutes: 25
+        if: matrix.lane == 'map-motion' && steps.scope.outputs.ui == 'true'
+        run: |
+          scripts/run-map-peek-motion-evidence.sh \
+            '${{ steps.motion_simulator.outputs.udid }}' \
+            '${{ steps.products.outputs.xctestrun }}' \
+            "$RUNNER_TEMP/SAVE-First-Run/peek-motion" \
+            "$RUNNER_TEMP/SAVE-Map-Peek-Motion.xcresult" \
+            "$RUNNER_TEMP/SAVE-Map-Peek-Motion-tests.log"
+      - name: Tear down production Map motion simulator
+        if: always() && steps.motion_simulator.outputs.udid != ''
+        run: |
+          udid='${{ steps.motion_simulator.outputs.udid }}'
+          xcrun simctl shutdown "$udid" || true
+          xcrun simctl list devices | grep -F "$udid" | grep -Fq '(Shutdown)'
+          xcrun simctl delete "$udid"
+          if xcrun simctl list devices | grep -Fq "$udid"; then exit 1; fi
       - name: Create Home evidence simulator
         id: simulator
         if: matrix.lane == 'home-evidence' && steps.partition.outputs.home == 'true'

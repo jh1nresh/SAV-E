@@ -4759,6 +4759,109 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     func testMapSavedUnsavedVisitedTaipeiFixture() throws {
         try captureTaipeiMapStates(language: "en", attachM1: true)
         try captureTaipeiMapStates(language: "zh-Hant", attachM1: false)
+        try exerciseMapPeekInteractions()
+    }
+
+    /// Dedicated motion lane: use the Simulator's real accessibility setting,
+    /// so both captures exercise the production SwiftUI environment value.
+    @MainActor
+    func testMapPeekMotionEvidence() throws {
+        let originalReduceMotion = UIAccessibility.isReduceMotionEnabled
+        addTeardownBlock { @MainActor in
+            try self.setSystemReduceMotion(originalReduceMotion)
+        }
+
+        for (mode, enabled) in [("normal", false), ("reduced", true)] {
+            try setSystemReduceMotion(enabled)
+            XCTAssertEqual(UIAccessibility.isReduceMotionEnabled, enabled)
+            let receipt = XCTAttachment(string:
+                "mode=\(mode)\nUIAccessibility.isReduceMotionEnabled=\(UIAccessibility.isReduceMotionEnabled)"
+            )
+            receipt.name = "peek-motion-mode-\(mode)"
+            receipt.lifetime = .keepAlways
+            add(receipt)
+            try exerciseMapPeekInteractions(evidencePrefix: "peek-motion-\(mode)")
+            XCTAssertEqual(UIAccessibility.isReduceMotionEnabled, enabled)
+        }
+    }
+
+    @MainActor
+    private func setSystemReduceMotion(_ enabled: Bool) throws {
+        let settings = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
+        settings.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        defer {
+            terminate(settings)
+            XCTAssertEqual(settings.state, .notRunning, "Settings must stop before returning to Savvy")
+        }
+        launch(settings)
+        let reduceMotion = settings.switches["Reduce Motion"].firstMatch
+        if !reduceMotion.waitForExistence(timeout: timeout(2)) {
+            // Settings preserves its navigation stack. A subsequent mode (and
+            // teardown) can use the Motion switch directly; a fresh device starts
+            // at the Settings root, where Accessibility may need scrolling.
+            let settingsBack = settings.navigationBars.buttons["Settings"].firstMatch
+            if settingsBack.exists, settingsBack.isHittable { settingsBack.tap() }
+            try tapSystemSettingsRow("Accessibility", in: settings)
+            try tapSystemSettingsRow("Motion", in: settings)
+        }
+        _ = try XCTUnwrap(
+            reduceMotion.waitForExistence(timeout: stepTimeout) ? reduceMotion : nil,
+            "System Settings must expose the real Reduce Motion switch"
+        )
+        if !reduceMotion.isHittable { settings.swipeUp() }
+        XCTAssertTrue(reduceMotion.isHittable)
+        let expectedSwitchValue = enabled ? "1" : "0"
+        if reduceMotion.value as? String != expectedSwitchValue {
+            // Settings exposes a row-wide labeled Switch plus a separate,
+            // unlabeled physical control. Tapping the label's center is a no-op.
+            let labelFrame = reduceMotion.frame
+            let row = settings.cells.containing(.switch, identifier: reduceMotion.identifier).firstMatch
+            let isPhysicalControl: (XCUIElement) -> Bool = { candidate in
+                let frame = candidate.frame
+                return frame.width > 0 && frame.width < labelFrame.width
+                    && frame.intersects(labelFrame)
+                    && abs(frame.midY - labelFrame.midY) < min(frame.height, labelFrame.height) / 2
+                    && candidate.isHittable
+            }
+            let rowControls = row.exists ? row.switches.allElementsBoundByIndex.filter(isPhysicalControl) : []
+            let controls = rowControls.isEmpty
+                ? settings.switches.allElementsBoundByIndex.filter(isPhysicalControl) : rowControls
+            XCTAssertEqual(controls.count, 1, "Reduce Motion must identify one physical switch in its row")
+            let control = try XCTUnwrap(controls.first, "Reduce Motion's physical switch must be hittable")
+            control.tap()
+        }
+        let switchMatches = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", expectedSwitchValue),
+            object: reduceMotion
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [switchMatches], timeout: stepTimeout), .completed,
+                       "The Settings switch must confirm Reduce Motion=\(enabled)")
+        XCTAssertEqual(reduceMotion.value as? String, expectedSwitchValue)
+        let systemMatches = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in UIAccessibility.isReduceMotionEnabled == enabled },
+            object: nil
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [systemMatches], timeout: stepTimeout), .completed,
+                       "The real OS Reduce Motion flag must match Settings")
+        XCTAssertEqual(UIAccessibility.isReduceMotionEnabled, enabled)
+    }
+
+    @MainActor
+    private func tapSystemSettingsRow(_ title: String, in settings: XCUIApplication) throws {
+        // Scope text lookup to cells so a navigation-bar title cannot be
+        // mistaken for a tappable Settings row. Newer Settings can use buttons.
+        let cell = settings.cells.containing(.staticText, identifier: title).firstMatch
+        let button = settings.buttons[title].firstMatch
+        for _ in 0..<8 {
+            if cell.waitForExistence(timeout: timeout(1)), cell.isHittable { cell.tap(); return }
+            if button.exists, button.isHittable { button.tap(); return }
+            settings.swipeUp()
+        }
+        let row = try XCTUnwrap(
+            cell.exists && cell.isHittable ? cell : (button.exists && button.isHittable ? button : nil),
+            "System Settings row '\(title)' must be visible and tappable"
+        )
+        row.tap()
     }
 
     @MainActor
@@ -4809,6 +4912,11 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         if attachM1 {
             attach(app, name: "M1")
         }
+        let close = app.buttons["map.peek.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: stepTimeout))
+        XCTAssertGreaterThanOrEqual(close.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(close.frame.height, 44)
+        XCTAssertEqual(close.label, language == "zh-Hant" ? "關閉地點卡片" : "Close place card")
         let unsavedPin = app.buttons["map.unsaved.uitest-unsaved-taipei"]
         if !unsavedPin.waitForExistence(timeout: timeout(1)) {
             // The selected saved stamp starts centered; the candidate is east
@@ -4822,6 +4930,80 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         unsavedPin.tap()
         XCTAssertTrue(app.buttons["drawer.unsaved.primaryAction"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "map-unsaved-marker-receipt-\(language)")
+        terminate(app)
+    }
+
+    /// Use separated map coordinates for taps; the M1 memory raster intentionally
+    /// stacks its seeds at one coordinate and cannot verify pin switching.
+    @MainActor
+    private func exerciseMapPeekInteractions(evidencePrefix: String? = nil) throws {
+        let language = "en"
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+            "--uitest-repair-review-demo-seed", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "--uitest-home-taipei-granted",
+            "--uitest-map-place-selected", "-save.appLanguage", language,
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["home.root"].waitForExistence(timeout: launchTimeout))
+        openRootTab("Map", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
+        let notice = app.buttons["map.locationNotice.dismiss"]
+        if notice.waitForExistence(timeout: timeout(2)) { notice.tap() }
+        let card = app.descendants(matching: .any)["map.placeSheet"]
+        let close = app.buttons["map.peek.close"]
+        XCTAssertTrue(close.waitForExistence(timeout: stepTimeout))
+        XCTAssertGreaterThanOrEqual(close.frame.width, 44)
+        XCTAssertGreaterThanOrEqual(close.frame.height, 44)
+        XCTAssertEqual(close.label, language == "zh-Hant" ? "關閉地點卡片" : "Close place card")
+        let selectedPin = app.descendants(matching: .any).matching(NSPredicate(
+            format: "identifier BEGINSWITH 'map.tilePin.' AND label BEGINSWITH 'Selected Map Stamp, '"
+        )).firstMatch
+        XCTAssertTrue(selectedPin.waitForExistence(timeout: stepTimeout))
+        let selectedPinID = selectedPin.identifier
+        let selectedName = app.buttons["map.peek.card"].label
+        for _ in 0..<2 {
+            close.tap()
+            XCTAssertTrue(card.waitForNonExistence(timeout: stepTimeout))
+            XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
+            let pin = app.descendants(matching: .any)[selectedPinID]
+            XCTAssertTrue(pin.waitForExistence(timeout: stepTimeout))
+            pin.tap()
+            XCTAssertTrue(card.waitForExistence(timeout: stepTimeout))
+            XCTAssertEqual(app.buttons["map.peek.card"].label, selectedName)
+            XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "map.placeSheet").count, 1)
+            XCTAssertTrue(app.buttons["map.directions"].isHittable)
+            XCTAssertTrue(app.buttons["map.card.beenHere"].isHittable
+                || app.buttons["map.card.beenHere.undo"].isHittable)
+        }
+        attach(app, name: evidencePrefix.map { "\($0)-reopened" } ?? "map-peek-reopened-\(language)")
+        let otherPin = try XCTUnwrap(app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.' AND identifier != %@", selectedPinID)
+        ).allElementsBoundByIndex.first(where: { $0.isHittable }))
+        let nameStart = try XCTUnwrap(otherPin.label.range(of: "Map Stamp, "))
+        let otherName = String(otherPin.label[nameStart.upperBound...])
+        otherPin.tap()
+        XCTAssertTrue(app.buttons.matching(identifier: "map.peek.card").matching(
+            NSPredicate(format: "label == %@", otherName)
+        ).firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "map.placeSheet").count, 1)
+        XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
+        XCTAssertTrue(app.buttons["map.directions"].isHittable)
+        XCTAssertTrue(app.buttons["map.card.beenHere"].isHittable
+            || app.buttons["map.card.beenHere.undo"].isHittable)
+        attach(app, name: evidencePrefix.map { "\($0)-switched" } ?? "map-peek-switched-\(language)")
+        app.descendants(matching: .any)[selectedPinID].tap()
+        XCTAssertTrue(app.buttons.matching(identifier: "map.peek.card").matching(
+            NSPredicate(format: "label == %@", selectedName)
+        ).firstMatch.waitForExistence(timeout: stepTimeout))
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "map.placeSheet").count, 1)
+        XCTAssertTrue(app.buttons["map.directions"].isHittable)
+        XCTAssertTrue(app.buttons["map.card.beenHere"].isHittable
+            || app.buttons["map.card.beenHere.undo"].isHittable)
+        app.buttons["map.peek.card"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["drawer.root"].waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(card.waitForNonExistence(timeout: stepTimeout))
         terminate(app)
     }
 
