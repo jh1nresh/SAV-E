@@ -623,7 +623,7 @@ final class SaveClipJournalLockTests: XCTestCase {
         XCTAssertTrue(shots.contains("skoverlay-en-dark"))
         XCTAssertTrue(shots.contains("cap50-en-dark"))
         XCTAssertTrue(shots.contains("clip.cap50.title"))
-        XCTAssertTrue(shots.contains("Free limit reached"))
+        XCTAssertTrue(shots.contains("Ready to confirm in Savvy"))
         XCTAssertTrue(shots.contains("friend-note-en"))
         XCTAssertTrue(shots.contains("clip.friendNote.by"))
         XCTAssertTrue(shots.contains("sharer-en-light"))

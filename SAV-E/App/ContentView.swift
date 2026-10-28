@@ -659,14 +659,10 @@ struct ContentView: View {
     private var rootTabs: some View {
         NavigationStack(path: $rootPath) {
             GeometryReader { safeArea in
-                // ReferenceViewport draws from the full-screen origin and scales its canvas.
-                // Read real insets before that view ignores them; convert Home's physical
-                // safe-area + 8pt header origin into the reference canvas coordinates.
-                let viewportScale = max(0.01, min(
-                    (safeArea.size.width + safeArea.safeAreaInsets.leading + safeArea.safeAreaInsets.trailing) / AtlasMetrics.width,
-                    (safeArea.size.height + safeArea.safeAreaInsets.top + safeArea.safeAreaInsets.bottom) / AtlasMetrics.height
-                ))
-                ReferenceViewport {
+                // Root pages reflow in device points. Fitting the 402x874
+                // reference to a short screen shrank a 375pt canvas to 307pt.
+                // Read safe-area insets before the inner canvas ignores them.
+                GeometryReader { canvas in
                     ZStack(alignment: .topLeading) {
                         Group {
                             switch selectedRootTab {
@@ -674,7 +670,7 @@ struct ContentView: View {
                                 SaveHomeView(
                                     store: tripStore,
                                     mapViewModel: mapVM,
-                                    headerTopPadding: (safeArea.safeAreaInsets.top + SaveSpace.xs) / viewportScale,
+                                    headerTopPadding: safeArea.safeAreaInsets.top + SaveSpace.xs,
                                     onCapture: { openDrawer(.addLink, tripID: nil) },
                                     onOpenSavedPlace: { openMapDetail(.savedPlace($0)) },
                                     onOpenReviewCandidate: { openReviewCandidate($0, tripID: nil) },
@@ -741,6 +737,7 @@ struct ContentView: View {
                             title: \.atlasTitle,
                             icon: \.atlasIcon,
                             accessibilityPrefix: "root.tab",
+                            availableWidth: canvas.size.width,
                             displayTitle: { $0.title(language: languageSettings.language) },
                             isRaisedControl: { $0.isCaptureControl },
                             hidesTitle: { $0.isCaptureControl },
@@ -759,15 +756,16 @@ struct ContentView: View {
                         )
                             .placed(
                                 x: AtlasTabBarMetrics.leadingInset,
-                                y: selectedRootTab == .map
-                                    ? AtlasTabBarMetrics.mapY
-                                    : AtlasTabBarMetrics.standardY,
-                                width: AtlasTabBarMetrics.width,
+                                y: canvas.size.height - AtlasTabBarMetrics.height,
+                                width: canvas.size.width,
                                 height: AtlasTabBarMetrics.height
                             )
                         }
                     }
+                    .frame(width: canvas.size.width, height: canvas.size.height, alignment: .topLeading)
+                    .background(AtlasPalette.canvas)
                 }
+                .ignoresSafeArea()
             }
             .tint(SaveAtlasPalette.forest)
             .environmentObject(doodleSession)

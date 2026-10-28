@@ -297,10 +297,15 @@ struct SaveDoodleHomeView: View {
     }
 
     private var placeList: some View {
-        VStack(spacing: 0) {
-            ForEach(Array(listedPlaces.enumerated()), id: \.element.id) { index, item in
-                placeRow(item)
-                if index < listedPlaces.count - 1 {
+        // Derive once for this render. Re-reading listedPlaces inside each
+        // row repeats the entire city's filtering and distance sort N times.
+        let rows = listedPlaces
+        let latestVisits = SaveDoodleVisitStore().latestVisits(for: rows.map(\.id))
+        let now = SaveUITestClock.now
+        return VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.element.id) { index, item in
+                placeRow(item, visitedAt: latestVisits[item.id], now: now)
+                if index < rows.count - 1 {
                     SaveDoodleDashedDivider()
                 }
             }
@@ -309,8 +314,15 @@ struct SaveDoodleHomeView: View {
         .accessibilityIdentifier("home.placeList")
     }
 
-    private func placeRow(_ item: SaveDoodleListedPlace) -> some View {
-        Button { presentation.onOpenPlace(item.place.id.uuidString) } label: {
+    private func placeRow(_ item: SaveDoodleListedPlace, visitedAt: Date?, now: Date) -> some View {
+        let metadata = SaveDoodleHomeCatalog.rowMetaText(
+            distance: item.distance,
+            place: item.place,
+            visitedAt: visitedAt,
+            now: now,
+            language: languageSettings.language
+        )
+        return Button { presentation.onOpenPlace(item.place.id.uuidString) } label: {
             HStack(alignment: .center, spacing: 0) {
                 Text("\(item.index)")
                     .font(SaveAtlasType.strong(24))
@@ -333,7 +345,7 @@ struct SaveDoodleHomeView: View {
                         .foregroundStyle(SaveAtlasPalette.ink)
                         .lineLimit(2)
                         .minimumScaleFactor(0.85)
-                    Text(metaText(for: item))
+                    Text(metadata)
                         .font(SaveAtlasType.body(13))
                         .foregroundStyle(SaveAtlasPalette.muted)
                         .lineLimit(nil)
@@ -346,7 +358,7 @@ struct SaveDoodleHomeView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(item.index), \(item.place.name), \(metaText(for: item))")
+        .accessibilityLabel("\(item.index), \(item.place.name), \(metadata)")
         .accessibilityIdentifier("home.place.\(item.place.id.uuidString)")
     }
 
@@ -633,16 +645,6 @@ struct SaveDoodleHomeView: View {
             in: allPlaces,
             excluding: listedPlaces.map(\.place),
             location: locationService.currentLocation
-        )
-    }
-
-    private func metaText(for item: SaveDoodleListedPlace) -> String {
-        SaveDoodleHomeCatalog.rowMetaText(
-            distance: item.distance,
-            place: item.place,
-            visitedAt: SaveDoodleVisitStore().latestVisit(for: item.place.id),
-            now: SaveUITestClock.now,
-            language: languageSettings.language
         )
     }
 

@@ -129,6 +129,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(root.waitForExistence(timeout: stepTimeout))
         let list = app.descendants(matching: .any)["friends.list"]
         XCTAssertTrue(list.waitForExistence(timeout: stepTimeout))
+        attach(app, name: name)
+        attach(app, name: "friends-town-\(width)")
         XCTAssertEqual(
             Int(app.frame.width.rounded()),
             width,
@@ -140,8 +142,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             "Friends root must use the full \(width)pt device width, not a letterbox"
         )
         XCTAssertEqual(list.value as? String, "\(columns)", "Friends is a 1-column people list")
-        attach(app, name: name)
-        attach(app, name: "friends-town-\(width)")
         terminate(app)
     }
 
@@ -1429,7 +1429,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(rootTabButton("Passport", app: app).isSelected, "Capture cancellation returns to Passport")
     }
 
-    /// Founder lock: paywall parity target is the Doodle v1 mock at 0.90.
+    /// Founder-approved native paywall raster (2026-10-28), gated at 0.90.
     /// Purchasing is off, so the wall is forced with `--uitest-show-paywall`.
     @MainActor
     func testDoodlePaywallParity() throws {
@@ -1957,6 +1957,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["map.city"].waitForExistence(timeout: stepTimeout))
         let live = app.descendants(matching: .any)["map.liveSurface"]
         XCTAssertTrue(live.waitForExistence(timeout: stepTimeout))
+        // Preserve the actual rendered failure state before a geometry assertion
+        // stops the test. The job still fails if the width is wrong.
+        attach(app, name: name)
         XCTAssertEqual(
             Int(app.frame.width.rounded()),
             width,
@@ -1972,7 +1975,6 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             width <= 390 ? 3 : 4,
             "DESIGN canvas at \(width)pt is \(columns) columns"
         )
-        attach(app, name: name)
         terminate(app)    }
 
     /// Real 375pt simulator (SE / mini). Not a maxWidth letterbox on 402pt.
@@ -2185,7 +2187,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 "--uitest-review-demo-offline",
                 "--uitest-reset-review-demo-storage",
                 "--uitest-map-place-selected",
-                "--uitest-show-paywall",
+                // This rail opens Pro from Passport at the end. Forcing its
+                // cover at launch hides the root bar needed by every earlier shot.
                 "-save.appLanguage", "en",
                 "-AppleInterfaceStyle", appleInterfaceStyle,
                 forceArgument,

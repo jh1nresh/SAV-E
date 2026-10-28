@@ -6,6 +6,49 @@ import XCTest
 
 @MainActor
 final class SaveDoodleHomeTests: XCTestCase {
+    func testLatestVisitsSnapshotKeepsSparseHistoryAndMatchesIndividualReads() {
+        let suite = "save.doodle.visit-snapshot.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let visited = UUID()
+        let empty = UUID()
+        let legacy = UUID()
+        let omitted = UUID()
+        defaults.set([
+            visited.uuidString: [300.0, 100.0, 200.0],
+            empty.uuidString: [],
+            omitted.uuidString: [400.0]
+        ], forKey: SaveDoodleVisitStore.datesKey)
+        defaults.set(5, forKey: SaveDoodleVisitStore.countKey(legacy))
+        let store = SaveDoodleVisitStore(defaults: defaults)
+        let ids = [visited, empty, legacy, UUID(), visited]
+        let snapshot = store.latestVisits(for: ids)
+        XCTAssertEqual(snapshot, [visited: Date(timeIntervalSince1970: 300)])
+        for id in ids {
+            XCTAssertEqual(snapshot[id], store.latestVisit(for: id))
+        }
+        XCTAssertTrue(store.latestVisits(for: []).isEmpty)
+        XCTAssertNil(snapshot[omitted], "Only requested places enter the render snapshot")
+    }
+
+    func testLatestVisitsSnapshotRefreshesAfterAnotherSurfaceRecordsUndoesAndRestores() {
+        let suite = "save.doodle.visit-snapshot-refresh.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let id = UUID()
+        let today = Date(timeIntervalSince1970: 1_760_000_000)
+        let home = SaveDoodleVisitStore(defaults: defaults, now: { today })
+        let map = SaveDoodleVisitStore(defaults: defaults, now: { today })
+        XCTAssertTrue(home.latestVisits(for: [id]).isEmpty)
+        XCTAssertTrue(map.recordVisit(for: id))
+        let saved = map.snapshot(for: id)
+        XCTAssertEqual(home.latestVisits(for: [id])[id], today)
+        XCTAssertTrue(map.undoToday(for: id))
+        XCTAssertNil(home.latestVisits(for: [id])[id])
+        map.restore(saved)
+        XCTAssertEqual(home.latestVisits(for: [id])[id], today)
+    }
+
     func testVisitHistoryIsSharedAcrossSurfacesAndSurvivesUndoAndRelaunch() {
         let suite = "save.doodle.shared-visits.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -1600,8 +1643,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(design.contains("68pt"))
         XCTAssertTrue(design.contains("hint row is always shown"))
         XCTAssertTrue(design.contains("DESIGN v2 is the Home layout contract"))
-        XCTAssertTrue(design.contains("79ae24aaf02002cd10f429c2869dcfc0"))
-        XCTAssertTrue(design.contains("expected FAIL on the current list-only Home"))
+        XCTAssertTrue(design.contains("a4d08600dfba758e1ac714894ef02728"))
+        XCTAssertTrue(design.contains("Home must now pass 0.90"))
         XCTAssertTrue(home.contains("placeCases"))
         XCTAssertFalse(home.contains("SaveDoodleElephant"), "Home no longer displays the retired elephant artwork")
         XCTAssertTrue(home.contains("SaveDoodleEmptyPlate"))
@@ -1620,8 +1663,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         let readme = try source(at: "Prototypes/AtlasPostcard/README.md")
         XCTAssertTrue(readme.contains("home-light.png"))
         XCTAssertTrue(readme.contains("eade369"))
-        XCTAssertTrue(readme.contains("79ae24aaf02002cd10f429c2869dcfc0"))
-        XCTAssertTrue(readme.contains("not** DESIGN v2") || readme.contains("**not** DESIGN v2"))
+        XCTAssertTrue(readme.contains("a4d08600dfba758e1ac714894ef02728"))
+        XCTAssertTrue(readme.contains("founder-approved native raster"))
         XCTAssertFalse(readme.contains("home-mask.png"))
         XCTAssertTrue(readme.contains("unmasked"))
         XCTAssertTrue(readme.contains("position"))
@@ -1737,7 +1780,8 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(home.contains("syncPersistedCitySelection"))
         XCTAssertTrue(home.contains("persistedCityAfterCollectionChange"))
         XCTAssertTrue(home.contains("collectionReady: collectionReady"))
-        XCTAssertTrue(home.contains("visitedAt: SaveDoodleVisitStore().latestVisit"))
+        XCTAssertTrue(home.contains("SaveDoodleVisitStore().latestVisits(for: rows.map(\\.id))"))
+        XCTAssertTrue(home.contains("visitedAt: latestVisits[item.id]"))
         let locationService = try source(at: "SAV-E/Services/LocationService.swift")
         XCTAssertTrue(locationService.contains("SaveLocationFreshness"))
         XCTAssertTrue(locationService.contains("forceRefresh"))

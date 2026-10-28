@@ -643,6 +643,21 @@ final class SaveDoodleVisitStore {
         dates(for: id).max()
     }
 
+    /// A render-scoped snapshot avoids decoding the whole defaults dictionary
+    /// for every row. Read afresh on every call so record/undo/restore and
+    /// writes from other surfaces remain immediately visible.
+    func latestVisits(for ids: [UUID]) -> [UUID: Date] {
+        guard !ids.isEmpty else { return [:] }
+        let payload = visitPayload
+        var latest: [UUID: Date] = [:]
+        for id in ids {
+            if let timestamp = payload[id.uuidString]?.max() {
+                latest[id] = Date(timeIntervalSince1970: timestamp)
+            }
+        }
+        return latest
+    }
+
     @discardableResult
     func recordVisit(for id: UUID) -> Bool {
         guard !hasVisitedToday(id) else { return false }
