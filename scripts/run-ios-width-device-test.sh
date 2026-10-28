@@ -71,6 +71,16 @@ if [[ -z "$width" || -z "$test_selector" || -z "$xctestrun" || -z "$output_dir" 
     exit 2
 fi
 
+case "$test_selector" in
+    */testMapWidth"$width") surface=map ;;
+    */testFriendsWidth"$width") surface=friends ;;
+    */testPassportWidth"$width") surface=passport ;;
+    *)
+        echo "unsupported width screenshot test: $test_selector" >&2
+        exit 2
+        ;;
+esac
+
 case "$width" in
     375)
         prefs='com.apple.CoreSimulator.SimDeviceType.iPhone-SE-3rd-generation,com.apple.CoreSimulator.SimDeviceType.iPhone-SE-2nd-generation'
@@ -176,10 +186,19 @@ if [[ -d "$sim_shots" ]]; then
     echo "copied simulator SAVE_SCREENSHOT_DIR from $sim_shots"
 fi
 if [[ -f "$result_bundle/Info.plist" ]]; then
+    # Each export writes its own manifest. Exporting all three surfaces into
+    # output_dir both collides on manifest.json and leaves UUID-named rasters.
+    attachments="$(mktemp -d "$output_dir/${surface}-${width}-attachments.XXXXXX")"
     xcrun xcresulttool export attachments \
         --path "$result_bundle" \
-        --output-path "$output_dir" \
+        --output-path "$attachments" \
         || echo "xcresulttool export failed; keep SAVE_SCREENSHOT_DIR rasters."
+    if [[ -f "$attachments/manifest.json" ]]; then
+        python3 scripts/extract-named-ui-screenshots.py "$attachments" "$output_dir" \
+            --expect "${surface}-${width}"
+    fi
 fi
+
+[[ -s "$output_dir/${surface}-${width}.png" ]] || status=1
 
 exit "$status"
