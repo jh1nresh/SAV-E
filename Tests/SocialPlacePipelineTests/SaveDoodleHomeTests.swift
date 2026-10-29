@@ -1551,7 +1551,7 @@ final class SaveDoodleHomeTests: XCTestCase {
         XCTAssertTrue(catalogHint.contains("\\(fullPhrase) ·\""))
         XCTAssertTrue(catalogHint.contains("\\(shortPhrase) ·\""))
         XCTAssertTrue(catalogHint.contains("spoken: \"\\(leadingFull) \\(review)\""))
-        XCTAssertTrue(home.contains("MemoMascotMark"))
+        XCTAssertFalse(home.contains("MemoMascotMark"), "The production Home header must not display the elephant mascot.")
         XCTAssertFalse(home.contains("import MapKit"))
         XCTAssertFalse(home.contains("MKMapView"))
         XCTAssertFalse(home.contains("Map(initialPosition:"))
