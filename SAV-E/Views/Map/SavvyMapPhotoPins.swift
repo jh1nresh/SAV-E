@@ -1018,7 +1018,7 @@ struct SavvyMapPinPhotoFill: View {
     }
 }
 
-struct SavvyMapCalloutTail: Shape {
+nonisolated struct SavvyMapCalloutTail: Shape {
     var size: CGFloat = 12
 
     func path(in rect: CGRect) -> Path {

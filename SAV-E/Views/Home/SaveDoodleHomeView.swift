@@ -118,15 +118,13 @@ struct SaveDoodleHomeView: View {
     private var header: some View {
         HStack(spacing: SaveSpace.xs) {
             Button(action: presentation.onOpenPassport) {
-                HStack(alignment: .center, spacing: SaveSpace.xs) {
-                    SaveDisplayTitle(
-                        text: "Savvy",
-                        pointSize: 34,
-                        relativeTo: .largeTitle,
-                        locksPointSize: true
-                    )
-                    MemoMascotMark(size: 28, framed: false)
-                }
+                SaveDisplayTitle(
+                    text: "Savvy",
+                    pointSize: 34,
+                    relativeTo: .largeTitle,
+                    locksPointSize: true
+                )
+                .frame(minHeight: SaveLayout.minTap)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -681,7 +679,7 @@ enum SaveDoodleOfficialSticker: String, CaseIterable {
 
     var title: String { rawValue.capitalized }
 
-    /// Place marks only. The brand elephant lives in the header, never here.
+    /// Place marks only; the Home surface does not display the brand elephant.
     static let placeCases: [SaveDoodleOfficialSticker] = [
         .duck, .noodle, .coffee, .temple, .lantern
     ]
