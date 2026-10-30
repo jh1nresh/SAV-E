@@ -2241,23 +2241,22 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             showingLiveSurface || showingAppleMap,
             "Product Map must show the live map surface for T3 pin evidence."
         )
-        let savedTilePins = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.'")
-        )
-        let savedMapPins = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'map.pin.saved.'")
-        )
-        let unsavedMapPins = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'map.pin.unsaved.'")
-        )
-        let reviewMapPins = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'map.pin.review.'")
-        )
+        // ReviewDemoSeed.places() supplies this rail's six saved places.
+        // Native MapKit markers may be Other elements, so count the known
+        // fixture titles within the map instead of custom pin IDs or Buttons.
+        let fixtureMarkerNames = [
+            "Ichiran Shibuya", "Fujin Tree 353 Cafe", "Guerrilla Tacos",
+            "The Siam Hotel", "Bar Benfiddich", "Daan Forest Park",
+        ]
+        let nativeFixturePins = fixtureMarkerNames.map { nativeMapMarker(app, name: $0) }
+        let markerReady = expectation(for: NSPredicate { _, _ in
+            nativeFixturePins.contains { $0.exists }
+        }, evaluatedWith: app)
+        wait(for: [markerReady], timeout: stepTimeout)
         XCTAssertGreaterThan(
-            savedTilePins.count + savedMapPins.count + unsavedMapPins.count + reviewMapPins.count
-                + app.maps.buttons.count,
+            nativeFixturePins.filter { $0.exists }.count,
             0,
-            "Map should show at least one saved or unsaved place pin for coral contrast."
+            "Map must expose a native marker for a known saved fixture place for coral contrast."
         )
         attach(app, name: "t3-map-saved-unsaved-\(suffix)")
 

@@ -772,6 +772,15 @@ prices, or purchase availability. All 0.90 thresholds, masks, interaction
 tests, and the other reference images remain unchanged. Future target
 changes still require the founder's personal raster approval.
 
+2026-10-30 Passport reference approval: the founder inspected the actual
+`five-tab-passport` raster from full CI run `40991924628`, PR #330 head
+`9e13338daafe4f52ae9cd83d5e3c9c483627ce7e`, and explicitly approved it as the
+new Passport target. `ProductionTargets/passport.png` is that 1206×2622 raster
+normalized to 402×874 RGB with Lanczos resampling. It shows account identity,
+edit/settings actions, then the sticker collection. Only the Passport light
+reference changes; all other targets, masks, interactions and the 0.90 threshold
+stay unchanged. The older sticker-only target is superseded for this surface.
+
 ### Passport (Doodle v1)
 
 Root Passport shows account identity, edit and settings actions above stickers and cities. Collected is the posts
