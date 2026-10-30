@@ -1240,7 +1240,21 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Map", app: app)
         let notice = app.buttons["map.locationNotice.dismiss"]
         if notice.waitForExistence(timeout: timeout(2)) { notice.tap() }
-        XCTAssertTrue(waitUntilHittable(nativeMapMarker(app, name: "Ichiran Shibuya")))
+        let tokyoMarker = nativeMapMarker(app, name: "Ichiran Shibuya")
+        let tokyoIsHittable = waitUntilHittable(tokyoMarker)
+        if !tokyoIsHittable {
+            let matches = app.maps.descendants(matching: .any).matching(
+                NSPredicate(format: "label CONTAINS %@", "Ichiran Shibuya")
+            ).allElementsBoundByIndex.prefix(8)
+            let diagnostic = XCTAttachment(string: matches.map {
+                "\($0.label); frame=\($0.frame); hittable=\($0.isHittable)"
+            }.joined(separator: "\n"))
+            diagnostic.name = "map-first-tokyo-marker-diagnostics"
+            diagnostic.lifetime = .keepAlways
+            add(diagnostic)
+            attach(app, name: "map-first-tokyo-failure")
+        }
+        XCTAssertTrue(tokyoIsHittable, "The state-bearing Tokyo Map Stamp must be in view")
         openRootTab("Home", app: app)
         chooseHomeCity("taipei")
         openRootTab("Map", app: app)
@@ -5016,8 +5030,15 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
 
     @MainActor
     private func nativeMapMarker(_ app: XCUIApplication, name: String) -> XCUIElement {
-        app.maps.descendants(matching: .any).matching(NSPredicate(
-            format: "label == %@ OR label BEGINSWITH %@", name, name + ","
+        // Apple's own POIs can have the same place name. Only our markers
+        // carry one of these established saved/visited/unsaved state titles.
+        let states = ["Map Stamp", "Visited Map Stamp", "Not saved yet",
+                      "地圖章", "去過的地圖章", "尚未保存"]
+        let titles = states.map { "\(name), \($0)" }
+        return app.maps.descendants(matching: .any).matching(NSCompoundPredicate(
+            orPredicateWithSubpredicates: titles.map { title in
+                NSPredicate(format: "label == %@ OR label BEGINSWITH %@", title, title + ",")
+            }
         )).firstMatch
     }
 
