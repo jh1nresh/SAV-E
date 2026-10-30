@@ -542,7 +542,9 @@ Source: `SAV-E/Extensions/Color+Theme.swift`.
 
 ### Map Pins
 
-Source: product Map uses coral numbered pins via `SaveDoodleMapPinStyle`
+2026-10-30 recovery: product Map uses native Apple markers, a stationary bottom detail card, and local camera gesture state. Saved and unsaved selections retain their separate confirmation flows. Selection, dismissal, and background refresh preserve the current viewport; city/lens changes and explicit locate/search commands may move it. The coral pin and pop animation rules below are historical.
+
+Source: product Map previously used coral numbered pins via `SaveDoodleMapPinStyle`
 on `SaveDoodleMapView`. Trip / Navigate MapKit still uses
 `SAV-E/Views/Map/MapView.swift`.
 
@@ -772,9 +774,9 @@ changes still require the founder's personal raster approval.
 
 ### Passport (Doodle v1)
 
-Root Passport shows stickers and cities. Collected is the posts
+Root Passport shows account identity, edit and settings actions above stickers and cities. Collected is the posts
 sub-page. Missions, streak, and the stamp ledger stay flagged off.
-Settings live on Collected. Wordmark is Caveat SemiBold 34 locked;
+Settings are directly reachable from the root and Collected. Wordmark is Caveat SemiBold 34 locked;
 the city line is Caveat 20 with a 2pt coral underline under the city
 word only. Body copy stays `SaveAtlasType`.
 
@@ -785,8 +787,7 @@ archive only; `passport-dark.png` remains a manual dark-mode reference. Grade
 position, size, color and font style by side-by-side comparison; a
 0.90 gate score is not Passport sign-off. v1 is retired. The face is
 Passport + Beijing · 4 of 12, the kraft sticker grid, cities, and the
-five-tab rail with Passport selected. It is not the profile header,
-quests, or shared-post grid.
+five-tab rail with Passport selected. The 2026-10-30 usability correction restores identity above the sticker grid; the historical sticker-only reference no longer owns that root layout.
 
 The sticker grid uses up to four 64pt columns with 16pt gaps. It reflows
 to three columns on 375/390pt phones after the 24pt screen and panel

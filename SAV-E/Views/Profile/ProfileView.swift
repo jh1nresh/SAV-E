@@ -121,6 +121,17 @@ struct ProfileView: View {
 
     private var passportContent: some View {
             SaveDoodlePassportPage(
+                identity: VStack(alignment: .leading, spacing: SaveSpace.sm) {
+                    passportIdentity
+                    Button { showSettings = true } label: {
+                        Label(languageSettings.localized(english: "Passport settings", traditionalChinese: "護照設定"), systemImage: "gearshape")
+                            .font(SaveAtlasType.strong(15))
+                            .foregroundStyle(SaveAtlasPalette.forest)
+                            .frame(minHeight: SaveLayout.minTap)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("profile.settings")
+                },
                 places: passportPlaces,
                 collectionMode: collectionMode,
                 onOpenPlace: onOpenPlace,

@@ -284,6 +284,16 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try signInViaReviewDemoRequired(app: app)
         openRootTab("Passport", app: app)
         XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
+        let editProfile = app.buttons["profile.edit"]
+        let settings = app.buttons["profile.settings"]
+        XCTAssertTrue(editProfile.isHittable, "Identity actions must be visible on Passport landing")
+        XCTAssertTrue(settings.isHittable)
+        XCTAssertLessThan(editProfile.frame.minY, app.descendants(matching: .any)["profile.stampGrid"].frame.minY)
+        settings.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["profile.controlPocket"].waitForExistence(timeout: stepTimeout))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(editProfile.waitForExistence(timeout: stepTimeout))
+        attach(app, name: "passport-identity-before-stickers")
         XCTAssertFalse(app.descendants(matching: .any)["profile.today"].exists)
         app.buttons["profile.stampProgress"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["profile.collected.root"].waitForExistence(timeout: stepTimeout))
@@ -2242,7 +2252,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             NSPredicate(format: "identifier BEGINSWITH 'map.pin.review.'")
         )
         XCTAssertGreaterThan(
-            savedTilePins.count + savedMapPins.count + unsavedMapPins.count + reviewMapPins.count,
+            savedTilePins.count + savedMapPins.count + unsavedMapPins.count + reviewMapPins.count
+                + app.maps.buttons.count,
             0,
             "Map should show at least one saved or unsaved place pin for coral contrast."
         )
@@ -3654,13 +3665,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertFalse(selectedName.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         XCTAssertTrue(app.staticTexts["map.peek.subtitle"].exists,
             "The selected Map Stamp should show its saved-date context.")
-        // MapKit annotations surface as Other, not Button. Query the same
-        // tree the Taipei pin-count tests already use.
-        let selectedPin = app.descendants(matching: .any).matching(
-            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.' AND label BEGINSWITH 'Selected Map Stamp, '")
-        ).firstMatch
+        let selectedPin = nativeMapMarker(app, name: selectedName.label)
         XCTAssertTrue(selectedPin.waitForExistence(timeout: stepTimeout))
-        XCTAssertEqual(selectedPin.label, "Selected Map Stamp, \(selectedName.label)")
 
         let openMapDetails = app.buttons["map.peek.card"]
         XCTAssertTrue(openMapDetails.waitForExistence(timeout: stepTimeout))
@@ -4917,7 +4923,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertGreaterThanOrEqual(close.frame.width, 44)
         XCTAssertGreaterThanOrEqual(close.frame.height, 44)
         XCTAssertEqual(close.label, language == "zh-Hant" ? "關閉地點卡片" : "Close place card")
-        let unsavedPin = app.buttons["map.unsaved.uitest-unsaved-taipei"]
+        let unsavedPin = nativeMapMarker(app, name: "Unsaved Night Market")
         if !unsavedPin.waitForExistence(timeout: timeout(1)) {
             // The selected saved stamp starts centered; the candidate is east
             // of the viewport. Pan it into view without clearing search results.
@@ -4931,6 +4937,13 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["drawer.unsaved.primaryAction"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "map-unsaved-marker-receipt-\(language)")
         terminate(app)
+    }
+
+    @MainActor
+    private func nativeMapMarker(_ app: XCUIApplication, name: String) -> XCUIElement {
+        app.maps.descendants(matching: .any).matching(NSPredicate(
+            format: "label == %@ OR label BEGINSWITH %@", name, name + ","
+        )).firstMatch
     }
 
     /// Use separated map coordinates for taps; the M1 memory raster intentionally
@@ -4957,17 +4970,14 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertGreaterThanOrEqual(close.frame.width, 44)
         XCTAssertGreaterThanOrEqual(close.frame.height, 44)
         XCTAssertEqual(close.label, language == "zh-Hant" ? "關閉地點卡片" : "Close place card")
-        let selectedPin = app.descendants(matching: .any).matching(NSPredicate(
-            format: "identifier BEGINSWITH 'map.tilePin.' AND label BEGINSWITH 'Selected Map Stamp, '"
-        )).firstMatch
-        XCTAssertTrue(selectedPin.waitForExistence(timeout: stepTimeout))
-        let selectedPinID = selectedPin.identifier
         let selectedName = app.buttons["map.peek.card"].label
+        let selectedPin = nativeMapMarker(app, name: selectedName)
+        XCTAssertTrue(selectedPin.waitForExistence(timeout: stepTimeout))
         for _ in 0..<2 {
             close.tap()
             XCTAssertTrue(card.waitForNonExistence(timeout: stepTimeout))
             XCTAssertFalse(app.descendants(matching: .any)["drawer.root"].exists)
-            let pin = app.descendants(matching: .any)[selectedPinID]
+            let pin = nativeMapMarker(app, name: selectedName)
             XCTAssertTrue(pin.waitForExistence(timeout: stepTimeout))
             pin.tap()
             XCTAssertTrue(card.waitForExistence(timeout: stepTimeout))
@@ -4977,12 +4987,35 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             XCTAssertTrue(app.buttons["map.card.beenHere"].isHittable
                 || app.buttons["map.card.beenHere.undo"].isHittable)
         }
+        let map = app.maps.firstMatch
+        map.coordinate(withNormalizedOffset: CGVector(dx: 0.7, dy: 0.25))
+            .press(forDuration: 0.1, thenDragTo: map.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.3)))
+        let markerAfterPan = nativeMapMarker(app, name: selectedName)
+        XCTAssertTrue(markerAfterPan.waitForExistence(timeout: stepTimeout))
+        var previousFrame = markerAfterPan.frame
+        var stableSamples = 0
+        let settled = expectation(for: NSPredicate { _, _ in
+            let frame = markerAfterPan.frame
+            stableSamples = abs(frame.midX - previousFrame.midX) < 1
+                && abs(frame.midY - previousFrame.midY) < 1 ? stableSamples + 1 : 0
+            previousFrame = frame
+            return stableSamples >= 3
+        }, evaluatedWith: markerAfterPan)
+        wait(for: [settled], timeout: stepTimeout)
+        let pannedFrame = markerAfterPan.frame
+        close.tap()
+        XCTAssertTrue(card.waitForNonExistence(timeout: stepTimeout))
+        let frameAfterClose = nativeMapMarker(app, name: selectedName).frame
+        XCTAssertEqual(frameAfterClose.midX, pannedFrame.midX, accuracy: 3)
+        XCTAssertEqual(frameAfterClose.midY, pannedFrame.midY, accuracy: 3)
+        nativeMapMarker(app, name: selectedName).tap()
+        XCTAssertTrue(card.waitForExistence(timeout: stepTimeout))
         attach(app, name: evidencePrefix.map { "\($0)-reopened" } ?? "map-peek-reopened-\(language)")
-        let otherPin = try XCTUnwrap(app.descendants(matching: .any).matching(
-            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.' AND identifier != %@", selectedPinID)
-        ).allElementsBoundByIndex.first(where: { $0.isHittable }))
-        let nameStart = try XCTUnwrap(otherPin.label.range(of: "Map Stamp, "))
-        let otherName = String(otherPin.label[nameStart.upperBound...])
+        let otherName = try XCTUnwrap([
+            "Taipei Window Cafe", "Taipei Lunch", "Raohe Night Market",
+            "Yongkang Beef Noodles", "Fujin Tree 353 Cafe"
+        ].first { $0 != selectedName && nativeMapMarker(app, name: $0).isHittable })
+        let otherPin = nativeMapMarker(app, name: otherName)
         otherPin.tap()
         XCTAssertTrue(app.buttons.matching(identifier: "map.peek.card").matching(
             NSPredicate(format: "label == %@", otherName)
@@ -4993,7 +5026,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.buttons["map.card.beenHere"].isHittable
             || app.buttons["map.card.beenHere.undo"].isHittable)
         attach(app, name: evidencePrefix.map { "\($0)-switched" } ?? "map-peek-switched-\(language)")
-        app.descendants(matching: .any)[selectedPinID].tap()
+        nativeMapMarker(app, name: selectedName).tap()
         XCTAssertTrue(app.buttons.matching(identifier: "map.peek.card").matching(
             NSPredicate(format: "label == %@", selectedName)
         ).firstMatch.waitForExistence(timeout: stepTimeout))
@@ -5059,30 +5092,30 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["map.root"].waitForExistence(timeout: stepTimeout))
         attach(app, name: "298-7-map-tab")
         XCTAssertTrue(app.buttons["map.city"].waitForExistence(timeout: stepTimeout))
-        let eatPin = "30000000-0000-0000-0000-000000000001"
-        let noodlePin = "30000000-0000-0000-0000-000000000002"
-        let cafePin = "30000000-0000-0000-0000-000000000003"
-        let parkPin = "30000000-0000-0000-0000-000000000004"
-        let lanternPin = "30000000-0000-0000-0000-000000000005"
-        let jingshanPin = "30000000-0000-0000-0000-000000000006"
+        let eatPin = "Siji Minfu Roast Duck"
+        let noodlePin = "Fangzhuangchang Noodles"
+        let cafePin = "Grey Cafe"
+        let parkPin = "Temple of Heaven Park"
+        let lanternPin = "Lantern Alley"
+        let jingshanPin = "Jingshan"
         XCTAssertTrue(
-            app.descendants(matching: .any)["map.tilePin.\(eatPin)"].waitForExistence(timeout: stepTimeout)
+            nativeMapMarker(app, name: eatPin).waitForExistence(timeout: stepTimeout)
         )
         for pin in [noodlePin, cafePin] {
             XCTAssertTrue(
-                app.descendants(matching: .any)["map.tilePin.\(pin)"].exists,
+                nativeMapMarker(app, name: pin).exists,
                 "298-3: Map draws saved Eat places under the shared city filter"
             )
         }
         XCTAssertFalse(
-            app.descendants(matching: .any)["map.tilePin.\(parkPin)"].exists
-                || app.descendants(matching: .any)["map.tilePin.\(lanternPin)"].exists
-                || app.descendants(matching: .any)["map.tilePin.\(jingshanPin)"].exists,
+            nativeMapMarker(app, name: parkPin).exists
+                || nativeMapMarker(app, name: lanternPin).exists
+                || nativeMapMarker(app, name: jingshanPin).exists,
             "298-3: Map draws only saved places matching Eat/Go + city"
         )
-        let mapPinCount = app.descendants(matching: .any).matching(
-            NSPredicate(format: "identifier BEGINSWITH 'map.tilePin.'")
-        ).count
+        let mapPinCount = [eatPin, noodlePin, cafePin].filter {
+            nativeMapMarker(app, name: $0).exists
+        }.count
         XCTAssertEqual(mapPinCount, homeEatCount, "298-3: pin count equals Home list rows")
         attach(app, name: "298-3-map")
         attach(app, name: "298-4-coral-pins")
