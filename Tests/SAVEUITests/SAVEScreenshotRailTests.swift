@@ -1216,6 +1216,77 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             app: app
         )
         attach(app, name: "TPE-F")
+        terminate(app)
+        try exerciseMapFilterReentry()
+    }
+
+    @MainActor
+    private func exerciseMapFilterReentry() throws {
+        // Default review seeds have genuinely separated Tokyo/Taipei coordinates.
+        let app = makeApp(launchArguments: [
+            "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
+            "--uitest-repair-review-demo-seed", "--uitest-review-demo-offline",
+            "--uitest-reset-review-demo-storage", "-save.appLanguage", "en",
+        ], launchEnvironment: ["SAVE_UI_TEST_STORAGE_ID": UUID().uuidString])
+        launch(app)
+        try signInViaReviewDemoRequired(app: app)
+        func chooseHomeCity(_ city: String) {
+            tapReachable(app.buttons["home.citySwitcher"])
+            let option = app.descendants(matching: .any)["home.city.\(city)"]
+            XCTAssertTrue(option.waitForExistence(timeout: stepTimeout))
+            tapReachable(option)
+        }
+        chooseHomeCity("tokyo")
+        openRootTab("Map", app: app)
+        let notice = app.buttons["map.locationNotice.dismiss"]
+        if notice.waitForExistence(timeout: timeout(2)) { notice.tap() }
+        XCTAssertTrue(waitUntilHittable(nativeMapMarker(app, name: "Ichiran Shibuya")))
+        openRootTab("Home", app: app)
+        chooseHomeCity("taipei")
+        openRootTab("Map", app: app)
+        let marker = nativeMapMarker(app, name: "Fujin Tree 353 Cafe")
+        XCTAssertTrue(waitUntilHittable(marker), "Changed Home city must refit Map to Taipei")
+        let beforePan = marker.frame
+        let map = app.maps.firstMatch
+        map.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.35))
+            .press(forDuration: 0.1, thenDragTo: map.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)))
+        XCTAssertTrue(waitUntilHittable(marker))
+        var previousFrame = marker.frame
+        var stableSamples = 0
+        let settled = expectation(for: NSPredicate { _, _ in
+            let frame = marker.frame
+            stableSamples = abs(frame.midX - previousFrame.midX) < 1
+                && abs(frame.midY - previousFrame.midY) < 1 ? stableSamples + 1 : 0
+            previousFrame = frame
+            return stableSamples >= 3
+        }, evaluatedWith: marker)
+        wait(for: [settled], timeout: stepTimeout)
+        let panned = marker.frame
+        XCTAssertGreaterThan(abs(panned.midX - beforePan.midX), 10)
+        openRootTab("Home", app: app)
+        openRootTab("Map", app: app)
+        XCTAssertTrue(waitUntilHittable(marker))
+        XCTAssertEqual(marker.frame.midX, panned.midX, accuracy: 3,
+                       "Unchanged filters must retain the panned viewport")
+        XCTAssertEqual(marker.frame.midY, panned.midY, accuracy: 3)
+
+        openRootTab("Home", app: app)
+        chooseHomeCity("tokyo")
+        let row = app.buttons.matching(NSPredicate(
+            format: "identifier BEGINSWITH 'home.place.' AND label CONTAINS 'Ichiran Shibuya'"
+        )).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: stepTimeout))
+        tapReachable(row)
+        let showOnMap = app.descendants(matching: .any)["home.row.showOnMap"]
+        XCTAssertTrue(showOnMap.waitForExistence(timeout: stepTimeout))
+        tapReachable(showOnMap)
+        let card = app.buttons["map.peek.card"]
+        XCTAssertTrue(card.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(card.label.contains("Ichiran Shibuya"),
+                      "Explicit show-on-map must win over a changed Home filter")
+        XCTAssertTrue(waitUntilHittable(nativeMapMarker(app, name: "Ichiran Shibuya")))
+        attach(app, name: "map-filter-reentry")
+        terminate(app)
     }
 
     /// Camera/selection state only. Missing camera chrome in CI (no tiles)

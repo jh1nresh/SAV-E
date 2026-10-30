@@ -615,7 +615,8 @@ struct ContentView: View {
 
     /// Search, show-on-map, and list handoffs open Map without a Home filter.
     /// Review correction keeps the exact-search session.
-    private func showMapTab() {
+    private func showMapTab(preservingCamera: Bool = false) {
+        if selectedRootTab != .map { doodleSession.pendingExplicitMapEntry = preservingCamera }
         selectedRootTab = .map
     }
 
@@ -1417,7 +1418,7 @@ struct ContentView: View {
 
     private func openCollaborativeListOnMap(_ list: SaveCollaborativeList) {
         isPassportPresented = false
-        showMapTab()
+        showMapTab(preservingCamera: true)
         rootPath.removeAll()
         Task {
             await mapVM.planCollaborativeList(list)
@@ -1571,7 +1572,7 @@ struct ContentView: View {
         isMapPanelExpanded = false
         doodleSession.pendingShowOnMapPlaceID = place.id
         mapVM.showSavedPlaceOnMap(place)
-        showMapTab()
+        showMapTab(preservingCamera: true)
     }
 
     /// "Find exact place" lands the user on the map with the candidate pins
@@ -1581,7 +1582,7 @@ struct ContentView: View {
         isRootSheetPresented = false
         isMapPanelExpanded = false
         rootPath.removeAll()
-        showMapTab()
+        showMapTab(preservingCamera: true)
         drawerVM.returnToCommands()
     }
 

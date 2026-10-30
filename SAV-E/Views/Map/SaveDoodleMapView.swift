@@ -76,7 +76,7 @@ enum SaveDoodleMapPeekOpen {
 enum SaveDoodleMapUnsavedMarker {
     @MainActor
     static func select(_ candidate: SaveMapCandidate, on mapViewModel: MapViewModel) {
-        mapViewModel.selectMapCandidate(candidate)
+        mapViewModel.selectMapCandidate(candidate, focusingCamera: false)
     }
 }
 
@@ -173,13 +173,21 @@ struct SaveDoodleMapView: View {
             mapViewModel.seedUITestUnsavedCandidateIfNeeded()
             selectParityPlaceIfNeeded()
             cameraPosition = mapViewModel.cameraPosition
-            if mapViewModel.visibleMapRegion != nil {
+            switch session.consumeMapEntry() {
+            case .explicitCommand:
                 hasFittedCollection = true
-            } else {
-                cameraPosition = mapViewModel.cameraPosition
+            case .changedFilters:
+                onClearSelection()
                 fitVisiblePlaces()
+            case .restoreViewport:
+                if mapViewModel.visibleMapRegion != nil {
+                    hasFittedCollection = true
+                } else {
+                    fitVisiblePlaces()
+                }
             }
         }
+        .onDisappear { session.recordMapFilters() }
         .onChange(of: mapViewModel.cameraPosition) { _, position in
             // A gesture publishes one snapshot on end. Do not feed that snapshot
             // back into MapKit; explicit commands still move the local camera.

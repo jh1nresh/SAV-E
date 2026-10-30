@@ -4777,7 +4777,7 @@ final class MapViewModel: ObservableObject {
         selectedMapFeature = nil
     }
 
-    func selectMapCandidate(_ candidate: SaveMapCandidate) {
+    func selectMapCandidate(_ candidate: SaveMapCandidate, focusingCamera: Bool = true) {
         selectedMapCandidate = candidate
         selectedPlace = nil
         selectedReviewCandidate = nil
@@ -4787,7 +4787,7 @@ final class MapViewModel: ObservableObject {
             latitude: candidate.latitude,
             longitude: candidate.longitude
         )
-        if SaveChromeNavigation.isTrustworthyMapCoordinate(coordinate) {
+        if focusingCamera, SaveChromeNavigation.isTrustworthyMapCoordinate(coordinate) {
             cameraPosition = .region(MKCoordinateRegion(
                 center: coordinate,
                 span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)

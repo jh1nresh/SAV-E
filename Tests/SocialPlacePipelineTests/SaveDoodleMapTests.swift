@@ -1,3 +1,4 @@
+import MapKit
 import UIKit
 import XCTest
 @testable import SAVE
@@ -547,6 +548,11 @@ final class SaveDoodleMapTests: XCTestCase {
         map.selectPlace(saved)
         XCTAssertEqual(map.selectedPlace?.id, saved.id)
         XCTAssertNil(map.selectedMapCandidate)
+        let viewport = MapCameraPosition.region(MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 25.04, longitude: 121.56),
+            span: MKCoordinateSpan(latitudeDelta: 0.08, longitudeDelta: 0.08)
+        ))
+        map.cameraPosition = viewport
 
         SaveDoodleMapUnsavedMarker.select(candidate, on: map)
 
@@ -554,6 +560,39 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertEqual(map.selectedMapCandidate?.title, "Unsaved Night Market")
         XCTAssertNil(map.selectedPlace)
         XCTAssertTrue(map.visibleMapCandidates.contains { $0.id == candidate.id })
+        XCTAssertEqual(map.cameraPosition, viewport, "Marker taps must preserve the viewport")
+
+        map.selectMapCandidate(candidate)
+        XCTAssertEqual(map.cameraPosition.region?.center.latitude, candidate.latitude)
+        XCTAssertEqual(map.cameraPosition.region?.center.longitude, candidate.longitude)
+        XCTAssertEqual(map.cameraPosition.region?.span.latitudeDelta, 0.01,
+                       "Explicit candidate selection must still focus the camera")
+    }
+
+    func testMapEntryReconcilesFiltersAndConsumesExplicitCommand() throws {
+        let suite = "SaveDoodleMapEntry-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let session = SaveDoodleSession(defaults: defaults)
+        session.city = .city("tokyo")
+        XCTAssertEqual(session.consumeMapEntry(), .restoreViewport)
+        XCTAssertEqual(session.consumeMapEntry(), .restoreViewport)
+
+        session.city = .city("taipei")
+        XCTAssertEqual(session.consumeMapEntry(), .changedFilters)
+        XCTAssertEqual(session.consumeMapEntry(), .restoreViewport)
+        session.lens = .go
+        XCTAssertEqual(session.consumeMapEntry(), .changedFilters)
+
+        session.city = .city("tokyo")
+        session.pendingExplicitMapEntry = true
+        XCTAssertEqual(session.consumeMapEntry(), .explicitCommand)
+        XCTAssertFalse(session.pendingExplicitMapEntry)
+        XCTAssertEqual(session.consumeMapEntry(), .restoreViewport)
+
+        session.lens = .eat
+        session.recordMapFilters() // Filters changed while Map was mounted.
+        XCTAssertEqual(session.consumeMapEntry(), .restoreViewport)
     }
 
     private func source(at relativePath: String) throws -> String {
