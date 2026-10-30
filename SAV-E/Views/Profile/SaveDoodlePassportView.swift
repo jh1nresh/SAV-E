@@ -31,6 +31,7 @@ struct SaveDoodlePassportPage<Identity: View>: View {
 
                 identity
                     .padding(.bottom, SaveLayout.sectionGap)
+                    .accessibilityElement(children: .contain)
                     .accessibilityIdentifier("profile.cover")
 
                 subtitle

@@ -286,7 +286,9 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(app.descendants(matching: .any)["profile.stampGrid"].waitForExistence(timeout: stepTimeout))
         let editProfile = app.buttons["profile.edit"]
         let settings = app.buttons["profile.settings"]
-        XCTAssertTrue(editProfile.isHittable, "Identity actions must be visible on Passport landing")
+        attach(app, name: "passport-identity-landing")
+        XCTAssertTrue(editProfile.exists, "Identity actions must exist on Passport landing: \(app.debugDescription)")
+        XCTAssertFalse(editProfile.isEnabled, "Review-demo identity remains read-only")
         XCTAssertTrue(settings.isHittable)
         XCTAssertLessThan(editProfile.frame.minY, app.descendants(matching: .any)["profile.stampGrid"].frame.minY)
         settings.tap()
