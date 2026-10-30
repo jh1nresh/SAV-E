@@ -105,6 +105,7 @@ struct SaveDoodleMapView: View {
     @State private var showsCityPicker = false
     @State private var stampPulse = false
     @State private var visitError: String?
+    private static let collapsedChromeClearance: CGFloat = 160
 
     var body: some View {
         let followsHomeFilter = session.mapFollowsHomeFilter
@@ -326,6 +327,11 @@ struct SaveDoodleMapView: View {
         .mapControls {
             MapCompass()
         }
+        // The root overlays its tab bar and collapsed search shelf. Give
+        // MapKit their safe area so collection fitting keeps pins tappable.
+        // Keep this constant when a place card replaces the shelf: changing
+        // map insets on selection/dismissal would move the camera again.
+        .safeAreaPadding(.bottom, Self.collapsedChromeClearance)
         .onMapCameraChange(frequency: .onEnd) { context in
             guard MapSearchGeography.isTrustworthyRegion(context.region) else { return }
             mapViewModel.updateVisibleMapRegion(context.region)
@@ -744,7 +750,7 @@ struct SaveDoodleMapView: View {
         }
         // Locate must stay above the collapsed 64pt search shelf (test: maxY
         // <= shelf.minY - 4). Original clearance 160 clears that band.
-        return 160
+        return Self.collapsedChromeClearance
     }
 
     private func selectParityPlaceIfNeeded() {

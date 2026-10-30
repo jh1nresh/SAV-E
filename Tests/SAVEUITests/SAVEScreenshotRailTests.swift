@@ -1255,6 +1255,10 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
             attach(app, name: "map-first-tokyo-failure")
         }
         XCTAssertTrue(tokyoIsHittable, "The state-bearing Tokyo Map Stamp must be in view")
+        let shelf = app.descendants(matching: .any)["map.drawerPanel.collapsed"].firstMatch
+        XCTAssertTrue(shelf.waitForExistence(timeout: stepTimeout))
+        XCTAssertLessThan(tokyoMarker.frame.maxY, shelf.frame.minY,
+                          "Collection fitting must keep the southern marker above the search shelf")
         openRootTab("Home", app: app)
         chooseHomeCity("taipei")
         openRootTab("Map", app: app)
