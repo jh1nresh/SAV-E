@@ -832,6 +832,7 @@ struct SaveDoodleMapView: View {
                     span: MKCoordinateSpan(latitudeDelta: 0.04, longitudeDelta: 0.04)
                 )
             )
+            hasFittedCollection = true
             return
         }
         let pins = cityOpeningPins()
