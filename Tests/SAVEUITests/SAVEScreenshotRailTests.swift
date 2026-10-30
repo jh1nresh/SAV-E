@@ -4838,6 +4838,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         try captureTaipeiMapStates(language: "en", attachM1: true)
         try captureTaipeiMapStates(language: "zh-Hant", attachM1: false)
         try exerciseMapPeekInteractions()
+        try exerciseMapPeekInteractions(language: "zh-Hant")
     }
 
     /// Dedicated motion lane: use the Simulator's real accessibility setting,
@@ -5004,6 +5005,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
                 .press(forDuration: 0.1, thenDragTo: map.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.45)))
         }
         XCTAssertTrue(unsavedPin.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(unsavedPin.label.contains(language == "zh-Hant" ? "尚未保存" : "Not saved yet"),
+                      "Native candidates must announce that they are not saved")
         XCTAssertTrue(unsavedPin.isHittable, "Unsaved native MapKit marker must receive taps")
         unsavedPin.tap()
         XCTAssertTrue(app.buttons["drawer.unsaved.primaryAction"].waitForExistence(timeout: stepTimeout))
@@ -5021,8 +5024,7 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
     /// Use separated map coordinates for taps; the M1 memory raster intentionally
     /// stacks its seeds at one coordinate and cannot verify pin switching.
     @MainActor
-    private func exerciseMapPeekInteractions(evidencePrefix: String? = nil) throws {
-        let language = "en"
+    private func exerciseMapPeekInteractions(language: String = "en", evidencePrefix: String? = nil) throws {
         let app = makeApp(launchArguments: [
             "--uitest-complete-onboarding", "--skip-map-tour", "--uitest-location-denied",
             "--uitest-repair-review-demo-seed", "--uitest-review-demo-offline",
@@ -5045,6 +5047,8 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         let selectedName = app.buttons["map.peek.card"].label
         let selectedPin = nativeMapMarker(app, name: selectedName)
         XCTAssertTrue(selectedPin.waitForExistence(timeout: stepTimeout))
+        XCTAssertTrue(selectedPin.label.contains(language == "zh-Hant" ? "去過的地圖章" : "Visited Map Stamp"),
+                      "Native visited markers must announce their visited state")
         for _ in 0..<2 {
             close.tap()
             XCTAssertTrue(card.waitForNonExistence(timeout: stepTimeout))
@@ -5084,10 +5088,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         XCTAssertTrue(card.waitForExistence(timeout: stepTimeout))
         attach(app, name: evidencePrefix.map { "\($0)-reopened" } ?? "map-peek-reopened-\(language)")
         let otherName = try XCTUnwrap([
-            "Taipei Window Cafe", "Taipei Lunch", "Raohe Night Market",
-            "Yongkang Beef Noodles", "Fujin Tree 353 Cafe"
+            "Taipei Lunch", "Raohe Night Market", "Fujin Tree 353 Cafe"
         ].first { $0 != selectedName && nativeMapMarker(app, name: $0).isHittable })
         let otherPin = nativeMapMarker(app, name: otherName)
+        XCTAssertTrue(otherPin.label.contains(language == "zh-Hant" ? "地圖章" : "Map Stamp"))
+        XCTAssertFalse(otherPin.label.contains(language == "zh-Hant" ? "去過的地圖章" : "Visited Map Stamp"),
+                       "Unvisited saved markers must stay distinct from visited stamps")
         otherPin.tap()
         XCTAssertTrue(app.buttons.matching(identifier: "map.peek.card").matching(
             NSPredicate(format: "label == %@", otherName)

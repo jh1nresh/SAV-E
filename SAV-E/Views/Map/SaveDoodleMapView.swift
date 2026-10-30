@@ -262,7 +262,11 @@ struct SaveDoodleMapView: View {
             if SaveDoodleMapPinStyle.current == .appleDefault {
                 ForEach(displayedListedPlaces) { item in
                     if item.place.isMapKitMappable {
-                        Marker(item.place.name, coordinate: item.place.coordinate)
+                        let state: SaveSearchObjectType = item.place.status == .visited ? .triedMemory : .savedPlace
+                        Marker(
+                            "\(item.place.name), \(state.displayName(language: languageSettings.language))",
+                            coordinate: item.place.coordinate
+                        )
                             .tint(item.place.status == .visited ? SaveDoodle.stampRed : SaveAtlasPalette.coral)
                             .tag(SaveDoodleNativeMapSelection.saved(item.place.id))
                     }
@@ -295,7 +299,10 @@ struct SaveDoodleMapView: View {
             }
 
             ForEach(nativeUnsavedCandidates) { candidate in
-                Marker(candidate.title, coordinate: candidate.coordinate)
+                Marker(
+                    "\(candidate.title), \(SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language))",
+                    coordinate: candidate.coordinate
+                )
                     .tag(SaveDoodleNativeMapSelection.candidate(candidate.id))
             }
 

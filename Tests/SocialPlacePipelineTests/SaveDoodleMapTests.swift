@@ -57,7 +57,8 @@ final class SaveDoodleMapTests: XCTestCase {
             "Numbered pins keep their coral fill; the separate place card may use paper."
         )
         XCTAssertTrue(map.contains("nativeUnsavedCandidates"))
-        XCTAssertTrue(map.contains("Marker(candidate.title, coordinate: candidate.coordinate)"))
+        XCTAssertTrue(map.contains("SaveSearchObjectType.mapVisibleUnsavedPlace.displayName(language: languageSettings.language)"))
+        XCTAssertTrue(map.contains("item.place.status == .visited ? .triedMemory : .savedPlace"))
         XCTAssertFalse(map.contains("AsyncImage"))
         XCTAssertFalse(map.contains("photoURL"))
         XCTAssertFalse(map.contains("businessPhotoURLs"))
