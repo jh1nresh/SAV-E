@@ -890,10 +890,18 @@ struct SaveDoodleMapView: View {
             session.mapHasEstablishedViewport = !pins.isEmpty
             return
         }
+        let filtered = filteredOpeningPins()
+        if Self.filterFitEstablishesViewport(matchingPinCount: filtered.count) {
+            cameraPosition = .region(Self.region(fitting: filtered))
+            session.mapHasEstablishedViewport = true
+            return
+        }
+        // No matching stamps yet. Fallback framing is not the filtered fit;
+        // leave it pending so a later load can bring those markers on screen.
+        session.mapHasEstablishedViewport = false
         let pins = cityOpeningPins()
         if !pins.isEmpty {
             cameraPosition = .region(Self.region(fitting: pins))
-            session.mapHasEstablishedViewport = true
             return
         }
         if let fallback = cityOpeningFallback() {
@@ -903,13 +911,25 @@ struct SaveDoodleMapView: View {
                     span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
                 )
             )
+            return
         }
+        // Drop a user-owned camera so the pending fit is not blocked
+        // when the matching stamps arrive.
+        if cameraPosition.positionedByUser, let region = cameraPosition.region {
+            cameraPosition = .region(region)
+        }
+    }
+
+    /// A changed filter establishes the viewport only after at least one
+    /// matching stamp is framed. An empty result stays pending.
+    static func filterFitEstablishesViewport(matchingPinCount: Int) -> Bool {
+        matchingPinCount > 0
     }
 
     /// HoP 298-3 / 298-7: fit the same saved Eat/Go + city set Home lists.
     /// Unsaved candidates stay native Markers and are not in this fit.
     /// Never fit the worldwide set — that opens over Europe/Africa.
-    private func cityOpeningPins() -> [CLLocationCoordinate2D] {
+    private func filteredOpeningPins() -> [CLLocationCoordinate2D] {
         let denied = locationService.isAuthorizationDenied
         let location = denied ? nil : locationService.currentLocation
         var selection = SaveDoodleHomeCatalog.resolvedSelection(
@@ -923,19 +943,22 @@ struct SaveDoodleMapView: View {
                 selection = .city(id)
             }
         }
-        var coords: [CLLocationCoordinate2D] = []
-        for place in SaveDoodleHomeCatalog.visiblePlaces(
+        return SaveDoodleHomeCatalog.visiblePlaces(
             from: mapViewModel.places,
             lens: session.lens,
             selection: selection,
             location: location,
             locationDenied: denied
-        ) where place.isMapKitMappable {
-            coords.append(place.coordinate)
+        ).filter(\.isMapKitMappable).map(\.coordinate)
+    }
+
+    private func cityOpeningPins() -> [CLLocationCoordinate2D] {
+        let filtered = filteredOpeningPins()
+        if !filtered.isEmpty {
+            return filtered
         }
-        if !coords.isEmpty {
-            return coords
-        }
+        let denied = locationService.isAuthorizationDenied
+        let location = denied ? nil : locationService.currentLocation
         guard let cityID = openingCityID(denied: denied, location: location) else {
             return addresslessOpeningPins(location: location)
         }

@@ -699,6 +699,10 @@ final class SaveDoodleMapTests: XCTestCase {
         XCTAssertTrue(map.contains("guard !session.mapHasEstablishedViewport, !cameraPosition.positionedByUser"))
         XCTAssertTrue(map.contains("if cameraPosition.positionedByUser { session.mapHasEstablishedViewport = true }"))
         XCTAssertTrue(map.contains("session.mapHasEstablishedViewport = !pins.isEmpty"))
+        XCTAssertTrue(map.contains("session.mapHasEstablishedViewport = false"))
+        XCTAssertFalse(SaveDoodleMapView.filterFitEstablishesViewport(matchingPinCount: 0),
+                       "An empty filter must leave the fit pending so a later load can refit")
+        XCTAssertTrue(SaveDoodleMapView.filterFitEstablishesViewport(matchingPinCount: 1))
     }
 
     func testMapEntryReconcilesFiltersAndConsumesExplicitCommand() throws {

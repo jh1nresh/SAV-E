@@ -543,7 +543,7 @@ Source: `SAV-E/Extensions/Color+Theme.swift`.
 
 ### Map Pins
 
-2026-10-30 recovery: product Map uses native Apple markers, a stationary bottom detail card, and local camera gesture state. Saved and unsaved selections retain their separate confirmation flows. Selection, dismissal, and background refresh preserve the current viewport; city/lens changes and explicit locate/search commands may move it. Photo pins come in a follow-up PR. The coral pin and pop animation rules below are historical.
+2026-10-30 recovery: product Map uses native Apple markers, a stationary bottom detail card, and local camera gesture state. Saved and unsaved selections retain their separate confirmation flows. Selection, dismissal, and background refresh preserve the current viewport; city/lens changes and explicit locate/search commands may move it. Photo pins come in a follow-up PR. The coral pin and pop animation rules below apply.
 2026-11-01 clarification: selection uses Apple's own enlarged native marker. At the selected stamp's exact coordinate, other saved markers are temporarily hidden so a second pin cannot show underneath it; nearby markers remain native and saved records are unchanged.
 
 Source: product Map previously used coral numbered pins via `SaveDoodleMapPinStyle`
@@ -774,9 +774,8 @@ prices, or purchase availability. All 0.90 thresholds, masks, interaction
 tests, and the other reference images remain unchanged. Future target
 changes still require the founder's personal raster approval.
 
-2026-10-30 Passport reference approval: the founder inspected the actual
-`five-tab-passport` raster from full CI run `40991924628`, PR #330 head
-`9e13338daafe4f52ae9cd83d5e3c9c483627ce7e`, and explicitly approved it as the
+2026-11-01 Passport reference approval: founder ledger L368 records that the founder inspected the actual
+`five-tab-passport` raster and explicitly approved it as the
 new Passport target. `ProductionTargets/passport.png` is that 1206×2622 raster
 normalized to 402×874 RGB with Lanczos resampling. It shows account identity,
 edit/settings actions, then the sticker collection. Only the Passport light
