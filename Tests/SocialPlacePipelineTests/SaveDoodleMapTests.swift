@@ -143,7 +143,7 @@ final class SaveDoodleMapTests: XCTestCase {
 
     func testInitialFitPreservesExplicitCommandsAndHasNoLateLocationOverride() throws {
         let map = try source(at: "SAV-E/Views/Map/SaveDoodleMapView.swift")
-        XCTAssertTrue(map.contains("fitVisiblePlaces(initialOpening: true)"))
+        XCTAssertTrue(map.contains("fitVisiblePlaces(initialOpening: !session.mapFollowsHomeFilter)"))
         XCTAssertTrue(map.contains("session.mapFollowsHomeFilter = !initialOpening"))
         let listStart = try XCTUnwrap(map.range(of: "private var displayedListedPlaces"))
         let listEnd = try XCTUnwrap(map.range(of: "private var nativeUnsavedCandidates"))

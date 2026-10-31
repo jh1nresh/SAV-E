@@ -1240,6 +1240,12 @@ final class SAVEScreenshotRailTests: SAVEUITestCase {
         openRootTab("Map", app: app)
         let notice = app.buttons["map.locationNotice.dismiss"]
         if notice.waitForExistence(timeout: timeout(2)) { notice.tap() }
+        // First opening shows all saved places; explicitly activate the city
+        // filter before testing filtered-mode reentry and viewport retention.
+        tapReachable(app.buttons["map.city"])
+        let tokyoFilter = app.buttons["map.city.tokyo"]
+        XCTAssertTrue(tokyoFilter.waitForExistence(timeout: stepTimeout))
+        tapReachable(tokyoFilter)
         let tokyoMarker = nativeMapMarker(app, name: "Ichiran Shibuya")
         let tokyoIsHittable = waitUntilHittable(tokyoMarker)
         if !tokyoIsHittable {

@@ -191,7 +191,7 @@ struct SaveDoodleMapView: View {
                 if mapViewModel.visibleMapRegion != nil {
                     hasFittedCollection = true
                 } else {
-                    fitVisiblePlaces(initialOpening: true)
+                    fitVisiblePlaces(initialOpening: !session.mapFollowsHomeFilter)
                 }
             }
             synchronizeNativeSavedSelection()
@@ -207,7 +207,7 @@ struct SaveDoodleMapView: View {
             selectParityPlaceIfNeeded()
             synchronizeNativeSavedSelection()
             guard !hasFittedCollection, !cameraPosition.positionedByUser else { return }
-            fitVisiblePlaces(initialOpening: true)
+            fitVisiblePlaces(initialOpening: !session.mapFollowsHomeFilter)
         }
         .onChange(of: mapViewModel.selectedPlace?.id) { _, _ in
             synchronizeNativeSavedSelection()
